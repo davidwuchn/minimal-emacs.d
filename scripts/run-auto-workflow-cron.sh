@@ -123,36 +123,37 @@ resolve_worktree_common_root() {
     dirname "$common_dir"
 }
 
+append_missing_submodule_path() {
+    local path="$1"
+    local existing
+
+    [ -n "$path" ] || return 0
+
+    if [ "${#missing[@]}" -gt 0 ]; then
+        for existing in "${missing[@]}"; do
+            [ "$existing" = "$path" ] && return 0
+        done
+    fi
+
+    missing+=("$path")
+}
 hydrate_missing_worktree_submodules() {
     local missing=()
     local path
     local _key
 
-    append_missing_submodule() {
-        local candidate="$1"
-        local existing
-        [ -n "$candidate" ] || return 0
-        if [ "${#missing[@]}" -gt 0 ]; then
-            for existing in "${missing[@]}"; do
-                [ "$existing" = "$candidate" ] && return 0
-            done
-        fi
-        missing+=("$candidate")
-    }
-
     [ -f "$DIR/.gitmodules" ] || return 0
 
     while IFS= read -r path; do
-        append_missing_submodule "$path"
+        append_missing_submodule_path "$path"
     done < <(git -C "$DIR" submodule status 2>/dev/null | awk 'substr($1, 1, 1) == "-" { print $2 }')
 
     # Fresh detached worktrees can materialize tracked submodule directories as
     # empty folders before Git reports them as missing. Hydrate any configured
     # submodule whose checkout still lacks the usual `.git` entry.
     while read -r _key path; do
-        [ -n "$path" ] || continue
         if ! path_exists_or_link "$DIR/$path/.git"; then
-            append_missing_submodule "$path"
+            append_missing_submodule_path "$path"
         fi
     done < <(git config --file "$DIR/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null)
 

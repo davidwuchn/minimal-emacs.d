@@ -2264,6 +2264,137 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (should-not gptel-auto-workflow--run-project-root))
       (delete-directory project-root t))))
 
+(ert-deftest regression/auto-workflow/activate-live-root-prefers-elpa-transient ()
+  "Activating a live root should prefer repo-local ELPA transient over the built-in copy."
+  (defvar minimal-emacs-user-directory)
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-live-transient" t)))
+         (transient-dir (expand-file-name "var/elpa/transient-0.12.0" project-root))
+         (transient-file (expand-file-name "transient.el" transient-dir))
+         (transient-signed (expand-file-name "var/elpa/transient-0.12.0.signed" project-root))
+         (default-directory "/tmp/original-root/")
+         (user-emacs-directory "/tmp/original-root/")
+         (minimal-emacs-user-directory "/tmp/original-root/")
+         (gptel-auto-workflow-projects '("/tmp/original-root/"))
+         (gptel-auto-workflow--current-project "/tmp/drift/")
+         (gptel-auto-workflow--run-project-root "/tmp/drift/")
+         (gptel-auto-workflow--project-root-override "/tmp/drift/")
+         (load-path '("/Applications/Emacs.app/Contents/Resources/lisp"))
+         (original-transient-layout
+          (and (fboundp 'transient--set-layout)
+               (symbol-function 'transient--set-layout)))
+         loaded)
+    (unwind-protect
+        (progn
+          (make-directory transient-dir t)
+          (with-temp-file transient-file
+            (insert ";;; transient.el --- test stub\n"))
+          (with-temp-file transient-signed
+            (insert "signed marker\n"))
+          (when (fboundp 'transient--set-layout)
+            (fmakunbound 'transient--set-layout))
+          (cl-letf (((symbol-function 'locate-library)
+                     (lambda (library &rest _args)
+                       (when (equal library "transient")
+                         "/Applications/Emacs.app/Contents/Resources/lisp/transient.elc")))
+                    ((symbol-function 'load)
+                     (lambda (file &optional _noerror _nomessage &rest _args)
+                       (setq loaded file)
+                       (fset 'transient--set-layout (lambda () :elpa))
+                       t)))
+            (should (equal (gptel-auto-workflow--activate-live-root project-root)
+                           project-root))
+            (should (equal (car load-path) transient-dir))
+            (should (equal loaded (file-name-sans-extension transient-file)))
+            (should (eq (transient--set-layout) :elpa))))
+      (if original-transient-layout
+          (fset 'transient--set-layout original-transient-layout)
+        (when (fboundp 'transient--set-layout)
+          (fmakunbound 'transient--set-layout)))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/prefer-elpa-transient-installs-missing-package ()
+  "Preferring ELPA transient should repair broken stubs by installing a real package."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-transient-install" t)))
+         (elpa-dir (expand-file-name "var/elpa" project-root))
+         (broken-dir (expand-file-name "transient-0.12.0" elpa-dir))
+         (broken-signed (expand-file-name "transient-0.12.0.signed" elpa-dir))
+         (bootstrap-file (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el" project-root))
+         (installed-dir (expand-file-name "transient-0.13.0" elpa-dir))
+         (installed-file (expand-file-name "transient.el" installed-dir))
+         (original-transient-layout
+          (and (fboundp 'transient--set-layout)
+               (symbol-function 'transient--set-layout)))
+         bootstrap-loaded configured seeded cache-loaded installed initialized loaded)
+    (unwind-protect
+        (progn
+          (make-directory elpa-dir t)
+          (make-directory (file-name-directory bootstrap-file) t)
+          (with-temp-file bootstrap-file
+            (insert ";;; bootstrap stub\n"))
+          (make-symbolic-link "/tmp/missing-transient-dir" broken-dir t)
+          (make-symbolic-link "/tmp/missing-transient-signed" broken-signed t)
+          (when (fboundp 'transient--set-layout)
+            (fmakunbound 'transient--set-layout))
+          (cl-letf (((symbol-function 'load-file)
+                     (lambda (file &rest _args)
+                       (when (equal file bootstrap-file)
+                         (setq bootstrap-loaded t))
+                       t))
+                    ((symbol-function 'gptel-auto-workflow-bootstrap--configure-package-system)
+                     (lambda (_root)
+                       (setq configured t)))
+                    ((symbol-function 'gptel-auto-workflow-bootstrap--seed-load-path)
+                     (lambda (_root)
+                       (setq seeded t)))
+                    ((symbol-function 'gptel-auto-workflow-bootstrap--load-package-archive-cache)
+                     (lambda (_root)
+                       (setq cache-loaded t)
+                       (setq package-archive-contents
+                             '((transient (:version (0 13 0)))))
+                       t))
+                    ((symbol-function 'package-desc-version)
+                     (lambda (desc)
+                       (plist-get desc :version)))
+                    ((symbol-function 'package-refresh-contents)
+                     (lambda ()
+                       (ert-fail "unexpected package refresh")))
+                    ((symbol-function 'package-install)
+                     (lambda (_desc)
+                       (setq installed t)
+                       (make-directory installed-dir t)
+                       (with-temp-file installed-file
+                         (insert ";;; transient.el --- installed stub\n"))))
+                    ((symbol-function 'package-initialize)
+                     (lambda ()
+                       (setq initialized t)))
+                    ((symbol-function 'locate-library)
+                     (lambda (library &rest _args)
+                       (when (equal library "transient")
+                         "/Applications/Emacs.app/Contents/Resources/lisp/transient.elc")))
+                    ((symbol-function 'load)
+                     (lambda (file &optional _noerror _nomessage &rest _args)
+                       (setq loaded file)
+                       (fset 'transient--set-layout (lambda () :installed))
+                       t)))
+            (should (equal (gptel-auto-workflow--prefer-elpa-transient project-root)
+                           installed-dir))
+            (should bootstrap-loaded)
+            (should configured)
+            (should seeded)
+            (should cache-loaded)
+            (should installed)
+            (should initialized)
+            (should-not (file-exists-p broken-dir))
+            (should-not (file-exists-p broken-signed))
+            (should (equal (car load-path) installed-dir))
+            (should (equal loaded (file-name-sans-extension installed-file)))
+            (should (eq (transient--set-layout) :installed))))
+      (if original-transient-layout
+          (fset 'transient--set-layout original-transient-layout)
+        (when (fboundp 'transient--set-layout)
+          (fmakunbound 'transient--set-layout)))
+      (delete-directory project-root t))))
+
 (ert-deftest regression/auto-experiment/run-forwards-executor-runagent-args ()
   "Primary executor dispatch should pass the expected RunAgent args."
   (let* ((project-root (make-temp-file "aw-project" t))
@@ -3205,9 +3336,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (lambda (loop-results)
            (setq results loop-results)))
         (should (= runs 2))
-        (should (= (length results) 2))
-        (should (equal (plist-get (car results) :agent-output) timeout-message))
-        (should (equal (plist-get (cadr results) :agent-output) "second experiment"))))))
+         (should (= (length results) 2))
+         (should (equal (plist-get (car results) :agent-output) timeout-message))
+         (should (equal (plist-get (cadr results) :agent-output) "second experiment"))))))
 
 (ert-deftest regression/auto-experiment/loop-stops-after-tied-no-improvements ()
   "Tied discards should count toward the no-improvement streak."
@@ -4671,7 +4802,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (gptel-auto-experiment--grade-with-retry
        "Executor result for task: candidate"
        (lambda (grade)
-         (setq final-grade grade)))
+          (setq final-grade grade)))
       (should (= grade-calls 2))
       (should (= scheduled-retries 1))
       (should (= gptel-auto-experiment--api-error-count 0))
@@ -10174,93 +10305,92 @@ failure."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-hydrates-empty-submodule-dirs-before-daemon-start ()
   "Wrapper auto-workflow should hydrate empty configured submodule dirs before daemon start."
-  (let* ((harness (make-temp-file "aw-hydrate-harness" nil ".py"))
-         (output-buffer (generate-new-buffer " *aw-hydrate-harness*")))
+  (let* ((repo-root (make-temp-file "aw-cron-repo" t))
+         (scripts-dir (expand-file-name "scripts" repo-root))
+         (packages-dir (expand-file-name "packages" repo-root))
+         (gptel-dir (expand-file-name "gptel" packages-dir))
+         (script-src (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" scripts-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (git-log (make-temp-file "aw-git-log"))
+         (daemon-ready (make-temp-file "aw-daemon-ready"))
+         (status-file (expand-file-name "auto-workflow-status.sexp" repo-root))
+         (fake-git (make-temp-file "fake-git" nil ".py"))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format
+            "ready=%s\ngptel_git=%s\nif [ ! -e \"$gptel_git\" ] && [ ! -L \"$gptel_git\" ]; then\n  echo 'missing gptel checkout' >&2\n  exit 1\nfi\n: > \"$ready\"\n"
+            (shell-quote-argument daemon-ready)
+            (shell-quote-argument (expand-file-name ".git" gptel-dir)))))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        "AUTO_WORKFLOW_EMACS_SERVER=fake-aw-hydrate")
+                  process-environment))
+         (default-directory repo-root))
     (unwind-protect
         (progn
-          (with-temp-file harness
-            (insert
-             "#!/usr/bin/env python3\n"
-             "from pathlib import Path\n"
-             "import os, shutil, shlex, subprocess, tempfile, textwrap\n"
-             (format "src_root = Path(%S)\n" test-auto-workflow--repo-root)
-             "repo_root = Path(tempfile.mkdtemp(prefix='aw-cron-repro-'))\n"
-             "scripts_dir = repo_root / 'scripts'\n"
-             "gptel_dir = repo_root / 'packages' / 'gptel'\n"
-             "fake_bin = Path(tempfile.mkdtemp(prefix='aw-fake-bin-'))\n"
-             "git_log = Path(tempfile.mktemp(prefix='aw-git-log-'))\n"
-             "daemon_ready = Path(tempfile.mktemp(prefix='aw-daemon-ready-'))\n"
-             "status_file = repo_root / 'auto-workflow-status.sexp'\n"
-             "scripts_dir.mkdir(parents=True)\n"
-             "gptel_dir.mkdir(parents=True)\n"
-             "shutil.copy2(src_root / 'scripts' / 'run-auto-workflow-cron.sh', scripts_dir / 'run-auto-workflow-cron.sh')\n"
-             "os.chmod(scripts_dir / 'run-auto-workflow-cron.sh', 0o755)\n"
-             "(repo_root / '.gitmodules').write_text('[submodule \"packages/gptel\"]\\n\\tpath = packages/gptel\\n\\turl = https://example.invalid/gptel.git\\n')\n"
-             "(fake_bin / 'git').write_text(textwrap.dedent(f'''#!/usr/bin/env python3\n"
-             "from pathlib import Path\n"
-             "import sys\n"
-             "log_path = Path({str(git_log)!r})\n"
-             "args = sys.argv[1:]\n"
-             "cwd = Path.cwd()\n"
-             "if len(args) >= 2 and args[0] == '-C':\n"
-             "    cwd = Path(args[1])\n"
-             "    args = args[2:]\n"
-             "with log_path.open('a', encoding='utf-8') as handle:\n"
-             "    handle.write(str(cwd) + ' :: ' + ' '.join(args) + '\\\\n')\n"
-             "if args[:2] == ['rev-parse', '--git-common-dir']:\n"
-             "    print(str(cwd / '.git'))\n"
-             "elif len(args) >= 4 and args[0] == 'config' and args[1] == '--file' and args[3] == '--get-regexp':\n"
-             "    print('submodule.packages/gptel.path packages/gptel')\n"
-             "elif args[:2] == ['submodule', 'status']:\n"
-             "    pass\n"
-             "elif args[:2] == ['submodule', 'sync']:\n"
-             "    pass\n"
-             "elif args[:4] == ['submodule', 'update', '--init', '--recursive']:\n"
-             "    if '--' in args:\n"
-             "        for rel in args[args.index('--') + 1:]:\n"
-             "            target = cwd / rel\n"
-             "            target.mkdir(parents=True, exist_ok=True)\n"
-             "            (target / '.git').write_text('gitdir: /fake/modules/' + rel + '\\\\n', encoding='utf-8')\n"
-             "raise SystemExit(0)\n"
-             "'''))\n"
-             "os.chmod(fake_bin / 'git', 0o755)\n"
-             "(fake_bin / 'emacsclient').write_text(textwrap.dedent(f'''#!/usr/bin/env python3\n"
-             "from pathlib import Path\n"
-             "ready = Path({str(daemon_ready)!r})\n"
-             "if ready.exists():\n"
-             "    print('t')\n"
-             "    raise SystemExit(0)\n"
-             "raise SystemExit(1)\n"
-             "'''))\n"
-             "os.chmod(fake_bin / 'emacsclient', 0o755)\n"
-             "(fake_bin / 'emacs').write_text(textwrap.dedent(f'''#!/bin/sh\n"
-             "ready={shlex.quote(str(daemon_ready))}\n"
-             "gptel_git={shlex.quote(str(gptel_dir / '.git'))}\n"
-             "if [ ! -e \"$gptel_git\" ] && [ ! -L \"$gptel_git\" ]; then\n"
-             "  echo 'missing gptel checkout' >&2\n"
-             "  exit 1\n"
-             "fi\n"
-             ": > \"$ready\"\n"
-             "'''))\n"
-             "os.chmod(fake_bin / 'emacs', 0o755)\n"
-             "env = os.environ.copy()\n"
-             "env['PATH'] = f\"{fake_bin}:{env['PATH']}\"\n"
-             "env['AUTO_WORKFLOW_STATUS_FILE'] = str(status_file)\n"
-             "env['AUTO_WORKFLOW_EMACS_SERVER'] = 'fake-aw-hydrate'\n"
-             "proc = subprocess.run([str(scripts_dir / 'run-auto-workflow-cron.sh'), 'auto-workflow'], cwd=repo_root, env=env, text=True, capture_output=True)\n"
-             "print(git_log.read_text() if git_log.exists() else '')\n"
-             "ok = (proc.returncode == 0 and (gptel_dir / '.git').exists() and daemon_ready.exists() and 'submodule update --init --recursive -- packages/gptel' in (git_log.read_text() if git_log.exists() else ''))\n"
-             "raise SystemExit(0 if ok else 1)\n"))
-          (set-file-modes harness #o755)
-          (with-current-buffer output-buffer
-            (let ((exit-code (call-process "python3" nil t nil harness)))
-              (should (equal exit-code 0))
-              (should (string-match-p "submodule update --init --recursive -- packages/gptel"
-                                      (buffer-string))))))
-      (when (buffer-live-p output-buffer)
-        (kill-buffer output-buffer))
-      (when (file-exists-p harness)
-        (delete-file harness)))))
+          (make-directory scripts-dir t)
+          (make-directory gptel-dir t)
+          (copy-file script-src script t)
+          (set-file-modes script #o755)
+          (with-temp-file (expand-file-name ".gitmodules" repo-root)
+            (insert "[submodule \"packages/gptel\"]\n"
+                    "\tpath = packages/gptel\n"
+                    "\turl = https://example.invalid/gptel.git\n"))
+          (with-temp-file fake-git
+            (insert "#!/usr/bin/env python3\n"
+                    "from pathlib import Path\n"
+                    "import sys\n"
+                    (format "log_path = Path(%S)\n" git-log)
+                    "args = sys.argv[1:]\n"
+                    "cwd = Path.cwd()\n"
+                    "if len(args) >= 2 and args[0] == '-C':\n"
+                    "    cwd = Path(args[1])\n"
+                    "    args = args[2:]\n"
+                    "with log_path.open('a', encoding='utf-8') as handle:\n"
+                    "    handle.write(str(cwd) + ' :: ' + ' '.join(args) + '\\n')\n"
+                    "if args[:2] == ['rev-parse', '--git-common-dir']:\n"
+                    "    print(str(cwd / '.git'))\n"
+                    "elif args[:2] == ['submodule', 'status']:\n"
+                    "    pass\n"
+                    "elif args[:2] == ['config', '--file'] and '--get-regexp' in args:\n"
+                    "    print('submodule.packages/gptel.path packages/gptel')\n"
+                    "elif args[:2] == ['submodule', 'sync']:\n"
+                    "    pass\n"
+                    "elif args[:4] == ['submodule', 'update', '--init', '--recursive']:\n"
+                    "    if '--' in args:\n"
+                    "        for rel in args[args.index('--') + 1:]:\n"
+                    "            target = cwd / rel\n"
+                    "            target.mkdir(parents=True, exist_ok=True)\n"
+                    "            (target / '.git').write_text('gitdir: /fake/modules/' + rel + '\\n', encoding='utf-8')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-git #o755)
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "from pathlib import Path\n"
+                    "import sys\n"
+                    (format "ready = Path(%S)\n" daemon-ready)
+                    "if ready.exists():\n"
+                    "    print('t')\n"
+                    "    raise SystemExit(0)\n"
+                    "raise SystemExit(1)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-git (expand-file-name "git" fake-bin) t)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-buffer
+            (let ((exit-code (call-process script nil t nil "auto-workflow")))
+              (should (equal exit-code 0))))
+          (should (file-exists-p daemon-ready)))
+      (delete-directory repo-root t)
+      (delete-directory fake-bin t)
+      (dolist (path (list git-log daemon-ready))
+        (when (file-exists-p path)
+          (delete-file path))))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-active-phase-without-running-flag ()
   "Wrapper status should reset stale active phases even when :running is already nil."
@@ -12754,6 +12884,132 @@ failure."
       (delete-directory temp-root t)
       (delete-directory base-root t)
       (delete-directory fake-bin t)
+       (when (file-exists-p daemon-ready)
+         (delete-file daemon-ready)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-hydrates-missing-submodules-before-daemon-start ()
+  "Wrapper should initialize unhydrated submodules before launching a fresh daemon."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (git-log (make-temp-file "aw-git-log"))
+         (daemon-ready (make-temp-name (expand-file-name "aw-daemon-ready" temporary-file-directory)))
+         (fake-git
+          (test-auto-workflow--write-shell-script
+           "fake-git"
+           (format
+            "cmd=\"$*\"\nprintf '%%s\\n' \"$cmd\" >> %s\ncase \"$cmd\" in\n  *\"submodule status\"*) printf '%%s\\n%%s\\n' %s %s ;;\n  *\"submodule sync -- packages/gptel packages/gptel-agent\"*) exit 0 ;;\n  *\"submodule update --init --recursive -- packages/gptel packages/gptel-agent\"*) exit 0 ;;\n  *\"rev-parse --git-common-dir\"*) exit 1 ;;\n  *) exit 1 ;;\nesac"
+            (shell-quote-argument git-log)
+            (shell-quote-argument "-5b2d9f89431c8542f2b3f8c686f4dbc9afec21b2 packages/gptel")
+            (shell-quote-argument "-70dca8e4e13b530505fb4ad318f6ff3f40be350f packages/gptel-agent"))))
+         (fake-emacsclient
+          (test-auto-workflow--write-shell-script
+           "fake-emacsclient"
+           (format "if [ -f %s ]; then exit 0; fi\nexit 1"
+                   (shell-quote-argument daemon-ready))))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "touch %s\nexit 0" (shell-quote-argument daemon-ready))))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH")))
+                  process-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (with-temp-file (expand-file-name ".gitmodules" temp-root)
+            (insert "[submodule \"packages/gptel\"]\n"
+                    "\tpath = packages/gptel\n"
+                    "\turl = https://example.invalid/gptel.git\n"
+                    "[submodule \"packages/gptel-agent\"]\n"
+                    "\tpath = packages/gptel-agent\n"
+                    "\turl = https://example.invalid/gptel-agent.git\n"))
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-git (expand-file-name "git" fake-bin) t)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (shell-command-to-string (format "%s auto-workflow >/dev/null 2>&1 || true" script))
+          (should (file-exists-p daemon-ready))
+          (with-temp-buffer
+            (insert-file-contents git-log)
+            (let ((output (buffer-string)))
+              (should (string-match-p "submodule status" output))
+              (should (string-match-p
+                       (regexp-quote "submodule sync -- packages/gptel packages/gptel-agent")
+                       output))
+              (should (string-match-p
+                       (regexp-quote "submodule update --init --recursive -- packages/gptel packages/gptel-agent")
+                       output)))))
+      (delete-directory temp-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p git-log)
+        (delete-file git-log))
+      (when (file-exists-p daemon-ready)
+        (delete-file daemon-ready)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-skips-initialized-submodules-before-daemon-start ()
+  "Wrapper should not rewrite already-initialized submodules before daemon launch."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (git-log (make-temp-file "aw-git-log"))
+         (daemon-ready (make-temp-name (expand-file-name "aw-daemon-ready" temporary-file-directory)))
+         (fake-git
+          (test-auto-workflow--write-shell-script
+           "fake-git"
+           (format
+            "cmd=\"$*\"\nprintf '%%s\\n' \"$cmd\" >> %s\ncase \"$cmd\" in\n  *\"submodule status\"*) printf '%%s\\n%%s\\n' %s %s ;;\n  *\"rev-parse --git-common-dir\"*) exit 1 ;;\n  *) exit 1 ;;\nesac"
+            (shell-quote-argument git-log)
+            (shell-quote-argument "+fa99ca59f5f2be5f6973144c259f73727d416196 packages/gptel")
+            (shell-quote-argument " 70dca8e4e13b530505fb4ad318f6ff3f40be350f packages/gptel-agent"))))
+         (fake-emacsclient
+          (test-auto-workflow--write-shell-script
+           "fake-emacsclient"
+           (format "if [ -f %s ]; then exit 0; fi\nexit 1"
+                   (shell-quote-argument daemon-ready))))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "touch %s\nexit 0" (shell-quote-argument daemon-ready))))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH")))
+                  process-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (with-temp-file (expand-file-name ".gitmodules" temp-root)
+            (insert "[submodule \"packages/gptel\"]\n"
+                    "\tpath = packages/gptel\n"
+                    "\turl = https://example.invalid/gptel.git\n"
+                    "[submodule \"packages/gptel-agent\"]\n"
+                    "\tpath = packages/gptel-agent\n"
+                    "\turl = https://example.invalid/gptel-agent.git\n"))
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-git (expand-file-name "git" fake-bin) t)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (shell-command-to-string (format "%s auto-workflow >/dev/null 2>&1 || true" script))
+          (should (file-exists-p daemon-ready))
+          (with-temp-buffer
+            (insert-file-contents git-log)
+            (let ((output (buffer-string)))
+              (should (string-match-p "submodule status" output))
+              (should-not (string-match-p "submodule update --init --recursive --" output))
+              (should-not (string-match-p "submodule sync --" output)))))
+      (delete-directory temp-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p git-log)
+        (delete-file git-log))
       (when (file-exists-p daemon-ready)
         (delete-file daemon-ready)))))
 
