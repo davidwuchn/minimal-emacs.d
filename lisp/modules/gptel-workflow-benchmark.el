@@ -870,6 +870,9 @@ Returns plist with :patterns, :issues, and :recommendations."
   "Display ANALYSIS for WORKFLOW-NAME."
   (when (null analysis)
     (error "[workflow-bench] Cannot display nil analysis for %s" workflow-name))
+  (let ((total-tests (or (plist-get analysis :total-tests) 0)))
+    (when (zerop total-tests)
+      (message "[workflow-bench] Warning: analysis for %s has zero tests" workflow-name)))
   (with-output-to-temp-buffer (format "*Workflow Analysis: %s*" workflow-name)
     (princ (format "=== Workflow Analysis: %s ===\n\n" workflow-name))
     (princ (format "Analyzed: %s\n" (or (plist-get analysis :analysis-timestamp) "N/A")))
