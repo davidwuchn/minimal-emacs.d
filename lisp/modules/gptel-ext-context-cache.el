@@ -317,7 +317,7 @@ for a partial match (case-insensitive).  Returns nil if not found."
 Returns the cdr (value) of the matching entry, or nil if no match.
 Matches if the alist key is a prefix of SEARCH-STR.
 When multiple entries match, returns the one with the longest key for most specific match."
-  (when (and (listp alist) (stringp search-str) (not (string-empty-p search-str)))
+  (when (and (consp alist) (stringp search-str) (not (string-empty-p search-str)))
     (let ((search-lower (downcase search-str))
           (best-match my/gptel--alist-match-sentinel)
           (best-key-len 0))
