@@ -3394,6 +3394,16 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           "ok")))
      (should (equal payload "ok"))))
 
+(ert-deftest regression/subagent/safe-callback-resignals-errors ()
+  "Callback dispatch should preserve callback error propagation."
+  (should-error
+   (with-temp-buffer
+     (my/gptel--invoke-callback-safely
+      (lambda (_result)
+        (error "boom"))
+      "ok"))
+   :type 'error))
+
 (ert-deftest regression/subagent/safe-callback-preserves-live-default-directory ()
   "Callback dispatch should preserve a live caller `default-directory'."
   (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
