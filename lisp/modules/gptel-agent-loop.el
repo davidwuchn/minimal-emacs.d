@@ -334,7 +334,7 @@ Truncates accumulated output to last
   (if (null state)
       (format "%s\n\n[CONTINUATION - Recent work completed]\n\n"
               (or gptel-agent-loop-continuation-prompt ""))
-    (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
+    (let* ((output (gptel-agent-loop--safe-accumulated-output state))
            (limit gptel-agent-loop-continuation-context-limit)
            (len (length output))
            (truncated (if (and (integerp limit) (> limit 0) (> len limit))
