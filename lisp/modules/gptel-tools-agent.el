@@ -9756,8 +9756,9 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
 
 (defun gptel-auto-workflow--refresh-status-if-running ()
   "Refresh the persisted workflow snapshot while the workflow is active."
-  (if (or gptel-auto-workflow--running
-          gptel-auto-workflow--cron-job-running)
+  (if (and (or gptel-auto-workflow--running
+               gptel-auto-workflow--cron-job-running)
+           gptel-auto-workflow--stats)
       (condition-case-unless-debug err
           (progn
             (gptel-auto-workflow--persist-status)
