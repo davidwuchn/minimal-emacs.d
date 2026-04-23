@@ -1857,14 +1857,14 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                    (setq result exp-result)))))
             (should result)
             (should (equal logged-result result))
-            (should (= runagent-call-count 1))
-            (should (= grade-call-count 2))
-            (should (= benchmark-call-count 1))
-            (should-not (plist-get result :grader-only-failure))
-            (should-not (plist-get result :error))
-            (should (= gptel-auto-experiment--api-error-count 1))
-            (should (equal (plist-get result :grader-reason) "graded after retry"))
-            (should (equal (plist-get result :comparator-reason) "Winner: A"))))
+             (should (= runagent-call-count 1))
+             (should (= grade-call-count 2))
+             (should (= benchmark-call-count 1))
+             (should-not (plist-get result :grader-only-failure))
+             (should-not (plist-get result :error))
+             (should (= gptel-auto-experiment--api-error-count 0))
+             (should (equal (plist-get result :grader-reason) "graded after retry"))
+             (should (equal (plist-get result :comparator-reason) "Winner: A"))))
       (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t))))
@@ -2216,6 +2216,137 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (should (equal gptel-auto-workflow--project-root-override project-root))
           (should-not gptel-auto-workflow--current-project)
           (should-not gptel-auto-workflow--run-project-root))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/activate-live-root-prefers-elpa-transient ()
+  "Activating a live root should prefer repo-local ELPA transient over the built-in copy."
+  (defvar minimal-emacs-user-directory)
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-live-transient" t)))
+         (transient-dir (expand-file-name "var/elpa/transient-0.12.0" project-root))
+         (transient-file (expand-file-name "transient.el" transient-dir))
+         (transient-signed (expand-file-name "var/elpa/transient-0.12.0.signed" project-root))
+         (default-directory "/tmp/original-root/")
+         (user-emacs-directory "/tmp/original-root/")
+         (minimal-emacs-user-directory "/tmp/original-root/")
+         (gptel-auto-workflow-projects '("/tmp/original-root/"))
+         (gptel-auto-workflow--current-project "/tmp/drift/")
+         (gptel-auto-workflow--run-project-root "/tmp/drift/")
+         (gptel-auto-workflow--project-root-override "/tmp/drift/")
+         (load-path '("/Applications/Emacs.app/Contents/Resources/lisp"))
+         (original-transient-layout
+          (and (fboundp 'transient--set-layout)
+               (symbol-function 'transient--set-layout)))
+         loaded)
+    (unwind-protect
+        (progn
+          (make-directory transient-dir t)
+          (with-temp-file transient-file
+            (insert ";;; transient.el --- test stub\n"))
+          (with-temp-file transient-signed
+            (insert "signed marker\n"))
+          (when (fboundp 'transient--set-layout)
+            (fmakunbound 'transient--set-layout))
+          (cl-letf (((symbol-function 'locate-library)
+                     (lambda (library &rest _args)
+                       (when (equal library "transient")
+                         "/Applications/Emacs.app/Contents/Resources/lisp/transient.elc")))
+                    ((symbol-function 'load)
+                     (lambda (file &optional _noerror _nomessage &rest _args)
+                       (setq loaded file)
+                       (fset 'transient--set-layout (lambda () :elpa))
+                       t)))
+            (should (equal (gptel-auto-workflow--activate-live-root project-root)
+                           project-root))
+            (should (equal (car load-path) transient-dir))
+            (should (equal loaded (file-name-sans-extension transient-file)))
+            (should (eq (transient--set-layout) :elpa))))
+      (if original-transient-layout
+          (fset 'transient--set-layout original-transient-layout)
+        (when (fboundp 'transient--set-layout)
+          (fmakunbound 'transient--set-layout)))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/prefer-elpa-transient-installs-missing-package ()
+  "Preferring ELPA transient should repair broken stubs by installing a real package."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-transient-install" t)))
+         (elpa-dir (expand-file-name "var/elpa" project-root))
+         (broken-dir (expand-file-name "transient-0.12.0" elpa-dir))
+         (broken-signed (expand-file-name "transient-0.12.0.signed" elpa-dir))
+         (bootstrap-file (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el" project-root))
+         (installed-dir (expand-file-name "transient-0.13.0" elpa-dir))
+         (installed-file (expand-file-name "transient.el" installed-dir))
+         (original-transient-layout
+          (and (fboundp 'transient--set-layout)
+               (symbol-function 'transient--set-layout)))
+         bootstrap-loaded configured seeded cache-loaded installed initialized loaded)
+    (unwind-protect
+        (progn
+          (make-directory elpa-dir t)
+          (make-directory (file-name-directory bootstrap-file) t)
+          (with-temp-file bootstrap-file
+            (insert ";;; bootstrap stub\n"))
+          (make-symbolic-link "/tmp/missing-transient-dir" broken-dir t)
+          (make-symbolic-link "/tmp/missing-transient-signed" broken-signed t)
+          (when (fboundp 'transient--set-layout)
+            (fmakunbound 'transient--set-layout))
+          (cl-letf (((symbol-function 'load-file)
+                     (lambda (file &rest _args)
+                       (when (equal file bootstrap-file)
+                         (setq bootstrap-loaded t))
+                       t))
+                    ((symbol-function 'gptel-auto-workflow-bootstrap--configure-package-system)
+                     (lambda (_root)
+                       (setq configured t)))
+                    ((symbol-function 'gptel-auto-workflow-bootstrap--seed-load-path)
+                     (lambda (_root)
+                       (setq seeded t)))
+                    ((symbol-function 'gptel-auto-workflow-bootstrap--load-package-archive-cache)
+                     (lambda (_root)
+                       (setq cache-loaded t)
+                       (setq package-archive-contents
+                             '((transient (:version (0 13 0)))))
+                       t))
+                    ((symbol-function 'package-desc-version)
+                     (lambda (desc)
+                       (plist-get desc :version)))
+                    ((symbol-function 'package-refresh-contents)
+                     (lambda ()
+                       (ert-fail "unexpected package refresh")))
+                    ((symbol-function 'package-install)
+                     (lambda (_desc)
+                       (setq installed t)
+                       (make-directory installed-dir t)
+                       (with-temp-file installed-file
+                         (insert ";;; transient.el --- installed stub\n"))))
+                    ((symbol-function 'package-initialize)
+                     (lambda ()
+                       (setq initialized t)))
+                    ((symbol-function 'locate-library)
+                     (lambda (library &rest _args)
+                       (when (equal library "transient")
+                         "/Applications/Emacs.app/Contents/Resources/lisp/transient.elc")))
+                    ((symbol-function 'load)
+                     (lambda (file &optional _noerror _nomessage &rest _args)
+                       (setq loaded file)
+                       (fset 'transient--set-layout (lambda () :installed))
+                       t)))
+            (should (equal (gptel-auto-workflow--prefer-elpa-transient project-root)
+                           installed-dir))
+            (should bootstrap-loaded)
+            (should configured)
+            (should seeded)
+            (should cache-loaded)
+            (should installed)
+            (should initialized)
+            (should-not (file-exists-p broken-dir))
+            (should-not (file-exists-p broken-signed))
+            (should (equal (car load-path) installed-dir))
+            (should (equal loaded (file-name-sans-extension installed-file)))
+            (should (eq (transient--set-layout) :installed))))
+      (if original-transient-layout
+          (fset 'transient--set-layout original-transient-layout)
+        (when (fboundp 'transient--set-layout)
+          (fmakunbound 'transient--set-layout)))
       (delete-directory project-root t))))
 
 (ert-deftest regression/auto-experiment/run-forwards-executor-runagent-args ()
@@ -3099,9 +3230,44 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (lambda (loop-results)
            (setq results loop-results)))
         (should (= runs 2))
-        (should (= (length results) 2))
-        (should (equal (plist-get (car results) :agent-output) timeout-message))
-        (should (equal (plist-get (cadr results) :agent-output) "second experiment"))))))
+         (should (= (length results) 2))
+         (should (equal (plist-get (car results) :agent-output) timeout-message))
+         (should (equal (plist-get (cadr results) :agent-output) "second experiment"))))))
+
+(ert-deftest regression/auto-experiment/grader-only-failure-stops-current-target ()
+  "Final grader-only failures should stop the current target without poisoning later targets."
+  (let ((gptel-auto-experiment-delay-between 0)
+        (gptel-auto-experiment-max-per-target 3)
+        (gptel-auto-experiment-no-improvement-threshold 99)
+        (gptel-auto-experiment--api-error-count 0)
+        (runs 0)
+        (results nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&rest _) '(:eight-keys 0.4)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () 0.5))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (target exp-id max-exp baseline baseline-code-quality previous-results callback &optional _retry-count)
+                 (cl-incf runs)
+                 (funcall callback
+                          (list :target target
+                                :id exp-id
+                                :score-after 0
+                                :kept nil
+                                :grader-only-failure t
+                                :comparator-reason "grader-api-rate-limit"
+                                :grader-reason "grader quota"
+                                :agent-output "Executor result for task: candidate"))
+                 (list target max-exp baseline baseline-code-quality previous-results)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-experiment-loop
+       "lisp/modules/gptel-tools-agent.el"
+       (lambda (loop-results)
+         (setq results loop-results)))
+      (should (= runs 1))
+      (should (= (length results) 1))
+      (should (plist-get (car results) :grader-only-failure)))))
 
 (ert-deftest regression/auto-experiment/loop-stops-after-tied-no-improvements ()
   "Tied discards should count toward the no-improvement streak."
@@ -4361,6 +4527,23 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (= gptel-auto-experiment--api-error-count 1))
     (should-not gptel-auto-experiment--quota-exhausted)))
 
+(ert-deftest regression/auto-experiment/note-api-pressure-can-stay-local ()
+  "Grader-only API pressure should not mutate run-wide pressure counters."
+  (let ((gptel-auto-experiment--api-error-count 0)
+        (gptel-auto-experiment--quota-exhausted nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--note-api-pressure
+       "lisp/modules/gptel-tools-agent.el"
+       :api-rate-limit
+       "Error: Task grader could not finish task \"Grade output\". Error details: (:code \"insufficient_quota\" :message \"month allocated quota exceeded.\" :param :null :type \"invalid_request_error\")"
+       "grader"
+       nil))
+    (should (= gptel-auto-experiment--api-error-count 0))
+    (should-not gptel-auto-experiment--quota-exhausted)))
+
 (ert-deftest regression/auto-experiment/grade-with-retry-retries-hard-quota-when-grader-fallback-remains ()
   "Grader hard quota should retry locally while another provider fallback remains."
   (let ((grade-calls 0)
@@ -4397,9 +4580,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (gptel-auto-experiment--grade-with-retry
        "Executor result for task: candidate"
        (lambda (grade)
-         (setq final-grade grade)))
+          (setq final-grade grade)))
       (should (= grade-calls 2))
       (should (= scheduled-retries 1))
+      (should (= gptel-auto-experiment--api-error-count 0))
       (should-not gptel-auto-experiment--quota-exhausted)
       (should (plist-get final-grade :passed))
       (should (= (plist-get final-grade :score) 4)))))
@@ -9424,6 +9608,95 @@ failure."
        (delete-directory status-dir t)
         (delete-directory fake-bin t))))
 
+(ert-deftest regression/auto-workflow/cron-wrapper-hydrates-empty-submodule-dirs-before-daemon-start ()
+  "Wrapper auto-workflow should hydrate empty configured submodule dirs before daemon start."
+  (let* ((repo-root (make-temp-file "aw-cron-repo" t))
+         (scripts-dir (expand-file-name "scripts" repo-root))
+         (packages-dir (expand-file-name "packages" repo-root))
+         (gptel-dir (expand-file-name "gptel" packages-dir))
+         (script-src (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" scripts-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (git-log (make-temp-file "aw-git-log"))
+         (daemon-ready (make-temp-file "aw-daemon-ready"))
+         (status-file (expand-file-name "auto-workflow-status.sexp" repo-root))
+         (fake-git (make-temp-file "fake-git" nil ".py"))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format
+            "ready=%s\ngptel_git=%s\nif [ ! -e \"$gptel_git\" ] && [ ! -L \"$gptel_git\" ]; then\n  echo 'missing gptel checkout' >&2\n  exit 1\nfi\n: > \"$ready\"\n"
+            (shell-quote-argument daemon-ready)
+            (shell-quote-argument (expand-file-name ".git" gptel-dir)))))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        "AUTO_WORKFLOW_EMACS_SERVER=fake-aw-hydrate")
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (make-directory scripts-dir t)
+          (make-directory gptel-dir t)
+          (copy-file script-src script t)
+          (set-file-modes script #o755)
+          (with-temp-file (expand-file-name ".gitmodules" repo-root)
+            (insert "[submodule \"packages/gptel\"]\n"
+                    "\tpath = packages/gptel\n"
+                    "\turl = https://example.invalid/gptel.git\n"))
+          (with-temp-file fake-git
+            (insert "#!/usr/bin/env python3\n"
+                    "from pathlib import Path\n"
+                    "import sys\n"
+                    (format "log_path = Path(%S)\n" git-log)
+                    "args = sys.argv[1:]\n"
+                    "cwd = Path.cwd()\n"
+                    "if len(args) >= 2 and args[0] == '-C':\n"
+                    "    cwd = Path(args[1])\n"
+                    "    args = args[2:]\n"
+                    "with log_path.open('a', encoding='utf-8') as handle:\n"
+                    "    handle.write(str(cwd) + ' :: ' + ' '.join(args) + '\\n')\n"
+                    "if args[:2] == ['rev-parse', '--git-common-dir']:\n"
+                    "    print(str(cwd / '.git'))\n"
+                    "elif args[:2] == ['submodule', 'status']:\n"
+                    "    pass\n"
+                    "elif args[:2] == ['config', '--file'] and '--get-regexp' in args:\n"
+                    "    print('submodule.packages/gptel.path packages/gptel')\n"
+                    "elif args[:2] == ['submodule', 'sync']:\n"
+                    "    pass\n"
+                    "elif args[:4] == ['submodule', 'update', '--init', '--recursive']:\n"
+                    "    if '--' in args:\n"
+                    "        for rel in args[args.index('--') + 1:]:\n"
+                    "            target = cwd / rel\n"
+                    "            target.mkdir(parents=True, exist_ok=True)\n"
+                    "            (target / '.git').write_text('gitdir: /fake/modules/' + rel + '\\n', encoding='utf-8')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-git #o755)
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "from pathlib import Path\n"
+                    "import sys\n"
+                    (format "ready = Path(%S)\n" daemon-ready)
+                    "if ready.exists():\n"
+                    "    print('t')\n"
+                    "    raise SystemExit(0)\n"
+                    "raise SystemExit(1)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-git (expand-file-name "git" fake-bin) t)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-buffer
+            (let ((exit-code (call-process script nil t nil "auto-workflow")))
+              (should (equal exit-code 0))))
+          (should (file-exists-p daemon-ready)))
+      (delete-directory repo-root t)
+      (delete-directory fake-bin t)
+      (dolist (path (list git-log daemon-ready))
+        (when (file-exists-p path)
+          (delete-file path))))))
+
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-active-phase-without-running-flag ()
   "Wrapper status should reset stale active phases even when :running is already nil."
   (let* ((repo-root test-auto-workflow--repo-root)
@@ -14369,7 +14642,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
     (should (= grade-call-count 2))
     (should (= benchmark-call-count 1))
     (should (= prepare-call-count 1))
-    (should (= gptel-auto-experiment--api-error-count 1))
+    (should (= gptel-auto-experiment--api-error-count 0))
     (should (plist-get result :validation-retry))
     (should (equal (plist-get result :retries) 1))
     (should (equal (plist-get result :hypothesis) "retry hypothesis"))
@@ -14494,7 +14767,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
     (should (= grade-call-count 3))
     (should (= benchmark-call-count 2))
     (should (= prepare-call-count 1))
-    (should (= gptel-auto-experiment--api-error-count 1))
+    (should (= gptel-auto-experiment--api-error-count 0))
     (should (plist-get result :validation-retry))
     (should (equal (plist-get result :retries) 1))
     (should (equal (plist-get result :hypothesis) "retry hypothesis"))

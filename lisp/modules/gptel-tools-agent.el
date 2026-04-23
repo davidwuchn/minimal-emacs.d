@@ -144,6 +144,79 @@ Reduces duplication of `(or (gptel-auto-workflow--project-root) (expand-file-nam
   (or (gptel-auto-workflow--project-root)
       (expand-file-name "~/.emacs.d/")))
 
+(defun gptel-auto-workflow--elpa-package-dir (proj-root package)
+  "Return the repo-local ELPA directory for PACKAGE under PROJ-ROOT, or nil."
+  (let* ((root (file-name-as-directory (expand-file-name proj-root)))
+         (elpa-dir (expand-file-name "var/elpa" root))
+         (pattern (format "\\`%s-[0-9]" (regexp-quote package)))
+         (candidates
+          (and (file-directory-p elpa-dir)
+               (seq-filter
+                #'file-directory-p
+                (directory-files elpa-dir t pattern)))))
+    (car (sort candidates #'string>))))
+
+(defun gptel-auto-workflow--cleanup-broken-elpa-entries (proj-root package)
+  "Delete broken ELPA symlinks for PACKAGE under PROJ-ROOT."
+  (let* ((root (file-name-as-directory (expand-file-name proj-root)))
+         (elpa-dir (expand-file-name "var/elpa" root))
+         (pattern (format "\\`%s-[0-9]" (regexp-quote package))))
+    (when (file-directory-p elpa-dir)
+      (dolist (entry (directory-files elpa-dir t pattern))
+        (when (and (file-symlink-p entry)
+                   (not (file-exists-p entry)))
+          (delete-file entry))))))
+
+(defun gptel-auto-workflow--install-elpa-package (proj-root package)
+  "Install PACKAGE into PROJ-ROOT's repo-local ELPA cache when missing."
+  (let* ((root (file-name-as-directory (expand-file-name proj-root)))
+         (bootstrap (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el" root))
+         (descs nil))
+    (gptel-auto-workflow--cleanup-broken-elpa-entries root (symbol-name package))
+    (when (file-readable-p bootstrap)
+      (load-file bootstrap)
+      (when (fboundp 'gptel-auto-workflow-bootstrap--configure-package-system)
+        (gptel-auto-workflow-bootstrap--configure-package-system root))
+      (when (fboundp 'gptel-auto-workflow-bootstrap--seed-load-path)
+        (gptel-auto-workflow-bootstrap--seed-load-path root))
+      (when (fboundp 'gptel-auto-workflow-bootstrap--load-package-archive-cache)
+        (gptel-auto-workflow-bootstrap--load-package-archive-cache root))
+      (unless (assq package package-archive-contents)
+        (package-refresh-contents))
+      (setq descs (cdr (assq package package-archive-contents)))
+      (when descs
+        (package-install
+         (car (sort (copy-sequence descs)
+                    (lambda (a b)
+                      (version-list-< (package-desc-version b)
+                                      (package-desc-version a))))))
+        (package-initialize))
+      (gptel-auto-workflow--elpa-package-dir root (symbol-name package)))))
+
+(defun gptel-auto-workflow--prefer-elpa-transient (&optional proj-root)
+  "Ensure repo-local ELPA transient shadows the built-in library.
+When the live worker inherits Emacs's built-in transient, newer Magit or
+evil-collection packages can fail on missing internals like
+`transient--set-layout'.  Prefer the repo-local ELPA transient package and load
+it when the current transient implementation is too old."
+  (let* ((root (file-name-as-directory
+                (expand-file-name
+                 (or proj-root
+                     (gptel-auto-workflow--default-dir)))))
+         (dir (or (gptel-auto-workflow--elpa-package-dir root "transient")
+                  (when (not (fboundp 'transient--set-layout))
+                    (gptel-auto-workflow--install-elpa-package root 'transient)))))
+    (when-let* ((dir dir)
+               (lib (cl-find-if #'file-readable-p
+                                (list (expand-file-name "transient.elc" dir)
+                                      (expand-file-name "transient.el" dir)))))
+      (setq load-path (cons dir (delete dir load-path)))
+      (when (or (not (fboundp 'transient--set-layout))
+                (let ((current-lib (locate-library "transient")))
+                  (and current-lib
+                       (not (string-prefix-p dir current-lib)))))
+        (load (file-name-sans-extension lib) nil 'nomessage))
+      dir)))
 (defun gptel-auto-workflow--activate-live-root (proj-root)
   "Retarget the live daemon to PROJ-ROOT for queued workflow actions."
   (let ((root (file-name-as-directory (expand-file-name proj-root))))
@@ -156,6 +229,7 @@ Reduces duplication of `(or (gptel-auto-workflow--project-root) (expand-file-nam
       (setq minimal-emacs-user-directory root))
     (when (boundp 'gptel-auto-workflow-projects)
       (setq gptel-auto-workflow-projects (list root)))
+    (gptel-auto-workflow--prefer-elpa-transient root)
     root))
 
 (defun gptel-auto-workflow--worktree-base-root ()
@@ -7519,27 +7593,49 @@ retrying on that provider instead."
        (not (gptel-auto-experiment--remaining-provider-failover-candidate
              agent-type))))
 
-(defun gptel-auto-experiment--note-api-pressure (target error-category error-source &optional agent-type)
-  "Record shared API pressure state for TARGET after ERROR-CATEGORY from ERROR-SOURCE.
+(cl-defun gptel-auto-experiment--note-api-pressure (target error-category error-source
+                                                           &optional agent-type
+                                                           (escalate-run-pressure t))
+  "Record API pressure state for TARGET after ERROR-CATEGORY from ERROR-SOURCE.
 
-AGENT-TYPE is the subagent that produced ERROR-SOURCE, when known."
+AGENT-TYPE is the subagent that produced ERROR-SOURCE, when known.
+When ESCALATE-RUN-PRESSURE is nil, log provider pressure without incrementing
+the shared run-wide API counter or stopping the rest of the workflow."
   (when (memq error-category '(:api-rate-limit :api-error))
-    (cl-incf gptel-auto-experiment--api-error-count)
-    (message "[auto-workflow] API error #%d: %s"
-             gptel-auto-experiment--api-error-count error-category)
-    (when (gptel-auto-experiment--hard-quota-exhausted-p error-source)
-      (if-let ((remaining
-                (gptel-auto-experiment--remaining-provider-failover-candidate
-                 (or agent-type "executor"))))
-          (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
-                   (or agent-type "subagent")
-                   (car remaining)
-                   (cdr remaining))
-        (setq gptel-auto-experiment--quota-exhausted t)
-        (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")))
-    (when (>= gptel-auto-experiment--api-error-count gptel-auto-experiment--api-error-threshold)
-      (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
-               target))))
+    (let* ((resolved-agent-type (or agent-type "executor"))
+           (hard-quota (gptel-auto-experiment--hard-quota-exhausted-p error-source)))
+      (if escalate-run-pressure
+          (progn
+            (cl-incf gptel-auto-experiment--api-error-count)
+            (message "[auto-workflow] API error #%d: %s"
+                     gptel-auto-experiment--api-error-count error-category)
+            (when hard-quota
+              (if-let ((remaining
+                        (gptel-auto-experiment--remaining-provider-failover-candidate
+                         resolved-agent-type)))
+                  (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
+                           resolved-agent-type
+                           (car remaining)
+                           (cdr remaining))
+                (setq gptel-auto-experiment--quota-exhausted t)
+                (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")))
+            (when (>= gptel-auto-experiment--api-error-count
+                      gptel-auto-experiment--api-error-threshold)
+              (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
+                       target)))
+        (progn
+          (message "[auto-workflow] Local API pressure on %s for %s; keeping run-wide pressure unchanged"
+                   resolved-agent-type target)
+          (when hard-quota
+            (if-let ((remaining
+                      (gptel-auto-experiment--remaining-provider-failover-candidate
+                       resolved-agent-type)))
+                (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
+                         resolved-agent-type
+                         (car remaining)
+                         (cdr remaining))
+              (message "[auto-workflow] Provider quota exhausted for %s; continuing other workflow work"
+                       resolved-agent-type))))))))
 
 (defun gptel-auto-experiment--grade-with-retry (output callback &optional retry-count)
   "Grade OUTPUT and locally retry transient grader failures.
@@ -7561,15 +7657,15 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
               (error-category (car error-info))
               (grader-only-failure
                (gptel-auto-experiment--grader-only-failure-p output grade-error-output)))
-         (if (and (not grade-passed)
-                  (gptel-auto-experiment--should-retry-grader-p
-                   output grade-error-output error-category retries))
-             (progn
+          (if (and (not grade-passed)
+                   (gptel-auto-experiment--should-retry-grader-p
+                    output grade-error-output error-category retries))
+              (progn
                 (gptel-auto-experiment--note-api-pressure
-                 target error-category grade-error-output "grader")
-               (let ((retry-delay
-                      (gptel-auto-experiment--retry-delay-seconds
-                       grade-error-output retries)))
+                 target error-category grade-error-output "grader" nil)
+                (let ((retry-delay
+                       (gptel-auto-experiment--retry-delay-seconds
+                        grade-error-output retries)))
                  (message "[auto-exp] Retrying grader (attempt %d/%d) after %ds delay"
                           (1+ retries) gptel-auto-experiment-max-grader-retries retry-delay)
                  (run-with-timer
@@ -7589,13 +7685,15 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
                           (setq final-grade
                                 (plist-put final-grade :grader-only-failure t)))
                         (funcall callback final-grade)))))))
-           (when (and (not grade-passed)
-                      (memq error-category '(:api-rate-limit :api-error)))
+            (when (and (not grade-passed)
+                       (memq error-category '(:api-rate-limit :api-error)))
               (gptel-auto-experiment--note-api-pressure
-               target error-category error-source "grader"))
-           (let ((final-grade (copy-sequence grade)))
-             (when grade-error-output
-               (setq final-grade
+               target error-category error-source
+               (if grader-only-failure "grader" "executor")
+               (not grader-only-failure)))
+            (let ((final-grade (copy-sequence grade)))
+              (when grade-error-output
+                (setq final-grade
                      (plist-put final-grade :error-source grade-error-output)))
              (when grader-only-failure
                (setq final-grade
@@ -8609,20 +8707,26 @@ Adapts max-experiments based on API error rate."
                        target exp-id max-exp
                        best-score
                        baseline-code-quality
-                       results
-                       (lambda (result)
-                         (push result results)
-                         (gptel-auto-workflow--update-progress)
-                         (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
-                                (kept (gptel-auto-workflow--plist-get result :kept nil))
-                                (quality-after
-                                 (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
-                                (hard-timeout
-                                 (gptel-auto-experiment--result-hard-timeout-p result))
-                                (next-exp-id (1+ exp-id)))
-                           (when kept
-                             (setq best-score score-after
-                                   baseline-code-quality quality-after
+                        results
+                        (lambda (result)
+                          (push result results)
+                          (gptel-auto-workflow--update-progress)
+                          (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
+                                 (kept (gptel-auto-workflow--plist-get result :kept nil))
+                                 (quality-after
+                                  (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
+                                 (hard-timeout
+                                  (gptel-auto-experiment--result-hard-timeout-p result))
+                                 (grader-only-failure
+                                  (plist-get result :grader-only-failure))
+                                 (next-exp-id (1+ exp-id)))
+                            (when grader-only-failure
+                              (message "[auto-experiment] Final grader-only failure for %s in experiment %d; stopping further experiments for this target"
+                                       target exp-id)
+                              (setq max-exp exp-id))
+                            (when kept
+                              (setq best-score score-after
+                                    baseline-code-quality quality-after
                                    no-improvement-count 0))
                              (when (and (not kept)
                                         score-after

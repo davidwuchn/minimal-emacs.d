@@ -40,6 +40,32 @@ Use this to refresh presets or update buffers that depend on tool availability."
   "Tool registry and management for gptel-agent."
   :group 'gptel)
 
+(defun gptel-tools--eval-expression (expression)
+  "Evaluate Elisp EXPRESSION and return result plus any captured stdout."
+  (let ((standard-output (generate-new-buffer " *gptel-eval*"))
+        (safe-default-directory
+         (or (and (stringp default-directory)
+                  default-directory)
+             (and (stringp temporary-file-directory)
+                  temporary-file-directory)
+             user-emacs-directory))
+        (result nil)
+        (output nil))
+    (unwind-protect
+          (condition-case err
+              (let ((default-directory safe-default-directory))
+                (setq result (eval (read expression) t))
+                (when (> (buffer-size standard-output) 0)
+                  (setq output (with-current-buffer standard-output (buffer-string))))
+                (concat (format "Result:\n%S" result)
+                        (and output (format "\n\nSTDOUT:\n%s" output))))
+            ((error user-error)
+             (when (> (buffer-size standard-output) 0)
+               (setq output (with-current-buffer standard-output (buffer-string))))
+             (concat (format "Error: %S: %S" (car err) (cdr err))
+                     (and output (format "\n\nSTDOUT:\n%s" output)))))
+      (kill-buffer standard-output))))
+
 (defun gptel-tools-register-all ()
   "Register all gptel tools.
 
@@ -144,21 +170,7 @@ Call this after gptel-agent-tools loads."
     ;; Eval tool
     (gptel-make-tool
      :name "Eval"
-     :function (lambda (expression)
-                 (let ((standard-output (generate-new-buffer " *gptel-eval*"))
-                       (result nil) (output nil))
-                   (unwind-protect
-                       (condition-case err
-                           (progn
-                             (setq result (eval (read expression) t))
-                             (when (> (buffer-size standard-output) 0)
-                               (setq output (with-current-buffer standard-output (buffer-string))))
-                             (concat (format "Result:\n%S" result)
-                                     (and output (format "\n\nSTDOUT:\n%s" output))))
-                         ((error user-error)
-                          (concat (format "Error: %S: %S" (car err) (cdr err))
-                                  (and output (format "\n\nSTDOUT:\n%s" output)))))
-                     (kill-buffer standard-output))))
+     :function #'gptel-tools--eval-expression
      :description "Evaluate a single Elisp expression."
      :args '((:name "expression" :type string))
      :category "gptel-agent"

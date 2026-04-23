@@ -241,6 +241,23 @@
       (error
        (should (string-match-p "void-function" (format "%S" err)))))))
 
+(ert-deftest tools/eval/preserves-buffer-default-directory ()
+  "Eval tool should not leak an invalid `default-directory' into the live buffer."
+  (test-tools--with-temp
+    (let ((root (file-name-as-directory test-tools--temp-dir)))
+      (with-temp-buffer
+        (setq default-directory root)
+        (should (equal "Result:\nnil"
+                       (gptel-tools--eval-expression "(setq default-directory nil)")))
+        (should (equal root default-directory))))))
+
+(ert-deftest tools/eval/preserves-stdout-on-error ()
+  "Eval tool should include captured stdout when evaluation errors."
+  (let ((result (gptel-tools--eval-expression
+                 "(progn (princ \"debug info\") (error \"boom\"))")))
+    (should (string-match-p (regexp-quote "Error: error: (\"boom\")") result))
+    (should (string-match-p (regexp-quote "STDOUT:\ndebug info") result))))
+
 ;;; Tests for WebSearch tool
 
 (ert-deftest tools/websearch/searches-query ()
