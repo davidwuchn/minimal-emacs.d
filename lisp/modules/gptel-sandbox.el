@@ -285,11 +285,17 @@ supports a small, explicit whitelist of pure operations."
       ('setq
        (gptel-sandbox--eval-setq-pairs (cdr expr) env))
       ('when
-          (when (gptel-sandbox--eval-expr (nth 1 expr) env)
-            (gptel-sandbox--eval-sequential (cddr expr) env)))
+       (let ((args (cdr expr)))
+         (unless (>= (length args) 1)
+           (error "Programmatic when requires at least 1 argument (condition), got: %d" (length args)))
+         (when (gptel-sandbox--eval-expr (car args) env)
+           (gptel-sandbox--eval-sequential (cdr args) env))))
       ('unless
-          (unless (gptel-sandbox--eval-expr (nth 1 expr) env)
-            (gptel-sandbox--eval-sequential (cddr expr) env)))
+       (let ((args (cdr expr)))
+         (unless (>= (length args) 1)
+           (error "Programmatic unless requires at least 1 argument (condition), got: %d" (length args)))
+         (unless (gptel-sandbox--eval-expr (car args) env)
+           (gptel-sandbox--eval-sequential (cdr args) env))))
       ('progn
         (gptel-sandbox--eval-sequential (cdr expr) env))
       ('let
