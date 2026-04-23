@@ -131,7 +131,7 @@ TEST: (my/gptel--retry-delay 3) => 30.0 (capped)"
                               my/gptel--retry-backoff-factor 2.0))
          (max-delay (if (numberp my/gptel--retry-max-delay)
                         my/gptel--retry-max-delay 30.0)))
-    (max 0.1 (min (abs max-delay) (* (abs base-delay) (expt (abs backoff-factor) r))))))
+    (max 0.1 (min max-delay (* base-delay (expt backoff-factor r))))))
 
 (defconst my/gptel--unbounded-byte-limit 999999999
   "Unbounded byte limit for model-specific context limits.
