@@ -143,6 +143,95 @@ Reduces duplication of `(or (gptel-auto-workflow--project-root) (expand-file-nam
   (or (gptel-auto-workflow--project-root)
       (expand-file-name "~/.emacs.d/")))
 
+(defun gptel-auto-workflow--elpa-package-dir (proj-root package)
+  "Return the repo-local ELPA directory for PACKAGE under PROJ-ROOT, or nil."
+  (let* ((root (file-name-as-directory (expand-file-name proj-root)))
+         (elpa-dir (expand-file-name "var/elpa" root))
+         (pattern (format "\\`%s-[0-9]" (regexp-quote package)))
+         (candidates
+          (and (file-directory-p elpa-dir)
+               (seq-filter
+                #'file-directory-p
+                (directory-files elpa-dir t pattern)))))
+    (car (sort candidates #'string>))))
+
+(defun gptel-auto-workflow--cleanup-broken-elpa-entries (proj-root package)
+  "Delete broken ELPA symlinks for PACKAGE under PROJ-ROOT."
+  (let* ((root (file-name-as-directory (expand-file-name proj-root)))
+         (elpa-dir (expand-file-name "var/elpa" root))
+         (pattern (format "\\`%s-[0-9]" (regexp-quote package))))
+    (when (file-directory-p elpa-dir)
+      (dolist (entry (directory-files elpa-dir t pattern))
+        (when (and (file-symlink-p entry)
+                   (not (file-exists-p entry)))
+          (delete-file entry))))))
+
+(defun gptel-auto-workflow--install-elpa-package (proj-root package)
+  "Install PACKAGE into PROJ-ROOT's repo-local ELPA cache when missing."
+  (let* ((root (file-name-as-directory (expand-file-name proj-root)))
+         (bootstrap (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el" root))
+         (descs nil))
+    (gptel-auto-workflow--cleanup-broken-elpa-entries root (symbol-name package))
+    (when (file-readable-p bootstrap)
+      (load-file bootstrap)
+      (when (fboundp 'gptel-auto-workflow-bootstrap--configure-package-system)
+        (gptel-auto-workflow-bootstrap--configure-package-system root))
+      (when (fboundp 'gptel-auto-workflow-bootstrap--seed-load-path)
+        (gptel-auto-workflow-bootstrap--seed-load-path root))
+      (when (fboundp 'gptel-auto-workflow-bootstrap--load-package-archive-cache)
+        (gptel-auto-workflow-bootstrap--load-package-archive-cache root))
+      (unless (assq package package-archive-contents)
+        (package-refresh-contents))
+      (setq descs (cdr (assq package package-archive-contents)))
+      (when descs
+        (package-install
+         (car (sort (copy-sequence descs)
+                    (lambda (a b)
+                      (version-list-< (package-desc-version b)
+                                      (package-desc-version a))))))
+        (package-initialize))
+      (gptel-auto-workflow--elpa-package-dir root (symbol-name package)))))
+
+(defun gptel-auto-workflow--prefer-elpa-transient (&optional proj-root)
+  "Ensure repo-local ELPA transient shadows the built-in library.
+When the live worker inherits Emacs's built-in transient, newer Magit or
+evil-collection packages can fail on missing internals like
+`transient--set-layout'.  Prefer the repo-local ELPA transient package and load
+it when the current transient implementation is too old."
+  (let* ((root (file-name-as-directory
+                (expand-file-name
+                 (or proj-root
+                     (gptel-auto-workflow--default-dir)))))
+         (dir (or (gptel-auto-workflow--elpa-package-dir root "transient")
+                  (when (not (fboundp 'transient--set-layout))
+                    (gptel-auto-workflow--install-elpa-package root 'transient)))))
+    (when-let* ((dir dir)
+               (lib (cl-find-if #'file-readable-p
+                                (list (expand-file-name "transient.elc" dir)
+                                      (expand-file-name "transient.el" dir)))))
+      (setq load-path (cons dir (delete dir load-path)))
+      (when (or (not (fboundp 'transient--set-layout))
+                (let ((current-lib (locate-library "transient")))
+                  (and current-lib
+                       (not (string-prefix-p dir current-lib)))))
+        (load (file-name-sans-extension lib) nil 'nomessage))
+      dir)))
+
+(defun gptel-auto-workflow--activate-live-root (proj-root)
+  "Retarget the live daemon to PROJ-ROOT for queued workflow actions."
+  (let ((root (file-name-as-directory (expand-file-name proj-root))))
+    (setq default-directory root
+          user-emacs-directory root
+          gptel-auto-workflow--project-root-override root
+          gptel-auto-workflow--current-project nil
+          gptel-auto-workflow--run-project-root nil)
+    (when (boundp 'minimal-emacs-user-directory)
+      (setq minimal-emacs-user-directory root))
+    (when (boundp 'gptel-auto-workflow-projects)
+      (setq gptel-auto-workflow-projects (list root)))
+    (gptel-auto-workflow--prefer-elpa-transient root)
+    root))
+
 (defun gptel-auto-workflow--worktree-base-root ()
   "Return a stable root for workflow-owned worktree artifacts.
 Prefer the root captured at workflow start over mutable experiment context."
