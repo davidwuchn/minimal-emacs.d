@@ -567,10 +567,37 @@ try:
 except subprocess.TimeoutExpired as err:
     # Leave the client alive so the server can finish the request cleanly
     # instead of logging a broken server connection when the wrapper gives up.
+    # The child must keep draining its stdout/stderr pipes after this wrapper
+    # exits, otherwise the server sees a remote peer disconnect mid-request.
     if err.stdout:
         sys.stdout.write(err.stdout if isinstance(err.stdout, str) else err.stdout.decode())
     if err.stderr:
         sys.stderr.write(err.stderr if isinstance(err.stderr, str) else err.stderr.decode())
+    if proc.poll() is None and hasattr(os, "fork"):
+        try:
+            reaper_pid = os.fork()
+        except OSError:
+            reaper_pid = -1
+        if reaper_pid == 0:
+            try:
+                try:
+                    os.setsid()
+                except OSError:
+                    pass
+                devnull_fd = os.open(os.devnull, os.O_RDWR)
+                try:
+                    os.dup2(devnull_fd, 0)
+                    os.dup2(devnull_fd, 1)
+                    os.dup2(devnull_fd, 2)
+                finally:
+                    if devnull_fd > 2:
+                        os.close(devnull_fd)
+                try:
+                    proc.communicate()
+                except Exception:
+                    pass
+            finally:
+                os._exit(0)
     raise SystemExit(124)
 
 proc_stdout = stdout_text or ""
