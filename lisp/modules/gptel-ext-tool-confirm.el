@@ -112,9 +112,12 @@ this accepts wrapped request entries and validates the resolved FSM itself."
   "Return a displayable tool name for TOOL-SPEC.
 Supports normal gptel tool structs and lightweight plist specs used for
 aggregate Programmatic previews."
-  (or (ignore-errors (gptel-tool-name tool-spec))
-      (plist-get tool-spec :name)
-      (format "%s" tool-spec)))
+  (cond
+   ((null tool-spec) nil)
+   ((stringp tool-spec) tool-spec)
+   (t (let ((name (or (ignore-errors (gptel-tool-name tool-spec))
+                      (plist-get tool-spec :name))))
+        (and (stringp name) name)))))
 
 ;; --- Enhanced Tool Call Confirmation Context ---
 
