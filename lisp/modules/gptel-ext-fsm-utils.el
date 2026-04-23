@@ -219,6 +219,8 @@ Returns FSM struct or nil if not found."
                     (or result
                         (cond
                          ((gethash obj seen) nil)
+                         ((consp obj)
+                          (coerce obj))
                          ((my/gptel--fsm-p obj)
                           (if (null context-id)
                               obj
