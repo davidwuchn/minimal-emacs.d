@@ -757,7 +757,8 @@ Cache behavior:
 
 (defun gptel-agent-loop--make-timeout-timer (state)
   "Create timeout timer for STATE, canceling any existing timer first."
-  (when (and state (gptel-agent-loop--task-p state) gptel-agent-loop-timeout)
+  (when (and state (gptel-agent-loop--task-p state)
+             (numberp gptel-agent-loop-timeout) (> gptel-agent-loop-timeout 0))
     (let ((existing-timer (gptel-agent-loop--task-timeout-timer state)))
       (when (timerp existing-timer)
         (cancel-timer existing-timer)))
