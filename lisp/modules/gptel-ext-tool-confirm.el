@@ -140,7 +140,7 @@ CALLBACK receives non-nil for approval and nil for rejection."
                     :tracking-marker (copy-marker (point) t)
                     :programmatic-confirm t)))
     (if (and (bound-and-true-p my/gptel-permitted-tools)
-             (my/gptel-tool-permitted-p (gptel-tool-name tool-spec)))
+             (my/gptel-tool-permitted-p (my/gptel--tool-spec-name tool-spec)))
         (funcall callback t)
       (if (or buffer-read-only
               (get-char-property (point) 'read-only))
