@@ -118,9 +118,12 @@ and `my/gptel--retry-max-delay' constants.
 ASSUMPTION: retries >= 0; negative values treated as 0.
 BEHAVIOR: delay = min(max-delay, base-delay * backoff-factor^retries)
 EDGE CASE: Negative retries clamped to 0 to prevent sub-second delays.
+EDGE CASE: Non-numeric retries default to 0.
+EDGE CASE: Nil/unbound constants fall back to defaults (4.0, 2.0, 30.0).
+EDGE CASE: Calculation overflow clamped by max-delay cap.
 TEST: (my/gptel--retry-delay 0) => 4.0
 TEST: (my/gptel--retry-delay 3) => 30.0 (capped)"
-  (let* ((r (if (numberp retries) retries 0))
+  (let* ((r (if (numberp retries) (truncate retries) 0))
          (r (max 0 r))
          (base-delay (if (numberp my/gptel--retry-base-delay)
                          my/gptel--retry-base-delay 4.0))
@@ -128,7 +131,7 @@ TEST: (my/gptel--retry-delay 3) => 30.0 (capped)"
                               my/gptel--retry-backoff-factor 2.0))
          (max-delay (if (numberp my/gptel--retry-max-delay)
                         my/gptel--retry-max-delay 30.0)))
-    (max 0.1 (min max-delay (* base-delay (expt backoff-factor r))))))
+    (max 0.1 (min (abs max-delay) (* (abs base-delay) (expt (abs backoff-factor) r))))))
 
 (defconst my/gptel--unbounded-byte-limit 999999999
   "Unbounded byte limit for model-specific context limits.
