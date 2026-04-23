@@ -177,11 +177,12 @@ TEST: (my/gptel--fsm-p 42) => nil
 
 PROACTIVE MITIGATION: Uses ignore-errors to safely handle
 any object type without signaling errors to caller."
-  (if (fboundp 'gptel-fsm-p)
-      (gptel-fsm-p object)
-    (ignore-errors
-      (gptel-fsm-state object)
-      t)))
+  (and object
+       (if (fboundp 'gptel-fsm-p)
+           (gptel-fsm-p object)
+         (ignore-errors
+           (gptel-fsm-state object)
+           t))))
 
 (defun my/gptel--coerce-fsm (object &optional context-id)
   "Return the FSM matching CONTEXT-ID from OBJECT, or first FSM if no match.
