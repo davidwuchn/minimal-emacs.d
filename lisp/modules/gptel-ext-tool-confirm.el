@@ -375,14 +375,16 @@ with an additional `p' option to permit and remember a tool."
 (defun my/gptel--extract-programmatic-callback (response ov)
   "Extract callback from PROGRAMMATIC RESPONSE if valid.
 Returns (callback . is-programmatic) where callback is the function or nil."
-  (let* ((first (car-safe response))
-         (cb (and (listp first) (nth 2 first))))
-    (if (and (listp response)
-             (= (length response) 1)
-             (or (and (overlayp ov) (overlay-get ov 'gptel-programmatic-confirm))
-                 (functionp cb)))
-        (cons cb t)
-      (cons nil nil))))
+  (if (and (listp response)
+           (= (length response) 1)
+           (listp (car-safe response)))
+      (let* ((first (car response))
+             (cb (nth 2 first)))
+        (if (or (and (overlayp ov) (overlay-get ov 'gptel-programmatic-confirm))
+                (functionp cb))
+            (cons cb t)
+          (cons nil nil)))
+    (cons nil nil)))
 
 (defun my/gptel--around-accept-tool-calls (orig &optional response ov)
   "Handle nested Programmatic tool confirmations before normal acceptance."
