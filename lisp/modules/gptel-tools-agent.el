@@ -2006,7 +2006,7 @@ subagent callback fired, and avoids reusing a deleted worktree as
 `default-directory'."
   (unless (functionp callback)
     (signal 'wrong-type-argument (list 'functionp callback)))
-  (let* ((caller-default-directory default-directory)
+  (let* ((caller-default-directory (or default-directory temporary-file-directory))
          (safe-buffer (get-buffer-create " *gptel-callback*"))
          (safe-default-directory
           (or (my/gptel--first-existing-directory
@@ -2023,10 +2023,7 @@ subagent callback fired, and avoids reusing a deleted worktree as
               temporary-file-directory)))
     (with-current-buffer safe-buffer
       (setq default-directory safe-default-directory)
-      (condition-case err
-          (funcall callback result)
-        (error
-         (signal (car err) (cdr err)))))))
+      (funcall callback result))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
