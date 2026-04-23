@@ -481,7 +481,8 @@ Image tokens are counted from `gptel-context' if available."
           (setq my/gptel--context-window-cache-data nil
                 my/gptel--context-window-cache-last-refresh nil)
           (load my/gptel-context-window-cache-file nil t)
-          (when (listp my/gptel--context-window-cache-data)
+          (when (and (listp my/gptel--context-window-cache-data)
+                     (hash-table-p my/gptel--context-window-cache))
             (dolist (kv my/gptel--context-window-cache-data)
               (let ((key (car kv)) (val (cdr kv)))
                 (cond
