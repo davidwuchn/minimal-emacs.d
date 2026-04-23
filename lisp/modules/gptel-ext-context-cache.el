@@ -397,7 +397,8 @@ raw tokens."
 
 (defun my/gptel--openrouter-entry-context-window (entry)
   "Extract valid context_window from an OpenRouter model ENTRY alist.
-Returns a cons cell (id . context_length) if ENTRY is valid; otherwise returns nil."
+Returns (id . context_length) if ENTRY is a plist/alist with a string id
+and a positive integer context_length; otherwise returns nil."
   (when (consp entry)
     (let ((id (alist-get 'id entry))
           (cw (alist-get 'context_length entry)))
@@ -616,8 +617,9 @@ Runs asynchronously; returns nil immediately."
                                          (let ((id (alist-get 'id e)))
                                            (and (stringp id) (string= id model-id))))
                                        valid-data)))
-                (result (my/gptel--openrouter-entry-context-window entry)))
-           (if result
+                (result (my/gptel--openrouter-entry-context-window entry))
+                (cw (and result (cdr result))))
+           (if cw
                (progn
                  (my/gptel--cache-put-context-window model-id (cdr result))
                  (message "OpenRouter context-window cached: %s -> %d" model-id (cdr result)))
