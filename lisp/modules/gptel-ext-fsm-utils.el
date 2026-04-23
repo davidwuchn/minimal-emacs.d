@@ -284,17 +284,15 @@ improving testability and reducing cognitive load."
   (let ((seen (make-hash-table :test 'eq))
         (result nil))
     (cl-labels ((collect (obj)
-                  (while (and (consp obj) (not (gethash obj seen)))
+                  (cond
+                   ((gethash obj seen) nil)
+                   ((consp obj)
                     (puthash obj t seen)
                     (collect (car obj))
-                    (setq obj (cdr obj)))
-                  (cond
-                   ((null obj) nil)
-                   ((and (consp obj) (gethash obj seen)) nil)
+                    (collect (cdr obj)))
                    ((my/gptel--fsm-p obj)
-                    (unless (gethash obj seen)
-                      (puthash obj t seen)
-                      (push obj result))))))
+                    (puthash obj t seen)
+                    (push obj result)))))
       (collect object)
       (nreverse result))))
 
