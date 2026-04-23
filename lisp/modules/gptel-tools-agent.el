@@ -2006,6 +2006,11 @@ subagent callback fired, and avoids reusing a deleted worktree as
 `default-directory'."
   (unless (functionp callback)
     (signal 'wrong-type-argument (list 'functionp callback)))
+  (when (and result
+             (or (consp result)
+                 (listp result))
+             (eq result (car result)))
+    (signal 'wrong-type-argument (list '(not (eq result (car result))) result)))
   (let* ((caller-default-directory (or default-directory temporary-file-directory))
          (safe-buffer (get-buffer-create " *gptel-callback*"))
          (safe-default-directory
