@@ -2103,7 +2103,8 @@ subagent callback fired, and avoids reusing a deleted worktree as
       (condition-case err
           (funcall callback result)
         (error
-         (signal (car err) (cdr err)))))))
+         (let ((err-data (cons callback (cons result (cdr err)))))
+           (signal (car err) err-data)))))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
