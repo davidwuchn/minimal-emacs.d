@@ -585,7 +585,8 @@ Supports JSON Schema-like validators:
               (setf (nth i normalized-args) val))
             (cond
               ;; Check for missing required arguments
-              ((and (null val) (not optional) (not (member type '("boolean" boolean))))
+              ((and (null val) (not optional)
+                    (not (or (equal type "boolean") (eq type 'boolean))))
                (nucleus-tools--validation-error tool-name :required arg-name))
              
              ;; Validate non-null values
