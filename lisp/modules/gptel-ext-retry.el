@@ -337,7 +337,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
            (keep my/gptel-truncate-old-messages-keep)
            (truncated 0)
            (truncation-text "[Earlier conversation truncated to reduce payload size]"))
-      (when (and messages (> (length messages) keep))
+      (when (and (vectorp messages) (> (length messages) keep))
         (let ((cutoff (- (length messages) keep)))
           (dotimes (i cutoff)
             (let* ((msg (aref messages i))
