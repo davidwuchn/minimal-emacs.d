@@ -345,9 +345,9 @@ Returns the number of messages truncated, or 0 if nothing was done."
                    (role (plist-get msg :role))
                    (content (plist-get msg :content)))
               ;; Only truncate user and assistant messages, not system/tool
-              (when (and (or (string= role "user") (string= role "assistant"))
+              (when (and (member role '("user" "assistant"))
                          (stringp content)
-                         (> (length content) truncation-text-len))
+                         (> (length content) (length truncation-text)))
                 (plist-put msg :content truncation-text)
                 (cl-incf truncated))))))
       truncated)))
