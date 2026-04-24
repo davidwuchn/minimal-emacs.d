@@ -682,16 +682,19 @@ Returns non-nil when at least one entry was removed."
 Checks both local and remote refs because cron resets the local staging branch to
 the workflow base before scanning tracked ledgers."
   (when (gptel-auto-workflow--non-empty-string-p commit-hash)
-    (let ((refs (delete-dups
-                 (delq nil
-                       (list gptel-auto-workflow-staging-branch
-                             (and (gptel-auto-workflow--non-empty-string-p
-                                   gptel-auto-workflow-staging-branch)
-                                  (format "origin/%s"
-                                          gptel-auto-workflow-staging-branch))
-                             "main"
-                             "origin/main"))))
-          integrated)
+    (let* ((remote-main (gptel-auto-workflow--shared-remote-branch "main"))
+           (remote-staging
+            (and (gptel-auto-workflow--non-empty-string-p
+                  gptel-auto-workflow-staging-branch)
+                 (gptel-auto-workflow--shared-remote-branch
+                  gptel-auto-workflow-staging-branch)))
+           (refs (delete-dups
+                  (delq nil
+                        (list gptel-auto-workflow-staging-branch
+                              remote-staging
+                              "main"
+                              remote-main))))
+           integrated)
       (dolist (ref refs integrated)
         (let ((ancestor-check
                (gptel-auto-workflow--git-cmd
@@ -896,7 +899,8 @@ Uses the staging worktree only."
 
 (defun gptel-auto-workflow-recover-all-orphans (&optional no-push)
   "Recover all orphan commits from tracked ledgers to staging branch.
-If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
+If NO-PUSH is non-nil, skip pushing to the workflow remote (useful for cron
+jobs)."
   (interactive)
   (let ((orphans (gptel-auto-workflow--recoverable-tracked-commits)))
     (if (not orphans)
@@ -935,26 +939,29 @@ All shell commands have timeout protection to prevent deadlocks."
                (gptel-auto-workflow--non-empty-string-p target-branch)
                (gptel-auto-workflow--non-empty-string-p action-name))
     (error "[auto-workflow] sync-branches: source-branch, target-branch, and action-name must be non-empty strings"))
-  (let ((default-directory (gptel-auto-workflow--default-dir))
-        (original-branch (gptel-auto-workflow--git-cmd
-                          "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
+  (let* ((default-directory (gptel-auto-workflow--default-dir))
+         (remote (gptel-auto-workflow--shared-remote))
+         (remote-source (format "%s/%s" remote source-branch))
+         (remote-target (format "%s/%s" remote target-branch))
+         (original-branch (gptel-auto-workflow--git-cmd
+                           "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
     (condition-case err
         (progn
-          (gptel-auto-workflow--git-cmd "git fetch origin" 180)
+          (gptel-auto-workflow--git-cmd (format "git fetch %s" remote) 180)
           (let* ((source-commit (gptel-auto-workflow--git-cmd
-                                 (format "git rev-parse origin/%s" source-branch)))
+                                 (format "git rev-parse %s" remote-source)))
                  (target-commit (gptel-auto-workflow--git-cmd
-                                 (format "git rev-parse origin/%s 2>/dev/null || echo \"none\"" target-branch)))
+                                 (format "git rev-parse %s 2>/dev/null || echo \"none\"" remote-target)))
                  (source-commit (or source-commit "none"))
                  (target-commit (or target-commit "none")))
             (if (string= source-commit target-commit)
                 (message "[auto-workflow] %s already in sync with %s" target-branch source-branch)
               (progn
                 (gptel-auto-workflow--git-cmd (format "git checkout %s" target-branch))
-                (gptel-auto-workflow--git-cmd (format "git merge origin/%s --ff-only" source-branch))
+                (gptel-auto-workflow--git-cmd (format "git merge %s --ff-only" remote-source))
                 (gptel-auto-workflow--with-skipped-submodule-sync
                  (lambda ()
-                   (gptel-auto-workflow--git-cmd (format "git push origin %s" target-branch))))
+                   (gptel-auto-workflow--git-cmd (format "git push %s %s" remote target-branch))))
                 (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
                 (message "[auto-workflow] %s %s to %s (%s -> %s)"
                          action-name target-branch source-branch
@@ -2568,8 +2575,8 @@ least this amount and the combined score still improves."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-experiment-auto-push t
-  "Automatically push experiment branches to origin after successful commit.
-When non-nil, branches are pushed to origin for PR review on Forgejo."
+  "Automatically push experiment branches to the shared remote after commit.
+When non-nil, branches are pushed to the workflow remote for PR review on Forgejo."
   :type 'boolean
   :group 'gptel-tools-agent)
 
@@ -2595,7 +2602,7 @@ Flow:
 1. Sync staging from main at workflow start
 2. optimize/* changes are merged to staging
 3. Tests run on staging (isolated worktree)
-4. If tests pass: push staging to origin
+4. If tests pass: push staging to the workflow remote
 5. Human reviews staging and manually merges to main
 
 IMPORTANT: Auto-workflow NEVER touches main branch.
@@ -2607,6 +2614,14 @@ All merges wait in staging for human review."
   "Name of the staging branch for integration.
 This branch is NEVER deleted and NEVER auto-merged to main."
   :type 'string
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-shared-remote nil
+  "Canonical remote used for shared auto-workflow refs.
+When nil, follow the local `main' branch's configured remote and fall back to
+`origin'."
+  :type '(choice (const :tag "Follow main's tracking remote" nil)
+                 (string :tag "Remote name"))
   :group 'gptel-tools-agent)
 
 ;;; State
@@ -2761,13 +2776,15 @@ Each item is a plist with keys :branch and :path."
     (nreverse entries)))
 
 (defun gptel-auto-workflow--remote-tracking-optimize-branches (&optional proj-root)
-  "Return local `origin/optimize/*' tracking refs within PROJ-ROOT."
-  (let ((default-directory (or proj-root (gptel-auto-workflow--default-dir))))
+  "Return local tracking refs for shared remote optimize branches within PROJ-ROOT."
+  (let* ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
+         (remote (gptel-auto-workflow--shared-remote))
+         (tracking-prefix (format "refs/remotes/%s/optimize" remote)))
     (if (not (file-directory-p default-directory))
         nil
       (let ((result
              (gptel-auto-workflow--git-result
-              "git for-each-ref --format=%(refname:short) refs/remotes/origin/optimize"
+              (format "git for-each-ref --format=%%(refname:short) %s" tracking-prefix)
               60)))
         (when (= 0 (cdr result))
           (split-string (string-trim-right (or (car result) "")) "\n" t))))))
@@ -2776,13 +2793,15 @@ Each item is a plist with keys :branch and :path."
   "Return remote optimize branches within PROJ-ROOT.
 
 Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
-  (let ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
-        (entries nil))
+  (let* ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
+         (remote (gptel-auto-workflow--shared-remote))
+         (entries nil))
     (if (not (file-directory-p default-directory))
         nil
       (let ((result
              (gptel-auto-workflow--git-result
-              (format "git ls-remote --heads origin %s"
+              (format "git ls-remote --heads %s %s"
+                      remote
                       (shell-quote-argument "refs/heads/optimize/*"))
               180)))
         (when (= 0 (cdr result))
@@ -2968,12 +2987,47 @@ Call this before any git operation that might modify branches."
       (message "[auto-workflow] Missing staging branch configuration")
       nil))
 
+(defun gptel-auto-workflow--shared-remote ()
+  "Return the canonical remote used for auto-workflow shared refs."
+  (let* ((default-directory (or (gptel-auto-workflow--project-root)
+                                (gptel-auto-workflow--default-dir)
+                                default-directory))
+         (configured
+          (and (gptel-auto-workflow--non-empty-string-p
+                gptel-auto-workflow-shared-remote)
+               gptel-auto-workflow-shared-remote))
+         (tracked (ignore-errors (magit-get "branch" "main" "remote"))))
+    (cond
+     ((gptel-auto-workflow--non-empty-string-p configured) configured)
+     ((gptel-auto-workflow--non-empty-string-p tracked) tracked)
+     (t "origin"))))
+
+(defun gptel-auto-workflow--shared-remote-branch (branch)
+  "Return BRANCH under the shared auto-workflow remote."
+  (when (gptel-auto-workflow--non-empty-string-p branch)
+    (format "%s/%s" (gptel-auto-workflow--shared-remote) branch)))
+
+(defun gptel-auto-workflow--shared-remote-ref (branch)
+  "Return the full remote-tracking ref for BRANCH on the shared remote."
+  (when (gptel-auto-workflow--non-empty-string-p branch)
+    (format "refs/remotes/%s/%s"
+            (gptel-auto-workflow--shared-remote)
+            branch)))
+
+(defun gptel-auto-workflow--shared-remote-refspec (branch)
+  "Return a targeted fetch refspec for BRANCH on the shared remote."
+  (let ((remote-ref (gptel-auto-workflow--shared-remote-ref branch)))
+    (when remote-ref
+      (format "+refs/heads/%s:%s" branch remote-ref))))
+
 (defun gptel-auto-workflow--staging-branch-exists-p ()
   "Check if staging branch exists locally or remotely."
-  (let ((branch (gptel-auto-workflow--configured-staging-branch)))
+  (let* ((branch (gptel-auto-workflow--configured-staging-branch))
+         (remote-branch (and branch
+                             (gptel-auto-workflow--shared-remote-branch branch))))
     (and branch
          (or (member branch (magit-list-local-branch-names))
-             (member (concat "origin/" branch)
+             (member remote-branch
                      (magit-list-remote-branch-names))))))
 
 (defun gptel-auto-workflow--autonomous-maintenance-commit-subject-p (subject)
@@ -2986,69 +3040,76 @@ Call this before any git operation that might modify branches."
 
 (defun gptel-auto-workflow--staging-main-ref ()
   "Return the safe main ref staging and experiments should mirror.
-Prefer local `main' when it either matches `origin/main' or is a clean
-ahead-only tip. Otherwise use `origin/main' so dirty or diverged local
-state does not leak into workflow branches."
+Prefer local `main' when it either matches the shared remote's `main' branch or
+is a clean ahead-only tip. Otherwise use the shared remote's `main' so dirty or
+diverged local state does not leak into workflow branches."
   (let ((default-directory (gptel-auto-workflow--default-dir)))
-    (let* ((main-result (gptel-auto-workflow--git-result
+    (let* ((remote-main (gptel-auto-workflow--shared-remote-branch "main"))
+           (main-result (gptel-auto-workflow--git-result
                          "git rev-parse --verify main"
                          60))
-           (origin-result (gptel-auto-workflow--git-result
-                           "git rev-parse --verify origin/main"
-                           60))
+           (remote-result (and remote-main
+                               (gptel-auto-workflow--git-result
+                                (format "git rev-parse --verify %s" remote-main)
+                                60)))
            (have-main (= 0 (cdr main-result)))
-           (have-origin (= 0 (cdr origin-result)))
+           (have-remote (and remote-main
+                             (= 0 (cdr remote-result))))
            (main-hash (and have-main (string-trim (car main-result))))
-           (origin-hash (and have-origin (string-trim (car origin-result)))))
+           (remote-hash (and have-remote (string-trim (car remote-result)))))
       (cond
-       ((and have-main have-origin)
-        (if (string= main-hash origin-hash)
+       ((and have-main have-remote)
+        (if (string= main-hash remote-hash)
             "main"
           (let* ((status-result (gptel-auto-workflow--git-result
                                  "git status --porcelain"
                                  60))
-                 (clean-main (and (= 0 (cdr status-result))
-                                  (string-empty-p (string-trim (car status-result)))))
-                  (ahead-result (and clean-main
-                                     (gptel-auto-workflow--git-result
-                                      "git rev-list --left-right --count origin/main...main"
-                                      60)))
-                  (ahead-counts (and ahead-result
-                                    (= 0 (cdr ahead-result))
-                                    (split-string (string-trim (car ahead-result))
-                                                   "[[:space:]]+" t)))
+                  (clean-main (and (= 0 (cdr status-result))
+                                   (string-empty-p (string-trim (car status-result)))))
+                 (ahead-result (and clean-main
+                                    (gptel-auto-workflow--git-result
+                                     (format "git rev-list --left-right --count %s...main"
+                                             remote-main)
+                                     60)))
+                   (ahead-counts (and ahead-result
+                                     (= 0 (cdr ahead-result))
+                                     (split-string (string-trim (car ahead-result))
+                                                    "[[:space:]]+" t)))
                   (behind-count (and (= (length ahead-counts) 2)
                                      (string-to-number (nth 0 ahead-counts))))
                   (ahead-count (and (= (length ahead-counts) 2)
                                     (string-to-number (nth 1 ahead-counts))))
-                  (ahead-only-main (and clean-main
-                                        (numberp behind-count)
-                                        (numberp ahead-count)
-                                        (= behind-count 0)
-                                        (> ahead-count 0)))
-                  (subject-result (and ahead-only-main
-                                       (gptel-auto-workflow--git-result
-                                        "git log --format=%s origin/main..main"
+                   (ahead-only-main (and clean-main
+                                         (numberp behind-count)
+                                         (numberp ahead-count)
+                                         (= behind-count 0)
+                                         (> ahead-count 0)))
+                   (subject-result (and ahead-only-main
+                                        (gptel-auto-workflow--git-result
+                                        (format "git log --format=%%s %s..main" remote-main)
                                         60)))
-                  (ahead-subjects (and subject-result
-                                       (= 0 (cdr subject-result))
-                                       (split-string (string-trim-right (car subject-result))
-                                                     "\n"
+                   (ahead-subjects (and subject-result
+                                        (= 0 (cdr subject-result))
+                                        (split-string (string-trim-right (car subject-result))
+                                                      "\n"
                                                      t))))
-             (if ahead-only-main
-                 (if (and (consp ahead-subjects)
-                          (cl-every
-                           #'gptel-auto-workflow--autonomous-maintenance-commit-subject-p
-                           ahead-subjects))
-                     (progn
-                       (message "[auto-workflow] Local main only contains autonomous maintenance commits; using origin/main as workflow base")
-                       "origin/main")
-                   (message "[auto-workflow] Local main is clean and ahead of origin/main; using main as workflow base")
-                   "main")
-               (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
-               "origin/main"))))
-        (have-origin
-         "origin/main")
+              (if ahead-only-main
+                  (if (and (consp ahead-subjects)
+                           (cl-every
+                            #'gptel-auto-workflow--autonomous-maintenance-commit-subject-p
+                            ahead-subjects))
+                      (progn
+                        (message "[auto-workflow] Local main only contains autonomous maintenance commits; using %s as workflow base"
+                                 remote-main)
+                        remote-main)
+                    (message "[auto-workflow] Local main is clean and ahead of %s; using main as workflow base"
+                             remote-main)
+                    "main")
+                (message "[auto-workflow] Local main differs from %s; using %s as workflow base"
+                         remote-main remote-main)
+                remote-main))))
+       (have-remote
+        remote-main)
         (have-main
          "main")
         (t
@@ -3057,44 +3118,48 @@ state does not leak into workflow branches."
 
 (defun gptel-auto-workflow--staging-sync-ref ()
   "Return the ref staging should sync from at workflow start.
-Prefer `origin/staging' when it exists so concurrent hosts append to the
-shared integration branch instead of rebuilding it from `main'. Callers may
-still need to refresh that base with `gptel-auto-workflow--staging-main-ref'
-when remote staging lags behind the selected main ref. Fall back to
-`gptel-auto-workflow--staging-main-ref' only when the remote staging branch is
-absent."
+Prefer the shared remote staging branch when it exists so concurrent hosts
+append to the shared integration branch instead of rebuilding it from `main'.
+Callers may still need to refresh that base with
+`gptel-auto-workflow--staging-main-ref' when remote staging lags behind the
+selected main ref. Fall back to `gptel-auto-workflow--staging-main-ref' only
+when the remote staging branch is absent."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
-         (staging (gptel-auto-workflow--require-staging-branch)))
+         (staging (gptel-auto-workflow--require-staging-branch))
+         (remote (gptel-auto-workflow--shared-remote)))
     (when staging
       (let* ((staging-q (shell-quote-argument staging))
-             (remote-staging (format "refs/remotes/origin/%s" staging))
+             (remote-staging (gptel-auto-workflow--shared-remote-ref staging))
              (remote-staging-refspec
-              (format "+refs/heads/%s:%s" staging remote-staging))
+              (gptel-auto-workflow--shared-remote-refspec staging))
              (remote-probe
               (gptel-auto-workflow--git-result
-               (format "git ls-remote --exit-code --heads origin %s" staging-q)
+               (format "git ls-remote --exit-code --heads %s %s" remote staging-q)
                60)))
         (cond
          ((= 0 (cdr remote-probe))
           (let ((fetch-result
                  (gptel-auto-workflow--git-result
-                  (format "git fetch origin %s"
+                  (format "git fetch %s %s"
+                          remote
                           (shell-quote-argument remote-staging-refspec))
                   180)))
             (if (= 0 (cdr fetch-result))
                 remote-staging
-              (message "[auto-workflow] Failed to fetch origin/%s for staging sync: %s"
+              (message "[auto-workflow] Failed to fetch %s/%s for staging sync: %s"
+                       remote
                        staging
                        (my/gptel--sanitize-for-logging (car fetch-result) 160))
               nil)))
          ((= 2 (cdr remote-probe))
           (gptel-auto-workflow--staging-main-ref))
          (t
-          (message "[auto-workflow] Failed to probe origin/%s for staging sync: %s"
-                   staging
-                   (my/gptel--sanitize-for-logging (car remote-probe) 160))
-          nil))))))
+           (message "[auto-workflow] Failed to probe %s/%s for staging sync: %s"
+                    remote
+                    staging
+                    (my/gptel--sanitize-for-logging (car remote-probe) 160))
+           nil))))))
 
 (defun gptel-auto-workflow--ref-ancestor-p (ancestor descendant)
   "Return non-nil when ANCESTOR is already contained in DESCENDANT."
@@ -3110,7 +3175,8 @@ absent."
 (defun gptel-auto-workflow--refresh-staging-base-with-main (main-ref)
   "Bring the current staging worktree up to MAIN-REF without dropping staging commits.
 Do not require the pre-merge staging checkout to hydrate cleanly: MAIN-REF may
-be the source of truth that repairs stale submodule gitlinks from origin/staging."
+be the source of truth that repairs stale submodule gitlinks from the shared
+remote staging branch."
   (let ((worktree default-directory))
     (let* ((main-q (shell-quote-argument main-ref))
            (ff-result
@@ -3167,7 +3233,8 @@ be the source of truth that repairs stale submodule gitlinks from origin/staging
 
 (defun gptel-auto-workflow--sync-staging-from-main ()
   "Sync staging from current upstream state at workflow start.
-Prefer `origin/staging' when available so shared staging keeps remote results.
+Prefer the shared remote staging branch when available so shared staging keeps
+remote results.
 Otherwise reset staging to the selected main ref. When remote staging exists
 but lags behind the selected main ref, merge the selected main ref into the
 local staging base before verification. Never checks out staging in the root
@@ -3190,7 +3257,7 @@ repo."
         (if (not worktree)
             nil
           (let* ((staging (gptel-auto-workflow--configured-staging-branch))
-                 (remote-staging (format "refs/remotes/origin/%s" staging))
+                 (remote-staging (gptel-auto-workflow--shared-remote-ref staging))
                  (default-directory worktree))
             (let* ((results (list
                              (gptel-auto-workflow--git-result
@@ -4513,40 +4580,43 @@ This prevents 'branch already used by worktree' errors."
 
 (defun gptel-auto-workflow--ensure-staging-branch-exists ()
   "Ensure the staging branch exists locally.
-If it is missing locally, recover it from `origin/staging' or create it from
-the preferred main ref. Remote pushes are deferred until verification passes."
+If it is missing locally, recover it from the shared remote staging branch or
+create it from the preferred main ref. Remote pushes are deferred until
+verification passes."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
-         (staging (gptel-auto-workflow--require-staging-branch)))
+         (staging (gptel-auto-workflow--require-staging-branch))
+         (remote (gptel-auto-workflow--shared-remote)))
     (gptel-auto-workflow--with-error-handling
      "ensure staging branch exists"
      (lambda ()
        (when staging
-         (let* ((staging-q (shell-quote-argument staging))
-                (remote-staging (format "refs/remotes/origin/%s" staging))
-                (remote-staging-q (shell-quote-argument remote-staging))
-                (remote-staging-refspec
-                 (format "+refs/heads/%s:refs/remotes/origin/%s" staging staging))
-                (remote-staging-refspec-q (shell-quote-argument remote-staging-refspec))
-                (local-exists
-                 (= 0 (cdr (gptel-auto-workflow--git-result
+          (let* ((staging-q (shell-quote-argument staging))
+                 (remote-staging (gptel-auto-workflow--shared-remote-ref staging))
+                 (remote-staging-q (shell-quote-argument remote-staging))
+                 (remote-staging-refspec
+                  (gptel-auto-workflow--shared-remote-refspec staging))
+                 (remote-staging-refspec-q (shell-quote-argument remote-staging-refspec))
+                 (local-exists
+                  (= 0 (cdr (gptel-auto-workflow--git-result
                             (format "git rev-parse --verify %s" staging-q)
                             60)))))
            (cond
             (local-exists
              (message "[auto-workflow] %s branch exists locally" staging)
              t)
-            ((= 0 (cdr (gptel-auto-workflow--git-result
-                        (format "git ls-remote --exit-code --heads origin %s"
-                                staging-q)
-                        60)))
-             (message "[auto-workflow] Creating local %s from origin/%s" staging staging)
-             (and (= 0 (cdr (gptel-auto-workflow--git-result
-                             (format "git fetch origin %s" remote-staging-refspec-q)
-                             180)))
-                  (= 0 (cdr (gptel-auto-workflow--git-result
-                             (format "git branch %s %s" staging-q remote-staging-q)
-                             180)))))
+             ((= 0 (cdr (gptel-auto-workflow--git-result
+                         (format "git ls-remote --exit-code --heads %s %s"
+                                 remote
+                                 staging-q)
+                         60)))
+              (message "[auto-workflow] Creating local %s from %s/%s" staging remote staging)
+              (and (= 0 (cdr (gptel-auto-workflow--git-result
+                              (format "git fetch %s %s" remote remote-staging-refspec-q)
+                              180)))
+                   (= 0 (cdr (gptel-auto-workflow--git-result
+                              (format "git branch %s %s" staging-q remote-staging-q)
+                              180)))))
             (t
              (let ((main-ref (gptel-auto-workflow--staging-main-ref)))
                (if (not main-ref)
@@ -4563,13 +4633,14 @@ the preferred main ref. Remote pushes are deferred until verification passes."
 (defun gptel-auto-workflow--ensure-merge-source-ref (branch)
   "Return a mergeable ref for BRANCH, fetching it narrowly if needed.
 Prefers the local branch when present so workflows keep working in repos that
-do not fetch every remote head into `refs/remotes/origin/*'."
+do not fetch every shared-remote head into local tracking refs."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (branch-q (shell-quote-argument branch))
-         (remote-ref (format "refs/remotes/origin/%s" branch))
+         (remote (gptel-auto-workflow--shared-remote))
+         (remote-ref (gptel-auto-workflow--shared-remote-ref branch))
          (remote-ref-q (shell-quote-argument remote-ref))
-         (remote-refspec (format "+refs/heads/%s:%s" branch remote-ref))
+         (remote-refspec (gptel-auto-workflow--shared-remote-refspec branch))
          (remote-refspec-q (shell-quote-argument remote-refspec)))
     (cond
      ((= 0 (cdr (gptel-auto-workflow--git-result
@@ -4581,10 +4652,10 @@ do not fetch every remote head into `refs/remotes/origin/*'."
                  60)))
       remote-ref)
      ((and (= 0 (cdr (gptel-auto-workflow--git-result
-                      (format "git ls-remote --exit-code --heads origin %s" branch-q)
+                      (format "git ls-remote --exit-code --heads %s %s" remote branch-q)
                       60)))
            (= 0 (cdr (gptel-auto-workflow--git-result
-                      (format "git fetch origin %s" remote-refspec-q)
+                      (format "git fetch %s %s" remote remote-refspec-q)
                       180))))
       remote-ref)
      (t nil))))
@@ -4852,25 +4923,27 @@ Returns (success-p . output)."
         (setq head (match-string 1 line))))))
 
 (defun gptel-auto-workflow--push-branch-with-lease (branch action &optional timeout)
-  "Push BRANCH to origin, using `--force-with-lease' when it already exists.
+  "Push BRANCH to the shared remote, using `--force-with-lease' when it already exists.
 ACTION is a short description used in failure messages."
-  (let* ((branch-q (shell-quote-argument branch))
+  (let* ((remote (gptel-auto-workflow--shared-remote))
+         (branch-q (shell-quote-argument branch))
          (remote-result
           (gptel-auto-workflow--git-result
-           (format "git ls-remote --exit-code --heads origin %s" branch-q)
+           (format "git ls-remote --exit-code --heads %s %s" remote branch-q)
            60))
          (remote-head
           (and (= 0 (cdr remote-result))
                (gptel-auto-workflow--parse-remote-head branch (car remote-result))))
          (push-command
           (if remote-head
-              (format "git push %s origin %s"
+              (format "git push %s %s %s"
                       (shell-quote-argument
                        (format "--force-with-lease=%s:%s"
                                branch
                                remote-head))
+                      remote
                       branch-q)
-            (format "git push origin %s" branch-q)))
+            (format "git push %s %s" remote branch-q)))
          (push-result
           (gptel-auto-workflow--with-skipped-submodule-sync
            (lambda ()
@@ -4885,11 +4958,12 @@ ACTION is a short description used in failure messages."
       nil)))
 
 (defun gptel-auto-workflow--push-staging ()
-  "Push staging branch to origin after successful verification.
+  "Push staging branch to the shared remote after successful verification.
 Unlike per-experiment optimize branches, staging is a shared integration branch,
 so this push must not rewrite remote history."
-  (let ((staging (gptel-auto-workflow--require-staging-branch)))
-    (message "[auto-workflow] Pushing staging to origin")
+  (let ((staging (gptel-auto-workflow--require-staging-branch))
+        (remote (gptel-auto-workflow--shared-remote)))
+    (message "[auto-workflow] Pushing staging to %s" remote)
     (when staging
       (gptel-auto-workflow--with-staging-worktree
        (lambda ()
@@ -4898,7 +4972,8 @@ so this push must not rewrite remote history."
                  (gptel-auto-workflow--with-skipped-submodule-sync
                   (lambda ()
                     (gptel-auto-workflow--git-result
-                     (format "git push origin %s"
+                     (format "git push %s %s"
+                             remote
                              (shell-quote-argument staging))
                      180)))))
            (setq gptel-auto-workflow--last-staging-push-output (car push-result))
@@ -4912,7 +4987,7 @@ so this push must not rewrite remote history."
   "Raw output from the most recent staging push attempt.")
 
 (defun gptel-auto-workflow--staging-push-remote-advanced-p (output)
-  "Return non-nil when OUTPUT shows `origin/staging' advanced mid-run."
+  "Return non-nil when OUTPUT shows the shared remote staging branch advanced."
   (string-match-p
    (rx (or "fetch first"
            "non-fast-forward"
@@ -4925,11 +5000,14 @@ so this push must not rewrite remote history."
 RETRIES-REMAINING counts remaining refresh-and-retry attempts after an
 initial remote-advance rejection. Returns a plist with keys `:success',
 `:reason', and `:output'."
-  (let* ((remaining (or retries-remaining
+  (let* ((remote (gptel-auto-workflow--shared-remote))
+         (remaining (or retries-remaining
                         gptel-auto-workflow--staging-push-max-retries))
          (max-retries (max 1 gptel-auto-workflow--staging-push-max-retries))
          (attempt (1+ (- max-retries remaining))))
-    (message "[auto-workflow] origin/staging advanced; refreshing staging and retrying publish (%d/%d)"
+    (message "[auto-workflow] %s/%s advanced; refreshing staging and retrying publish (%d/%d)"
+             remote
+             (gptel-auto-workflow--require-staging-branch)
              attempt max-retries)
     (setq gptel-auto-workflow--last-staging-push-output nil)
     (cond
@@ -4941,9 +5019,11 @@ initial remote-advance rejection. Returns a plist with keys `:success',
             (gptel-auto-workflow--retry-staging-publish-after-remote-advance
              optimize-branch
              (1- remaining)))
-        (list :success nil
-              :reason 'staging-sync-failed
-              :output "Failed to sync staging from updated origin/staging")))
+         (list :success nil
+               :reason 'staging-sync-failed
+              :output (format "Failed to sync staging from updated %s/%s"
+                              remote
+                              (gptel-auto-workflow--require-staging-branch)))))
      ((not (gptel-auto-workflow--merge-to-staging optimize-branch))
       (list :success nil
             :reason 'staging-merge-failed
@@ -5126,10 +5206,10 @@ Flow:
 3. Merge OPTIMIZE-BRANCH to staging
 4. Create staging worktree (never touches project root)
 5. Run tests on staging
-6. If pass: push staging to origin (human reviews later)
+6. If pass: push staging to the shared remote (human reviews later)
 7. If fail: log failure to TSV, then restore staging to the last good baseline
 
-ASSUMPTION: OPTIMIZE-BRANCH has been pushed to origin.
+ASSUMPTION: OPTIMIZE-BRANCH has been pushed to the shared remote.
 BEHAVIOR: Never modifies project root - all verification in worktree.
 EDGE CASE: Handles merge conflicts with auto-resolution (theirs).
 TEST: Verify main is never touched by auto-workflow.
@@ -9800,8 +9880,10 @@ Works across macOS and Linux."
   "Delete remote optimize branches already integrated and prune stale tracking refs.
 
 Only remote optimize branches whose tip commit is already contained in staging or
-main are deleted. Stale `origin/optimize/*' tracking refs are pruned afterward."
-  (let* ((default-directory (or proj-root (gptel-auto-workflow--default-dir))))
+main are deleted. Stale shared-remote optimize tracking refs are pruned
+afterward."
+  (let* ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
+         (remote (gptel-auto-workflow--shared-remote)))
     (if (not (file-directory-p default-directory))
         0
       (let* ((tracking-before
@@ -9828,7 +9910,8 @@ main are deleted. Stale `origin/optimize/*' tracking refs are pruned afterward."
                 (cl-incf count))
               (setq batch (nreverse batch))
               (let* ((delete-command
-                      (format "git push origin --delete %s"
+                      (format "git push %s --delete %s"
+                              remote
                               (mapconcat #'shell-quote-argument batch " ")))
                      (delete-result
                       (gptel-auto-workflow--with-skipped-submodule-sync
@@ -9843,7 +9926,9 @@ main are deleted. Stale `origin/optimize/*' tracking refs are pruned afterward."
           (message "[auto-workflow] Deleted %d integrated remote optimize branch(es)" deleted))
         (when (> tracking-before 0)
           (let ((prune-result
-                 (gptel-auto-workflow--git-result "git remote prune origin" 180)))
+                 (gptel-auto-workflow--git-result
+                  (format "git remote prune %s" remote)
+                  180)))
             (if (= 0 (cdr prune-result))
                 (let* ((tracking-after
                         (length
@@ -9853,7 +9938,8 @@ main are deleted. Stale `origin/optimize/*' tracking refs are pruned afterward."
                   (when (> pruned 0)
                     (message "[auto-workflow] Pruned %d stale remote optimize tracking ref(s)"
                              pruned)))
-              (message "[auto-workflow] Failed to prune origin optimize tracking refs: %s"
+              (message "[auto-workflow] Failed to prune %s optimize tracking refs: %s"
+                       remote
                        (my/gptel--sanitize-for-logging (car prune-result) 200)))))
         deleted))))
 

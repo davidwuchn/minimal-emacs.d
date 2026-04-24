@@ -8590,6 +8590,8 @@ failure."
                              :path "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1/var/tmp/experiments/optimize/agent-riven-exp2"))))
               ((symbol-function 'gptel-auto-workflow--optimize-branches)
                (lambda (&optional _proj-root) nil))
+              ((symbol-function 'gptel-auto-workflow--cleanup-integrated-remote-optimize-branches)
+               (lambda (&optional _proj-root) 0))
               ((symbol-function 'process-list)
                (lambda () nil))
               ((symbol-function 'process-live-p)
@@ -8675,6 +8677,8 @@ failure."
                (lambda (&optional _proj-root)
                  '("optimize/agent-riven-r123-exp1"
                    "optimize/cache-riven-r456-exp2")))
+              ((symbol-function 'gptel-auto-workflow--cleanup-integrated-remote-optimize-branches)
+               (lambda (&optional _proj-root) 0))
               ((symbol-function 'file-exists-p)
                (lambda (_path) nil))
               ((symbol-function 'call-process)
@@ -8692,8 +8696,9 @@ failure."
 
 (ert-deftest regression/auto-workflow/remote-optimize-branches-ignore-ssh-noise ()
   "Remote optimize branch listing should ignore SSH noise lines."
-  (let ((expected-command
-         (format "git ls-remote --heads origin %s"
+  (let ((gptel-auto-workflow-shared-remote "upstream")
+        (expected-command
+         (format "git ls-remote --heads upstream %s"
                  (shell-quote-argument "refs/heads/optimize/*"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-result)
                (lambda (command &optional _timeout)
@@ -8714,17 +8719,18 @@ failure."
 
 (ert-deftest regression/auto-workflow/cleanup-integrated-remote-optimize-branches-prunes-tracking-refs ()
   "Startup cleanup should delete integrated remote optimize branches and prune stale tracking refs."
-  (let* ((project-root (make-temp-file "aw-remote-cleanup" t))
+  (let* ((gptel-auto-workflow-shared-remote "upstream")
+         (project-root (make-temp-file "aw-remote-cleanup" t))
          (integrated-head "5043dae3e83ee7ea00e044870e04a40cf986d196")
          (pending-head "ddabfb2816264e0fe4198e49bf05ae655771d82c")
          (tracking-state
-          '("origin/optimize/agent-riven-exp1"
-            "origin/optimize/stale-exp9"
-            "origin/optimize/cache-riven-exp2"))
+          '("upstream/optimize/agent-riven-exp1"
+            "upstream/optimize/stale-exp9"
+            "upstream/optimize/cache-riven-exp2"))
          (commands nil)
          (messages nil)
          (expected-delete
-          (format "git push origin --delete %s"
+          (format "git push upstream --delete %s"
                   (shell-quote-argument "optimize/agent-riven-exp1"))))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--remote-optimize-branches)
@@ -8743,14 +8749,14 @@ failure."
                    (lambda (command &optional _timeout)
                      (push command commands)
                      (cond
-                      ((equal command expected-delete)
-                       (cons "" 0))
-                      ((equal command "git remote prune origin")
-                       (setq tracking-state
-                             '("origin/optimize/cache-riven-exp2"))
-                       (cons "pruned" 0))
-                      (t
-                       (cons "" 1)))))
+                       ((equal command expected-delete)
+                        (cons "" 0))
+                       ((equal command "git remote prune upstream")
+                        (setq tracking-state
+                              '("upstream/optimize/cache-riven-exp2"))
+                        (cons "pruned" 0))
+                       (t
+                        (cons "" 1)))))
                   ((symbol-function 'message)
                    (lambda (fmt &rest args)
                      (push (apply #'format fmt args) messages))))
@@ -8759,7 +8765,7 @@ failure."
                project-root)
               1))
           (should (member expected-delete commands))
-          (should (member "git remote prune origin" commands))
+          (should (member "git remote prune upstream" commands))
           (should (seq-some
                    (lambda (msg)
                      (string-match-p
@@ -10960,9 +10966,10 @@ failure."
              (should-not (file-exists-p tracking-file))))
        (delete-directory proj-root t))))
 
-(ert-deftest regression/auto-workflow/recover-orphans-untracks-commits-reachable-from-origin-staging ()
-  "Commits already preserved on origin/staging should not be treated as orphans."
+(ert-deftest regression/auto-workflow/recover-orphans-untracks-commits-reachable-from-shared-remote-staging ()
+  "Commits already preserved on the shared remote staging branch should not be treated as orphans."
   (let* ((gptel-auto-workflow--run-id nil)
+         (gptel-auto-workflow-shared-remote "upstream")
          (proj-root (make-temp-file "aw-origin-staging" t))
          (tracking-file (expand-file-name
                          (format "var/tmp/experiments/%s/commits.txt"
@@ -10982,7 +10989,7 @@ failure."
                     ((symbol-function 'gptel-auto-workflow--git-cmd)
                      (lambda (command &optional _timeout)
                        (if (string-match-p
-                            "git merge-base --is-ancestor abc1234 origin/staging 2>/dev/null && echo yes"
+                            "git merge-base --is-ancestor abc1234 upstream/staging 2>/dev/null && echo yes"
                             command)
                            "yes"
                          "")))
@@ -15461,6 +15468,21 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should (member "git status --porcelain" commands))
       (should (member "git rev-list --left-right --count origin/main...main" commands)))))
 
+(ert-deftest regression/auto-workflow/shared-remote-prefers-main-tracking-remote ()
+  "Shared auto-workflow refs should follow `branch.main.remote' when configured."
+  (let ((gptel-auto-workflow-shared-remote nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'magit-get)
+               (lambda (&rest args)
+                 (when (equal args '("branch" "main" "remote"))
+                   "upstream"))))
+      (should (equal (gptel-auto-workflow--shared-remote) "upstream"))
+      (should (equal (gptel-auto-workflow--shared-remote-branch "main")
+                     "upstream/main"))
+      (should (equal (gptel-auto-workflow--shared-remote-ref "staging")
+                     "refs/remotes/upstream/staging")))))
+
 (ert-deftest regression/auto-workflow/staging-main-ref-ignores-autonomous-maintenance-commits ()
   "Workflow base should ignore ahead-only autonomous maintenance commits on local main."
   (let ((commands nil))
@@ -15979,10 +16001,11 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                nil t)))))
 
 (ert-deftest regression/auto-workflow/push-staging-uses-plain-push ()
-  "Shared staging should use a plain push so remote history is not rewritten."
-  (let* ((commands nil)
+  "Shared staging should use a plain push to the shared remote."
+  (let* ((gptel-auto-workflow-shared-remote "upstream")
+         (commands nil)
          (expected-push
-          (format "git push origin %s"
+          (format "git push upstream %s"
                   (shell-quote-argument "staging"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--with-staging-worktree)
                (lambda (fn) (funcall fn)))
@@ -16001,9 +16024,10 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 
 (ert-deftest regression/auto-workflow/push-staging-skips-submodule-sync-hook ()
   "Staging pushes should also bypass local submodule-sync hooks."
-  (let* ((captured-env nil)
+  (let* ((gptel-auto-workflow-shared-remote "upstream")
+         (captured-env nil)
          (expected-push
-          (format "git push origin %s"
+          (format "git push upstream %s"
                   (shell-quote-argument "staging"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--with-staging-worktree)
                (lambda (fn) (funcall fn)))
@@ -16022,23 +16046,24 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 
 (ert-deftest regression/auto-workflow/push-optimize-branch-parses-noisy-remote-head-output ()
   "Optimize branch push should still force-with-lease when ls-remote prints SSH noise."
-  (let* ((commands nil)
+  (let* ((gptel-auto-workflow-shared-remote "upstream")
+         (commands nil)
          (branch "optimize/projects-riven-exp1")
          (remote-head "5043dae3e83ee7ea00e044870e04a40cf986d196")
          (expected-push
-          (format "git push %s origin %s"
+          (format "git push %s upstream %s"
                   (shell-quote-argument
                    (format "--force-with-lease=%s:%s" branch remote-head))
                   (shell-quote-argument branch))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-result)
                (lambda (command &optional _timeout)
-                 (push command commands)
-                 (cond
-                  ((string-match-p
-                    "\\`git ls-remote --exit-code --heads origin optimize/projects-riven-exp1\\'"
-                    command)
-                   (cons (format "mux_client_request_session: read from master failed: Broken pipe\n%s\trefs/heads/%s\n"
-                                 remote-head branch)
+                  (push command commands)
+                  (cond
+                   ((string-match-p
+                     "\\`git ls-remote --exit-code --heads upstream optimize/projects-riven-exp1\\'"
+                     command)
+                    (cons (format "mux_client_request_session: read from master failed: Broken pipe\n%s\trefs/heads/%s\n"
+                                  remote-head branch)
                          0))
                   ((equal command expected-push)
                    (cons "" 0))
@@ -16055,21 +16080,22 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 
 (ert-deftest regression/auto-workflow/push-branch-with-lease-skips-submodule-sync-hook ()
   "Workflow pushes should bypass local submodule-sync hooks."
-  (let* ((captured-env nil)
+  (let* ((gptel-auto-workflow-shared-remote "upstream")
+         (captured-env nil)
          (branch "staging")
          (remote-head "5043dae3e83ee7ea00e044870e04a40cf986d196")
          (expected-push
-          (format "git push %s origin %s"
+          (format "git push %s upstream %s"
                   (shell-quote-argument
                    (format "--force-with-lease=%s:%s" branch remote-head))
                   (shell-quote-argument branch))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-result)
-               (lambda (command &optional _timeout)
-                 (cond
-                  ((string-match-p "\\`git ls-remote --exit-code --heads origin staging\\'" command)
-                   (cons (format "%s\trefs/heads/%s\n" remote-head branch) 0))
-                  ((equal command expected-push)
-                   (setq captured-env (copy-sequence process-environment))
+                (lambda (command &optional _timeout)
+                  (cond
+                   ((string-match-p "\\`git ls-remote --exit-code --heads upstream staging\\'" command)
+                    (cons (format "%s\trefs/heads/%s\n" remote-head branch) 0))
+                   ((equal command expected-push)
+                    (setq captured-env (copy-sequence process-environment))
                    (cons "" 0))
                   (t
                    (cons "" 1)))))
@@ -16458,16 +16484,21 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                             commands))
       (should-not (member "git reset --hard origin/main" commands)))))
 
-(ert-deftest regression/auto-workflow/sync-staging-prefers-origin-staging-when-up-to-date ()
-  "Staging sync should keep origin/staging as the base when it already contains main."
-  (let* ((commands nil)
+(ert-deftest regression/auto-workflow/sync-staging-prefers-shared-remote-staging-when-up-to-date ()
+  "Staging sync should keep the shared remote staging ref as the base when it already contains main."
+  (let* ((gptel-auto-workflow-shared-remote nil)
+         (commands nil)
          (finalized nil)
          (expected-fetch
-          (format "git fetch origin %s"
+          (format "git fetch upstream %s"
                   (shell-quote-argument
-                   "+refs/heads/staging:refs/remotes/origin/staging"))))
+                   "+refs/heads/staging:refs/remotes/upstream/staging"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () "/tmp/project"))
+              ((symbol-function 'magit-get)
+               (lambda (&rest args)
+                 (when (equal args '("branch" "main" "remote"))
+                   "upstream")))
               ((symbol-function 'gptel-auto-workflow--ensure-staging-branch-exists)
                (lambda () t))
               ((symbol-function 'gptel-auto-workflow--staging-main-ref)
@@ -16482,20 +16513,20 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda (command &optional _timeout)
                  (push command commands)
                  (cond
-                   ((string-match-p "\\`git ls-remote --exit-code --heads origin staging\\'" command)
-                    (cons "5043dae3e83ee7ea00e044870e04a40cf986d196\trefs/heads/staging\n" 0))
-                   ((equal command expected-fetch)
-                    (cons "" 0))
-                   ((equal command "git merge-base --is-ancestor main refs/remotes/origin/staging")
-                    (cons "" 0))
-                   (t
-                    (cons "" 0)))))
+                    ((string-match-p "\\`git ls-remote --exit-code --heads upstream staging\\'" command)
+                     (cons "5043dae3e83ee7ea00e044870e04a40cf986d196\trefs/heads/staging\n" 0))
+                    ((equal command expected-fetch)
+                     (cons "" 0))
+                    ((equal command "git merge-base --is-ancestor main refs/remotes/upstream/staging")
+                     (cons "" 0))
+                    (t
+                     (cons "" 0)))))
               ((symbol-function 'message)
-               (lambda (&rest _) nil)))
+                (lambda (&rest _) nil)))
       (should (gptel-auto-workflow--sync-staging-from-main))
       (should (member expected-fetch commands))
-      (should (member "git reset --hard refs/remotes/origin/staging" commands))
-      (should (member "git merge-base --is-ancestor main refs/remotes/origin/staging" commands))
+      (should (member "git reset --hard refs/remotes/upstream/staging" commands))
+      (should (member "git merge-base --is-ancestor main refs/remotes/upstream/staging" commands))
       (should (equal finalized '("/tmp/staging" "main")))
       (should-not (member "git reset --hard main" commands))
       (should-not (member "git merge --ff-only main" commands))
@@ -16609,7 +16640,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 
 (ert-deftest regression/auto-workflow/ensure-staging-branch-fetches-remote-head-when-missing-locally ()
   "Ensure staging branch should use ls-remote and targeted fetch when only remote staging exists."
-  (let ((commands nil))
+  (let ((gptel-auto-workflow-shared-remote "upstream")
+        (commands nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () "/tmp/project"))
               ((symbol-function 'gptel-auto-workflow--git-cmd)
@@ -16617,27 +16649,27 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                  (push command commands)
                  ""))
               ((symbol-function 'gptel-auto-workflow--git-result)
-               (lambda (command &optional _timeout)
-                 (push command commands)
-                 (cond
-                  ((string-match-p "git rev-parse --verify staging" command)
-                   (cons "" 1))
-                  ((string-match-p "git ls-remote --exit-code --heads origin staging" command)
-                   (cons "ddabfb2816264e0fe4198e49bf05ae655771d82c\trefs/heads/staging" 0))
-                  ((string-match-p "git fetch origin '\\+refs/heads/staging:refs/remotes/origin/staging'" command)
-                   (cons "" 0))
-                  ((string-match-p "git branch staging refs/remotes/origin/staging" command)
-                   (cons "" 0))
-                  (t
-                   (cons "" 0)))))
+                (lambda (command &optional _timeout)
+                  (push command commands)
+                  (cond
+                   ((string-match-p "git rev-parse --verify staging" command)
+                    (cons "" 1))
+                   ((string-match-p "git ls-remote --exit-code --heads upstream staging" command)
+                    (cons "ddabfb2816264e0fe4198e49bf05ae655771d82c\trefs/heads/staging" 0))
+                   ((string-match-p "git fetch upstream '\\+refs/heads/staging:refs/remotes/upstream/staging'" command)
+                    (cons "" 0))
+                   ((string-match-p "git branch staging refs/remotes/upstream/staging" command)
+                    (cons "" 0))
+                   (t
+                    (cons "" 0)))))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (should (gptel-auto-workflow--ensure-staging-branch-exists))
-      (should (member "git ls-remote --exit-code --heads origin staging" commands))
-      (should (member "git fetch origin \\+refs/heads/staging\\:refs/remotes/origin/staging" commands))
-      (should (member "git branch staging refs/remotes/origin/staging" commands))
+      (should (member "git ls-remote --exit-code --heads upstream staging" commands))
+      (should (member "git fetch upstream \\+refs/heads/staging\\:refs/remotes/upstream/staging" commands))
+      (should (member "git branch staging refs/remotes/upstream/staging" commands))
       (should-not (seq-some (lambda (command)
-                              (string-match-p "git push -u origin staging" command))
+                              (string-match-p "git push -u .* staging" command))
                             commands)))))
 
 (ert-deftest regression/mementum/synthesize-candidate-captures-project-context ()
