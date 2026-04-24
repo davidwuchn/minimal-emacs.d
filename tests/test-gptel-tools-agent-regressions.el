@@ -1084,11 +1084,44 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
              "Override: keep non-regressing high-confidence tie with passing tests"
              (plist-get decision :reasoning)))))
 
+(ert-deftest regression/auto-experiment/does-not-promote-explicitly-rejected-high-confidence-ties ()
+  "Explicit decision-gate rejections must not be overridden later."
+  (let* ((grade-details
+         (concat
+           "Grader result for task: Grade output | EXPECTED: | "
+           "1. **change clearly described**: PASS - The output provides HYPOTHESIS, FOCUS, and explicit diff with line-by-line explanation of the three improvements made. | "
+           "2. **change is minimal and focused**: PASS - Only 2 lines changed in the diff, focused on single function `gptel-auto-workflow--start-status-refresh-timer`. | "
+           "3. **improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability**: PASS - Claims performance improvement (eliminates function call overhead) and clarity improvement (explicit state management with nil assignment). | "
+           "4. **verification attempted (byte-compile, nucleus, tests, or manual)**: PASS - Shows successful byte-compile check and nucleus verification script both passed. | "
+           "FORBIDDEN: | "
+           "1. **large refactor unrelated to stated improvement**: PASS - Change is minimal (2 lines), no large refactoring present. | "
+           "2. **changed security files without review**: PASS - File is a general tools/agent module, not a security file. | "
+           "3. **no description or unclear purpose**: PASS - Clear hypothesis, focus, and evidence provided throughout. | "
+           "4. **style-only change without functional impact**: PASS - Change explicitly aims to reduce function call overhead and make state management explicit. | "
+           "5. **replaces working code without clear improvement**: PASS - Clear improvement stated (performance + clarity). | "
+           "SUMMARY: SCORE: 5/5 expected, 5/5 forbidden"))
+         (hypothesis
+          "Inlining the timer cancellation in `gptel-auto-workflow--start-status-refresh-timer` reduces function call overhead and makes the timer state management explicit, improving both performance and clarity.")
+         (decision
+          (gptel-auto-experiment--promote-correctness-fix-decision
+           '(:keep nil
+             :reasoning "Comparator override: B -> A | Winner: A | Score: 0.40 → 0.40, Quality: 0.77 → 0.82, Combined: 0.55 → 0.57 | Rejected: score tie without >= 0.10 quality gain"
+             :improvement (:score 0.0 :quality 0.05 :combined 0.02))
+           t 5 5
+           grade-details
+           hypothesis)))
+    (should (gptel-auto-experiment--grader-indicates-correctness-fix-p grade-details))
+    (should-not (gptel-auto-experiment--speculative-correctness-language-p hypothesis))
+    (should-not (plist-get decision :keep))
+    (should (string-match-p
+             "Rejected: score tie without >= 0.10 quality gain"
+             (plist-get decision :reasoning)))))
+
 (ert-deftest regression/auto-experiment/does-not-promote-speculative-runtime-hardening-ties ()
   "Speculative defensive runtime hardening must not override the tie gate."
   (let ((decision
          (gptel-auto-experiment--promote-correctness-fix-decision
-          '(:keep nil
+           '(:keep nil
             :reasoning "Winner: A | Rejected: score tie without >= 0.10 quality gain"
             :improvement (:score 0.0 :quality 0.05 :combined 0.02))
           t 4 4

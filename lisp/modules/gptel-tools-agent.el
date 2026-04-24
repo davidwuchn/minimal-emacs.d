@@ -6624,8 +6624,8 @@ Speculative or purely defensive hardening language does not count."
     (decision tests-passed grade-score grade-total grade-details &optional hypothesis)
   "Return DECISION or a promoted keep decision for high-confidence ties.
 Promotion is allowed only for non-regressing ties with passing tests, some
-positive quality/combined improvement, and strong grader evidence of a real
-correctness fix."
+positive quality/combined improvement, strong grader evidence of a real
+correctness fix, and no explicit rejection from the local decision gate."
   (let* ((improvement (and (listp decision) (plist-get decision :improvement)))
          (decision-threshold 0.005)
          (score-delta (if (listp improvement)
@@ -6638,9 +6638,12 @@ correctness fix."
                              (or (plist-get improvement :combined) 0)
                            0))
          (reasoning (and (listp decision) (plist-get decision :reasoning)))
+         (gate-rejected-p
+          (and (stringp reasoning)
+               (string-match-p (rx "Rejected:") reasoning)))
           (correctness-fix-p
            (gptel-auto-experiment--grader-indicates-correctness-fix-p
-            grade-details))
+             grade-details))
          (speculative-hypothesis-p
           (gptel-auto-experiment--speculative-correctness-language-p
            hypothesis))
@@ -6649,13 +6652,14 @@ correctness fix."
     (if (or (not (listp decision))
             (plist-get decision :keep)
             (not tests-passed)
-            (<= score-delta (- decision-threshold))
-            (<= quality-delta 0)
-            (<= combined-delta 0)
-            (not correctness-fix-p)
-            speculative-hypothesis-p
-            (not (gptel-auto-experiment--strong-grade-pass-p
-                  grade-score grade-total)))
+             (<= score-delta (- decision-threshold))
+             (<= quality-delta 0)
+             (<= combined-delta 0)
+             gate-rejected-p
+             (not correctness-fix-p)
+             speculative-hypothesis-p
+             (not (gptel-auto-experiment--strong-grade-pass-p
+                   grade-score grade-total)))
         decision
       (let ((promoted (copy-sequence decision)))
         (setq promoted (plist-put promoted :keep t))
