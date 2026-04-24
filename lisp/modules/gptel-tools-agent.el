@@ -9242,6 +9242,7 @@ Relative paths are resolved from the project root."
                              (not (string-empty-p gptel-auto-workflow--status-run-id))
                              gptel-auto-workflow--status-run-id))
          (run-id (or active-run-id
+                     (and running status-run-id)
                      (and (member phase '("complete" "quota-exhausted" "error"))
                           status-run-id))))
     (list :running running
