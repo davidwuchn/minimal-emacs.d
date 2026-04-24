@@ -738,13 +738,20 @@ Without PROJECT-ROOT, clears cache for all projects."
 (defun gptel-auto-workflow-research-status-all ()
   "Show research status for all configured projects."
   (interactive)
-  (let ((now (current-time)))
-    (if (and gptel-auto-workflow--research-status-cache
-             (= (car gptel-auto-workflow--research-status-cache) (floor (car now)))
-             (< (cdr gptel-auto-workflow--research-status-cache)
+  (let* ((now (float-time))
+         (cache gptel-auto-workflow--research-status-cache)
+         (cached-at (and (consp cache)
+                         (numberp (car cache))
+                         (car cache)))
+         (cached-result (and (consp cache)
+                             (stringp (cdr cache))
+                             (cdr cache))))
+    (if (and cached-at
+             cached-result
+             (< (- now cached-at)
                 gptel-auto-workflow--research-status-ttl-seconds))
         (message "Research cache status:\n%s"
-                 (cddr gptel-auto-workflow--research-status-cache))
+                 cached-result)
       (let ((status-lines '()))
         (dolist (project-root gptel-auto-workflow-projects)
           (let* ((findings (gethash project-root gptel-auto-workflow--research-findings-cache ""))
@@ -759,7 +766,7 @@ Without PROJECT-ROOT, clears cache for all projects."
                   status-lines)))
         (let ((result (string-join (nreverse status-lines) "\n")))
           (setq gptel-auto-workflow--research-status-cache
-                (cons (floor (car now)) result))
+                (cons now result))
           (message "Research cache status:\n%s" result))))))
 
 ;;; Weekly Job Runner (shared by mementum and instincts)
