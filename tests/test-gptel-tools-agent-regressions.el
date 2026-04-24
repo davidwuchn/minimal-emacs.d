@@ -9208,8 +9208,10 @@ failure."
       (should (string-match-p "Proven Correctness Bugs" (cdr review-result))))))
 
 (ert-deftest regression/auto-workflow/cleanup-preserves-queued-phase ()
-  "Cleanup should not overwrite queued/run phases while a cron job is active."
-  (let ((gptel-auto-workflow--running nil)
+  "Cleanup should keep queued cron status metadata intact during handoff."
+  (let ((gptel-auto-workflow--run-id "2026-04-24T183032Z-590b")
+        (gptel-auto-workflow--status-run-id "2026-04-24T183032Z-590b")
+        (gptel-auto-workflow--running nil)
         (gptel-auto-workflow--cron-job-running t)
         (gptel-auto-workflow--stats '(:phase "auto-workflow" :total 3 :kept 0))
         (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
@@ -9220,10 +9222,18 @@ failure."
                (lambda () 0))
               ((symbol-function 'gptel-auto-workflow--persist-status)
                (lambda ()
-                 (setq persisted (plist-get gptel-auto-workflow--stats :phase)))))
+                 (setq persisted (gptel-auto-workflow--status-plist)))))
        (gptel-auto-workflow--cleanup-stale-state)
-       (should (equal (plist-get gptel-auto-workflow--stats :phase) "auto-workflow"))
-       (should (equal persisted "auto-workflow")))))
+        (should (equal (plist-get gptel-auto-workflow--stats :phase) "auto-workflow"))
+        (should (equal gptel-auto-workflow--run-id "2026-04-24T183032Z-590b"))
+        (should (equal gptel-auto-workflow--status-run-id "2026-04-24T183032Z-590b"))
+        (should (equal persisted
+                       '(:running t
+                         :kept 0
+                         :total 3
+                         :phase "auto-workflow"
+                         :run-id "2026-04-24T183032Z-590b"
+                         :results "var/tmp/experiments/2026-04-24T183032Z-590b/results.tsv"))))))
 
 (ert-deftest regression/auto-workflow/cleanup-old-worktrees-removes-nested-attached-worktrees ()
   "Cleanup should remove nested optimize worktrees before their parents."
@@ -11823,9 +11833,24 @@ failure."
                    '(:running nil
                      :kept 1
                      :total 4
-                     :phase "complete"
-                     :run-id "2026-04-21T030002Z-d267"
-                     :results "var/tmp/experiments/2026-04-21T030002Z-d267/results.tsv")))))
+                      :phase "complete"
+                      :run-id "2026-04-21T030002Z-d267"
+                      :results "var/tmp/experiments/2026-04-21T030002Z-d267/results.tsv")))))
+
+(ert-deftest regression/auto-workflow/status-plist-keeps-queued-run-metadata ()
+  "Queued/running cron snapshots should keep the last known run id."
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--status-run-id "2026-04-24T174146Z-8b36")
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--cron-job-running t)
+        (gptel-auto-workflow--stats '(:phase "auto-workflow" :total 0 :kept 0)))
+    (should (equal (gptel-auto-workflow--status-plist)
+                   '(:running t
+                     :kept 0
+                     :total 0
+                     :phase "auto-workflow"
+                     :run-id "2026-04-24T174146Z-8b36"
+                     :results "var/tmp/experiments/2026-04-24T174146Z-8b36/results.tsv")))))
 
 (ert-deftest regression/auto-workflow/status-file-honors-environment-override ()
   "Workflow status file should honor AUTO_WORKFLOW_STATUS_FILE."
