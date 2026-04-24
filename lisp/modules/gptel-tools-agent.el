@@ -2078,7 +2078,12 @@ its async continuation layer in the worker daemon."
 This prevents `Selecting deleted buffer' errors when callback side effects
 delete the request or file buffer that happened to be current when the
 subagent callback fired, and avoids reusing a deleted worktree as
-`default-directory'."
+`default-directory'.
+
+ERROR CONTRACT: When re-signaling, the error DATA is wrapped as
+\\(CALLBACK RESULT . ORIGINAL-DATA\\) so outer handlers can identify
+the callback and result. Any `condition-case' catching this error
+should use `if (consp data)' before accessing `car' or `cdr'."
   (unless (functionp callback)
     (signal 'wrong-type-argument (list 'functionp callback)))
   (when (and result
@@ -2103,7 +2108,11 @@ subagent callback fired, and avoids reusing a deleted worktree as
       (condition-case err
           (funcall callback result)
         (error
-         (signal (car err) (cdr err)))))))
+         ;; ASSUMPTION: Outer handlers may inspect error data structure.
+         ;; BEHAVIOR: Wraps error data as (callback result . original-data)
+         ;; so handlers can identify source callback and result.
+         (let ((augmented-data (cons callback (cons result (cdr err)))))
+           (signal (car err) augmented-data)))))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
