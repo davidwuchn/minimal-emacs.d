@@ -245,14 +245,11 @@ where first FSM was always returned (potentially wrong parent FSM).
 
 PROACTIVE MITIGATION: Uses registration order as proxy for nesting level,
 avoiding need for explicit parent-child tracking."
-  (let* ((all-fsms (my/gptel--collect-all-fsms object))
-         (count (length all-fsms)))
+  (let ((all-fsms (my/gptel--collect-all-fsms object)))
     (cond
-     ((zerop count) nil)
-     ((= count 1) (car all-fsms))
+     ((null all-fsms) nil)
+     ((null (cdr all-fsms)) (car all-fsms))
      (t
-      ;; Multiple FSMs: prefer most recently registered
-      ;; (likely the child FSM in nested scenarios)
       (car (last all-fsms))))))
 
 (defun my/gptel--collect-all-fsms (object)
@@ -276,21 +273,21 @@ nested subagent scenarios and select appropriate FSM.
 ADAPTS TO: Pure functional approach eliminates mutable state,
 improving testability and reducing cognitive load."
   (let ((seen (make-hash-table :test 'eq)))
-    (cl-labels ((collect (obj)
+    (cl-labels ((collect (obj result)
                   (cond
-                   ((null obj) nil)
-                   ((gethash obj seen) nil)
+                   ((null obj) result)
+                   ((gethash obj seen) result)
                    ((my/gptel--fsm-p obj)
-                    (prog1 (list obj)
-                      (puthash obj t seen)))
+                    (puthash obj t seen)
+                    (cons obj result))
                    ((consp obj)
                     (if (gethash obj seen)
-                        nil
+                        result
                       (puthash obj t seen)
-                      (append (collect (car obj))
-                              (collect (cdr obj)))))
-                   (t nil))))
-      (delq nil (collect object)))))
+                      (collect (cdr obj)
+                               (collect (car obj) result))))
+                   (t result))))
+      (delq nil (nreverse (collect object nil))))))
 
 (defun my/gptel--fsm-depth (object)
   "Return nesting depth of FSMs in OBJECT.
