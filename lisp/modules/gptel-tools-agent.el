@@ -4923,18 +4923,26 @@ Returns (success-p . output)."
                  (string-match pattern line))
         (setq head (match-string 1 line))))))
 
+(defun gptel-auto-workflow--remote-branch-head (remote branch &optional timeout)
+  "Return BRANCH head on REMOTE, or nil when the branch is absent."
+  (let* ((branch-q (shell-quote-argument branch))
+         (remote-result
+          (gptel-auto-workflow--git-result
+           (format "git ls-remote --exit-code --heads %s %s" remote branch-q)
+           (or timeout 60))))
+    (and (= 0 (cdr remote-result))
+         (gptel-auto-workflow--parse-remote-head branch (car remote-result)))))
+
 (defun gptel-auto-workflow--push-branch-with-lease (branch action &optional timeout)
   "Push BRANCH to the shared remote, using `--force-with-lease' when it already exists.
 ACTION is a short description used in failure messages."
   (let* ((remote (gptel-auto-workflow--shared-remote))
          (branch-q (shell-quote-argument branch))
-         (remote-result
-          (gptel-auto-workflow--git-result
-           (format "git ls-remote --exit-code --heads %s %s" remote branch-q)
-           60))
+         (push-timeout (or timeout 180))
          (remote-head
-          (and (= 0 (cdr remote-result))
-               (gptel-auto-workflow--parse-remote-head branch (car remote-result))))
+          (gptel-auto-workflow--remote-branch-head remote branch 60))
+         (local-head
+          (gptel-auto-workflow--current-head-hash))
          (push-command
           (if remote-head
               (format "git push %s %s %s"
@@ -4943,20 +4951,35 @@ ACTION is a short description used in failure messages."
                                branch
                                remote-head))
                       remote
-                      branch-q)
-            (format "git push %s %s" remote branch-q)))
+                       branch-q)
+             (format "git push %s %s" remote branch-q)))
          (push-result
           (gptel-auto-workflow--with-skipped-submodule-sync
            (lambda ()
-             (gptel-auto-workflow--git-result
-              push-command
-              (or timeout 180))))))
-    (if (= 0 (cdr push-result))
-        t
+              (gptel-auto-workflow--git-result
+               push-command
+               push-timeout))))
+         (push-output (car push-result)))
+    (cond
+     ((= 0 (cdr push-result))
+      t)
+     ((and local-head
+           (equal local-head
+                  (gptel-auto-workflow--remote-branch-head remote branch 60)))
+      (message "[auto-workflow] %s reached %s despite the initial push error"
+               action remote)
+      t)
+     ((and (< push-timeout 360)
+           (stringp push-output)
+           (string-match-p "Command timed out after" push-output))
+      (message "[auto-workflow] %s timed out after %ds; retrying once with %ds"
+               action push-timeout 360)
+      (gptel-auto-workflow--push-branch-with-lease branch action 360))
+     (t
       (message "[auto-workflow] %s failed: %s"
                action
-               (my/gptel--sanitize-for-logging (car push-result) 160))
-      nil)))
+               (my/gptel--sanitize-for-logging push-output 160))
+      nil))))
 
 (defun gptel-auto-workflow--push-staging ()
   "Push staging branch to the shared remote after successful verification.

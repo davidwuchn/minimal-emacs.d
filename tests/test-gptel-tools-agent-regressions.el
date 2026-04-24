@@ -16136,6 +16136,80 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         180))
       (should (member "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1" captured-env)))))
 
+(ert-deftest regression/auto-workflow/push-branch-with-lease-accepts-timed-out-push-when-remote-ref-landed ()
+  "A timed-out push should still count as success when the remote ref matches HEAD."
+  (let* ((gptel-auto-workflow-shared-remote "upstream")
+         (branch "optimize/projects-riven-exp1")
+         (local-head "8c7a5af9d6d4e42f2ff5289e2422db52ebf0fda1")
+         (push-command
+          (format "git push upstream %s"
+                  (shell-quote-argument branch)))
+         (probe-count 0)
+         (push-count 0))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--current-head-hash)
+               (lambda () local-head))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (cond
+                  ((string-match-p
+                    "\\`git ls-remote --exit-code --heads upstream optimize/projects-riven-exp1\\'"
+                    command)
+                   (cl-incf probe-count)
+                   (if (= probe-count 1)
+                       (cons "" 2)
+                     (cons (format "%s\trefs/heads/%s\n" local-head branch) 0)))
+                  ((equal command push-command)
+                   (cl-incf push-count)
+                   (cons "Error: Command timed out after 180s: git push upstream optimize/projects-riven-exp1" -1))
+                  (t
+                   (cons "" 1)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should
+       (gptel-auto-workflow--push-branch-with-lease
+        branch
+        (format "Push optimize branch %s" branch)
+        180))
+      (should (= push-count 1))
+      (should (= probe-count 2)))))
+
+(ert-deftest regression/auto-workflow/push-branch-with-lease-retries-timeouts-once ()
+  "Timed-out optimize pushes should retry once before failing."
+  (let* ((gptel-auto-workflow-shared-remote "upstream")
+         (branch "optimize/projects-riven-exp1")
+         (local-head "8c7a5af9d6d4e42f2ff5289e2422db52ebf0fda1")
+         (push-command
+          (format "git push upstream %s"
+                  (shell-quote-argument branch)))
+         (probe-count 0)
+         (push-timeouts nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--current-head-hash)
+               (lambda () local-head))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional timeout)
+                 (cond
+                  ((string-match-p
+                    "\\`git ls-remote --exit-code --heads upstream optimize/projects-riven-exp1\\'"
+                    command)
+                   (cl-incf probe-count)
+                   (cons "" 2))
+                  ((equal command push-command)
+                   (push timeout push-timeouts)
+                   (if (= (length push-timeouts) 1)
+                       (cons "Error: Command timed out after 180s: git push upstream optimize/projects-riven-exp1" -1)
+                     (cons "" 0)))
+                  (t
+                   (cons "" 1)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should
+       (gptel-auto-workflow--push-branch-with-lease
+        branch
+        (format "Push optimize branch %s" branch)
+        180))
+      (should (equal (nreverse push-timeouts) '(180 360)))
+      (should (= probe-count 3)))))
+
 (ert-deftest regression/auto-workflow/shared-submodule-git-dir-prefers-standalone-checkout ()
   "Standalone submodule repos under packages/ should be preferred when they contain the commit."
   (let ((project-root "/tmp/project")
