@@ -7263,8 +7263,8 @@ failure."
         (when (file-directory-p activity-dir)
           (delete-directory activity-dir t))))))
 
-(ert-deftest regression/subagent/curl-activity-extends-timeout ()
-  "Curl-request activity should extend executor timeout while work continues."
+(ert-deftest regression/subagent/curl-activity-does-not-extend-timeout ()
+  "Curl-request setup must not extend executor idle timeouts."
   (let ((my/gptel-agent-task-timeout 42)
         (my/gptel-subagent-progress-interval 10)
         (scheduled-timeouts nil)
@@ -7312,13 +7312,8 @@ failure."
             (should (= (length scheduled-timeouts) 1))
             (setq now 30)
             (my/gptel--agent-task-note-curl-activity)
-            (setq now 35)
+            (setq now 50)
             (funcall (cdr (car scheduled-timeouts)))
-            (should (= (length scheduled-timeouts) 2))
-            (should-not aborted-buffers)
-            (should-not callback-results)
-            (setq now 80)
-            (funcall (cdr (cadr scheduled-timeouts)))
             (should (equal aborted-buffers (list request-buf)))
             (should (= (length callback-results) 1))
             (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
