@@ -323,14 +323,14 @@ Truncates accumulated output to last
 `gptel-agent-loop-continuation-context-limit' chars."
   (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
          (limit gptel-agent-loop-continuation-context-limit)
-         (len (length output))
-         (truncated (if (and (integerp limit) (> limit 0) (> len limit))
-                        (concat "...[earlier output truncated]\n"
-                                (substring output (- limit)))
-                      output)))
+         (context (if (and (integerp limit) (> limit 0)
+                          (> (length output) limit))
+                      (concat "...[earlier output truncated]\n"
+                              (substring output (- limit)))
+                    output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
             gptel-agent-loop-continuation-prompt
-            truncated)))
+            context)))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
   "Build max-steps summary prompt for STATE."
