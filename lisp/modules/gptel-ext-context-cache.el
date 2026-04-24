@@ -344,33 +344,31 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
 (defun my/gptel--lookup-context-window-in-gptel-tables (model)
   "Look up context window for MODEL in gptel's built-in model tables.
 Returns the context window in tokens, or nil if not found.
-Handles both symbol and string model identifiers with case-insensitive fallback.
-Caches results in `my/gptel--gptel-tables-cw-cache' for future lookups."
-  (let* ((model (or model gptel-model))
-         (model-sym (cond
-                      ((symbolp model) model)
-                      ((stringp model) (intern-soft model))
-                      (t nil)))
-         (model-str (cond
-                      ((stringp model) model)
-                      ((symbolp model) (symbol-name model))
-                      (t nil))))
-    (when (or model-sym model-str)
-      (or (gethash model-str my/gptel--gptel-tables-cw-cache)
-          (let ((cw (cl-some
-                     (lambda (var)
-                       (let* ((table (symbol-value var))
-                              (entry (or (and model-sym (assq model-sym table))
-                                         (and model-str (assoc-string model-str table t)))))
-                         (when entry
-                           (let ((cw (my/gptel--normalize-context-window
-                                      (plist-get (cdr entry) :context-window))))
-                             (when (and (integerp cw) (> cw 0))
-                               cw)))))
-                     (my/gptel--gptel-model-tables))))
-            (when cw
-              (puthash model-str cw my/gptel--gptel-tables-cw-cache))
-            cw)))))
+Handles both symbol and string model identifiers with case-insensitive fallback."
+  (cond
+   ((symbolp model)
+    (catch 'found
+      (dolist (var (my/gptel--gptel-model-tables))
+        (let* ((table (symbol-value var))
+               (entry (assq model table)))
+          (when entry
+            (let ((cw (my/gptel--normalize-context-window
+                       (plist-get (cdr entry) :context-window))))
+              (when (and (integerp cw) (> cw 0))
+                (throw 'found cw))))))
+      nil))
+   ((stringp model)
+    (catch 'found
+      (dolist (var (my/gptel--gptel-model-tables))
+        (let* ((table (symbol-value var))
+               (entry (assoc-string model table t)))
+          (when entry
+            (let ((cw (my/gptel--normalize-context-window
+                       (plist-get (cdr entry) :context-window))))
+              (when (and (integerp cw) (> cw 0))
+                (throw 'found cw))))))
+      nil))
+   (t nil)))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -610,20 +608,19 @@ Runs asynchronously; returns nil immediately."
      (t
       (my/gptel--openrouter-fetch-with-callback
        url
-        (lambda (data)
-          (let* ((valid-data (and (listp data) data))
-                 (entry (and valid-data
-                             (seq-find (lambda (e)
-                                         (let ((id (alist-get 'id e)))
-                                           (and (stringp id) (string= id model-id))))
-                                       valid-data)))
-                (result (my/gptel--openrouter-entry-context-window entry))
-                (cw (and result (cdr result))))
-            (if cw
-                (progn
-                  (my/gptel--cache-put-context-window model-id cw)
-                  (message "OpenRouter context-window cached: %s -> %d" model-id cw))
-              (message "OpenRouter context-window: model not found or missing context_length: %s" model-id))))
+       (lambda (data)
+         (let* ((valid-data (and (listp data) data))
+                (entry (and valid-data
+                            (seq-find (lambda (e)
+                                        (let ((id (alist-get 'id e)))
+                                          (and (stringp id) (string= id model-id))))
+                                      valid-data)))
+                (cw (and entry (alist-get 'context_length entry))))
+           (if (and (integerp cw) (> cw 0))
+               (progn
+                 (my/gptel--cache-put-context-window model-id cw)
+                 (message "OpenRouter context-window cached: %s -> %d" model-id cw))
+             (message "OpenRouter context-window: model not found or missing context_length: %s" model-id))))
        "gptel-openrouter-models"
        my/gptel-openrouter-models-connect-timeout
        my/gptel-openrouter-models-max-time)
