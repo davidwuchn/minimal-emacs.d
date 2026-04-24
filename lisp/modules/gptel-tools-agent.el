@@ -478,6 +478,9 @@ On timeout or error, returns empty string and logs warning."
 (defvar gptel-auto-workflow--run-id nil
   "Unique identifier for the current auto-workflow run.")
 
+(defvar gptel-auto-workflow--status-run-id nil
+  "Last run id that should remain visible in persisted workflow status.")
+
 (defun gptel-auto-workflow--make-run-id ()
   "Return a unique identifier for a workflow launch."
   (format "%s-%s"
@@ -10046,8 +10049,16 @@ into staging or main."
 
 (defun gptel-auto-workflow--cleanup-stale-state ()
   "Clean up stale timers, buffers, and state from aborted runs."
-  (let ((proj-root (gptel-auto-workflow--default-dir))
-        (cleaned 0))
+  (let* ((proj-root (gptel-auto-workflow--default-dir))
+         (cleaned 0)
+         (queued-run-id
+          (and (bound-and-true-p gptel-auto-workflow--cron-job-running)
+               (or (and (stringp gptel-auto-workflow--run-id)
+                        (not (string-empty-p gptel-auto-workflow--run-id))
+                        gptel-auto-workflow--run-id)
+                   (and (stringp gptel-auto-workflow--status-run-id)
+                        (not (string-empty-p gptel-auto-workflow--status-run-id))
+                        gptel-auto-workflow--status-run-id)))))
     (when proj-root
       (my/gptel--reset-agent-task-state)
       (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
@@ -10078,6 +10089,8 @@ into staging or main."
               (kill-buffer buf)
               (cl-incf cleaned)))))
       (setq gptel-auto-workflow--running nil
+            gptel-auto-workflow--status-run-id queued-run-id
+            gptel-auto-workflow--run-id queued-run-id
             gptel-auto-workflow--current-target nil)
       (setq gptel-auto-workflow--stats
             (plist-put gptel-auto-workflow--stats
