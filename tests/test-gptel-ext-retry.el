@@ -382,6 +382,34 @@
                :messages (list '(:role "tool" :tool_call_id "1" :content "result")))))
     (should (= 0 (test--truncate-old-messages info)))))
 
+;;; Tests for strip-images-from-messages
+
+(ert-deftest retry/strip-images/removes-image-parts-from-vector-content ()
+  "Should remove image_url parts from multimodal vector content."
+  (let* ((content [(:type "text" :text "keep")
+                   [:type "image_url" :image_url (:url "data:image/png;base64,abc")]
+                   (:type "text" :text "keep-too")])
+         (info (test-make-info
+                :messages (list (list :role "user" :content content)))))
+    (should (= 1 (my/gptel--strip-images-from-messages info)))
+    (let* ((messages (plist-get (plist-get info :data) :messages))
+           (updated (plist-get (aref messages 0) :content)))
+      (should (= 2 (length updated)))
+      (should (equal (plist-get (aref updated 0) :type) "text"))
+      (should (equal (plist-get (aref updated 1) :type) "text")))))
+
+(ert-deftest retry/strip-images/ignores-malformed-odd-length-vectors ()
+  "Malformed odd-length vectors should not signal args-out-of-range."
+  (let* ((content [[:type "image_url" :image_url (:url "data:image/png;base64,abc")]
+                   [:foo "bar" :type]])
+         (info (test-make-info
+                :messages (list (list :role "user" :content content)))))
+    (should (= 1 (my/gptel--strip-images-from-messages info)))
+    (let* ((messages (plist-get (plist-get info :data) :messages))
+           (updated (plist-get (aref messages 0) :content)))
+      (should (= 1 (length updated)))
+      (should (equal (aref updated 0) [:foo "bar" :type])))))
+
 ;;; Tests for effective-byte-limit
 
 (ert-deftest retry/effective-limit/uses-model-limit ()
