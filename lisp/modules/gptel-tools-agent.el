@@ -27,7 +27,6 @@
 (defvar gptel-auto-workflow--current-project nil)
 (defvar gptel-auto-workflow--run-project-root nil)
 (defvar gptel-auto-workflow--project-root-override)
-(defvar gptel--request-alist)
 (defvar gptel-agent-loop--bypass nil)
 (defvar gptel-benchmark--subagent-files nil)
 
@@ -480,7 +479,7 @@ On timeout or error, returns empty string and logs warning."
   "Unique identifier for the current auto-workflow run.")
 
 (defvar gptel-auto-workflow--status-run-id nil
-  "Run identifier to expose in terminal workflow status snapshots.")
+  "Last run id that should remain visible in persisted workflow status.")
 
 (defun gptel-auto-workflow--make-run-id ()
   "Return a unique identifier for a workflow launch."
@@ -1206,9 +1205,6 @@ FSM-local snapshot so later tool dispatch matches the request payload."
 (defvar gptel-auto-workflow--defer-subagent-env-persistence nil
   "When non-nil, defer buffer-local subagent env persistence until launch ends.")
 
-(defvar gptel-auto-workflow--pending-subagent-process-environment nil
-  "Isolated env prepared for the current subagent launch before buffer persistence.")
-
 (defun my/gptel-agent--task-override (main-cb agent-type description prompt)
   "Call a gptel agent to do specific compound tasks.
 Like upstream `gptel-agent--task' but adds parent-buffer tracking-marker,
@@ -1826,23 +1822,12 @@ TIMESTAMP defaults to `current-time'."
                                (my/gptel--path-within-directory-p dir activity-dir))
                           (and file
                                (my/gptel--path-within-directory-p file activity-dir))))
-              (my/gptel--agent-task-note-activity task-id activity-time))))
+             (my/gptel--agent-task-note-activity task-id activity-time))))
        my/gptel--agent-task-state))))
 
-(defconst my/gptel--agent-task-nonactivity-message-formats
-  '("gptel: sanitizing nil :content on %s message"
-     "gptel: sanitizing :null :content on %s message"
-     "gptel: converting non-string :content on %s message: %S"
-     "[LSP] Waiting for server... (%d retries left)"
-     "[LSP] Connection error, retrying... (%d left)")
-  "Message format strings that should not count as executor progress.")
-
-(defun my/gptel--agent-task-note-message-activity (format-string &rest _args)
-  "Treat worktree-context messages as executor activity unless they are noise."
-  (unless (and (stringp format-string)
-               (member format-string
-                       my/gptel--agent-task-nonactivity-message-formats))
-    (my/gptel--agent-task-note-context-activity)))
+(defun my/gptel--agent-task-note-message-activity (&rest _args)
+  "Treat worktree-context messages as executor activity."
+  (my/gptel--agent-task-note-context-activity))
 
 (while (advice-member-p #'my/gptel--agent-task-note-message-activity 'message)
   (advice-remove 'message #'my/gptel--agent-task-note-message-activity))
@@ -1856,58 +1841,6 @@ TIMESTAMP defaults to `current-time'."
                           'gptel-curl--get-args)
     (advice-remove 'gptel-curl--get-args
                    #'my/gptel--agent-task-note-curl-activity)))
-
-(defun my/gptel--request-entry-fsm (process)
-  "Return the request FSM associated with PROCESS, unwrapping local entry shapes."
-  (when (bound-and-true-p gptel--request-alist)
-    (let ((entry (alist-get process gptel--request-alist)))
-      (or (and (fboundp 'my/gptel--coerce-fsm)
-               (my/gptel--coerce-fsm entry))
-          (car-safe entry)
-          entry))))
-
-(defun my/gptel--handle-deleted-process-buffer (process stage)
-  "Clean up PROCESS after STAGE finds its process buffer already deleted."
-  (let* ((fsm (my/gptel--request-entry-fsm process))
-         (proc-info (and fsm (ignore-errors (gptel-fsm-info fsm)))))
-    (when (listp proc-info)
-      (plist-put proc-info :error
-                 (format "Request buffer was deleted before %s completed." stage))
-      (plist-put proc-info :status "Request buffer deleted")
-      (with-demoted-errors "gptel callback error: %S"
-        (when-let ((proc-callback (plist-get proc-info :callback)))
-          (funcall proc-callback nil proc-info))))
-    (when (bound-and-true-p gptel--request-alist)
-      (setf (alist-get process gptel--request-alist nil 'remove) nil))
-    (when (process-live-p process)
-      (ignore-errors (delete-process process)))))
-
-(defun my/gptel-curl--sentinel (orig-fun process status)
-  "Around advice for `gptel-curl--sentinel' guarding deleted process buffers."
-  (let ((proc-buf (ignore-errors (process-buffer process))))
-    (if (buffer-live-p proc-buf)
-        (funcall orig-fun process status)
-      (my/gptel--handle-deleted-process-buffer process "curl sentinel"))))
-
-(defun my/gptel-curl--stream-cleanup (orig-fun process status)
-  "Around advice for `gptel-curl--stream-cleanup' guarding deleted buffers."
-  (let ((proc-buf (ignore-errors (process-buffer process))))
-    (if (buffer-live-p proc-buf)
-        (funcall orig-fun process status)
-      (my/gptel--handle-deleted-process-buffer process "curl stream cleanup"))))
-
-(defun my/gptel--install-request-entry-fixes ()
-  "Install local guards around gptel curl request cleanup."
-  (when (featurep 'gptel-request)
-    (unless (advice-member-p #'my/gptel-curl--sentinel 'gptel-curl--sentinel)
-      (advice-add 'gptel-curl--sentinel :around #'my/gptel-curl--sentinel))
-    (unless (advice-member-p #'my/gptel-curl--stream-cleanup 'gptel-curl--stream-cleanup)
-      (advice-add 'gptel-curl--stream-cleanup :around #'my/gptel-curl--stream-cleanup))))
-
-(with-eval-after-load 'gptel-request
-  (my/gptel--install-request-entry-fixes))
-(when (featurep 'gptel-request)
-  (my/gptel--install-request-entry-fixes))
 
 (defun my/gptel--register-agent-task-buffer (buffer)
   "Record BUFFER as the active request buffer for the current subagent task."
@@ -1928,7 +1861,6 @@ TIMESTAMP defaults to `current-time'."
                  updated-state
                  my/gptel--agent-task-state)
         (when (and (not (plist-get updated-state :launching))
-                   (not gptel-auto-workflow--defer-subagent-env-persistence)
                    (plist-get updated-state :process-environment)
                    (fboundp 'gptel-auto-workflow--persist-subagent-process-environment))
           (gptel-auto-workflow--persist-subagent-process-environment
@@ -1954,14 +1886,13 @@ TIMESTAMP defaults to `current-time'."
           (condition-case err
               (gptel-abort request-buf)
             (error
-             (let ((safe-msg (or (ignore-errors
-                                   (my/gptel--sanitize-for-logging
-                                    (error-message-string err) 160))
-                                 "[unavailable]")))
-               (when (buffer-live-p request-buf)
-                 (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
-                          (buffer-name request-buf)
-                          safe-msg))))))))))
+             (let ((safe-msg (condition-case nil
+                                 (my/gptel--sanitize-for-logging
+                                  (error-message-string err) 160)
+                               (error "abort-error"))))
+               (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
+                        (buffer-name request-buf)
+                        safe-msg)))))))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."
@@ -2032,7 +1963,9 @@ its async continuation layer in the worker daemon."
                 t)))
          (gptel-auto-workflow--defer-subagent-env-persistence
           (and isolated-env t))
-         (gptel-auto-workflow--pending-subagent-process-environment isolated-env)
+         (gptel-auto-workflow--subagent-process-environment isolated-env)
+         (process-environment
+          (or isolated-env process-environment))
          (task-runner nil))
     (when (and isolated-env
                my/gptel--current-agent-task-id)
@@ -2086,40 +2019,22 @@ its async continuation layer in the worker daemon."
 This prevents `Selecting deleted buffer' errors when callback side effects
 delete the request or file buffer that happened to be current when the
 subagent callback fired, and avoids reusing a deleted worktree as
-`default-directory'.
-
-ERROR CONTRACT: When re-signaling, the error DATA is wrapped as
-\\(CALLBACK RESULT . ORIGINAL-DATA\\) so outer handlers can identify
-the callback and result. Any `condition-case' catching this error
-should use `if (consp data)' before accessing `car' or `cdr'."
-  (unless (functionp callback)
-    (signal 'wrong-type-argument (list 'functionp callback)))
-  (when (and result
-             (listp result)
-             (eq result (car result)))
-    (signal 'wrong-type-argument (list '(not (eq result (car result))) result)))
-  (let* ((caller-default-directory (or default-directory temporary-file-directory))
-         (safe-buffer (get-buffer-create " *gptel-callback*"))
-         (safe-default-directory
-          (or (my/gptel--first-existing-directory
-               caller-default-directory
-               (and (buffer-live-p safe-buffer)
-                    (condition-case err
-                        (buffer-local-value 'default-directory safe-buffer)
-                      (error nil)))
-               user-emacs-directory
-               temporary-file-directory)
-              temporary-file-directory)))
-    (with-current-buffer safe-buffer
-      (setq default-directory safe-default-directory)
-      (condition-case err
-          (funcall callback result)
-        (error
-         ;; ASSUMPTION: Outer handlers may inspect error data structure.
-         ;; BEHAVIOR: Wraps error data as (callback result . original-data)
-         ;; so handlers can identify source callback and result.
-         (let ((augmented-data (cons callback (cons result (cdr err)))))
-           (signal (car err) augmented-data)))))))
+`default-directory'."
+  (when (functionp callback)
+    (let* ((caller-default-directory default-directory)
+           (safe-buffer (get-buffer-create " *gptel-callback*"))
+           (safe-default-directory
+            (or (my/gptel--first-existing-directory
+                 caller-default-directory
+                 (and (buffer-live-p safe-buffer)
+                      (buffer-local-value 'default-directory safe-buffer))
+                 user-emacs-directory
+                 temporary-file-directory)
+                (and (stringp default-directory) default-directory)
+                temporary-file-directory)))
+      (with-current-buffer safe-buffer
+        (setq default-directory safe-default-directory)
+        (funcall callback result)))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
@@ -2155,31 +2070,19 @@ Uses hash table keyed by task-id to support parallel execution."
          (restore-origin-fsm
           (lambda (&optional expected-fsm)
             (when (buffer-live-p origin-buf)
-              (let ((default-directory
-                      (or (my/gptel--first-existing-directory
-                           (and (buffer-live-p origin-buf)
-                                (buffer-local-value 'default-directory origin-buf))
-                           user-emacs-directory
-                           temporary-file-directory)
-                          temporary-file-directory)))
-                (condition-case err
-                    (with-current-buffer origin-buf
-                      (when (or (null expected-fsm)
-                                (eq gptel--fsm-last expected-fsm))
-                        (if parent-fsm-local-p
-                            (setq-local gptel--fsm-last parent-fsm)
-                          (kill-local-variable 'gptel--fsm-last))))
-                  (file-missing
-                   (message "[nucleus] Skipping FSM restore for %s after origin directory vanished: %s"
-                            agent-type
-                            (error-message-string err))))))))
+              (with-current-buffer origin-buf
+                (when (or (null expected-fsm)
+                          (eq gptel--fsm-last expected-fsm))
+                  (if parent-fsm-local-p
+                      (setq-local gptel--fsm-last parent-fsm)
+                    (kill-local-variable 'gptel--fsm-last)))))))
          (wrapped-cb
           (lambda (result)
-            (let* ((state (gethash task-id my/gptel--agent-task-state)))
+            (let* ((state (gethash task-id my/gptel--agent-task-state))
+                   (already-done (plist-get state :done)))
               (if (not state)
                   (message "[nucleus] Ignoring stale subagent %s callback after reset"
                            agent-type)
-                (let ((already-done (plist-get state :done)))
                  ;; Atomic test-and-set: mark done before acting to prevent
                  ;; double-invocation if gptel-abort fires synchronously in timeout.
                  (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
@@ -2189,9 +2092,9 @@ Uses hash table keyed by task-id to support parallel execution."
                             agent-type (float-time (time-since start-time))
                             (if (stringp result) (length result) 0))
                    (funcall restore-origin-fsm child-fsm)
-                   (unwind-protect
-                       (my/gptel--invoke-callback-safely callback result)
-                     (remhash task-id my/gptel--agent-task-state)))))))))
+                  (unwind-protect
+                      (my/gptel--invoke-callback-safely callback result)
+                    (remhash task-id my/gptel--agent-task-state))))))))
     (cl-labels
          ((finish-timeout (state timeout-seconds timeout-suffix
                                  &optional timeout-kind total-elapsed-seconds)
@@ -2608,12 +2511,8 @@ time to apply and verify a focused fix."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-validation-retry-active-grace 360
-  "Extra wall-clock seconds active validation-retry calls may use beyond budget.
-
-This leaves focused repair retries below full-experiment limits while giving
-large-file fixes enough active headroom to finish after they have already
-started producing edits."
+(defcustom gptel-auto-experiment-validation-retry-active-grace 180
+  "Extra wall-clock seconds active validation-retry calls may use beyond budget."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
@@ -2621,7 +2520,7 @@ started producing edits."
 (defconst gptel-auto-workflow--legacy-validation-retry-active-grace 120
   "Previous default for `gptel-auto-experiment-validation-retry-active-grace'.")
 
-(defconst gptel-auto-workflow--current-validation-retry-active-grace 360
+(defconst gptel-auto-workflow--current-validation-retry-active-grace 180
   "Current runtime default for `gptel-auto-experiment-validation-retry-active-grace'.")
 
 (defcustom gptel-auto-experiment-delay-between 3
@@ -3520,26 +3419,25 @@ NOTE: Staging branch is never deleted, only the worktree."
 
 (defun gptel-auto-workflow--checkout-git-common-dir-from-marker (checkout)
   "Return CHECKOUT's git-common-dir by reading its `.git' marker directly."
-  (when (stringp checkout)
-    (let ((git-marker (expand-file-name ".git" checkout)))
-      (cond
-       ((file-directory-p git-marker)
-        git-marker)
-       ((file-regular-p git-marker)
-        (let ((git-dir
-               (with-temp-buffer
-                 (insert-file-contents git-marker)
-                 (goto-char (point-min))
-                 (when (re-search-forward "^gitdir: \\(.+\\)$" nil t)
-                   (expand-file-name (string-trim (match-string 1)) checkout)))))
-          (when git-dir
-            (let ((commondir-file (expand-file-name "commondir" git-dir)))
-              (if (file-regular-p commondir-file)
-                  (with-temp-buffer
-                    (insert-file-contents commondir-file)
-                    (expand-file-name (string-trim (buffer-string)) git-dir))
-                git-dir)))))
-       (t nil)))))
+  (let ((git-marker (expand-file-name ".git" checkout)))
+    (cond
+     ((file-directory-p git-marker)
+      git-marker)
+     ((file-regular-p git-marker)
+      (let ((git-dir
+             (with-temp-buffer
+               (insert-file-contents git-marker)
+               (goto-char (point-min))
+               (when (re-search-forward "^gitdir: \\(.+\\)$" nil t)
+                 (expand-file-name (string-trim (match-string 1)) checkout)))))
+        (when git-dir
+          (let ((commondir-file (expand-file-name "commondir" git-dir)))
+            (if (file-regular-p commondir-file)
+                (with-temp-buffer
+                  (insert-file-contents commondir-file)
+                  (expand-file-name (string-trim (buffer-string)) git-dir))
+              git-dir)))))
+     (t nil))))
 
 (defun gptel-auto-workflow--submodule-checkout-git-dir-at-root (root path)
   "Return the absolute git-common-dir for submodule PATH checked out under ROOT."
@@ -4187,7 +4085,7 @@ The returned plist contains:
 Calls CALLBACK with (approved-p . review-output).
 Reviewer checks for Blocker/Critical issues."
   (if (not gptel-auto-workflow-require-review)
-      (my/gptel--invoke-callback-safely callback (cons t "Review disabled by config"))
+      (funcall callback (cons t "Review disabled by config"))
     (let* ((proj-root (gptel-auto-workflow--project-root))
            (worktree (car (gptel-auto-workflow--branch-worktree-paths
                            optimize-branch proj-root)))
@@ -4257,7 +4155,7 @@ Maximum response: 1000 characters."
                   callback
                   (cons approved response))))
              review-timeout))
-        (my/gptel--invoke-callback-safely callback (cons t "No reviewer agent available, auto-approving"))))))
+        (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--review-approved-p (response)
   "Return non-nil when RESPONSE approves a staging review.
@@ -4466,37 +4364,9 @@ the reviewer admits it could not verify the diff or locate the relevant file."
                (* blank)
                "UNVERIFIED")
            review-output)
-           (string-match-p "did not meet verification contract" review-output)
-           (string-match-p "cannot access the file directly" review-output)
-           (string-match-p "cannot locate the file" review-output)))))
-
-(defun gptel-auto-workflow--review-provider-chain-incomplete-p ()
-  "Return non-nil when reviewer provider failover still has retries worth trying.
-
-This keeps staging review alive long enough to rate-limit the current reviewer
-backend and actually try the next available fallback provider."
-  (let* ((preset (and (fboundp 'gptel-auto-experiment--current-subagent-preset)
-                      (gptel-auto-experiment--current-subagent-preset "reviewer")))
-         (backend (and (listp preset)
-                       (gptel-auto-workflow--preset-backend-name
-                        (plist-get preset :backend))))
-         (failures (or (and (stringp backend)
-                            (cdr (cl-assoc backend
-                                           gptel-auto-workflow--backend-failure-counts
-                                           :test #'string=)))
-                       0)))
-    (or (and (stringp backend)
-             (< failures gptel-auto-workflow-backend-rate-limit-failure-threshold))
-        (gptel-auto-experiment--remaining-provider-failover-candidate "reviewer"))))
-
-(defun gptel-auto-workflow--review-error-retry-allowed-p (review-output)
-  "Return non-nil when REVIEW-OUTPUT should get another transient retry."
-  (or (< gptel-auto-workflow--review-error-retry-count
-         gptel-auto-workflow--review-max-retries)
-      (and (stringp review-output)
-           (memq (car-safe (gptel-auto-experiment--categorize-error review-output))
-                 '(:api-rate-limit :api-error :timeout))
-           (gptel-auto-workflow--review-provider-chain-incomplete-p))))
+          (string-match-p "did not meet verification contract" review-output)
+          (string-match-p "cannot access the file directly" review-output)
+          (string-match-p "cannot locate the file" review-output)))))
 
 (defun gptel-auto-workflow--fix-output-indicates-already-fixed-p (fix-output)
   "Return non-nil when FIX-OUTPUT says the worktree already contains the fix."
@@ -5447,21 +5317,18 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                disproven-undefined-blocker))
     (cond
      (review-error
-      (if (gptel-auto-workflow--review-error-retry-allowed-p review-output)
+      (if (< gptel-auto-workflow--review-error-retry-count
+             gptel-auto-workflow--review-max-retries)
           (progn
             (when (memq review-error-category '(:api-rate-limit :api-error :timeout))
               (when-let ((reviewer-preset
                           (gptel-auto-workflow--agent-base-preset "reviewer")))
                 (gptel-auto-workflow--activate-provider-failover
-                  "reviewer" reviewer-preset review-output)))
+                 "reviewer" reviewer-preset review-output)))
             (cl-incf gptel-auto-workflow--review-error-retry-count)
-            (message "[auto-workflow] Review failed transiently, retrying review (%d/%d%s)..."
+            (message "[auto-workflow] Review failed transiently, retrying review (%d/%d)..."
                      gptel-auto-workflow--review-error-retry-count
-                     gptel-auto-workflow--review-max-retries
-                     (if (> gptel-auto-workflow--review-error-retry-count
-                            gptel-auto-workflow--review-max-retries)
-                         ", provider failover"
-                       ""))
+                     gptel-auto-workflow--review-max-retries)
             (run-with-timer
              gptel-auto-experiment-retry-delay nil
              (lambda ()
@@ -6833,13 +6700,8 @@ correctness fix, and no explicit rejection from the local decision gate."
 
 ;;; Prompt Building
 
-(defconst gptel-auto-experiment-focused-target-byte-threshold 32768
-  "Byte size above which prompts require a controller-selected starting symbol.
-This covers medium-large targets that are prone to inspection-thrash before the
-first edit, even when they are smaller than the large-target guidance band.")
-
 (defconst gptel-auto-experiment-large-target-byte-threshold 60000
-  "Byte size above which experiment prompts add large-target advisory guidance.")
+  "Byte size above which experiment prompts enable the focus contract.")
 
 (defconst gptel-auto-experiment-large-target-focus-token-weights
   '(("callback" . 6.0)
@@ -6988,36 +6850,16 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (target-bytes (gptel-auto-experiment--target-byte-size target-full-path))
          (recovery-p
           (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results))
-         (follow-up-focus-p
-           (and previous-results (not recovery-p)))
-         (focused-target-p
-           (and (numberp target-bytes)
-                (>= target-bytes gptel-auto-experiment-focused-target-byte-threshold)))
-          (large-target-p
-             (and (numberp target-bytes)
-                   (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
-          (preemptive-focus-contract-p
-           (and focused-target-p
-                (not previous-results)))
+         (large-target-p
+          (and (numberp target-bytes)
+               (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
          (focus-candidate
-             (when focused-target-p
-               (gptel-auto-experiment--select-large-target-focus target-full-path experiment-id)))
-          (focused-target-guidance
-           (when (and focused-target-p
-                      (not preemptive-focus-contract-p)
-                      (not large-target-p))
-             (concat "## Focused Target Guidance\n"
-                     (format "This target is medium-large (%d bytes). Start from one concrete function or variable before broader file surveys.\n"
-                             target-bytes)
-                    (when focus-candidate
-                      (format "- Begin at `%s` or a direct caller/callee.\n"
-                              (plist-get focus-candidate :name)))
-                    "- Prefer focused Grep or narrow Read before broader Code_Map surveys.\n"
-                    "- Make the first edit before exploring a second subsystem.\n\n")))
+          (when large-target-p
+            (gptel-auto-experiment--select-large-target-focus target-full-path experiment-id)))
          (large-target-guidance
-           (when large-target-p
-             (concat "## Large Target Guidance\n"
-                     (format "This target is large (%d bytes). Start from one concrete function or variable instead of surveying the whole file.\n"
+          (when large-target-p
+            (concat "## Large Target Guidance\n"
+                    (format "This target is large (%d bytes). Start from one concrete function or variable instead of surveying the whole file.\n"
                             target-bytes)
                     (when focus-candidate
                       (format "- Begin at `%s` or a direct caller/callee.\n"
@@ -7029,25 +6871,19 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
                   (or (plist-get focus-candidate :name)
                       "<one concrete function or variable>")))
          (controller-focus
-           (when focus-candidate
-             (format "## Controller-Selected Starting Symbol\n- Symbol: `%s`\n- Kind: %s\n- Approx lines: %d-%d (%d lines)\n- Reason: controller-selected small or medium helper in a medium or large file; start here or at a direct caller/callee.\n\n"
-                     (plist-get focus-candidate :name)
-                     (plist-get focus-candidate :kind)
-                     (plist-get focus-candidate :start-line)
+          (when focus-candidate
+            (format "## Controller-Selected Starting Symbol\n- Symbol: `%s`\n- Kind: %s\n- Approx lines: %d-%d (%d lines)\n- Reason: controller-selected small or medium helper in a very large file; start here or at a direct caller/callee.\n\n"
+                    (plist-get focus-candidate :name)
+                    (plist-get focus-candidate :kind)
+                    (plist-get focus-candidate :start-line)
                     (plist-get focus-candidate :end-line)
                     (plist-get focus-candidate :size-lines))))
-         (mandatory-focus-contract
-          (when (or recovery-p preemptive-focus-contract-p)
+         (inspection-thrash-contract
+          (when recovery-p
             (concat "## Mandatory Focus Contract\n"
-                     (cond
-                      (recovery-p
-                       "A previous attempt on this target already failed with inspection-thrash.\n")
-                      (preemptive-focus-contract-p
-                       (format "This target is %s and prone to inspection-thrash before the first edit.\n"
-                               (if large-target-p "large" "medium-large"))))
-                    (when focused-target-p
-                      (format "This target is %s (%d bytes). Broad file surveys are likely to fail.\n"
-                              (if large-target-p "large" "medium-large")
+                    "A previous attempt on this target already failed with inspection-thrash.\n"
+                    (when large-target-p
+                      (format "This target is large (%d bytes). Broad file surveys are likely to fail.\n"
                               target-bytes))
                     "Follow this exact opening sequence:\n"
                     (format "1. The second line after HYPOTHESIS must be exactly `%s`.\n"
@@ -7055,28 +6891,13 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
                     "2. Do NOT use Code_Map on the whole file.\n"
                     "3. Use at most 3 read-only tool calls, all on that same symbol or its direct callers/callees.\n"
                     "4. Your next tool call after those reads must be a write-capable tool on that same symbol.\n"
-                    "5. Do not inspect a second subsystem before the first edit exists.\n\n")))
-         (follow-up-focus-contract
-          (when follow-up-focus-p
-            (concat "## Follow-up Focus Contract\n"
-                    "This is not the first attempt on this target. Do not resurvey the whole file.\n"
-                    (format "The second line after HYPOTHESIS must be exactly `%s`.\n"
-                            focus-line)
-                    "Do NOT use Code_Map on the whole file.\n"
-                    "Use at most 3 read-only tool calls, all on that same symbol or its direct callers/callees.\n"
-                    "Your next tool call after those reads must be a write-capable tool on that same symbol.\n"
-                    "Prefer the symbol from the previous attempt, prior analysis, or a direct caller/callee.\n"
-                    "Do not inspect a second subsystem before the first edit exists.\n\n"))))
+                    "5. Do not inspect a second subsystem before the first edit exists.\n\n"))))
     (format "You are running experiment %d of %d to optimize %s.
 
 ## Working Directory
 %s
 
 ## Target File (full path)
-%s
-
-%s
-
 %s
 
 %s
@@ -7124,8 +6945,8 @@ Make minimal, targeted changes to CODE, not documentation.
 
 ## Instructions
 1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
-2. If a Controller-Selected Starting Symbol or any Focus Contract is present, line 2 must be exactly `%s`
-3. If a Mandatory Focus Contract is present, obey it exactly; otherwise if a Follow-up Focus Contract is present, obey it before broader exploration; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
+2. If a Controller-Selected Starting Symbol is present, line 2 must be exactly `%s`
+3. If a Mandatory Focus Contract is present, obey it exactly; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
 4. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
 5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
 6. Implement the CODE change minimally using Edit tool
@@ -7151,17 +6972,15 @@ Example HYPOTHESES:
 - HYPOTHESIS: Extracting duplicate retry logic into a helper will reduce code duplication
 - HYPOTHESIS: Adding a cache for expensive computation will improve performance
 - HYPOTHESIS: Fixing the off-by-one error in the loop will correct the boundary case"
-             experiment-id max-experiments target
-             worktree-path
-             target-full-path
-              (or controller-focus "")
-              (or focused-target-guidance "")
-              (or large-target-guidance "")
-              (or mandatory-focus-contract "")
-              (or follow-up-focus-contract "")
-             (or patterns "No previous experiments")
-             (or suggestions "None")
-             git-history
+            experiment-id max-experiments target
+            worktree-path
+            target-full-path
+            (or controller-focus "")
+            (or large-target-guidance "")
+            (or inspection-thrash-contract "")
+            (or patterns "No previous experiments")
+            (or suggestions "None")
+            git-history
             (or baseline 0.5)
             (if weakest-keys
                 (format "## Weakest Keys (Priority Focus)\n%s" weakest-keys)
@@ -7381,10 +7200,10 @@ failover advances past transient timeout or provider-pressure failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
+    ("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
@@ -7406,10 +7225,10 @@ DashScope and others when rate-limited or unavailable."
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
+    ("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Ordered backend/model fallbacks for executor after provider rate limits.
 
@@ -7431,23 +7250,23 @@ run can advance through this list instead of repeatedly hammering the same provi
 (defconst gptel-auto-workflow--legacy-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
+    ("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Previous default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
 
 (defconst gptel-auto-workflow--current-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
+    ("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Current runtime default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
 
 (defconst gptel-auto-workflow--legacy-executor-rate-limit-fallbacks
-  '(("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
+  '(("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("DashScope" . "qwen3.6-plus")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Previous default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
@@ -7458,10 +7277,10 @@ run can advance through this list instead of repeatedly hammering the same provi
 
 (defconst gptel-auto-workflow--current-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
+    ("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Current runtime default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
 
@@ -7472,35 +7291,10 @@ Each element is (AGENT-TYPE . (BACKEND . MODEL)). These overrides are cleared
 at run start and whenever workflow state is force-reset.")
 
 (defvar gptel-auto-workflow--rate-limited-backends nil
-  "Per-run backend rate-limit state with timestamps.
+  "Per-run backend names that hit rate limits during workflow execution.
 
-Each element is (BACKEND . TIMESTAMP). BACKEND is a string, TIMESTAMP
-is the time when it was marked rate-limited (via current-time).
-After the cooldown period expires, the backend becomes available again.
-
-Format: ((\"MiniMax\" . 415500.123) (\"DeepSeek\" . 415500.456))")
-
-(defcustom gptel-auto-workflow-rate-limit-cooldown-seconds 7200
-  "Seconds to wait before retrying a rate-limited backend.
-Default 7200 = 2 hours. After this period, the backend becomes available
-again for new attempts. Set to 3600 for 1 hour, 14400 for 4 hours."
-  :type 'integer
-  :group 'gptel-tools-agent)
-
-(defvar gptel-auto-workflow--backend-failure-counts nil
-  "Per-run failure count per backend before marking as rate-limited.
-
-Each element is (BACKEND . COUNT). Backend is only added to
-rate-limited-backends after reaching `gptel-auto-workflow--backend-rate-limit-failure-threshold'
-consecutive failures. This prevents single errors from permanently skipping a backend.")
-
-(defcustom gptel-auto-workflow-backend-rate-limit-failure-threshold 10
-  "Number of consecutive failures before a backend is marked as rate-limited.
-Lower values make fallback trigger faster but risk skipping good backends.
-Higher values try harder on the primary backend before falling back.
-With MiniMax quota at 10%, set high to prefer MiniMax over fallback providers."
-  :type 'integer
-  :group 'gptel-tools-agent)
+All matching headless subagents skip these backends for the rest of the run
+and advance through the configured fallback chain instead.")
 
 (defconst gptel-auto-workflow--backend-key-hosts
   '(("MiniMax" . "api.minimaxi.com")
@@ -7607,8 +7401,7 @@ can use newer models without a restart."
 (defun gptel-auto-workflow--clear-runtime-subagent-provider-overrides ()
   "Reset per-run provider failover state."
   (setq gptel-auto-workflow--runtime-subagent-provider-overrides nil
-        gptel-auto-workflow--rate-limited-backends nil
-        gptel-auto-workflow--backend-failure-counts nil))
+        gptel-auto-workflow--rate-limited-backends nil))
 
 (defun gptel-auto-workflow--rate-limit-failover-candidates (agent-type)
   "Return fallback provider candidates for AGENT-TYPE after rate limiting."
@@ -7637,28 +7430,11 @@ can use newer models without a restart."
              nil nil #'string=))
 
 (defun gptel-auto-workflow--backend-rate-limited-p (backend-name)
-  "Return non-nil when BACKEND-NAME is currently rate-limited.
-A backend is considered rate-limited if it was marked within the
-cooldown period (`gptel-auto-workflow-rate-limit-cooldown-seconds').
-After the cooldown expires, the backend becomes available again."
-  (when (stringp backend-name)
-    (when-let* ((entry (cl-assoc backend-name gptel-auto-workflow--rate-limited-backends
-                                 :test #'string=))
-                (timestamp (cdr entry))
-                (elapsed (- (float-time (current-time)) timestamp))
-                ((>= elapsed gptel-auto-workflow-rate-limit-cooldown-seconds)))
-      (setq gptel-auto-workflow--rate-limited-backends
-            (cl-remove-if (lambda (e)
-                            (and (consp e) (string= (car e) backend-name)))
-                          gptel-auto-workflow--rate-limited-backends))
-      nil)
-    (cl-assoc backend-name gptel-auto-workflow--rate-limited-backends
-               :test #'string=)))
-
-(defun gptel-auto-workflow--rate-limited-backend-names ()
-  "Return list of backend names currently rate-limited.
-Extracts just the backend names from the timestamp alist."
-  (mapcar #'car gptel-auto-workflow--rate-limited-backends))
+  "Return non-nil when BACKEND-NAME has already rate-limited this run."
+  (and (stringp backend-name)
+       (seq-contains-p gptel-auto-workflow--rate-limited-backends
+                       backend-name
+                       #'string=)))
 
 (defun gptel-auto-workflow--preset-backend-name (backend)
   "Return a readable backend name for BACKEND."
@@ -7710,7 +7486,7 @@ name strings."
     (when (gptel-auto-workflow--backend-rate-limited-p current-backend)
       (gptel-auto-workflow--first-available-provider-candidate
        candidates
-       (gptel-auto-workflow--rate-limited-backend-names)))))
+       gptel-auto-workflow--rate-limited-backends))))
 
 (defun gptel-auto-workflow--rewrite-subagent-provider (preset candidate)
   "Return PRESET rewritten to use CANDIDATE backend/model."
@@ -7746,11 +7522,9 @@ name strings."
     override))
 
 (defun gptel-auto-workflow--activate-provider-failover (agent-type preset &optional reason)
-  "Increment failure count for PRESET's backend; mark as rate-limited after threshold.
+  "Mark PRESET's backend unavailable for this run and fail AGENT-TYPE over.
 
-REASON is only used for logging. This implements retry-before-failover:
-a backend must fail `gptel-auto-workflow-backend-rate-limit-failure-threshold'
-times before the workflow stops using it."
+REASON is only used for logging."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
              (stringp agent-type)
              (listp preset))
@@ -7758,52 +7532,25 @@ times before the workflow stops using it."
             (gptel-auto-workflow--preset-backend-name
              (plist-get preset :backend)))
            (current-model (plist-get preset :model))
-           (candidate nil)
-           (already-limited
-            (gptel-auto-workflow--backend-rate-limited-p current-backend)))
+           (candidate nil))
       (when (stringp current-backend)
-        (unless already-limited
-          (let* ((existing-count
-                  (or (cdr (cl-assoc current-backend
-                                     gptel-auto-workflow--backend-failure-counts
-                                     :test #'string=))
-                      0))
-                 (new-count (1+ existing-count)))
-             (setq gptel-auto-workflow--backend-failure-counts
-                   (cons (cons current-backend new-count)
-                         (cl-remove-if
-                          (lambda (pair) (string= (car pair) current-backend))
-                          gptel-auto-workflow--backend-failure-counts)))
-             (message "[auto-workflow] Provider pressure on %s/%s for %s (failure %d/%d)"
-                      (or current-backend "unknown")
-                      (or current-model "unknown")
-                      agent-type
-                      new-count
-                     gptel-auto-workflow-backend-rate-limit-failure-threshold)
-            (when (>= new-count gptel-auto-workflow-backend-rate-limit-failure-threshold)
-              (push (cons current-backend (float-time (current-time)))
-                    gptel-auto-workflow--rate-limited-backends)
-              (message "[auto-workflow] Backend %s marked rate-limited until %s (%d second cooldown)"
-                       current-backend
-                       (format-time-string "%H:%M:%S"
-                                           (time-add (current-time)
-                                                     (seconds-to-time
-                                                      gptel-auto-workflow-rate-limit-cooldown-seconds)))
-                       gptel-auto-workflow-rate-limit-cooldown-seconds)
-              (setq candidate
-                    (gptel-auto-workflow--runtime-provider-failover-candidate
-                     agent-type preset))
-              (when candidate
-                (message "[auto-workflow] Provider failure threshold reached on %s/%s for %s%s; future retries will use %s/%s"
-                         (or current-backend "unknown")
-                         (or current-model "unknown")
-                         agent-type
-                         (if (and (stringp reason) (not (string-empty-p reason)))
-                             (format " (%s)"
-                                     (my/gptel--sanitize-for-logging reason 120))
-                           "")
-                         (car candidate)
-                         (cdr candidate)))))))
+        (cl-pushnew current-backend
+                    gptel-auto-workflow--rate-limited-backends
+                    :test #'string=)
+        (setq candidate
+              (gptel-auto-workflow--runtime-provider-failover-candidate
+               agent-type preset)))
+      (when candidate
+        (message "[auto-workflow] Provider failure on %s/%s for %s%s; future retries will use %s/%s"
+                 (or current-backend "unknown")
+                 (or current-model "unknown")
+                 agent-type
+                 (if (and (stringp reason) (not (string-empty-p reason)))
+                     (format " (%s)"
+                             (my/gptel--sanitize-for-logging reason 120))
+                   "")
+                 (car candidate)
+                 (cdr candidate)))
       candidate)))
 
 (defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
@@ -7850,7 +7597,7 @@ times before the workflow stops using it."
            (gptel-auto-experiment--provider-usage-limit-error-p error-output)
             (let ((case-fold-search t))
               (string-match-p
-               "rate_limit_error\\|rate.limit.exceeded\\|rate.limit.hit\\|quota.exceeded\\|quota.insufficient\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+               "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
                error-output)))))
 
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
@@ -7862,13 +7609,12 @@ times before the workflow stops using it."
           error-output))))
 
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
-  "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure.
-Only triggers on actual quota/rate limit errors, not general throttling."
+  "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure."
   (and (stringp error-output)
        (or (gptel-auto-experiment--provider-usage-limit-error-p error-output)
            (let ((case-fold-search t))
              (string-match-p
-              "rate_limit_error\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|rate.limit.exceeded\\|rate.limit.hit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
+              "rate_limit_error\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
               error-output)))))
 
 (defun gptel-auto-experiment--provider-auth-error-p (error-output)
@@ -7880,13 +7626,15 @@ Only triggers on actual quota/rate limit errors, not general throttling."
           error-output))))
 
 (defun gptel-auto-experiment--provider-pressure-error-p (error-output)
-  "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend.
-
-Be conservative: only trigger fallback for actual quota/rate-limit errors.
-Generic timeouts and server errors may be transient and recover on retry."
+  "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend."
   (or (gptel-auto-experiment--rate-limit-error-p error-output)
       (gptel-auto-experiment--provider-auth-error-p error-output)
-      (gptel-auto-experiment--shared-transient-error-p error-output)))
+      (gptel-auto-experiment--shared-transient-error-p error-output)
+      (and (stringp error-output)
+           (let ((case-fold-search t))
+             (string-match-p
+               "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
+               error-output)))))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
@@ -7946,48 +7694,6 @@ Only successful executor output may take the local grader retry path."
      (gptel-auto-workflow--rate-limit-failover-candidates agent-type)
      gptel-auto-workflow--rate-limited-backends)))
 
-(defun gptel-auto-experiment--provider-chain-incomplete-p (&optional agent-type)
-  "Return non-nil when AGENT-TYPE still has provider retries worth trying.
-
-This covers both retries that should stay on the current backend and retries
-that should advance to the next failover candidate.  Defaults to the executor
-path used by experiment loops."
-  (let* ((resolved-agent-type (or agent-type "executor"))
-         (current-preset
-          (and (fboundp 'gptel-auto-experiment--current-subagent-preset)
-               (gptel-auto-experiment--current-subagent-preset
-                resolved-agent-type)))
-         (base-preset
-          (and (or (not (listp current-preset))
-                   (null (plist-get current-preset :backend)))
-               (fboundp 'gptel-auto-workflow--agent-base-preset)
-               (gptel-auto-workflow--agent-base-preset resolved-agent-type)))
-         (effective-preset
-          (cond
-           ((and (listp current-preset)
-                 (plist-get current-preset :backend))
-            current-preset)
-           ((and (listp base-preset)
-                 (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
-            (gptel-auto-workflow--maybe-override-subagent-provider
-             resolved-agent-type base-preset))
-           (t base-preset)))
-         (backend
-          (and (listp effective-preset)
-               (fboundp 'gptel-auto-workflow--preset-backend-name)
-               (gptel-auto-workflow--preset-backend-name
-                (plist-get effective-preset :backend))))
-         (failures (or (and (stringp backend)
-                            (cdr (cl-assoc backend
-                                           gptel-auto-workflow--backend-failure-counts
-                                           :test #'string=)))
-                       0)))
-    (or (and (stringp backend)
-             (< failures
-                gptel-auto-workflow-backend-rate-limit-failure-threshold))
-        (gptel-auto-experiment--remaining-provider-failover-candidate
-         resolved-agent-type))))
-
 (defun gptel-auto-experiment--hard-quota-stops-run-p (agent-type error-output)
   "Return non-nil when ERROR-OUTPUT should stop the run for AGENT-TYPE.
 
@@ -8009,39 +7715,35 @@ the shared run-wide API counter or stopping the rest of the workflow."
   (when (memq error-category '(:api-rate-limit :api-error))
     (let* ((resolved-agent-type (or agent-type "executor"))
            (hard-quota (gptel-auto-experiment--hard-quota-exhausted-p error-source)))
-        (if escalate-run-pressure
-            (progn
-              (cl-incf gptel-auto-experiment--api-error-count)
-              (message "[auto-workflow] API error #%d: %s"
-                       gptel-auto-experiment--api-error-count error-category)
-             (when hard-quota
-               (if-let ((remaining
-                         (gptel-auto-experiment--remaining-provider-failover-candidate
-                          resolved-agent-type)))
-                   (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
-                            resolved-agent-type
-                            (car remaining)
-                            (cdr remaining))
-                  (setq gptel-auto-experiment--quota-exhausted t)
-                  (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")))
-              (when (>= gptel-auto-experiment--api-error-count
-                        gptel-auto-experiment--api-error-threshold)
-                (if (gptel-auto-experiment--provider-chain-incomplete-p
-                     resolved-agent-type)
-                    (message "[auto-workflow] API pressure threshold reached for %s, but provider failover remains available for %s"
-                             target resolved-agent-type)
-                  (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
-                           target))))
+      (if escalate-run-pressure
           (progn
-            (message "[auto-workflow] Local API pressure on %s for %s; keeping run-wide pressure unchanged"
-                     resolved-agent-type target)
+            (cl-incf gptel-auto-experiment--api-error-count)
+            (message "[auto-workflow] API error #%d: %s"
+                     gptel-auto-experiment--api-error-count error-category)
             (when hard-quota
-             (if-let ((remaining
-                       (gptel-auto-experiment--remaining-provider-failover-candidate
-                        resolved-agent-type)))
-                 (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
-                          resolved-agent-type
-                          (car remaining)
+              (if-let ((remaining
+                        (gptel-auto-experiment--remaining-provider-failover-candidate
+                         resolved-agent-type)))
+                  (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
+                           resolved-agent-type
+                           (car remaining)
+                           (cdr remaining))
+                (setq gptel-auto-experiment--quota-exhausted t)
+                (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")))
+            (when (>= gptel-auto-experiment--api-error-count
+                      gptel-auto-experiment--api-error-threshold)
+              (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
+                       target)))
+        (progn
+          (message "[auto-workflow] Local API pressure on %s for %s; keeping run-wide pressure unchanged"
+                   resolved-agent-type target)
+          (when hard-quota
+            (if-let ((remaining
+                      (gptel-auto-experiment--remaining-provider-failover-candidate
+                       resolved-agent-type)))
+                (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
+                         resolved-agent-type
+                         (car remaining)
                          (cdr remaining))
               (message "[auto-workflow] Provider quota exhausted for %s; continuing other workflow work"
                        resolved-agent-type))))))))
@@ -8281,14 +7983,9 @@ Also logs agent-output snippet for debugging when category is :unknown."
       (message "[auto-experiment] No error pattern found, snippet: %s" (my/gptel--sanitize-for-logging snippet))
       (cons :unknown "Unknown error")))))
 
-(defun gptel-auto-experiment--should-reduce-experiments-p (&optional agent-type)
-  "Return non-nil when API pressure should reduce experiment count.
-
-When AGENT-TYPE still has current-backend retries or a failover candidate left,
-the workflow keeps going instead of reducing experiment budgets prematurely."
-  (and (>= gptel-auto-experiment--api-error-count
-           gptel-auto-experiment--api-error-threshold)
-       (not (gptel-auto-experiment--provider-chain-incomplete-p agent-type))))
+(defun gptel-auto-experiment--should-reduce-experiments-p ()
+  "Check if we should reduce experiment count due to API issues."
+  (>= gptel-auto-experiment--api-error-count gptel-auto-experiment--api-error-threshold))
 
 (defun gptel-auto-experiment--adaptive-max-experiments (original-max)
   "Return adjusted experiment count based on API error rate."
@@ -9104,12 +8801,12 @@ Adapts max-experiments based on API error rate."
                       (message "[auto-workflow] Provider quota exhausted; stopping early for %s"
                                target)
                       (setq max-exp (min max-exp (1- exp-id))))
-                    (when (and (gptel-auto-experiment--should-reduce-experiments-p
-                                "executor")
+                    (when (and (>= gptel-auto-experiment--api-error-count
+                                   gptel-auto-experiment--api-error-threshold)
                                (< exp-id max-exp))
-                       (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
-                                gptel-auto-experiment--api-error-count target)
-                       (setq max-exp (1- exp-id)))
+                      (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
+                               gptel-auto-experiment--api-error-count target)
+                      (setq max-exp (1- exp-id)))
                     (if (or (> exp-id max-exp)
                             (>= no-improvement-count threshold))
                         (progn
@@ -9121,19 +8818,19 @@ Adapts max-experiments based on API error rate."
                        target exp-id max-exp
                        best-score
                        baseline-code-quality
-                       results
-                       (lambda (result)
-                         (push result results)
-                         (gptel-auto-workflow--update-progress)
-                         (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
-                                (kept (gptel-auto-workflow--plist-get result :kept nil))
-                                (quality-after
-                                 (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
-                                (hard-timeout
-                                 (gptel-auto-experiment--result-hard-timeout-p result))
-                                (grader-only-failure
-                                 (plist-get result :grader-only-failure))
-                                (next-exp-id (1+ exp-id)))
+                        results
+                        (lambda (result)
+                          (push result results)
+                          (gptel-auto-workflow--update-progress)
+                          (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
+                                 (kept (gptel-auto-workflow--plist-get result :kept nil))
+                                 (quality-after
+                                  (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
+                                 (hard-timeout
+                                  (gptel-auto-experiment--result-hard-timeout-p result))
+                                 (grader-only-failure
+                                  (plist-get result :grader-only-failure))
+                                 (next-exp-id (1+ exp-id)))
                             (when grader-only-failure
                               (message "[auto-experiment] Final grader-only failure for %s in experiment %d; stopping further experiments for this target"
                                        target exp-id)
@@ -9141,17 +8838,17 @@ Adapts max-experiments based on API error rate."
                             (when kept
                               (setq best-score score-after
                                     baseline-code-quality quality-after
-                                    no-improvement-count 0))
-                            (when (and (not kept)
-                                       score-after
-                                       (<= score-after best-score))
-                              (cl-incf no-improvement-count))
+                                   no-improvement-count 0))
+                             (when (and (not kept)
+                                        score-after
+                                        (<= score-after best-score))
+                               (cl-incf no-improvement-count))
                             (when hard-timeout
                               (message "[auto-experiment] Hard timeout for %s in experiment %d; skipping retries for this attempt and continuing if budget remains"
                                        target exp-id))
-                            (let ((continue
-                                   (lambda ()
-                                     (if (gptel-auto-workflow--run-callback-live-p run-id)
+                           (let ((continue
+                                  (lambda ()
+                                    (if (gptel-auto-workflow--run-callback-live-p run-id)
                                         (gptel-auto-workflow--call-in-run-context
                                          workflow-root
                                          (lambda () (run-next next-exp-id))
@@ -9240,14 +8937,8 @@ Relative paths are resolved from the project root."
   :type 'integer
   :group 'gptel)
 
-(defvar gptel-auto-workflow--persisted-status-file nil
-  "Sticky status snapshot path captured at workflow start.")
-
-(defvar gptel-auto-workflow--persisted-messages-file nil
-  "Sticky messages snapshot path captured at workflow start.")
-
-(defun gptel-auto-workflow--resolve-status-file ()
-  "Resolve the current workflow status snapshot path."
+(defun gptel-auto-workflow--status-file ()
+  "Return absolute path to the persisted workflow status snapshot."
   (let* ((configured-file gptel-auto-workflow-status-file)
          (default-file "var/tmp/cron/auto-workflow-status.sexp")
          (env-file (getenv "AUTO_WORKFLOW_STATUS_FILE")))
@@ -9266,8 +8957,8 @@ Relative paths are resolved from the project root."
       (expand-file-name configured-file
                         (gptel-auto-workflow--default-dir))))))
 
-(defun gptel-auto-workflow--resolve-messages-file ()
-  "Resolve the current workflow messages snapshot path."
+(defun gptel-auto-workflow--messages-file ()
+  "Return absolute path to the persisted workflow messages snapshot."
   (let* ((configured-file gptel-auto-workflow-messages-file)
          (default-file "var/tmp/cron/auto-workflow-messages-tail.txt")
          (env-file (getenv "AUTO_WORKFLOW_MESSAGES_FILE")))
@@ -9285,28 +8976,6 @@ Relative paths are resolved from the project root."
      (t
       (expand-file-name configured-file
                         (gptel-auto-workflow--default-dir))))))
-
-(defun gptel-auto-workflow--capture-persisted-snapshot-files ()
-  "Capture sticky snapshot paths for the current workflow run."
-  (setq gptel-auto-workflow--persisted-status-file
-        (gptel-auto-workflow--resolve-status-file)
-        gptel-auto-workflow--persisted-messages-file
-        (gptel-auto-workflow--resolve-messages-file)))
-
-(defun gptel-auto-workflow--clear-persisted-snapshot-files ()
-  "Clear sticky snapshot paths after a workflow run finishes."
-  (setq gptel-auto-workflow--persisted-status-file nil
-        gptel-auto-workflow--persisted-messages-file nil))
-
-(defun gptel-auto-workflow--status-file ()
-  "Return absolute path to the persisted workflow status snapshot."
-  (or gptel-auto-workflow--persisted-status-file
-      (gptel-auto-workflow--resolve-status-file)))
-
-(defun gptel-auto-workflow--messages-file ()
-  "Return absolute path to the persisted workflow messages snapshot."
-  (or gptel-auto-workflow--persisted-messages-file
-      (gptel-auto-workflow--resolve-messages-file)))
 
 (defun gptel-auto-workflow--messages-chars ()
   "Return the configured trailing *Messages* snapshot size."
@@ -9338,13 +9007,9 @@ Relative paths are resolved from the project root."
                                     gptel-auto-workflow--messages-start-pos)))
                          (t (point-min))))
              (tail-start (max (point-min) (- (point-max) max-chars))))
-        (condition-case err
-            (write-region (max start-pos tail-start)
-                          (point-max)
-                          file nil 'silent)
-          (error
-           (message "[auto-workflow] Messages tail persist failed: %s"
-                    (error-message-string err))))))))
+        (write-region (max start-pos tail-start)
+                      (point-max)
+                      file nil 'silent)))))
 
 (defun gptel-auto-workflow--status-plist ()
   "Return current workflow status as a plist."
@@ -9393,57 +9058,29 @@ Relative paths are resolved from the project root."
        (equal (plist-get status :run-id)
               gptel-auto-workflow--run-id)))
 
-(defvar gptel-auto-workflow--allow-placeholder-status-overwrite nil
-  "When non-nil, let placeholder idle snapshots replace active persisted status.")
-
 (defun gptel-auto-workflow--persist-status ()
   "Persist current workflow status for non-blocking cron health checks."
   (let* ((file (gptel-auto-workflow--status-file))
          (dir (file-name-directory file))
-         (status (gptel-auto-workflow--status-plist)))
+         (status (gptel-auto-workflow--status-plist))
+         (existing-status (gptel-auto-workflow-read-persisted-status)))
     ;; Preserve the last active snapshot when an unrelated process only has an
     ;; idle placeholder view of workflow state. The shell wrapper already owns
-     ;; stale-active detection; this guard prevents bogus idle rewrites with
-     ;; synthetic run ids while a real run is still active elsewhere.
-     (when (and (gptel-auto-workflow--status-placeholder-p status)
-                (not gptel-auto-workflow--allow-placeholder-status-overwrite))
-       (let ((existing-status (gptel-auto-workflow-read-persisted-status)))
-         (when (and (gptel-auto-workflow--status-active-p existing-status)
-                    (not (gptel-auto-workflow--status-owned-by-current-run-p
-                          existing-status)))
-           (setq status existing-status))))
-     (when dir
+    ;; stale-active detection; this guard prevents bogus idle rewrites with
+    ;; synthetic run ids while a real run is still active elsewhere.
+    (when (and (gptel-auto-workflow--status-placeholder-p status)
+               (gptel-auto-workflow--status-active-p existing-status)
+               (not (gptel-auto-workflow--status-owned-by-current-run-p
+                     existing-status)))
+      (setq status existing-status))
+    (when dir
       (make-directory dir t))
-    (condition-case err
-        (progn
-          (with-temp-file file
-            (let ((print-length nil)
-                  (print-level nil))
-              (prin1 status (current-buffer))
-              (insert "\n")))
-          (gptel-auto-workflow--persist-messages-tail))
-      (error
-       (message "[auto-workflow] Status persist failed: %s"
-                (error-message-string err))))))
-
-(defun gptel-auto-workflow--append-messages-line (text)
-  "Append TEXT to *Messages* without going through `message'."
-  (when (gptel-auto-workflow--non-empty-string-p text)
-    (with-current-buffer (get-buffer-create "*Messages*")
-      (let ((inhibit-read-only t))
-        (goto-char (point-max))
-        (unless (bolp)
-          (insert "\n"))
-        (insert text)
-        (unless (string-suffix-p "\n" text)
-          (insert "\n"))))))
-
-(defun gptel-auto-workflow--report-finalization-error (context err)
-  "Record a finalization failure for CONTEXT and ERR in *Messages*."
-  (gptel-auto-workflow--append-messages-line
-   (format "[auto-workflow] %s: %s"
-           context
-           (my/gptel--sanitize-for-logging (error-message-string err) 200))))
+    (with-temp-file file
+      (let ((print-length nil)
+            (print-level nil))
+        (prin1 status (current-buffer))
+        (insert "\n")))
+    (gptel-auto-workflow--persist-messages-tail)))
 
 (defun gptel-auto-workflow-read-persisted-status ()
   "Read the persisted workflow status snapshot, or nil if unavailable."
@@ -9673,22 +9310,17 @@ When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
             (cl-remove-if #'gptel-auto-workflow--isolated-state-env-entry-p
                           process-environment))))
 
- (defun gptel-auto-workflow--persist-subagent-process-environment (&optional buffer env)
-   "Persist isolated workflow ENV onto BUFFER for later async tool processes."
-   (let ((target (or buffer (current-buffer)))
-         (effective-env (or env gptel-auto-workflow--subagent-process-environment)))
-     (when (and (buffer-live-p target)
-                (listp effective-env))
-       (with-current-buffer target
-         (let ((copied-env (copy-sequence effective-env)))
-           (if (fboundp 'buffer-local-set-state)
-               (buffer-local-set-state
-                gptel-auto-workflow--subagent-process-environment (copy-sequence copied-env)
-                process-environment copied-env)
-             (set (make-local-variable 'gptel-auto-workflow--subagent-process-environment)
-                  (copy-sequence copied-env))
-             (set (make-local-variable 'process-environment)
-                  copied-env)))))))
+(defun gptel-auto-workflow--persist-subagent-process-environment (&optional buffer env)
+  "Persist isolated workflow ENV onto BUFFER for later async tool processes."
+  (let ((target (or buffer (current-buffer)))
+        (effective-env (or env gptel-auto-workflow--subagent-process-environment)))
+    (when (and (buffer-live-p target)
+               (listp effective-env))
+      (with-current-buffer target
+        (set (make-local-variable 'gptel-auto-workflow--subagent-process-environment)
+             (copy-sequence effective-env))
+        (set (make-local-variable 'process-environment)
+             (copy-sequence effective-env))))))
 
 (defun gptel-auto-workflow--git-step-success-p (cmd action &optional timeout)
   "Run git CMD and report whether it succeeded.
@@ -9872,20 +9504,16 @@ Prevents workflow from hanging indefinitely due to callback failures."
                                  60))))
       (cond
        ((null stuck-minutes)
-       (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
+        (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
         (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
         (setq gptel-auto-workflow--running nil
               gptel-auto-workflow--cron-job-running nil
-              gptel-auto-workflow--status-run-id nil
-              gptel-auto-workflow--run-id nil
               gptel-auto-workflow--run-project-root nil
               gptel-auto-workflow--current-project nil
               gptel-auto-workflow--current-target nil)
         (setq gptel-auto-workflow--stats
               (plist-put gptel-auto-workflow--stats :phase "idle"))
-        (let ((gptel-auto-workflow--allow-placeholder-status-overwrite t))
-          (gptel-auto-workflow--persist-status))
-        (gptel-auto-workflow--clear-persisted-snapshot-files)
+        (gptel-auto-workflow--persist-status)
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
           (setq gptel-auto-workflow--watchdog-timer nil))
@@ -9897,16 +9525,12 @@ Prevents workflow from hanging indefinitely due to callback failures."
         (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
         (setq gptel-auto-workflow--running nil
               gptel-auto-workflow--cron-job-running nil
-              gptel-auto-workflow--status-run-id nil
-              gptel-auto-workflow--run-id nil
               gptel-auto-workflow--run-project-root nil
               gptel-auto-workflow--current-project nil
               gptel-auto-workflow--current-target nil)
         (setq gptel-auto-workflow--stats
               (plist-put gptel-auto-workflow--stats :phase "idle"))
-        (let ((gptel-auto-workflow--allow-placeholder-status-overwrite t))
-          (gptel-auto-workflow--persist-status))
-        (gptel-auto-workflow--clear-persisted-snapshot-files)
+        (gptel-auto-workflow--persist-status)
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
           (setq gptel-auto-workflow--watchdog-timer nil))
@@ -9951,28 +9575,19 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
 (defun gptel-auto-workflow--stop-status-refresh-timer ()
   "Cancel the active workflow status refresh timer, if any."
   (when (timerp gptel-auto-workflow--status-refresh-timer)
-    (cancel-timer gptel-auto-workflow--status-refresh-timer)
-    (setq gptel-auto-workflow--status-refresh-timer nil)))
+    (cancel-timer gptel-auto-workflow--status-refresh-timer))
+  (setq gptel-auto-workflow--status-refresh-timer nil))
 
 (defun gptel-auto-workflow--refresh-status-if-running ()
   "Refresh the persisted workflow snapshot while the workflow is active."
-  (if (and (or gptel-auto-workflow--running
-               gptel-auto-workflow--cron-job-running)
-           gptel-auto-workflow--stats
-           (numberp gptel-auto-workflow-status-refresh-interval)
-           (> gptel-auto-workflow-status-refresh-interval 0))
+  (if (or gptel-auto-workflow--running
+          gptel-auto-workflow--cron-job-running)
       (condition-case-unless-debug err
-          (progn
-            (gptel-auto-workflow--persist-status)
-            (unless (or gptel-auto-workflow--running
-                        gptel-auto-workflow--cron-job-running)
-              (gptel-auto-workflow--stop-status-refresh-timer)))
+          (gptel-auto-workflow--persist-status)
         (error
          (message "[auto-workflow] Status refresh failed: %s"
                   (error-message-string err))
-         (unless (or gptel-auto-workflow--running
-                     gptel-auto-workflow--cron-job-running)
-           (gptel-auto-workflow--stop-status-refresh-timer))))
+         (gptel-auto-workflow--stop-status-refresh-timer)))
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--start-status-refresh-timer ()
@@ -9982,7 +9597,7 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
              (numberp gptel-auto-workflow-status-refresh-interval)
              (> gptel-auto-workflow-status-refresh-interval 0))
     (when (timerp gptel-auto-workflow--status-refresh-timer)
-      (cancel-timer gptel-auto-workflow--status-refresh-timer))
+      (gptel-auto-workflow--stop-status-refresh-timer))
     (setq gptel-auto-workflow--status-refresh-timer
           (run-with-timer gptel-auto-workflow-status-refresh-interval
                           gptel-auto-workflow-status-refresh-interval
@@ -10003,16 +9618,13 @@ Interactive command to recover from hung workflow state."
   (gptel-auto-workflow--terminate-active-shell-processes)
   (setq gptel-auto-workflow--running nil
          gptel-auto-workflow--cron-job-running nil
-         gptel-auto-workflow--status-run-id nil
          gptel-auto-workflow--run-id nil
          gptel-auto-workflow--run-project-root nil
          gptel-auto-workflow--current-project nil
          gptel-auto-workflow--current-target nil)
   (setq gptel-auto-workflow--stats
         (plist-put gptel-auto-workflow--stats :phase "idle"))
-  (let ((gptel-auto-workflow--allow-placeholder-status-overwrite t))
-    (gptel-auto-workflow--persist-status))
-  (gptel-auto-workflow--clear-persisted-snapshot-files)
+  (gptel-auto-workflow--persist-status)
   (when gptel-auto-workflow--watchdog-timer
     (cancel-timer gptel-auto-workflow--watchdog-timer)
     (setq gptel-auto-workflow--watchdog-timer nil))
@@ -10178,13 +9790,11 @@ Usage:
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
                                           (gptel-auto-workflow--make-run-id))
-          gptel-auto-workflow--status-run-id gptel-auto-workflow--run-id
           gptel-auto-experiment--api-error-count 0
           gptel-auto-experiment--quota-exhausted nil
           gptel-auto-workflow--running t
           gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
           gptel-auto-workflow--last-progress-time (current-time))
-    (gptel-auto-workflow--capture-persisted-snapshot-files)
     (gptel-auto-workflow--ensure-results-file gptel-auto-workflow--run-id)
     (unless gptel-auto-workflow--cron-job-running
       (gptel-auto-workflow--mark-messages-start))
@@ -10489,7 +10099,6 @@ into staging or main."
                                       "queued")
                                 "idle")))
       (gptel-auto-workflow--persist-status)
-      (gptel-auto-workflow--clear-persisted-snapshot-files)
       (clrhash gptel-auto-workflow--worktree-state))
     (when (> cleaned 0)
       (message "[auto-workflow] Cleaned %d stale items" cleaned))))
@@ -10513,74 +10122,27 @@ into staging or main."
                                gptel-auto-workflow--run-id))
          (proj-root (gptel-auto-workflow--default-dir))
          (run-buffer (current-buffer))
-         (run-in-context
-          (lambda (thunk)
-             (if (buffer-live-p run-buffer)
-                 (with-current-buffer run-buffer
-                   (let ((default-directory proj-root)
-                         (gptel-auto-workflow--project-root-override proj-root)
-                         (gptel-auto-workflow--current-project proj-root)
-                         (gptel-auto-workflow--run-project-root proj-root))
-                     (funcall thunk)))
-               (let ((default-directory proj-root)
-                     (gptel-auto-workflow--project-root-override proj-root)
-                     (gptel-auto-workflow--current-project proj-root)
-                     (gptel-auto-workflow--run-project-root proj-root))
-                 (funcall thunk)))))
          (all-results '())
          (kept-count 0)
          (finish
           (gptel-auto-workflow--make-idempotent-callback
            (lambda ()
-             (funcall
-              run-in-context
-              (lambda ()
-                 (let ((final-phase (if gptel-auto-experiment--quota-exhausted
-                                        "quota-exhausted"
-                                      "complete")))
-                   (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-                   (gptel-auto-workflow--stop-status-refresh-timer)
-                   (setq gptel-auto-workflow--status-run-id run-id
-                         gptel-auto-workflow--running nil
-                         gptel-auto-workflow--cron-job-running nil
-                         gptel-auto-workflow--run-id nil
-                         gptel-auto-workflow--run-project-root nil
-                         gptel-auto-workflow--current-target nil
-                         gptel-auto-workflow--current-project nil)
-                   (set-default-toplevel-value 'gptel-auto-workflow--status-run-id run-id)
-                   (set-default-toplevel-value 'gptel-auto-workflow--running nil)
-                   (set-default-toplevel-value 'gptel-auto-workflow--cron-job-running nil)
-                   (set-default-toplevel-value 'gptel-auto-workflow--run-id nil)
-                   (set-default-toplevel-value 'gptel-auto-workflow--run-project-root nil)
-                   (set-default-toplevel-value 'gptel-auto-workflow--current-target nil)
-                   (set-default-toplevel-value 'gptel-auto-workflow--current-project nil)
-                   (setq gptel-auto-workflow--stats
-                         (plist-put gptel-auto-workflow--stats :phase final-phase))
-                   (condition-case err
-                       (gptel-auto-workflow--persist-status)
-                     (error
-                      (gptel-auto-workflow--report-finalization-error
-                       "Failed to persist completion status" err)))
-                   (condition-case err
-                       (message "[auto-workflow] Complete: %d experiments, %d targets improved"
-                                (length all-results) kept-count)
-                     (error
-                      (gptel-auto-workflow--report-finalization-error
-                       "Failed to log completion message" err)))
-                   (when completion-callback
-                     (condition-case err
-                         (funcall completion-callback all-results)
-                       (error
-                        (gptel-auto-workflow--report-finalization-error
-                         "Completion callback failed" err))))
-                   (condition-case err
-                       (prog1
-                           (gptel-auto-workflow--persist-messages-tail)
-                         (gptel-auto-workflow--clear-persisted-snapshot-files))
-                     (error
-                      (gptel-auto-workflow--clear-persisted-snapshot-files)
-                      (gptel-auto-workflow--report-finalization-error
-                       "Failed to persist completion messages" err))))))))))
+              (let ((final-phase (if gptel-auto-experiment--quota-exhausted
+                                     "quota-exhausted"
+                                   "complete")))
+                (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                (gptel-auto-workflow--stop-status-refresh-timer)
+                (setq gptel-auto-workflow--running nil
+                      gptel-auto-workflow--run-project-root nil
+                      gptel-auto-workflow--current-target nil
+                      gptel-auto-workflow--current-project nil)
+                (setq gptel-auto-workflow--stats
+                      (plist-put gptel-auto-workflow--stats :phase final-phase))
+                (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+                         (length all-results) kept-count)
+                (gptel-auto-workflow--persist-status)
+                (when completion-callback
+                  (funcall completion-callback all-results)))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)
@@ -10606,28 +10168,41 @@ into staging or main."
                          (if (not (gptel-auto-workflow--run-callback-live-p callback-run-id))
                              (message "[auto-workflow] Ignoring stale target completion for %s; run %s is no longer active"
                                       target run-id)
-                            (funcall
-                             run-in-context
-                             (lambda ()
-                               (setq all-results (append all-results results))
-                                (setq kept-count
-                                      (gptel-auto-workflow--kept-target-count all-results))
-                                (setq gptel-auto-workflow--stats
-                                      (plist-put gptel-auto-workflow--stats :kept kept-count))
-                                (gptel-auto-workflow--persist-status)
-                                (cond
-                                 (gptel-auto-experiment--quota-exhausted
-                                  (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
-                                  (finish-run))
-                                 ((and (> kept-count 0)
-                                       (gptel-auto-experiment--should-reduce-experiments-p))
-                                  (message "[auto-workflow] API pressure with %d kept target(s); stopping remaining targets"
-                                           kept-count)
-                                  (finish-run))
-                                 (t
-                                  (run-next (cdr remaining-targets)))))))))))
-                   (gptel-auto-experiment-loop target target-complete))))))
-      (funcall run-in-context (lambda () (run-next targets))))))
+                           (setq all-results (append all-results results))
+                           (setq kept-count
+                                 (gptel-auto-workflow--kept-target-count all-results))
+                           (setq gptel-auto-workflow--stats
+                                 (plist-put gptel-auto-workflow--stats :kept kept-count))
+                           (gptel-auto-workflow--persist-status)
+                           (if gptel-auto-experiment--quota-exhausted
+                               (progn
+                                 (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
+                                 (finish-run))
+                             (if (buffer-live-p run-buffer)
+                                 (with-current-buffer run-buffer
+                                   (let ((default-directory proj-root)
+                                         (gptel-auto-workflow--project-root-override proj-root)
+                                         (gptel-auto-workflow--current-project proj-root)
+                                         (gptel-auto-workflow--run-project-root proj-root))
+                                     (run-next (cdr remaining-targets))))
+                               (let ((default-directory proj-root)
+                                     (gptel-auto-workflow--project-root-override proj-root)
+                                     (gptel-auto-workflow--current-project proj-root)
+                                     (gptel-auto-workflow--run-project-root proj-root))
+                                 (run-next (cdr remaining-targets))))))))))
+                 (gptel-auto-experiment-loop target target-complete))))))
+      (if (buffer-live-p run-buffer)
+          (with-current-buffer run-buffer
+            (let ((default-directory proj-root)
+                  (gptel-auto-workflow--project-root-override proj-root)
+                  (gptel-auto-workflow--current-project proj-root)
+                  (gptel-auto-workflow--run-project-root proj-root))
+              (run-next targets)))
+        (let ((default-directory proj-root)
+              (gptel-auto-workflow--project-root-override proj-root)
+              (gptel-auto-workflow--current-project proj-root)
+              (gptel-auto-workflow--run-project-root proj-root))
+          (run-next targets))))))
 
 (defun gptel-auto-workflow-run (&optional targets)
   "Run auto-workflow asynchronously.

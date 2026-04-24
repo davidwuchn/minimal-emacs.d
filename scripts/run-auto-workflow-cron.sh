@@ -399,6 +399,11 @@ status_can_use_persisted_active_snapshot() {
     status_indicates_active_phase || return 1
     status_has_live_run_id || return 1
 
+    if daemon_socket_has_owner &&
+       ! daemon_socket_owned_by_worker_daemon; then
+        return 0
+    fi
+
     case "$ACTION" in
         messages)
             if messages_snapshot_fresh &&
@@ -456,7 +461,7 @@ status_can_use_persisted_active_snapshot() {
         else
             rc=$?
             if [ "$rc" -eq 1 ]; then
-                return 1
+                daemon_socket_owned_by_worker_daemon && return 1
             elif [ "$rc" -eq 2 ]; then
                 return 0
             fi

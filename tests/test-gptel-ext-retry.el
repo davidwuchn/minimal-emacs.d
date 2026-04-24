@@ -382,6 +382,22 @@
                :messages (list '(:role "tool" :tool_call_id "1" :content "result")))))
     (should (= 0 (test--truncate-old-messages info)))))
 
+(ert-deftest retry/truncate-old-messages/real-implementation-handles-vector-messages ()
+  "Real truncate helper should not depend on an unbound local length variable."
+  (let* ((my/gptel-truncate-old-messages-keep 6)
+         (long-content (make-string 100 ?x))
+         (info (test-make-info
+                :messages (list (list :role "user" :content long-content)
+                                '(:role "assistant" :content "msg2")
+                                '(:role "user" :content "msg3")
+                                '(:role "assistant" :content "msg4")
+                                '(:role "user" :content "msg5")
+                                '(:role "assistant" :content "msg6")
+                                '(:role "user" :content "msg7")))))
+    (should (= 1 (my/gptel--truncate-old-messages info)))
+    (let ((msgs (plist-get (plist-get info :data) :messages)))
+      (should (string-match-p "truncated" (plist-get (aref msgs 0) :content))))))
+
 ;;; Tests for strip-images-from-messages
 
 (ert-deftest retry/strip-images/removes-image-parts-from-vector-content ()
