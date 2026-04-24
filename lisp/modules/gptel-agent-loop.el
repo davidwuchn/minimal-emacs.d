@@ -656,6 +656,7 @@ Returns non-nil if result was delivered."
 (defun gptel-agent-loop--handle-continuation (state resp)
   "Handle STATE when continuation is needed after RESP.
 Returns non-nil if result was delivered."
+  (setq resp (if (stringp resp) resp ""))
   (when (gptel-agent-loop--continuation-needed-p state resp)
     (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
       (if gptel-agent-loop-hard-loop
