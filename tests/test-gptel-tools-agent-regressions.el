@@ -11088,6 +11088,7 @@ failure."
 (ert-deftest regression/auto-workflow/status-plist-omits-run-metadata-when-idle ()
   "Idle status should not synthesize run metadata when no run is active."
   (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--status-run-id nil)
         (gptel-auto-workflow--running nil)
         (gptel-auto-workflow--cron-job-running nil)
         (gptel-auto-workflow--stats '(:phase "idle" :total 5 :kept 0)))
@@ -11095,8 +11096,6 @@ failure."
                    '(:running nil
                      :kept 0
                      :total 5
-                     :phase "idle"
-                     :run-id nil
                      :phase "idle"
                      :run-id nil
                      :results nil)))))
