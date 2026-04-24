@@ -198,7 +198,9 @@ Returns (tokens window threshold-fraction percentage-threshold)."
   (let* ((tokens (my/gptel--current-tokens))
          (window (my/gptel--context-window))
          (threshold-fraction (my/gptel--effective-threshold))
-         (percentage-threshold (* window threshold-fraction)))
+         (percentage-threshold (if (and (integerp window) (plusp window))
+                                   (* window threshold-fraction)
+                                 0)))
     (list tokens window threshold-fraction percentage-threshold)))
 
 (defun my/gptel--current-tokens ()
