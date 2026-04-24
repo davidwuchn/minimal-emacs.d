@@ -186,11 +186,9 @@ Returns :dashscope, :gemini, :openai, :copilot, or :unknown."
 (defun my/gptel--effective-threshold ()
   "Return effective threshold based on backend type.
 DashScope uses lower threshold due to server-side timeout limits."
-  (let ((backend-type (my/gptel--backend-type)))
-    (cond
-     ((eq backend-type :dashscope)
-      my/gptel-auto-compact-threshold-dashscope)
-     (t my/gptel-auto-compact-threshold))))
+  (if (eq (my/gptel--backend-type) :dashscope)
+      my/gptel-auto-compact-threshold-dashscope
+    my/gptel-auto-compact-threshold))
 
 (defun my/gptel--threshold-values ()
   "Return threshold values for current context.
