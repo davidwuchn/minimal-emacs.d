@@ -111,14 +111,21 @@ Used by `my/gptel-auto-retry' to compute retry delays.")
 Prevents excessively long waits when many retries are needed.")
 
 (defun my/gptel--retry-delay (retries)
-  (let* ((r (if (numberp retries) (max 0 (truncate retries)) 0))
-         (base-delay (if (numberp my/gptel--retry-base-delay)
-                         my/gptel--retry-base-delay 4.0))
-         (backoff-factor (if (numberp my/gptel--retry-backoff-factor)
-                              my/gptel--retry-backoff-factor 2.0))
-         (max-delay (if (numberp my/gptel--retry-max-delay)
-                        my/gptel--retry-max-delay 30.0)))
-    (max 0.1 (min (abs max-delay) (* base-delay (expt backoff-factor r))))))
+  "Compute exponential backoff delay in seconds for RETRIES attempt.
+Uses `my/gptel--retry-base-delay', `my/gptel--retry-backoff-factor',
+and `my/gptel--retry-max-delay' constants.
+
+ASSUMPTION: retries >= 0; negative values treated as 0.
+BEHAVIOR: delay = min(max-delay, base-delay * backoff-factor^retries)
+EDGE CASE: Negative retries clamped to 0 to prevent sub-second delays.
+TEST: (my/gptel--retry-delay 0) => 4.0
+TEST: (my/gptel--retry-delay 3) => 30.0 (capped)"
+  (let ((r (if (and (numberp retries) (>= retries 0))
+               retries
+             0)))
+    (min my/gptel--retry-max-delay
+         (* my/gptel--retry-base-delay
+            (expt my/gptel--retry-backoff-factor r)))))
 
 (defconst my/gptel--unbounded-byte-limit 999999999
   "Unbounded byte limit for model-specific context limits.
