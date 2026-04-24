@@ -757,7 +757,7 @@ Without PROJECT-ROOT, clears cache for all projects."
                   status-lines)))
         (let ((result (string-join (nreverse status-lines) "\n")))
           (setq gptel-auto-workflow--research-status-cache
-                (cons (floor (car now)) result))
+                (list (floor (car now)) 0 result))
           (message "Research cache status:\n%s" result))))))
 
 ;;; Weekly Job Runner (shared by mementum and instincts)
