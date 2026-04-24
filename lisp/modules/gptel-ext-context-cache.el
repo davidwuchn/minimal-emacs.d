@@ -662,17 +662,16 @@ Run asynchronously. Use for bulk cache warming."
     (when (my/gptel--openrouter-fetch-with-callback
            url
            (lambda (data)
-             (atomic-change-group
-               (let* ((valid-data (and (listp data) data))
-                      (count 0))
-                 (dolist (entry valid-data)
-                   (let ((result (my/gptel--openrouter-entry-context-window entry)))
-                     (when result
-                       (puthash (car result) (cdr result) my/gptel--context-window-cache)
-                       (cl-incf count))))
-                 (when (> count 0)
-                   (my/gptel--cache-save-context-windows))
-                 (message "OpenRouter: cached %d models" count))))
+             (let* ((valid-data (and (listp data) data))
+                    (results (cl-loop for entry in valid-data
+                                      for res = (my/gptel--openrouter-entry-context-window entry)
+                                      when res collect res))
+                    (count (length results)))
+               (dolist (r results)
+                 (puthash (car r) (cdr r) my/gptel--context-window-cache))
+               (when (> count 0)
+                 (my/gptel--cache-save-context-windows))
+               (message "OpenRouter: cached %d models" count)))
            "gptel-openrouter-all-models"
            10
            120)
