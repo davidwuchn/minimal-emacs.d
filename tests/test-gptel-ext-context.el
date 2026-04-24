@@ -12,6 +12,8 @@
 
 (require 'ert)
 
+(declare-function my/gptel--threshold-values "gptel-ext-context")
+
 ;;; Mock variables
 
 (defvar gptel-mode nil)
@@ -20,6 +22,7 @@
 (defvar my/gptel-auto-compact-threshold 0.75)
 (defvar my/gptel-auto-compact-min-chars 4000)
 (defvar my/gptel-auto-compact-min-interval 45)
+(defvar my/gptel-default-context-window 128000)
 (defvar-local my/gptel-auto-compact-running nil)
 (defvar-local my/gptel-auto-compact-last-run nil)
 
@@ -137,8 +140,13 @@
 
 (ert-deftest context/threshold-values/falls-back-to-default-window ()
   "Threshold calculation should fall back to the default context window."
-  (load-file "lisp/modules/gptel-ext-context.el")
-  (let ((my/gptel-default-context-window 128000))
+  (let* ((repo-root (or (locate-dominating-file default-directory "lisp/modules")
+                        default-directory))
+         (load-path (append (list (expand-file-name "lisp/modules" repo-root)
+                                  (expand-file-name "packages/gptel" repo-root))
+                            load-path))
+         (my/gptel-default-context-window 128000))
+    (load-file (expand-file-name "lisp/modules/gptel-ext-context.el" repo-root))
     (cl-letf (((symbol-function 'my/gptel--current-tokens)
                (lambda () 1000))
               ((symbol-function 'my/gptel--context-window)
