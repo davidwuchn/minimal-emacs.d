@@ -619,11 +619,11 @@ Runs asynchronously; returns nil immediately."
                                        valid-data)))
                 (result (my/gptel--openrouter-entry-context-window entry))
                 (cw (and result (cdr result))))
-           (if cw
-               (progn
-                 (my/gptel--cache-put-context-window model-id (cdr result))
-                 (message "OpenRouter context-window cached: %s -> %d" model-id (cdr result)))
-             (message "OpenRouter context-window: model not found or missing context_length: %s" model-id))))
+            (if cw
+                (progn
+                  (my/gptel--cache-put-context-window model-id cw)
+                  (message "OpenRouter context-window cached: %s -> %d" model-id cw))
+              (message "OpenRouter context-window: model not found or missing context_length: %s" model-id))))
        "gptel-openrouter-models"
        my/gptel-openrouter-models-connect-timeout
        my/gptel-openrouter-models-max-time)
