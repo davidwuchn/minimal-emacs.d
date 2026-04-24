@@ -135,6 +135,19 @@
       (insert (make-string 50000 ?x))
       (should (test-auto-compact-needed-p)))))
 
+(ert-deftest context/threshold-values/falls-back-to-default-window ()
+  "Threshold calculation should fall back to the default context window."
+  (load-file "lisp/modules/gptel-ext-context.el")
+  (let ((my/gptel-default-context-window 128000))
+    (cl-letf (((symbol-function 'my/gptel--current-tokens)
+               (lambda () 1000))
+              ((symbol-function 'my/gptel--context-window)
+               (lambda () nil))
+              ((symbol-function 'my/gptel--effective-threshold)
+               (lambda () 0.75)))
+      (should (equal (my/gptel--threshold-values)
+                     (list 1000 128000 0.75 96000.0))))))
+
 ;;; Tests for my/gptel--directive-text
 
 (ert-deftest context/directive/string-value ()
