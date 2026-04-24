@@ -11087,7 +11087,39 @@ failure."
                      :total 5
                      :phase "idle"
                      :run-id nil
+                     :phase "idle"
+                     :run-id nil
                      :results nil)))))
+
+(ert-deftest regression/auto-workflow/status-plist-keeps-terminal-run-metadata ()
+  "Completed workflow status should keep the last run metadata after cleanup."
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--status-run-id "2026-04-21T030002Z-d267")
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--stats '(:phase "complete" :total 4 :kept 1)))
+    (should (equal (gptel-auto-workflow--status-plist)
+                   '(:running nil
+                     :kept 1
+                     :total 4
+                     :phase "complete"
+                     :run-id "2026-04-21T030002Z-d267"
+                     :results "var/tmp/experiments/2026-04-21T030002Z-d267/results.tsv")))))
+
+(ert-deftest regression/auto-workflow/status-plist-keeps-queued-run-metadata ()
+  "Queued/running cron snapshots should keep the last known run id."
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--status-run-id "2026-04-24T174146Z-8b36")
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--cron-job-running t)
+        (gptel-auto-workflow--stats '(:phase "auto-workflow" :total 0 :kept 0)))
+    (should (equal (gptel-auto-workflow--status-plist)
+                   '(:running t
+                     :kept 0
+                     :total 0
+                     :phase "auto-workflow"
+                     :run-id "2026-04-24T174146Z-8b36"
+                     :results "var/tmp/experiments/2026-04-24T174146Z-8b36/results.tsv")))))
 
 (ert-deftest regression/auto-workflow/status-file-honors-environment-override ()
   "Workflow status file should honor AUTO_WORKFLOW_STATUS_FILE."

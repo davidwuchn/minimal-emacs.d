@@ -9012,13 +9012,21 @@ Relative paths are resolved from the project root."
   "Return current workflow status as a plist."
   (let* ((running (or gptel-auto-workflow--running
                       (bound-and-true-p gptel-auto-workflow--cron-job-running)))
-         (run-id (and (stringp gptel-auto-workflow--run-id)
-                      (not (string-empty-p gptel-auto-workflow--run-id))
-                      gptel-auto-workflow--run-id)))
+         (phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle"))
+         (active-run-id (and (stringp gptel-auto-workflow--run-id)
+                             (not (string-empty-p gptel-auto-workflow--run-id))
+                             gptel-auto-workflow--run-id))
+         (status-run-id (and (stringp gptel-auto-workflow--status-run-id)
+                             (not (string-empty-p gptel-auto-workflow--status-run-id))
+                             gptel-auto-workflow--status-run-id))
+         (run-id (or active-run-id
+                     (and running status-run-id)
+                     (and (member phase '("complete" "quota-exhausted" "error"))
+                          status-run-id))))
     (list :running running
           :kept (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :kept 0)
           :total (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :total 0)
-          :phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle")
+          :phase phase
           :run-id run-id
           :results (and run-id
                         (gptel-auto-workflow--results-relative-path run-id)))))

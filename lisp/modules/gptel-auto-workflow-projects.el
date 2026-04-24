@@ -346,7 +346,9 @@ the queued job actually finishes."
     (setq gptel-auto-workflow--cron-job-running t)
     (when (fboundp 'gptel-auto-workflow--make-run-id)
       (setq gptel-auto-workflow--run-id
-            (gptel-auto-workflow--make-run-id)))
+            (gptel-auto-workflow--make-run-id)
+            gptel-auto-workflow--status-run-id
+            gptel-auto-workflow--run-id))
     (when (fboundp 'gptel-auto-workflow--mark-messages-start)
       (gptel-auto-workflow--mark-messages-start))
     (setq gptel-auto-workflow--stats
