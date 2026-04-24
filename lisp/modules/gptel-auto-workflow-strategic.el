@@ -461,11 +461,8 @@ Logs parsing failures for debugging."
                     (cond
                      ((gptel-auto-workflow--json-object-p data)
                       (or (alist-get 'targets data)
-                          (cdr (assoc "targets" data))
                           (alist-get 'files data)
-                          (cdr (assoc "files" data))
                           (alist-get 'paths data)
-                          (cdr (assoc "paths" data))
                           (and (gptel-auto-workflow--json-target-file data)
                                (list data))))
                      ((listp data) data)))
