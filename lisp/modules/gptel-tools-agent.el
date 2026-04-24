@@ -9558,7 +9558,8 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
              (numberp gptel-auto-workflow-status-refresh-interval)
              (> gptel-auto-workflow-status-refresh-interval 0))
     (when (timerp gptel-auto-workflow--status-refresh-timer)
-      (gptel-auto-workflow--stop-status-refresh-timer))
+      (cancel-timer gptel-auto-workflow--status-refresh-timer))
+    (setq gptel-auto-workflow--status-refresh-timer nil)
     (setq gptel-auto-workflow--status-refresh-timer
           (run-with-timer gptel-auto-workflow-status-refresh-interval
                           gptel-auto-workflow-status-refresh-interval
