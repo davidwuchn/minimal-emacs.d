@@ -134,9 +134,17 @@ Agent prompts (code_agent.md, plan_agent.md) are loaded separately from `nucleus
 
 (defun nucleus--project-root ()
   "Return the current project root or `default-directory`."
-  (if-let ((proj (project-current nil)))
-      (project-root proj)
-    default-directory))
+  (let* ((fallback-dir (if (boundp 'minimal-emacs-user-directory)
+                           minimal-emacs-user-directory
+                         user-emacs-directory))
+         (active-dir (if (and (stringp default-directory)
+                              (file-directory-p default-directory))
+                         default-directory
+                       fallback-dir)))
+    (let ((default-directory active-dir))
+      (if-let ((proj (project-current nil)))
+          (project-root proj)
+        active-dir))))
 
 (defun nucleus--resolve-prompts-dir ()
   "Return `nucleus-prompts-dir' if it exists as a directory, else nil."

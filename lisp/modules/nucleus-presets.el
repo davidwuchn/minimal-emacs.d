@@ -140,14 +140,19 @@ changed (e.g. RunAgent added after buffer was created)."
         (when (and (bound-and-true-p gptel-mode)
                    (boundp 'gptel--preset)
                    (memq gptel--preset '(gptel-plan gptel-agent)))
-          (condition-case err
-              (gptel--apply-preset gptel--preset
-                                   (lambda (sym val)
-                                     (set (make-local-variable sym) val)))
-            (error
-             (message "[nucleus] Warning: failed to re-apply preset %S to buffer %S: %s"
-                      gptel--preset (buffer-name buf)
-                      (error-message-string err)))))))))
+          (if (or (not (stringp default-directory))
+                  (file-directory-p default-directory))
+              (condition-case err
+                  (gptel--apply-preset gptel--preset
+                                       (lambda (sym val)
+                                         (set (make-local-variable sym) val)))
+                (error
+                 (message "[nucleus] Warning: failed to re-apply preset %S to buffer %S: %s"
+                          gptel--preset (buffer-name buf)
+                          (error-message-string err))))
+            (message "[nucleus] Skipping stale gptel buffer %S (missing %s)"
+                     (buffer-name buf)
+                     default-directory)))))))
 
 (defun nucleus--override-gptel-agent-presets ()
   "Make gptel-agent's Plan/Agent presets use nucleus system prompts and toolsets.
@@ -326,20 +331,29 @@ Runs as :after advice on `gptel--apply-preset'."
            (proj-agents (expand-file-name "assistant/agents/"
                                           (nucleus--project-root)))
            (skill-dir (expand-file-name "assistant/skills/" base-dir))
-           (agent-dirs (seq-remove
-                        (lambda (dir)
-                          (member dir (list user-agents proj-agents)))
-                        (if (boundp 'gptel-agent-dirs)
-                            gptel-agent-dirs
-                          '()))))
+            (agent-dirs (seq-remove
+                         (lambda (dir)
+                           (or (member dir (list user-agents proj-agents))
+                               (not (file-directory-p dir))))
+                         (if (boundp 'gptel-agent-dirs)
+                             (copy-sequence gptel-agent-dirs)
+                           '())))
+            (skill-dirs (seq-remove
+                         (lambda (dir)
+                           (or (equal dir skill-dir)
+                               (not (file-directory-p dir))))
+                         (if (boundp 'gptel-agent-skill-dirs)
+                             (copy-sequence gptel-agent-skill-dirs)
+                           '()))))
       (when (file-directory-p user-agents)
         (setq agent-dirs (append agent-dirs (list user-agents))))
       (when (file-directory-p proj-agents)
         (setq agent-dirs (append agent-dirs (list proj-agents))))
-      (setq gptel-agent-dirs agent-dirs)
-      (when (and (boundp 'gptel-agent-skill-dirs)
-                 (file-directory-p skill-dir))
-        (add-to-list 'gptel-agent-skill-dirs skill-dir)))
+      (setq gptel-agent-dirs (delete-dups agent-dirs))
+      (when (boundp 'gptel-agent-skill-dirs)
+        (when (file-directory-p skill-dir)
+          (setq skill-dirs (append skill-dirs (list skill-dir))))
+        (setq gptel-agent-skill-dirs (delete-dups skill-dirs))))
     (when (fboundp 'gptel-agent-update)
       (gptel-agent-update))))
 
