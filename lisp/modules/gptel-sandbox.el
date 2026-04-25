@@ -182,14 +182,14 @@ When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
   (let ((child-env (gptel-sandbox--copy-env env)))
     (if sequentialp
         (dolist (binding bindings)
-          (pcase-let ((`(,symbol . ,value)
-                       (gptel-sandbox--eval-let-binding binding child-env)))
-            (puthash symbol value child-env)))
-      (let (resolved)
-        (dolist (binding bindings)
-          (push (gptel-sandbox--eval-let-binding binding env) resolved))
-        (dolist (entry (nreverse resolved))
-          (puthash (car entry) (cdr entry) child-env))))
+          (pcase-let ((`(,symbol ,value-form)
+                       (gptel-sandbox--normalize-binding binding)))
+            (let ((value (gptel-sandbox--eval-expr value-form child-env)))
+              (puthash symbol value child-env))))
+      (dolist (binding bindings)
+        (pcase-let ((`(,symbol . ,value)
+                     (gptel-sandbox--eval-let-binding binding env)))
+          (puthash symbol value child-env))))
     (let ((value nil))
       (dolist (form body value)
         (setq value (gptel-sandbox--eval-expr form child-env))))))
@@ -285,11 +285,17 @@ supports a small, explicit whitelist of pure operations."
       ('setq
        (gptel-sandbox--eval-setq-pairs (cdr expr) env))
       ('when
-          (when (gptel-sandbox--eval-expr (nth 1 expr) env)
-            (gptel-sandbox--eval-sequential (cddr expr) env)))
+       (let ((args (cdr expr)))
+         (unless (>= (length args) 1)
+           (error "Programmatic when requires at least 1 argument (condition), got: %d" (length args)))
+         (when (gptel-sandbox--eval-expr (car args) env)
+           (gptel-sandbox--eval-sequential (cdr args) env))))
       ('unless
-          (unless (gptel-sandbox--eval-expr (nth 1 expr) env)
-            (gptel-sandbox--eval-sequential (cddr expr) env)))
+       (let ((args (cdr expr)))
+         (unless (>= (length args) 1)
+           (error "Programmatic unless requires at least 1 argument (condition), got: %d" (length args)))
+         (unless (gptel-sandbox--eval-expr (car args) env)
+           (gptel-sandbox--eval-sequential (cdr args) env))))
       ('progn
         (gptel-sandbox--eval-sequential (cdr expr) env))
       ('let
@@ -322,6 +328,8 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--tool-arg-map (arg-pairs)
   "Convert ARG-PAIRS plist into a keyword->value hash table."
+  (unless (listp arg-pairs)
+    (error "Programmatic tool-call arguments must be a list, got: %S" arg-pairs))
   (let ((table (make-hash-table :test #'eq)))
     (while arg-pairs
       (let ((key (pop arg-pairs))
@@ -353,15 +361,21 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--allowed-tool-p (tool-name)
   "Return non-nil when TOOL-NAME may run inside Programmatic."
-  (member tool-name
-          (pcase (gptel-sandbox--current-profile)
-            ('readonly my/gptel-programmatic-readonly-tools)
-            (_ my/gptel-programmatic-allowed-tools))))
+  (let ((name-str (if (symbolp tool-name)
+                      (symbol-name tool-name)
+                    tool-name)))
+    (member name-str
+            (pcase (gptel-sandbox--current-profile)
+              ('readonly my/gptel-programmatic-readonly-tools)
+              (_ my/gptel-programmatic-allowed-tools)))))
 
 (defun gptel-sandbox--confirm-supported-p (tool-name)
   "Return non-nil when TOOL-NAME may request confirmation in Programmatic."
-  (and (eq (gptel-sandbox--current-profile) 'agent)
-       (member tool-name my/gptel-programmatic-confirming-tools)))
+  (let ((name-str (if (symbolp tool-name)
+                      (symbol-name tool-name)
+                    tool-name)))
+    (and (eq (gptel-sandbox--current-profile) 'agent)
+         (member name-str my/gptel-programmatic-confirming-tools))))
 
 (defun gptel-sandbox--current-profile ()
   "Return the active Programmatic capability profile.
@@ -499,11 +513,17 @@ CALLBACK receives non-nil when approved and nil when rejected."
         (if (>= suffix-len limit)
             (format "%s" suffix)
           (let ((head-len (- limit suffix-len)))
-            (format "%s%s" (substring text 0 head-len) suffix)))))))
+            (format "%s%s" (substring text 0 (min head-len (length text))) suffix)))))))
 
 (defun gptel-sandbox--format-error (message)
   "Format MESSAGE as a sandbox error string."
   (format "Error: %s" message))
+
+(defun gptel-sandbox--wrap-result (result)
+  "Wrap RESULT for callback, avoiding double-wrapping of error strings."
+  (if (and (stringp result) (string-prefix-p "Error: " result))
+      result
+    (gptel-sandbox--format-result result)))
 
 (defun gptel-sandbox--format-result (result)
   "Convert RESULT to string, preferring gptel--to-string when available."
@@ -527,6 +547,10 @@ can consume lists, vectors, plists, and alists as readable data."
            (print-circle t))
        (pp-to-string value))))))
 
+(defun gptel-sandbox--format-tool-result (result)
+  "Format RESULT from a tool call into a sandbox result string."
+  (gptel-sandbox--format-result result))
+
 (defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
   (let* ((tool-spec (if (fboundp 'gptel-get-tool)
@@ -546,16 +570,16 @@ can consume lists, vectors, plists, and alists as readable data."
                      (apply (gptel-tool-function tool-spec)
                             (lambda (result)
                               (condition-case cb-err
-                                  (funcall callback (gptel-sandbox--format-result result))
+                                  (funcall callback (gptel-sandbox--format-tool-result result))
                                 (error (funcall callback
-                                                (gptel-sandbox--format-result
+                                                (gptel-sandbox--format-tool-result
                                                  (gptel-sandbox--format-error
                                                   (error-message-string cb-err)))))))
                             arg-values)
                    (let ((result (condition-case inner-err
                                      (apply (gptel-tool-function tool-spec) arg-values)
                                    (error (gptel-sandbox--format-error (error-message-string inner-err))))))
-                     (funcall callback (gptel-sandbox--format-result result)))))))
+                     (funcall callback (gptel-sandbox--format-tool-result result)))))))
           (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
               (gptel-sandbox--maybe-aggregate-confirm
                state

@@ -60,7 +60,7 @@ ARGS are passed to `gptel-make-openai'."
                     ("User-Agent"    . "KimiCLI/1.3")))
         :stream t
         :curl-args '("--http1.1" "--max-time" "900" "--connect-timeout" "30")
-        :models '((kimi-k2.6-code-preview
+        :models '((kimi-k2.6
                    :request-params (:reasoning (:effort "high")
                                                :thinking  (:type "enabled")))
                   (kimi-k2.5
@@ -74,7 +74,7 @@ ARGS are passed to `gptel-make-openai'."
     :endpoint "/chat/completions"
     :key (lambda () (my/gptel-api-key "api.deepseek.com"))
     :stream t
-    :models '(deepseek-chat deepseek-reasoner)))
+    :models '(deepseek-reasoner deepseek-chat)))
 
 (defvar gptel--cf-gateway
   (gptel-make-openai "CF-Gateway"
@@ -82,8 +82,8 @@ ARGS are passed to `gptel-make-openai'."
     :endpoint "/v1/e68f70855c32831717611057ed23aa46/mindward/workers-ai/v1/chat/completions"
     :key (lambda () (my/gptel-api-key "gateway.ai.cloudflare.com"))
     :stream t
-    :models '(\@cf/zai-org/glm-4.7-flash
-              \@cf/moonshotai/kimi-k2.5
+    :models '(\@cf/moonshotai/kimi-k2.6
+              \@cf/zai-org/glm-4.7-flash
               \@cf/openai/whisper
               \@cf/openai/whisper-large-v3-turbo)))
 

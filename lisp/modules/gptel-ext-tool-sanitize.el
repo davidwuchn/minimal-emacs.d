@@ -26,22 +26,57 @@ Removes underscores, hyphens, and converts to lowercase."
   (when (stringp name)
     (downcase (replace-regexp-in-string "[-_]" "" name))))
 
+(defun my/gptel--tool-spec (tool)
+  "Return TOOL as a bare `gptel-tool' struct when possible.
+Accepts already-normalized tool structs and registry entries of the form
+\(NAME . TOOL)."
+  (cond
+   ((and (fboundp 'gptel-tool-p) (gptel-tool-p tool))
+    tool)
+   ((and (consp tool)
+         (fboundp 'gptel-tool-p)
+         (gptel-tool-p (cdr tool)))
+    (cdr tool))
+   (t nil)))
+
+(defun my/gptel--normalize-tool-list (tools)
+  "Return TOOLS as a list of bare `gptel-tool' structs."
+  (delq nil (mapcar #'my/gptel--tool-spec tools)))
+
+(defun my/gptel--tool-name-candidates (name)
+  "Return fuzzy-match candidates extracted from tool NAME.
+This keeps the original NAME first, then any token-like substrings so
+malformed parser output such as embedded XML can still recover the
+underlying tool name."
+  (when (stringp name)
+    (let* ((tokens (split-string name "[^[:alnum:]_-]+" t))
+           (candidates (cons name tokens)))
+      (delete-dups (seq-filter (lambda (candidate)
+                                 (> (length candidate) 0))
+                               candidates)))))
+
 (defun my/gptel--find-tool-fuzzy (name tools)
   "Find tool in TOOLS matching NAME using fuzzy matching.
 Tries: exact, case-insensitive, underscore/hyphen normalization."
   (when (stringp name)
-    (or
-     ;; 1. Exact match
-     (cl-find-if (lambda (ts) (string= (gptel-tool-name ts) name)) tools)
-     ;; 2. Case-insensitive match
-     (cl-find-if (lambda (ts) (string-equal-ignore-case (gptel-tool-name ts) name)) tools)
-     ;; 3. Normalized match (ignore underscores/hyphens)
-     (when my/gptel-tool-repair-enabled
-       (let ((normalized (my/gptel--normalize-tool-name name)))
-         (cl-find-if
-          (lambda (ts)
-            (string= normalized (my/gptel--normalize-tool-name (gptel-tool-name ts))))
-          tools))))))
+    (let ((tool-specs (my/gptel--normalize-tool-list tools)))
+      (cl-loop
+       for candidate in (my/gptel--tool-name-candidates name)
+       for normalized = (my/gptel--normalize-tool-name candidate)
+       thereis
+       (or
+        ;; 1. Exact match
+        (cl-find-if (lambda (ts) (string= (gptel-tool-name ts) candidate)) tool-specs)
+        ;; 2. Case-insensitive match
+        (cl-find-if (lambda (ts) (string-equal-ignore-case (gptel-tool-name ts) candidate))
+                    tool-specs)
+        ;; 3. Normalized match (ignore underscores/hyphens)
+        (when (and my/gptel-tool-repair-enabled normalized)
+          (cl-find-if
+           (lambda (ts)
+             (string= normalized
+                      (my/gptel--normalize-tool-name (gptel-tool-name ts))))
+           tool-specs)))))))
 
 ;; Handle nil/unknown tool calls gracefully instead of hanging the FSM.
 ;; When a model sends a tool call with a nil or unrecognized name, gptel's
@@ -80,10 +115,14 @@ This handles the case where the gptel-agent preset was applied before
 RunAgent was registered, leaving it out of the buffer's tool list."
   (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
               (tool-use (plist-get info :tool-use)))
-    (let ((tools (plist-get info :tools))
-          (all-tools (when (boundp 'gptel--known-tools)
-                       (apply #'append (mapcar #'cdr gptel--known-tools))))
-          pruned)
+    (let* ((tools (my/gptel--normalize-tool-list (plist-get info :tools)))
+           (all-tools (when (boundp 'gptel--known-tools)
+                        (cl-loop for (_ . entries) in gptel--known-tools
+                                 append (my/gptel--normalize-tool-list entries))))
+           pruned)
+      (unless (equal tools (plist-get info :tools))
+        (setq info (plist-put info :tools tools))
+        (setf (gptel-fsm-info fsm) info))
       (dolist (tc tool-use)
         (let* ((name (plist-get tc :name))
                (matched-tool (and (stringp name)
@@ -147,6 +186,18 @@ or `Grep' but never switch to a write-capable tool."
   :type 'integer
   :group 'gptel)
 
+(defcustom my/gptel-inspection-thrash-bytes-per-extra-step 16384
+  "Bytes of readable file size that earn one extra inspection-thrash step.
+Larger files need a bit more exploration headroom before a same-file read-only
+streak should be treated as a stuck turn."
+  :type 'integer
+  :group 'gptel)
+
+(defcustom my/gptel-inspection-thrash-max-extra 25
+  "Maximum extra same-file inspection-thrash steps granted to large files."
+  :type 'integer
+  :group 'gptel)
+
 (defconst my/gptel--inspection-tools
   '("Code_Inspect" "Code_Map" "Code_Usages" "Read" "Grep")
   "Read-only tools that contribute to same-file inspection thrash.")
@@ -174,6 +225,19 @@ only when both the tool name and the serialized argument plist match."
       (when (member name my/gptel--inspection-tools)
         (or (plist-get args :file_path)
             (plist-get args :path))))))
+
+(defun my/gptel--inspection-thrash-threshold-for-file (file)
+  "Return the same-file inspection-thrash threshold for FILE."
+  (let* ((attrs (and (stringp file)
+                     (file-readable-p file)
+                     (not (file-directory-p file))
+                     (ignore-errors (file-attributes file 'string))))
+         (size (and attrs (file-attribute-size attrs)))
+         (extra (if (and (integerp size) (> size 0))
+                    (min my/gptel-inspection-thrash-max-extra
+                         (/ size my/gptel-inspection-thrash-bytes-per-extra-step))
+                  0)))
+    (+ my/gptel-inspection-thrash-threshold extra)))
 
 (defun my/gptel--abort-sanitized-turn (fsm info error-message)
   "Abort the live request behind FSM/INFO and stamp ERROR-MESSAGE on the FSM."
@@ -242,12 +306,11 @@ to a write-capable tool."
     (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
                 (tool-use (plist-get info :tool-use)))
       (let* ((state (plist-get info :inspection-thrash-state))
-             (current-file (plist-get state :file))
-             (current-run (or (plist-get state :count) 0))
-             (threshold my/gptel-inspection-thrash-threshold))
+              (current-file (plist-get state :file))
+              (current-run (or (plist-get state :count) 0)))
         (dolist (tc tool-use)
           (let* ((name (plist-get tc :name))
-                 (file (my/gptel--inspection-tool-target tc)))
+                  (file (my/gptel--inspection-tool-target tc)))
             (cond
              ((member name my/gptel--write-tools)
               (setq current-file nil
@@ -255,25 +318,26 @@ to a write-capable tool."
               (setf (gptel-fsm-info fsm)
                     (plist-put info :inspection-thrash-state
                                (list :file current-file :count current-run))))
-             (file
-              (setq current-run (if (equal current-file file)
-                                    (1+ current-run)
-                                  1)
-                    current-file file)
-              (when (>= current-run threshold)
-                (let ((abbrev-file (abbreviate-file-name file)))
-                  (let ((error-message
-                         (format "gptel: inspection-thrash aborted — %d consecutive read-only inspections on %s without a write-capable tool. Try editing sooner or narrow the task."
-                                 current-run abbrev-file)))
-                    (message "gptel: inspection-thrash detected — %d read-only inspections on %s without a write, aborting turn"
-                             current-run abbrev-file)
-                    (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
-                    (funcall (plist-get info :callback) error-message info))
-                  (gptel--fsm-transition fsm 'DONE)
-                  (cl-return-from my/gptel--detect-inspection-thrash)))
-              (setf (gptel-fsm-info fsm)
-                    (plist-put info :inspection-thrash-state
-                               (list :file current-file :count current-run))))
+              (file
+               (setq current-run (if (equal current-file file)
+                                     (1+ current-run)
+                                   1)
+                     current-file file)
+               (let ((threshold (my/gptel--inspection-thrash-threshold-for-file file)))
+                 (when (>= current-run threshold)
+                 (let ((abbrev-file (abbreviate-file-name file)))
+                   (let ((error-message
+                          (format "gptel: inspection-thrash aborted — %d consecutive read-only inspections on %s without a write-capable tool. Try editing sooner or narrow the task."
+                                  current-run abbrev-file)))
+                     (message "gptel: inspection-thrash detected — %d read-only inspections on %s without a write, aborting turn"
+                              current-run abbrev-file)
+                     (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
+                     (funcall (plist-get info :callback) error-message info))
+                   (gptel--fsm-transition fsm 'DONE)
+                   (cl-return-from my/gptel--detect-inspection-thrash))))
+               (setf (gptel-fsm-info fsm)
+                     (plist-put info :inspection-thrash-state
+                                (list :file current-file :count current-run))))
              (t
              (setq current-file nil
                    current-run 0)

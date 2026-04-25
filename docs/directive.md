@@ -32,7 +32,7 @@ From latest experiment runs (updated 2026-04-16):
 | `gptel-sandbox.el` | 0.50→0.90 | 0.50→0.85 | π Synthesis | Active |
 | `gptel-benchmark-core.el` | 0.40→0.80 | 0.50→0.93 | σ Specificity | Active |
 
-**Note**: Backend fallback chain now includes moonshot/kimi-k2.6-code-preview as first fallback after MiniMax.
+**Note**: Backend fallback chain now includes moonshot/kimi-k2.6 as first fallback after MiniMax.
 
 ## Targets
 
@@ -98,10 +98,10 @@ When MiniMax hits rate limits (429), auto-workflow automatically fails over:
 | Order | Backend | Model | Purpose |
 |-------|---------|-------|---------|
 | 1 | **MiniMax** | `minimax-m2.7-highspeed` | Primary workhorse |
-| 2 | **moonshot** | `kimi-k2.6-code-preview` | First fallback |
+| 2 | **moonshot** | `kimi-k2.6` | First fallback |
 | 3 | **DashScope** | `qwen3.6-plus` | Second fallback |
-| 4 | **DeepSeek** | `deepseek-chat` | Third fallback |
-| 5 | **CF-Gateway** | `@cf/zai-org/glm-4.7-flash` | Fourth fallback |
+| 4 | **DeepSeek** | `deepseek-reasoner` | Third fallback |
+| 5 | **CF-Gateway** | `@cf/moonshotai/kimi-k2.6` | Fourth fallback |
 | 6 | **Gemini** | `gemini-3.1-pro-preview` | Last resort |
 
 ## Mutation Strategy

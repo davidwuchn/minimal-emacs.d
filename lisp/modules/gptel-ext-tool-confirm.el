@@ -112,8 +112,10 @@ this accepts wrapped request entries and validates the resolved FSM itself."
   "Return a displayable tool name for TOOL-SPEC.
 Supports normal gptel tool structs and lightweight plist specs used for
 aggregate Programmatic previews."
-  (or (ignore-errors (gptel-tool-name tool-spec))
-      (plist-get tool-spec :name)
+  (or (let ((name (ignore-errors (gptel-tool-name tool-spec))))
+        (and (stringp name) (not (string-empty-p name)) name))
+      (let ((name (plist-get tool-spec :name)))
+        (and (stringp name) (not (string-empty-p name)) name))
       (format "%s" tool-spec)))
 
 ;; --- Enhanced Tool Call Confirmation Context ---
@@ -130,14 +132,17 @@ aggregate Programmatic previews."
 (defun my/gptel--programmatic-confirm-tool (tool-spec arg-values callback)
   "Confirm nested Programmatic TOOL-SPEC with ARG-VALUES, then run CALLBACK.
 CALLBACK receives non-nil for approval and nil for rejection."
-  (let ((tool-call (list tool-spec arg-values callback))
-        (info (list :buffer (current-buffer)
-                    :backend gptel-backend
-                    :position (point-marker)
-                    :tracking-marker (copy-marker (point) t)
-                    :programmatic-confirm t)))
-    (if (and (bound-and-true-p my/gptel-permitted-tools)
-             (my/gptel-tool-permitted-p (gptel-tool-name tool-spec)))
+  (let* ((tool-name (my/gptel--tool-spec-name tool-spec))
+         (tool-call (list tool-spec arg-values callback))
+         (info (list :buffer (current-buffer)
+                     :backend gptel-backend
+                     :position (point-marker)
+                     :tracking-marker (copy-marker (point) t)
+                     :programmatic-confirm t)))
+    (if (and (stringp tool-name)
+             (not (string-empty-p tool-name))
+             (bound-and-true-p my/gptel-permitted-tools)
+             (my/gptel-tool-permitted-p tool-name))
         (funcall callback t)
       (if (or buffer-read-only
               (get-char-property (point) 'read-only))
@@ -195,7 +200,8 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
              ;; Already permitted — auto-accept this one
              (progn
                (if programmaticp
-                   (funcall done-cb t)
+                   (when (functionp done-cb)
+                     (funcall done-cb t))
                  (gptel--accept-tool-calls (list tool-call-spec) nil))
                nil)
            (concat (if aggregatep
@@ -206,9 +212,11 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
                      (concat " " (propertize formatted-args 'face 'font-lock-constant-face)))
                    ": "))))
      (lambda (tcs)
-       (if programmaticp
-           (funcall (nth 2 tcs) t)
-         (gptel--accept-tool-calls (list tcs) nil)))
+       (let ((cb (nth 2 tcs)))
+         (if programmaticp
+             (when (functionp cb)
+               (funcall cb t))
+           (gptel--accept-tool-calls (list tcs) nil))))
      tool-calls '("tool call" "tool calls" "run")
      `((?i ,(lambda (_) (save-window-excursion
                           (with-selected-window
@@ -229,9 +237,11 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
                 (my/gptel-permit-tool name)
                 (message "Permitted %s for this session" name))
               ;; Accept this tool call and continue
-              (if programmaticp
-                  (funcall (nth 2 tool-call-spec) t)
-                (gptel--accept-tool-calls (list tool-call-spec) nil))
+              (let ((cb (nth 2 tool-call-spec)))
+                (if programmaticp
+                    (when (functionp cb)
+                      (funcall cb t))
+                  (gptel--accept-tool-calls (list tool-call-spec) nil)))
               nil)
            "permit & run (remember)")))))
 
@@ -364,11 +374,15 @@ with an additional `p' option to permit and remember a tool."
 (defun my/gptel--extract-programmatic-callback (response ov)
   "Extract callback from PROGRAMMATIC RESPONSE if valid.
 Returns (callback . is-programmatic) where callback is the function or nil."
-  (if (and response
+  (if (and (listp response)
            (= (length response) 1)
-           (or (and (overlayp ov) (overlay-get ov 'gptel-programmatic-confirm))
-               (functionp (nth 2 (car response)))))
-      (cons (nth 2 (car response)) t)
+           (listp (car-safe response)))
+      (let* ((first (car response))
+             (cb (nth 2 first)))
+        (if (or (and (overlayp ov) (overlay-get ov 'gptel-programmatic-confirm))
+                (functionp cb))
+            (cons cb t)
+          (cons nil nil)))
     (cons nil nil)))
 
 (defun my/gptel--around-accept-tool-calls (orig &optional response ov)

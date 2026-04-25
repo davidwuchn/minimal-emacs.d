@@ -42,6 +42,7 @@
 (require 'cl-lib)
 (require 'gptel)
 (require 'gptel-openai)
+(require 'seq)
 
 (defvar gptel-send--handlers)
 (defvar gptel-request--handlers)
@@ -119,7 +120,9 @@ BEHAVIOR: delay = min(max-delay, base-delay * backoff-factor^retries)
 EDGE CASE: Negative retries clamped to 0 to prevent sub-second delays.
 TEST: (my/gptel--retry-delay 0) => 4.0
 TEST: (my/gptel--retry-delay 3) => 30.0 (capped)"
-  (let ((r (max 0 (or retries 0))))
+  (let ((r (if (and (numberp retries) (>= retries 0))
+               retries
+             0)))
     (min my/gptel--retry-max-delay
          (* my/gptel--retry-base-delay
             (expt my/gptel--retry-backoff-factor r)))))
@@ -175,22 +178,21 @@ Returns the number of messages truncated, or 0 if nothing was done."
                 (lambda (msg) (equal (plist-get msg :role) "tool")))))
           (when (> (length tool-indices) keep)
             (let ((to-truncate (seq-take tool-indices (- (length tool-indices) keep))))
-              ;; Single pass: calculate bytes-saved AND truncate
-              ;; ASSUMPTION: Truncation decision based on total potential savings
-              ;; EDGE CASE: Must check min-bytes threshold before modifying messages
-              (dolist (idx to-truncate)
-                (let* ((msg (aref messages idx))
-                       (content (plist-get msg :content)))
-                  (when (and (stringp content)
-                             (> (string-bytes content) (string-bytes replacement)))
-                    (cl-incf bytes-saved (- (string-bytes content) (string-bytes replacement))))))
-              (when (or (= my/gptel-trim-min-bytes 0)
-                        (>= bytes-saved my/gptel-trim-min-bytes))
+              ;; Single pass: collect candidates and calculate bytes-saved
+              ;; Then check threshold before modifying messages
+              (let ((candidates))
                 (dolist (idx to-truncate)
                   (let* ((msg (aref messages idx))
                          (content (plist-get msg :content)))
                     (when (and (stringp content)
                                (> (string-bytes content) (string-bytes replacement)))
+                      (push idx candidates)
+                      (cl-incf bytes-saved (- (string-bytes content) (string-bytes replacement))))))
+                (when (or (= my/gptel-trim-min-bytes 0)
+                          (>= bytes-saved my/gptel-trim-min-bytes))
+                  (dolist (idx (nreverse candidates))
+                    (let* ((msg (aref messages idx))
+                           (content (plist-get msg :content)))
                       (plist-put msg :content replacement)
                       (cl-incf truncated)))))))))
       truncated)))
@@ -244,18 +246,17 @@ INFO is the request info plist containing :model, :backend, :data, and :buffer.
 
 Returns the number of messages repaired."
   (let* ((model (plist-get info :model))
-         (backend (plist-get info :backend))
          (reasoning-key (and (fboundp 'my/gptel--reasoning-key-for-model)
-                             (my/gptel--reasoning-key-for-model model backend)))
-         (data (plist-get info :data))
-         (messages (and data (plist-get data :messages)))
+                             (my/gptel--reasoning-key-for-model model)))
+         (messages (let ((data (plist-get info :data)))
+                     (and data (plist-get data :messages))))
          (gptel-buf (plist-get info :buffer))
          (reasoning-alist
           (and gptel-buf (buffer-live-p gptel-buf)
                (boundp 'my/gptel--tool-reasoning-alist)
                (buffer-local-value 'my/gptel--tool-reasoning-alist gptel-buf)))
          (repaired 0))
-    (when (and reasoning-key messages (> (length messages) 0)
+    (when (and reasoning-key messages
                (fboundp 'my/gptel--ensure-reasoning-on-messages))
       (setq repaired
             (my/gptel--ensure-reasoning-on-messages
@@ -337,7 +338,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
            (keep my/gptel-truncate-old-messages-keep)
            (truncated 0)
            (truncation-text "[Earlier conversation truncated to reduce payload size]"))
-      (when (and messages (> (length messages) keep))
+      (when (and (vectorp messages) (> (length messages) keep))
         (let ((cutoff (- (length messages) keep)))
           (dotimes (i cutoff)
             (let* ((msg (aref messages i))
@@ -432,6 +433,18 @@ Matched case-insensitively against error message text.")
 401: Unauthorized (invalid API key)
 403: Forbidden (access denied)")
 
+(defun my/gptel--extract-error-message (error-data)
+  "Extract error message string from ERROR-DATA.
+ERROR-DATA can be a string, plist, or alist.
+Returns the message string if found, nil otherwise.
+ASSUMPTION: Error messages can be in :message (plist) or 'message (alist) keys."
+  (cond
+    ((stringp error-data) error-data)
+    ((listp error-data)
+     (or (plist-get error-data :message)
+         (cdr (assq 'message error-data))))
+    (t nil)))
+
 (defun my/gptel--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error.
 Matches network failures, overload responses, rate limits, and common
@@ -458,15 +471,14 @@ EDGE CASE: Misleading success codes can still accompany application-level
 TEST: (my/gptel--transient-error-p \"Malformed JSON\" 500) => t
 TEST: (my/gptel--transient-error-p \"Invalid API key\" 401) => nil
 TEST: (my/gptel--transient-error-p nil 429) => t"
-  (let ((status (cond
-                 ((stringp http-status) (string-to-number http-status))
-                 ((numberp http-status) http-status)
-                 (t nil)))
-        (error-msg (when (listp error-data)
-                     (or (plist-get error-data :message)
-                         (cdr (assq 'message error-data))))))
+  (let* ((status (cond
+                  ((stringp http-status) (string-to-number http-status))
+                  ((numberp http-status) http-status)
+                  (t nil)))
+         (error-msg (my/gptel--extract-error-message error-data)))
     (or (and (stringp error-data)
-             (string-match-p my/gptel--transient-error-string-patterns error-data))
+             (string-match-p my/gptel--transient-error-string-patterns
+                             (downcase error-data)))
         (and (numberp status) (memq status my/gptel--transient-http-statuses))
         (and (numberp status)
              (= status 400)
@@ -498,12 +510,12 @@ start <= tracking to avoid corrupting the buffer."
           (set-marker tracking-marker start-marker))))))
 
 (defun my/gptel--format-error-message (error-data http-status)
-  "Format error message from ERROR-DATA and HTTP-STATUS."
-  (if (stringp error-data)
-      (string-trim error-data)
-    (if (and http-status (not (eq http-status t)))
-        (format "HTTP %s" http-status)
-      "Transient API Error")))
+  "Format error message from ERROR-DATA and HTTP-STATUS.
+Extracts message from plist/alist when error-data is not a string."
+  (or (my/gptel--extract-error-message error-data)
+      (if (and http-status (not (eq http-status t)))
+          (format "HTTP %s" http-status)
+        "Transient API Error")))
 
 (defun my/gptel--headless-auto-workflow-agent-buffer-p (info)
   "Return non-nil when INFO belongs to a headless auto-workflow agent buffer."

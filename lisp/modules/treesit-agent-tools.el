@@ -9,6 +9,11 @@
   (when (and (treesit-available-p) (treesit-parser-list))
     (treesit-buffer-root-node)))
 
+(defun treesit-agent--has-parser-language-p (lang)
+  "Check if current buffer has a tree-sitter parser for LANG."
+  (and (treesit-parser-list)
+       (cl-find-if (lambda (p) (eq (treesit-parser-language p) lang)) (treesit-parser-list))))
+
 (defun treesit-agent--get-defun-regexp ()
   "Get the appropriate defun type regexp for the current buffer.
 Provides fallback regexps for languages that don't set treesit-defun-type-regexp."
@@ -17,32 +22,25 @@ Provides fallback regexps for languages that don't set treesit-defun-type-regexp
       (and (derived-mode-p 'emacs-lisp-mode 'emacs-lisp-ts-mode)
            "function_definition")
       ;; Fallback for Clojure family (check parser language since mode might not be set)
-      (and (treesit-parser-list)
-           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'clojure)) (treesit-parser-list))
+      (and (treesit-agent--has-parser-language-p 'clojure)
            "list_lit")
       ;; Fallback for Rust (function, struct, enum, impl, trait, mod)
-      (and (treesit-parser-list)
-           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'rust)) (treesit-parser-list))
+      (and (treesit-agent--has-parser-language-p 'rust)
            "\\(?:function\\|struct\\|enum\\|impl\\|trait\\|mod\\)_item")
       ;; Fallback for Python (class, function — matches inside decorated_definition too)
-      (and (treesit-parser-list)
-           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'python)) (treesit-parser-list))
+      (and (treesit-agent--has-parser-language-p 'python)
            "\\(?:class\\|function\\)_definition")
       ;; Fallback for Java (class, method, constructor, enum, interface, record)
-      (and (treesit-parser-list)
-           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'java)) (treesit-parser-list))
+      (and (treesit-agent--has-parser-language-p 'java)
            "\\(?:class\\|method\\|constructor\\|enum\\|interface\\|record\\)_declaration")
       ;; Fallback for C (function, struct, enum, union, type_definition)
-      (and (treesit-parser-list)
-           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'c)) (treesit-parser-list))
+      (and (treesit-agent--has-parser-language-p 'c)
            "\\(?:function_definition\\|struct_specifier\\|enum_specifier\\|union_specifier\\|type_definition\\)")
       ;; Fallback for C++ (adds class_specifier and namespace_definition)
-      (and (treesit-parser-list)
-           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'cpp)) (treesit-parser-list))
+      (and (treesit-agent--has-parser-language-p 'cpp)
            "\\(?:function_definition\\|class_specifier\\|struct_specifier\\|enum_specifier\\|union_specifier\\|namespace_definition\\|type_definition\\)")
       ;; Fallback for Lua (function_declaration only — name field handles extraction)
-      (and (treesit-parser-list)
-           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'lua)) (treesit-parser-list))
+      (and (treesit-agent--has-parser-language-p 'lua)
            "function_declaration")))
 
 (defun treesit-agent--get-defun-name (node)
@@ -102,8 +100,7 @@ Provides fallback for languages where treesit-defun-name returns nil."
 
 (defun treesit-agent--clojure-parser-p ()
   "Check if current buffer has a Clojure tree-sitter parser."
-  (and (treesit-parser-list)
-       (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'clojure)) (treesit-parser-list))))
+  (treesit-agent--has-parser-language-p 'clojure))
 
 (defun treesit-agent--flatten-sparse-tree (tree)
   "Flatten a sparse tree produced by `treesit-induce-sparse-tree'."

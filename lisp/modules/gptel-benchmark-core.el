@@ -154,8 +154,8 @@ JSON parsing returns vectors for arrays; this normalizes to lists."
   "Get FIELD from OBJ, handling both plist and alist formats.
 FIELD should be a keyword like :score.
 For alist lookup, tries both keyword and symbol keys.
-Returns nil if OBJ is not a valid plist or alist."
-  (when (listp obj)
+Returns nil if OBJ is not a valid plist or alist, or if FIELD is nil."
+  (when (and (listp obj) field)
     (or (plist-get obj field)
         (cdr (assoc field obj))
         (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
@@ -272,14 +272,9 @@ Handles nil scores by treating them as 0.
 Returns TOTALS unchanged if SCORES-ALIST is nil."
   (if (null scores-alist)
       totals
-    (mapcar (lambda (pair)
-              (let ((score-type (car pair))
-                    (current (cdr pair)))
-                (cons score-type
-                      (gptel-benchmark--accumulate-score
-                       current
-                       (alist-get score-type scores-alist)))))
-            totals)))
+    (cl-loop for (score-type . current) in totals
+             for score = (or (alist-get score-type scores-alist) 0.0)
+             collect (cons score-type (+ current score)))))
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.

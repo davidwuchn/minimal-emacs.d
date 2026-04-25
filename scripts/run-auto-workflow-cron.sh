@@ -137,7 +137,6 @@ append_missing_submodule_path() {
 
     missing+=("$path")
 }
-
 hydrate_missing_worktree_submodules() {
     local missing=()
     local path
@@ -336,10 +335,152 @@ raise SystemExit(0 if probe.returncode == 0 else 1)
 PY
 }
 
+daemon_socket_owned_by_worker_daemon() {
+    local daemon_pid
+
+    daemon_pid="$(worker_daemon_pid || true)"
+    [ -n "$daemon_pid" ] || return 1
+
+    python3 - "$SERVER_NAME" "$daemon_pid" <<'PY'
+from pathlib import Path
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+server_name = sys.argv[1]
+daemon_pid = sys.argv[2]
+
+def candidate_socket_paths(name):
+    uid = os.getuid()
+    candidates = []
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir:
+        candidates.append(Path(runtime_dir) / "emacs" / name)
+    for base in filter(None, [os.environ.get("TMPDIR"), tempfile.gettempdir(), "/tmp"]):
+        candidates.append(Path(base) / f"emacs{uid}" / name)
+    deduped = []
+    seen = set()
+    for path in candidates:
+        key = str(path)
+        if key not in seen:
+            deduped.append(path)
+            seen.add(key)
+    return deduped
+
+socket_path = next((path for path in candidate_socket_paths(server_name) if path.exists()), None)
+if socket_path is None:
+    raise SystemExit(1)
+
+lsof = shutil.which("lsof")
+if not lsof:
+    raise SystemExit(1)
+
+try:
+    probe = subprocess.run(
+        [lsof, "-t", str(socket_path)],
+        capture_output=True,
+        text=True,
+        timeout=2,
+        check=False,
+    )
+except subprocess.TimeoutExpired:
+    raise SystemExit(1)
+
+owners = {line.strip() for line in probe.stdout.splitlines() if line.strip()}
+raise SystemExit(0 if daemon_pid in owners else 1)
+PY
+}
+
 status_can_use_persisted_active_snapshot() {
-    status_indicates_active_phase &&
-        status_has_live_run_id &&
-        { status_snapshot_fresh || messages_snapshot_fresh || daemon_socket_has_owner; }
+    local rc
+
+    status_indicates_active_phase || return 1
+    status_has_live_run_id || return 1
+
+    if daemon_socket_has_owner &&
+       ! daemon_socket_owned_by_worker_daemon; then
+        return 0
+    fi
+
+    case "$ACTION" in
+        messages)
+            if messages_snapshot_fresh &&
+               ! daemon_socket_owned_by_worker_daemon; then
+                return 0
+            fi
+            ;;
+        status)
+            if status_snapshot_fresh &&
+               ! daemon_socket_owned_by_worker_daemon; then
+                return 0
+            fi
+            ;;
+        *)
+            if { status_snapshot_fresh || messages_snapshot_fresh; } &&
+               ! daemon_socket_owned_by_worker_daemon; then
+                return 0
+            fi
+            ;;
+    esac
+
+    case "$ACTION" in
+        messages)
+            if messages_snapshot_fresh && ! daemon_socket_has_owner; then
+                return 0
+            fi
+            ;;
+        status)
+            if status_snapshot_fresh && ! daemon_socket_has_owner; then
+                return 0
+            fi
+            ;;
+        *)
+            if { status_snapshot_fresh || messages_snapshot_fresh; } &&
+               ! daemon_socket_has_owner; then
+                return 0
+            fi
+            ;;
+    esac
+
+    if check_worker_daemon; then
+        if daemon_reports_active_workflow; then
+            case "$ACTION" in
+                messages)
+                    messages_snapshot_fresh
+                    ;;
+                status)
+                    status_snapshot_fresh
+                    ;;
+                *)
+                    status_snapshot_fresh || messages_snapshot_fresh
+                    ;;
+            esac
+            return $?
+        else
+            rc=$?
+            if [ "$rc" -eq 1 ]; then
+                daemon_socket_owned_by_worker_daemon && return 1
+            elif [ "$rc" -eq 2 ]; then
+                return 0
+            fi
+        fi
+    else
+        rc=$?
+        if [ "$rc" -eq 2 ]; then
+            return 0
+        fi
+    fi
+
+    case "$ACTION" in
+        messages)
+            messages_snapshot_fresh || daemon_socket_has_owner
+            ;;
+        *)
+            status_snapshot_fresh || messages_snapshot_fresh || daemon_socket_has_owner
+            ;;
+    esac
 }
 
 rewrite_status_idle() {
@@ -432,10 +573,37 @@ try:
 except subprocess.TimeoutExpired as err:
     # Leave the client alive so the server can finish the request cleanly
     # instead of logging a broken server connection when the wrapper gives up.
+    # The child must keep draining its stdout/stderr pipes after this wrapper
+    # exits, otherwise the server sees a remote peer disconnect mid-request.
     if err.stdout:
         sys.stdout.write(err.stdout if isinstance(err.stdout, str) else err.stdout.decode())
     if err.stderr:
         sys.stderr.write(err.stderr if isinstance(err.stderr, str) else err.stderr.decode())
+    if proc.poll() is None and hasattr(os, "fork"):
+        try:
+            reaper_pid = os.fork()
+        except OSError:
+            reaper_pid = -1
+        if reaper_pid == 0:
+            try:
+                try:
+                    os.setsid()
+                except OSError:
+                    pass
+                devnull_fd = os.open(os.devnull, os.O_RDWR)
+                try:
+                    os.dup2(devnull_fd, 0)
+                    os.dup2(devnull_fd, 1)
+                    os.dup2(devnull_fd, 2)
+                finally:
+                    if devnull_fd > 2:
+                        os.close(devnull_fd)
+                try:
+                    proc.communicate()
+                except Exception:
+                    pass
+            finally:
+                os._exit(0)
     raise SystemExit(124)
 
 proc_stdout = stdout_text or ""
@@ -603,6 +771,8 @@ refresh_snapshot_paths_from_daemon() {
     local payload
     local daemon_status
     local daemon_messages
+    local effective_status
+    local effective_messages
 
     body='(if (and (fboundp '"'"'gptel-auto-workflow--status-file)
                    (fboundp '"'"'gptel-auto-workflow--messages-file))
@@ -621,9 +791,23 @@ refresh_snapshot_paths_from_daemon() {
     [ -n "$daemon_messages" ] || return 1
     [ -d "$(dirname "$daemon_status")" ] || return 1
     [ -d "$(dirname "$daemon_messages")" ] || return 1
-    STATUS_FILE="$daemon_status"
-    MESSAGES_FILE="$daemon_messages"
-    save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE"
+
+    effective_status="$daemon_status"
+    effective_messages="$daemon_messages"
+    if [ -n "${AUTO_WORKFLOW_STATUS_FILE:-}" ]; then
+        effective_status="$STATUS_FILE"
+    fi
+    if [ -n "${AUTO_WORKFLOW_MESSAGES_FILE:-}" ]; then
+        effective_messages="$MESSAGES_FILE"
+    fi
+
+    if [ -n "${AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE:-}" ] ||
+       { [ -z "${AUTO_WORKFLOW_STATUS_FILE:-}" ] && [ -z "${AUTO_WORKFLOW_MESSAGES_FILE:-}" ]; }; then
+        save_cached_snapshot_paths "$daemon_status" "$daemon_messages"
+    fi
+
+    STATUS_FILE="$effective_status"
+    MESSAGES_FILE="$effective_messages"
     return 0
 }
 

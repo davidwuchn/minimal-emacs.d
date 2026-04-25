@@ -257,7 +257,6 @@
                  "(progn (princ \"debug info\") (error \"boom\"))")))
     (should (string-match-p (regexp-quote "Error: error: (\"boom\")") result))
     (should (string-match-p (regexp-quote "STDOUT:\ndebug info") result))))
-
 ;;; Tests for WebSearch tool
 
 (ert-deftest tools/websearch/searches-query ()

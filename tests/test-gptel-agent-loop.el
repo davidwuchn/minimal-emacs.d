@@ -131,16 +131,33 @@
 (ert-deftest gptel-agent-loop-test-timeout-discards-late-success ()
   (gptel-agent-loop-test--with-env
    (let (callback delivered)
-     (cl-letf (((symbol-function 'gptel-request)
-                (lambda (_prompt &rest args)
+      (cl-letf (((symbol-function 'gptel-request)
+                 (lambda (_prompt &rest args)
                   (setq callback (plist-get args :callback)))))
        (gptel-agent-loop-task
         (lambda (result) (setq delivered result))
         "reviewer" "timeout task" "prompt")
-       (setf (gptel-agent-loop--task-aborted gptel-agent-loop--state) t)
-       (funcall callback "late success" '(:tool-use nil))
-       (should (string-match-p "Aborted:" delivered))
-       (should-not (string-match-p "late success" delivered))))))
+        (setf (gptel-agent-loop--task-aborted gptel-agent-loop--state) t)
+        (funcall callback "late success" '(:tool-use nil))
+        (should (string-match-p "Aborted:" delivered))
+        (should-not (string-match-p "late success" delivered))))))
+
+(ert-deftest gptel-agent-loop-test-make-timeout-timer-returns-created-timer ()
+  (let ((gptel-agent-loop-timeout 30)
+        (cancelled-timer nil))
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (&rest _args) 'new-timer))
+              ((symbol-function 'timerp)
+               (lambda (timer) (memq timer '(old-timer new-timer))))
+              ((symbol-function 'cancel-timer)
+               (lambda (timer) (setq cancelled-timer timer))))
+      (let ((state (gptel-agent-loop--task-create
+                    :description "timeout test"
+                    :timeout-timer 'old-timer)))
+        (setf (gptel-agent-loop--task-timeout-timer state)
+              (gptel-agent-loop--make-timeout-timer state))
+        (should (eq cancelled-timer 'old-timer))
+        (should (eq (gptel-agent-loop--task-timeout-timer state) 'new-timer))))))
 
 (ert-deftest gptel-agent-loop-test-max-steps-disables-tools-on-summary-turn ()
   ;; FIXME: Skipped due to gptel-backend binding issues in batch mode.

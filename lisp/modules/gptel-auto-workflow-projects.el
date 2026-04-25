@@ -60,7 +60,8 @@ Customize this variable to add more projects.")
   "Root directory for mementum. Set per-project.")
 
 (defvar gptel-auto-workflow--project-root-override)
-(defvar gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)
+(defvar gptel-auto-workflow--research-findings-cache
+  (make-hash-table :test 'equal)
   "Hash table caching research findings per project root.")
 
 (defvar gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal)
@@ -137,6 +138,7 @@ Each worktree gets its own isolated buffer for subagent overlays."
         (progn
           (with-current-buffer existing
             (setq-local default-directory root))
+          (puthash root existing gptel-auto-workflow--project-buffers)
           existing)
       ;; Create new buffer (or recreate if previous was killed)
       (let ((buf (get-buffer-create buf-name)))
@@ -719,6 +721,7 @@ then runs researcher for that project."
   "Clear research findings cache for PROJECT-ROOT or all projects.
 Without PROJECT-ROOT, clears cache for all projects."
   (interactive)
+  (setq gptel-auto-workflow--research-status-cache nil)
   (if project-root
       (let ((root (expand-file-name project-root)))
         (remhash root gptel-auto-workflow--research-findings-cache)
@@ -746,7 +749,7 @@ Without PROJECT-ROOT, clears cache for all projects."
     (if (and cached-at
              cached-result
              (< (- now cached-at)
-                 gptel-auto-workflow--research-status-ttl-seconds))
+                gptel-auto-workflow--research-status-ttl-seconds))
         (message "Research cache status:\n%s"
                  cached-result)
       (let ((status-lines '()))

@@ -177,9 +177,12 @@ TEST: (my/gptel--fsm-p 42) => nil
 
 PROACTIVE MITIGATION: Uses ignore-errors to safely handle
 any object type without signaling errors to caller."
-  (ignore-errors
-    (gptel-fsm-state object)
-    t))
+  (and object
+       (if (fboundp 'gptel-fsm-p)
+           (gptel-fsm-p object)
+         (ignore-errors
+           (gptel-fsm-state object)
+           t))))
 
 (defun my/gptel--coerce-fsm (object &optional context-id)
   "Return the FSM matching CONTEXT-ID from OBJECT, or first FSM if no match.
@@ -210,16 +213,17 @@ Returns FSM struct or nil if not found."
   (let ((seen (make-hash-table :test 'eq)))
     (cl-labels ((coerce (obj)
                   (cond
-                   ((gethash obj seen) nil)
+                   ((and (consp obj) (gethash obj seen)) nil)
+                   ((consp obj)
+                    (puthash obj t seen)
+                    (or (coerce (car obj))
+                        (coerce (cdr obj))))
                    ((my/gptel--fsm-p obj)
                     (if (null context-id)
                         obj
                       (let ((id (my/gptel--fsm-get-id obj)))
                         (when (and id (equal id context-id)) obj))))
-                   ((consp obj)
-                    (puthash obj t seen)
-                    (or (coerce (car obj))
-                        (coerce (cdr obj)))))))
+                   (t nil))))
       (coerce object))))
 
 (defun my/gptel--coerce-fsm-with-context (object)
@@ -265,32 +269,33 @@ BEHAVIOR: Returns empty list if no FSMs found.
 EDGE CASE: Nil object returns empty list.
 EDGE CASE: Single FSM returns list with one element.
 EDGE CASE: Deeply nested FSMs all collected.
+EDGE CASE: Dotted pairs (a . b) where b is cons are fully traversed.
 TEST: (my/gptel--collect-all-fsms nil) => ()
 TEST: (my/gptel--collect-all-fsms fsm) => (fsm)
 TEST: (my/gptel--collect-all-fsms '(fsm1 fsm2)) => (fsm1 fsm2)
 TEST: (my/gptel--collect-all-fsms '(a (b fsm) c)) => (fsm)
+TEST: (my/gptel--collect-all-fsms '(a . (b fsm))) => (fsma fsmb)
 
 BUILDS ON DISCOVERY: Need to collect all FSMs to detect
 nested subagent scenarios and select appropriate FSM.
 
 ADAPTS TO: Pure functional approach eliminates mutable state,
 improving testability and reducing cognitive load."
-  (let ((seen (make-hash-table :test 'eq)))
+  (let ((seen (make-hash-table :test 'eq))
+        (result nil))
     (cl-labels ((collect (obj)
                   (cond
-                   ((null obj) nil)
-                   ((gethash obj seen) nil)
-                   ((my/gptel--fsm-p obj)
-                    (prog1 (list obj)
-                      (puthash obj t seen)))
                    ((consp obj)
-                    (if (gethash obj seen)
-                        nil
+                    (unless (gethash obj seen)
                       (puthash obj t seen)
-                      (append (collect (car obj))
-                              (collect (cdr obj)))))
-                   (t nil))))
-      (delq nil (collect object)))))
+                      (collect (car obj))
+                      (collect (cdr obj))))
+                   ((null obj) nil)
+                   ((my/gptel--fsm-p obj)
+                    (puthash obj t seen)
+                    (push obj result)))))
+      (collect object)
+      (nreverse result))))
 
 (defun my/gptel--fsm-depth (object)
   "Return nesting depth of FSMs in OBJECT.
@@ -372,8 +377,17 @@ Returns t on success, signals error on failure."
                  ;; Track FSM usage count
                  (let ((count (gethash value fsm-counts 0)))
                    (puthash value (1+ count) fsm-counts)))
-                ;; FSM → ID mapping: skip, validated via ID→FSM entry
-                ((my/gptel--fsm-p key) nil)
+                ;; FSM → ID mapping: validate ID format and bidirectional consistency
+                ((my/gptel--fsm-p key)
+                 (let ((id value))
+                   (unless (my/gptel--fsm-id-valid-p id)
+                     (error "FSM registry invariant violated: invalid ID format in FSM→ID mapping: %s" id))
+                   (let ((fsm-via-id (gethash id my/gptel--fsm-registry)))
+                     (unless (eq fsm-via-id key)
+                       (error "FSM registry invariant violated: FSM→ID bidirectional mismatch for FSM %S (expected ID %S, got %S)" key id fsm-via-id)))
+                   ;; Track FSM usage count
+                   (let ((count (gethash key fsm-counts 0)))
+                     (puthash key (1+ count) fsm-counts))))
                 ;; Unknown key type is a corruption
                 (t
                  (error "FSM registry invariant violated: unknown key type %S" key))))

@@ -147,14 +147,15 @@ falls back to the user's Emacs configuration directory."
 
 (defun gptel-auto-workflow--target-in-root-repo-p (abs-path proj-root)
   "Return non-nil when ABS-PATH belongs to the same git repo as PROJ-ROOT."
-  (let ((project-git-root (locate-dominating-file proj-root ".git"))
-        (target-git-root (locate-dominating-file
-                          (file-name-directory (directory-file-name abs-path))
-                          ".git")))
-    (and project-git-root
-         target-git-root
-         (file-equal-p (expand-file-name project-git-root)
-                       (expand-file-name target-git-root)))))
+  (when (and (stringp abs-path) (stringp proj-root) (not (string-empty-p abs-path)))
+    (let ((project-git-root (locate-dominating-file proj-root ".git"))
+          (target-git-root (locate-dominating-file
+                            (file-name-directory (directory-file-name abs-path))
+                            ".git")))
+      (and project-git-root
+           target-git-root
+           (file-equal-p (expand-file-name project-git-root)
+                         (expand-file-name target-git-root))))))
 
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
@@ -254,7 +255,7 @@ CALLBACK receives list of target files."
          (analyzer-timeout (max (or my/gptel-agent-task-timeout 0)
                                 gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
-                   context research-findings max-targets)))
+                  context research-findings max-targets)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (cl-labels
@@ -289,6 +290,7 @@ CALLBACK receives list of target files."
 Returns updated targets list."
   (cond
    ((not (stringp file)) targets)
+   ((not (and (stringp proj-root) (not (string-empty-p proj-root)))) targets)
    ((>= (length targets) max-targets) targets)
    (t
     (let ((abs-path (if (file-name-absolute-p file)
@@ -297,20 +299,20 @@ Returns updated targets list."
           (root-prefix (if (string-suffix-p "/" proj-root)
                            proj-root
                          (concat proj-root "/"))))
-       (if (and (file-exists-p abs-path)
-                (file-regular-p abs-path)
-                (string-prefix-p root-prefix abs-path)
-                (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
-           (let ((rel-path (file-relative-name abs-path proj-root)))
-             (if (gptel-auto-workflow--skip-headless-target-p rel-path)
-                 (progn
-                   (message "[auto-workflow] Skipping self-hosting target in headless run: %s"
-                            rel-path)
-                   targets)
-                (if (member rel-path targets)
-                    targets
-                  (cons rel-path targets))))
-         targets)))))
+      (if (and (file-exists-p abs-path)
+               (file-regular-p abs-path)
+               (string-prefix-p root-prefix abs-path)
+               (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
+          (let ((rel-path (file-relative-name abs-path proj-root)))
+            (if (gptel-auto-workflow--skip-headless-target-p rel-path)
+                (progn
+                  (message "[auto-workflow] Skipping self-hosting target in headless run: %s"
+                           rel-path)
+                  targets)
+              (if (member rel-path targets)
+                  targets
+                (cons rel-path targets))))
+        targets)))))
 
 (defun gptel-auto-workflow--normalize-response (response)
   "Normalize RESPONSE to a string.
@@ -339,6 +341,8 @@ Otherwise, convert using princ representation."
 (defun gptel-auto-workflow--filter-valid-targets (candidates proj-root max-targets)
   "Filter CANDIDATES to valid target files.
 Returns list of validated relative paths, up to MAX-TARGETS."
+  (when (or (null max-targets) (not (integerp max-targets)) (<= max-targets 0))
+    (setq max-targets most-positive-fixnum))
   (let ((candidates-list (if (listp candidates) candidates (list candidates)))
         (results '()))
     (dolist (file candidates-list (reverse results))
@@ -390,16 +394,16 @@ TARGETS is the analyzer result, STATIC-TARGETS is fallback list.
 Returns non-nil if error state was handled."
   (cond
    ((and gptel-auto-workflow--analyzer-quota-exhausted
-         (null targets))
+         (not targets))
     (message "[auto-workflow] Analyzer quota exhausted; using static targets")
     (funcall callback static-targets)
     t)
    ((and gptel-auto-workflow--analyzer-transient-failure
-         (null targets))
+         (not targets))
     (message "[auto-workflow] Analyzer transient failure; using static targets")
     (funcall callback static-targets)
     t)
-   ((null targets)
+   ((not targets)
     (message "[auto-workflow] Analyzer returned no targets; using static targets")
     (funcall callback static-targets)
     t)
@@ -424,8 +428,11 @@ Returns non-nil if error state was handled."
    ((gptel-auto-workflow--json-object-p item)
     (gptel-auto-workflow--normalize-target-candidate
      (or (alist-get 'file item)
+         (cdr (assoc "file" item))
          (alist-get 'path item)
-         (alist-get 'target item))))
+         (cdr (assoc "path" item))
+         (alist-get 'target item)
+         (cdr (assoc "target" item)))))
    (t nil)))
 
 (defun gptel-auto-workflow--nonempty-string-p (s)

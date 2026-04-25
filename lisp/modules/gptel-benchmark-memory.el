@@ -336,15 +336,24 @@ Knowledge is AI documentation written for future AI sessions."
 
 (defun gptel-benchmark-memory-search (query &optional depth)
   "Search memories for QUERY with optional DEPTH (fibonacci: 1,2,3,5,8,13).
-Uses git grep for semantic search, git log for temporal search."
+Uses git grep for semantic search, git log for temporal search.
+Returns list of matching file paths."
   (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
          (d (or depth 2))
+         (grep-regexp (format "--grep=%s" query))
          (results '()))
-    (call-process "git" nil t nil "grep" "-i" "-l" query "--" mem-dir)
-    (call-process "git" nil t nil "log" (format "-n %d" d) "--oneline" "--"
-                  (expand-file-name "memories/" mem-dir)
-                  (expand-file-name "knowledge/" mem-dir))
-    results))
+    (dolist (subdir '("memories" "knowledge"))
+      (let ((subdir-path (expand-file-name subdir mem-dir)))
+        (when (file-exists-p subdir-path)
+          (dolist (file (directory-files-recursively subdir-path "\\.md$"))
+            (when (with-temp-buffer
+                    (insert-file-contents file)
+                    (goto-char (point-min))
+                    (re-search-forward query nil t))
+              (push file results))))))
+    (when (>= (length results) d)
+      (nreverse (butlast results (- (length results) d))))
+    (nreverse results)))
 
 (defun gptel-benchmark-memory-read (path)
   "Read memory or knowledge at PATH."

@@ -229,10 +229,14 @@ memory after long sessions or if tasks appear stuck."
   (when (eq gptel-agent-loop--state state)
     (setq gptel-agent-loop--state nil)))
 
+(defun gptel-agent-loop--safe-accumulated-output (state)
+  "Return STATE's accumulated output or empty string if nil."
+  (or (gptel-agent-loop--task-accumulated-output state) ""))
+
 (defun gptel-agent-loop--append-output (state text)
   "Append TEXT to STATE's accumulated output."
   (setf (gptel-agent-loop--task-accumulated-output state)
-        (concat (or (gptel-agent-loop--task-accumulated-output state) "")
+        (concat (gptel-agent-loop--safe-accumulated-output state)
                 text
                 (unless (string-suffix-p "\n" text) "\n"))))
 
@@ -245,7 +249,7 @@ memory after long sessions or if tasks appear stuck."
 (defun gptel-agent-loop--build-final-result (state tail)
   "Build final response text for STATE ending with TAIL."
   (concat (gptel-agent-loop--result-prefix state)
-          (or (gptel-agent-loop--task-accumulated-output state) "")
+          (gptel-agent-loop--safe-accumulated-output state)
           tail))
 
 (defun gptel-agent-loop--transient-error-p (error-data)
@@ -280,7 +284,7 @@ Guards against delivering to a killed parent buffer by checking
 `gptel-agent-loop--task-parent-buffer' and
 `gptel-agent-loop--task-tracking-marker'."
   (cl-block gptel-agent-loop--deliver-result
-    (unless (and state result (gptel-agent-loop--task-main-cb state))
+    (unless (and state result (stringp result) (gptel-agent-loop--task-main-cb state))
       (message "[RunAgent] Error: Invalid args to deliver-result, dropping: %s"
                (if (stringp result)
                    (substring result 0 (min 50 (length result)))
@@ -294,6 +298,12 @@ Guards against delivering to a killed parent buffer by checking
         (gptel-agent-loop--cleanup-state state)
         (cl-return-from gptel-agent-loop--deliver-result)))
     (let ((main-cb (gptel-agent-loop--task-main-cb state)))
+      (unless (functionp main-cb)
+        (message "[RunAgent] Error: main callback is not a function for task '%s', dropping result"
+                 (gptel-agent-loop--task-description state))
+        (setf (gptel-agent-loop--task-finished state) t)
+        (gptel-agent-loop--cleanup-state state)
+        (cl-return-from gptel-agent-loop--deliver-result))
       (unless (gptel-agent-loop--task-finished state)
         (setf (gptel-agent-loop--task-finished state) t)
         (gptel-agent-loop--cleanup-state state)
@@ -323,21 +333,21 @@ Truncates accumulated output to last
 `gptel-agent-loop-continuation-context-limit' chars."
   (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
          (limit gptel-agent-loop-continuation-context-limit)
-         (len (length output))
-         (truncated (if (and (integerp limit) (> limit 0) (> len limit))
-                        (concat "...[earlier output truncated]\n"
-                                (substring output (- limit)))
-                      output)))
+         (context (if (and (integerp limit) (> limit 0)
+                          (> (length output) limit))
+                      (concat "...[earlier output truncated]\n"
+                              (substring output (- limit)))
+                    output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
             gptel-agent-loop-continuation-prompt
-            truncated)))
+            context)))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
   "Build max-steps summary prompt for STATE."
   (format "%s\n\nOriginal task:\n%s\n\nWork completed so far:\n%s"
           gptel-agent-loop-max-steps-prompt
           (gptel-agent-loop--task-prompt state)
-          (or (gptel-agent-loop--task-accumulated-output state) "")))
+          (gptel-agent-loop--safe-accumulated-output state)))
 
 (defconst gptel-agent-loop--completion-patterns
   '("all tasks.*complete"
@@ -356,8 +366,8 @@ a RunAgent task has finished successfully.")
 
 (defun gptel-agent-loop--compile-patterns (patterns)
   "Compile PATTERNS list into a single combined regex string.
-Returns nil if patterns list is empty."
-  (when patterns
+Returns nil if patterns list is empty or contains non-string elements."
+  (when (and patterns (cl-every #'stringp patterns))
     (mapconcat (lambda (p) (concat "\\(" p "\\)")) patterns "\\|")))
 
 (defun gptel-agent-loop--ensure-patterns-compiled ()
@@ -373,22 +383,32 @@ Call once after definitions to pre-compile regex patterns."
         (gptel-agent-loop--compile-patterns gptel-agent-loop--finishing-patterns)))
 
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
-  "Return non-nil when TEXT matches any pattern in PATTERNS.
+  "Return non-nil when TEXT matches any string in PATTERNS.
+Returns nil if TEXT is not a string or PATTERNS is not a list of strings.
 Patterns are matched case-insensitively."
   (and (stringp text)
-       (let ((text-lower (downcase text)))
-         (cl-some (lambda (pattern)
-                    (string-match-p (downcase pattern) text-lower))
-                  patterns))))
+       (cl-every #'stringp patterns)
+       (cl-some (lambda (pattern)
+                  (let ((case-fold-search t))
+                    (string-match-p pattern text)))
+                patterns)))
+
+(defun gptel-agent-loop--match-precompiled-pattern (resp patterns compiled)
+  "Match RESP against PATTERNS using COMPILED regex if available.
+Assumes RESP is a string and patterns are strings.
+Extracted from duplicate pattern-matching boilerplate."
+  (let ((case-fold-search t))
+    (if compiled
+        (string-match-p compiled resp)
+      (gptel-agent-loop--matches-any-pattern resp patterns))))
 
 (defun gptel-agent-loop--seems-complete-p (resp)
   "Return non-nil when RESP looks like a completion message.
 Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
-       (let ((case-fold-search t))
-         (if gptel-agent-loop--completion-patterns-compiled
-             (string-match-p gptel-agent-loop--completion-patterns-compiled resp)
-           (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--completion-patterns)))))
+       (gptel-agent-loop--match-precompiled-pattern
+        resp gptel-agent-loop--completion-patterns
+        gptel-agent-loop--completion-patterns-compiled)))
 
 (defconst gptel-agent-loop--turn-skipped-pattern
   "gptel: turn skipped\\|all tool calls.*malformed"
@@ -403,10 +423,9 @@ gptel skipped a turn due to malformed tool calls.")
   "Return non-nil when RESP matches malformed-tool skip output.
 Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
-       (let ((case-fold-search t))
-         (if gptel-agent-loop--turn-skipped-pattern-compiled
-             (string-match-p gptel-agent-loop--turn-skipped-pattern-compiled resp)
-           (string-match-p gptel-agent-loop--turn-skipped-pattern resp)))))
+       (gptel-agent-loop--match-precompiled-pattern
+        resp (list gptel-agent-loop--turn-skipped-pattern)
+        gptel-agent-loop--turn-skipped-pattern-compiled)))
 
 (defconst gptel-agent-loop--planning-patterns
   '("\\blet me\\b"
@@ -431,10 +450,9 @@ Detects common patterns where model talks about doing work
 but didn't call tools. Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
        (>= (length resp) 30)
-       (let ((case-fold-search t))
-         (if gptel-agent-loop--planning-patterns-compiled
-             (string-match-p gptel-agent-loop--planning-patterns-compiled resp)
-           (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--planning-patterns)))))
+       (gptel-agent-loop--match-precompiled-pattern
+        resp gptel-agent-loop--planning-patterns
+        gptel-agent-loop--planning-patterns-compiled)))
 
 (defconst gptel-agent-loop--finishing-patterns
   '("summariz\\|conclude\\|conclusion\\|finish\\|wrap up\\|that's all\\|in summary\\|to summarize\\|final\\|overall"
@@ -454,10 +472,9 @@ when the model is concluding rather than planning more work.")
 Detects patterns indicating the model is wrapping up,
 not planning more work. Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
-       (let ((case-fold-search t))
-         (if gptel-agent-loop--finishing-patterns-compiled
-             (string-match-p gptel-agent-loop--finishing-patterns-compiled resp)
-           (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--finishing-patterns)))))
+       (gptel-agent-loop--match-precompiled-pattern
+        resp gptel-agent-loop--finishing-patterns
+        gptel-agent-loop--finishing-patterns-compiled)))
 
 (defun gptel-agent-loop--continuation-count (state)
   "Return continuation count for STATE, defaulting to 0 if nil."
@@ -474,17 +491,18 @@ Assumes STATE is a valid task structure."
 Only continues if tools were called AND model seems to be
 planning without action.  Also checks continuation count
 limit for early exit."
-  (unless (stringp resp)
-    (setq resp ""))
-  (let ((cont-count (gptel-agent-loop--continuation-count state)))
-    (and gptel-agent-loop-force-completion
-         gptel-agent-loop-hard-loop
-         (< cont-count gptel-agent-loop-max-continuations)
-         (not (gptel-agent-loop--seems-complete-p resp))
-         (not (gptel-agent-loop--looks-like-finishing-p resp))
-         (not (gptel-agent-loop--task-max-steps-reached state))
-         (or (gptel-agent-loop--turn-skipped-p resp)
-             (gptel-agent-loop--looks-like-planning-p resp)))))
+  (when (and (gptel-agent-loop--task-p state)
+             (numberp (gptel-agent-loop--task-continuation-count state)))
+    (unless (stringp resp)
+      (setq resp ""))
+    (let ((cont-count (gptel-agent-loop--continuation-count state)))
+      (and gptel-agent-loop-force-completion
+           (< cont-count gptel-agent-loop-max-continuations)
+           (not (gptel-agent-loop--seems-complete-p resp))
+           (not (gptel-agent-loop--looks-like-finishing-p resp))
+           (not (gptel-agent-loop--task-max-steps-reached state))
+           (or (gptel-agent-loop--turn-skipped-p resp)
+               (gptel-agent-loop--looks-like-planning-p resp))))))
 
 (defun gptel-agent-loop--schedule (delay fn)
   "Run FN after DELAY seconds."
@@ -522,8 +540,8 @@ Extracted from duplicate abort handling patterns."
 
 (defun gptel-agent-loop--should-retry-p (state error-data)
   "Return non-nil when STATE should retry after ERROR-DATA.
-Retries when error is transient (or absent) and retry budget remains."
-  (and (or (null error-data) (gptel-agent-loop--transient-error-p error-data))
+Retries when error is transient and retry budget remains."
+  (and (gptel-agent-loop--transient-error-p error-data)
        (< (gptel-agent-loop--task-retries state)
           gptel-agent-loop-max-retries)))
 
@@ -549,8 +567,6 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
                      (gptel-agent-loop--task-description state)
                      (gptel-agent-loop--task-retries state)
                      gptel-agent-loop-max-retries)
-            (when (timerp (gptel-agent-loop--task-timeout-timer state))
-              (cancel-timer (gptel-agent-loop--task-timeout-timer state)))
             (setf (gptel-agent-loop--task-timeout-timer state)
                   (gptel-agent-loop--make-timeout-timer state))
             (gptel-agent-loop--schedule-request state request-prompt use-tools 2.0))
@@ -582,6 +598,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
           (gptel--display-tool-calls calls info)))
 
        ((and (consp resp) (eq (car resp) 'tool-result))
+        (gptel-agent-loop--cleanup-overlay ov)
         nil)
 
        ((stringp resp)
@@ -609,7 +626,7 @@ Returns non-nil if result was delivered."
        (gptel-agent-loop--build-final-result state "[empty response]")))
     t))
 
-(defun gptel-agent-loop--handle-max-steps-reached (state resp)
+(defun gptel-agent-loop--handle-max-steps-reached (state _resp)
   "Handle STATE when max steps were reached and RESP is final turn.
 Returns non-nil if result was delivered."
   (when (and (gptel-agent-loop--task-max-steps-reached state)
@@ -620,11 +637,11 @@ Returns non-nil if result was delivered."
       (gptel-agent-loop--deliver-result
        state
        (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-               (gptel-agent-loop--build-final-result state resp)
+               (gptel-agent-loop--build-final-result state "")
                (gptel-agent-loop--task-step-count state))))
     t))
 
-(defun gptel-agent-loop--handle-summary-turn (state resp use-tools)
+(defun gptel-agent-loop--handle-summary-turn (state _resp use-tools)
   "Handle STATE when summary was requested and RESP is summary turn.
 USE-TOOLS indicates whether tools were requested.
 Returns non-nil if result was delivered."
@@ -632,13 +649,14 @@ Returns non-nil if result was delivered."
              (not use-tools))
     (gptel-agent-loop--deliver-result
      state
-     (gptel-agent-loop--build-final-result state resp)
+     (gptel-agent-loop--build-final-result state "")
      t)
     t))
 
 (defun gptel-agent-loop--handle-continuation (state resp)
   "Handle STATE when continuation is needed after RESP.
 Returns non-nil if result was delivered."
+  (setq resp (if (stringp resp) resp ""))
   (when (gptel-agent-loop--continuation-needed-p state resp)
     (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
       (if gptel-agent-loop-hard-loop
@@ -655,12 +673,12 @@ Returns non-nil if result was delivered."
                  (gptel-agent-loop--task-step-count state)))))
     t))
 
-(defun gptel-agent-loop--handle-final-response (state resp)
+(defun gptel-agent-loop--handle-final-response (state _resp)
   "Handle STATE when RESP is a final response to deliver.
 Returns non-nil if result was delivered."
   (gptel-agent-loop--deliver-result
    state
-   (gptel-agent-loop--build-final-result state resp)
+   (gptel-agent-loop--build-final-result state "")
    t)
   t)
 
@@ -748,18 +766,26 @@ Cache behavior:
                 (my/gptel--seed-fsm-tools child-fsm request-tools)))))))))
 
 (defun gptel-agent-loop--make-timeout-timer (state)
-  "Create timeout timer for STATE."
-  (when gptel-agent-loop-timeout
-    (let ((timeout gptel-agent-loop-timeout))
-      (run-with-timer
-       timeout nil
-       (lambda ()
-         (unless (gptel-agent-loop--task-finished state)
-           (setf (gptel-agent-loop--task-aborted state) t)
-           (message "[RunAgent] Task '%s' timed out after %ds"
-                    (gptel-agent-loop--task-description state)
-                    timeout)
-           (gptel-agent-loop--deliver-aborted state)))))))
+  "Create timeout timer for STATE, canceling any existing timer first."
+  (when (and state (gptel-agent-loop--task-p state)
+             (numberp gptel-agent-loop-timeout) (> gptel-agent-loop-timeout 0))
+    (let ((existing-timer (gptel-agent-loop--task-timeout-timer state)))
+      (when (timerp existing-timer)
+        (cancel-timer existing-timer)))
+    (let* ((timeout gptel-agent-loop-timeout)
+           (timer (run-with-timer
+                   timeout nil
+                   (lambda ()
+                     (when (and state
+                                (gptel-agent-loop--task-p state)
+                                (not (gptel-agent-loop--task-finished state))
+                                (not (gptel-agent-loop--task-aborted state)))
+                       (setf (gptel-agent-loop--task-aborted state) t)
+                       (message "[RunAgent] Task '%s' timed out after %ds"
+                                (gptel-agent-loop--task-description state)
+                                timeout)
+                       (gptel-agent-loop--deliver-aborted state))))))
+      timer)))
 
 (defun gptel-agent-loop-task (main-cb agent-type description prompt)
   "Call a RunAgent task with timeout, retry, and step limits.

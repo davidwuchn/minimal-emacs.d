@@ -262,9 +262,29 @@
               ((symbol-function 'message) (lambda (&rest _args) nil)))
       (should-not
        (condition-case err
-           (my/gptel-fetch-all-model-metadata)
-         (error err)))
+            (my/gptel-fetch-all-model-metadata)
+          (error err)))
       (should (= (hash-table-count my/gptel--context-window-cache) 0)))))
+
+(ert-deftest cache/load-context-windows/preserves-last-refresh ()
+  "Loading the cache file should preserve the saved refresh timestamp."
+  (test--context-cache-setup)
+  (let* ((temp-dir (make-temp-file "context-cache" t))
+         (my/gptel-context-window-cache-file
+          (expand-file-name "gptel-context-window-cache.el" temp-dir))
+         (my/gptel--context-window-cache (make-hash-table :test 'equal))
+         (my/gptel--context-window-cache-data nil)
+         (my/gptel--context-window-cache-last-refresh 7.0))
+    (unwind-protect
+        (progn
+          (with-temp-file my/gptel-context-window-cache-file
+            (insert "(setq my/gptel--context-window-cache-data '((\"demo\" . 1234)))\n")
+            (insert "(setq my/gptel--context-window-cache-last-refresh 42.0)\n"))
+          (my/gptel--cache-load-context-windows)
+          (should (= (gethash "demo" my/gptel--context-window-cache) 1234))
+          (should (equal my/gptel--context-window-cache-last-refresh 42.0))
+          (should-not my/gptel--context-window-cache-data))
+      (delete-directory temp-dir t))))
 
 (provide 'test-gptel-ext-context-cache)
 
