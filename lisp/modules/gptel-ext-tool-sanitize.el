@@ -275,8 +275,9 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                  (current-run (or (plist-get info :doom-loop-current-run) 0)))
             (setq info (plist-put info :doom-loop-fingerprints (append fps new-fps)))
             (dolist (fp new-fps)
-              (let ((current-run
-                     (if (and prev-fp (equal prev-fp fp))
+              (let ((this-prev prev-fp)
+                    (current-run
+                     (if (and this-prev (equal this-prev fp))
                          (1+ (or (alist-get fp run-counts nil nil #'string=) 0))
                        1)))
                 (setq run-counts (cons (cons fp current-run) run-counts))
