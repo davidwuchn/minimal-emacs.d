@@ -346,7 +346,9 @@ the queued job actually finishes."
     (setq gptel-auto-workflow--cron-job-running t)
     (when (fboundp 'gptel-auto-workflow--make-run-id)
       (setq gptel-auto-workflow--run-id
-            (gptel-auto-workflow--make-run-id)))
+            (gptel-auto-workflow--make-run-id)
+            gptel-auto-workflow--status-run-id
+            gptel-auto-workflow--run-id))
     (when (fboundp 'gptel-auto-workflow--mark-messages-start)
       (gptel-auto-workflow--mark-messages-start))
     (setq gptel-auto-workflow--stats
@@ -724,24 +726,45 @@ Without PROJECT-ROOT, clears cache for all projects."
     (clrhash gptel-auto-workflow--research-findings-cache)
     (message "[research] Cleared findings cache for all projects")))
 
+(defvar gptel-auto-workflow--research-status-cache nil
+  "Cache for research status with timestamp for TTL control.")
+
+(defvar gptel-auto-workflow--research-status-ttl-seconds 5
+  "Time-to-live in seconds for the research status cache.")
+
 (defun gptel-auto-workflow-research-status-all ()
   "Show research status for all configured projects."
   (interactive)
-  (let ((status-lines '()))
-    (dolist (project-root gptel-auto-workflow-projects)
-      (let* ((findings (gethash project-root gptel-auto-workflow--research-findings-cache ""))
-             (cache-file (expand-file-name "var/tmp/research-findings.md" project-root))
-             (file-exists (file-exists-p cache-file))
-             (file-size (if file-exists
-                            (nth 7 (file-attributes cache-file))
-                          0)))
-        (push (format "  %s:\n    In-memory: %d chars\n    File: %s (%d bytes)"
-                      project-root
-                      (length findings)
-                      (if file-exists "exists" "none")
-                      file-size)
-              status-lines)))
-    (message "Research cache status:\n%s" (string-join (nreverse status-lines) "\n"))))
+  (let* ((now (float-time))
+         (cache gptel-auto-workflow--research-status-cache)
+         (cached-at (and (consp cache)
+                         (numberp (car cache))
+                         (car cache)))
+         (cached-result (and (consp cache)
+                             (stringp (cdr cache))
+                             (cdr cache))))
+    (if (and cached-at
+             cached-result
+             (< (- now cached-at)
+                 gptel-auto-workflow--research-status-ttl-seconds))
+        (message "Research cache status:\n%s"
+                 cached-result)
+      (let ((status-lines '()))
+        (dolist (project-root gptel-auto-workflow-projects)
+          (let* ((findings (gethash project-root gptel-auto-workflow--research-findings-cache ""))
+                 (cache-file (expand-file-name "var/tmp/research-findings.md" project-root))
+                 (attrs (file-attributes cache-file))
+                 (file-size (or (nth 7 attrs) 0)))
+            (push (format "  %s:\n    In-memory: %d chars\n    File: %s (%d bytes)"
+                          project-root
+                          (length findings)
+                          (if attrs "exists" "none")
+                          file-size)
+                  status-lines)))
+        (let ((result (string-join (nreverse status-lines) "\n")))
+          (setq gptel-auto-workflow--research-status-cache
+                (cons now result))
+          (message "Research cache status:\n%s" result))))))
 
 ;;; Weekly Job Runner (shared by mementum and instincts)
 

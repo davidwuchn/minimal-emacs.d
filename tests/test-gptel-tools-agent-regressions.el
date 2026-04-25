@@ -1084,11 +1084,44 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
              "Override: keep non-regressing high-confidence tie with passing tests"
              (plist-get decision :reasoning)))))
 
+(ert-deftest regression/auto-experiment/does-not-promote-explicitly-rejected-high-confidence-ties ()
+  "Explicit decision-gate rejections must not be overridden later."
+  (let* ((grade-details
+         (concat
+           "Grader result for task: Grade output | EXPECTED: | "
+           "1. **change clearly described**: PASS - The output provides HYPOTHESIS, FOCUS, and explicit diff with line-by-line explanation of the three improvements made. | "
+           "2. **change is minimal and focused**: PASS - Only 2 lines changed in the diff, focused on single function `gptel-auto-workflow--start-status-refresh-timer`. | "
+           "3. **improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability**: PASS - Claims performance improvement (eliminates function call overhead) and clarity improvement (explicit state management with nil assignment). | "
+           "4. **verification attempted (byte-compile, nucleus, tests, or manual)**: PASS - Shows successful byte-compile check and nucleus verification script both passed. | "
+           "FORBIDDEN: | "
+           "1. **large refactor unrelated to stated improvement**: PASS - Change is minimal (2 lines), no large refactoring present. | "
+           "2. **changed security files without review**: PASS - File is a general tools/agent module, not a security file. | "
+           "3. **no description or unclear purpose**: PASS - Clear hypothesis, focus, and evidence provided throughout. | "
+           "4. **style-only change without functional impact**: PASS - Change explicitly aims to reduce function call overhead and make state management explicit. | "
+           "5. **replaces working code without clear improvement**: PASS - Clear improvement stated (performance + clarity). | "
+           "SUMMARY: SCORE: 5/5 expected, 5/5 forbidden"))
+         (hypothesis
+          "Inlining the timer cancellation in `gptel-auto-workflow--start-status-refresh-timer` reduces function call overhead and makes the timer state management explicit, improving both performance and clarity.")
+         (decision
+          (gptel-auto-experiment--promote-correctness-fix-decision
+           '(:keep nil
+             :reasoning "Comparator override: B -> A | Winner: A | Score: 0.40 → 0.40, Quality: 0.77 → 0.82, Combined: 0.55 → 0.57 | Rejected: score tie without >= 0.10 quality gain"
+             :improvement (:score 0.0 :quality 0.05 :combined 0.02))
+           t 5 5
+           grade-details
+           hypothesis)))
+    (should (gptel-auto-experiment--grader-indicates-correctness-fix-p grade-details))
+    (should-not (gptel-auto-experiment--speculative-correctness-language-p hypothesis))
+    (should-not (plist-get decision :keep))
+    (should (string-match-p
+             "Rejected: score tie without >= 0.10 quality gain"
+             (plist-get decision :reasoning)))))
+
 (ert-deftest regression/auto-experiment/does-not-promote-speculative-runtime-hardening-ties ()
   "Speculative defensive runtime hardening must not override the tie gate."
   (let ((decision
          (gptel-auto-experiment--promote-correctness-fix-decision
-          '(:keep nil
+           '(:keep nil
             :reasoning "Winner: A | Rejected: score tie without >= 0.10 quality gain"
             :improvement (:score 0.0 :quality 0.05 :combined 0.02))
           t 4 4
@@ -7230,8 +7263,8 @@ failure."
         (when (file-directory-p activity-dir)
           (delete-directory activity-dir t))))))
 
-(ert-deftest regression/subagent/curl-activity-extends-timeout ()
-  "Curl-request activity should extend executor timeout while work continues."
+(ert-deftest regression/subagent/curl-activity-does-not-extend-timeout ()
+  "Curl-request setup must not extend executor idle timeouts."
   (let ((my/gptel-agent-task-timeout 42)
         (my/gptel-subagent-progress-interval 10)
         (scheduled-timeouts nil)
@@ -7279,13 +7312,8 @@ failure."
             (should (= (length scheduled-timeouts) 1))
             (setq now 30)
             (my/gptel--agent-task-note-curl-activity)
-            (setq now 35)
+            (setq now 50)
             (funcall (cdr (car scheduled-timeouts)))
-            (should (= (length scheduled-timeouts) 2))
-            (should-not aborted-buffers)
-            (should-not callback-results)
-            (setq now 80)
-            (funcall (cdr (cadr scheduled-timeouts)))
             (should (equal aborted-buffers (list request-buf)))
             (should (= (length callback-results) 1))
             (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
@@ -8559,8 +8587,10 @@ failure."
       (should (string-match-p "Proven Correctness Bugs" (cdr review-result))))))
 
 (ert-deftest regression/auto-workflow/cleanup-preserves-queued-phase ()
-  "Cleanup should not overwrite queued/run phases while a cron job is active."
-  (let ((gptel-auto-workflow--running nil)
+  "Cleanup should keep queued cron status metadata intact during handoff."
+  (let ((gptel-auto-workflow--run-id "2026-04-24T183032Z-590b")
+        (gptel-auto-workflow--status-run-id "2026-04-24T183032Z-590b")
+        (gptel-auto-workflow--running nil)
         (gptel-auto-workflow--cron-job-running t)
         (gptel-auto-workflow--stats '(:phase "auto-workflow" :total 3 :kept 0))
         (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
@@ -8571,10 +8601,18 @@ failure."
                (lambda () 0))
               ((symbol-function 'gptel-auto-workflow--persist-status)
                (lambda ()
-                 (setq persisted (plist-get gptel-auto-workflow--stats :phase)))))
+                 (setq persisted (gptel-auto-workflow--status-plist)))))
        (gptel-auto-workflow--cleanup-stale-state)
-       (should (equal (plist-get gptel-auto-workflow--stats :phase) "auto-workflow"))
-       (should (equal persisted "auto-workflow")))))
+        (should (equal (plist-get gptel-auto-workflow--stats :phase) "auto-workflow"))
+        (should (equal gptel-auto-workflow--run-id "2026-04-24T183032Z-590b"))
+        (should (equal gptel-auto-workflow--status-run-id "2026-04-24T183032Z-590b"))
+        (should (equal persisted
+                       '(:running t
+                         :kept 0
+                         :total 3
+                         :phase "auto-workflow"
+                         :run-id "2026-04-24T183032Z-590b"
+                         :results "var/tmp/experiments/2026-04-24T183032Z-590b/results.tsv"))))))
 
 (ert-deftest regression/auto-workflow/cleanup-old-worktrees-removes-nested-attached-worktrees ()
   "Cleanup should remove nested optimize worktrees before their parents."
@@ -11050,6 +11088,7 @@ failure."
 (ert-deftest regression/auto-workflow/status-plist-omits-run-metadata-when-idle ()
   "Idle status should not synthesize run metadata when no run is active."
   (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--status-run-id nil)
         (gptel-auto-workflow--running nil)
         (gptel-auto-workflow--cron-job-running nil)
         (gptel-auto-workflow--stats '(:phase "idle" :total 5 :kept 0)))
@@ -11060,6 +11099,36 @@ failure."
                      :phase "idle"
                      :run-id nil
                      :results nil)))))
+
+(ert-deftest regression/auto-workflow/status-plist-keeps-terminal-run-metadata ()
+  "Completed workflow status should keep the last run metadata after cleanup."
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--status-run-id "2026-04-21T030002Z-d267")
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--stats '(:phase "complete" :total 4 :kept 1)))
+    (should (equal (gptel-auto-workflow--status-plist)
+                   '(:running nil
+                     :kept 1
+                     :total 4
+                     :phase "complete"
+                     :run-id "2026-04-21T030002Z-d267"
+                     :results "var/tmp/experiments/2026-04-21T030002Z-d267/results.tsv")))))
+
+(ert-deftest regression/auto-workflow/status-plist-keeps-queued-run-metadata ()
+  "Queued/running cron snapshots should keep the last known run id."
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--status-run-id "2026-04-24T174146Z-8b36")
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--cron-job-running t)
+        (gptel-auto-workflow--stats '(:phase "auto-workflow" :total 0 :kept 0)))
+    (should (equal (gptel-auto-workflow--status-plist)
+                   '(:running t
+                     :kept 0
+                     :total 0
+                     :phase "auto-workflow"
+                     :run-id "2026-04-24T174146Z-8b36"
+                     :results "var/tmp/experiments/2026-04-24T174146Z-8b36/results.tsv")))))
 
 (ert-deftest regression/auto-workflow/status-file-honors-environment-override ()
   "Workflow status file should honor AUTO_WORKFLOW_STATUS_FILE."
@@ -16107,6 +16176,80 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         "Push staging"
         180))
       (should (member "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1" captured-env)))))
+
+(ert-deftest regression/auto-workflow/push-branch-with-lease-accepts-timed-out-push-when-remote-ref-landed ()
+  "A timed-out push should still count as success when the remote ref matches HEAD."
+  (let* ((gptel-auto-workflow-shared-remote "upstream")
+         (branch "optimize/projects-riven-exp1")
+         (local-head "8c7a5af9d6d4e42f2ff5289e2422db52ebf0fda1")
+         (push-command
+          (format "git push upstream %s"
+                  (shell-quote-argument branch)))
+         (probe-count 0)
+         (push-count 0))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--current-head-hash)
+               (lambda () local-head))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (cond
+                  ((string-match-p
+                    "\\`git ls-remote --exit-code --heads upstream optimize/projects-riven-exp1\\'"
+                    command)
+                   (cl-incf probe-count)
+                   (if (= probe-count 1)
+                       (cons "" 2)
+                     (cons (format "%s\trefs/heads/%s\n" local-head branch) 0)))
+                  ((equal command push-command)
+                   (cl-incf push-count)
+                   (cons "Error: Command timed out after 180s: git push upstream optimize/projects-riven-exp1" -1))
+                  (t
+                   (cons "" 1)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should
+       (gptel-auto-workflow--push-branch-with-lease
+        branch
+        (format "Push optimize branch %s" branch)
+        180))
+      (should (= push-count 1))
+      (should (= probe-count 2)))))
+
+(ert-deftest regression/auto-workflow/push-branch-with-lease-retries-timeouts-once ()
+  "Timed-out optimize pushes should retry once before failing."
+  (let* ((gptel-auto-workflow-shared-remote "upstream")
+         (branch "optimize/projects-riven-exp1")
+         (local-head "8c7a5af9d6d4e42f2ff5289e2422db52ebf0fda1")
+         (push-command
+          (format "git push upstream %s"
+                  (shell-quote-argument branch)))
+         (probe-count 0)
+         (push-timeouts nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--current-head-hash)
+               (lambda () local-head))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional timeout)
+                 (cond
+                  ((string-match-p
+                    "\\`git ls-remote --exit-code --heads upstream optimize/projects-riven-exp1\\'"
+                    command)
+                   (cl-incf probe-count)
+                   (cons "" 2))
+                  ((equal command push-command)
+                   (push timeout push-timeouts)
+                   (if (= (length push-timeouts) 1)
+                       (cons "Error: Command timed out after 180s: git push upstream optimize/projects-riven-exp1" -1)
+                     (cons "" 0)))
+                  (t
+                   (cons "" 1)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should
+       (gptel-auto-workflow--push-branch-with-lease
+        branch
+        (format "Push optimize branch %s" branch)
+        180))
+      (should (equal (nreverse push-timeouts) '(180 360)))
+      (should (= probe-count 3)))))
 
 (ert-deftest regression/auto-workflow/shared-submodule-git-dir-prefers-standalone-checkout ()
   "Standalone submodule repos under packages/ should be preferred when they contain the commit."

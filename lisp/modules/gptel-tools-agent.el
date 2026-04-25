@@ -478,6 +478,9 @@ On timeout or error, returns empty string and logs warning."
 (defvar gptel-auto-workflow--run-id nil
   "Unique identifier for the current auto-workflow run.")
 
+(defvar gptel-auto-workflow--status-run-id nil
+  "Last run id that should remain visible in persisted workflow status.")
+
 (defun gptel-auto-workflow--make-run-id ()
   "Return a unique identifier for a workflow launch."
   (format "%s-%s"
@@ -1826,17 +1829,18 @@ TIMESTAMP defaults to `current-time'."
   "Treat worktree-context messages as executor activity."
   (my/gptel--agent-task-note-context-activity))
 
-(unless (advice-member-p 'message #'my/gptel--agent-task-note-message-activity)
-  (advice-add 'message :before #'my/gptel--agent-task-note-message-activity))
+(while (advice-member-p #'my/gptel--agent-task-note-message-activity 'message)
+  (advice-remove 'message #'my/gptel--agent-task-note-message-activity))
+(advice-add 'message :before #'my/gptel--agent-task-note-message-activity)
 
 (defun my/gptel--agent-task-note-curl-activity (&rest _args)
-  "Treat gptel curl request setup as active subagent progress."
-  (my/gptel--agent-task-note-active-activity))
+  "Ignore curl setup chatter for subagent activity tracking.")
 
 (with-eval-after-load 'gptel-request
-  (unless (advice-member-p 'gptel-curl--get-args #'my/gptel--agent-task-note-curl-activity)
-    (advice-add 'gptel-curl--get-args :before
-                #'my/gptel--agent-task-note-curl-activity)))
+  (while (advice-member-p #'my/gptel--agent-task-note-curl-activity
+                          'gptel-curl--get-args)
+    (advice-remove 'gptel-curl--get-args
+                   #'my/gptel--agent-task-note-curl-activity)))
 
 (defun my/gptel--register-agent-task-buffer (buffer)
   "Record BUFFER as the active request buffer for the current subagent task."
@@ -4922,18 +4926,26 @@ Returns (success-p . output)."
                  (string-match pattern line))
         (setq head (match-string 1 line))))))
 
+(defun gptel-auto-workflow--remote-branch-head (remote branch &optional timeout)
+  "Return BRANCH head on REMOTE, or nil when the branch is absent."
+  (let* ((branch-q (shell-quote-argument branch))
+         (remote-result
+          (gptel-auto-workflow--git-result
+           (format "git ls-remote --exit-code --heads %s %s" remote branch-q)
+           (or timeout 60))))
+    (and (= 0 (cdr remote-result))
+         (gptel-auto-workflow--parse-remote-head branch (car remote-result)))))
+
 (defun gptel-auto-workflow--push-branch-with-lease (branch action &optional timeout)
   "Push BRANCH to the shared remote, using `--force-with-lease' when it already exists.
 ACTION is a short description used in failure messages."
   (let* ((remote (gptel-auto-workflow--shared-remote))
          (branch-q (shell-quote-argument branch))
-         (remote-result
-          (gptel-auto-workflow--git-result
-           (format "git ls-remote --exit-code --heads %s %s" remote branch-q)
-           60))
+         (push-timeout (or timeout 180))
          (remote-head
-          (and (= 0 (cdr remote-result))
-               (gptel-auto-workflow--parse-remote-head branch (car remote-result))))
+          (gptel-auto-workflow--remote-branch-head remote branch 60))
+         (local-head
+          (gptel-auto-workflow--current-head-hash))
          (push-command
           (if remote-head
               (format "git push %s %s %s"
@@ -4942,20 +4954,35 @@ ACTION is a short description used in failure messages."
                                branch
                                remote-head))
                       remote
-                      branch-q)
-            (format "git push %s %s" remote branch-q)))
+                       branch-q)
+             (format "git push %s %s" remote branch-q)))
          (push-result
           (gptel-auto-workflow--with-skipped-submodule-sync
            (lambda ()
-             (gptel-auto-workflow--git-result
-              push-command
-              (or timeout 180))))))
-    (if (= 0 (cdr push-result))
-        t
+              (gptel-auto-workflow--git-result
+               push-command
+               push-timeout))))
+         (push-output (car push-result)))
+    (cond
+     ((= 0 (cdr push-result))
+      t)
+     ((and local-head
+           (equal local-head
+                  (gptel-auto-workflow--remote-branch-head remote branch 60)))
+      (message "[auto-workflow] %s reached %s despite the initial push error"
+               action remote)
+      t)
+     ((and (< push-timeout 360)
+           (stringp push-output)
+           (string-match-p "Command timed out after" push-output))
+      (message "[auto-workflow] %s timed out after %ds; retrying once with %ds"
+               action push-timeout 360)
+      (gptel-auto-workflow--push-branch-with-lease branch action 360))
+     (t
       (message "[auto-workflow] %s failed: %s"
                action
-               (my/gptel--sanitize-for-logging (car push-result) 160))
-      nil)))
+               (my/gptel--sanitize-for-logging push-output 160))
+      nil))))
 
 (defun gptel-auto-workflow--push-staging ()
   "Push staging branch to the shared remote after successful verification.
@@ -6624,8 +6651,8 @@ Speculative or purely defensive hardening language does not count."
     (decision tests-passed grade-score grade-total grade-details &optional hypothesis)
   "Return DECISION or a promoted keep decision for high-confidence ties.
 Promotion is allowed only for non-regressing ties with passing tests, some
-positive quality/combined improvement, and strong grader evidence of a real
-correctness fix."
+positive quality/combined improvement, strong grader evidence of a real
+correctness fix, and no explicit rejection from the local decision gate."
   (let* ((improvement (and (listp decision) (plist-get decision :improvement)))
          (decision-threshold 0.005)
          (score-delta (if (listp improvement)
@@ -6638,9 +6665,12 @@ correctness fix."
                              (or (plist-get improvement :combined) 0)
                            0))
          (reasoning (and (listp decision) (plist-get decision :reasoning)))
+         (gate-rejected-p
+          (and (stringp reasoning)
+               (string-match-p (rx "Rejected:") reasoning)))
           (correctness-fix-p
            (gptel-auto-experiment--grader-indicates-correctness-fix-p
-            grade-details))
+             grade-details))
          (speculative-hypothesis-p
           (gptel-auto-experiment--speculative-correctness-language-p
            hypothesis))
@@ -6649,13 +6679,14 @@ correctness fix."
     (if (or (not (listp decision))
             (plist-get decision :keep)
             (not tests-passed)
-            (<= score-delta (- decision-threshold))
-            (<= quality-delta 0)
-            (<= combined-delta 0)
-            (not correctness-fix-p)
-            speculative-hypothesis-p
-            (not (gptel-auto-experiment--strong-grade-pass-p
-                  grade-score grade-total)))
+             (<= score-delta (- decision-threshold))
+             (<= quality-delta 0)
+             (<= combined-delta 0)
+             gate-rejected-p
+             (not correctness-fix-p)
+             speculative-hypothesis-p
+             (not (gptel-auto-experiment--strong-grade-pass-p
+                   grade-score grade-total)))
         decision
       (let ((promoted (copy-sequence decision)))
         (setq promoted (plist-put promoted :keep t))
@@ -8984,13 +9015,21 @@ Relative paths are resolved from the project root."
   "Return current workflow status as a plist."
   (let* ((running (or gptel-auto-workflow--running
                       (bound-and-true-p gptel-auto-workflow--cron-job-running)))
-         (run-id (and (stringp gptel-auto-workflow--run-id)
-                      (not (string-empty-p gptel-auto-workflow--run-id))
-                      gptel-auto-workflow--run-id)))
+         (phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle"))
+         (active-run-id (and (stringp gptel-auto-workflow--run-id)
+                             (not (string-empty-p gptel-auto-workflow--run-id))
+                             gptel-auto-workflow--run-id))
+         (status-run-id (and (stringp gptel-auto-workflow--status-run-id)
+                             (not (string-empty-p gptel-auto-workflow--status-run-id))
+                             gptel-auto-workflow--status-run-id))
+         (run-id (or active-run-id
+                     (and running status-run-id)
+                     (and (member phase '("complete" "quota-exhausted" "error"))
+                          status-run-id))))
     (list :running running
           :kept (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :kept 0)
           :total (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :total 0)
-          :phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle")
+          :phase phase
           :run-id run-id
           :results (and run-id
                         (gptel-auto-workflow--results-relative-path run-id)))))
@@ -10011,8 +10050,16 @@ into staging or main."
 
 (defun gptel-auto-workflow--cleanup-stale-state ()
   "Clean up stale timers, buffers, and state from aborted runs."
-  (let ((proj-root (gptel-auto-workflow--default-dir))
-        (cleaned 0))
+  (let* ((proj-root (gptel-auto-workflow--default-dir))
+         (cleaned 0)
+         (queued-run-id
+          (and (bound-and-true-p gptel-auto-workflow--cron-job-running)
+               (or (and (stringp gptel-auto-workflow--run-id)
+                        (not (string-empty-p gptel-auto-workflow--run-id))
+                        gptel-auto-workflow--run-id)
+                   (and (stringp gptel-auto-workflow--status-run-id)
+                        (not (string-empty-p gptel-auto-workflow--status-run-id))
+                        gptel-auto-workflow--status-run-id)))))
     (when proj-root
       (my/gptel--reset-agent-task-state)
       (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
@@ -10043,6 +10090,8 @@ into staging or main."
               (kill-buffer buf)
               (cl-incf cleaned)))))
       (setq gptel-auto-workflow--running nil
+            gptel-auto-workflow--status-run-id queued-run-id
+            gptel-auto-workflow--run-id queued-run-id
             gptel-auto-workflow--current-target nil)
       (setq gptel-auto-workflow--stats
             (plist-put gptel-auto-workflow--stats
