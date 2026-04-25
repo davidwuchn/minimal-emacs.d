@@ -13,11 +13,13 @@
 (require 'ert)
 
 (declare-function my/gptel--threshold-values "gptel-ext-context")
+(declare-function my/gptel--maybe-auto-delegate-advice "gptel-ext-context")
 
 ;;; Mock variables
 
 (defvar gptel-mode nil)
 (defvar gptel-directives nil)
+(defvar my/gptel-auto-delegate-enabled t)
 (defvar my/gptel-auto-compact-enabled t)
 (defvar my/gptel-auto-compact-threshold 0.75)
 (defvar my/gptel-auto-compact-min-chars 4000)
