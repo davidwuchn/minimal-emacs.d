@@ -235,7 +235,41 @@
            (should (string-match-p "\"Read\" called 3 times" logged-message))
            (should (string-match-p "\"Read\" called 3 consecutive times" callback-message))
            (should (eq aborted-buffer request-buffer))
-           (should (eq transition 'DONE)))
+            (should (eq transition 'DONE)))
+      (when (buffer-live-p request-buffer)
+        (kill-buffer request-buffer)))))
+
+(ert-deftest sanitize/doom-loop/actual-handler-counts-same-turn-repeats ()
+  "Doom-loop detection should count repeated identical tool calls within one turn."
+  (require 'gptel-ext-tool-sanitize)
+  (let* ((tc '(:name "Read" :args (:path "test.el")))
+         (request-buffer (generate-new-buffer " *doom-loop-same-turn*"))
+         (info (list :tool-use (list tc tc tc)
+                     :buffer request-buffer))
+         (fsm (gptel-make-fsm :info info))
+         logged-message
+         callback-message
+         aborted-buffer
+         transition)
+    (unwind-protect
+        (progn
+          (plist-put info :callback
+                     (lambda (msg _info)
+                       (setq callback-message msg)))
+          (cl-letf (((symbol-function 'gptel--fsm-transition)
+                     (lambda (_fsm state)
+                       (setq transition state)))
+                    ((symbol-function 'my/gptel-abort-here)
+                     (lambda ()
+                       (setq aborted-buffer (current-buffer))))
+                    ((symbol-function 'message)
+                     (lambda (fmt &rest args)
+                       (setq logged-message (apply #'format fmt args)))))
+            (my/gptel--detect-doom-loop fsm))
+          (should (string-match-p "\"Read\" called 3 times" logged-message))
+          (should (string-match-p "\"Read\" called 3 consecutive times" callback-message))
+          (should (eq aborted-buffer request-buffer))
+          (should (eq transition 'DONE)))
       (when (buffer-live-p request-buffer)
         (kill-buffer request-buffer)))))
 
