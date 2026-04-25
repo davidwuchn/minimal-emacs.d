@@ -12954,6 +12954,63 @@ failure."
       (when (file-exists-p argv-log)
         (delete-file argv-log)))))
 
+(ert-deftest regression/auto-workflow/cron-wrapper-instincts-action-uses-dedicated-snapshot-cache ()
+  "Instincts actions should not overwrite auto-workflow snapshot files or cache."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (cron-dir (expand-file-name "var/tmp/cron" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (auto-cache (expand-file-name "copilot-auto-workflow-snapshot-paths.txt" cron-dir))
+         (instincts-cache (expand-file-name "instincts-snapshot-paths.txt" cron-dir))
+         (auto-status-file (expand-file-name "auto-workflow-status.sexp" cron-dir))
+         (auto-messages-file (expand-file-name "auto-workflow-messages-tail.txt" cron-dir))
+         (instincts-status-file (expand-file-name "instincts-status.sexp" cron-dir))
+         (instincts-messages-file (expand-file-name "instincts-messages-tail.txt" cron-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 0))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" entry)))
+           process-environment))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH")))
+                  base-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (make-directory cron-dir t)
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file auto-cache
+            (insert auto-status-file "\n" auto-messages-file "\n"))
+          (call-process shell-file-name nil nil nil shell-command-switch
+                        (format "%s instincts >/dev/null 2>&1 || true" script))
+          (with-temp-buffer
+            (insert-file-contents auto-cache)
+            (should (equal (split-string (buffer-string) "\n" t)
+                           (list auto-status-file auto-messages-file))))
+          (with-temp-buffer
+            (insert-file-contents instincts-cache)
+            (should (equal (split-string (buffer-string) "\n" t)
+                           (list instincts-status-file instincts-messages-file)))))
+      (delete-directory temp-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log)))))
+
 (ert-deftest regression/auto-workflow/cron-wrapper-status-heals-stale-shared-research-cache ()
   "Research status/messages should prefer research files over stale shared cache paths."
   (let* ((temp-root (make-temp-file "aw-cron-root" t))
