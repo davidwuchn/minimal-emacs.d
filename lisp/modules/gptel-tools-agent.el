@@ -2884,31 +2884,60 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
   (when (and (stringp worktree-dir)
              (> (length worktree-dir) 0))
     (let* ((root (file-name-as-directory (expand-file-name worktree-dir)))
-           (tracked
-            (delete-dups
-             (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
-                   (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root))))
-           (killed 0))
-      (dolist (buf (delete-dups (append tracked (buffer-list))))
-        (when (buffer-live-p buf)
-          (with-current-buffer buf
-            (let ((buf-dir
-                   (and (stringp default-directory)
-                        (file-name-as-directory
-                         (expand-file-name default-directory)))))
-              (when (and buf-dir
-                         (string-prefix-p root buf-dir)
-                         (or (memq buf tracked)
-                             (string-prefix-p "*gptel-agent:" (buffer-name buf))))
-                (when (fboundp 'gptel-abort)
-                  (ignore-errors (gptel-abort buf)))
-                (let ((kill-buffer-query-functions nil))
-                  (kill-buffer buf))
-                (cl-incf killed))))))
-      (when (and (boundp 'gptel-auto-workflow--worktree-buffers)
-                 (hash-table-p gptel-auto-workflow--worktree-buffers))
-        (remhash root gptel-auto-workflow--worktree-buffers))
-      (when (and (boundp 'gptel-auto-workflow--project-buffers)
+           (root-parent (file-name-directory (directory-file-name root)))
+           (safe-default-directory
+            (or (my/gptel--first-existing-directory
+                 root-parent
+                 user-emacs-directory
+                 temporary-file-directory)
+                temporary-file-directory))
+            (tracked
+             (delete-dups
+              (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
+                    (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root))))
+             (killed 0))
+       (cl-labels
+           ((defer-kill (buf attempts-left)
+              (run-at-time
+               1 nil
+               (lambda ()
+                 (when (buffer-live-p buf)
+                   (let ((proc (ignore-errors (get-buffer-process buf))))
+                     (cond
+                      ((and (processp proc)
+                            (process-live-p proc)
+                            (> attempts-left 0))
+                       (defer-kill buf (1- attempts-left)))
+                      ((or (null proc)
+                           (not (process-live-p proc)))
+                       (let ((kill-buffer-query-functions nil))
+                         (kill-buffer buf)))))))))
+            (retire-buffer (buf)
+              (setq-local default-directory safe-default-directory)
+              (when (fboundp 'gptel-abort)
+                (ignore-errors (gptel-abort buf)))
+              (let ((proc (ignore-errors (get-buffer-process buf))))
+                (if (and (processp proc) (process-live-p proc))
+                    (defer-kill buf 30)
+                  (let ((kill-buffer-query-functions nil))
+                    (kill-buffer buf))))))
+         (dolist (buf (delete-dups (append tracked (buffer-list))))
+           (when (buffer-live-p buf)
+             (with-current-buffer buf
+               (let ((buf-dir
+                      (and (stringp default-directory)
+                           (file-name-as-directory
+                            (expand-file-name default-directory)))))
+                 (when (and buf-dir
+                            (string-prefix-p root buf-dir)
+                            (or (memq buf tracked)
+                                (string-prefix-p "*gptel-agent:" (buffer-name buf))))
+                   (retire-buffer buf)
+                   (cl-incf killed)))))))
+       (when (and (boundp 'gptel-auto-workflow--worktree-buffers)
+                  (hash-table-p gptel-auto-workflow--worktree-buffers))
+         (remhash root gptel-auto-workflow--worktree-buffers))
+       (when (and (boundp 'gptel-auto-workflow--project-buffers)
                  (hash-table-p gptel-auto-workflow--project-buffers))
         (remhash root gptel-auto-workflow--project-buffers))
       killed)))
@@ -3918,6 +3947,18 @@ Return nil on success, or an error string if the stale path could not be removed
                               (format " (%s)"
                                       (mapconcat #'identity baseline-failures ", "))
                             ""))))))))))
+
+(defun gptel-auto-workflow--summarize-staging-verification-output (output)
+  "Return a concise failure summary extracted from staging verification OUTPUT."
+  (let ((failed-tests (gptel-auto-workflow--extract-failed-tests output)))
+    (cond
+     (failed-tests
+      (format "failing tests: %s"
+              (mapconcat #'identity failed-tests ", ")))
+     ((gptel-auto-workflow--non-empty-string-p output)
+      (my/gptel--sanitize-for-logging output 200))
+     (t
+      "no verification output captured"))))
 
 (defun gptel-auto-workflow--hydrate-staging-submodules (&optional worktree)
   "Materialize top-level submodules in WORKTREE from shared module repos.
@@ -4963,17 +5004,22 @@ Returns (success-p . output)."
               (goto-char (point-max))
               (unless (bolp)
                 (insert "\n"))
-              (insert "\n"
-                      (let ((note (cdr-safe baseline-check)))
-                        (if (gptel-auto-workflow--non-empty-string-p note)
-                            note
-                          "Staging verification failed against main baseline"))
-                      "\n"))
-            (setq output (with-current-buffer output-buffer (buffer-string)))))
-        (kill-buffer output-buffer)
-        (setq result (and syntax-pass submodule-pass checks-pass))
-        (message "[auto-workflow] Staging verification: %s" (if result "PASS" "FAIL"))
-        (cons result output)))))
+               (insert "\n"
+                       (let ((note (cdr-safe baseline-check)))
+                         (if (gptel-auto-workflow--non-empty-string-p note)
+                             note
+                           "Staging verification failed against main baseline"))
+                       "\n"))
+             (setq output (with-current-buffer output-buffer (buffer-string)))))
+         (kill-buffer output-buffer)
+         (setq result (and syntax-pass submodule-pass checks-pass))
+         (message "[auto-workflow] Staging verification: %s"
+                  (if result
+                      "PASS"
+                    (format "FAIL (%s)"
+                            (gptel-auto-workflow--summarize-staging-verification-output
+                             output))))
+         (cons result output)))))
 
 
 
@@ -5168,7 +5214,8 @@ initial remote-advance rejection. Returns a plist with keys `:success',
             :analyzer-patterns ""
             :agent-output "")))
     ('staging-verification-failed
-     (message "[auto-workflow] ✗ Staging verification FAILED")
+     (message "[auto-workflow] ✗ Staging verification FAILED: %s"
+              (gptel-auto-workflow--summarize-staging-verification-output output))
      (gptel-auto-experiment-log-tsv
       (gptel-auto-workflow--current-run-id)
       (list :target "staging-verification"

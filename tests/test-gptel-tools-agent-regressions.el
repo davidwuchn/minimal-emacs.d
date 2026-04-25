@@ -9887,10 +9887,11 @@ failure."
     (should (= (hash-table-count my/gptel--subagent-cache) 0))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status ()
-  "Wrapper status should reset stale running snapshots when the worker is gone."
+  "Wrapper status should reset stale running snapshots with an empty messages tail when the worker is gone."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient
           (test-auto-workflow--write-shell-script "fake-emacsclient" "exit 1"))
@@ -9898,20 +9899,22 @@ failure."
           (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
          (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
          (process-environment
-          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
-                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
-                  process-environment))
+           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                         (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                         (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file))
+                   process-environment))
          (default-directory repo-root))
     (unwind-protect
         (progn
           (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
           (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
           (with-temp-file status-file
-            (insert "(:running t :kept 0 :total 3 :phase \"running\" :results \"var/tmp/experiments/2026-04-02/results.tsv\")\n"))
+             (insert "(:running t :kept 0 :total 3 :phase \"running\" :run-id \"2026-04-02T010203Z-dead\" :results \"var/tmp/experiments/2026-04-02/results.tsv\")\n"))
+          (with-temp-file messages-file)
           (let ((output (shell-command-to-string (format "%s status" script))))
             (should (string-match-p ":running nil" output))
              (should (string-match-p ":phase \"idle\"" output))
-              (should (string-match-p "2026-04-02/results.tsv" output))))
+               (should (string-match-p "2026-04-02/results.tsv" output))))
        (delete-directory status-dir t)
         (delete-directory fake-bin t))))
 
@@ -15293,6 +15296,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   "Staging verification should fail when test failures exceed the main baseline."
   (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
         (test-args nil)
+        (messages nil)
         (test-script "/tmp/staging/scripts/run-tests.sh")
         (verify-script "/tmp/staging/scripts/verify-nucleus.sh"))
     (cl-letf (((symbol-function 'file-exists-p)
@@ -15320,20 +15324,26 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                                       ""))))
                   (if (equal script test-script)
                       (progn
-                        (with-current-buffer buffer
-                          (insert "   FAILED   1/10  new/failure (0.001 sec)\n"))
+                       (with-current-buffer buffer
+                         (insert "   FAILED   1/10  new/failure (0.001 sec)\n"))
                         1)
                    0)))
-              ((symbol-function 'message)
-               (lambda (&rest _) nil)))
+               ((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) messages))))
        (unwind-protect
             (let ((result (gptel-auto-workflow--verify-staging)))
               (should (equal test-args '("unit")))
               (should-not (car result))
               (should (string-match-p "New staging verification failures vs main"
-                                      (cdr result))))
+                                      (cdr result)))
+              (should (cl-some (lambda (msg)
+                                 (string-match-p
+                                  "Staging verification: FAIL (failing tests: new/failure)"
+                                  msg))
+                               messages)))
            (when-let ((buf (get-buffer "*test-staging-verify*")))
-             (kill-buffer buf))))))
+              (kill-buffer buf))))))
 
 (ert-deftest regression/auto-workflow/staging-worktree-failure-restores-staging-baseline ()
   "Failed staging worktree creation should restore the pre-merge staging baseline."
@@ -15417,8 +15427,9 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 (ert-deftest regression/auto-workflow/staging-verification-failure-restores-staging-baseline ()
   "Failed staging verification should restore the pre-merge staging baseline."
   (let ((restore-arg nil)
-        (sync-count 0)
-        completion)
+         (sync-count 0)
+         (messages nil)
+         completion)
     (cl-letf (((symbol-function 'gptel-auto-workflow--assert-main-untouched)
                (lambda (&rest _) t))
               ((symbol-function 'gptel-auto-workflow--review-changes)
@@ -15443,16 +15454,22 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                  (cl-incf sync-count)
                  t))
               ((symbol-function 'gptel-auto-experiment-log-tsv)
-               (lambda (&rest _) nil))
+                (lambda (&rest _) nil))
               ((symbol-function 'message)
-               (lambda (&rest _) nil)))
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) messages))))
       (gptel-auto-workflow--staging-flow
        "optimize/test"
        (lambda (success)
-         (setq completion success)))
+          (setq completion success)))
       (should-not completion)
       (should (equal restore-arg "staging-base"))
-      (should (= sync-count 0)))))
+      (should (= sync-count 0))
+      (should (cl-some (lambda (msg)
+                         (string-match-p
+                          "Staging verification FAILED: new staging failures"
+                          msg))
+                       messages)))))
 
 (ert-deftest regression/auto-workflow/staging-push-failure-restores-staging-baseline ()
   "Failed staging push should also restore the pre-merge staging baseline."
@@ -16029,9 +16046,97 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
           (equal (last args 6)
                  '("worktree" "add" "-b"
                    "optimize/agent-riven-exp1"
-                   "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1"
-                   "origin/main")))
+                    "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1"
+                    "origin/main")))
         calls)))))
+
+(ert-deftest regression/auto-workflow/discard-worktree-buffers-reroots-stale-default-directory ()
+  "Discarding stale worktree buffers should reroot their default directory first."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1"
+                                         project-root))
+         (safe-parent (file-name-as-directory
+                       (file-name-directory (directory-file-name worktree-dir))))
+         (gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))
+         (gptel-auto-workflow--project-buffers (make-hash-table :test 'equal))
+         (request-buf (generate-new-buffer "*gptel-agent:agent-riven-exp1@test*"))
+         (aborted-default-directory nil))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer request-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (puthash (file-name-as-directory worktree-dir)
+                   request-buf
+                   gptel-auto-workflow--worktree-buffers)
+          (delete-directory worktree-dir t)
+          (cl-letf (((symbol-function 'gptel-abort)
+                     (lambda (buffer)
+                       (setq aborted-default-directory
+                             (buffer-local-value 'default-directory buffer)))))
+            (should (= 1 (gptel-auto-workflow--discard-worktree-buffers worktree-dir)))
+            (should (equal aborted-default-directory safe-parent))
+            (should-not (buffer-live-p request-buf))
+            (should-not
+             (gethash (file-name-as-directory worktree-dir)
+                      gptel-auto-workflow--worktree-buffers))))
+       (when (buffer-live-p request-buf)
+         (kill-buffer request-buf))
+       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/discard-worktree-buffers-defers-kill-for-live-processes ()
+  "Discarding stale worktree buffers should not synchronously kill live request buffers."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1"
+                                         project-root))
+         (safe-parent (file-name-as-directory
+                       (file-name-directory (directory-file-name worktree-dir))))
+         (gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))
+         (gptel-auto-workflow--project-buffers (make-hash-table :test 'equal))
+         (request-buf (generate-new-buffer "*gptel-agent:agent-riven-exp1@test*"))
+         (live-process nil)
+         (aborted nil)
+         (scheduled nil))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer request-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (setq live-process
+                (make-process :name "aw-live-worktree-buffer"
+                              :buffer request-buf
+                              :noquery t
+                              :command (list shell-file-name shell-command-switch "sleep 5")))
+          (puthash (file-name-as-directory worktree-dir)
+                   request-buf
+                   gptel-auto-workflow--worktree-buffers)
+          (puthash (file-name-as-directory worktree-dir)
+                   request-buf
+                   gptel-auto-workflow--project-buffers)
+          (cl-letf (((symbol-function 'gptel-abort)
+                     (lambda (buffer)
+                       (push buffer aborted)))
+                    ((symbol-function 'run-at-time)
+                     (lambda (&rest args)
+                       (setq scheduled args)
+                       'fake-timer)))
+            (should (= 1 (gptel-auto-workflow--discard-worktree-buffers worktree-dir)))
+            (should (equal aborted (list request-buf)))
+            (should (buffer-live-p request-buf))
+            (should (equal (buffer-local-value 'default-directory request-buf)
+                           safe-parent))
+            (should scheduled)
+            (should-not
+             (gethash (file-name-as-directory worktree-dir)
+                      gptel-auto-workflow--worktree-buffers))
+            (should-not
+             (gethash (file-name-as-directory worktree-dir)
+                      gptel-auto-workflow--project-buffers))))
+      (when (and live-process (process-live-p live-process))
+        (delete-process live-process))
+      (when (buffer-live-p request-buf)
+        (kill-buffer request-buf))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/auto-workflow/run-with-targets-rebinds-run-root-between-targets ()
   "Advancing to the next target should return to the stable project root."
