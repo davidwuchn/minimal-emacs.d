@@ -2247,8 +2247,34 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (should (equal minimal-emacs-user-directory project-root))
           (should (equal gptel-auto-workflow-projects (list project-root)))
           (should (equal gptel-auto-workflow--project-root-override project-root))
-          (should-not gptel-auto-workflow--current-project)
-          (should-not gptel-auto-workflow--run-project-root))
+           (should-not gptel-auto-workflow--current-project)
+           (should-not gptel-auto-workflow--run-project-root))
+       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/activate-live-root-discards-missing-worktree-buffers ()
+  "Activating a live root should purge deleted workflow worktree buffers first."
+  (defvar minimal-emacs-user-directory)
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-live-root" t)))
+         (discarded nil)
+         (default-directory "/tmp/original-root/")
+         (user-emacs-directory "/tmp/original-root/")
+         (minimal-emacs-user-directory "/tmp/original-root/")
+         (gptel-auto-workflow-projects '("/tmp/original-root/"))
+         (gptel-auto-workflow--current-project "/tmp/drift/")
+         (gptel-auto-workflow--run-project-root "/tmp/drift/")
+         (gptel-auto-workflow--project-root-override "/tmp/drift/"))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--discard-missing-worktree-buffers)
+                   (lambda ()
+                     (setq discarded t)
+                     3))
+                  ((symbol-function 'gptel-auto-workflow--seed-live-root-load-path)
+                   (lambda (_root) nil))
+                  ((symbol-function 'gptel-auto-workflow--prefer-elpa-transient)
+                   (lambda (_root) nil)))
+          (should (equal (gptel-auto-workflow--activate-live-root project-root)
+                         project-root))
+          (should discarded))
       (delete-directory project-root t))))
 
 (ert-deftest regression/auto-workflow/activate-live-root-prefers-elpa-transient ()
@@ -9134,10 +9160,30 @@ failure."
       (if saved-worktree-bound
           (setq gptel-auto-workflow--worktree-buffers saved-worktree-value)
         (ignore-errors (makunbound 'gptel-auto-workflow--worktree-buffers)))
-      (if saved-project-bound
-          (setq gptel-auto-workflow--project-buffers saved-project-value)
-        (ignore-errors (makunbound 'gptel-auto-workflow--project-buffers)))
-      (delete-directory project-root t))))
+       (if saved-project-bound
+           (setq gptel-auto-workflow--project-buffers saved-project-value)
+         (ignore-errors (makunbound 'gptel-auto-workflow--project-buffers)))
+       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/discard-missing-worktree-buffers-kills-deleted-roots ()
+  "Missing workflow roots should be discarded once from tracked buffer tables."
+  (let* ((live-root (file-name-as-directory (make-temp-file "aw-live-worktree" t)))
+         (missing-root (file-name-as-directory (make-temp-file "aw-missing-worktree" t)))
+         (gptel-auto-workflow--project-buffers (make-hash-table :test 'equal))
+         (gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))
+         (calls nil))
+    (delete-directory missing-root t)
+    (puthash live-root 'live gptel-auto-workflow--worktree-buffers)
+    (puthash missing-root 'missing-a gptel-auto-workflow--worktree-buffers)
+    (puthash missing-root 'missing-b gptel-auto-workflow--project-buffers)
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--discard-worktree-buffers)
+                   (lambda (root)
+                     (push root calls)
+                     1)))
+          (should (= (gptel-auto-workflow--discard-missing-worktree-buffers) 1))
+          (should (equal calls (list missing-root))))
+      (delete-directory live-root t))))
 
 (ert-deftest regression/auto-workflow/delete-worktree-discards-stale-buffers-without-directory ()
   "Deleting worktree state should discard routed buffers even if the path is already gone."
