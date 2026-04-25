@@ -249,15 +249,8 @@ where first FSM was always returned (potentially wrong parent FSM).
 
 PROACTIVE MITIGATION: Uses registration order as proxy for nesting level,
 avoiding need for explicit parent-child tracking."
-  (let* ((all-fsms (my/gptel--collect-all-fsms object))
-         (count (length all-fsms)))
-    (cond
-     ((zerop count) nil)
-     ((= count 1) (car all-fsms))
-     (t
-      ;; Multiple FSMs: prefer most recently registered
-      ;; (likely the child FSM in nested scenarios)
-      (car (last all-fsms))))))
+  (let ((all-fsms (my/gptel--collect-all-fsms object)))
+    (if all-fsms (nth (1- (length all-fsms)) all-fsms) nil)))
 
 (defun my/gptel--collect-all-fsms (object)
   "Collect all FSMs found in OBJECT as a list.
