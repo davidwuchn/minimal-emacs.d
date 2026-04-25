@@ -76,6 +76,13 @@ Legacy cache - use `my/gptel--model-metadata-cache' for full metadata.")
 Keys include: :context-window, :pricing-input, :pricing-output,
 :max-output, :provider, :description.")
 
+(defvar my/gptel--gptel-tables-cw-cache (make-hash-table :test 'equal)
+  "Hash table caching context-window lookups from gptel model tables.
+Reduces repeated iterations through model tables.")
+
+(defvar my/gptel--token-estimate-cache (make-hash-table :test 'equal)
+  "Hash table caching token estimates for (chars . extension) pairs.")
+
 (defvar my/gptel--context-window-cache-last-refresh nil
   "Time (as a float) when the cache was last refreshed.")
 
@@ -122,8 +129,10 @@ under `lexical-binding: t'.")
     ("gpt-4-32k" . 32768)
     ("gpt-3.5" . 16385)
     ;; DeepSeek
-    ("deepseek-chat" . 163840)
-    ("deepseek-reasoner" . 163840)
+    ("deepseek-v4-flash" . 1000000)
+    ("deepseek-v4-pro" . 1000000)
+    ("deepseek-chat" . 1000000)
+    ("deepseek-reasoner" . 1000000)
     ("deepseek-coder" . 16384)
     ;; MiniMax
     ("minimax-m2.7-highspeed" . 196608)
@@ -131,6 +140,7 @@ under `lexical-binding: t'.")
     ("MiniMax-M2.5" . 196608)
     ("minimax-m2.1" . 196608)
     ;; Kimi/Moonshot
+    ("kimi-k2.6" . 262144)
     ("kimi-k2.5" . 262144)
     ("kimi-for-coding" . 131072)
     ;; GLM (Zhipu AI)
@@ -156,7 +166,7 @@ Sources:
 - Qwen: https://help.aliyun.com/zh/model-studio/getting-started/models
 - Gemini: https://openrouter.ai/models/google/gemini-2.5-pro-preview
 - Claude: https://openrouter.ai/models/anthropic/claude-sonnet-4
-- DeepSeek: https://openrouter.ai/models/deepseek/deepseek-chat
+- DeepSeek: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
 - MiniMax: https://openrouter.ai/models/minimax/minimax-m2.5")
 
 (defvar my/gptel--known-model-metadata
@@ -219,16 +229,26 @@ Sources:
      :max-output 16384
      :description "Claude Opus 4 - best, 200k context")
     ;; DeepSeek
+    ("deepseek-v4-flash"
+     :context-window 1000000
+     :pricing-input 1.0 :pricing-output 2.0
+     :max-output 384000
+     :description "DeepSeek V4 Flash - 1M context, fast path with thinking disabled")
+    ("deepseek-v4-pro"
+     :context-window 1000000
+     :pricing-input 12.0 :pricing-output 24.0
+     :max-output 384000
+     :description "DeepSeek V4 Pro - 1M context, thinking-enabled reasoning model")
     ("deepseek-chat"
-     :context-window 163840
-     :pricing-input 0.27 :pricing-output 1.1
-     :max-output 8192
-     :description "DeepSeek V3 - 163k context, great value")
+     :context-window 1000000
+     :pricing-input 1.0 :pricing-output 2.0
+     :max-output 384000
+     :description "Deprecated alias for DeepSeek V4 Flash (thinking disabled)")
     ("deepseek-reasoner"
-     :context-window 163840
-     :pricing-input 0.55 :pricing-output 2.19
-     :max-output 8192
-     :description "DeepSeek R1 - reasoning model")
+     :context-window 1000000
+     :pricing-input 1.0 :pricing-output 2.0
+     :max-output 384000
+     :description "Deprecated alias for DeepSeek V4 Flash (thinking enabled)")
     ;; MiniMax
     ("minimax-m2.7-highspeed"
      :context-window 196608
@@ -309,53 +329,58 @@ for a partial match (case-insensitive).  Returns nil if not found."
 Returns the cdr (value) of the matching entry, or nil if no match.
 Matches if the alist key is a prefix of SEARCH-STR.
 When multiple entries match, returns the one with the longest key for most specific match."
-  (when (and (listp alist) (stringp search-str))
+  (when (and (consp alist) (stringp search-str) (not (string-empty-p search-str)))
     (let ((search-lower (downcase search-str))
           (best-match my/gptel--alist-match-sentinel)
           (best-key-len 0))
       (dolist (entry alist)
-        (when (and (consp entry) (stringp (car entry)))
-          (let* ((entry-key (car entry))
-                 (entry-key-lower (downcase entry-key)))
-            (when (string-prefix-p entry-key-lower search-lower)
-              (let ((key-len (length entry-key))
-                    (entry-match (cdr entry)))
-                (when (>= key-len best-key-len)
-                  (setq best-key-len key-len)
-                  (setq best-match entry-match)))))))
+        (when (consp entry)
+          (let ((entry-key (car entry)))
+            (when (stringp entry-key)
+              (when (string-prefix-p (downcase entry-key) search-lower)
+                (let ((key-len (length entry-key)))
+                  (when (>= key-len best-key-len)
+                    (setq best-key-len key-len)
+                    (setq best-match (cdr entry)))))))))
       (unless (eq best-match my/gptel--alist-match-sentinel)
         best-match))))
 
 (defun my/gptel--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
 Reduces duplication of `(or (plist-get ...) default-value)` patterns."
-  (or (plist-get plist key) default))
+  (if (plist-member plist key)
+      (plist-get plist key)
+    default))
 
 
 (defun my/gptel--lookup-context-window-in-gptel-tables (model)
   "Look up context window for MODEL in gptel's built-in model tables.
 Returns the context window in tokens, or nil if not found.
 Handles both symbol and string model identifiers with case-insensitive fallback."
-  (let ((model-sym (cond
-                    ((symbolp model) model)
-                    ((stringp model) (intern-soft model))
-                    (t nil)))
-        (model-str (cond
-                    ((stringp model) model)
-                    ((symbolp model) (symbol-name model))
-                    (t nil))))
-    (when (or model-sym model-str)
-      (catch 'found
-        (dolist (var (my/gptel--gptel-model-tables))
-          (let* ((table (symbol-value var))
-                 (entry (or (and model-sym (assq model-sym table))
-                            (and model-str (assoc-string model-str table t)))))
-            (when entry
-              (let ((cw (my/gptel--normalize-context-window
-                         (plist-get (cdr entry) :context-window))))
-                (when (and (integerp cw) (> cw 0))
-                  (throw 'found cw))))))
-        nil))))
+  (cond
+   ((symbolp model)
+    (catch 'found
+      (dolist (var (my/gptel--gptel-model-tables))
+        (let* ((table (symbol-value var))
+               (entry (assq model table)))
+          (when entry
+            (let ((cw (my/gptel--normalize-context-window
+                       (plist-get (cdr entry) :context-window))))
+              (when (and (integerp cw) (> cw 0))
+                (throw 'found cw))))))
+      nil))
+   ((stringp model)
+    (catch 'found
+      (dolist (var (my/gptel--gptel-model-tables))
+        (let* ((table (symbol-value var))
+               (entry (assoc-string model table t)))
+          (when entry
+            (let ((cw (my/gptel--normalize-context-window
+                       (plist-get (cdr entry) :context-window))))
+              (when (and (integerp cw) (> cw 0))
+                (throw 'found cw))))))
+      nil))
+   (t nil)))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -380,6 +405,16 @@ raw tokens."
    ;; Larger values are already in raw tokens
    (t (round n))))
 
+(defun my/gptel--openrouter-entry-context-window (entry)
+  "Extract valid context_window from an OpenRouter model ENTRY alist.
+Returns (id . context_length) if ENTRY is a plist/alist with a string id
+and a positive integer context_length; otherwise returns nil."
+  (when (consp entry)
+    (let ((id (alist-get 'id entry))
+          (cw (alist-get 'context_length entry)))
+      (and (stringp id) (integerp cw) (> cw 0)
+           (cons id cw)))))
+
 (defun my/gptel--estimate-text-tokens (chars)
   "Estimate text token count from CHARS.
 
@@ -390,19 +425,23 @@ Uses language-aware heuristics:
 
 For buffers with current buffer, analyzes content type."
   (if (not (and (numberp chars) (> chars 0)))
-      0
-    (let ((ratio 3.5))
-      (when (and (buffer-live-p (current-buffer))
-                 (buffer-file-name))
-        (let ((ext (file-name-extension (buffer-file-name))))
-          (cond
-           ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
-            (setq ratio 3.0))
-           ((member ext '("md" "txt" "org" "rst" "adoc"))
-            (setq ratio 4.0))
-           ((member ext '("json" "yaml" "yml" "toml" "ini"))
-            (setq ratio 2.5)))))
-      (/ (float chars) ratio))))
+      0.0
+    (let* ((ext (and (buffer-live-p (current-buffer))
+                     (buffer-file-name)
+                     (file-name-extension (buffer-file-name))))
+           (cache-key (cons chars ext)))
+      (or (gethash cache-key my/gptel--token-estimate-cache)
+          (let* ((ratio (cond
+                         ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
+                          3.0)
+                         ((member ext '("md" "txt" "org" "rst" "adoc"))
+                          4.0)
+                         ((member ext '("json" "yaml" "yml" "toml" "ini"))
+                          2.5)
+                         (t 3.5)))
+                 (result (/ (float chars) ratio)))
+            (puthash cache-key result my/gptel--token-estimate-cache)
+            result)))))
 
 (defun my/gptel--estimate-tokens (chars)
   "Estimate total token count: text (CHARS) + images in context.
@@ -447,12 +486,17 @@ Image tokens are counted from `gptel-context' if available."
   (when (file-readable-p my/gptel-context-window-cache-file)
     (condition-case err
         (progn
-          (setq my/gptel--context-window-cache-data nil)
+          (clrhash my/gptel--context-window-cache)
+          (setq my/gptel--context-window-cache-data nil
+                my/gptel--context-window-cache-last-refresh nil)
           (load my/gptel-context-window-cache-file nil t)
-          (when (listp my/gptel--context-window-cache-data)
+          (when (and (listp my/gptel--context-window-cache-data)
+                     (hash-table-p my/gptel--context-window-cache))
             (dolist (kv my/gptel--context-window-cache-data)
-              (when (and (consp kv) (stringp (car kv)) (integerp (cdr kv)))
-                (puthash (car kv) (cdr kv) my/gptel--context-window-cache))))
+              (let ((key (car kv)) (val (cdr kv)))
+                (cond
+                 ((and (stringp key) (integerp val))
+                  (puthash key val my/gptel--context-window-cache))))))
           (setq my/gptel--context-window-cache-data nil))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
@@ -480,7 +524,8 @@ Filters to only bound variables."
                (tokens (my/gptel--normalize-context-window cw))
                (id (my/gptel--model-id-string model)))
           (when (and (stringp id) (integerp tokens) (> tokens 0))
-            (puthash id tokens my/gptel--context-window-cache)))))))
+            (puthash id tokens my/gptel--context-window-cache)
+            (puthash id plist my/gptel--model-metadata-cache)))))))
 
 (defun my/gptel--openrouter-curl-command (url connect-timeout max-time key)
   "Build curl command list for OpenRouter API request.
@@ -517,6 +562,7 @@ Returns nil if curl is unavailable or a fetch is already in flight."
       (message "OpenRouter: curl not found")
       nil)
      (my/gptel--openrouter-context-window-fetch-inflight
+      (message "OpenRouter: fetch already in flight, skipping")
       nil)
      (t
       (let* ((key (condition-case err
@@ -526,7 +572,7 @@ Returns nil if curl is unavailable or a fetch is already in flight."
                      nil)))
              (buf (generate-new-buffer (format " *%s*" process-name))))
         (if (not (and (stringp key) (not (string-empty-p key))))
-            (progn
+            (prog1 nil
               (when (buffer-live-p buf) (kill-buffer buf))
               (message "OpenRouter: no API key found"))
           (setq my/gptel--openrouter-context-window-fetch-inflight t)
@@ -574,13 +620,13 @@ Runs asynchronously; returns nil immediately."
      (t
       (my/gptel--openrouter-fetch-with-callback
        url
-        (lambda (data)
-          (let* ((valid-data (and (listp data) data))
-                 (entry (and valid-data
-                             (seq-find (lambda (e)
-                                         (let ((id (alist-get 'id e)))
-                                           (and (stringp id) (string= id model-id))))
-                                       valid-data)))
+       (lambda (data)
+         (let* ((valid-data (and (listp data) data))
+                (entry (and valid-data
+                            (seq-find (lambda (e)
+                                        (let ((id (alist-get 'id e)))
+                                          (and (stringp id) (string= id model-id))))
+                                      valid-data)))
                 (cw (and entry (alist-get 'context_length entry))))
            (if (and (integerp cw) (> cw 0))
                (progn
@@ -625,18 +671,16 @@ Run asynchronously. Use for bulk cache warming."
     (when (my/gptel--openrouter-fetch-with-callback
            url
            (lambda (data)
-             (atomic-change-group
-               (let* ((valid-data (and (listp data) data))
-                      (count 0))
-                 (dolist (entry valid-data)
-                   (let* ((id (alist-get 'id entry))
-                          (cw (alist-get 'context_length entry)))
-                     (when (and (stringp id) (integerp cw) (> cw 0))
-                       (puthash id cw my/gptel--context-window-cache)
-                       (cl-incf count))))
-                 (when (> count 0)
-                   (my/gptel--cache-save-context-windows))
-                 (message "OpenRouter: cached %d models" count))))
+             (let* ((valid-data (and (listp data) data))
+                    (results (cl-loop for entry in valid-data
+                                      for res = (my/gptel--openrouter-entry-context-window entry)
+                                      when res collect res))
+                    (count (length results)))
+               (dolist (r results)
+                 (puthash (car r) (cdr r) my/gptel--context-window-cache))
+               (when (> count 0)
+                 (my/gptel--cache-save-context-windows))
+               (message "OpenRouter: cached %d models" count)))
            "gptel-openrouter-all-models"
            10
            120)
@@ -702,14 +746,16 @@ Description: %s"
       (glm-4.7 . 131072)))
 
     (deepseek
-     :description "DeepSeek - V3 and R1 models"
+     :description "DeepSeek - V4 Flash and V4 Pro models"
      :rate-limit "Varies, check dashboard"
-     :pricing-model "Per-token, V3 very cheap"
-     :features (streaming tools)
-     :notes "V3: 163k context, $0.27/1M input. R1: reasoning model."
+     :pricing-model "Per-token, Flash low-cost and Pro premium"
+     :features (streaming tools reasoning)
+     :notes "Both V4 models support 1M context, 384K output, and thinking mode; deepseek-chat/reasoner are deprecated aliases."
      :context-windows
-     ((deepseek-chat . 163840)
-      (deepseek-reasoner . 163840)))
+     ((deepseek-v4-flash . 1000000)
+      (deepseek-v4-pro . 1000000)
+      (deepseek-chat . 1000000)
+      (deepseek-reasoner . 1000000)))
 
     (moonshot
      :description "Moonshot AI - Kimi models"
@@ -798,7 +844,7 @@ Use `my/gptel-show-provider-contract' to query.")
 
 Fallback order:
 1. Cached context window for model-id (with known-model alist fallback)
-2. gptel model tables (OpenAI, Gemini, etc.)
+2. gptel model tables (OpenAI, Gemini, etc.) - cached for future lookups
 3. Known model metadata (from cache or known list)
 4. my/gptel-default-context-window (128k default)
 
@@ -807,11 +853,14 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
   (require 'gptel)
   (let ((model-id (my/gptel--model-id-string gptel-model)))
     (cond
-     ((not (stringp model-id)) my/gptel-default-context-window)
+     ((string= model-id "nil") my/gptel-default-context-window)
      ((my/gptel--cache-or-alist-lookup my/gptel--context-window-cache
                                        my/gptel--known-model-context-windows
                                        model-id))
-     ((my/gptel--lookup-context-window-in-gptel-tables gptel-model))
+     ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
+        (when (and cw (integerp cw))
+          (puthash model-id cw my/gptel--context-window-cache))
+        cw))
      ((let ((meta (my/gptel-get-model-metadata model-id)))
         (plist-get meta :context-window)))
      (t my/gptel-default-context-window))))

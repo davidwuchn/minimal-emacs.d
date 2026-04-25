@@ -36,8 +36,8 @@ when re-serializing the conversation for APIs that require it (e.g. Moonshot).")
 
 (defun my/gptel--reasoning-key-for-model (model &optional backend)
   "Return the reasoning field keyword for MODEL on BACKEND, or nil.
-Returns :reasoning_content for models with :thinking param (Moonshot),
-:reasoning for models with :reasoning param (OpenRouter/DeepSeek).
+Returns :reasoning_content for models with :thinking param (Moonshot, DeepSeek V4),
+:reasoning for legacy models that still use :reasoning request params.
 When BACKEND is non-nil, only returns a key for gptel-openai backends."
   (when (stringp model)
     (setq model (intern model)))
@@ -51,8 +51,8 @@ When BACKEND is non-nil, only returns a key for gptel-openai backends."
 
 (defun my/gptel--thinking-model-p ()
   "Return the reasoning field keyword if current model has thinking/reasoning enabled.
-Returns :reasoning_content for Moonshot (:thinking param),
-:reasoning for OpenRouter/DeepSeek (:reasoning param), nil otherwise."
+Returns :reasoning_content for models with :thinking enabled,
+:reasoning for legacy models that still use :reasoning, nil otherwise."
   (my/gptel--reasoning-key-for-model gptel-model))
 
 (defun my/gptel--reset-reasoning-block (fsm)

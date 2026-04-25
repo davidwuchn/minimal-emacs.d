@@ -101,7 +101,7 @@ Single source of truth: `config.json`
 |----------|--------|
 | `dashscope` | qwen3.5-plus, kimi-k2.5, glm-5, deepseek-v3.2 |
 | `openrouter` | claude-sonnet-4.6, gpt-5.4 |
-| `deepseek` | deepseek-chat, deepseek-reasoner |
+| `deepseek` | deepseek-v4-flash, deepseek-v4-pro |
 | `moonshot` | kimi-k2.5, kimi-for-coding |
 | `google` | gemini-3.1-pro-preview |
 | `minimax` | minimax-m2.5, minimax-m2.7 |

@@ -169,9 +169,10 @@ INPUT from previous cycle feeds forward."
 Map to elements, detect imbalances, identify evolution opportunity."
   (let* ((diagnosis (plist-get observation :element-status))
          (deficient-elements '()))
-    (dolist (d diagnosis)
-      (when (memq (plist-get d :status) '(deficient critical))
-        (push (plist-get d :element) deficient-elements)))
+    (when (listp diagnosis)
+      (dolist (d diagnosis)
+        (when (memq (plist-get d :status) '(deficient critical))
+          (push (plist-get d :element) deficient-elements))))
     (list :imbalances deficient-elements
           :focus-element (car deficient-elements)
           :evolution-opportunity (gptel-benchmark-evolution--find-opportunity observation))))
@@ -304,7 +305,7 @@ Rate = 0: no growth."
   "Check if AI COMPLETE has been reached.
 SYSTEM + Feed Forward = AI COMPLETE"
   (let ((capabilities (plist-get gptel-benchmark-evolution-state :capabilities)))
-    (when (= (length capabilities) 5)
+    (when (= (length capabilities) 7)
       (message "[evolution] AI COMPLETE achieved!")
       t)))
 
@@ -535,9 +536,12 @@ Uses 相生 cycle to predict evolution order."
 (defun gptel-benchmark-evolution--find-opportunity (observation)
   "Find evolution opportunity from OBSERVATION."
   (let ((deficient (plist-get observation :element-status)))
-    (when deficient
-      (car (cl-find-if (lambda (d) (memq (plist-get d :status) '(deficient critical)))
-                       deficient)))))
+    (when (and (listp deficient)
+               (cl-find-if (lambda (d) (memq (plist-get d :status) '(deficient critical)))
+                           deficient))
+      (plist-get (cl-find-if (lambda (d) (memq (plist-get d :status) '(deficient critical)))
+                             deficient)
+                 :element))))
 
 ;;; Co-Evolution Interface
 
@@ -564,11 +568,11 @@ HUMAN-INPUT guides the collapsing wave."
       (princ (format "Cycle: %d\n" cycle))
       (princ (format "AI COMPLETE: %s\n\n" (if complete "YES" "Not yet")))
       (princ "Capabilities:\n")
-      (dolist '(cap-name) '((interface . "Interface (Engine + Query)")
-                            (capability . "Capability (Engine + Graph)")
-                            (self-awareness . "Self-awareness (Engine + Introspection)")
-                            (extension . "Extension (Graph + API)")
-                            (memory . "Memory (Query + History + Knowledge)"))
+      (dolist (cap-name '((interface . "Interface (Engine + Query)")
+                          (capability . "Capability (Engine + Graph)")
+                          (self-awareness . "Self-awareness (Engine + Introspection)")
+                          (extension . "Extension (Graph + API)")
+                          (memory . "Memory (Query + History + Knowledge)")))
         (princ (format "  %s %s\n"
                        (if (memq (car cap-name) capabilities) "✓" "○")
                        (cdr cap-name))))

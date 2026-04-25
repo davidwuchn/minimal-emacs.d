@@ -2296,8 +2296,49 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (if original-transient-layout
           (fset 'transient--set-layout original-transient-layout)
         (when (fboundp 'transient--set-layout)
-          (fmakunbound 'transient--set-layout)))
-      (delete-directory project-root t))))
+           (fmakunbound 'transient--set-layout)))
+       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/activate-live-root-prefers-live-module-paths ()
+  "Activating a live root should make `locate-library' prefer that root's modules."
+  (defvar minimal-emacs-user-directory)
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-live-modules" t)))
+         (modules-dir (expand-file-name "lisp/modules" project-root))
+         (bootstrap-file (expand-file-name "gptel-auto-workflow-bootstrap.el" modules-dir))
+         (live-module (expand-file-name "gptel-ext-context.el" modules-dir))
+         (stale-root (make-temp-file "aw-stale-modules" t))
+         (stale-dir (expand-file-name "lisp/modules" stale-root))
+         (stale-module (expand-file-name "gptel-ext-context.el" stale-dir))
+         (default-directory "/tmp/original-root/")
+         (user-emacs-directory "/tmp/original-root/")
+         (minimal-emacs-user-directory "/tmp/original-root/")
+         (gptel-auto-workflow-projects '("/tmp/original-root/"))
+         (gptel-auto-workflow--current-project "/tmp/drift/")
+         (gptel-auto-workflow--run-project-root "/tmp/drift/")
+         (gptel-auto-workflow--project-root-override "/tmp/drift/")
+         (load-path (list stale-dir)))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          (make-directory stale-dir t)
+          (with-temp-file bootstrap-file
+            (insert
+             "(defun gptel-auto-workflow-bootstrap--seed-load-path (root)\n"
+             "  (let ((dir (expand-file-name \"lisp/modules\" root)))\n"
+             "    (when (file-directory-p dir)\n"
+             "      (setq load-path (cons dir (delete dir load-path))))))\n"))
+          (with-temp-file live-module
+            (insert ";;; live module\n"))
+          (with-temp-file stale-module
+            (insert ";;; stale module\n"))
+          (should (equal (locate-library "gptel-ext-context") stale-module))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--prefer-elpa-transient)
+                     (lambda (&optional _root) nil)))
+            (should (equal (gptel-auto-workflow--activate-live-root project-root)
+                           project-root)))
+          (should (equal (locate-library "gptel-ext-context") live-module)))
+      (delete-directory project-root t)
+      (delete-directory stale-root t))))
 
 (ert-deftest regression/auto-workflow/prefer-elpa-transient-installs-missing-package ()
   "Preferring ELPA transient should repair broken stubs by installing a real package."
@@ -3568,7 +3609,18 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
    (equal
     (gptel-auto-experiment--categorize-error
      "Aborted: executor task 'Experiment 1: optimize lisp/modules/gptel-tools-agent.el' was cancelled or timed out.")
-    '(:tool-error . "Subagent aborted"))))
+     '(:tool-error . "Subagent aborted"))))
+
+(ert-deftest regression/auto-experiment/reviewer-blocked-output-is-not-unknown-error ()
+  "Explicit reviewer BLOCKED output should not be logged as an unknown error."
+  (let ((review-output
+         "Reviewer result for task: Review changes before merge | ## BLOCKED: ignore-errors swallows callback errors and hides real failures. | Action item."))
+    (cl-letf (((symbol-function 'message)
+               (lambda (&rest args)
+                 (ert-fail (format "Unexpected log output: %S" args)))))
+      (let ((result (gptel-auto-experiment--categorize-error review-output)))
+        (should (eq (car result) :tool-error))
+        (should (string-match-p "BLOCKED:" (cdr result)))))))
 
 (ert-deftest regression/auto-workflow/headless-analyzer-provider-override-prefers-available-fallback ()
   "Headless analyzer should keep MiniMax as primary workhorse."
@@ -3728,7 +3780,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (gptel-make-openai "DeepSeek"
             :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(deepseek-chat)))
+            :models '(deepseek-v4-flash deepseek-v4-pro)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (had-deepseek (boundp 'gptel--deepseek))
@@ -3741,13 +3793,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (gptel-auto-workflow-headless-fallback-agents
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")
-            ("DeepSeek" . "deepseek-chat")))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("DashScope" . "qwen3.6-plus")
+             ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")
-            ("DeepSeek" . "deepseek-chat")))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("DashScope" . "qwen3.6-plus")
+             ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
@@ -3769,11 +3821,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "executor" dashscope-preset
              "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
-            (let ((override
-                   (gptel-auto-workflow--maybe-override-subagent-provider
-                    "reviewer" minimax-preset)))
-              (should (eq (plist-get override :backend) deepseek-backend))
-              (should (eq (plist-get override :model) 'deepseek-chat)))))
+             (let ((override
+                    (gptel-auto-workflow--maybe-override-subagent-provider
+                     "reviewer" minimax-preset)))
+               (should (eq (plist-get override :backend) deepseek-backend))
+               (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-dashscope
@@ -4093,7 +4145,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (gptel-make-openai "DeepSeek"
             :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(deepseek-chat)))
+            :models '(deepseek-v4-flash deepseek-v4-pro)))
          (dashscope-backend
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
@@ -4124,10 +4176,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "executor" preset
              "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
-            (let ((override
-                   (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
-              (should (eq (plist-get override :backend) deepseek-backend))
-              (should (eq (plist-get override :model) 'deepseek-chat)))))
+             (let ((override
+                    (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
+               (should (eq (plist-get override :backend) deepseek-backend))
+               (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-deepseek
           (set 'gptel--deepseek old-deepseek)
@@ -4308,22 +4360,22 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (gptel-make-openai "DeepSeek"
             :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(deepseek-chat)))
+            :models '(deepseek-v4-flash deepseek-v4-pro)))
          (had-deepseek (boundp 'gptel--deepseek))
          (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "MiniMax"
-                  :model "minimax-m2.7-highspeed"
-                  :max-tokens 65536)))
+                   :model "minimax-m2.7-highspeed"
+                   :max-tokens 500000)))
     (unwind-protect
         (progn
           (set 'gptel--deepseek deepseek-backend)
-          (let ((override
-                 (gptel-auto-workflow--rewrite-subagent-provider
-                  preset
-                  '("DeepSeek" . "deepseek-chat"))))
-            (should (eq (plist-get override :backend) deepseek-backend))
-            (should (eq (plist-get override :model) 'deepseek-chat))
-            (should (= (plist-get override :max-tokens) 8192))))
+           (let ((override
+                  (gptel-auto-workflow--rewrite-subagent-provider
+                   preset
+                   '("DeepSeek" . "deepseek-v4-flash"))))
+             (should (eq (plist-get override :backend) deepseek-backend))
+             (should (eq (plist-get override :model) 'deepseek-v4-flash))
+             (should (= (plist-get override :max-tokens) 384000))))
       (if had-deepseek
           (set 'gptel--deepseek old-deepseek)
         (makunbound 'gptel--deepseek)))))
@@ -7317,9 +7369,146 @@ failure."
             (should (equal aborted-buffers (list request-buf)))
             (should (= (length callback-results) 1))
             (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
+             (should (= (hash-table-count my/gptel--agent-task-state) 0)))
+         (when (buffer-live-p request-buf)
+           (kill-buffer request-buf))))))
+
+(ert-deftest regression/subagent/curl-temp-write-message-does-not-extend-timeout ()
+  "Temp curl payload write messages must not extend executor idle timeouts."
+  (let ((my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeouts nil)
+        (aborted-buffers nil)
+        (callback-results nil)
+        (now 0))
+    (clrhash my/gptel--agent-task-state)
+    (let ((request-buf (generate-new-buffer " *gptel-request-curl-write*"))
+          (activity-dir (make-temp-file "gptel-task-curl-write-" t)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'current-time)
+                     (lambda ()
+                       (seconds-to-time now)))
+                    ((symbol-function 'time-since)
+                     (lambda (then)
+                       (seconds-to-time (- now (float-time then)))))
+                    ((symbol-function 'run-at-time)
+                     (lambda (secs repeat fn &rest _args)
+                       (cond
+                        ((and repeat (= secs my/gptel-subagent-progress-interval))
+                         :fake-progress)
+                        ((and (null repeat) (= secs my/gptel-agent-task-timeout))
+                         (let ((timer (cons :timeout fn)))
+                           (setq scheduled-timeouts
+                                 (append scheduled-timeouts (list timer)))
+                           timer))
+                        (t :fake-timer))))
+                    ((symbol-function 'timerp)
+                     (lambda (obj)
+                       (and (consp obj) (eq (car obj) :timeout))))
+                    ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-workflow--state-active-p)
+                     (lambda (state)
+                       (and state (not (plist-get state :done)))))
+                    ((symbol-function 'gptel-abort)
+                     (lambda (buffer)
+                       (push buffer aborted-buffers)))
+                    ((symbol-function 'my/gptel--call-gptel-agent-task)
+                     (lambda (&rest _args)
+                       (my/gptel--register-agent-task-buffer request-buf)))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (let ((default-directory activity-dir))
+              (with-temp-buffer
+                (my/gptel--agent-task-with-timeout
+                 (lambda (result) (push result callback-results))
+                 "executor" "desc" "prompt")))
+            (should (= (length scheduled-timeouts) 1))
+            (setq now 30)
+            (with-temp-buffer
+              (let ((default-directory activity-dir))
+                (my/gptel--agent-task-note-message-activity
+                 "Wrote %s"
+                 "/var/folders/example/T/gptel-curl-dataabc123.json")))
+            (setq now 50)
+            (funcall (cdr (car scheduled-timeouts)))
+            (should (equal aborted-buffers (list request-buf)))
+            (should (= (length callback-results) 1))
+            (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
             (should (= (hash-table-count my/gptel--agent-task-state) 0)))
         (when (buffer-live-p request-buf)
-          (kill-buffer request-buf))))))
+          (kill-buffer request-buf))
+        (when (file-directory-p activity-dir)
+          (delete-directory activity-dir t))))))
+
+(ert-deftest regression/subagent/recentf-cleanup-message-does-not-extend-timeout ()
+  "recentf cleanup chatter must not extend executor idle timeouts."
+  (let ((my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeouts nil)
+        (aborted-buffers nil)
+        (callback-results nil)
+        (now 0))
+    (clrhash my/gptel--agent-task-state)
+    (let ((request-buf (generate-new-buffer " *gptel-request-recentf*"))
+          (activity-dir (make-temp-file "gptel-task-recentf-" t)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'current-time)
+                     (lambda ()
+                       (seconds-to-time now)))
+                    ((symbol-function 'time-since)
+                     (lambda (then)
+                       (seconds-to-time (- now (float-time then)))))
+                    ((symbol-function 'run-at-time)
+                     (lambda (secs repeat fn &rest _args)
+                       (cond
+                        ((and repeat (= secs my/gptel-subagent-progress-interval))
+                         :fake-progress)
+                        ((and (null repeat) (= secs my/gptel-agent-task-timeout))
+                         (let ((timer (cons :timeout fn)))
+                           (setq scheduled-timeouts
+                                 (append scheduled-timeouts (list timer)))
+                           timer))
+                        (t :fake-timer))))
+                    ((symbol-function 'timerp)
+                     (lambda (obj)
+                       (and (consp obj) (eq (car obj) :timeout))))
+                    ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-workflow--state-active-p)
+                     (lambda (state)
+                       (and state (not (plist-get state :done)))))
+                    ((symbol-function 'gptel-abort)
+                     (lambda (buffer)
+                       (push buffer aborted-buffers)))
+                    ((symbol-function 'my/gptel--call-gptel-agent-task)
+                     (lambda (&rest _args)
+                       (my/gptel--register-agent-task-buffer request-buf)))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (let ((default-directory activity-dir))
+              (with-temp-buffer
+                (my/gptel--agent-task-with-timeout
+                 (lambda (result) (push result callback-results))
+                 "executor" "desc" "prompt")))
+            (should (= (length scheduled-timeouts) 1))
+            (setq now 25)
+            (with-temp-buffer
+              (let ((default-directory activity-dir))
+                (my/gptel--agent-task-note-message-activity
+                 "Cleaning up the recentf list...")))
+            (setq now 30)
+            (with-temp-buffer
+              (let ((default-directory activity-dir))
+                (my/gptel--agent-task-note-message-activity
+                 "File %s removed from the recentf list"
+                 "/tmp/old-optimize-worktree/lisp/modules/old-target.el")))
+            (setq now 50)
+            (funcall (cdr (car scheduled-timeouts)))
+            (should (equal aborted-buffers (list request-buf)))
+            (should (= (length callback-results) 1))
+            (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
+            (should (= (hash-table-count my/gptel--agent-task-state) 0)))
+        (when (buffer-live-p request-buf)
+          (kill-buffer request-buf))
+        (when (file-directory-p activity-dir)
+          (delete-directory activity-dir t))))))
 
 (ert-deftest regression/subagent/timeout-aborts-routed-request-buffer ()
   "Timeout abort should target the live routed request buffer."
@@ -7668,22 +7857,24 @@ failure."
                       loaded))
       (should (equal reloaded "/tmp/project")))))
 
-(ert-deftest regression/auto-workflow/reload-live-support-reloads-retry-module ()
-  "Warm-daemon workflow reloads should refresh retry support too."
+(ert-deftest regression/auto-workflow/reload-live-support-reloads-context-and-retry-modules ()
+  "Warm-daemon workflow reloads should refresh context and retry support."
   (let ((loaded nil))
     (cl-letf (((symbol-function 'load-file)
-               (lambda (path)
-                 (push path loaded)
-                 t))
-              ((symbol-function 'nucleus-presets-setup-agents)
-               (lambda () t))
-              ((symbol-function 'nucleus--after-agent-update)
-               (lambda () t)))
-      (gptel-auto-workflow--reload-live-support "/tmp/project")
-      (should (member (expand-file-name "lisp/modules/gptel-ext-retry.el" "/tmp/project")
-                      loaded))
-      (should (member (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" "/tmp/project")
-                      loaded)))))
+                (lambda (path)
+                  (push path loaded)
+                  t))
+               ((symbol-function 'nucleus-presets-setup-agents)
+                (lambda () t))
+               ((symbol-function 'nucleus--after-agent-update)
+                (lambda () t)))
+       (gptel-auto-workflow--reload-live-support "/tmp/project")
+       (should (member (expand-file-name "lisp/modules/gptel-ext-context.el" "/tmp/project")
+                       loaded))
+       (should (member (expand-file-name "lisp/modules/gptel-ext-retry.el" "/tmp/project")
+                       loaded))
+       (should (member (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" "/tmp/project")
+                       loaded)))))
 
 (ert-deftest regression/auto-workflow/cron-safe-disables-headless-on-skip ()
   "Cron-safe should restore headless suppression when the active-use guard skips."
@@ -14356,9 +14547,33 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                    my/gptel--agent-task-state)
           (my/gptel--register-agent-task-buffer buf)
           (with-current-buffer buf
-            (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
+           (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
             (should-not (local-variable-p 'process-environment)))
           (should (eq (plist-get (gethash 4 my/gptel--agent-task-state) :request-buf)
+                      buf)))
+      (kill-buffer buf))))
+
+(ert-deftest regression/subagent/register-agent-task-buffer-defers-env-while-persistence-deferred ()
+  "Request buffer registration should honor launch-time env deferral even after re-entry."
+  (let* ((buf (generate-new-buffer "*test-subagent-deferred-env*"))
+         (task-env '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+                     "PATH=/usr/bin"))
+         (my/gptel--agent-task-state (make-hash-table :test 'eql))
+         (my/gptel--current-agent-task-id 5)
+         (gptel-auto-workflow--defer-subagent-env-persistence t))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my/gptel--agent-task-buffer-priority)
+                   (lambda (_state _buffer) 0)))
+          (puthash 5 (list :request-buf nil
+                           :launching nil
+                           :process-environment task-env)
+                   my/gptel--agent-task-state)
+          (my/gptel--register-agent-task-buffer buf)
+          (with-current-buffer buf
+            (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
+            (should-not (local-variable-p 'process-environment)))
+          (should (eq (plist-get (gethash 5 my/gptel--agent-task-state) :request-buf)
                       buf)))
       (kill-buffer buf))))
 

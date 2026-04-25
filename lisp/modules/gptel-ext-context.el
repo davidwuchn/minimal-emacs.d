@@ -186,20 +186,18 @@ Returns :dashscope, :gemini, :openai, :copilot, or :unknown."
 (defun my/gptel--effective-threshold ()
   "Return effective threshold based on backend type.
 DashScope uses lower threshold due to server-side timeout limits."
-  (let ((backend-type (my/gptel--backend-type)))
-    (cond
-     ((eq backend-type :dashscope)
-      my/gptel-auto-compact-threshold-dashscope)
-     (t my/gptel-auto-compact-threshold))))
+  (if (eq (my/gptel--backend-type) :dashscope)
+      my/gptel-auto-compact-threshold-dashscope
+    my/gptel-auto-compact-threshold))
 
 (defun my/gptel--threshold-values ()
   "Return threshold values for current context.
 Returns (tokens window threshold-fraction percentage-threshold)."
   (let* ((tokens (my/gptel--current-tokens))
          (window (let ((value (my/gptel--context-window)))
-                   (if (and (integerp value) (plusp value))
-                       value
-                     my/gptel-default-context-window)))
+                     (if (and (integerp value) (> value 0))
+                         value
+                       my/gptel-default-context-window)))
          (threshold-fraction (my/gptel--effective-threshold))
          (percentage-threshold (* window threshold-fraction)))
     (list tokens window threshold-fraction percentage-threshold)))
@@ -287,13 +285,14 @@ Auto-delegate: %s"
              model model-id
              (if cached (format "yes (%d)" cached) "no")
              chars (round tokens) (round text-tokens) (round image-tokens) image-count
-             (* 100 (/ (float tokens) window))
+             (if (zerop window) 0.0 (* 100 (/ (float tokens) window)))
              delegate-status)))
 
 (defun my/gptel--directive-text (sym)
   "Resolve directive SYM to a string.
 Returns nil if directive is missing or invalid, and logs a warning."
-  (let ((val (alist-get sym gptel-directives)))
+  (let ((val (and (boundp 'gptel-directives)
+                  (alist-get sym gptel-directives))))
     (cond
      ((functionp val) (funcall val))
      ((stringp val) val)
@@ -382,14 +381,14 @@ Returns non-nil if compaction was initiated."
                                                     'face '(:foreground "green" :weight bold)))
                                 (insert (propertize "═══════════════════════════════════════════════════════════════\n"
                                                     'face '(:foreground "yellow" :weight bold)))
-                                (message "[compact] Preview appended (original kept)")))
-                          (progn
-                            (kill-new backup)
-                            (erase-buffer)
-                            (insert response)
-                            (goto-char (min point-before (point-max)))
-                            (message "[compact] Done: %s [backup in kill-ring]"
-                                     (my/gptel--format-compaction-stats chars-before (buffer-size) tokens-before))))))))
+                                (message "[compact] Preview appended (original kept)"))
+                          (t
+                           (kill-new backup)
+                           (erase-buffer)
+                           (insert response)
+                           (goto-char (min point-before (point-max)))
+                           (message "[compact] Done: %s [backup in kill-ring]"
+                                    (my/gptel--format-compaction-stats chars-before (buffer-size) tokens-before)))))))))
             (error
              (with-current-buffer buf
                (setq my/gptel-auto-compact-running nil))
@@ -431,15 +430,16 @@ Hook for `gptel-post-response-functions'."
 (defun my/gptel--buffer-lines (buffer-string)
   "Return lines from BUFFER-STRING as a list.
 Helper function to avoid duplicate split-string calls."
-  (split-string buffer-string "\n"))
+  (and (stringp buffer-string) (split-string buffer-string "\n")))
 
 (defun my/gptel--extract-last-task-from-lines (lines)
   "Extract the most recent task/request from LINES.
 Returns a short description of what the user was asking for."
-  (let* ((user-lines (cl-remove-if-not
-                      (lambda (line)
-                        (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
-                      lines))
+  (let* ((user-lines (and (listp lines)
+                          (cl-remove-if-not
+                           (lambda (line)
+                             (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
+                           lines)))
          (last-user (car (last user-lines 3))))
     (if last-user
         (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
@@ -454,26 +454,30 @@ Returns a short description of what the user was asking for."
   "Build context for subagent delegation.
 BUFFER-STRING is the full conversation. LAST-TASK is the extracted task.
 Returns plist with :strategy and :context keys."
-  (let* ((lines (my/gptel--buffer-lines buffer-string))
-         (total-lines (length lines))
-         (recent-lines (last lines (min 50 total-lines)))
-         (has-tool-results (cl-some
-                            (lambda (line)
-                              (string-match-p "tool_result\\|tool-result\\|Tool result" line))
-                            recent-lines)))
-    (cond
-     ((and has-tool-results (< total-lines 100))
-      (list :strategy 'recent-history
-            :context (string-join recent-lines "\n")
-            :reason "Task involves recent tool results"))
-     ((< total-lines 30)
-      (list :strategy 'full-context
-            :context buffer-string
-            :reason "Short conversation, full context safe"))
-     (t
+  (if (not (stringp buffer-string))
       (list :strategy 'task-only
-            :context last-task
-            :reason "Large conversation, delegating with task only")))))
+            :context (or last-task "Continue the task")
+            :reason "Empty or invalid buffer")
+    (let* ((lines (my/gptel--buffer-lines buffer-string))
+           (total-lines (length lines))
+           (recent-lines (last lines (min 50 total-lines)))
+           (has-tool-results (cl-some
+                              (lambda (line)
+                                (string-match-p "tool_result\\|tool-result\\|Tool result" line))
+                              recent-lines)))
+      (cond
+       ((and has-tool-results (< total-lines 100))
+        (list :strategy 'recent-history
+              :context (string-join recent-lines "\n")
+              :reason "Task involves recent tool results"))
+       ((< total-lines 30)
+        (list :strategy 'full-context
+              :context buffer-string
+              :reason "Short conversation, full context safe"))
+       (t
+        (list :strategy 'task-only
+              :context last-task
+              :reason "Large conversation, delegating with task only"))))))
 
 (defun my/gptel--do-auto-delegate (prompt callback &optional buffer)
   "Auto-delegate to subagent when context is too large.
@@ -522,7 +526,10 @@ ORIG-FN is `gptel-request'. PROMPT and ARGS are passed through."
                  (window (my/gptel--context-window))
                  (callback (plist-get args :callback)))
             (message "[auto-delegate] Threshold exceeded: %d/%d tokens (%.0f%%)"
-                     (round tokens) (round window) (* 100 (/ (float tokens) window)))
+                     (round tokens) (round window)
+                     (if (and (integerp window) (> window 0))
+                         (* 100 (/ (float tokens) window))
+                       0))
             (my/gptel--do-auto-delegate prompt callback))
         (apply orig-fn prompt args)))))
 

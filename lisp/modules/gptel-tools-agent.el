@@ -217,6 +217,33 @@ it when the current transient implementation is too old."
                        (not (string-prefix-p dir current-lib)))))
         (load (file-name-sans-extension lib) nil 'nomessage))
       dir)))
+
+(defun gptel-auto-workflow--seed-live-root-load-path (&optional proj-root)
+  "Prepend repo-local load paths for PROJ-ROOT to `load-path'."
+  (let* ((root (file-name-as-directory
+                (expand-file-name
+                 (or proj-root
+                     (gptel-auto-workflow--default-dir)))))
+         (bootstrap (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el" root))
+         (dirs nil))
+    (when (file-readable-p bootstrap)
+      (load-file bootstrap)
+      (when (fboundp 'gptel-auto-workflow-bootstrap--seed-load-path)
+        (gptel-auto-workflow-bootstrap--seed-load-path root)))
+    (setq dirs
+          (append
+           (list (expand-file-name "lisp/modules" root)
+                 (expand-file-name "lisp" root)
+                 (expand-file-name "packages/gptel" root)
+                 (expand-file-name "packages/gptel-agent" root)
+                 (expand-file-name "packages/ai-code" root))
+           (when (fboundp 'gptel-auto-workflow-bootstrap--elpa-dirs)
+             (gptel-auto-workflow-bootstrap--elpa-dirs root))))
+    (dolist (dir (reverse dirs))
+      (when (file-directory-p dir)
+        (setq load-path (cons dir (delete dir load-path)))))
+    dirs))
+
 (defun gptel-auto-workflow--activate-live-root (proj-root)
   "Retarget the live daemon to PROJ-ROOT for queued workflow actions."
   (let ((root (file-name-as-directory (expand-file-name proj-root))))
@@ -229,6 +256,7 @@ it when the current transient implementation is too old."
       (setq minimal-emacs-user-directory root))
     (when (boundp 'gptel-auto-workflow-projects)
       (setq gptel-auto-workflow-projects (list root)))
+    (gptel-auto-workflow--seed-live-root-load-path root)
     (gptel-auto-workflow--prefer-elpa-transient root)
     root))
 
@@ -1822,12 +1850,32 @@ TIMESTAMP defaults to `current-time'."
                                (my/gptel--path-within-directory-p dir activity-dir))
                           (and file
                                (my/gptel--path-within-directory-p file activity-dir))))
-             (my/gptel--agent-task-note-activity task-id activity-time))))
+              (my/gptel--agent-task-note-activity task-id activity-time))))
        my/gptel--agent-task-state))))
 
-(defun my/gptel--agent-task-note-message-activity (&rest _args)
+(defun my/gptel--ignore-agent-activity-message-p (text)
+  "Return non-nil when TEXT is unrelated chatter for executor activity."
+  (or (and (stringp text)
+           (not (null (string-match-p
+                       "\\`Cleaning up the recentf list\\(?:\\.\\.\\.\\(?:done.*\\)?\\)?\\'"
+                       text))))
+      (and (stringp text)
+           (not (null (string-match-p
+                       "\\`File .+ removed from the recentf list\\'"
+                       text))))
+      (and (stringp text)
+           (string-match "\\`Wrote \\(.+\\)\\'" text)
+           (string-prefix-p "gptel-curl-data"
+                            (file-name-nondirectory (match-string 1 text))))))
+
+(defun my/gptel--agent-task-note-message-activity (format-string &rest args)
   "Treat worktree-context messages as executor activity."
-  (my/gptel--agent-task-note-context-activity))
+  (let ((text (and (stringp format-string)
+                   (condition-case nil
+                       (apply #'format format-string args)
+                     (error format-string)))))
+    (unless (my/gptel--ignore-agent-activity-message-p text)
+      (my/gptel--agent-task-note-context-activity))))
 
 (while (advice-member-p #'my/gptel--agent-task-note-message-activity 'message)
   (advice-remove 'message #'my/gptel--agent-task-note-message-activity))
@@ -1860,7 +1908,8 @@ TIMESTAMP defaults to `current-time'."
         (puthash my/gptel--current-agent-task-id
                  updated-state
                  my/gptel--agent-task-state)
-        (when (and (not (plist-get updated-state :launching))
+        (when (and (not gptel-auto-workflow--defer-subagent-env-persistence)
+                   (not (plist-get updated-state :launching))
                    (plist-get updated-state :process-environment)
                    (fboundp 'gptel-auto-workflow--persist-subagent-process-environment))
           (gptel-auto-workflow--persist-subagent-process-environment
@@ -7202,7 +7251,7 @@ failover advances past transient timeout or provider-pressure failures.")
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-chat")
+    ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
@@ -7227,7 +7276,7 @@ DashScope and others when rate-limited or unavailable."
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-chat")
+    ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Ordered backend/model fallbacks for executor after provider rate limits.
@@ -7259,7 +7308,7 @@ run can advance through this list instead of repeatedly hammering the same provi
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-chat")
+    ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Current runtime default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
@@ -7279,7 +7328,7 @@ run can advance through this list instead of repeatedly hammering the same provi
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-chat")
+    ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Current runtime default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
@@ -7966,18 +8015,21 @@ Also logs agent-output snippet for debugging when category is :unknown."
      (cons :tool-error "Tool execution failed"))
    ((string-match-p "could not finish" agent-output)
     (cons :api-error "API request failed"))
-   ((string-match-p "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output)
-    (cons :tool-error (format "Tool unavailable: %s" (gptel-auto-experiment--error-snippet agent-output))))
-   ((string-match-p "^Error:" agent-output)
-    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
-      (message "[auto-experiment] Executor error: %s" snippet)
-      (cons :tool-error snippet)))
-   ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
-    (cons :grader-failed "Executor succeeded, grader returned score 0"))
-   ((string-match-p "error\\|failed\\|exception" agent-output)
-    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
-      (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
-      (cons :unknown (format "Error pattern: %s" snippet))))
+    ((string-match-p "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output)
+     (cons :tool-error (format "Tool unavailable: %s" (gptel-auto-experiment--error-snippet agent-output))))
+    ((string-match-p "^Error:" agent-output)
+     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
+       (message "[auto-experiment] Executor error: %s" snippet)
+       (cons :tool-error snippet)))
+    ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
+     (cons :grader-failed "Executor succeeded, grader returned score 0"))
+    ((let ((case-fold-search t))
+       (string-match-p "\\bBLOCKED:" agent-output))
+     (cons :tool-error (gptel-auto-experiment--error-snippet agent-output)))
+    ((string-match-p "error\\|failed\\|exception" agent-output)
+     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
+       (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
+       (cons :unknown (format "Error pattern: %s" snippet))))
    (t
     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
       (message "[auto-experiment] No error pattern found, snippet: %s" (my/gptel--sanitize-for-logging snippet))
@@ -9317,10 +9369,10 @@ When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
     (when (and (buffer-live-p target)
                (listp effective-env))
       (with-current-buffer target
-        (set (make-local-variable 'gptel-auto-workflow--subagent-process-environment)
-             (copy-sequence effective-env))
-        (set (make-local-variable 'process-environment)
-             (copy-sequence effective-env))))))
+        (setq-local gptel-auto-workflow--subagent-process-environment
+                    (copy-sequence effective-env))
+        (setq-local process-environment
+                    (copy-sequence effective-env))))))
 
 (defun gptel-auto-workflow--git-step-success-p (cmd action &optional timeout)
   "Run git CMD and report whether it succeeded.
@@ -9834,6 +9886,8 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
                 (or proj-root
                     (gptel-auto-workflow--default-dir)
                     default-directory)))))
+    (gptel-auto-workflow--seed-live-root-load-path root)
+    (load-file (expand-file-name "lisp/modules/gptel-ext-context.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-ext-retry.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root))

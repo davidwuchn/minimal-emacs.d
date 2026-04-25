@@ -434,28 +434,32 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
 
 (defun gptel-workflow--score-tools (run tools-cfg)
   "Score tool usage of RUN against TOOLS-CFG."
-  (let* ((used-tools (gptel-workflow--tool-names run))
-         (required (or (cdr (assq 'required tools-cfg)) '()))
-         (forbidden-before (cdr (assq 'forbidden_before_phase tools-cfg)))
-         (p1-forbidden (cdr (assq 'P1 forbidden-before)))
-         (total-score 0.0)
-         (count 0))
-    (when required
-      (let* ((found (cl-intersection required used-tools :test #'string=))
-             (score (/ (float (length found)) (max 1 (length required)))))
-        (cl-incf total-score score)
-        (cl-incf count)))
-    (when p1-forbidden
-      (let* ((p1-tools (if (gptel-workflow--phase-active-p run 'P1)
-                           used-tools
-                         nil))
-             (violations (cl-intersection p1-forbidden p1-tools :test #'string=))
-             (score (if violations 0.0 1.0)))
-        (cl-incf total-score score)
-        (cl-incf count)))
-    (if (> count 0)
-        (/ total-score count)
-      1.0)))
+  (cond
+   ((null run) 1.0)
+   ((null tools-cfg) 1.0)
+   (t
+    (let* ((used-tools (gptel-workflow--tool-names run))
+           (required (cdr (assq 'required tools-cfg)))
+           (forbidden-before (cdr (assq 'forbidden_before_phase tools-cfg)))
+           (p1-forbidden (and forbidden-before (cdr (assq 'P1 forbidden-before))))
+           (total-score 0.0)
+           (count 0))
+      (when required
+        (let* ((found (cl-intersection required used-tools :test #'string=))
+               (score (/ (float (length found)) (max 1 (length required)))))
+          (cl-incf total-score score)
+          (cl-incf count)))
+      (when p1-forbidden
+        (let* ((p1-tools (if (gptel-workflow--phase-active-p run 'P1)
+                             used-tools
+                           nil))
+               (violations (cl-intersection p1-forbidden p1-tools :test #'string=))
+               (score (if violations 0.0 1.0)))
+          (cl-incf total-score score)
+          (cl-incf count)))
+      (if (> count 0)
+          (/ total-score count)
+        1.0)))))
 
 (defun gptel-workflow--score-eight-keys (run eight-keys-cfg)
   "Score Eight Keys of RUN against EIGHT-KEYS-CFG."
@@ -864,24 +868,33 @@ Returns plist with :patterns, :issues, and :recommendations."
 
 (defun gptel-workflow--display-analysis (workflow-name analysis)
   "Display ANALYSIS for WORKFLOW-NAME."
-  (with-output-to-temp-buffer (format "*Workflow Analysis: %s*" workflow-name)
-    (princ (format "=== Workflow Analysis: %s ===\n\n" workflow-name))
-    (princ (format "Analyzed: %s\n" (plist-get analysis :analysis-timestamp)))
-    (princ (format "Total Tests: %d\n\n" (plist-get analysis :total-tests)))
-    (princ "--- Issues Detected ---\n")
-    (dolist (issue (plist-get analysis :issues))
-      (princ (format "  - %s: %d tests (%.0f%%)\n"
-                     (plist-get issue :type)
-                     (plist-get issue :count)
-                     (* 100 (plist-get issue :percentage)))))
-    (princ "\n--- Patterns ---\n")
-    (dolist (pattern (plist-get analysis :patterns))
-      (princ (format "  - %s: %S\n"
-                     (plist-get pattern :type)
-                     (plist-get pattern :tools))))
-    (princ "\n--- Recommendations ---\n")
-    (dolist (rec (plist-get analysis :recommendations))
-      (princ (format "  - %s\n" rec)))))
+  (when (null analysis)
+    (error "[workflow-bench] Cannot display nil analysis for %s" workflow-name))
+  (let* ((total-tests (or (plist-get analysis :total-tests) 0))
+         (timestamp (or (plist-get analysis :analysis-timestamp) "N/A"))
+         (issues (or (plist-get analysis :issues) '()))
+         (patterns (or (plist-get analysis :patterns) '()))
+         (recommendations (or (plist-get analysis :recommendations) '())))
+    (when (zerop total-tests)
+      (message "[workflow-bench] Warning: analysis for %s has zero tests" workflow-name))
+    (with-output-to-temp-buffer (format "*Workflow Analysis: %s*" workflow-name)
+      (princ (format "=== Workflow Analysis: %s ===\n\n" workflow-name))
+      (princ (format "Analyzed: %s\n" timestamp))
+      (princ (format "Total Tests: %d\n\n" total-tests))
+      (princ "--- Issues Detected ---\n")
+      (dolist (issue issues)
+        (princ (format "  - %s: %d tests (%.0f%%)\n"
+                       (or (plist-get issue :type) "unknown")
+                       (or (plist-get issue :count) 0)
+                       (* 100 (or (plist-get issue :percentage) 0)))))
+      (princ "\n--- Patterns ---\n")
+      (dolist (pattern patterns)
+        (princ (format "  - %s: %S\n"
+                       (or (plist-get pattern :type) "unknown")
+                       (or (plist-get pattern :tools) '()))))
+      (princ "\n--- Recommendations ---\n")
+      (dolist (rec recommendations)
+        (princ (format "  - %s\n" rec))))))
 
 (defun gptel-workflow-generate-improvements (workflow-name)
   "Generate improvement suggestions for WORKFLOW-NAME using analyzer subagent.

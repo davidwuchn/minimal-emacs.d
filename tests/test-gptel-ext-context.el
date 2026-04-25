@@ -12,14 +12,19 @@
 
 (require 'ert)
 
+(declare-function my/gptel--threshold-values "gptel-ext-context")
+(declare-function my/gptel--maybe-auto-delegate-advice "gptel-ext-context")
+
 ;;; Mock variables
 
 (defvar gptel-mode nil)
 (defvar gptel-directives nil)
+(defvar my/gptel-auto-delegate-enabled t)
 (defvar my/gptel-auto-compact-enabled t)
 (defvar my/gptel-auto-compact-threshold 0.75)
 (defvar my/gptel-auto-compact-min-chars 4000)
 (defvar my/gptel-auto-compact-min-interval 45)
+(defvar my/gptel-default-context-window 128000)
 (defvar-local my/gptel-auto-compact-running nil)
 (defvar-local my/gptel-auto-compact-last-run nil)
 
@@ -137,8 +142,13 @@
 
 (ert-deftest context/threshold-values/falls-back-to-default-window ()
   "Threshold calculation should fall back to the default context window."
-  (load-file "lisp/modules/gptel-ext-context.el")
-  (let ((my/gptel-default-context-window 128000))
+  (let* ((repo-root (or (locate-dominating-file default-directory "lisp/modules")
+                        default-directory))
+         (load-path (append (list (expand-file-name "lisp/modules" repo-root)
+                                  (expand-file-name "packages/gptel" repo-root))
+                            load-path))
+         (my/gptel-default-context-window 128000))
+    (load-file (expand-file-name "lisp/modules/gptel-ext-context.el" repo-root))
     (cl-letf (((symbol-function 'my/gptel--current-tokens)
                (lambda () 1000))
               ((symbol-function 'my/gptel--context-window)
@@ -147,6 +157,66 @@
                (lambda () 0.75)))
       (should (equal (my/gptel--threshold-values)
                      (list 1000 128000 0.75 96000.0))))))
+
+(ert-deftest context/threshold-values/does-not-require-plusp ()
+  "Threshold calculation should not depend on the obsolete `plusp' helper."
+  (load-file "lisp/modules/gptel-ext-context.el")
+  (let ((my/gptel-default-context-window 128000)
+        (had-plusp (fboundp 'plusp))
+        (old-plusp (and (fboundp 'plusp) (symbol-function 'plusp))))
+    (unwind-protect
+        (progn
+          (when had-plusp
+            (fmakunbound 'plusp))
+          (cl-letf (((symbol-function 'my/gptel--current-tokens)
+                     (lambda () 1000))
+                    ((symbol-function 'my/gptel--context-window)
+                     (lambda () 64000))
+                    ((symbol-function 'my/gptel--effective-threshold)
+                     (lambda () 0.75)))
+            (should (equal (my/gptel--threshold-values)
+                           (list 1000 64000 0.75 48000.0)))))
+      (when had-plusp
+        (fset 'plusp old-plusp)))))
+
+(ert-deftest context/auto-delegate/does-not-require-plusp ()
+  "Auto-delegation logging should not depend on the obsolete `plusp' helper."
+  (load-file "lisp/modules/gptel-ext-context.el")
+  (let ((my/gptel-auto-delegate-enabled t)
+        (gptel-mode t)
+        (had-plusp (fboundp 'plusp))
+        (old-plusp (and (fboundp 'plusp) (symbol-function 'plusp)))
+        delegated
+        orig-called)
+    (unwind-protect
+        (progn
+          (when had-plusp
+            (fmakunbound 'plusp))
+          (with-temp-buffer
+            (let ((result
+                   (cl-letf (((symbol-function 'my/gptel--delegate-threshold-exceeded-p)
+                              (lambda () t))
+                             ((symbol-function 'my/gptel--current-tokens)
+                              (lambda () 1000))
+                             ((symbol-function 'my/gptel--context-window)
+                              (lambda () 64000))
+                             ((symbol-function 'my/gptel--do-auto-delegate)
+                              (lambda (prompt callback)
+                                (setq delegated (list prompt callback))
+                                'delegated))
+                             ((symbol-function 'message)
+                              (lambda (&rest _args) nil)))
+                     (my/gptel--maybe-auto-delegate-advice
+                      (lambda (&rest _args)
+                        (setq orig-called t)
+                        'original)
+                      "prompt"
+                      :callback 'done))))
+              (should (eq result 'delegated)))
+            (should (equal delegated '("prompt" done)))
+            (should-not orig-called)))
+      (when had-plusp
+        (fset 'plusp old-plusp)))))
 
 ;;; Tests for my/gptel--directive-text
 
