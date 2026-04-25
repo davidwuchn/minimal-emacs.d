@@ -270,31 +270,33 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                  (run-counts (or (plist-get info :doom-loop-run-counts) nil))
                  (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
                  (n my/gptel-doom-loop-threshold)
-                 (fps-end (last fps))
-                 (prev-fp (car fps-end))
-                 (current-run (or (plist-get info :doom-loop-current-run) 0)))
+                 prev-fp)
             (setq info (plist-put info :doom-loop-fingerprints (append fps new-fps)))
-            (dolist (fp new-fps)
-              (let ((current-run
-                     (if (and prev-fp (equal prev-fp fp))
-                         (1+ (or (alist-get fp run-counts nil nil #'string=) 0))
-                       1)))
-                (setq run-counts (cons (cons fp current-run) run-counts))
-                (setq info (plist-put info :doom-loop-run-counts run-counts))
-                (setf (gptel-fsm-info fsm) info)
-                (when (>= current-run n)
-                  (let ((error-message
+            (dolist (fp new-fps run-counts)
+              (let* ((prev-run (or (alist-get fp run-counts nil nil #'string=) 0))
+                     (current-run (if (and prev-fp (equal prev-fp fp))
+                                      (1+ prev-run)
+                                    1)))
+                (setq run-counts (cons (cons fp current-run) run-counts))))
+            (setq info (plist-put info :doom-loop-run-counts run-counts))
+            (setf (gptel-fsm-info fsm) info)
+            (when-let* ((worst (cl-loop for (fp . count) in run-counts
+                                        maximize count into max-count
+                                        finally return (when (>= max-count n)
+                                                         (cons (caar run-counts) max-count))))
+                        (aborting-fp (car worst))
+                        (run-count (cdr worst))
+                        (tool-name (car (split-string aborting-fp ":" t)))
+                        (error-message
                          (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
  with identical arguments.  Try a different approach or break the task into smaller steps."
-                                 (car (split-string fp ":" t)) current-run)))
-                    (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
-                             (car (split-string fp ":" t)) current-run)
-                    (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
-                    (funcall (plist-get info :callback) error-message info))
-                  (setq info (gptel-fsm-info fsm))
-                  (gptel--fsm-transition fsm 'DONE)
-                  (cl-return-from my/gptel--detect-doom-loop))
-                (setq prev-fp fp)))))))))
+                                 tool-name run-count)))
+              (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
+                       tool-name run-count)
+              (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
+              (funcall (plist-get info :callback) error-message info)
+              (gptel--fsm-transition fsm 'DONE)
+              (cl-return-from my/gptel--detect-doom-loop))))))))
 
 (cl-defun my/gptel--detect-inspection-thrash (fsm)
   "Abort FSM when it stays in same-file read-only inspection for too long.
