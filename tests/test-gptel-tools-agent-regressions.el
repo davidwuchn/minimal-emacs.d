@@ -16317,6 +16317,51 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (kill-buffer request-buf))
       (delete-directory project-root t))))
 
+(ert-deftest regression/auto-workflow/discard-worktree-buffers-kills-buffer-after-retries-exhaust ()
+  "Deferred cleanup should still kill the buffer after retry attempts run out."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1"
+                                         project-root))
+         (gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))
+         (gptel-auto-workflow--project-buffers (make-hash-table :test 'equal))
+         (request-buf (generate-new-buffer "*gptel-agent:agent-riven-exp1@test*"))
+         (live-process nil)
+         (scheduled-callbacks nil))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer request-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (setq live-process
+                (make-process :name "aw-live-worktree-buffer-retry"
+                              :buffer request-buf
+                              :noquery t
+                              :command (list shell-file-name shell-command-switch "sleep 30")))
+          (puthash (file-name-as-directory worktree-dir)
+                   request-buf
+                   gptel-auto-workflow--worktree-buffers)
+          (puthash (file-name-as-directory worktree-dir)
+                   request-buf
+                   gptel-auto-workflow--project-buffers)
+          (cl-letf (((symbol-function 'gptel-abort)
+                     (lambda (_buffer) nil))
+                    ((symbol-function 'run-at-time)
+                     (lambda (_secs _repeat fn &rest _args)
+                       (push fn scheduled-callbacks)
+                       'fake-timer)))
+            (should (= 1 (gptel-auto-workflow--discard-worktree-buffers worktree-dir)))
+            (should (buffer-live-p request-buf))
+            (should scheduled-callbacks)
+            (while scheduled-callbacks
+              (let ((callback (pop scheduled-callbacks)))
+                (funcall callback)))
+            (should-not (buffer-live-p request-buf))))
+      (when (and live-process (process-live-p live-process))
+        (delete-process live-process))
+      (when (buffer-live-p request-buf)
+        (kill-buffer request-buf))
+      (delete-directory project-root t))))
+
 (ert-deftest regression/auto-workflow/run-with-targets-rebinds-run-root-between-targets ()
   "Advancing to the next target should return to the stable project root."
   (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
