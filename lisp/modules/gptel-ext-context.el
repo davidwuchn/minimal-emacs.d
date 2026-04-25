@@ -197,9 +197,9 @@ DashScope uses lower threshold due to server-side timeout limits."
 Returns (tokens window threshold-fraction percentage-threshold)."
   (let* ((tokens (my/gptel--current-tokens))
          (window (let ((value (my/gptel--context-window)))
-                   (if (and (integerp value) (plusp value))
-                       value
-                     my/gptel-default-context-window)))
+                    (if (and (integerp value) (> value 0))
+                        value
+                      my/gptel-default-context-window)))
          (threshold-fraction (my/gptel--effective-threshold))
          (percentage-threshold (* window threshold-fraction)))
     (list tokens window threshold-fraction percentage-threshold)))

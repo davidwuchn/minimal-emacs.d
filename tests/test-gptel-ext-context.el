@@ -148,6 +148,27 @@
       (should (equal (my/gptel--threshold-values)
                      (list 1000 128000 0.75 96000.0))))))
 
+(ert-deftest context/threshold-values/does-not-require-plusp ()
+  "Threshold calculation should not depend on the obsolete `plusp' helper."
+  (load-file "lisp/modules/gptel-ext-context.el")
+  (let ((my/gptel-default-context-window 128000)
+        (had-plusp (fboundp 'plusp))
+        (old-plusp (and (fboundp 'plusp) (symbol-function 'plusp))))
+    (unwind-protect
+        (progn
+          (when had-plusp
+            (fmakunbound 'plusp))
+          (cl-letf (((symbol-function 'my/gptel--current-tokens)
+                     (lambda () 1000))
+                    ((symbol-function 'my/gptel--context-window)
+                     (lambda () 64000))
+                    ((symbol-function 'my/gptel--effective-threshold)
+                     (lambda () 0.75)))
+            (should (equal (my/gptel--threshold-values)
+                           (list 1000 64000 0.75 48000.0)))))
+      (when had-plusp
+        (fset 'plusp old-plusp)))))
+
 ;;; Tests for my/gptel--directive-text
 
 (ert-deftest context/directive/string-value ()
