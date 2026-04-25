@@ -2910,8 +2910,7 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
                            (process-live-p proc)
                            (> attempts-left 0))
                       (defer-kill buf (1- attempts-left)))
-                     ((or (null proc)
-                          (not (process-live-p proc)))
+                     (t
                       (let ((kill-buffer-query-functions nil))
                         (kill-buffer buf)))))))))
            (retire-buffer (buf)
