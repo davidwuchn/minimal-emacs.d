@@ -7369,9 +7369,146 @@ failure."
             (should (equal aborted-buffers (list request-buf)))
             (should (= (length callback-results) 1))
             (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
+             (should (= (hash-table-count my/gptel--agent-task-state) 0)))
+         (when (buffer-live-p request-buf)
+           (kill-buffer request-buf))))))
+
+(ert-deftest regression/subagent/curl-temp-write-message-does-not-extend-timeout ()
+  "Temp curl payload write messages must not extend executor idle timeouts."
+  (let ((my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeouts nil)
+        (aborted-buffers nil)
+        (callback-results nil)
+        (now 0))
+    (clrhash my/gptel--agent-task-state)
+    (let ((request-buf (generate-new-buffer " *gptel-request-curl-write*"))
+          (activity-dir (make-temp-file "gptel-task-curl-write-" t)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'current-time)
+                     (lambda ()
+                       (seconds-to-time now)))
+                    ((symbol-function 'time-since)
+                     (lambda (then)
+                       (seconds-to-time (- now (float-time then)))))
+                    ((symbol-function 'run-at-time)
+                     (lambda (secs repeat fn &rest _args)
+                       (cond
+                        ((and repeat (= secs my/gptel-subagent-progress-interval))
+                         :fake-progress)
+                        ((and (null repeat) (= secs my/gptel-agent-task-timeout))
+                         (let ((timer (cons :timeout fn)))
+                           (setq scheduled-timeouts
+                                 (append scheduled-timeouts (list timer)))
+                           timer))
+                        (t :fake-timer))))
+                    ((symbol-function 'timerp)
+                     (lambda (obj)
+                       (and (consp obj) (eq (car obj) :timeout))))
+                    ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-workflow--state-active-p)
+                     (lambda (state)
+                       (and state (not (plist-get state :done)))))
+                    ((symbol-function 'gptel-abort)
+                     (lambda (buffer)
+                       (push buffer aborted-buffers)))
+                    ((symbol-function 'my/gptel--call-gptel-agent-task)
+                     (lambda (&rest _args)
+                       (my/gptel--register-agent-task-buffer request-buf)))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (let ((default-directory activity-dir))
+              (with-temp-buffer
+                (my/gptel--agent-task-with-timeout
+                 (lambda (result) (push result callback-results))
+                 "executor" "desc" "prompt")))
+            (should (= (length scheduled-timeouts) 1))
+            (setq now 30)
+            (with-temp-buffer
+              (let ((default-directory activity-dir))
+                (my/gptel--agent-task-note-message-activity
+                 "Wrote %s"
+                 "/var/folders/example/T/gptel-curl-dataabc123.json")))
+            (setq now 50)
+            (funcall (cdr (car scheduled-timeouts)))
+            (should (equal aborted-buffers (list request-buf)))
+            (should (= (length callback-results) 1))
+            (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
             (should (= (hash-table-count my/gptel--agent-task-state) 0)))
         (when (buffer-live-p request-buf)
-          (kill-buffer request-buf))))))
+          (kill-buffer request-buf))
+        (when (file-directory-p activity-dir)
+          (delete-directory activity-dir t))))))
+
+(ert-deftest regression/subagent/recentf-cleanup-message-does-not-extend-timeout ()
+  "recentf cleanup chatter must not extend executor idle timeouts."
+  (let ((my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeouts nil)
+        (aborted-buffers nil)
+        (callback-results nil)
+        (now 0))
+    (clrhash my/gptel--agent-task-state)
+    (let ((request-buf (generate-new-buffer " *gptel-request-recentf*"))
+          (activity-dir (make-temp-file "gptel-task-recentf-" t)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'current-time)
+                     (lambda ()
+                       (seconds-to-time now)))
+                    ((symbol-function 'time-since)
+                     (lambda (then)
+                       (seconds-to-time (- now (float-time then)))))
+                    ((symbol-function 'run-at-time)
+                     (lambda (secs repeat fn &rest _args)
+                       (cond
+                        ((and repeat (= secs my/gptel-subagent-progress-interval))
+                         :fake-progress)
+                        ((and (null repeat) (= secs my/gptel-agent-task-timeout))
+                         (let ((timer (cons :timeout fn)))
+                           (setq scheduled-timeouts
+                                 (append scheduled-timeouts (list timer)))
+                           timer))
+                        (t :fake-timer))))
+                    ((symbol-function 'timerp)
+                     (lambda (obj)
+                       (and (consp obj) (eq (car obj) :timeout))))
+                    ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-workflow--state-active-p)
+                     (lambda (state)
+                       (and state (not (plist-get state :done)))))
+                    ((symbol-function 'gptel-abort)
+                     (lambda (buffer)
+                       (push buffer aborted-buffers)))
+                    ((symbol-function 'my/gptel--call-gptel-agent-task)
+                     (lambda (&rest _args)
+                       (my/gptel--register-agent-task-buffer request-buf)))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (let ((default-directory activity-dir))
+              (with-temp-buffer
+                (my/gptel--agent-task-with-timeout
+                 (lambda (result) (push result callback-results))
+                 "executor" "desc" "prompt")))
+            (should (= (length scheduled-timeouts) 1))
+            (setq now 25)
+            (with-temp-buffer
+              (let ((default-directory activity-dir))
+                (my/gptel--agent-task-note-message-activity
+                 "Cleaning up the recentf list...")))
+            (setq now 30)
+            (with-temp-buffer
+              (let ((default-directory activity-dir))
+                (my/gptel--agent-task-note-message-activity
+                 "File %s removed from the recentf list"
+                 "/tmp/old-optimize-worktree/lisp/modules/old-target.el")))
+            (setq now 50)
+            (funcall (cdr (car scheduled-timeouts)))
+            (should (equal aborted-buffers (list request-buf)))
+            (should (= (length callback-results) 1))
+            (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
+            (should (= (hash-table-count my/gptel--agent-task-state) 0)))
+        (when (buffer-live-p request-buf)
+          (kill-buffer request-buf))
+        (when (file-directory-p activity-dir)
+          (delete-directory activity-dir t))))))
 
 (ert-deftest regression/subagent/timeout-aborts-routed-request-buffer ()
   "Timeout abort should target the live routed request buffer."
@@ -14410,9 +14547,33 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                    my/gptel--agent-task-state)
           (my/gptel--register-agent-task-buffer buf)
           (with-current-buffer buf
-            (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
+           (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
             (should-not (local-variable-p 'process-environment)))
           (should (eq (plist-get (gethash 4 my/gptel--agent-task-state) :request-buf)
+                      buf)))
+      (kill-buffer buf))))
+
+(ert-deftest regression/subagent/register-agent-task-buffer-defers-env-while-persistence-deferred ()
+  "Request buffer registration should honor launch-time env deferral even after re-entry."
+  (let* ((buf (generate-new-buffer "*test-subagent-deferred-env*"))
+         (task-env '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+                     "PATH=/usr/bin"))
+         (my/gptel--agent-task-state (make-hash-table :test 'eql))
+         (my/gptel--current-agent-task-id 5)
+         (gptel-auto-workflow--defer-subagent-env-persistence t))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my/gptel--agent-task-buffer-priority)
+                   (lambda (_state _buffer) 0)))
+          (puthash 5 (list :request-buf nil
+                           :launching nil
+                           :process-environment task-env)
+                   my/gptel--agent-task-state)
+          (my/gptel--register-agent-task-buffer buf)
+          (with-current-buffer buf
+            (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
+            (should-not (local-variable-p 'process-environment)))
+          (should (eq (plist-get (gethash 5 my/gptel--agent-task-state) :request-buf)
                       buf)))
       (kill-buffer buf))))
 
