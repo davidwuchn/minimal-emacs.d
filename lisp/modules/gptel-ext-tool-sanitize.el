@@ -186,7 +186,7 @@ or `Grep' but never switch to a write-capable tool."
   :type 'integer
   :group 'gptel)
 
-(defcustom my/gptel-inspection-thrash-bytes-per-extra-step 16384
+(defcustom my/gptel-inspection-thrash-bytes-per-extra-step 8192
   "Bytes of readable file size that earn one extra inspection-thrash step.
 Larger files need a bit more exploration headroom before a same-file read-only
 streak should be treated as a stuck turn."
