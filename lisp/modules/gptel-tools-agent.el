@@ -1850,12 +1850,32 @@ TIMESTAMP defaults to `current-time'."
                                (my/gptel--path-within-directory-p dir activity-dir))
                           (and file
                                (my/gptel--path-within-directory-p file activity-dir))))
-             (my/gptel--agent-task-note-activity task-id activity-time))))
+              (my/gptel--agent-task-note-activity task-id activity-time))))
        my/gptel--agent-task-state))))
 
-(defun my/gptel--agent-task-note-message-activity (&rest _args)
+(defun my/gptel--ignore-agent-activity-message-p (text)
+  "Return non-nil when TEXT is unrelated chatter for executor activity."
+  (or (and (stringp text)
+           (not (null (string-match-p
+                       "\\`Cleaning up the recentf list\\(?:\\.\\.\\.\\(?:done.*\\)?\\)?\\'"
+                       text))))
+      (and (stringp text)
+           (not (null (string-match-p
+                       "\\`File .+ removed from the recentf list\\'"
+                       text))))
+      (and (stringp text)
+           (string-match "\\`Wrote \\(.+\\)\\'" text)
+           (string-prefix-p "gptel-curl-data"
+                            (file-name-nondirectory (match-string 1 text))))))
+
+(defun my/gptel--agent-task-note-message-activity (format-string &rest args)
   "Treat worktree-context messages as executor activity."
-  (my/gptel--agent-task-note-context-activity))
+  (let ((text (and (stringp format-string)
+                   (condition-case nil
+                       (apply #'format format-string args)
+                     (error format-string)))))
+    (unless (my/gptel--ignore-agent-activity-message-p text)
+      (my/gptel--agent-task-note-context-activity))))
 
 (while (advice-member-p #'my/gptel--agent-task-note-message-activity 'message)
   (advice-remove 'message #'my/gptel--agent-task-note-message-activity))
@@ -1888,7 +1908,8 @@ TIMESTAMP defaults to `current-time'."
         (puthash my/gptel--current-agent-task-id
                  updated-state
                  my/gptel--agent-task-state)
-        (when (and (not (plist-get updated-state :launching))
+        (when (and (not gptel-auto-workflow--defer-subagent-env-persistence)
+                   (not (plist-get updated-state :launching))
                    (plist-get updated-state :process-environment)
                    (fboundp 'gptel-auto-workflow--persist-subagent-process-environment))
           (gptel-auto-workflow--persist-subagent-process-environment
