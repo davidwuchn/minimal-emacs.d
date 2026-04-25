@@ -247,6 +247,8 @@ it when the current transient implementation is too old."
 (defun gptel-auto-workflow--activate-live-root (proj-root)
   "Retarget the live daemon to PROJ-ROOT for queued workflow actions."
   (let ((root (file-name-as-directory (expand-file-name proj-root))))
+    (when (fboundp 'gptel-auto-workflow--discard-missing-worktree-buffers)
+      (gptel-auto-workflow--discard-missing-worktree-buffers))
     (setq default-directory root
           user-emacs-directory root
           gptel-auto-workflow--project-root-override root
@@ -2895,52 +2897,72 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
              (delete-dups
               (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
                     (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root))))
-             (killed 0))
-       (cl-labels
-           ((defer-kill (buf attempts-left)
-              (run-at-time
-               1 nil
-               (lambda ()
-                 (when (buffer-live-p buf)
-                   (let ((proc (ignore-errors (get-buffer-process buf))))
-                     (cond
-                      ((and (processp proc)
-                            (process-live-p proc)
-                            (> attempts-left 0))
-                       (defer-kill buf (1- attempts-left)))
-                      ((or (null proc)
-                           (not (process-live-p proc)))
-                       (let ((kill-buffer-query-functions nil))
-                         (kill-buffer buf)))))))))
-            (retire-buffer (buf)
-              (setq-local default-directory safe-default-directory)
-              (when (fboundp 'gptel-abort)
-                (ignore-errors (gptel-abort buf)))
-              (let ((proc (ignore-errors (get-buffer-process buf))))
-                (if (and (processp proc) (process-live-p proc))
-                    (defer-kill buf 30)
-                  (let ((kill-buffer-query-functions nil))
-                    (kill-buffer buf))))))
-         (dolist (buf (delete-dups (append tracked (buffer-list))))
-           (when (buffer-live-p buf)
-             (with-current-buffer buf
-               (let ((buf-dir
-                      (and (stringp default-directory)
-                           (file-name-as-directory
-                            (expand-file-name default-directory)))))
-                 (when (and buf-dir
-                            (string-prefix-p root buf-dir)
-                            (or (memq buf tracked)
-                                (string-prefix-p "*gptel-agent:" (buffer-name buf))))
-                   (retire-buffer buf)
-                   (cl-incf killed)))))))
-       (when (and (boundp 'gptel-auto-workflow--worktree-buffers)
-                  (hash-table-p gptel-auto-workflow--worktree-buffers))
-         (remhash root gptel-auto-workflow--worktree-buffers))
-       (when (and (boundp 'gptel-auto-workflow--project-buffers)
+            (killed 0))
+      (cl-labels
+          ((defer-kill (buf attempts-left)
+             (run-at-time
+              1 nil
+              (lambda ()
+                (when (buffer-live-p buf)
+                  (let ((proc (ignore-errors (get-buffer-process buf))))
+                    (cond
+                     ((and (processp proc)
+                           (process-live-p proc)
+                           (> attempts-left 0))
+                      (defer-kill buf (1- attempts-left)))
+                     ((or (null proc)
+                          (not (process-live-p proc)))
+                      (let ((kill-buffer-query-functions nil))
+                        (kill-buffer buf)))))))))
+           (retire-buffer (buf)
+             (setq-local default-directory safe-default-directory)
+             (when (fboundp 'gptel-abort)
+               (ignore-errors (gptel-abort buf)))
+             (let ((proc (ignore-errors (get-buffer-process buf))))
+               (if (and (processp proc) (process-live-p proc))
+                   (defer-kill buf 30)
+                 (let ((kill-buffer-query-functions nil))
+                   (kill-buffer buf))))))
+        (dolist (buf (delete-dups (append tracked (buffer-list))))
+          (when (buffer-live-p buf)
+            (with-current-buffer buf
+              (let ((buf-dir
+                     (and (stringp default-directory)
+                          (file-name-as-directory
+                           (expand-file-name default-directory)))))
+                (when (and buf-dir
+                           (string-prefix-p root buf-dir)
+                           (or (memq buf tracked)
+                               (string-prefix-p "*gptel-agent:" (buffer-name buf))))
+                  (retire-buffer buf)
+                  (cl-incf killed)))))))
+      (when (and (boundp 'gptel-auto-workflow--worktree-buffers)
+                 (hash-table-p gptel-auto-workflow--worktree-buffers))
+        (remhash root gptel-auto-workflow--worktree-buffers))
+      (when (and (boundp 'gptel-auto-workflow--project-buffers)
                  (hash-table-p gptel-auto-workflow--project-buffers))
         (remhash root gptel-auto-workflow--project-buffers))
       killed)))
+
+(defun gptel-auto-workflow--discard-missing-worktree-buffers ()
+  "Discard tracked workflow buffers rooted at deleted worktrees."
+  (let (roots)
+    (dolist (table-symbol '(gptel-auto-workflow--worktree-buffers
+                            gptel-auto-workflow--project-buffers))
+      (when-let ((table (and (boundp table-symbol)
+                             (symbol-value table-symbol))))
+        (when (hash-table-p table)
+          (maphash (lambda (root _buf)
+                     (when (and (stringp root)
+                                (> (length root) 0)
+                                (not (file-directory-p root)))
+                       (push root roots)))
+                   table))))
+    (let ((discarded 0))
+      (dolist (root (delete-dups roots))
+        (setq discarded (+ discarded
+                           (or (gptel-auto-workflow--discard-worktree-buffers root) 0))))
+      discarded)))
 
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
   "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch.

@@ -492,7 +492,7 @@ Only continues if tools were called AND model seems to be
 planning without action.  Also checks continuation count
 limit for early exit."
   (when (and (gptel-agent-loop--task-p state)
-             (numberp (gptel-agent-loop--task-continuation-count state)))
+             (numberp (gptel-agent-loop--continuation-count state)))
     (unless (stringp resp)
       (setq resp ""))
     (let ((cont-count (gptel-agent-loop--continuation-count state)))

@@ -64,7 +64,8 @@
 (defun test--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error."
   (or (and (stringp error-data)
-            (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
+            (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests"
+                            (downcase error-data)))
       (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
       (and (listp error-data)
            (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit\\|access_terminated_error\\|reached your usage limit\\|quota will be refreshed in the next cycle"
@@ -205,6 +206,12 @@
   (should (test--transient-error-p "Gateway Timeout" nil))
   (should (test--transient-error-p "Overloaded" nil))
   (should (test--transient-error-p "Too Many Requests" nil)))
+
+(ert-deftest retry/transient-error/string-matches-case-insensitively ()
+  "Should treat transient string errors case-insensitively."
+  (should (my/gptel--transient-error-p "malformed json response" nil))
+  (should (my/gptel--transient-error-p "SERVICE UNAVAILABLE" nil))
+  (should (my/gptel--transient-error-p "too many requests" nil)))
 
 (ert-deftest retry/transient-error/http-status-codes ()
   "Should detect transient HTTP status codes."
