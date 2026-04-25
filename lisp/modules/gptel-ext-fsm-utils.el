@@ -249,15 +249,7 @@ where first FSM was always returned (potentially wrong parent FSM).
 
 PROACTIVE MITIGATION: Uses registration order as proxy for nesting level,
 avoiding need for explicit parent-child tracking."
-  (let* ((all-fsms (my/gptel--collect-all-fsms object))
-         (count (length all-fsms)))
-    (cond
-     ((zerop count) nil)
-     ((= count 1) (car all-fsms))
-     (t
-      ;; Multiple FSMs: prefer most recently registered
-      ;; (likely the child FSM in nested scenarios)
-      (car (last all-fsms))))))
+  (car (last (my/gptel--collect-all-fsms object))))
 
 (defun my/gptel--collect-all-fsms (object)
   "Collect all FSMs found in OBJECT as a list.
@@ -297,6 +289,23 @@ improving testability and reducing cognitive load."
       (collect object)
       (nreverse result))))
 
+(defun my/gptel--fsm-count-internal (object seen)
+  "Count FSMs in OBJECT using Seen hash table. Returns count.
+ASSUMPTION: SEEN is pre-allocated hash table with eq test.
+EDGE CASE: Nil object returns 0.
+EDGE CASE: Non-FSM atoms return 0."
+  (cond
+   ((consp object)
+    (unless (gethash object seen)
+      (puthash object t seen)
+      (+ (my/gptel--fsm-count-internal (car object) seen)
+         (my/gptel--fsm-count-internal (cdr object) seen))))
+   ((null object) 0)
+   ((my/gptel--fsm-p object)
+    (puthash object t seen)
+    1)
+   (t 0)))
+
 (defun my/gptel--fsm-depth (object)
   "Return nesting depth of FSMs in OBJECT.
 
@@ -318,7 +327,8 @@ ADAPTS TO: Provides quantitative measure of nesting for decision making.
 
 PROACTIVE MITIGATION: Enables detection of nested scenarios before
 wrong FSM selection occurs."
-  (length (my/gptel--collect-all-fsms object)))
+  (let ((seen (make-hash-table :test 'eq)))
+    (my/gptel--fsm-count-internal object seen)))
 
 ;;; Registry Validation
 
