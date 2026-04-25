@@ -2296,8 +2296,49 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (if original-transient-layout
           (fset 'transient--set-layout original-transient-layout)
         (when (fboundp 'transient--set-layout)
-          (fmakunbound 'transient--set-layout)))
-      (delete-directory project-root t))))
+           (fmakunbound 'transient--set-layout)))
+       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/activate-live-root-prefers-live-module-paths ()
+  "Activating a live root should make `locate-library' prefer that root's modules."
+  (defvar minimal-emacs-user-directory)
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-live-modules" t)))
+         (modules-dir (expand-file-name "lisp/modules" project-root))
+         (bootstrap-file (expand-file-name "gptel-auto-workflow-bootstrap.el" modules-dir))
+         (live-module (expand-file-name "gptel-ext-context.el" modules-dir))
+         (stale-root (make-temp-file "aw-stale-modules" t))
+         (stale-dir (expand-file-name "lisp/modules" stale-root))
+         (stale-module (expand-file-name "gptel-ext-context.el" stale-dir))
+         (default-directory "/tmp/original-root/")
+         (user-emacs-directory "/tmp/original-root/")
+         (minimal-emacs-user-directory "/tmp/original-root/")
+         (gptel-auto-workflow-projects '("/tmp/original-root/"))
+         (gptel-auto-workflow--current-project "/tmp/drift/")
+         (gptel-auto-workflow--run-project-root "/tmp/drift/")
+         (gptel-auto-workflow--project-root-override "/tmp/drift/")
+         (load-path (list stale-dir)))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          (make-directory stale-dir t)
+          (with-temp-file bootstrap-file
+            (insert
+             "(defun gptel-auto-workflow-bootstrap--seed-load-path (root)\n"
+             "  (let ((dir (expand-file-name \"lisp/modules\" root)))\n"
+             "    (when (file-directory-p dir)\n"
+             "      (setq load-path (cons dir (delete dir load-path))))))\n"))
+          (with-temp-file live-module
+            (insert ";;; live module\n"))
+          (with-temp-file stale-module
+            (insert ";;; stale module\n"))
+          (should (equal (locate-library "gptel-ext-context") stale-module))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--prefer-elpa-transient)
+                     (lambda (&optional _root) nil)))
+            (should (equal (gptel-auto-workflow--activate-live-root project-root)
+                           project-root)))
+          (should (equal (locate-library "gptel-ext-context") live-module)))
+      (delete-directory project-root t)
+      (delete-directory stale-root t))))
 
 (ert-deftest regression/auto-workflow/prefer-elpa-transient-installs-missing-package ()
   "Preferring ELPA transient should repair broken stubs by installing a real package."
@@ -7679,22 +7720,24 @@ failure."
                       loaded))
       (should (equal reloaded "/tmp/project")))))
 
-(ert-deftest regression/auto-workflow/reload-live-support-reloads-retry-module ()
-  "Warm-daemon workflow reloads should refresh retry support too."
+(ert-deftest regression/auto-workflow/reload-live-support-reloads-context-and-retry-modules ()
+  "Warm-daemon workflow reloads should refresh context and retry support."
   (let ((loaded nil))
     (cl-letf (((symbol-function 'load-file)
-               (lambda (path)
-                 (push path loaded)
-                 t))
-              ((symbol-function 'nucleus-presets-setup-agents)
-               (lambda () t))
-              ((symbol-function 'nucleus--after-agent-update)
-               (lambda () t)))
-      (gptel-auto-workflow--reload-live-support "/tmp/project")
-      (should (member (expand-file-name "lisp/modules/gptel-ext-retry.el" "/tmp/project")
-                      loaded))
-      (should (member (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" "/tmp/project")
-                      loaded)))))
+                (lambda (path)
+                  (push path loaded)
+                  t))
+               ((symbol-function 'nucleus-presets-setup-agents)
+                (lambda () t))
+               ((symbol-function 'nucleus--after-agent-update)
+                (lambda () t)))
+       (gptel-auto-workflow--reload-live-support "/tmp/project")
+       (should (member (expand-file-name "lisp/modules/gptel-ext-context.el" "/tmp/project")
+                       loaded))
+       (should (member (expand-file-name "lisp/modules/gptel-ext-retry.el" "/tmp/project")
+                       loaded))
+       (should (member (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" "/tmp/project")
+                       loaded)))))
 
 (ert-deftest regression/auto-workflow/cron-safe-disables-headless-on-skip ()
   "Cron-safe should restore headless suppression when the active-use guard skips."

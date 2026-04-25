@@ -217,6 +217,33 @@ it when the current transient implementation is too old."
                        (not (string-prefix-p dir current-lib)))))
         (load (file-name-sans-extension lib) nil 'nomessage))
       dir)))
+
+(defun gptel-auto-workflow--seed-live-root-load-path (&optional proj-root)
+  "Prepend repo-local load paths for PROJ-ROOT to `load-path'."
+  (let* ((root (file-name-as-directory
+                (expand-file-name
+                 (or proj-root
+                     (gptel-auto-workflow--default-dir)))))
+         (bootstrap (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el" root))
+         (dirs nil))
+    (when (file-readable-p bootstrap)
+      (load-file bootstrap)
+      (when (fboundp 'gptel-auto-workflow-bootstrap--seed-load-path)
+        (gptel-auto-workflow-bootstrap--seed-load-path root)))
+    (setq dirs
+          (append
+           (list (expand-file-name "lisp/modules" root)
+                 (expand-file-name "lisp" root)
+                 (expand-file-name "packages/gptel" root)
+                 (expand-file-name "packages/gptel-agent" root)
+                 (expand-file-name "packages/ai-code" root))
+           (when (fboundp 'gptel-auto-workflow-bootstrap--elpa-dirs)
+             (gptel-auto-workflow-bootstrap--elpa-dirs root))))
+    (dolist (dir (reverse dirs))
+      (when (file-directory-p dir)
+        (setq load-path (cons dir (delete dir load-path)))))
+    dirs))
+
 (defun gptel-auto-workflow--activate-live-root (proj-root)
   "Retarget the live daemon to PROJ-ROOT for queued workflow actions."
   (let ((root (file-name-as-directory (expand-file-name proj-root))))
@@ -229,6 +256,7 @@ it when the current transient implementation is too old."
       (setq minimal-emacs-user-directory root))
     (when (boundp 'gptel-auto-workflow-projects)
       (setq gptel-auto-workflow-projects (list root)))
+    (gptel-auto-workflow--seed-live-root-load-path root)
     (gptel-auto-workflow--prefer-elpa-transient root)
     root))
 
@@ -9832,6 +9860,8 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
                 (or proj-root
                     (gptel-auto-workflow--default-dir)
                     default-directory)))))
+    (gptel-auto-workflow--seed-live-root-load-path root)
+    (load-file (expand-file-name "lisp/modules/gptel-ext-context.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-ext-retry.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root))
