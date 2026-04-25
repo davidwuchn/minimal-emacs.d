@@ -177,6 +177,45 @@
       (when had-plusp
         (fset 'plusp old-plusp)))))
 
+(ert-deftest context/auto-delegate/does-not-require-plusp ()
+  "Auto-delegation logging should not depend on the obsolete `plusp' helper."
+  (load-file "lisp/modules/gptel-ext-context.el")
+  (let ((my/gptel-auto-delegate-enabled t)
+        (gptel-mode t)
+        (had-plusp (fboundp 'plusp))
+        (old-plusp (and (fboundp 'plusp) (symbol-function 'plusp)))
+        delegated
+        orig-called)
+    (unwind-protect
+        (progn
+          (when had-plusp
+            (fmakunbound 'plusp))
+          (with-temp-buffer
+            (let ((result
+                   (cl-letf (((symbol-function 'my/gptel--delegate-threshold-exceeded-p)
+                              (lambda () t))
+                             ((symbol-function 'my/gptel--current-tokens)
+                              (lambda () 1000))
+                             ((symbol-function 'my/gptel--context-window)
+                              (lambda () 64000))
+                             ((symbol-function 'my/gptel--do-auto-delegate)
+                              (lambda (prompt callback)
+                                (setq delegated (list prompt callback))
+                                'delegated))
+                             ((symbol-function 'message)
+                              (lambda (&rest _args) nil)))
+                     (my/gptel--maybe-auto-delegate-advice
+                      (lambda (&rest _args)
+                        (setq orig-called t)
+                        'original)
+                      "prompt"
+                      :callback 'done))))
+              (should (eq result 'delegated)))
+            (should (equal delegated '("prompt" done)))
+            (should-not orig-called)))
+      (when had-plusp
+        (fset 'plusp old-plusp)))))
+
 ;;; Tests for my/gptel--directive-text
 
 (ert-deftest context/directive/string-value ()
