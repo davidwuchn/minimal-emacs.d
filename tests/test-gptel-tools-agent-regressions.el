@@ -3568,7 +3568,18 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
    (equal
     (gptel-auto-experiment--categorize-error
      "Aborted: executor task 'Experiment 1: optimize lisp/modules/gptel-tools-agent.el' was cancelled or timed out.")
-    '(:tool-error . "Subagent aborted"))))
+     '(:tool-error . "Subagent aborted"))))
+
+(ert-deftest regression/auto-experiment/reviewer-blocked-output-is-not-unknown-error ()
+  "Explicit reviewer BLOCKED output should not be logged as an unknown error."
+  (let ((review-output
+         "Reviewer result for task: Review changes before merge | ## BLOCKED: ignore-errors swallows callback errors and hides real failures. | Action item."))
+    (cl-letf (((symbol-function 'message)
+               (lambda (&rest args)
+                 (ert-fail (format "Unexpected log output: %S" args)))))
+      (let ((result (gptel-auto-experiment--categorize-error review-output)))
+        (should (eq (car result) :tool-error))
+        (should (string-match-p "BLOCKED:" (cdr result)))))))
 
 (ert-deftest regression/auto-workflow/headless-analyzer-provider-override-prefers-available-fallback ()
   "Headless analyzer should keep MiniMax as primary workhorse."
