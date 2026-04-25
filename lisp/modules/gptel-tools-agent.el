@@ -2910,8 +2910,7 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
                            (process-live-p proc)
                            (> attempts-left 0))
                       (defer-kill buf (1- attempts-left)))
-                     ((or (null proc)
-                          (not (process-live-p proc)))
+                     (t
                       (let ((kill-buffer-query-functions nil))
                         (kill-buffer buf)))))))))
            (retire-buffer (buf)
@@ -9447,13 +9446,18 @@ When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
   "Persist isolated workflow ENV onto BUFFER for later async tool processes."
   (let ((target (or buffer (current-buffer)))
         (effective-env (or env gptel-auto-workflow--subagent-process-environment)))
-    (when (and (buffer-live-p target)
+    (when (and (not gptel-auto-workflow--defer-subagent-env-persistence)
+               (buffer-live-p target)
                (listp effective-env))
       (with-current-buffer target
-        (setq-local gptel-auto-workflow--subagent-process-environment
-                    (copy-sequence effective-env))
-        (setq-local process-environment
-                    (copy-sequence effective-env))))))
+        (unless (and (local-variable-p 'gptel-auto-workflow--subagent-process-environment target)
+                     (local-variable-p 'process-environment target)
+                     (equal gptel-auto-workflow--subagent-process-environment effective-env)
+                     (equal process-environment effective-env))
+          (setq-local gptel-auto-workflow--subagent-process-environment
+                      (copy-sequence effective-env))
+          (setq-local process-environment
+                      (copy-sequence effective-env)))))))
 
 (defun gptel-auto-workflow--git-step-success-p (cmd action &optional timeout)
   "Run git CMD and report whether it succeeded.

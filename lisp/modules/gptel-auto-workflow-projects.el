@@ -55,6 +55,7 @@ Customize this variable to add more projects.")
 (defvar gptel-auto-workflow--stats nil)
 (defvar gptel-auto-workflow--running nil)
 (defvar gptel-auto-workflow--cron-job-timer nil)
+(defvar gptel-auto-workflow--defer-subagent-env-persistence nil)
 
 (defvar mementum-root nil
   "Root directory for mementum. Set per-project.")
@@ -501,14 +502,15 @@ Also handles caching and result truncation from old advice."
             (if (and target-buf 
                      (buffer-live-p target-buf)
                      (not (string= (buffer-name target-buf) "*Messages*")))
-                (progn
-                  (when (fboundp 'my/gptel--register-agent-task-buffer)
-                    (my/gptel--register-agent-task-buffer target-buf))
-                  (with-current-buffer target-buf
-                    (when (fboundp 'gptel-auto-workflow--persist-subagent-process-environment)
-                      (gptel-auto-workflow--persist-subagent-process-environment
-                       target-buf))
-                    ;; Ensure FSM exists for agent task
+                 (progn
+                   (when (fboundp 'my/gptel--register-agent-task-buffer)
+                     (my/gptel--register-agent-task-buffer target-buf))
+                   (with-current-buffer target-buf
+                     (when (and (not gptel-auto-workflow--defer-subagent-env-persistence)
+                                (fboundp 'gptel-auto-workflow--persist-subagent-process-environment))
+                       (gptel-auto-workflow--persist-subagent-process-environment
+                        target-buf))
+                     ;; Ensure FSM exists for agent task
                     (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
                       ;; Create minimal FSM for agent context
                       (when (fboundp 'gptel-make-fsm)

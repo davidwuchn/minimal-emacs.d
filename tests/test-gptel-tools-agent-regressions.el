@@ -14431,6 +14431,64 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (set-marker messages-start nil))
       (kill-buffer target-buf))))
 
+(ert-deftest regression/subagent/persist-subagent-process-environment-honors-deferral ()
+  "Persist helper should no-op while launch-time env persistence is deferred."
+  (let* ((target-buf (generate-new-buffer "*test-subagent-deferred-persist*"))
+         (isolated-env
+          '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+            "PATH=/usr/bin"))
+         (gptel-auto-workflow--subagent-process-environment isolated-env)
+         (gptel-auto-workflow--defer-subagent-env-persistence t))
+    (unwind-protect
+         (with-current-buffer target-buf
+           (gptel-auto-workflow--persist-subagent-process-environment)
+           (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
+           (should-not (local-variable-p 'process-environment)))
+       (kill-buffer target-buf))))
+
+(ert-deftest regression/subagent/persist-subagent-process-environment-noops-on-matching-buffer-env ()
+  "Persist helper should not rewrite a buffer that already has the same env."
+  (let* ((target-buf (generate-new-buffer "*test-subagent-persist-same-env*"))
+         (messages-buf (get-buffer-create "*Messages*"))
+         (isolated-env
+          '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+            "PATH=/usr/bin"))
+         (gptel-auto-workflow--subagent-process-environment isolated-env)
+         (process-environment isolated-env)
+         (messages-start nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer messages-buf
+            (setq messages-start (point-max-marker)))
+          (with-current-buffer target-buf
+            (setq-local gptel-auto-workflow--subagent-process-environment
+                        (copy-sequence isolated-env))
+            (setq-local process-environment
+                        (copy-sequence isolated-env))
+            (let ((before-env process-environment)
+                  (before-subagent-env gptel-auto-workflow--subagent-process-environment))
+              (gptel-auto-workflow--persist-subagent-process-environment)
+              (should (eq process-environment before-env))
+              (should (eq gptel-auto-workflow--subagent-process-environment
+                          before-subagent-env))))
+          (with-current-buffer messages-buf
+            (let ((recent (buffer-substring-no-properties
+                           (marker-position messages-start)
+                           (point-max))))
+              (should-not
+               (string-match-p
+                "Making gptel-auto-workflow--subagent-process-environment buffer-local while locally let-bound!"
+                recent))
+              (should-not
+               (string-match-p
+                "Making process-environment buffer-local while locally let-bound!"
+                recent)))))
+      (when (markerp messages-start)
+        (set-marker messages-start nil))
+      (kill-buffer target-buf))))
+
 (ert-deftest regression/bash/persistent-shell-resets-when-workflow-context-changes ()
   "Persistent bash should reset when workflow env or worktree changes."
   (let* ((dir-a (make-temp-file "aw-bash-dir-a" t))
@@ -14622,11 +14680,71 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                "Defer workflow env persistence"
                "Prompt body")))
           (should (equal callback-result "ok"))
-          (should-not
-           (cl-some (lambda (msg)
-                      (string-match-p "buffer-local while locally let-bound" msg))
-                    messages)))
-      (kill-buffer request-buf))))
+           (should-not
+            (cl-some (lambda (msg)
+                       (string-match-p "buffer-local while locally let-bound" msg))
+                     messages)))
+       (kill-buffer request-buf))))
+
+(ert-deftest regression/subagent/task-routing-defers-env-persistence-during-launch ()
+  "Per-project task routing should skip env persistence while launch defers it."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-route-project" t)))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/test-exp1"
+                                         project-root))
+         (target-buf (generate-new-buffer "*test-routed-subagent*"))
+         (callback-result nil)
+         (persisted nil)
+         (registered nil)
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--current-target "lisp/modules/gptel-ext-fsm-utils.el")
+         (gptel-auto-workflow--defer-subagent-env-persistence t)
+         (default-directory project-root))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer target-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir))
+            (setq-local gptel--fsm-last
+                        (gptel-make-fsm
+                         :info (list :buffer target-buf
+                                     :position (point-marker)
+                                     :tracking-marker (point-marker)))))
+          (cl-letf (((symbol-function 'my/gptel--subagent-cache-get)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (cb _agent-type _description _prompt)
+                       (funcall cb "ok")))
+                    ((symbol-function 'gptel-auto-workflow--get-project-for-context)
+                     (lambda () (cons project-root target-buf)))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                     (lambda (_target) worktree-dir))
+                    ((symbol-function 'gptel-auto-workflow--normalize-worktree-dir)
+                     (lambda (dir &optional _project-root)
+                       (file-name-as-directory (expand-file-name dir))))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (_dir) target-buf))
+                    ((symbol-function 'my/gptel--register-agent-task-buffer)
+                     (lambda (buf)
+                       (setq registered buf)))
+                    ((symbol-function 'gptel-auto-workflow--persist-subagent-process-environment)
+                     (lambda (&rest _args)
+                       (setq persisted t)))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--advice-task-override
+             (lambda (_cb _agent-type _description _prompt)
+               (ert-fail "orig-fun should not be called when task override is available"))
+             (lambda (result)
+               (setq callback-result result))
+             "executor"
+             "Routed env deferral"
+             "Prompt body")
+            (should (equal callback-result "ok"))
+            (should (eq registered target-buf))
+            (should-not persisted)))
+      (when (buffer-live-p target-buf)
+        (kill-buffer target-buf))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/subagent/register-agent-task-buffer-persists-task-env ()
   "Registering a request buffer should copy tracked task env onto it."
@@ -16178,6 +16296,51 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
             (should-not
              (gethash (file-name-as-directory worktree-dir)
                       gptel-auto-workflow--project-buffers))))
+      (when (and live-process (process-live-p live-process))
+        (delete-process live-process))
+      (when (buffer-live-p request-buf)
+        (kill-buffer request-buf))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/discard-worktree-buffers-kills-buffer-after-retries-exhaust ()
+  "Deferred cleanup should still kill the buffer after retry attempts run out."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1"
+                                         project-root))
+         (gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))
+         (gptel-auto-workflow--project-buffers (make-hash-table :test 'equal))
+         (request-buf (generate-new-buffer "*gptel-agent:agent-riven-exp1@test*"))
+         (live-process nil)
+         (scheduled-callbacks nil))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer request-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (setq live-process
+                (make-process :name "aw-live-worktree-buffer-retry"
+                              :buffer request-buf
+                              :noquery t
+                              :command (list shell-file-name shell-command-switch "sleep 30")))
+          (puthash (file-name-as-directory worktree-dir)
+                   request-buf
+                   gptel-auto-workflow--worktree-buffers)
+          (puthash (file-name-as-directory worktree-dir)
+                   request-buf
+                   gptel-auto-workflow--project-buffers)
+          (cl-letf (((symbol-function 'gptel-abort)
+                     (lambda (_buffer) nil))
+                    ((symbol-function 'run-at-time)
+                     (lambda (_secs _repeat fn &rest _args)
+                       (push fn scheduled-callbacks)
+                       'fake-timer)))
+            (should (= 1 (gptel-auto-workflow--discard-worktree-buffers worktree-dir)))
+            (should (buffer-live-p request-buf))
+            (should scheduled-callbacks)
+            (while scheduled-callbacks
+              (let ((callback (pop scheduled-callbacks)))
+                (funcall callback)))
+            (should-not (buffer-live-p request-buf))))
       (when (and live-process (process-live-p live-process))
         (delete-process live-process))
       (when (buffer-live-p request-buf)
