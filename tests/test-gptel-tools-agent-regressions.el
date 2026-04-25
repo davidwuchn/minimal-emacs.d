@@ -14498,10 +14498,52 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
          (gptel-auto-workflow--subagent-process-environment isolated-env)
          (gptel-auto-workflow--defer-subagent-env-persistence t))
     (unwind-protect
-        (with-current-buffer target-buf
-          (gptel-auto-workflow--persist-subagent-process-environment)
-          (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
-          (should-not (local-variable-p 'process-environment)))
+         (with-current-buffer target-buf
+           (gptel-auto-workflow--persist-subagent-process-environment)
+           (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
+           (should-not (local-variable-p 'process-environment)))
+       (kill-buffer target-buf))))
+
+(ert-deftest regression/subagent/persist-subagent-process-environment-noops-on-matching-buffer-env ()
+  "Persist helper should not rewrite a buffer that already has the same env."
+  (let* ((target-buf (generate-new-buffer "*test-subagent-persist-same-env*"))
+         (messages-buf (get-buffer-create "*Messages*"))
+         (isolated-env
+          '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+            "PATH=/usr/bin"))
+         (gptel-auto-workflow--subagent-process-environment isolated-env)
+         (process-environment isolated-env)
+         (messages-start nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer messages-buf
+            (setq messages-start (point-max-marker)))
+          (with-current-buffer target-buf
+            (setq-local gptel-auto-workflow--subagent-process-environment
+                        (copy-sequence isolated-env))
+            (setq-local process-environment
+                        (copy-sequence isolated-env))
+            (let ((before-env process-environment)
+                  (before-subagent-env gptel-auto-workflow--subagent-process-environment))
+              (gptel-auto-workflow--persist-subagent-process-environment)
+              (should (eq process-environment before-env))
+              (should (eq gptel-auto-workflow--subagent-process-environment
+                          before-subagent-env))))
+          (with-current-buffer messages-buf
+            (let ((recent (buffer-substring-no-properties
+                           (marker-position messages-start)
+                           (point-max))))
+              (should-not
+               (string-match-p
+                "Making gptel-auto-workflow--subagent-process-environment buffer-local while locally let-bound!"
+                recent))
+              (should-not
+               (string-match-p
+                "Making process-environment buffer-local while locally let-bound!"
+                recent)))))
+      (when (markerp messages-start)
+        (set-marker messages-start nil))
       (kill-buffer target-buf))))
 
 (ert-deftest regression/bash/persistent-shell-resets-when-workflow-context-changes ()
