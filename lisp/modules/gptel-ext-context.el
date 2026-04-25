@@ -440,7 +440,7 @@ Returns a short description of what the user was asking for."
                            (lambda (line)
                              (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
                            lines)))
-         (last-user (car (last user-lines 3))))
+         (last-user (car (last user-lines))))
     (if last-user
         (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
       "Continue the task")))
