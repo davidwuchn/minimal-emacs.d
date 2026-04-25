@@ -409,10 +409,14 @@ supports a small, explicit whitelist of pure operations."
     (while arg-forms
       (let ((key (pop arg-forms))
             (value (pop arg-forms)))
-        (push (format "%s=%s"
-                      (substring (symbol-name key) 1)
-                      (gptel-sandbox--truncate-summary value 60))
-              parts)))
+        (let ((key-str (cond
+                        ((keywordp key) (substring (symbol-name key) 1))
+                        ((symbolp key) (symbol-name key))
+                        (t (format "%s" key)))))
+          (push (format "%s=%s"
+                        key-str
+                        (gptel-sandbox--truncate-summary value 60))
+                parts))))
     (list :tool-name tool-name
           :summary (if parts
                        (format "%s %s" tool-name (mapconcat #'identity (nreverse parts) " "))
