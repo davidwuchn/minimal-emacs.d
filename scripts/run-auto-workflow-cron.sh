@@ -247,6 +247,19 @@ messages_snapshot_fresh() {
     snapshot_file_fresh "$MESSAGES_FILE"
 }
 
+active_snapshot_has_empty_messages_tail() {
+    local status_dir messages_dir
+
+    status_indicates_active_phase &&
+        status_has_live_run_id &&
+        [ -e "$MESSAGES_FILE" ] &&
+        ! [ -s "$MESSAGES_FILE" ] || return 1
+
+    status_dir="$(dirname "$STATUS_FILE")"
+    messages_dir="$(dirname "$MESSAGES_FILE")"
+    [ "$status_dir" = "$messages_dir" ]
+}
+
 snapshot_file_stale_for_recovery() {
     local path="$1"
     ! snapshot_file_fresh "$path" "${AUTO_WORKFLOW_STALE_DAEMON_TTL:-1800}"
@@ -932,6 +945,9 @@ EVAL_ELISP="$(wrap_emacs_eval "$ELISP")"
 
 cd "$DIR"
 if [ "$ACTION" = "status" ]; then
+    if active_snapshot_has_empty_messages_tail; then
+        clear_stale_running_status
+    fi
     if status_can_use_persisted_active_snapshot; then
         print_status
         exit 0
@@ -949,6 +965,9 @@ if [ "$ACTION" = "status" ]; then
 fi
 
 if [ "$ACTION" = "messages" ]; then
+    if active_snapshot_has_empty_messages_tail; then
+        clear_stale_running_status
+    fi
     if status_can_use_persisted_active_snapshot && [ -r "$MESSAGES_FILE" ]; then
         cat "$MESSAGES_FILE"
         exit 0
