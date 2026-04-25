@@ -10,15 +10,24 @@ case "$ACTION" in
     research) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-copilot-researcher}" ;;
     *) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-copilot-auto-workflow}" ;;
 esac
-case "$SERVER_NAME" in
-    copilot-auto-workflow) SNAPSHOT_NAME="auto-workflow" ;;
-    *) SNAPSHOT_NAME="$SERVER_NAME" ;;
+case "$ACTION" in
+    mementum|instincts) SNAPSHOT_NAME="$ACTION" ;;
+    *)
+        case "$SERVER_NAME" in
+            copilot-auto-workflow) SNAPSHOT_NAME="auto-workflow" ;;
+            *) SNAPSHOT_NAME="$SERVER_NAME" ;;
+        esac
+        ;;
 esac
 STATUS_FILE="${AUTO_WORKFLOW_STATUS_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_NAME}-status.sexp}"
 DAEMON_LOG="$DIR/var/tmp/cron/${SERVER_NAME}.log"
 MESSAGES_FILE="${AUTO_WORKFLOW_MESSAGES_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_NAME}-messages-tail.txt}"
 MESSAGES_CHARS="${AUTO_WORKFLOW_MESSAGES_CHARS:-16000}"
-SNAPSHOT_PATHS_FILE="${AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE:-$DIR/var/tmp/cron/${SERVER_NAME}-snapshot-paths.txt}"
+case "$ACTION" in
+    mementum|instincts) SNAPSHOT_CACHE_NAME="$ACTION" ;;
+    *) SNAPSHOT_CACHE_NAME="$SERVER_NAME" ;;
+esac
+SNAPSHOT_PATHS_FILE="${AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_CACHE_NAME}-snapshot-paths.txt}"
 STALE_DAEMON_RECOVERED=0
 
 lisp_escape() {
