@@ -129,8 +129,10 @@ under `lexical-binding: t'.")
     ("gpt-4-32k" . 32768)
     ("gpt-3.5" . 16385)
     ;; DeepSeek
-    ("deepseek-chat" . 163840)
-    ("deepseek-reasoner" . 163840)
+    ("deepseek-v4-flash" . 1000000)
+    ("deepseek-v4-pro" . 1000000)
+    ("deepseek-chat" . 1000000)
+    ("deepseek-reasoner" . 1000000)
     ("deepseek-coder" . 16384)
     ;; MiniMax
     ("minimax-m2.7-highspeed" . 196608)
@@ -164,7 +166,7 @@ Sources:
 - Qwen: https://help.aliyun.com/zh/model-studio/getting-started/models
 - Gemini: https://openrouter.ai/models/google/gemini-2.5-pro-preview
 - Claude: https://openrouter.ai/models/anthropic/claude-sonnet-4
-- DeepSeek: https://openrouter.ai/models/deepseek/deepseek-chat
+- DeepSeek: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
 - MiniMax: https://openrouter.ai/models/minimax/minimax-m2.5")
 
 (defvar my/gptel--known-model-metadata
@@ -227,16 +229,26 @@ Sources:
      :max-output 16384
      :description "Claude Opus 4 - best, 200k context")
     ;; DeepSeek
+    ("deepseek-v4-flash"
+     :context-window 1000000
+     :pricing-input 1.0 :pricing-output 2.0
+     :max-output 384000
+     :description "DeepSeek V4 Flash - 1M context, fast path with thinking disabled")
+    ("deepseek-v4-pro"
+     :context-window 1000000
+     :pricing-input 12.0 :pricing-output 24.0
+     :max-output 384000
+     :description "DeepSeek V4 Pro - 1M context, thinking-enabled reasoning model")
     ("deepseek-chat"
-     :context-window 163840
-     :pricing-input 0.27 :pricing-output 1.1
-     :max-output 8192
-     :description "DeepSeek V3 - 163k context, great value")
+     :context-window 1000000
+     :pricing-input 1.0 :pricing-output 2.0
+     :max-output 384000
+     :description "Deprecated alias for DeepSeek V4 Flash (thinking disabled)")
     ("deepseek-reasoner"
-     :context-window 163840
-     :pricing-input 0.55 :pricing-output 2.19
-     :max-output 8192
-     :description "DeepSeek R1 - reasoning model")
+     :context-window 1000000
+     :pricing-input 1.0 :pricing-output 2.0
+     :max-output 384000
+     :description "Deprecated alias for DeepSeek V4 Flash (thinking enabled)")
     ;; MiniMax
     ("minimax-m2.7-highspeed"
      :context-window 196608
@@ -734,14 +746,16 @@ Description: %s"
       (glm-4.7 . 131072)))
 
     (deepseek
-     :description "DeepSeek - V3 and R1 models"
+     :description "DeepSeek - V4 Flash and V4 Pro models"
      :rate-limit "Varies, check dashboard"
-     :pricing-model "Per-token, V3 very cheap"
-     :features (streaming tools)
-     :notes "V3: 163k context, $0.27/1M input. R1: reasoning model."
+     :pricing-model "Per-token, Flash low-cost and Pro premium"
+     :features (streaming tools reasoning)
+     :notes "Both V4 models support 1M context, 384K output, and thinking mode; deepseek-chat/reasoner are deprecated aliases."
      :context-windows
-     ((deepseek-chat . 163840)
-      (deepseek-reasoner . 163840)))
+     ((deepseek-v4-flash . 1000000)
+      (deepseek-v4-pro . 1000000)
+      (deepseek-chat . 1000000)
+      (deepseek-reasoner . 1000000)))
 
     (moonshot
      :description "Moonshot AI - Kimi models"

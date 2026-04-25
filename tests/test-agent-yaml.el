@@ -18,7 +18,7 @@
 (require 'ert)
 (require 'cl-lib)
 
-;;; Known models (subset of what DashScope supports)
+;;; Known models (subset of models validated in this repo)
 
 (defconst test-agent-known-models
   '("qwen3.5-plus"
@@ -26,7 +26,10 @@
     "qwen3-coder-plus"
     "qwen3-coder-next"
     "glm-5"
+    "deepseek-v4-flash"
+    "deepseek-v4-pro"
     "deepseek-chat"
+    "deepseek-reasoner"
     "deepseek-coder"
     "kimi-k2.5"
     "minimax-m2.7-highspeed"

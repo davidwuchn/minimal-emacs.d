@@ -3739,7 +3739,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (gptel-make-openai "DeepSeek"
             :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(deepseek-chat)))
+            :models '(deepseek-v4-flash deepseek-v4-pro)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (had-deepseek (boundp 'gptel--deepseek))
@@ -3752,13 +3752,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (gptel-auto-workflow-headless-fallback-agents
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")
-            ("DeepSeek" . "deepseek-chat")))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("DashScope" . "qwen3.6-plus")
+             ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")
-            ("DeepSeek" . "deepseek-chat")))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("DashScope" . "qwen3.6-plus")
+             ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
@@ -3780,11 +3780,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "executor" dashscope-preset
              "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
-            (let ((override
-                   (gptel-auto-workflow--maybe-override-subagent-provider
-                    "reviewer" minimax-preset)))
-              (should (eq (plist-get override :backend) deepseek-backend))
-              (should (eq (plist-get override :model) 'deepseek-chat)))))
+             (let ((override
+                    (gptel-auto-workflow--maybe-override-subagent-provider
+                     "reviewer" minimax-preset)))
+               (should (eq (plist-get override :backend) deepseek-backend))
+               (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-dashscope
@@ -4104,7 +4104,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (gptel-make-openai "DeepSeek"
             :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(deepseek-chat)))
+            :models '(deepseek-v4-flash deepseek-v4-pro)))
          (dashscope-backend
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
@@ -4135,10 +4135,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "executor" preset
              "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
-            (let ((override
-                   (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
-              (should (eq (plist-get override :backend) deepseek-backend))
-              (should (eq (plist-get override :model) 'deepseek-chat)))))
+             (let ((override
+                    (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
+               (should (eq (plist-get override :backend) deepseek-backend))
+               (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-deepseek
           (set 'gptel--deepseek old-deepseek)
@@ -4319,22 +4319,22 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (gptel-make-openai "DeepSeek"
             :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(deepseek-chat)))
+            :models '(deepseek-v4-flash deepseek-v4-pro)))
          (had-deepseek (boundp 'gptel--deepseek))
          (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "MiniMax"
-                  :model "minimax-m2.7-highspeed"
-                  :max-tokens 65536)))
+                   :model "minimax-m2.7-highspeed"
+                   :max-tokens 500000)))
     (unwind-protect
         (progn
           (set 'gptel--deepseek deepseek-backend)
-          (let ((override
-                 (gptel-auto-workflow--rewrite-subagent-provider
-                  preset
-                  '("DeepSeek" . "deepseek-chat"))))
-            (should (eq (plist-get override :backend) deepseek-backend))
-            (should (eq (plist-get override :model) 'deepseek-chat))
-            (should (= (plist-get override :max-tokens) 8192))))
+           (let ((override
+                  (gptel-auto-workflow--rewrite-subagent-provider
+                   preset
+                   '("DeepSeek" . "deepseek-v4-flash"))))
+             (should (eq (plist-get override :backend) deepseek-backend))
+             (should (eq (plist-get override :model) 'deepseek-v4-flash))
+             (should (= (plist-get override :max-tokens) 384000))))
       (if had-deepseek
           (set 'gptel--deepseek old-deepseek)
         (makunbound 'gptel--deepseek)))))

@@ -24,7 +24,7 @@
 **New Feature: Backend Fallback on 429 Errors**
 - When MiniMax hits the 5-hour rolling window rate limit (429), experiments now
   automatically fail over to the next available backend instead of being discarded
-- Fallback order: DashScope/qwen3.6-plus → DeepSeek/deepseek-chat → CF-Gateway/glm-4.7-flash → Gemini/gemini-3.1-pro-preview
+- Fallback order: DashScope/qwen3.6-plus → DeepSeek/deepseek-v4-flash → CF-Gateway/glm-4.7-flash → Gemini/gemini-3.1-pro-preview
 - New functions:
   - `gptel-auto-experiment--forced-backend`: dynamic variable to force backend
   - `gptel-auto-experiment--run-agent-with-backend-fallback`: wrapper that detects 429 and retries

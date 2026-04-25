@@ -74,7 +74,16 @@ ARGS are passed to `gptel-make-openai'."
     :endpoint "/chat/completions"
     :key (lambda () (my/gptel-api-key "api.deepseek.com"))
     :stream t
-    :models '(deepseek-reasoner deepseek-chat)))
+    :models '((deepseek-v4-flash
+               :request-params (:thinking (:type "disabled")))
+              (deepseek-v4-pro
+               :request-params (:thinking (:type "enabled")
+                                :reasoning_effort "high"))
+              (deepseek-chat
+               :request-params (:thinking (:type "disabled")))
+              (deepseek-reasoner
+               :request-params (:thinking (:type "enabled")
+                                :reasoning_effort "high")))))
 
 (defvar gptel--cf-gateway
   (gptel-make-openai "CF-Gateway"

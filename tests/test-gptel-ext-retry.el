@@ -29,8 +29,10 @@
     (qwen3\.5-plus      . 400000)
     (glm-5              . 350000)
     (glm-4\.7           . 350000)
-    (deepseek-chat      . 200000)
-    (deepseek-reasoner  . 200000)))
+    (deepseek-v4-flash  . 3000000)
+    (deepseek-v4-pro    . 3000000)
+    (deepseek-chat      . 3000000)
+    (deepseek-reasoner  . 3000000)))
 
 ;;; Test helpers
 
@@ -430,7 +432,7 @@
 
 (ert-deftest retry/effective-limit/uses-model-limit ()
   "Should use model-specific limit."
-  (let ((info (test-make-info :model 'deepseek-chat)))
+  (let ((info (test-make-info :model 'deepseek-v4-flash)))
     (should (= 200000 (test--effective-byte-limit info)))))
 
 (ert-deftest retry/effective-limit/uses-global-limit ()

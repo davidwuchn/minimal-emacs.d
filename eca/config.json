@@ -179,8 +179,21 @@
       "url": "https://api.deepseek.com",
       "keyRc": "api.deepseek.com",
       "models": {
-        "deepseek-chat": {},
-        "deepseek-reasoner": {}
+        "deepseek-v4-flash": {
+          "extraPayload": {
+            "thinking": {
+              "type": "disabled"
+            }
+          }
+        },
+        "deepseek-v4-pro": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled"
+            },
+            "reasoning_effort": "high"
+          }
+        }
       }
     },
     "minimax": {

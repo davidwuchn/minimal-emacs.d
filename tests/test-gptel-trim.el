@@ -99,7 +99,7 @@ Preserves N most recent reasoning blocks where N is `test-trim--reasoning-keep-t
   (pcase model
     ('kimi-k2\.5 :reasoning_content)
     ('moonshot :reasoning_content)
-    ('deepseek-reasoner :reasoning)
+    ((or 'deepseek-v4-pro 'deepseek-reasoner) :reasoning_content)
     (_ nil)))
 
 (defvar-local test-trim--tool-reasoning-alist nil
@@ -942,7 +942,8 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
 
 (defconst test-trim--model-context-bytes
   '((kimi-k2\.5        . 400000)
-    (deepseek-chat      . 200000)
+    (deepseek-v4-flash  . 3000000)
+    (deepseek-chat      . 3000000)
     (tiny-model         . 50000))
   "Test stub for model context byte limits.")
 

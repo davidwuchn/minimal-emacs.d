@@ -156,11 +156,17 @@
   (should (assoc "gemini-2.5" my/gptel--known-model-context-windows))
   (should (= (cdr (assoc "gemini-2.5" my/gptel--known-model-context-windows)) 1048576)))
 
-(ert-deftest cache/known-models/deepseek-chat ()
-  "DeepSeek Chat should have 163k context."
+(ert-deftest cache/known-models/deepseek-v4-flash ()
+  "DeepSeek V4 Flash should have 1M context."
   (test--context-cache-setup)
-  (should (assoc "deepseek-chat" my/gptel--known-model-context-windows))
-  (should (= (cdr (assoc "deepseek-chat" my/gptel--known-model-context-windows)) 163840)))
+  (should (assoc "deepseek-v4-flash" my/gptel--known-model-context-windows))
+  (should (= (cdr (assoc "deepseek-v4-flash" my/gptel--known-model-context-windows)) 1000000)))
+
+(ert-deftest cache/known-models/deepseek-v4-pro ()
+  "DeepSeek V4 Pro should have 1M context."
+  (test--context-cache-setup)
+  (should (assoc "deepseek-v4-pro" my/gptel--known-model-context-windows))
+  (should (= (cdr (assoc "deepseek-v4-pro" my/gptel--known-model-context-windows)) 1000000)))
 
 ;;; Tests for provider contracts
 

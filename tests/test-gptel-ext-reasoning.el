@@ -25,7 +25,8 @@
   (or gptel--model-request-params-plist
       (cond
        ((eq model 'moonshot-v1-8k) '(:thinking t))
-       ((eq model 'deepseek-reasoner) '(:reasoning t))
+       ((eq model 'deepseek-v4-pro) '(:thinking (:type "enabled")
+                                      :reasoning_effort "high"))
        (t nil))))
 
 (defclass test-reasoning-openai-backend () ())
@@ -89,11 +90,12 @@
     (should (eq (test-reasoning--reasoning-key-for-model 'moonshot-v1-8k)
                 :reasoning_content))))
 
-(ert-deftest reasoning/key-for-model/deepseek-returns-reasoning ()
-  "DeepSeek models should return :reasoning key."
-  (let ((gptel--model-request-params-plist '(:reasoning t)))
-    (should (eq (test-reasoning--reasoning-key-for-model 'deepseek-reasoner)
-                :reasoning))))
+(ert-deftest reasoning/key-for-model/deepseek-v4-pro-returns-reasoning-content ()
+  "DeepSeek V4 Pro should return :reasoning_content."
+  (let ((gptel--model-request-params-plist '(:thinking (:type "enabled")
+                                             :reasoning_effort "high")))
+    (should (eq (test-reasoning--reasoning-key-for-model 'deepseek-v4-pro)
+                :reasoning_content))))
 
 (ert-deftest reasoning/key-for-model/gpt4-returns-nil ()
   "GPT-4 should return nil (no reasoning)."
@@ -122,9 +124,10 @@
 
 (ert-deftest reasoning/thinking-model-p/deepseek ()
   "Should detect DeepSeek as thinking model."
-  (let ((gptel-model 'deepseek-reasoner)
-        (gptel--model-request-params-plist '(:reasoning t)))
-    (should (eq (test-reasoning--thinking-model-p) :reasoning))))
+  (let ((gptel-model 'deepseek-v4-pro)
+        (gptel--model-request-params-plist '(:thinking (:type "enabled")
+                                             :reasoning_effort "high")))
+    (should (eq (test-reasoning--thinking-model-p) :reasoning_content))))
 
 (ert-deftest reasoning/thinking-model-p/gpt4 ()
   "GPT-4 should not be detected as thinking model."
