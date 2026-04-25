@@ -9447,7 +9447,8 @@ When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
   "Persist isolated workflow ENV onto BUFFER for later async tool processes."
   (let ((target (or buffer (current-buffer)))
         (effective-env (or env gptel-auto-workflow--subagent-process-environment)))
-    (when (and (buffer-live-p target)
+    (when (and (not gptel-auto-workflow--defer-subagent-env-persistence)
+               (buffer-live-p target)
                (listp effective-env))
       (with-current-buffer target
         (setq-local gptel-auto-workflow--subagent-process-environment

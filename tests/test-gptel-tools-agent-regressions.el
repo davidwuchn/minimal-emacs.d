@@ -14431,6 +14431,22 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (set-marker messages-start nil))
       (kill-buffer target-buf))))
 
+(ert-deftest regression/subagent/persist-subagent-process-environment-honors-deferral ()
+  "Persist helper should no-op while launch-time env persistence is deferred."
+  (let* ((target-buf (generate-new-buffer "*test-subagent-deferred-persist*"))
+         (isolated-env
+          '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+            "PATH=/usr/bin"))
+         (gptel-auto-workflow--subagent-process-environment isolated-env)
+         (gptel-auto-workflow--defer-subagent-env-persistence t))
+    (unwind-protect
+        (with-current-buffer target-buf
+          (gptel-auto-workflow--persist-subagent-process-environment)
+          (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
+          (should-not (local-variable-p 'process-environment)))
+      (kill-buffer target-buf))))
+
 (ert-deftest regression/bash/persistent-shell-resets-when-workflow-context-changes ()
   "Persistent bash should reset when workflow env or worktree changes."
   (let* ((dir-a (make-temp-file "aw-bash-dir-a" t))
@@ -14622,11 +14638,71 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                "Defer workflow env persistence"
                "Prompt body")))
           (should (equal callback-result "ok"))
-          (should-not
-           (cl-some (lambda (msg)
-                      (string-match-p "buffer-local while locally let-bound" msg))
-                    messages)))
-      (kill-buffer request-buf))))
+           (should-not
+            (cl-some (lambda (msg)
+                       (string-match-p "buffer-local while locally let-bound" msg))
+                     messages)))
+       (kill-buffer request-buf))))
+
+(ert-deftest regression/subagent/task-routing-defers-env-persistence-during-launch ()
+  "Per-project task routing should skip env persistence while launch defers it."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-route-project" t)))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/test-exp1"
+                                         project-root))
+         (target-buf (generate-new-buffer "*test-routed-subagent*"))
+         (callback-result nil)
+         (persisted nil)
+         (registered nil)
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--current-target "lisp/modules/gptel-ext-fsm-utils.el")
+         (gptel-auto-workflow--defer-subagent-env-persistence t)
+         (default-directory project-root))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer target-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir))
+            (setq-local gptel--fsm-last
+                        (gptel-make-fsm
+                         :info (list :buffer target-buf
+                                     :position (point-marker)
+                                     :tracking-marker (point-marker)))))
+          (cl-letf (((symbol-function 'my/gptel--subagent-cache-get)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (cb _agent-type _description _prompt)
+                       (funcall cb "ok")))
+                    ((symbol-function 'gptel-auto-workflow--get-project-for-context)
+                     (lambda () (cons project-root target-buf)))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                     (lambda (_target) worktree-dir))
+                    ((symbol-function 'gptel-auto-workflow--normalize-worktree-dir)
+                     (lambda (dir &optional _project-root)
+                       (file-name-as-directory (expand-file-name dir))))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (_dir) target-buf))
+                    ((symbol-function 'my/gptel--register-agent-task-buffer)
+                     (lambda (buf)
+                       (setq registered buf)))
+                    ((symbol-function 'gptel-auto-workflow--persist-subagent-process-environment)
+                     (lambda (&rest _args)
+                       (setq persisted t)))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--advice-task-override
+             (lambda (_cb _agent-type _description _prompt)
+               (ert-fail "orig-fun should not be called when task override is available"))
+             (lambda (result)
+               (setq callback-result result))
+             "executor"
+             "Routed env deferral"
+             "Prompt body")
+            (should (equal callback-result "ok"))
+            (should (eq registered target-buf))
+            (should-not persisted)))
+      (when (buffer-live-p target-buf)
+        (kill-buffer target-buf))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/subagent/register-agent-task-buffer-persists-task-env ()
   "Registering a request buffer should copy tracked task env onto it."
