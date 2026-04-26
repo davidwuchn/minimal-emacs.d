@@ -32,6 +32,9 @@
 (declare-function gptel-make-fsm "gptel")
 (declare-function gptel-request "gptel")
 
+(defvar gptel-use-tools)
+(defvar gptel-tools)
+
 (declare-function my/gptel--coerce-fsm "gptel-ext-fsm-utils")
 (declare-function my/gptel--deliver-subagent-result "gptel-tools-agent")
 (declare-function my/gptel--seed-fsm-tools "gptel-tools-agent" (fsm tools))
@@ -370,18 +373,6 @@ Returns nil if patterns list is empty or contains non-string elements."
   (when (and patterns (cl-every #'stringp patterns))
     (mapconcat (lambda (p) (concat "\\(?:" p "\\)")) patterns "\\|")))
 
-(defun gptel-agent-loop--ensure-patterns-compiled ()
-  "Ensure all pattern variables are compiled for performance.
-Call once after definitions to pre-compile regex patterns."
-  (setq gptel-agent-loop--completion-patterns-compiled
-        (gptel-agent-loop--compile-patterns gptel-agent-loop--completion-patterns))
-  (setq gptel-agent-loop--turn-skipped-pattern-compiled
-        (gptel-agent-loop--compile-patterns (list gptel-agent-loop--turn-skipped-pattern)))
-  (setq gptel-agent-loop--planning-patterns-compiled
-        (gptel-agent-loop--compile-patterns gptel-agent-loop--planning-patterns))
-  (setq gptel-agent-loop--finishing-patterns-compiled
-        (gptel-agent-loop--compile-patterns gptel-agent-loop--finishing-patterns)))
-
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
   "Return non-nil when TEXT matches any string in PATTERNS.
 Returns nil if TEXT is not a string or PATTERNS is not a list of strings.
@@ -466,6 +457,18 @@ when the model is concluding rather than planning more work.")
 
 (defvar gptel-agent-loop--finishing-patterns-compiled nil
   "Pre-compiled finishing patterns for performance.")
+
+(defun gptel-agent-loop--ensure-patterns-compiled ()
+  "Ensure all pattern variables are compiled for performance.
+Call once after definitions to pre-compile regex patterns."
+  (setq gptel-agent-loop--completion-patterns-compiled
+        (gptel-agent-loop--compile-patterns gptel-agent-loop--completion-patterns))
+  (setq gptel-agent-loop--turn-skipped-pattern-compiled
+        (gptel-agent-loop--compile-patterns (list gptel-agent-loop--turn-skipped-pattern)))
+  (setq gptel-agent-loop--planning-patterns-compiled
+        (gptel-agent-loop--compile-patterns gptel-agent-loop--planning-patterns))
+  (setq gptel-agent-loop--finishing-patterns-compiled
+        (gptel-agent-loop--compile-patterns gptel-agent-loop--finishing-patterns)))
 
 (defun gptel-agent-loop--looks-like-finishing-p (resp)
   "Return non-nil when RESP looks like model is about to finish.
@@ -793,7 +796,7 @@ Reads `steps' from agent YAML to set max-steps per agent."
            (fboundp 'my/gptel-agent--task-override))
       (my/gptel-agent--task-override main-cb agent-type description prompt)
     (let* ((agent-config (cdr (assoc agent-type gptel-agent--agents)))
-           (agent-steps (plist-get agent-config :steps))
+           (agent-steps (and agent-config (plist-get agent-config :steps)))
            (effective-max-steps (or agent-steps gptel-agent-loop-max-steps))
            (state (gptel-agent-loop--remember-state
                    (gptel-agent-loop--task-create
