@@ -1895,6 +1895,16 @@ TIMESTAMP defaults to `current-time'."
   (advice-remove 'message #'my/gptel--agent-task-note-message-activity))
 (advice-add 'message :before #'my/gptel--agent-task-note-message-activity)
 
+(defun my/gptel--agent-task-note-write-region-activity (_start _end filename &rest _args)
+  "Treat direct worktree writes to FILENAME as executor activity."
+  (when-let* ((path (and (stringp filename)
+                         (ignore-errors (expand-file-name filename)))))
+    (my/gptel--agent-task-note-context-activity path nil)))
+
+(while (advice-member-p #'my/gptel--agent-task-note-write-region-activity 'write-region)
+  (advice-remove 'write-region #'my/gptel--agent-task-note-write-region-activity))
+(advice-add 'write-region :after #'my/gptel--agent-task-note-write-region-activity)
+
 (defun my/gptel--agent-task-note-curl-activity (&rest _args)
   "Ignore curl setup chatter for subagent activity tracking.")
 
