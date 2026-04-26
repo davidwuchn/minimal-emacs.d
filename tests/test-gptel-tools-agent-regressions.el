@@ -3662,7 +3662,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
 
 (ert-deftest regression/fsm/coerce-fsm-returns-matching-object ()
   "`my/gptel--coerce-fsm' should return the FSM object, not a boolean."
-  (let* ((fsm (gptel-make-fsm :state 'init :table nil :handlers nil :info nil))
+  (let* ((my/gptel--fsm-registry (make-hash-table :test 'equal :weakness 'value))
+         (my/gptel--fsm-id-counter 0)
+         (fsm (gptel-make-fsm :state 'init :table nil :handlers nil :info nil))
          (other-fsm (gptel-make-fsm :state 'other :table nil :handlers nil :info nil)))
     (unwind-protect
         (let ((fsm-id (my/gptel--fsm-register fsm))
