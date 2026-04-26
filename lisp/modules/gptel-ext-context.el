@@ -313,7 +313,7 @@ Returns 0.0 if CHARS-BEFORE is zero to avoid division by zero."
       0.0
     (* 100 (- 1 (/ (float chars-after) chars-before)))))
 
-(defun my/gptel--format-compaction-stats (chars-before chars-after tokens-before)
+(defun my/gptel--format-compaction-stats (chars-before tokens-before)
   "Format and return compaction statistics as a message string.
 Computes chars-after and tokens-after from current buffer state."
   (let* ((chars-after (buffer-size))
@@ -377,7 +377,7 @@ Returns non-nil if compaction was initiated."
                                                     'face '(:foreground "yellow" :weight bold)))
                                 (insert (propertize response 'face '(:foreground "cyan")))
                                 (insert (propertize (format "\nCOMPACTED: %s\n"
-                                                            (my/gptel--format-compaction-stats chars-before (buffer-size) tokens-before))
+                                                            (my/gptel--format-compaction-stats chars-before tokens-before))
                                                     'face '(:foreground "green" :weight bold)))
                                 (insert (propertize "═══════════════════════════════════════════════════════════════\n"
                                                     'face '(:foreground "yellow" :weight bold)))
@@ -388,7 +388,7 @@ Returns non-nil if compaction was initiated."
                               (insert response)
                               (goto-char (min point-before (point-max)))
                               (message "[compact] Done: %s [backup in kill-ring]"
-                                       (my/gptel--format-compaction-stats chars-before (buffer-size) tokens-before)))))))))
+                                       (my/gptel--format-compaction-stats chars-before tokens-before)))))))))
             (error
              (with-current-buffer buf
                (setq my/gptel-auto-compact-running nil))
