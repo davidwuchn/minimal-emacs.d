@@ -305,15 +305,46 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (when (file-exists-p fake-emacs)
         (delete-file fake-emacs)))))
 
-(ert-deftest regression/init-system/compile-angel-on-load-skips-noninteractive ()
-  "Batch sessions should not enable compile-angel on-load hooks."
+(ert-deftest regression/init-system/compile-angel-on-load-skips-noninteractive-and-workflow-daemon ()
+  "Batch sessions and workflow daemons should not enable compile-angel on-load hooks."
   (let* ((repo-root test-auto-workflow--repo-root)
          (init-system (expand-file-name "lisp/init-system.el" repo-root)))
     (with-temp-buffer
       (insert-file-contents init-system)
+      (let ((contents (buffer-string)))
+        (should (string-match-p
+                 (regexp-quote ":hook (emacs-startup . (lambda ()")
+                 contents))
+        (should (string-match-p
+                 (regexp-quote "(unless (or noninteractive")
+                 contents))
+        (should (string-match-p
+                 (regexp-quote "(fboundp 'my/workflow-daemon-p)")
+                 contents))
+        (should (string-match-p
+                 (regexp-quote "(my/workflow-daemon-p)")
+                 contents))
+        (should (string-match-p
+                 (regexp-quote "(compile-angel-on-load-mode 1)")
+                 contents))))))
+
+(ert-deftest regression/init-files/recentf-skips-workflow-daemon ()
+  "Workflow daemons should not enable or persist recentf state at startup."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (init-files (expand-file-name "lisp/init-files.el" repo-root)))
+    (with-temp-buffer
+      (insert-file-contents init-files)
       (should (string-match-p
                (regexp-quote
-                ":hook (emacs-startup . (lambda ()\n                           (unless noninteractive\n                             (compile-angel-on-load-mode 1))))")
+                "(defun my/enable-recentf-mode-if-appropriate ()\n  \"Enable `recentf-mode' unless this is a dedicated workflow daemon.\"\n  (unless (and (fboundp 'my/workflow-daemon-p)\n               (my/workflow-daemon-p))\n    (recentf-mode 1)))")
+               (buffer-string)))
+      (should (string-match-p
+               (regexp-quote
+                ":hook (after-init . my/enable-recentf-mode-if-appropriate)")
+               (buffer-string)))
+      (should (string-match-p
+               (regexp-quote
+                "(unless (and (fboundp 'my/workflow-daemon-p)\n               (my/workflow-daemon-p))\n    (add-hook 'kill-emacs-hook #'recentf-cleanup -90))")
                (buffer-string))))))
 
 (ert-deftest regression/auto-workflow/verify-nucleus-binds-worktree-root-before-early-init ()
@@ -10865,8 +10896,8 @@ failure."
       (when (file-exists-p emacs-log)
         (delete-file emacs-log)))))
 
-(ert-deftest regression/auto-workflow/cron-wrapper-status-uses-aged-active-snapshot-while-daemon-socket-owned ()
-  "Aged active snapshots should stay persisted while the daemon socket is still owned."
+(ert-deftest regression/auto-workflow/cron-wrapper-status-probes-then-uses-aged-active-snapshot-while-daemon-socket-owned ()
+  "Aged active snapshots should be probed before socket-owner fallback."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -10919,7 +10950,7 @@ failure."
             (should (string-match-p "2026-04-14T192005Z-29f3" output)))
           (with-temp-buffer
             (insert-file-contents argv-log)
-            (should (string-empty-p (buffer-string))))
+            (should-not (string-empty-p (buffer-string))))
           (with-temp-buffer
             (insert-file-contents emacs-log)
             (should (string-empty-p (buffer-string)))))

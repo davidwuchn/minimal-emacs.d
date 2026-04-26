@@ -16,9 +16,15 @@
         auto-revert-avoid-polling nil
         auto-revert-verbose t))
 
+(defun my/enable-recentf-mode-if-appropriate ()
+  "Enable `recentf-mode' unless this is a dedicated workflow daemon."
+  (unless (and (fboundp 'my/workflow-daemon-p)
+               (my/workflow-daemon-p))
+    (recentf-mode 1)))
+
 (use-package recentf
   :ensure nil
-  :hook (after-init . recentf-mode)
+  :hook (after-init . my/enable-recentf-mode-if-appropriate)
   :init
   (setq recentf-auto-cleanup (if (daemonp) 300 'never)
         recentf-exclude
@@ -29,7 +35,9 @@
               "\\.\\(?:gz\\|gif\\|svg\\|png\\|jpe?g\\|bmp\\|xpm\\)$"
               "-autoloads\\.el$" "autoload\\.el$"))
   :config
-  (add-hook 'kill-emacs-hook #'recentf-cleanup -90))
+  (unless (and (fboundp 'my/workflow-daemon-p)
+               (my/workflow-daemon-p))
+    (add-hook 'kill-emacs-hook #'recentf-cleanup -90)))
 
 (use-package savehist
   :ensure nil

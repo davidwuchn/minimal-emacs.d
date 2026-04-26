@@ -18,6 +18,22 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/common.bash"
 
 SUBCOMMAND="${1:-all}"
 
+touch_minutes_ago() {
+    local minutes="$1"
+    local path="$2"
+
+    python3 - "$minutes" "$path" <<'PY'
+import os
+import sys
+import time
+
+minutes = float(sys.argv[1])
+path = sys.argv[2]
+stamp = time.time() - (minutes * 60.0)
+os.utime(path, (stamp, stamp))
+PY
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ERT Unit Tests
 # ═══════════════════════════════════════════════════════════════════════════
@@ -112,6 +128,7 @@ run_e2e_tests() {
     local complete_messages_file=""
     local complete_runtime_dir=""
     local complete_server=""
+    local complete_daemon_log=""
     local live_messages_status_file=""
     local live_messages_file=""
     local live_messages_runtime_dir=""
@@ -169,9 +186,15 @@ run_e2e_tests() {
         fail "Failed to create complete-state messages file"
         return 1
     }
-    complete_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/auto-workflow-complete-runtime.XXXXXX")" || {
+    complete_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/aw-comp.XXXXXX")" || {
         rm -f "$complete_status_file" "$complete_messages_file"
         fail "Failed to create complete-state runtime dir"
+        return 1
+    }
+    complete_daemon_log="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-complete-daemon.XXXXXX")" || {
+        rm -f "$complete_status_file" "$complete_messages_file"
+        rm -rf "$complete_runtime_dir"
+        fail "Failed to create complete-state daemon log"
         return 1
     }
     chmod 700 "$complete_runtime_dir"
@@ -179,12 +202,15 @@ run_e2e_tests() {
 
     printf '%s\n' '(:running t :kept 0 :total 5 :phase "running" :run-id "stale-complete" :results "var/tmp/experiments/stale-complete/results.tsv")' >"$complete_status_file"
     printf '%s\n' '[auto-workflow] stale running snapshot' >"$complete_messages_file"
+    touch_minutes_ago 2 "$complete_status_file"
 
     env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+        MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+        MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
         XDG_RUNTIME_DIR="$complete_runtime_dir" \
-        emacs --init-directory="$DIR" --bg-daemon="$complete_server" >/dev/null 2>&1 || true
+        emacs --init-directory="$DIR" --bg-daemon="$complete_server" >"$complete_daemon_log" 2>&1 || true
 
-    for _ in $(seq 1 50); do
+    for _ in $(seq 1 100); do
         if env XDG_RUNTIME_DIR="$complete_runtime_dir" \
            emacsclient -a false -s "$complete_server" --eval "t" >/dev/null 2>&1; then
             daemon_ready=1
@@ -194,8 +220,9 @@ run_e2e_tests() {
     done
 
     if [ "$daemon_ready" -ne 1 ]; then
+        tail -n 80 "$complete_daemon_log" >&2 || true
         emacsclient -a false -s "$complete_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
-        rm -f "$complete_status_file" "$complete_messages_file"
+        rm -f "$complete_status_file" "$complete_messages_file" "$complete_daemon_log"
         rm -rf "$complete_runtime_dir"
         fail "Test daemon did not start"
         return 1
@@ -212,7 +239,7 @@ run_e2e_tests() {
                  gptel-auto-workflow--current-project nil)
            t)" >/dev/null 2>&1 || {
         emacsclient -a false -s "$complete_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
-        rm -f "$complete_status_file" "$complete_messages_file"
+        rm -f "$complete_status_file" "$complete_messages_file" "$complete_daemon_log"
         rm -rf "$complete_runtime_dir"
         fail "Failed to seed daemon with completed workflow state"
         return 1
@@ -226,7 +253,7 @@ run_e2e_tests() {
         "$RUNNER" status); then
         env XDG_RUNTIME_DIR="$complete_runtime_dir" \
             emacsclient -a false -s "$complete_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
-        rm -f "$complete_status_file" "$complete_messages_file"
+        rm -f "$complete_status_file" "$complete_messages_file" "$complete_daemon_log"
         rm -rf "$complete_runtime_dir"
         fail "wrapper status failed while checking daemon completion recovery"
         return 1
@@ -240,13 +267,13 @@ run_e2e_tests() {
        ! grep -q ':running t' "$complete_status_file"; then
         pass "wrapper rewrites stale running snapshot from daemon completion"
     else
-        rm -f "$complete_status_file" "$complete_messages_file"
+        rm -f "$complete_status_file" "$complete_messages_file" "$complete_daemon_log"
         rm -rf "$complete_runtime_dir"
         fail "wrapper kept stale running snapshot after daemon completion"
         return 1
     fi
 
-    rm -f "$complete_status_file" "$complete_messages_file"
+    rm -f "$complete_status_file" "$complete_messages_file" "$complete_daemon_log"
     rm -rf "$complete_runtime_dir"
 
     echo ""
@@ -260,7 +287,7 @@ run_e2e_tests() {
         fail "Failed to create live-messages file"
         return 1
     }
-    live_messages_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/auto-workflow-live-runtime.XXXXXX")" || {
+    live_messages_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/aw-live.XXXXXX")" || {
         rm -f "$live_messages_status_file" "$live_messages_file"
         fail "Failed to create live-messages runtime dir"
         return 1
@@ -270,14 +297,16 @@ run_e2e_tests() {
 
     printf '%s\n' '(:running t :kept 0 :total 3 :phase "running" :run-id "live-messages" :results "var/tmp/experiments/live-messages/results.tsv")' >"$live_messages_status_file"
     printf '%s\n' '[auto-workflow] stale persisted tail' >"$live_messages_file"
-    touch -d '2 minutes ago' "$live_messages_file"
+    touch_minutes_ago 2 "$live_messages_file"
 
     daemon_ready=0
     env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+        MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+        MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
         XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
         emacs --init-directory="$DIR" --bg-daemon="$live_messages_server" >/dev/null 2>&1 || true
 
-    for _ in $(seq 1 50); do
+    for _ in $(seq 1 100); do
         if env XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
            emacsclient -a false -s "$live_messages_server" --eval "t" >/dev/null 2>&1; then
             daemon_ready=1

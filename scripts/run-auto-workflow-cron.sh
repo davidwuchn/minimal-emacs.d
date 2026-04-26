@@ -421,11 +421,6 @@ status_can_use_persisted_active_snapshot() {
     status_indicates_active_phase || return 1
     status_has_live_run_id || return 1
 
-    if daemon_socket_has_owner &&
-       ! daemon_socket_owned_by_worker_daemon; then
-        return 0
-    fi
-
     case "$ACTION" in
         messages)
             if messages_snapshot_fresh &&
@@ -483,7 +478,7 @@ status_can_use_persisted_active_snapshot() {
         else
             rc=$?
             if [ "$rc" -eq 1 ]; then
-                daemon_socket_owned_by_worker_daemon && return 1
+                return 1
             elif [ "$rc" -eq 2 ]; then
                 return 0
             fi
@@ -895,6 +890,7 @@ ensure_worker_daemon() {
     seed_worker_daemon_shared_var
     env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
         MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+        MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
         "$EMACS" --init-directory="$DIR" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
     for _ in $(seq 1 50); do
         if check_worker_daemon; then

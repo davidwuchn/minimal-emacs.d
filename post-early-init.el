@@ -18,6 +18,13 @@
   "Return non-nil when startup explicitly allows a second daemon."
   (string= (getenv my/secondary-daemon-env) "1"))
 
+(defconst my/workflow-daemon-env "MINIMAL_EMACS_WORKFLOW_DAEMON"
+  "Environment variable that marks a dedicated workflow daemon startup.")
+
+(defun my/workflow-daemon-p ()
+  "Return non-nil when startup is for a dedicated workflow daemon."
+  (string= (getenv my/workflow-daemon-env) "1"))
+
 (when (daemonp)
   (require 'server)
   (when (and (not (my/secondary-daemon-allowed-p))
