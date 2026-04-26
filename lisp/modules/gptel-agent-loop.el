@@ -494,16 +494,15 @@ Assumes STATE is a valid task structure."
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP."
-  (let ((resp (if (stringp resp) resp "")))
-    (and (gptel-agent-loop--task-p state)
-         gptel-agent-loop-force-completion
-         (< (gptel-agent-loop--continuation-count state)
-            gptel-agent-loop-max-continuations)
-         (not (gptel-agent-loop--task-max-steps-reached state))
-         (not (gptel-agent-loop--seems-complete-p resp))
-         (not (gptel-agent-loop--looks-like-finishing-p resp))
-         (or (gptel-agent-loop--turn-skipped-p resp)
-             (gptel-agent-loop--looks-like-planning-p resp)))))
+  (and (gptel-agent-loop--task-p state)
+       gptel-agent-loop-force-completion
+       (< (gptel-agent-loop--continuation-count state)
+          gptel-agent-loop-max-continuations)
+       (not (gptel-agent-loop--task-max-steps-reached state))
+       (not (gptel-agent-loop--seems-complete-p resp))
+       (not (gptel-agent-loop--looks-like-finishing-p resp))
+       (or (gptel-agent-loop--turn-skipped-p resp)
+           (gptel-agent-loop--looks-like-planning-p resp))))
 
 (defun gptel-agent-loop--schedule (delay fn)
   "Run FN after DELAY seconds."
@@ -660,7 +659,6 @@ Returns non-nil if result was delivered."
 (defun gptel-agent-loop--handle-continuation (state resp)
   "Handle STATE when continuation is needed after RESP.
 Returns non-nil if result was delivered."
-  (setq resp (if (stringp resp) resp ""))
   (when (gptel-agent-loop--continuation-needed-p state resp)
     (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
       (if gptel-agent-loop-hard-loop
