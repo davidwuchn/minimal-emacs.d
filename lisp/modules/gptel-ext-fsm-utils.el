@@ -214,14 +214,15 @@ forcing caller to handle the case explicitly.
 Returns FSM struct or nil if not found."
   (let ((seen (make-hash-table :test 'eq)))
     (cl-labels ((matches-context-p (fsm)
-                  (and (my/gptel--fsm-p fsm)
-                       (or (null context-id)
-                           (let ((id (my/gptel--fsm-get-id fsm)))
-                             (and id (equal id context-id))))))
+                  (or (null context-id)
+                      (let ((id (my/gptel--fsm-get-id fsm)))
+                        (and id (equal id context-id)))))
                 (coerce-id (id)
                   (let ((fsm (and (stringp id)
                                   (my/gptel--fsm-get-by-id id))))
-                    (and (matches-context-p fsm) fsm)))
+                    (and (my/gptel--fsm-p fsm)
+                         (matches-context-p fsm)
+                         fsm)))
                 (coerce (obj)
                    (cond
                     ((null obj) nil)
@@ -232,8 +233,6 @@ Returns FSM struct or nil if not found."
                     ((stringp obj)
                      (coerce-id obj))
                     ((symbolp obj)
-                     ;; Stale FSM identifiers have shown up as symbols in warm
-                     ;; daemons; treat them as inert IDs, never as variables.
                      (coerce-id (symbol-name obj)))
                     ((and (consp obj) (gethash obj seen)) nil)
                     ((consp obj)
