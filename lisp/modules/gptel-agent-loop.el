@@ -290,7 +290,7 @@ Guards against delivering to a killed parent buffer by checking
 `gptel-agent-loop--task-parent-buffer' and
 `gptel-agent-loop--task-tracking-marker'."
   (cl-block gptel-agent-loop--deliver-result
-    (unless (and state result (stringp result) (gptel-agent-loop--task-main-cb state))
+    (unless (and state (stringp result) (gptel-agent-loop--task-main-cb state))
       (message "[RunAgent] Error: Invalid args to deliver-result, dropping: %s"
                (if (stringp result)
                    (substring result 0 (min 50 (length result)))
