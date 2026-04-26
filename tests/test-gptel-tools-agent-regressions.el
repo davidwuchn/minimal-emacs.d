@@ -8227,8 +8227,8 @@ failure."
       (should (equal (car (nth 4 ops)) 'reload))
       (should (equal (cddr (nth 4 ops)) '(t nil))))))
 
-(ert-deftest regression/auto-workflow/reload-live-support-reloads-context-and-retry-modules ()
-  "Warm-daemon workflow reloads should refresh context and retry support."
+(ert-deftest regression/auto-workflow/reload-live-support-reloads-context-fsm-and-retry-modules ()
+  "Warm-daemon workflow reloads should refresh context, FSM, and retry support."
   (let ((loaded nil))
     (cl-letf (((symbol-function 'load-file)
                 (lambda (path)
@@ -8240,6 +8240,8 @@ failure."
                 (lambda () t)))
        (gptel-auto-workflow--reload-live-support "/tmp/project")
        (should (member (expand-file-name "lisp/modules/gptel-ext-context.el" "/tmp/project")
+                       loaded))
+       (should (member (expand-file-name "lisp/modules/gptel-ext-fsm-utils.el" "/tmp/project")
                        loaded))
        (should (member (expand-file-name "lisp/modules/gptel-ext-retry.el" "/tmp/project")
                        loaded))
@@ -9974,6 +9976,30 @@ failure."
     (setf (gptel-fsm-info fsm) nil)
     (should (my/gptel--disable-auto-retry-for-fsm fsm))
     (should (plist-get (gptel-fsm-info fsm) :disable-auto-retry))))
+
+(ert-deftest regression/fsm-utils/coerce-fsm-returns-fsm-objects ()
+  "FSM coercion should return FSM objects, not boolean match sentinels."
+  (load (expand-file-name "lisp/modules/gptel-ext-fsm-utils.el"
+                          test-auto-workflow--repo-root)
+        nil t)
+  (let ((fsm (gptel-make-fsm)))
+    (setf (gptel-fsm-info fsm) (list :buffer (current-buffer)))
+    (should (eq (my/gptel--coerce-fsm fsm) fsm))
+    (should (eq (my/gptel--coerce-fsm (list 'prefix fsm)) fsm))))
+
+(ert-deftest regression/fsm-utils/coerce-fsm-handles-cycles-and-stale-ids ()
+  "FSM coercion should not recurse forever or evaluate stale FSM ID symbols."
+  (load (expand-file-name "lisp/modules/gptel-ext-fsm-utils.el"
+                          test-auto-workflow--repo-root)
+        nil t)
+  (let* ((fsm (gptel-make-fsm))
+         (cell (cons nil nil)))
+    (setcar cell cell)
+    (setcdr cell (list fsm))
+    (setf (gptel-fsm-info fsm) (list :buffer (current-buffer)))
+    (should (eq (my/gptel--coerce-fsm cell) fsm))
+    (should-not (my/gptel--coerce-fsm 'fsm-1-123))
+    (should-not (my/gptel--coerce-fsm "fsm-1-123"))))
 
 (ert-deftest regression/auto-workflow/subagent-wrapper-reseeds-request-fsm-tools ()
   "Wrapped subagent launches should restore missing FSM tools from the request buffer."

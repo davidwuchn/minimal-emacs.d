@@ -1301,8 +1301,12 @@ large-result truncation, and result caching."
         (cl-progv syms vals
           (gptel--apply-preset preset)
           (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
-                 (parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
-                 (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+                  (parent-fsm
+                   (and (boundp 'gptel--fsm-last)
+                        (fboundp 'my/gptel--coerce-fsm)
+                        (my/gptel--coerce-fsm gptel--fsm-last)))
+                  (info (and parent-fsm
+                             (ignore-errors (gptel-fsm-info parent-fsm))))
                  (info-buf (plist-get info :buffer))
                  (parent-buf (or (when (buffer-live-p info-buf)
                                     info-buf)
@@ -1318,8 +1322,12 @@ large-result truncation, and result caching."
                  (child-fsm (gptel-make-fsm :table gptel-send--transitions
                                             :handlers gptel-agent-request--handlers))
                  (previous-fsm-local-p (local-variable-p 'gptel--fsm-last parent-buf))
-                 (previous-fsm (and previous-fsm-local-p
-                                    (buffer-local-value 'gptel--fsm-last parent-buf)))
+                  (previous-fsm (and previous-fsm-local-p
+                                     (buffer-local-value 'gptel--fsm-last parent-buf)))
+                  (previous-fsm-valid-p
+                   (and previous-fsm
+                        (or (not (fboundp 'my/gptel--coerce-fsm))
+                            (my/gptel--coerce-fsm previous-fsm))))
                  (partial (format "%s result for task: %s\n\n"
                                   (capitalize (or agent-type "agent"))
                                   (or description "unknown"))))
@@ -1394,7 +1402,7 @@ large-result truncation, and result caching."
                     (setq request-started t))
                 (unless request-started
                   (with-current-buffer parent-buf
-                    (if previous-fsm-local-p
+                    (if (and previous-fsm-local-p previous-fsm-valid-p)
                         (setq-local gptel--fsm-last previous-fsm)
                       (kill-local-variable 'gptel--fsm-last))))))))))))
 
@@ -10063,6 +10071,7 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
                     default-directory)))))
     (gptel-auto-workflow--seed-live-root-load-path root)
     (load-file (expand-file-name "lisp/modules/gptel-ext-context.el" root))
+    (load-file (expand-file-name "lisp/modules/gptel-ext-fsm-utils.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-ext-retry.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root))
