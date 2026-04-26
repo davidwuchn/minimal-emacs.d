@@ -197,10 +197,12 @@ EDGE CASE: Nil object returns nil.
 EDGE CASE: Non-FSM object returns nil.
 EDGE CASE: Context-id mismatch returns nil (prevents wrong FSM selection).
 EDGE CASE: Unregistered FSM with context-id returns nil (must be registered).
+EDGE CASE: Dotted pairs (a . b) where b is non-cons are fully traversed.
 TEST: (my/gptel--coerce-fsm fsm) => fsm (no context)
-TEST: (my/gptel--coerce-fsm fsm \"fsm-1-123\") => fsm if IDs match
-TEST: (my/gptel--coerce-fsm fsm \"fsm-2-456\") => nil if IDs differ
-TEST: (my/gptel--coerce-fsm '(fsm1 fsm2) \"fsm-2-456\") => fsm2
+TEST: (my/gptel--coerce-fsm fsm "fsm-1-123") => fsm if IDs match
+TEST: (my/gptel--coerce-fsm fsm "fsm-2-456") => nil if IDs differ
+TEST: (my/gptel--coerce-fsm '(fsm1 fsm2) "fsm-2-456") => fsm2
+TEST: (my/gptel--coerce-fsm '(a . (b . fsm))) => fsm (dotted pair)
 
 BUILDS ON DISCOVERY: Parent and child FSMs can coexist in nested calls.
 ADAPTS TO: Context-aware selection when ID provided, preventing
@@ -213,16 +215,23 @@ Returns FSM struct or nil if not found."
   (let ((seen (make-hash-table :test 'eq)))
     (cl-labels ((coerce (obj)
                   (cond
+                   ((null obj) nil)
                    ((and (consp obj) (gethash obj seen)) nil)
                    ((consp obj)
-                    (puthash obj t seen)
                     (or (coerce (car obj))
-                        (coerce (cdr obj))))
+                        (coerce (cdr obj)))
+                    (puthash obj t seen)
+                    (and (my/gptel--fsm-p obj)
+                         (or (null context-id)
+                             (let ((id (my/gptel--fsm-get-id obj)))
+                               (and id (equal id context-id))))
+                         obj))
                    ((my/gptel--fsm-p obj)
-                    (if (null context-id)
-                        obj
-                      (let ((id (my/gptel--fsm-get-id obj)))
-                        (when (and id (equal id context-id)) obj))))
+                    (unless (gethash obj seen)
+                      (puthash obj t seen)
+                      (or (null context-id)
+                          (let ((id (my/gptel--fsm-get-id obj)))
+                            (and id (equal id context-id))))))
                    (t nil))))
       (coerce object))))
 
@@ -277,12 +286,12 @@ improving testability and reducing cognitive load."
         (result nil))
     (cl-labels ((collect (obj)
                   (cond
+                   ((null obj) nil)
                    ((consp obj)
                     (unless (gethash obj seen)
                       (puthash obj t seen)
                       (collect (car obj))
                       (collect (cdr obj))))
-                   ((null obj) nil)
                    ((my/gptel--fsm-p obj)
                     (puthash obj t seen)
                     (push obj result)))))
