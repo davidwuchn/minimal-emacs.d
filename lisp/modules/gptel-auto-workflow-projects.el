@@ -568,7 +568,7 @@ Also handles caching and result truncation from old advice."
                 (when (fboundp 'my/gptel--register-agent-task-buffer)
                   (my/gptel--register-agent-task-buffer safe-buffer))
                 (with-current-buffer safe-buffer
-                  (funcall task-runner main-cb agent-type description prompt))))))))))
+                  (funcall orig-fun main-cb agent-type description prompt))))))))))
 
 (defun gptel-auto-workflow-enable-per-project-subagents ()
   "Enable per-project subagent buffer support.
