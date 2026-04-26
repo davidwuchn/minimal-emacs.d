@@ -426,9 +426,9 @@ Uses language-aware heuristics:
 For buffers with current buffer, analyzes content type."
   (if (not (and (numberp chars) (> chars 0)))
       0.0
-    (let* ((ext (and (buffer-live-p (current-buffer))
-                     (buffer-file-name)
-                     (file-name-extension (buffer-file-name))))
+    (let* ((ext (when (buffer-live-p (current-buffer))
+                  (let ((fname (buffer-file-name)))
+                    (and fname (file-name-extension fname)))))
            (cache-key (cons chars ext)))
       (or (gethash cache-key my/gptel--token-estimate-cache)
           (let* ((ratio (cond

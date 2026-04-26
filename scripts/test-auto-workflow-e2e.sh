@@ -59,6 +59,22 @@ cleanup_test_artifacts() {
 
 trap cleanup_test_artifacts EXIT
 
+touch_minutes_ago() {
+    local minutes="$1"
+    local path="$2"
+
+    python3 - "$minutes" "$path" <<'PY'
+import os
+import sys
+import time
+
+minutes = float(sys.argv[1])
+path = sys.argv[2]
+stamp = time.time() - (minutes * 60.0)
+os.utime(path, (stamp, stamp))
+PY
+}
+
 run_batch_bootstrap() {
     emacs --batch -Q \
         -L "$DIR" \
@@ -117,6 +133,8 @@ start_test_daemon() {
     local runtime_dir="$2"
 
     env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+        MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+        MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
         XDG_RUNTIME_DIR="$runtime_dir" \
         emacs --init-directory="$DIR" --bg-daemon="$server_name" >/dev/null 2>&1 || true
     DAEMON_SERVERS+=("$server_name")
@@ -137,7 +155,7 @@ start_test_daemon() {
 echo "=== Auto-Workflow E2E Test ==="
 echo
 
-echo "[1/11] Checking prerequisites..."
+echo "[1/12] Checking prerequisites..."
 if [ ! -x "$RUNNER" ]; then
     echo "  ✗ wrapper missing or not executable: $RUNNER"
     exit 1
@@ -151,7 +169,7 @@ fi
 echo "  ✓ emacsclient is resolvable"
 
 echo
-echo "[2/11] Checking wrapper status..."
+echo "[2/12] Checking wrapper status..."
 if "$RUNNER" status | grep -q ':phase'; then
     echo "  ✓ wrapper returns a workflow status snapshot"
 else
@@ -160,13 +178,13 @@ else
 fi
 
 echo
-echo "[3/11] Checking persisted live snapshot handling..."
+echo "[3/12] Checking persisted live snapshot handling..."
 STATUS_TMP="$(mktemp "$DIR/var/tmp/cron/test-status-XXXXXX.sexp")"
 MESSAGES_TMP="$(mktemp "$DIR/var/tmp/cron/test-messages-XXXXXX.txt")"
 TEMP_ARTIFACTS+=("$STATUS_TMP" "$MESSAGES_TMP")
 printf '%s\n' '(:running t :kept 2 :total 5 :phase "running" :run-id "2026-04-15T230002Z-2dbb" :results "var/tmp/experiments/2026-04-15T230002Z-2dbb/results.tsv")' >"$STATUS_TMP"
 printf '%s\n' '[auto-workflow] reviewer still running...' >"$MESSAGES_TMP"
-touch -d '2 minutes ago' "$STATUS_TMP"
+touch_minutes_ago 2 "$STATUS_TMP"
 if AUTO_WORKFLOW_STATUS_FILE="$STATUS_TMP" \
    AUTO_WORKFLOW_MESSAGES_FILE="$MESSAGES_TMP" \
    AUTO_WORKFLOW_EMACS_SERVER="missing-status-test-$$" \
@@ -179,7 +197,7 @@ else
     exit 1
 fi
 
-touch -d '2 minutes ago' "$MESSAGES_TMP"
+touch_minutes_ago 2 "$MESSAGES_TMP"
 XDG_RUNTIME_DIR_TMP="$(mktemp -d "$DIR/var/tmp/cron/test-xdg-runtime-XXXXXX")"
 TEMP_ARTIFACTS+=("$XDG_RUNTIME_DIR_TMP")
 XDG_SOCKET_SERVER="fake-status-test-xdg-$$"
@@ -198,8 +216,8 @@ else
     exit 1
 fi
 
-touch -d '2 minutes ago' "$STATUS_TMP"
-touch -d '2 minutes ago' "$MESSAGES_TMP"
+touch_minutes_ago 2 "$STATUS_TMP"
+touch_minutes_ago 2 "$MESSAGES_TMP"
 TMPDIR_SOCKET_ROOT="$(mktemp -d "$DIR/var/tmp/cron/test-tmpdir-runtime-XXXXXX")"
 TEMP_ARTIFACTS+=("$TMPDIR_SOCKET_ROOT")
 TMPDIR_SOCKET_SERVER="fake-status-test-tmp-$$"
@@ -220,13 +238,14 @@ else
 fi
 
 echo
-echo "[4/11] Checking daemon completion overrides stale running snapshot..."
+echo "[4/12] Checking daemon completion overrides stale running snapshot..."
 COMPLETE_RUNTIME_DIR="$(mktemp -d "$DIR/var/tmp/cron/test-complete-runtime-XXXXXX")"
 TEMP_ARTIFACTS+=("$COMPLETE_RUNTIME_DIR")
 COMPLETE_SERVER="complete-status-test-$$"
 start_test_daemon "$COMPLETE_SERVER" "$COMPLETE_RUNTIME_DIR"
 printf '%s\n' '(:running t :kept 0 :total 5 :phase "running" :run-id "stale-complete" :results "var/tmp/experiments/stale-complete/results.tsv")' >"$STATUS_TMP"
 printf '%s\n' '[auto-workflow] stale running snapshot' >"$MESSAGES_TMP"
+touch_minutes_ago 2 "$STATUS_TMP"
 env XDG_RUNTIME_DIR="$COMPLETE_RUNTIME_DIR" \
     emacsclient -a false -s "$COMPLETE_SERVER" --eval \
     "(progn
@@ -252,14 +271,14 @@ else
 fi
 
 echo
-echo "[5/11] Checking live daemon messages refresh stale persisted tail..."
+echo "[5/12] Checking live daemon messages refresh stale persisted tail..."
 LIVE_MESSAGES_RUNTIME_DIR="$(mktemp -d "$DIR/var/tmp/cron/test-live-messages-runtime-XXXXXX")"
 TEMP_ARTIFACTS+=("$LIVE_MESSAGES_RUNTIME_DIR")
 LIVE_MESSAGES_SERVER="live-messages-test-$$"
 start_test_daemon "$LIVE_MESSAGES_SERVER" "$LIVE_MESSAGES_RUNTIME_DIR"
 printf '%s\n' '(:running t :kept 0 :total 3 :phase "running" :run-id "live-messages" :results "var/tmp/experiments/live-messages/results.tsv")' >"$STATUS_TMP"
 printf '%s\n' '[auto-workflow] stale persisted tail' >"$MESSAGES_TMP"
-touch -d '2 minutes ago' "$MESSAGES_TMP"
+touch_minutes_ago 2 "$MESSAGES_TMP"
 env XDG_RUNTIME_DIR="$LIVE_MESSAGES_RUNTIME_DIR" \
     emacsclient -a false -s "$LIVE_MESSAGES_SERVER" --eval \
     "(progn
@@ -288,8 +307,29 @@ else
 fi
 
 echo
+echo "[6/12] Checking workflow daemon startup disables recentf and compile-angel..."
+RECENTF_RUNTIME_DIR="$(mktemp -d "$DIR/var/tmp/cron/test-recentf-runtime-XXXXXX")"
+TEMP_ARTIFACTS+=("$RECENTF_RUNTIME_DIR")
+RECENTF_SERVER="recentf-daemon-test-$$"
+start_test_daemon "$RECENTF_SERVER" "$RECENTF_RUNTIME_DIR"
+if env XDG_RUNTIME_DIR="$RECENTF_RUNTIME_DIR" \
+   emacsclient -a false -s "$RECENTF_SERVER" --eval "(and (boundp 'recentf-mode) recentf-mode)" | grep -qx 'nil'; then
+    echo "  ✓ workflow test daemon starts with recentf disabled"
+else
+    echo "  ✗ workflow test daemon still enabled recentf"
+    exit 1
+fi
+if env XDG_RUNTIME_DIR="$RECENTF_RUNTIME_DIR" \
+   emacsclient -a false -s "$RECENTF_SERVER" --eval "(and (boundp 'compile-angel-on-load-mode) compile-angel-on-load-mode)" | grep -qx 'nil'; then
+    echo "  ✓ workflow test daemon starts with compile-angel disabled"
+else
+    echo "  ✗ workflow test daemon still enabled compile-angel"
+    exit 1
+fi
+
 echo
-echo "[6/11] Checking override isolation..."
+echo
+echo "[7/12] Checking override isolation..."
 backup_global_snapshot_cache
 CACHE_STATUS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/aw-status-dirXXXXXX")"
 TEMP_ARTIFACTS+=("$CACHE_STATUS_DIR")
@@ -313,7 +353,7 @@ else
 fi
 
 echo
-echo "[7/11] Checking required modules..."
+echo "[8/12] Checking required modules..."
 for module in gptel-tools-agent.el gptel-auto-workflow-projects.el gptel-auto-workflow-strategic.el; do
     if [ -f "lisp/modules/$module" ]; then
         echo "  ✓ $module exists"
@@ -324,7 +364,7 @@ for module in gptel-tools-agent.el gptel-auto-workflow-projects.el gptel-auto-wo
 done
 
 echo
-echo "[8/11] Checking cron configuration..."
+echo "[9/12] Checking cron configuration..."
 if crontab -l 2>/dev/null | grep -Eq '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow'; then
     echo "  ✓ Auto-workflow cron job installed via wrapper"
     crontab -l | grep -E '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow' | head -1 | sed 's/^/    /'
@@ -335,7 +375,7 @@ else
 fi
 
 echo
-echo "[9/11] Checking required directories..."
+echo "[10/12] Checking required directories..."
 for dir in var/tmp/cron var/tmp/experiments; do
     if [ -d "$dir" ]; then
         echo "  ✓ $dir exists"
@@ -346,7 +386,7 @@ for dir in var/tmp/cron var/tmp/experiments; do
 done
 
 echo
-echo "[10/11] Testing batch module loading..."
+echo "[11/12] Testing batch module loading..."
 if run_batch_bootstrap >/dev/null 2>&1; then
     echo "  ✓ auto-workflow modules load successfully in batch mode"
 else
@@ -355,7 +395,7 @@ else
 fi
 
 echo
-echo "[11/11] Checking workflow entrypoints..."
+echo "[12/12] Checking workflow entrypoints..."
 if "$RUNNER" status | grep -q ':phase'; then
     echo "  ✓ wrapper status remains responsive"
 else

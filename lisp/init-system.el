@@ -24,8 +24,10 @@
   (push "/pre-early-init.el" compile-angel-excluded-files)
   (push "/post-early-init.el" compile-angel-excluded-files)
   :hook (emacs-startup . (lambda ()
-                           (unless noninteractive
-                             (compile-angel-on-load-mode 1)))))
+                           (unless (or noninteractive
+                                       (and (fboundp 'my/workflow-daemon-p)
+                                            (my/workflow-daemon-p)))
+                              (compile-angel-on-load-mode 1)))))
 
 ;; Environment Variable Synchronization (Essential for macOS users)
 (use-package exec-path-from-shell
