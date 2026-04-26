@@ -357,30 +357,20 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
   "Look up context window for MODEL in gptel's built-in model tables.
 Returns the context window in tokens, or nil if not found.
 Handles both symbol and string model identifiers with case-insensitive fallback."
-  (cond
-   ((symbolp model)
+  (let ((model-str (cond
+                    ((stringp model) model)
+                    ((symbolp model) (symbol-name model))
+                    (t (return-from my/gptel--lookup-context-window-in-gptel-tables nil)))))
     (catch 'found
       (dolist (var (my/gptel--gptel-model-tables))
         (let* ((table (symbol-value var))
-               (entry (assq model table)))
+               (entry (assoc-string model-str table t)))
           (when entry
             (let ((cw (my/gptel--normalize-context-window
                        (plist-get (cdr entry) :context-window))))
               (when (and (integerp cw) (> cw 0))
                 (throw 'found cw))))))
-      nil))
-   ((stringp model)
-    (catch 'found
-      (dolist (var (my/gptel--gptel-model-tables))
-        (let* ((table (symbol-value var))
-               (entry (assoc-string model table t)))
-          (when entry
-            (let ((cw (my/gptel--normalize-context-window
-                       (plist-get (cdr entry) :context-window))))
-              (when (and (integerp cw) (> cw 0))
-                (throw 'found cw))))))
-      nil))
-   (t nil)))
+      nil)))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
