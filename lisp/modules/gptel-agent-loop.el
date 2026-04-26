@@ -334,7 +334,7 @@ Truncates accumulated output to last
   (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
          (limit gptel-agent-loop-continuation-context-limit)
          (context (if (and (integerp limit) (> limit 0)
-                          (> (length output) limit))
+                           (> (length output) limit))
                       (concat "...[earlier output truncated]\n"
                               (substring output (- limit)))
                     output)))
@@ -368,7 +368,7 @@ a RunAgent task has finished successfully.")
   "Compile PATTERNS list into a single combined regex string.
 Returns nil if patterns list is empty or contains non-string elements."
   (when (and patterns (cl-every #'stringp patterns))
-    (mapconcat (lambda (p) (concat "\\(" p "\\)")) patterns "\\|")))
+    (mapconcat (lambda (p) (concat "\\(?:" p "\\)")) patterns "\\|")))
 
 (defun gptel-agent-loop--ensure-patterns-compiled ()
   "Ensure all pattern variables are compiled for performance.
@@ -737,11 +737,8 @@ Cache behavior:
                            (with-current-buffer parent-buf (point-marker))))
                    (tracking-marker
                     (or (gptel-agent-loop--task-tracking-marker state)
-                        ;; If where is already in parent-buf, use it directly.
-                        ;; If it's from a foreign buffer (fsm-info), don't copy
-                        ;; its position across buffers — create a fresh marker instead.
                         (if (and where (eq (marker-buffer where) parent-buf))
-                            where
+                            (copy-marker where)
                           (with-current-buffer parent-buf (point-marker)))))
                    (callback (gptel-agent-loop--make-callback state prompt use-tools))
                    (child-fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)))
