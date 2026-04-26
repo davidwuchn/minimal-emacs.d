@@ -9406,6 +9406,31 @@ failure."
           (should (equal undo-fu-calls '(1 -1))))
       (makunbound 'undo-fu-session-global-mode))))
 
+(ert-deftest regression/auto-workflow/headless-suppression-disables-and-restores-recentf ()
+  "Headless suppression should disable recentf maintenance during workflow runs."
+  (let ((recentf-calls nil)
+        (gptel-auto-workflow--headless nil)
+        (gptel-auto-workflow-persistent-headless nil)
+        (gptel-auto-workflow--recentf-was-enabled nil))
+    (setq recentf-mode t)
+    (unwind-protect
+        (cl-letf (((symbol-function 'advice-add) (lambda (&rest _) nil))
+                  ((symbol-function 'advice-remove) (lambda (&rest _) nil))
+                  ((symbol-function 'global-auto-revert-mode) (lambda (&rest _) nil))
+                  ((symbol-function 'add-hook) (lambda (&rest _) nil))
+                  ((symbol-function 'remove-hook) (lambda (&rest _) nil))
+                  ((symbol-function 'recentf-mode)
+                   (lambda (arg)
+                     (push arg recentf-calls)
+                     (setq recentf-mode (> arg 0)))))
+          (gptel-auto-workflow--enable-headless-suppression)
+          (should-not recentf-mode)
+          (should (equal recentf-calls '(-1)))
+          (gptel-auto-workflow--disable-headless-suppression)
+          (should recentf-mode)
+          (should (equal recentf-calls '(1 -1))))
+      (makunbound 'recentf-mode))))
+
 (ert-deftest regression/auto-workflow/watchdog-clears-cron-job-running ()
   "Watchdog force-stop should clear the cron-job latch."
   (let ((gptel-auto-workflow--running t)
