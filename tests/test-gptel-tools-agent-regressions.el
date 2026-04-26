@@ -3644,6 +3644,38 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (when (file-directory-p caller-dir)
         (delete-directory caller-dir t)))))
 
+(ert-deftest regression/subagent/safe-callback-does-not-rewrite-caller-directory ()
+  "Callback cleanup should not mutate the caller buffer's `default-directory'."
+  (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
+         (caller-dir (file-name-as-directory (make-temp-file "gptel-callback-caller-" t)))
+         (original-caller-dir (file-name-as-directory (expand-file-name caller-dir))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory original-caller-dir)
+          (delete-directory caller-dir t)
+          (my/gptel--invoke-callback-safely #'ignore "ok")
+          (should (equal default-directory original-caller-dir)))
+      (when (buffer-live-p safe-buffer)
+        (kill-buffer safe-buffer))
+      (when (file-directory-p caller-dir)
+        (delete-directory caller-dir t)))))
+
+(ert-deftest regression/fsm/coerce-fsm-returns-matching-object ()
+  "`my/gptel--coerce-fsm' should return the FSM object, not a boolean."
+  (let* ((fsm (gptel-make-fsm :state 'init :table nil :handlers nil :info nil))
+         (other-fsm (gptel-make-fsm :state 'other :table nil :handlers nil :info nil)))
+    (unwind-protect
+        (let ((fsm-id (my/gptel--fsm-register fsm))
+              (other-id (my/gptel--fsm-register other-fsm)))
+          (should (eq (my/gptel--coerce-fsm fsm) fsm))
+          (should (eq (my/gptel--coerce-fsm (list :wrapper fsm)) fsm))
+          (should (eq (my/gptel--coerce-fsm (cons :wrapper fsm)) fsm))
+          (should (eq (my/gptel--coerce-fsm (list other-fsm fsm) fsm-id) fsm))
+          (should (eq (my/gptel--coerce-fsm (list other-fsm fsm) other-id) other-fsm))
+          (should-not (my/gptel--coerce-fsm (list fsm) "missing-id")))
+      (my/gptel--fsm-unregister fsm)
+      (my/gptel--fsm-unregister other-fsm))))
+
 (ert-deftest regression/auto-experiment/error-snippet-sanitizes-output ()
   "Error snippet extraction should be sanitized and never signal."
   (let ((snippet (gptel-auto-experiment--error-snippet "line1\nline2\tline3" 40)))
