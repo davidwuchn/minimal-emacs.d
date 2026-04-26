@@ -315,13 +315,13 @@ Single constant avoids allocating a new symbol on every search call.")
   "Look up KEY in HASH-TABLE, falling back to ALIST partial match.
 Returns the value from hash table if found, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found."
-  (if (and (hash-table-p hash-table) (stringp key))
+  (if (and (hash-table-p hash-table) (stringp key) (not (string-empty-p key)))
       (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
         (if (eq hash-value my/gptel--cache-sentinel)
             (and (listp alist)
                  (my/gptel--alist-partial-match alist key))
           hash-value))
-    (and (listp alist) (stringp key)
+    (and (listp alist) (stringp key) (not (string-empty-p key))
          (my/gptel--alist-partial-match alist key))))
 
 (defun my/gptel--alist-partial-match (alist search-str)
