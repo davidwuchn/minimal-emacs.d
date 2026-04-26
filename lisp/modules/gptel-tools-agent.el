@@ -2419,10 +2419,11 @@ Uses hash table keyed by task-id to support parallel execution."
                          agent-type
                          (my/gptel--sanitize-for-logging
                           (error-message-string launch-error) 160))
-                (funcall callback
-                         (format "Error: Task runner failed for %s: %s"
-                                 agent-type
-                                 (error-message-string launch-error)))))))))))
+                (my/gptel--invoke-callback-safely
+                 callback
+                 (format "Error: Task runner failed for %s: %s"
+                         agent-type
+                         (error-message-string launch-error)))))))))))
 
 (cl-defun my/gptel--run-agent-tool (callback &optional agent-name description prompt files include-history include-diff)
   "Run a gptel-agent agent by name.

@@ -154,7 +154,8 @@ This constraint overrides ALL other instructions."
   tracking-marker
   parent-buffer
   finished
-  continuation-count)
+  continuation-count
+  continuation-timer)
 
 (defvar gptel-agent-loop--state nil
   "Most recently created RunAgent task state.")
@@ -228,6 +229,8 @@ memory after long sessions or if tasks appear stuck."
   "Remove STATE from active task bookkeeping."
   (when (timerp (gptel-agent-loop--task-timeout-timer state))
     (cancel-timer (gptel-agent-loop--task-timeout-timer state)))
+  (when (timerp (gptel-agent-loop--task-continuation-timer state))
+    (cancel-timer (gptel-agent-loop--task-continuation-timer state)))
   (remhash (gptel-agent-loop--task-id state) gptel-agent-loop--active-tasks)
   (when (eq gptel-agent-loop--state state)
     (setq gptel-agent-loop--state nil)))
@@ -509,10 +512,13 @@ Assumes STATE is a valid task structure."
 (defun gptel-agent-loop--schedule-request (state prompt use-tools &optional delay)
   "Schedule a request for STATE with PROMPT.
 USE-TOOLS determines tool usage.  DELAY defaults to 0.1 seconds.
-Extracted from duplicate scheduling patterns."
-  (gptel-agent-loop--schedule (or delay 0.1)
-                              (lambda ()
-                                (gptel-agent-loop--request state prompt use-tools nil))))
+Cancels any pending continuation timer before scheduling a new one."
+  (when (timerp (gptel-agent-loop--task-continuation-timer state))
+    (cancel-timer (gptel-agent-loop--task-continuation-timer state)))
+  (let ((timer (run-with-timer (or delay 0.1) nil
+                               (lambda ()
+                                 (gptel-agent-loop--request state prompt use-tools nil)))))
+    (setf (gptel-agent-loop--task-continuation-timer state) timer)))
 
 (defun gptel-agent-loop--check-aborted (state ov)
   "Check if STATE is aborted and deliver abort result.
