@@ -307,44 +307,39 @@ to a write-capable tool."
     (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
                 (tool-use (plist-get info :tool-use)))
       (let* ((state (plist-get info :inspection-thrash-state))
-              (current-file (plist-get state :file))
-              (current-run (or (plist-get state :count) 0)))
+             (inspection-thrash-state (list :file (plist-get state :file)
+                                            :count (or (plist-get state :count) 0))))
         (dolist (tc tool-use)
           (let* ((name (plist-get tc :name))
-                  (file (my/gptel--inspection-tool-target tc)))
+                 (file (my/gptel--inspection-tool-target tc)))
             (cond
              ((member name my/gptel--write-tools)
-              (setq current-file nil
-                    current-run 0)
-              (setf (gptel-fsm-info fsm)
-                    (plist-put info :inspection-thrash-state
-                               (list :file current-file :count current-run))))
+              (setq inspection-thrash-state (list :file nil :count 0)))
              (file
-               (setq current-run (if (equal current-file file)
-                                     (1+ current-run)
-                                   1)
-                     current-file file)
-               (let ((threshold (my/gptel--inspection-thrash-threshold-for-file file)))
-                 (when (>= current-run threshold)
-                 (let ((abbrev-file (abbreviate-file-name file)))
-                   (let ((error-message
-                          (format "gptel: inspection-thrash aborted — %d consecutive read-only inspections on %s without a write-capable tool. Try editing sooner or narrow the task."
-                                  current-run abbrev-file)))
-                     (message "gptel: inspection-thrash detected — %d read-only inspections on %s without a write, aborting turn"
-                              current-run abbrev-file)
-                     (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
-                     (funcall (plist-get info :callback) error-message info))
-                   (gptel--fsm-transition fsm 'DONE)
-                   (cl-return-from my/gptel--detect-inspection-thrash))))
-               (setf (gptel-fsm-info fsm)
-                     (plist-put info :inspection-thrash-state
-                                (list :file current-file :count current-run))))
+              (setq inspection-thrash-state
+                    (if (equal (plist-get inspection-thrash-state :file) file)
+                        (plist-put inspection-thrash-state :count
+                                   (1+ (or (plist-get inspection-thrash-state :count) 0)))
+                      (list :file file :count 1)))
+              (let ((current-run (plist-get inspection-thrash-state :count))
+                    (threshold (my/gptel--inspection-thrash-threshold-for-file file)))
+                (when (>= current-run threshold)
+                  (let ((abbrev-file (abbreviate-file-name file))
+                        (error-message (format "gptel: inspection-thrash aborted — %d consecutive read-only inspections on %s without a write-capable tool. Try editing sooner or narrow the task."
+                                                current-run abbrev-file)))
+                    (message "gptel: inspection-thrash detected — %d read-only inspections on %s without a write, aborting turn"
+                             current-run abbrev-file)
+                    (plist-put inspection-thrash-state :stopped t)
+                    (setf (gptel-fsm-info fsm)
+                          (plist-put info :inspection-thrash-state inspection-thrash-state))
+                    (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
+                    (funcall (plist-get info :callback) error-message info)
+                    (gptel--fsm-transition fsm 'DONE)
+                    (cl-return-from my/gptel--detect-inspection-thrash))))))
              (t
-             (setq current-file nil
-                   current-run 0)
-              (setf (gptel-fsm-info fsm)
-                    (plist-put info :inspection-thrash-state
-                               (list :file current-file :count current-run)))))))))))
+              (setq inspection-thrash-state (list :file nil :count 0)))))
+        (setf (gptel-fsm-info fsm)
+              (plist-put info :inspection-thrash-state inspection-thrash-state))))))
 
 ;; --- Duplicate Tool Name Guard ---
 ;; gptel--parse-tools maps gptel-tools directly to JSON without deduplication.
