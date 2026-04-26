@@ -9017,6 +9017,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--compile-angel-on-load-was-enabled nil
   "Remember whether `compile-angel-on-load-mode' was enabled before headless operation.")
 
+(defvar gptel-auto-workflow--undo-fu-session-was-enabled nil
+  "Remember whether `undo-fu-session-global-mode' was enabled before headless operation.")
+
 (defvar gptel-auto-workflow--create-lockfiles-value t
   "Remember `create-lockfiles' before headless operation.")
 
@@ -9274,7 +9277,7 @@ In headless mode, marks buffer as unmodified before killing to bypass prompt."
 
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation.
-Also disables auto-revert, compile-angel, and uniquify to prevent
+Also disables auto-revert, compile-angel, undo-fu-session, and uniquify to prevent
 buffer churn in ephemeral workflow worktrees."
   (setq gptel-auto-workflow--headless t)
   ;; Remember and disable auto-revert
@@ -9289,6 +9292,13 @@ buffer churn in ephemeral workflow worktrees."
   (when (and gptel-auto-workflow--compile-angel-on-load-was-enabled
              (fboundp 'compile-angel-on-load-mode))
     (compile-angel-on-load-mode -1))
+  ;; Disable undo-fu session recovery so worker daemons do not spam *Messages*
+  ;; with stale-session mismatch warnings while replaying repo/worktree files.
+  (setq gptel-auto-workflow--undo-fu-session-was-enabled
+        (bound-and-true-p undo-fu-session-global-mode))
+  (when (and gptel-auto-workflow--undo-fu-session-was-enabled
+             (fboundp 'undo-fu-session-global-mode))
+    (undo-fu-session-global-mode -1))
   ;; Disable lockfiles so repeated experiment/worktree reuse does not prompt.
   (setq gptel-auto-workflow--create-lockfiles-value create-lockfiles
         create-lockfiles nil)
@@ -9320,7 +9330,7 @@ Set to t when running as daemon/cron to prevent interactive prompts."
 
 (defun gptel-auto-workflow--disable-headless-suppression ()
   "Disable suppression of interactive prompts.
-Restores auto-revert, compile-angel, and uniquify if they were
+Restores auto-revert, compile-angel, undo-fu-session, and uniquify if they were
 enabled before headless operation.
 Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
   (when (and (not gptel-auto-workflow-persistent-headless)
@@ -9335,6 +9345,11 @@ Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
                (fboundp 'compile-angel-on-load-mode))
       (compile-angel-on-load-mode 1))
     (setq gptel-auto-workflow--compile-angel-on-load-was-enabled nil)
+    ;; Restore undo-fu-session only when this session disabled it.
+    (when (and gptel-auto-workflow--undo-fu-session-was-enabled
+               (fboundp 'undo-fu-session-global-mode))
+      (undo-fu-session-global-mode 1))
+    (setq gptel-auto-workflow--undo-fu-session-was-enabled nil)
     ;; Restore lockfile behavior
     (setq create-lockfiles gptel-auto-workflow--create-lockfiles-value)
     ;; Restore uniquify
