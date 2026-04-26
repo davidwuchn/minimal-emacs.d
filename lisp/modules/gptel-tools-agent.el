@@ -240,9 +240,42 @@ it when the current transient implementation is too old."
            (when (fboundp 'gptel-auto-workflow-bootstrap--elpa-dirs)
              (gptel-auto-workflow-bootstrap--elpa-dirs root))))
     (dolist (dir (reverse dirs))
-      (when (file-directory-p dir)
+     (when (file-directory-p dir)
         (setq load-path (cons dir (delete dir load-path)))))
     dirs))
+
+(defun my/gptel--retarget-live-buffer-directory (buffer-or-name dir)
+  "Set BUFFER-OR-NAME `default-directory' to DIR when both are live."
+  (when (and (stringp dir)
+             (file-directory-p dir))
+    (when-let ((buf (get-buffer buffer-or-name)))
+      (with-current-buffer buf
+        (setq default-directory (file-name-as-directory (expand-file-name dir))))
+      buf)))
+
+(defun gptel-auto-workflow--retarget-shared-process-buffers (proj-root)
+  "Retarget shared curl/bash helper buffers to PROJ-ROOT.
+Reset the persistent bash process when it still points at a different or
+deleted directory."
+  (let* ((root (file-name-as-directory (expand-file-name proj-root)))
+         (bash-buf (get-buffer " *gptel-persistent-bash*"))
+         (bash-dir (when (buffer-live-p bash-buf)
+                     (with-current-buffer bash-buf default-directory)))
+         (bash-process-live-p
+          (and (boundp 'my/gptel--persistent-bash-process)
+               (process-live-p my/gptel--persistent-bash-process)))
+         (bash-needs-reset
+          (and bash-process-live-p
+               (or (not (and (stringp bash-dir)
+                             (file-directory-p bash-dir)))
+                   (not (equal (file-name-as-directory (expand-file-name bash-dir))
+                               root))))))
+    (my/gptel--retarget-live-buffer-directory " *gptel-curl*" root)
+    (my/gptel--retarget-live-buffer-directory " *gptel-persistent-bash*" root)
+    (when (and bash-needs-reset
+               (fboundp 'my/gptel--reset-persistent-bash))
+      (my/gptel--reset-persistent-bash))
+    root))
 
 (defun gptel-auto-workflow--activate-live-root (proj-root)
   "Retarget the live daemon to PROJ-ROOT for queued workflow actions."
@@ -258,6 +291,7 @@ it when the current transient implementation is too old."
       (setq minimal-emacs-user-directory root))
     (when (boundp 'gptel-auto-workflow-projects)
       (setq gptel-auto-workflow-projects (list root)))
+    (gptel-auto-workflow--retarget-shared-process-buffers root)
     (gptel-auto-workflow--seed-live-root-load-path root)
     (gptel-auto-workflow--prefer-elpa-transient root)
     root))
@@ -2085,6 +2119,22 @@ its async continuation layer in the worker daemon."
                  (file-directory-p dir))
         (throw 'found (file-name-as-directory (expand-file-name dir)))))
     nil))
+
+(defun my/gptel--prime-curl-buffer-directory (&rest _)
+  "Retarget the shared curl buffer to the current workflow root."
+  (let ((root (or (my/gptel--first-existing-directory
+                   default-directory
+                   user-emacs-directory
+                   temporary-file-directory)
+                  temporary-file-directory)))
+    (with-current-buffer (get-buffer-create " *gptel-curl*")
+      (setq default-directory root))))
+
+(with-eval-after-load 'gptel-request
+  (advice-remove 'gptel-curl-get-response
+                 #'my/gptel--prime-curl-buffer-directory)
+  (advice-add 'gptel-curl-get-response :before
+              #'my/gptel--prime-curl-buffer-directory))
 
 (defun my/gptel--invoke-callback-safely (callback result)
   "Invoke CALLBACK with RESULT from a stable internal buffer.
@@ -9027,6 +9077,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--compile-angel-on-load-was-enabled nil
   "Remember whether `compile-angel-on-load-mode' was enabled before headless operation.")
 
+(defvar gptel-auto-workflow--undo-fu-session-was-enabled nil
+  "Remember whether `undo-fu-session-global-mode' was enabled before headless operation.")
+
 (defvar gptel-auto-workflow--create-lockfiles-value t
   "Remember `create-lockfiles' before headless operation.")
 
@@ -9284,7 +9337,7 @@ In headless mode, marks buffer as unmodified before killing to bypass prompt."
 
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation.
-Also disables auto-revert, compile-angel, and uniquify to prevent
+Also disables auto-revert, compile-angel, undo-fu-session, and uniquify to prevent
 buffer churn in ephemeral workflow worktrees."
   (setq gptel-auto-workflow--headless t)
   ;; Remember and disable auto-revert
@@ -9299,6 +9352,13 @@ buffer churn in ephemeral workflow worktrees."
   (when (and gptel-auto-workflow--compile-angel-on-load-was-enabled
              (fboundp 'compile-angel-on-load-mode))
     (compile-angel-on-load-mode -1))
+  ;; Disable undo-fu session recovery so worker daemons do not spam *Messages*
+  ;; with stale-session mismatch warnings while replaying repo/worktree files.
+  (setq gptel-auto-workflow--undo-fu-session-was-enabled
+        (bound-and-true-p undo-fu-session-global-mode))
+  (when (and gptel-auto-workflow--undo-fu-session-was-enabled
+             (fboundp 'undo-fu-session-global-mode))
+    (undo-fu-session-global-mode -1))
   ;; Disable lockfiles so repeated experiment/worktree reuse does not prompt.
   (setq gptel-auto-workflow--create-lockfiles-value create-lockfiles
         create-lockfiles nil)
@@ -9330,7 +9390,7 @@ Set to t when running as daemon/cron to prevent interactive prompts."
 
 (defun gptel-auto-workflow--disable-headless-suppression ()
   "Disable suppression of interactive prompts.
-Restores auto-revert, compile-angel, and uniquify if they were
+Restores auto-revert, compile-angel, undo-fu-session, and uniquify if they were
 enabled before headless operation.
 Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
   (when (and (not gptel-auto-workflow-persistent-headless)
@@ -9345,6 +9405,11 @@ Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
                (fboundp 'compile-angel-on-load-mode))
       (compile-angel-on-load-mode 1))
     (setq gptel-auto-workflow--compile-angel-on-load-was-enabled nil)
+    ;; Restore undo-fu-session only when this session disabled it.
+    (when (and gptel-auto-workflow--undo-fu-session-was-enabled
+               (fboundp 'undo-fu-session-global-mode))
+      (undo-fu-session-global-mode 1))
+    (setq gptel-auto-workflow--undo-fu-session-was-enabled nil)
     ;; Restore lockfile behavior
     (setq create-lockfiles gptel-auto-workflow--create-lockfiles-value)
     ;; Restore uniquify

@@ -2274,7 +2274,51 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                    (lambda (_root) nil)))
           (should (equal (gptel-auto-workflow--activate-live-root project-root)
                          project-root))
-          (should discarded))
+           (should discarded))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/activate-live-root-retargets-shared-process-buffers ()
+  "Activating a live root should repoint shared curl/bash buffers."
+  (defvar minimal-emacs-user-directory)
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-live-root" t)))
+         (stale-root (file-name-as-directory (make-temp-file "aw-stale-root" t)))
+         (curl-buf (get-buffer-create " *gptel-curl*"))
+         (bash-buf (get-buffer-create " *gptel-persistent-bash*"))
+         (default-directory "/tmp/original-root/")
+         (user-emacs-directory "/tmp/original-root/")
+         (minimal-emacs-user-directory "/tmp/original-root/")
+         (gptel-auto-workflow-projects '("/tmp/original-root/"))
+         (gptel-auto-workflow--current-project "/tmp/drift/")
+         (gptel-auto-workflow--run-project-root "/tmp/drift/")
+         (gptel-auto-workflow--project-root-override "/tmp/drift/")
+         (my/gptel--persistent-bash-process 'fake-bash)
+         (reset-called nil))
+    (unwind-protect
+        (progn
+          (delete-directory stale-root t)
+          (with-current-buffer curl-buf
+            (setq default-directory stale-root))
+          (with-current-buffer bash-buf
+            (setq default-directory stale-root))
+          (cl-letf (((symbol-function 'process-live-p)
+                     (lambda (proc) (eq proc 'fake-bash)))
+                    ((symbol-function 'my/gptel--reset-persistent-bash)
+                     (lambda () (setq reset-called t)))
+                    ((symbol-function 'gptel-auto-workflow--seed-live-root-load-path)
+                     (lambda (_root) nil))
+                    ((symbol-function 'gptel-auto-workflow--prefer-elpa-transient)
+                     (lambda (_root) nil)))
+            (should (equal (gptel-auto-workflow--activate-live-root project-root)
+                           project-root))
+            (with-current-buffer curl-buf
+              (should (equal default-directory project-root)))
+            (with-current-buffer bash-buf
+              (should (equal default-directory project-root)))
+            (should reset-called)))
+      (when (buffer-live-p curl-buf)
+        (kill-buffer curl-buf))
+      (when (buffer-live-p bash-buf)
+        (kill-buffer bash-buf))
       (delete-directory project-root t))))
 
 (ert-deftest regression/auto-workflow/activate-live-root-prefers-elpa-transient ()
@@ -9334,8 +9378,33 @@ failure."
           (should (equal compile-angel-calls '(-1)))
           (gptel-auto-workflow--disable-headless-suppression)
           (should compile-angel-on-load-mode)
-          (should (equal compile-angel-calls '(1 -1))))
+           (should (equal compile-angel-calls '(1 -1))))
       (makunbound 'compile-angel-on-load-mode))))
+
+(ert-deftest regression/auto-workflow/headless-suppression-disables-and-restores-undo-fu-session ()
+  "Headless suppression should disable undo-fu-session recovery during workflow runs."
+  (let ((undo-fu-calls nil)
+        (gptel-auto-workflow--headless nil)
+        (gptel-auto-workflow-persistent-headless nil)
+        (gptel-auto-workflow--undo-fu-session-was-enabled nil))
+    (setq undo-fu-session-global-mode t)
+    (unwind-protect
+        (cl-letf (((symbol-function 'advice-add) (lambda (&rest _) nil))
+                  ((symbol-function 'advice-remove) (lambda (&rest _) nil))
+                  ((symbol-function 'global-auto-revert-mode) (lambda (&rest _) nil))
+                  ((symbol-function 'add-hook) (lambda (&rest _) nil))
+                  ((symbol-function 'remove-hook) (lambda (&rest _) nil))
+                  ((symbol-function 'undo-fu-session-global-mode)
+                   (lambda (arg)
+                     (push arg undo-fu-calls)
+                     (setq undo-fu-session-global-mode (> arg 0)))))
+          (gptel-auto-workflow--enable-headless-suppression)
+          (should-not undo-fu-session-global-mode)
+          (should (equal undo-fu-calls '(-1)))
+          (gptel-auto-workflow--disable-headless-suppression)
+          (should undo-fu-session-global-mode)
+          (should (equal undo-fu-calls '(1 -1))))
+      (makunbound 'undo-fu-session-global-mode))))
 
 (ert-deftest regression/auto-workflow/watchdog-clears-cron-job-running ()
   "Watchdog force-stop should clear the cron-job latch."
@@ -14556,6 +14625,48 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (when (markerp messages-start)
         (set-marker messages-start nil))
       (kill-buffer target-buf))))
+
+(ert-deftest regression/subagent/prime-curl-buffer-directory-retargets-stale-buffer ()
+  "Curl request setup should repoint the shared curl buffer to the live root."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-curl-root" t)))
+         (stale-root (file-name-as-directory (make-temp-file "aw-curl-stale" t)))
+         (curl-buf (get-buffer-create " *gptel-curl*"))
+         (default-directory project-root))
+    (unwind-protect
+        (progn
+          (delete-directory stale-root t)
+          (with-current-buffer curl-buf
+            (setq default-directory stale-root))
+          (my/gptel--prime-curl-buffer-directory)
+          (with-current-buffer curl-buf
+            (should (equal default-directory project-root))))
+      (when (buffer-live-p curl-buf)
+        (kill-buffer curl-buf))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/bash/ensure-persistent-bash-retargets-buffer-directory ()
+  "Persistent bash should repoint its shared buffer to the active context dir."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-bash-root" t)))
+         (stale-root (file-name-as-directory (make-temp-file "aw-bash-stale" t)))
+         (context-buf (generate-new-buffer "*test-bash-context*"))
+         (bash-buf (get-buffer-create " *gptel-persistent-bash*"))
+         (my/gptel--persistent-bash-process nil))
+    (unwind-protect
+        (progn
+          (delete-directory stale-root t)
+          (with-current-buffer bash-buf
+            (setq default-directory stale-root))
+          (with-current-buffer context-buf
+            (setq default-directory project-root)
+            (my/gptel--ensure-persistent-bash))
+          (with-current-buffer bash-buf
+            (should (equal default-directory project-root))))
+      (my/gptel--reset-persistent-bash)
+      (when (buffer-live-p bash-buf)
+        (kill-buffer bash-buf))
+      (when (buffer-live-p context-buf)
+        (kill-buffer context-buf))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/subagent/persist-subagent-process-environment-honors-deferral ()
   "Persist helper should no-op while launch-time env persistence is deferred."

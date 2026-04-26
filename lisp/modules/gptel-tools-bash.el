@@ -174,21 +174,23 @@ Sets `my/gptel--persistent-bash-process' to a live process with TERM=dumb.
 Recreates the shell when the workflow env or working directory changes."
   (let* ((context-buffer (my/gptel--bash-context-buffer))
          (process-environment (my/gptel--bash-context-environment context-buffer))
-         (default-directory (my/gptel--bash-context-directory context-buffer))
+         (context-directory (my/gptel--bash-context-directory context-buffer))
          (signature (my/gptel--bash-context-signature context-buffer)))
     (when (and (process-live-p my/gptel--persistent-bash-process)
                (not (equal signature
                            (process-get my/gptel--persistent-bash-process
                                         'my/gptel-bash-context-signature))))
       (my/gptel--reset-persistent-bash))
-    (unless (and my/gptel--persistent-bash-process
-                 (process-live-p my/gptel--persistent-bash-process))
-      (let ((buf (get-buffer-create " *gptel-persistent-bash*")))
-        (with-current-buffer buf (erase-buffer))
-        (setq my/gptel--persistent-bash-process
-              (make-process
-               :name "gptel-bash"
-               :buffer buf
+     (unless (and my/gptel--persistent-bash-process
+                  (process-live-p my/gptel--persistent-bash-process))
+       (let ((buf (get-buffer-create " *gptel-persistent-bash*")))
+         (with-current-buffer buf
+           (erase-buffer)
+           (setq default-directory context-directory))
+         (setq my/gptel--persistent-bash-process
+               (make-process
+                :name "gptel-bash"
+                :buffer buf
                :command '("bash" "--norc" "--noprofile")
                :connection-type 'pipe
                :noquery t))
