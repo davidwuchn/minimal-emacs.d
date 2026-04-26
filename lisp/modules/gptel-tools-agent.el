@@ -2153,7 +2153,6 @@ subagent callback fired, and avoids reusing a deleted worktree as
                       (buffer-local-value 'default-directory safe-buffer))
                  user-emacs-directory
                  temporary-file-directory)
-                (and (stringp default-directory) default-directory)
                 temporary-file-directory)))
       (with-current-buffer safe-buffer
         (setq default-directory safe-default-directory)
