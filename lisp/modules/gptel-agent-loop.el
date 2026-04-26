@@ -587,9 +587,9 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
               (message "[RunAgent] Max steps (%d) reached for task '%s'"
                        max-steps
                        (gptel-agent-loop--task-description state))))
-          (unless (plist-get info :tracking-marker)
-            (setf (plist-get info :tracking-marker)
-                  (gptel-agent-loop--task-tracking-marker state)))
+          (unless (plist-member info :tracking-marker)
+            (setq info (plist-put info :tracking-marker
+                                  (gptel-agent-loop--task-tracking-marker state))))
           (gptel--display-tool-calls calls info)))
 
        ((and (consp resp) (eq (car resp) 'tool-result))
