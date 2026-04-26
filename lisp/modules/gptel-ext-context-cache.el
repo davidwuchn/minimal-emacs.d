@@ -406,18 +406,12 @@ and a positive integer context_length; otherwise returns nil."
            (cons id cw)))))
 
 (defun my/gptel--estimate-text-tokens (chars)
-  "Estimate text token count from CHARS.
-
-Uses language-aware heuristics:
-- Code (high symbol density): ~3 chars/token
-- Prose (English text): ~4 chars/token
-- Mixed (default): ~3.5 chars/token
-
-For buffers with current buffer, analyzes content type."
+  "Estimate text token count from CHARS."
   (if (not (and (numberp chars) (> chars 0)))
       0.0
-    (let* ((ext (when (buffer-live-p (current-buffer))
-                  (let ((fname (buffer-file-name)))
+    (let* ((buf (current-buffer))
+           (ext (when (buffer-live-p buf)
+                  (let ((fname (buffer-file-name buf)))
                     (and fname (file-name-extension fname)))))
            (cache-key (cons chars ext)))
       (or (gethash cache-key my/gptel--token-estimate-cache)
