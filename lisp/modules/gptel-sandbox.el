@@ -359,11 +359,15 @@ supports a small, explicit whitelist of pure operations."
          (t
           (push (gptel-sandbox--eval-expr value-form env) values)))))))
 
+(defun gptel-sandbox--normalize-tool-name (tool-name)
+  "Convert TOOL-NAME to string representation."
+  (if (symbolp tool-name)
+      (symbol-name tool-name)
+    tool-name))
+
 (defun gptel-sandbox--allowed-tool-p (tool-name)
   "Return non-nil when TOOL-NAME may run inside Programmatic."
-  (let ((name-str (if (symbolp tool-name)
-                      (symbol-name tool-name)
-                    tool-name)))
+  (let ((name-str (gptel-sandbox--normalize-tool-name tool-name)))
     (member name-str
             (pcase (gptel-sandbox--current-profile)
               ('readonly my/gptel-programmatic-readonly-tools)
@@ -371,9 +375,7 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--confirm-supported-p (tool-name)
   "Return non-nil when TOOL-NAME may request confirmation in Programmatic."
-  (let ((name-str (if (symbolp tool-name)
-                      (symbol-name tool-name)
-                    tool-name)))
+  (let ((name-str (gptel-sandbox--normalize-tool-name tool-name)))
     (and (eq (gptel-sandbox--current-profile) 'agent)
          (member name-str my/gptel-programmatic-confirming-tools))))
 
@@ -430,9 +432,7 @@ supports a small, explicit whitelist of pure operations."
                    (or (gptel-sandbox--statement-tool-call statement)
                        '(nil nil))))
         (when (and tool-name
-                   (let ((name (if (symbolp tool-name)
-                                   (symbol-name tool-name)
-                                 tool-name)))
+                   (let ((name (gptel-sandbox--normalize-tool-name tool-name)))
                      (member name my/gptel-programmatic-confirming-tools)))
           (push (gptel-sandbox--summarize-tool-call-plan tool-name arg-forms)
                 plan))))))
