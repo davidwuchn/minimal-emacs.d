@@ -690,11 +690,12 @@ Returns non-nil if result was delivered."
   "Handle string response RESP for STATE.
 USE-TOOLS indicates whether tools were requested on this turn.
 Returns non-nil if result was delivered."
-  (or (gptel-agent-loop--handle-max-steps-reached state resp)
-      (gptel-agent-loop--handle-summary-turn state resp use-tools)
-      (gptel-agent-loop--handle-empty-response state resp)
-      (gptel-agent-loop--handle-continuation state resp)
-      (gptel-agent-loop--handle-final-response state resp)))
+  (and (gptel-agent-loop--task-p state)
+       (or (gptel-agent-loop--handle-max-steps-reached state resp)
+           (gptel-agent-loop--handle-summary-turn state resp use-tools)
+           (gptel-agent-loop--handle-empty-response state resp)
+           (gptel-agent-loop--handle-continuation state resp)
+           (gptel-agent-loop--handle-final-response state resp))))
 
 (defun gptel-agent-loop--request (state prompt use-tools allow-cache)
   "Start or continue a subagent request for STATE.
