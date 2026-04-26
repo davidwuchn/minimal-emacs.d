@@ -272,7 +272,8 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                  (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
                  (n my/gptel-doom-loop-threshold)
                  (fps-end (last fps))
-                 (prev-fp (car fps-end)))
+                 (prev-fp (car fps-end))
+                 (aborted nil))
             (setq info (plist-put info :doom-loop-fingerprints (append fps new-fps)))
             (dolist (fp new-fps)
               (let* ((existing-count (alist-get fp run-counts nil nil #'string=))
@@ -281,8 +282,6 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                           (1+ existing-count)
                         1)))
                 (setf (alist-get fp run-counts nil t #'string=) current-run)
-                (plist-put info :doom-loop-run-counts run-counts)
-                (setf (gptel-fsm-info fsm) info)
                 (when (>= current-run n)
                   (let ((error-message
                          (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
@@ -290,12 +289,16 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                                  (car (split-string fp ":" t)) current-run)))
                     (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
                              (car (split-string fp ":" t)) current-run)
+                    (plist-put info :doom-loop-run-counts run-counts)
                     (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
                     (funcall (plist-get info :callback) error-message info))
-                  (setq info (gptel-fsm-info fsm))
+                  (setq aborted t)
                   (gptel--fsm-transition fsm 'DONE)
                   (cl-return-from my/gptel--detect-doom-loop))
-                (setq prev-fp fp)))))))))
+                (setq prev-fp fp)))
+            (unless aborted
+              (plist-put info :doom-loop-run-counts run-counts)
+              (setf (gptel-fsm-info fsm) info))))))))
 
 (cl-defun my/gptel--detect-inspection-thrash (fsm)
   "Abort FSM when it stays in same-file read-only inspection for too long.
