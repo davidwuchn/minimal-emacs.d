@@ -4582,8 +4582,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
        (should (equal (plist-get final-result :agent-output)
                       "Executor result for task: retry success")))))
 
-(ert-deftest regression/auto-experiment/run-with-retry-carries-inspection-thrash-into-retry-history ()
-  "Retry attempts should inherit the just-failed inspection-thrash result."
+(ert-deftest regression/auto-experiment/run-with-retry-retries-inspection-thrash-tool-error ()
+  "Inspection-thrash aborts should retry immediately with recovery guidance."
   (let ((runs 0)
         (captured-previous-results nil)
         (final-result nil)
@@ -4597,10 +4597,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                  (funcall callback
                           (if (= runs 1)
                               (list :id 1
-                                    :target "lisp/modules/gptel-agent-loop.el"
-                                    :agent-output
-                                    "gptel: inspection-thrash aborted — 25 consecutive read-only inspections on target without a write-capable tool."
-                                    :comparator-reason :api-rate-limit)
+                                     :target "lisp/modules/gptel-agent-loop.el"
+                                     :agent-output
+                                     "gptel: inspection-thrash aborted — 25 consecutive read-only inspections on target without a write-capable tool."
+                                     :comparator-reason :tool-error)
                             (list :id 1
                                   :target "lisp/modules/gptel-agent-loop.el"
                                   :agent-output "Executor result for task: retry success"
