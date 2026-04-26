@@ -240,9 +240,42 @@ it when the current transient implementation is too old."
            (when (fboundp 'gptel-auto-workflow-bootstrap--elpa-dirs)
              (gptel-auto-workflow-bootstrap--elpa-dirs root))))
     (dolist (dir (reverse dirs))
-      (when (file-directory-p dir)
+     (when (file-directory-p dir)
         (setq load-path (cons dir (delete dir load-path)))))
     dirs))
+
+(defun my/gptel--retarget-live-buffer-directory (buffer-or-name dir)
+  "Set BUFFER-OR-NAME `default-directory' to DIR when both are live."
+  (when (and (stringp dir)
+             (file-directory-p dir))
+    (when-let ((buf (get-buffer buffer-or-name)))
+      (with-current-buffer buf
+        (setq default-directory (file-name-as-directory (expand-file-name dir))))
+      buf)))
+
+(defun gptel-auto-workflow--retarget-shared-process-buffers (proj-root)
+  "Retarget shared curl/bash helper buffers to PROJ-ROOT.
+Reset the persistent bash process when it still points at a different or
+deleted directory."
+  (let* ((root (file-name-as-directory (expand-file-name proj-root)))
+         (bash-buf (get-buffer " *gptel-persistent-bash*"))
+         (bash-dir (when (buffer-live-p bash-buf)
+                     (with-current-buffer bash-buf default-directory)))
+         (bash-process-live-p
+          (and (boundp 'my/gptel--persistent-bash-process)
+               (process-live-p my/gptel--persistent-bash-process)))
+         (bash-needs-reset
+          (and bash-process-live-p
+               (or (not (and (stringp bash-dir)
+                             (file-directory-p bash-dir)))
+                   (not (equal (file-name-as-directory (expand-file-name bash-dir))
+                               root))))))
+    (my/gptel--retarget-live-buffer-directory " *gptel-curl*" root)
+    (my/gptel--retarget-live-buffer-directory " *gptel-persistent-bash*" root)
+    (when (and bash-needs-reset
+               (fboundp 'my/gptel--reset-persistent-bash))
+      (my/gptel--reset-persistent-bash))
+    root))
 
 (defun gptel-auto-workflow--activate-live-root (proj-root)
   "Retarget the live daemon to PROJ-ROOT for queued workflow actions."
@@ -258,6 +291,7 @@ it when the current transient implementation is too old."
       (setq minimal-emacs-user-directory root))
     (when (boundp 'gptel-auto-workflow-projects)
       (setq gptel-auto-workflow-projects (list root)))
+    (gptel-auto-workflow--retarget-shared-process-buffers root)
     (gptel-auto-workflow--seed-live-root-load-path root)
     (gptel-auto-workflow--prefer-elpa-transient root)
     root))
@@ -2075,6 +2109,22 @@ its async continuation layer in the worker daemon."
                  (file-directory-p dir))
         (throw 'found (file-name-as-directory (expand-file-name dir)))))
     nil))
+
+(defun my/gptel--prime-curl-buffer-directory (&rest _)
+  "Retarget the shared curl buffer to the current workflow root."
+  (let ((root (or (my/gptel--first-existing-directory
+                   default-directory
+                   user-emacs-directory
+                   temporary-file-directory)
+                  temporary-file-directory)))
+    (with-current-buffer (get-buffer-create " *gptel-curl*")
+      (setq default-directory root))))
+
+(with-eval-after-load 'gptel-request
+  (advice-remove 'gptel-curl-get-response
+                 #'my/gptel--prime-curl-buffer-directory)
+  (advice-add 'gptel-curl-get-response :before
+              #'my/gptel--prime-curl-buffer-directory))
 
 (defun my/gptel--invoke-callback-safely (callback result)
   "Invoke CALLBACK with RESULT from a stable internal buffer.
