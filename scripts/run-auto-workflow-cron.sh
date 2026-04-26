@@ -6,7 +6,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ACTION="${1:-auto-workflow}"
 shift || true
 case "$ACTION" in
-    auto-workflow) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-copilot-auto-workflow}" ;;
+    auto-workflow|stop) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-copilot-auto-workflow}" ;;
     research) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-copilot-researcher}" ;;
     *) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-copilot-auto-workflow}" ;;
 esac
@@ -782,6 +782,21 @@ workflow_action_elisp() {
            "$ROOT_LISP" "$dispatch"
 }
 
+stop_action_elisp() {
+    printf '(let ((root (file-name-as-directory "%s")))
+              (let ((agent-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))
+                (when (file-readable-p agent-file)
+                  (load-file agent-file)))
+              (when (fboundp (quote gptel-auto-workflow--activate-live-root))
+                (gptel-auto-workflow--activate-live-root root))
+              (when (fboundp (quote gptel-auto-workflow-force-stop))
+                (gptel-auto-workflow-force-stop))
+              (if (fboundp (quote gptel-auto-workflow--status-plist))
+                  (gptel-auto-workflow--status-plist)
+                (quote (:running nil :kept 0 :total 0 :phase "idle" :run-id nil :results nil))))' \
+           "$ROOT_LISP"
+}
+
 refresh_snapshot_paths_from_daemon() {
     local body
     local output
@@ -938,10 +953,13 @@ case "$ACTION" in
                    (write-region (max (point-min) (- (point-max) max-chars))
                                  (point-max)
                                  outfile nil 'silent))
-                 outfile)"
+                  outfile)"
+        ;;
+    stop)
+        ELISP="$(stop_action_elisp)"
         ;;
     *)
-        echo "Usage: $0 {auto-workflow|research|mementum|instincts|status|messages}" >&2
+        echo "Usage: $0 {auto-workflow|research|mementum|instincts|status|messages|stop}" >&2
         exit 2
         ;;
 esac
@@ -999,6 +1017,30 @@ if [ "$ACTION" = "messages" ]; then
         exit 0
     fi
     exit $rc
+fi
+
+if [ "$ACTION" = "stop" ]; then
+    if check_worker_daemon; then
+        if output="$(run_emacsclient_eval "$EVAL_ELISP" 20 2>/dev/null)" &&
+           printf '%s' "$output" | grep -q ':phase '; then
+            refresh_snapshot_paths_from_daemon >/dev/null 2>&1 || true
+            printf '%s\n' "$output" >"$STATUS_FILE"
+            printf '%s\n' "$output"
+            exit 0
+        fi
+        rc=$?
+        if [ "$rc" -eq 124 ]; then
+            echo "stop timed out waiting for worker daemon: $SERVER_NAME" >&2
+            print_status
+            exit 124
+        fi
+    fi
+    clear_stale_running_status
+    if status_looks_active; then
+        rewrite_status_idle
+    fi
+    print_status
+    exit 0
 fi
 
 clear_stale_running_status
