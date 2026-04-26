@@ -318,7 +318,7 @@ to a write-capable tool."
               (setf (gptel-fsm-info fsm)
                     (plist-put info :inspection-thrash-state
                                (list :file current-file :count current-run))))
-              (file
+             (file
                (setq current-run (if (equal current-file file)
                                      (1+ current-run)
                                    1)
