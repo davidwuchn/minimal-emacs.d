@@ -271,16 +271,16 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                  (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
                  (n my/gptel-doom-loop-threshold)
                  (fps-end (last fps))
-                 (prev-fp (car fps-end))
-                 (current-run (or (plist-get info :doom-loop-current-run) 0)))
+                 (prev-fp (car fps-end)))
             (setq info (plist-put info :doom-loop-fingerprints (append fps new-fps)))
             (dolist (fp new-fps)
-              (let ((current-run
-                     (if (and prev-fp (equal prev-fp fp))
-                         (1+ (or (alist-get fp run-counts nil nil #'string=) 0))
-                       1)))
-                (setq run-counts (cons (cons fp current-run) run-counts))
-                (setq info (plist-put info :doom-loop-run-counts run-counts))
+              (let* ((existing-count (alist-get fp run-counts nil nil #'string=))
+                     (current-run
+                      (if (and prev-fp (equal prev-fp fp))
+                          (1+ existing-count)
+                        1)))
+                (setf (alist-get fp run-counts nil t #'string=) current-run)
+                (plist-put info :doom-loop-run-counts run-counts)
                 (setf (gptel-fsm-info fsm) info)
                 (when (>= current-run n)
                   (let ((error-message
@@ -318,7 +318,7 @@ to a write-capable tool."
               (setf (gptel-fsm-info fsm)
                     (plist-put info :inspection-thrash-state
                                (list :file current-file :count current-run))))
-              (file
+             (file
                (setq current-run (if (equal current-file file)
                                      (1+ current-run)
                                    1)

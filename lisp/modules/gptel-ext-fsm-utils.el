@@ -197,10 +197,12 @@ EDGE CASE: Nil object returns nil.
 EDGE CASE: Non-FSM object returns nil.
 EDGE CASE: Context-id mismatch returns nil (prevents wrong FSM selection).
 EDGE CASE: Unregistered FSM with context-id returns nil (must be registered).
+EDGE CASE: Dotted pairs (a . b) where b is non-cons are fully traversed.
 TEST: (my/gptel--coerce-fsm fsm) => fsm (no context)
-TEST: (my/gptel--coerce-fsm fsm \"fsm-1-123\") => fsm if IDs match
-TEST: (my/gptel--coerce-fsm fsm \"fsm-2-456\") => nil if IDs differ
-TEST: (my/gptel--coerce-fsm '(fsm1 fsm2) \"fsm-2-456\") => fsm2
+TEST: (my/gptel--coerce-fsm fsm "fsm-1-123") => fsm if IDs match
+TEST: (my/gptel--coerce-fsm fsm "fsm-2-456") => nil if IDs differ
+TEST: (my/gptel--coerce-fsm '(fsm1 fsm2) "fsm-2-456") => fsm2
+TEST: (my/gptel--coerce-fsm '(a . (b . fsm))) => fsm (dotted pair)
 
 BUILDS ON DISCOVERY: Parent and child FSMs can coexist in nested calls.
 ADAPTS TO: Context-aware selection when ID provided, preventing
@@ -213,16 +215,23 @@ Returns FSM struct or nil if not found."
   (let ((seen (make-hash-table :test 'eq)))
     (cl-labels ((coerce (obj)
                   (cond
+                   ((null obj) nil)
                    ((and (consp obj) (gethash obj seen)) nil)
                    ((consp obj)
-                    (puthash obj t seen)
                     (or (coerce (car obj))
-                        (coerce (cdr obj))))
+                        (coerce (cdr obj)))
+                    (puthash obj t seen)
+                    (and (my/gptel--fsm-p obj)
+                         (or (null context-id)
+                             (let ((id (my/gptel--fsm-get-id obj)))
+                               (and id (equal id context-id))))
+                         obj))
                    ((my/gptel--fsm-p obj)
-                    (if (null context-id)
-                        obj
-                      (let ((id (my/gptel--fsm-get-id obj)))
-                        (when (and id (equal id context-id)) obj))))
+                    (unless (gethash obj seen)
+                      (puthash obj t seen)
+                      (or (null context-id)
+                          (let ((id (my/gptel--fsm-get-id obj)))
+                            (and id (equal id context-id))))))
                    (t nil))))
       (coerce object))))
 
@@ -249,15 +258,7 @@ where first FSM was always returned (potentially wrong parent FSM).
 
 PROACTIVE MITIGATION: Uses registration order as proxy for nesting level,
 avoiding need for explicit parent-child tracking."
-  (let* ((all-fsms (my/gptel--collect-all-fsms object))
-         (count (length all-fsms)))
-    (cond
-     ((zerop count) nil)
-     ((= count 1) (car all-fsms))
-     (t
-      ;; Multiple FSMs: prefer most recently registered
-      ;; (likely the child FSM in nested scenarios)
-      (car (last all-fsms))))))
+  (car (last (my/gptel--collect-all-fsms object))))
 
 (defun my/gptel--collect-all-fsms (object)
   "Collect all FSMs found in OBJECT as a list.
@@ -285,17 +286,34 @@ improving testability and reducing cognitive load."
         (result nil))
     (cl-labels ((collect (obj)
                   (cond
+                   ((null obj) nil)
                    ((consp obj)
                     (unless (gethash obj seen)
                       (puthash obj t seen)
                       (collect (car obj))
                       (collect (cdr obj))))
-                   ((null obj) nil)
                    ((my/gptel--fsm-p obj)
                     (puthash obj t seen)
                     (push obj result)))))
       (collect object)
       (nreverse result))))
+
+(defun my/gptel--fsm-count-internal (object seen)
+  "Count FSMs in OBJECT using Seen hash table. Returns count.
+ASSUMPTION: SEEN is pre-allocated hash table with eq test.
+EDGE CASE: Nil object returns 0.
+EDGE CASE: Non-FSM atoms return 0."
+  (cond
+   ((consp object)
+    (unless (gethash object seen)
+      (puthash object t seen)
+      (+ (my/gptel--fsm-count-internal (car object) seen)
+         (my/gptel--fsm-count-internal (cdr object) seen))))
+   ((null object) 0)
+   ((my/gptel--fsm-p object)
+    (puthash object t seen)
+    1)
+   (t 0)))
 
 (defun my/gptel--fsm-depth (object)
   "Return nesting depth of FSMs in OBJECT.
@@ -318,7 +336,8 @@ ADAPTS TO: Provides quantitative measure of nesting for decision making.
 
 PROACTIVE MITIGATION: Enables detection of nested scenarios before
 wrong FSM selection occurs."
-  (length (my/gptel--collect-all-fsms object)))
+  (let ((seen (make-hash-table :test 'eq)))
+    (my/gptel--fsm-count-internal object seen)))
 
 ;;; Registry Validation
 
