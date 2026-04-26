@@ -8068,6 +8068,65 @@ failure."
                       loaded))
       (should (equal reloaded "/tmp/project")))))
 
+(ert-deftest regression/auto-workflow/cron-safe-enables-headless-before-runtime-loads ()
+  "Cron-safe should enable headless suppression before loading workflow deps."
+  (let ((ops nil)
+        (compile-angel-on-load-mode t)
+        (gptel-auto-workflow--headless nil)
+        (gptel-auto-workflow-persistent-headless nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--enable-headless-suppression)
+               (lambda ()
+                 (setq gptel-auto-workflow--headless t
+                       compile-angel-on-load-mode nil)
+                 (push 'enable ops)))
+              ((symbol-function 'require)
+               (lambda (feature &optional _filename _noerror)
+                 (push (list 'require
+                             feature
+                             gptel-auto-workflow--headless
+                             compile-angel-on-load-mode)
+                       ops)
+                 t))
+              ((symbol-function 'load-file)
+               (lambda (path)
+                 (push (list 'load-file path
+                             gptel-auto-workflow--headless
+                             compile-angel-on-load-mode)
+                       ops)
+                 t))
+              ((symbol-function 'gptel-auto-workflow--reload-live-support)
+               (lambda (&optional root)
+                 (push (list 'reload root
+                             gptel-auto-workflow--headless
+                             compile-angel-on-load-mode)
+                       ops)))
+              ((symbol-function 'gptel-auto-workflow--disable-headless-suppression)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--cleanup-stale-state)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--sync-staging-with-main)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--recover-orphans)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow-run-async--guarded)
+               (lambda (_ callback)
+                 (should (functionp callback))
+                 (push 'run ops)
+                 'started))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (eq (gptel-auto-workflow-cron-safe) 'started))
+      (setq ops (nreverse ops))
+      (should (equal (car ops) 'enable))
+      (should (equal (nth 1 ops) '(require magit t nil)))
+      (should (equal (nth 2 ops) '(require json t nil)))
+      (should (equal (car (nth 3 ops)) 'load-file))
+      (should (equal (cddr (nth 3 ops)) '(t nil)))
+      (should (equal (car (nth 4 ops)) 'reload))
+      (should (equal (cddr (nth 4 ops)) '(t nil))))))
+
 (ert-deftest regression/auto-workflow/reload-live-support-reloads-context-and-retry-modules ()
   "Warm-daemon workflow reloads should refresh context and retry support."
   (let ((loaded nil))
