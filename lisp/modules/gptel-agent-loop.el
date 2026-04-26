@@ -342,7 +342,7 @@ Truncates accumulated output to last
          (context (if (and (integerp limit) (> limit 0)
                            (> (length output) limit))
                       (concat "...[earlier output truncated]\n"
-                              (substring output (- limit)))
+                              (substring output (max 0 (- (length output) limit))))
                     output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
             gptel-agent-loop-continuation-prompt
