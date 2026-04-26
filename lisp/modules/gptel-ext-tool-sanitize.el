@@ -155,9 +155,10 @@ RunAgent was registered, leaving it out of the buffer's tool list."
                          (format "Error: unknown or nil tool %S called by model" name))
               (push tc pruned))))))
       (when pruned
-        (plist-put info :tool-use
-                   (cl-remove-if (lambda (tc) (memq tc pruned))
-                                 tool-use))
+        (setq info (plist-put info :tool-use
+                              (cl-remove-if (lambda (tc) (memq tc pruned))
+                                            tool-use)))
+        (setf (gptel-fsm-info fsm) info)
         (when (= 0 (length (plist-get info :tool-use)))
           (message "gptel: all tool calls were malformed, advancing FSM to DONE")
           (when gptel-mode (gptel--update-status " Ready" 'success))
