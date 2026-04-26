@@ -1172,10 +1172,11 @@ Failure-shaped responses must not be cached, otherwise transient transport
 or reviewer-contract failures can poison later workflow attempts with
 immediate cache hits."
   (or (not (stringp result))
-      (and (not (string-match-p
-                 (concat
-                  "\\`Error:"
-                  "\\|\\`Warning:.*not available"
+      (and (not (string-empty-p result))
+           (not (string-match-p
+                  (concat
+                   "\\`Error:"
+                   "\\|\\`Warning:.*not available"
                   "\\|throttling"
                   "\\|rate.limit"
                   "\\|quota exceeded"

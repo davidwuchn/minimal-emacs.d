@@ -71,6 +71,17 @@
   (my/gptel--subagent-cache-put "executor" "test prompt" "second result")
   (should (equal (my/gptel--subagent-cache-get "executor" "test prompt") "second result")))
 
+(ert-deftest subagent-cache/empty-string-is-not-cacheable ()
+  "Empty subagent results should not be cached or replayed as cache hits."
+  (test--subagent-cache-setup)
+  (load-file "lisp/modules/gptel-tools-agent.el")
+  (my/gptel--subagent-cache-put "executor" "test prompt" "")
+  (should (= (hash-table-count my/gptel--subagent-cache) 0))
+  (let ((key (my/gptel--subagent-cache-key "executor" "manual prompt")))
+    (puthash key (cons (float-time) "") my/gptel--subagent-cache)
+    (should-not (my/gptel--subagent-cache-get "executor" "manual prompt"))
+    (should (= (hash-table-count my/gptel--subagent-cache) 0))))
+
 (ert-deftest subagent-cache/multiple-entries ()
   "Should store multiple cache entries independently."
   (test--subagent-cache-setup)
