@@ -545,8 +545,9 @@ Extracted from duplicate abort handling patterns."
   "Return non-nil when STATE should retry after ERROR-DATA.
 Retries when error is transient and retry budget remains."
   (and (gptel-agent-loop--transient-error-p error-data)
-       (< (gptel-agent-loop--task-retries state)
-          gptel-agent-loop-max-retries)))
+       (or (null gptel-agent-loop-max-retries)
+           (< (gptel-agent-loop--task-retries state)
+              gptel-agent-loop-max-retries))))
 
 (defun gptel-agent-loop--make-callback (state request-prompt use-tools)
   "Build request callback for STATE.
@@ -565,11 +566,11 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
            ((gptel-agent-loop--should-retry-p state error-data)
             (setf (gptel-agent-loop--task-retries state)
                   (1+ (gptel-agent-loop--task-retries state)))
-            (message "[RunAgent] Retrying %s task '%s' (attempt %d/%d)"
+            (message "[RunAgent] Retrying %s task '%s' (attempt %d/%s)"
                      (gptel-agent-loop--task-agent-type state)
                      (gptel-agent-loop--task-description state)
                      (gptel-agent-loop--task-retries state)
-                     gptel-agent-loop-max-retries)
+                     (or gptel-agent-loop-max-retries "unlimited"))
             (setf (gptel-agent-loop--task-timeout-timer state)
                   (gptel-agent-loop--make-timeout-timer state))
             (gptel-agent-loop--schedule-request state request-prompt use-tools 2.0))
