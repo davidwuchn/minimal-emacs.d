@@ -339,7 +339,7 @@ When multiple entries match, returns the one with the longest key for most speci
             (when (stringp entry-key)
               (when (string-prefix-p (downcase entry-key) search-lower)
                 (let ((key-len (length entry-key)))
-                  (when (>= key-len best-key-len)
+                  (when (> key-len best-key-len)
                     (setq best-key-len key-len)
                     (setq best-match (cdr entry)))))))))
       (unless (eq best-match my/gptel--alist-match-sentinel)
