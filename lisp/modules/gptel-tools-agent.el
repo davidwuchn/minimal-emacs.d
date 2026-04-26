@@ -8065,9 +8065,9 @@ RETRY-COUNT tracks current retry attempt."
                                    agent-output)))
                (grader-only-failure (plist-get result :grader-only-failure))
                (quota-source raw-error)
-                (retry-delay
-                 (gptel-auto-experiment--retry-delay-seconds
-                  (or raw-error agent-output)
+               (retry-delay
+                (gptel-auto-experiment--retry-delay-seconds
+                 (or raw-error agent-output)
                  retries))
                (error-type (plist-get result :comparator-reason))
                (hard-timeout
@@ -8080,16 +8080,19 @@ RETRY-COUNT tracks current retry attempt."
                 (memq error-type '(:api-rate-limit)))
                (timeout-category
                 (memq error-type '(:timeout)))
-                (retryable-category
-                 (or api-rate-limit-category
-                     (and (not hard-timeout)
-                          timeout-category)))
-                 (retryable-failure
-                  (and (not grader-only-failure)
-                       (or retryable-category
-                           (and raw-error
-                                (not hard-timeout)
-                                (gptel-auto-experiment--is-retryable-error-p raw-error)))))
+               (inspection-thrash-failure
+                (gptel-auto-experiment--inspection-thrash-result-p result))
+               (retryable-category
+                (or api-rate-limit-category
+                    (and (not hard-timeout)
+                         timeout-category)))
+               (retryable-failure
+                (and (not grader-only-failure)
+                     (or retryable-category
+                         inspection-thrash-failure
+                         (and raw-error
+                              (not hard-timeout)
+                              (gptel-auto-experiment--is-retryable-error-p raw-error)))))
                 (retry-history
                  (gptel-auto-experiment--retry-history previous-results result)))
            (gptel-auto-workflow--restore-live-target-file target workflow-root)
