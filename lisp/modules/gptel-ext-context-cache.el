@@ -330,14 +330,13 @@ Returns the cdr (value) of the matching entry, or nil if no match.
 Matches if the alist key is a prefix of SEARCH-STR.
 When multiple entries match, returns the one with the longest key for most specific match."
   (when (and (consp alist) (stringp search-str) (not (string-empty-p search-str)))
-    (let ((search-lower (downcase search-str))
-          (best-match my/gptel--alist-match-sentinel)
+    (let ((best-match my/gptel--alist-match-sentinel)
           (best-key-len 0))
       (dolist (entry alist)
         (when (consp entry)
           (let ((entry-key (car entry)))
             (when (stringp entry-key)
-              (when (string-prefix-p (downcase entry-key) search-lower)
+              (when (string-prefix-p entry-key search-str t)
                 (let ((key-len (length entry-key)))
                   (when (> key-len best-key-len)
                     (setq best-key-len key-len)
