@@ -240,13 +240,48 @@ it when the current transient implementation is too old."
            (when (fboundp 'gptel-auto-workflow-bootstrap--elpa-dirs)
              (gptel-auto-workflow-bootstrap--elpa-dirs root))))
     (dolist (dir (reverse dirs))
-      (when (file-directory-p dir)
+     (when (file-directory-p dir)
         (setq load-path (cons dir (delete dir load-path)))))
     dirs))
+
+(defun my/gptel--retarget-live-buffer-directory (buffer-or-name dir)
+  "Set BUFFER-OR-NAME `default-directory' to DIR when both are live."
+  (when (and (stringp dir)
+             (file-directory-p dir))
+    (when-let ((buf (get-buffer buffer-or-name)))
+      (with-current-buffer buf
+        (setq default-directory (file-name-as-directory (expand-file-name dir))))
+      buf)))
+
+(defun gptel-auto-workflow--retarget-shared-process-buffers (proj-root)
+  "Retarget shared curl/bash helper buffers to PROJ-ROOT.
+Reset the persistent bash process when it still points at a different or
+deleted directory."
+  (let* ((root (file-name-as-directory (expand-file-name proj-root)))
+         (bash-buf (get-buffer " *gptel-persistent-bash*"))
+         (bash-dir (when (buffer-live-p bash-buf)
+                     (with-current-buffer bash-buf default-directory)))
+         (bash-process-live-p
+          (and (boundp 'my/gptel--persistent-bash-process)
+               (process-live-p my/gptel--persistent-bash-process)))
+         (bash-needs-reset
+          (and bash-process-live-p
+               (or (not (and (stringp bash-dir)
+                             (file-directory-p bash-dir)))
+                   (not (equal (file-name-as-directory (expand-file-name bash-dir))
+                               root))))))
+    (my/gptel--retarget-live-buffer-directory " *gptel-curl*" root)
+    (my/gptel--retarget-live-buffer-directory " *gptel-persistent-bash*" root)
+    (when (and bash-needs-reset
+               (fboundp 'my/gptel--reset-persistent-bash))
+      (my/gptel--reset-persistent-bash))
+    root))
 
 (defun gptel-auto-workflow--activate-live-root (proj-root)
   "Retarget the live daemon to PROJ-ROOT for queued workflow actions."
   (let ((root (file-name-as-directory (expand-file-name proj-root))))
+    (when (fboundp 'gptel-auto-workflow--discard-missing-worktree-buffers)
+      (gptel-auto-workflow--discard-missing-worktree-buffers))
     (setq default-directory root
           user-emacs-directory root
           gptel-auto-workflow--project-root-override root
@@ -256,6 +291,7 @@ it when the current transient implementation is too old."
       (setq minimal-emacs-user-directory root))
     (when (boundp 'gptel-auto-workflow-projects)
       (setq gptel-auto-workflow-projects (list root)))
+    (gptel-auto-workflow--retarget-shared-process-buffers root)
     (gptel-auto-workflow--seed-live-root-load-path root)
     (gptel-auto-workflow--prefer-elpa-transient root)
     root))
@@ -1868,18 +1904,40 @@ TIMESTAMP defaults to `current-time'."
            (string-prefix-p "gptel-curl-data"
                             (file-name-nondirectory (match-string 1 text))))))
 
+(defun my/gptel--agent-task-message-activity-path (text)
+  "Return an absolute work path from TEXT when it denotes real file output."
+  (when (and (stringp text)
+             (string-match "\\`Wrote \\(.+\\)\\'" text))
+    (let ((path (match-string 1 text)))
+      (when (file-name-absolute-p path)
+        path))))
+
 (defun my/gptel--agent-task-note-message-activity (format-string &rest args)
   "Treat worktree-context messages as executor activity."
   (let ((text (and (stringp format-string)
                    (condition-case nil
                        (apply #'format format-string args)
-                     (error format-string)))))
+                     (error format-string))))
+        (activity-path nil))
+    (setq activity-path (my/gptel--agent-task-message-activity-path text))
     (unless (my/gptel--ignore-agent-activity-message-p text)
-      (my/gptel--agent-task-note-context-activity))))
+      (if activity-path
+          (my/gptel--agent-task-note-context-activity activity-path nil)
+        (my/gptel--agent-task-note-context-activity)))))
 
 (while (advice-member-p #'my/gptel--agent-task-note-message-activity 'message)
   (advice-remove 'message #'my/gptel--agent-task-note-message-activity))
 (advice-add 'message :before #'my/gptel--agent-task-note-message-activity)
+
+(defun my/gptel--agent-task-note-write-region-activity (_start _end filename &rest _args)
+  "Treat direct worktree writes to FILENAME as executor activity."
+  (when-let* ((path (and (stringp filename)
+                         (ignore-errors (expand-file-name filename)))))
+    (my/gptel--agent-task-note-context-activity path nil)))
+
+(while (advice-member-p #'my/gptel--agent-task-note-write-region-activity 'write-region)
+  (advice-remove 'write-region #'my/gptel--agent-task-note-write-region-activity))
+(advice-add 'write-region :after #'my/gptel--agent-task-note-write-region-activity)
 
 (defun my/gptel--agent-task-note-curl-activity (&rest _args)
   "Ignore curl setup chatter for subagent activity tracking.")
@@ -2061,6 +2119,22 @@ its async continuation layer in the worker daemon."
                  (file-directory-p dir))
         (throw 'found (file-name-as-directory (expand-file-name dir)))))
     nil))
+
+(defun my/gptel--prime-curl-buffer-directory (&rest _)
+  "Retarget the shared curl buffer to the current workflow root."
+  (let ((root (or (my/gptel--first-existing-directory
+                   default-directory
+                   user-emacs-directory
+                   temporary-file-directory)
+                  temporary-file-directory)))
+    (with-current-buffer (get-buffer-create " *gptel-curl*")
+      (setq default-directory root))))
+
+(with-eval-after-load 'gptel-request
+  (advice-remove 'gptel-curl-get-response
+                 #'my/gptel--prime-curl-buffer-directory)
+  (advice-add 'gptel-curl-get-response :before
+              #'my/gptel--prime-curl-buffer-directory))
 
 (defun my/gptel--invoke-callback-safely (callback result)
   "Invoke CALLBACK with RESULT from a stable internal buffer.
@@ -2872,27 +2946,55 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
   (when (and (stringp worktree-dir)
              (> (length worktree-dir) 0))
     (let* ((root (file-name-as-directory (expand-file-name worktree-dir)))
-           (tracked
-            (delete-dups
-             (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
-                   (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root))))
-           (killed 0))
-      (dolist (buf (delete-dups (append tracked (buffer-list))))
-        (when (buffer-live-p buf)
-          (with-current-buffer buf
-            (let ((buf-dir
-                   (and (stringp default-directory)
-                        (file-name-as-directory
-                         (expand-file-name default-directory)))))
-              (when (and buf-dir
-                         (string-prefix-p root buf-dir)
-                         (or (memq buf tracked)
-                             (string-prefix-p "*gptel-agent:" (buffer-name buf))))
-                (when (fboundp 'gptel-abort)
-                  (ignore-errors (gptel-abort buf)))
-                (let ((kill-buffer-query-functions nil))
-                  (kill-buffer buf))
-                (cl-incf killed))))))
+           (root-parent (file-name-directory (directory-file-name root)))
+           (safe-default-directory
+            (or (my/gptel--first-existing-directory
+                 root-parent
+                 user-emacs-directory
+                 temporary-file-directory)
+                temporary-file-directory))
+            (tracked
+             (delete-dups
+              (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
+                    (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root))))
+            (killed 0))
+      (cl-labels
+          ((defer-kill (buf attempts-left)
+             (run-at-time
+              1 nil
+              (lambda ()
+                (when (buffer-live-p buf)
+                  (let ((proc (ignore-errors (get-buffer-process buf))))
+                    (cond
+                     ((and (processp proc)
+                           (process-live-p proc)
+                           (> attempts-left 0))
+                      (defer-kill buf (1- attempts-left)))
+                     (t
+                      (let ((kill-buffer-query-functions nil))
+                        (kill-buffer buf)))))))))
+           (retire-buffer (buf)
+             (setq-local default-directory safe-default-directory)
+             (when (fboundp 'gptel-abort)
+               (ignore-errors (gptel-abort buf)))
+             (let ((proc (ignore-errors (get-buffer-process buf))))
+               (if (and (processp proc) (process-live-p proc))
+                   (defer-kill buf 30)
+                 (let ((kill-buffer-query-functions nil))
+                   (kill-buffer buf))))))
+        (dolist (buf (delete-dups (append tracked (buffer-list))))
+          (when (buffer-live-p buf)
+            (with-current-buffer buf
+              (let ((buf-dir
+                     (and (stringp default-directory)
+                          (file-name-as-directory
+                           (expand-file-name default-directory)))))
+                (when (and buf-dir
+                           (string-prefix-p root buf-dir)
+                           (or (memq buf tracked)
+                               (string-prefix-p "*gptel-agent:" (buffer-name buf))))
+                  (retire-buffer buf)
+                  (cl-incf killed)))))))
       (when (and (boundp 'gptel-auto-workflow--worktree-buffers)
                  (hash-table-p gptel-auto-workflow--worktree-buffers))
         (remhash root gptel-auto-workflow--worktree-buffers))
@@ -2900,6 +3002,26 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
                  (hash-table-p gptel-auto-workflow--project-buffers))
         (remhash root gptel-auto-workflow--project-buffers))
       killed)))
+
+(defun gptel-auto-workflow--discard-missing-worktree-buffers ()
+  "Discard tracked workflow buffers rooted at deleted worktrees."
+  (let (roots)
+    (dolist (table-symbol '(gptel-auto-workflow--worktree-buffers
+                            gptel-auto-workflow--project-buffers))
+      (when-let ((table (and (boundp table-symbol)
+                             (symbol-value table-symbol))))
+        (when (hash-table-p table)
+          (maphash (lambda (root _buf)
+                     (when (and (stringp root)
+                                (> (length root) 0)
+                                (not (file-directory-p root)))
+                       (push root roots)))
+                   table))))
+    (let ((discarded 0))
+      (dolist (root (delete-dups roots))
+        (setq discarded (+ discarded
+                           (or (gptel-auto-workflow--discard-worktree-buffers root) 0))))
+      discarded)))
 
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
   "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch.
@@ -3906,6 +4028,18 @@ Return nil on success, or an error string if the stale path could not be removed
                               (format " (%s)"
                                       (mapconcat #'identity baseline-failures ", "))
                             ""))))))))))
+
+(defun gptel-auto-workflow--summarize-staging-verification-output (output)
+  "Return a concise failure summary extracted from staging verification OUTPUT."
+  (let ((failed-tests (gptel-auto-workflow--extract-failed-tests output)))
+    (cond
+     (failed-tests
+      (format "failing tests: %s"
+              (mapconcat #'identity failed-tests ", ")))
+     ((gptel-auto-workflow--non-empty-string-p output)
+      (my/gptel--sanitize-for-logging output 200))
+     (t
+      "no verification output captured"))))
 
 (defun gptel-auto-workflow--hydrate-staging-submodules (&optional worktree)
   "Materialize top-level submodules in WORKTREE from shared module repos.
@@ -4951,17 +5085,22 @@ Returns (success-p . output)."
               (goto-char (point-max))
               (unless (bolp)
                 (insert "\n"))
-              (insert "\n"
-                      (let ((note (cdr-safe baseline-check)))
-                        (if (gptel-auto-workflow--non-empty-string-p note)
-                            note
-                          "Staging verification failed against main baseline"))
-                      "\n"))
-            (setq output (with-current-buffer output-buffer (buffer-string)))))
-        (kill-buffer output-buffer)
-        (setq result (and syntax-pass submodule-pass checks-pass))
-        (message "[auto-workflow] Staging verification: %s" (if result "PASS" "FAIL"))
-        (cons result output)))))
+               (insert "\n"
+                       (let ((note (cdr-safe baseline-check)))
+                         (if (gptel-auto-workflow--non-empty-string-p note)
+                             note
+                           "Staging verification failed against main baseline"))
+                       "\n"))
+             (setq output (with-current-buffer output-buffer (buffer-string)))))
+         (kill-buffer output-buffer)
+         (setq result (and syntax-pass submodule-pass checks-pass))
+         (message "[auto-workflow] Staging verification: %s"
+                  (if result
+                      "PASS"
+                    (format "FAIL (%s)"
+                            (gptel-auto-workflow--summarize-staging-verification-output
+                             output))))
+         (cons result output)))))
 
 
 
@@ -5156,7 +5295,8 @@ initial remote-advance rejection. Returns a plist with keys `:success',
             :analyzer-patterns ""
             :agent-output "")))
     ('staging-verification-failed
-     (message "[auto-workflow] ✗ Staging verification FAILED")
+     (message "[auto-workflow] ✗ Staging verification FAILED: %s"
+              (gptel-auto-workflow--summarize-staging-verification-output output))
      (gptel-auto-experiment-log-tsv
       (gptel-auto-workflow--current-run-id)
       (list :target "staging-verification"
@@ -8937,6 +9077,12 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--compile-angel-on-load-was-enabled nil
   "Remember whether `compile-angel-on-load-mode' was enabled before headless operation.")
 
+(defvar gptel-auto-workflow--undo-fu-session-was-enabled nil
+  "Remember whether `undo-fu-session-global-mode' was enabled before headless operation.")
+
+(defvar gptel-auto-workflow--recentf-was-enabled nil
+  "Remember whether `recentf-mode' was enabled before headless operation.")
+
 (defvar gptel-auto-workflow--create-lockfiles-value t
   "Remember `create-lockfiles' before headless operation.")
 
@@ -9194,8 +9340,8 @@ In headless mode, marks buffer as unmodified before killing to bypass prompt."
 
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation.
-Also disables auto-revert, compile-angel, and uniquify to prevent
-buffer churn in ephemeral workflow worktrees."
+Also disables auto-revert, compile-angel, undo-fu-session, recentf, and
+uniquify to prevent buffer churn in ephemeral workflow worktrees."
   (setq gptel-auto-workflow--headless t)
   ;; Remember and disable auto-revert
   (setq gptel-auto-workflow--auto-revert-was-enabled 
@@ -9209,6 +9355,20 @@ buffer churn in ephemeral workflow worktrees."
   (when (and gptel-auto-workflow--compile-angel-on-load-was-enabled
              (fboundp 'compile-angel-on-load-mode))
     (compile-angel-on-load-mode -1))
+  ;; Disable undo-fu session recovery so worker daemons do not spam *Messages*
+  ;; with stale-session mismatch warnings while replaying repo/worktree files.
+  (setq gptel-auto-workflow--undo-fu-session-was-enabled
+        (bound-and-true-p undo-fu-session-global-mode))
+  (when (and gptel-auto-workflow--undo-fu-session-was-enabled
+             (fboundp 'undo-fu-session-global-mode))
+    (undo-fu-session-global-mode -1))
+  ;; Disable recentf cleanup so worker daemons do not pollute *Messages* with
+  ;; background recentf maintenance while experiments are running.
+  (setq gptel-auto-workflow--recentf-was-enabled
+        (bound-and-true-p recentf-mode))
+  (when (and gptel-auto-workflow--recentf-was-enabled
+             (fboundp 'recentf-mode))
+    (recentf-mode -1))
   ;; Disable lockfiles so repeated experiment/worktree reuse does not prompt.
   (setq gptel-auto-workflow--create-lockfiles-value create-lockfiles
         create-lockfiles nil)
@@ -9240,7 +9400,8 @@ Set to t when running as daemon/cron to prevent interactive prompts."
 
 (defun gptel-auto-workflow--disable-headless-suppression ()
   "Disable suppression of interactive prompts.
-Restores auto-revert, compile-angel, and uniquify if they were
+Restores auto-revert, compile-angel, undo-fu-session, recentf, and uniquify if
+they were
 enabled before headless operation.
 Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
   (when (and (not gptel-auto-workflow-persistent-headless)
@@ -9255,6 +9416,16 @@ Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
                (fboundp 'compile-angel-on-load-mode))
       (compile-angel-on-load-mode 1))
     (setq gptel-auto-workflow--compile-angel-on-load-was-enabled nil)
+    ;; Restore undo-fu-session only when this session disabled it.
+    (when (and gptel-auto-workflow--undo-fu-session-was-enabled
+               (fboundp 'undo-fu-session-global-mode))
+      (undo-fu-session-global-mode 1))
+    (setq gptel-auto-workflow--undo-fu-session-was-enabled nil)
+    ;; Restore recentf only when this session disabled it.
+    (when (and gptel-auto-workflow--recentf-was-enabled
+               (fboundp 'recentf-mode))
+      (recentf-mode 1))
+    (setq gptel-auto-workflow--recentf-was-enabled nil)
     ;; Restore lockfile behavior
     (setq create-lockfiles gptel-auto-workflow--create-lockfiles-value)
     ;; Restore uniquify
@@ -9366,13 +9537,18 @@ When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
   "Persist isolated workflow ENV onto BUFFER for later async tool processes."
   (let ((target (or buffer (current-buffer)))
         (effective-env (or env gptel-auto-workflow--subagent-process-environment)))
-    (when (and (buffer-live-p target)
+    (when (and (not gptel-auto-workflow--defer-subagent-env-persistence)
+               (buffer-live-p target)
                (listp effective-env))
       (with-current-buffer target
-        (setq-local gptel-auto-workflow--subagent-process-environment
-                    (copy-sequence effective-env))
-        (setq-local process-environment
-                    (copy-sequence effective-env))))))
+        (unless (and (local-variable-p 'gptel-auto-workflow--subagent-process-environment target)
+                     (local-variable-p 'process-environment target)
+                     (equal gptel-auto-workflow--subagent-process-environment effective-env)
+                     (equal process-environment effective-env))
+          (setq-local gptel-auto-workflow--subagent-process-environment
+                      (copy-sequence effective-env))
+          (setq-local process-environment
+                      (copy-sequence effective-env)))))))
 
 (defun gptel-auto-workflow--git-step-success-p (cmd action &optional timeout)
   "Run git CMD and report whether it succeeded.
@@ -9920,22 +10096,25 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
              (gptel-auto-workflow--disable-headless-suppression)
              (when completion-callback
                (funcall completion-callback results))))))
-    (setq default-directory proj-root)
-    (require 'magit)
-    (require 'json)
-    (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root))
-    (when (fboundp 'gptel-auto-workflow--reload-live-support)
-      (gptel-auto-workflow--reload-live-support proj-root))
-    (setq gptel-auto-workflow-persistent-headless t)
-    (gptel-auto-workflow--enable-headless-suppression)
-    (if gptel-auto-workflow--running
+    (condition-case err
         (progn
-          (message "[auto-workflow] Job already running; skipping new request")
-          (funcall finish nil)
-          nil)
-      (setq gptel-auto-experiment--api-error-count 0)
-      (condition-case err
-          (progn
+          (setq default-directory proj-root
+                gptel-auto-workflow-persistent-headless t)
+          (gptel-auto-workflow--enable-headless-suppression)
+          (if gptel-auto-workflow--running
+              (progn
+                (message "[auto-workflow] Job already running; skipping new request")
+                (funcall finish nil)
+                nil)
+            ;; Enable headless suppression before requiring/loading workflow
+            ;; dependencies so worker startup does not byte-compile unrelated ELPA
+            ;; packages on load.
+            (require 'magit)
+            (require 'json)
+            (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root))
+            (when (fboundp 'gptel-auto-workflow--reload-live-support)
+              (gptel-auto-workflow--reload-live-support proj-root))
+            (setq gptel-auto-experiment--api-error-count 0)
             (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
             (gptel-auto-workflow--safe-call "Sync staging" #'gptel-auto-workflow--sync-staging-with-main)
             (gptel-auto-workflow--safe-call
@@ -9953,15 +10132,15 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                       finish))))
               (unless started
                 (funcall finish nil))
-              started))
-        (error
-         (message "[auto-workflow] Cron error: %s"
-                  (my/gptel--sanitize-for-logging (error-message-string err) 160))
-         (setq gptel-auto-workflow--stats
-               (list :phase "error" :total 0 :kept 0))
-         (gptel-auto-workflow--persist-status)
-         (funcall finish nil)
-         nil)))))
+              started)))
+      (error
+       (message "[auto-workflow] Cron error: %s"
+                (my/gptel--sanitize-for-logging (error-message-string err) 160))
+       (setq gptel-auto-workflow--stats
+             (list :phase "error" :total 0 :kept 0))
+       (gptel-auto-workflow--persist-status)
+       (funcall finish nil)
+       nil))))
 
 
 (defun gptel-auto-workflow--experiment-suffix ()

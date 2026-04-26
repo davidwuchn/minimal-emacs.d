@@ -382,13 +382,13 @@ Returns non-nil if compaction was initiated."
                                 (insert (propertize "═══════════════════════════════════════════════════════════════\n"
                                                     'face '(:foreground "yellow" :weight bold)))
                                 (message "[compact] Preview appended (original kept)"))
-                          (t
-                           (kill-new backup)
-                           (erase-buffer)
-                           (insert response)
-                           (goto-char (min point-before (point-max)))
-                           (message "[compact] Done: %s [backup in kill-ring]"
-                                    (my/gptel--format-compaction-stats chars-before (buffer-size) tokens-before)))))))))
+                            (progn
+                              (kill-new backup)
+                              (erase-buffer)
+                              (insert response)
+                              (goto-char (min point-before (point-max)))
+                              (message "[compact] Done: %s [backup in kill-ring]"
+                                       (my/gptel--format-compaction-stats chars-before (buffer-size) tokens-before)))))))))
             (error
              (with-current-buffer buf
                (setq my/gptel-auto-compact-running nil))
@@ -440,7 +440,7 @@ Returns a short description of what the user was asking for."
                            (lambda (line)
                              (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
                            lines)))
-         (last-user (car (last user-lines 3))))
+         (last-user (car (last user-lines))))
     (if last-user
         (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
       "Continue the task")))

@@ -487,22 +487,17 @@ Assumes STATE is a valid task structure."
         (1+ (gptel-agent-loop--continuation-count state))))
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
-  "Return non-nil when STATE should continue after RESP.
-Only continues if tools were called AND model seems to be
-planning without action.  Also checks continuation count
-limit for early exit."
-  (when (and (gptel-agent-loop--task-p state)
-             (numberp (gptel-agent-loop--task-continuation-count state)))
-    (unless (stringp resp)
-      (setq resp ""))
-    (let ((cont-count (gptel-agent-loop--continuation-count state)))
-      (and gptel-agent-loop-force-completion
-           (< cont-count gptel-agent-loop-max-continuations)
-           (not (gptel-agent-loop--seems-complete-p resp))
-           (not (gptel-agent-loop--looks-like-finishing-p resp))
-           (not (gptel-agent-loop--task-max-steps-reached state))
-           (or (gptel-agent-loop--turn-skipped-p resp)
-               (gptel-agent-loop--looks-like-planning-p resp))))))
+  "Return non-nil when STATE should continue after RESP."
+  (let ((resp (if (stringp resp) resp "")))
+    (and (gptel-agent-loop--task-p state)
+         gptel-agent-loop-force-completion
+         (< (gptel-agent-loop--continuation-count state)
+            gptel-agent-loop-max-continuations)
+         (not (gptel-agent-loop--task-max-steps-reached state))
+         (not (gptel-agent-loop--seems-complete-p resp))
+         (not (gptel-agent-loop--looks-like-finishing-p resp))
+         (or (gptel-agent-loop--turn-skipped-p resp)
+             (gptel-agent-loop--looks-like-planning-p resp)))))
 
 (defun gptel-agent-loop--schedule (delay fn)
   "Run FN after DELAY seconds."

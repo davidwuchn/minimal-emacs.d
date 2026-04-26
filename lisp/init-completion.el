@@ -4,7 +4,9 @@
 
 (use-package vertico
   :ensure t
-  :hook (after-init . vertico-mode))
+  :demand t
+  :hook (after-init . vertico-mode)
+  :hook (minibuffer-setup-hook . vertico-mode))
 
 (use-package orderless
   :ensure t
