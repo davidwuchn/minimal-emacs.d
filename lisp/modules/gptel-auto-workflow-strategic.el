@@ -344,13 +344,13 @@ Returns list of validated relative paths, up to MAX-TARGETS."
   (when (or (null max-targets) (not (integerp max-targets)) (<= max-targets 0))
     (setq max-targets most-positive-fixnum))
   (let ((candidates-list (if (listp candidates) candidates (list candidates)))
-        (results '()))
-    (dolist (file candidates-list (reverse results))
-      (unless (>= (length results) max-targets)
-        (let ((new-results (gptel-auto-workflow--validate-and-add-target
-                            file proj-root results max-targets)))
-          (when (consp new-results)
-            (setq results new-results)))))))
+        (targets '()))
+    (dolist (file candidates-list (reverse targets))
+      (unless (>= (length targets) max-targets)
+        (let ((new-targets (gptel-auto-workflow--validate-and-add-target
+                             file proj-root targets max-targets)))
+          (when (consp new-targets)
+            (setq targets new-targets)))))))
 
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list.
