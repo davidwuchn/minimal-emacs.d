@@ -184,6 +184,41 @@
     (should (= 30 (funcall wrapped "40")))
     (should (= 30 captured))))
 
+(ert-deftest test-nucleus-tools-async-contract-error-uses-callback ()
+  "Async tool contract errors should return tool errors, not signal."
+  (let* ((called nil)
+         (callback-result nil)
+         (wrapped
+          (nucleus-tools--validate-contract
+           "Edit"
+           (lambda (callback file_path &optional old_str new_str)
+             (setq called (list file_path old_str new_str))
+             (funcall callback "ok"))
+           '((:name "file_path" :type string)
+             (:name "old_str" :type string :optional t)
+             (:name "new_str" :type string))
+           t)))
+    (funcall wrapped (lambda (result) (setq callback-result result))
+             "file.el" nil nil)
+    (should-not called)
+    (should (stringp callback-result))
+    (should (string-prefix-p "Error: Tool Contract Violation" callback-result))
+    (should (string-match-p "missing or null required argument" callback-result))
+    (should (string-match-p "new_str" callback-result))))
+
+(ert-deftest test-nucleus-tools-sync-contract-error-still-signals ()
+  "Synchronous tool contract errors should keep signaling."
+  (let ((wrapped
+         (nucleus-tools--validate-contract
+          "Edit"
+          (lambda (file_path &optional old_str new_str)
+            (list file_path old_str new_str))
+          '((:name "file_path" :type string)
+            (:name "old_str" :type string :optional t)
+            (:name "new_str" :type string))
+          nil)))
+    (should-error (funcall wrapped "file.el" nil nil) :type 'user-error)))
+
 (ert-deftest test-nucleus-tools-advise-make-tool-strips-local-contract-keys ()
   "Provider-facing tool args should not include local-only contract metadata."
   (let* ((normalize (lambda (val) val))

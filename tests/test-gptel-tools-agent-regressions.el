@@ -10401,8 +10401,68 @@ failure."
             (should (string-match-p ":running nil" output))
             (should (string-match-p ":phase \"idle\"" output))
             (should (string-match-p "2026-04-04/results.tsv" output))))
+       (delete-directory status-dir t)
+       (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-stop-force-stops-live-daemon ()
+  "Wrapper stop should call the live daemon force-stop function and persist idle status."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (eval-log (make-temp-file "aw-stop-eval-log"))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file)
+                        "AUTO_WORKFLOW_EMACS_SERVER=fake-aw-stop")
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "from pathlib import Path\n"
+                    "import sys\n"
+                    (format "log = Path(%S)\n" eval-log)
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    "with log.open('a', encoding='utf-8') as handle:\n"
+                    "    handle.write(expr + '\\n---\\n')\n"
+                    "if expr == 't':\n"
+                    "    print('t')\n"
+                    "    raise SystemExit(0)\n"
+                    "if 'gptel-auto-workflow-force-stop' in expr:\n"
+                    "    print('(:running nil :kept 1 :total 4 :phase \"idle\" :run-id nil :results nil)')\n"
+                    "    raise SystemExit(0)\n"
+                    "print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 4 :phase \"running\" :run-id \"active\" :results \"var/tmp/experiments/active/results.tsv\")\n"))
+          (with-temp-file messages-file)
+          (with-temp-buffer
+            (let ((exit-code (call-process script nil t nil "stop")))
+              (should (= exit-code 0))
+              (should (string-match-p ":running nil" (buffer-string)))
+              (should (string-match-p ":phase \"idle\"" (buffer-string)))))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running nil" (buffer-string)))
+            (should (string-match-p ":phase \"idle\"" (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents eval-log)
+            (should (string-match-p "gptel-auto-workflow-force-stop" (buffer-string)))))
       (delete-directory status-dir t)
-      (delete-directory fake-bin t))))
+      (delete-directory fake-bin t)
+      (when (file-exists-p eval-log)
+        (delete-file eval-log)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-status-prefers-live-daemon-status ()
   "Wrapper status should prefer the live daemon snapshot when available."
