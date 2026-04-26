@@ -522,10 +522,16 @@ Also handles caching and result truncation from old advice."
                                             nil target-buf (point-marker))))))
                     (let* ((default-directory (or worktree-dir project-root))
                            (target-marker (point-marker))
-                           (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+                           (parent-fsm
+                            (and (boundp 'gptel--fsm-last)
+                                 (if (fboundp 'my/gptel--coerce-fsm)
+                                     (my/gptel--coerce-fsm gptel--fsm-last)
+                                   gptel--fsm-last)))
                            (orig-gptel-fsm-info (symbol-function 'gptel-fsm-info))
-                           (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
-                                     (list :buffer target-buf :position target-marker)))
+                            (info (or (and parent-fsm
+                                           (ignore-errors
+                                             (gptel-fsm-info parent-fsm)))
+                                      (list :buffer target-buf :position target-marker)))
                            (modified-info (gptel-auto-workflow--routed-fsm-info
                                            info target-buf target-marker))
                            ;; Wrap callback to cache results
@@ -539,16 +545,21 @@ Also handles caching and result truncation from old advice."
                                           orig-fun)))
                       (cl-letf (((symbol-function 'gptel-fsm-info)
                                  (lambda (&optional fsm)
-                                   (let ((active-fsm
-                                          (or fsm
-                                              (and (boundp 'gptel--fsm-last)
-                                                   gptel--fsm-last))))
-                                     (cond
-                                      ((eq active-fsm parent-fsm)
-                                       modified-info)
-                                      (active-fsm
-                                       (funcall orig-gptel-fsm-info active-fsm))
-                                      (t nil))))))
+                                    (let* ((active-fsm
+                                            (or fsm
+                                                (and (boundp 'gptel--fsm-last)
+                                                     gptel--fsm-last)))
+                                           (coerced-fsm
+                                            (if (fboundp 'my/gptel--coerce-fsm)
+                                                (my/gptel--coerce-fsm active-fsm)
+                                              active-fsm)))
+                                      (cond
+                                       ((and coerced-fsm parent-fsm
+                                             (eq coerced-fsm parent-fsm))
+                                        modified-info)
+                                       (coerced-fsm
+                                        (funcall orig-gptel-fsm-info coerced-fsm))
+                                       (t nil))))))
                         (if (and gptel-auto-workflow--persist-executor-overlays
                                  (equal agent-type "executor"))
                             (cl-letf (((symbol-function 'delete-overlay)

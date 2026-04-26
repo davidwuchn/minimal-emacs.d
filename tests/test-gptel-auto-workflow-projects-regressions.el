@@ -11,6 +11,10 @@
 (defvar gptel-auto-workflow--current-target nil)
 (defvar gptel-auto-workflow-worktree-base nil)
 
+(defvar test-auto-workflow-projects--repo-root
+  (expand-file-name ".." (file-name-directory
+                          (or load-file-name buffer-file-name default-directory))))
+
 (ert-deftest regression/auto-workflow-projects/task-routing-uses-target-worktree-by-default ()
   "Executor routing should use the recorded target worktree even when base is defaulted."
   (let* ((project-root (make-temp-file "aw-project" t))
@@ -55,8 +59,56 @@
       (delete-directory project-root t)
        (when (get-buffer "*aw-project-root*")
          (kill-buffer "*aw-project-root*"))
-        (when (get-buffer "*aw-worktree*")
-          (kill-buffer "*aw-worktree*")))))
+         (when (get-buffer "*aw-worktree*")
+           (kill-buffer "*aw-worktree*")))))
+
+(ert-deftest regression/auto-workflow-projects/task-routing-ignores-stale-fsm-id-symbol ()
+  "Routing should not evaluate stale FSM ID symbols from warm daemon buffers."
+  (load (expand-file-name "lisp/modules/gptel-ext-fsm-utils.el"
+                          test-auto-workflow-projects--repo-root)
+        nil t)
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/foo-exp1" project-root))
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--current-target "lisp/modules/gptel-ext-fsm-utils.el")
+         (gptel-auto-workflow-worktree-base nil)
+         (task-called nil)
+         (captured-result nil))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (cl-letf (((symbol-function 'my/gptel--subagent-cache-get) (lambda (&rest _) nil))
+                    ((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (callback _agent-type _description _prompt)
+                       (setq task-called t)
+                       (funcall callback "ok")))
+                    ((symbol-function 'gptel-auto-workflow--get-project-for-context)
+                     (lambda ()
+                       (cons project-root (get-buffer-create "*aw-project-root*"))))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                     (lambda (_target) worktree-dir))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (dir)
+                       (let ((buf (get-buffer-create "*aw-worktree-stale-fsm*")))
+                         (with-current-buffer buf
+                           (setq-local default-directory (file-name-as-directory dir))
+                           (setq-local gptel--fsm-last 'fsm-1-123))
+                         buf)))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (gptel-auto-workflow--advice-task-override
+             (lambda (_main-cb _agent-type _description _prompt)
+               (error "fallback task runner should not be used"))
+             (lambda (result) (setq captured-result result))
+             "executor"
+             "desc"
+             "prompt"))
+          (should task-called)
+          (should (equal captured-result "ok")))
+      (delete-directory project-root t)
+      (when (get-buffer "*aw-project-root*")
+        (kill-buffer "*aw-project-root*"))
+      (when (get-buffer "*aw-worktree-stale-fsm*")
+        (kill-buffer "*aw-worktree-stale-fsm*")))))
 
 (ert-deftest regression/auto-workflow-projects/executor-routing-refuses-project-root-fallback-without-worktree ()
   "Executor routing should fail closed instead of editing the project root."
