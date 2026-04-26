@@ -195,6 +195,69 @@ Returns the number of messages truncated, or 0 if nothing was done."
                            (content (plist-get msg :content)))
                       (plist-put msg :content replacement)
                       (cl-incf truncated)))))))))
+       truncated)))
+
+(defun my/gptel--trim-gemini-function-responses-for-retry (info &optional retry-count force-trim-p)
+  "Trim old Gemini function-response content in INFO's :data :contents.
+
+Gemini requests are serialized with `:contents' entries containing
+`:functionResponse' parts instead of OpenAI-style `:messages' with role
+\"tool\".  This mirrors `my/gptel--trim-tool-results-for-retry' for that
+payload shape so provider failover to Gemini can still compact oversized
+tool-output history.
+
+Returns the number of function-response parts truncated, or 0 if nothing was
+done."
+  (if (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p))
+      0
+    (let* ((data (plist-get info :data))
+           (contents (and data (plist-get data :contents)))
+           (retries (or retry-count (plist-get info :retries) 1))
+           (keep (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries)))
+           (replacement my/gptel-retry-truncated-result-text)
+           (truncated 0)
+           (bytes-saved 0)
+           candidates)
+      (when (and contents (sequencep contents) (not (stringp contents)))
+        (dotimes (content-index (length contents))
+          (let* ((content-entry (elt contents content-index))
+                 (parts (and (consp content-entry)
+                             (plist-get content-entry :parts))))
+            (when (and parts (sequencep parts) (not (stringp parts)))
+              (dotimes (part-index (length parts))
+                (let* ((part (elt parts part-index))
+                       (function-response
+                        (and (consp part)
+                             (plist-get part :functionResponse)))
+                       (response
+                        (and (consp function-response)
+                             (plist-get function-response :response)))
+                       (response-content
+                        (and (consp response)
+                             (plist-get response :content))))
+                  (when (and (stringp response-content)
+                             (> (string-bytes response-content)
+                                (string-bytes replacement)))
+                    (push (list content-index part-index)
+                          candidates)
+                    (cl-incf bytes-saved
+                             (- (string-bytes response-content)
+                                (string-bytes replacement))))))))))
+      (when (> (length candidates) keep)
+        (let* ((ordered-candidates (nreverse candidates))
+               (to-truncate (seq-take ordered-candidates
+                                      (- (length ordered-candidates) keep))))
+          (when (or (= my/gptel-trim-min-bytes 0)
+                    (>= bytes-saved my/gptel-trim-min-bytes))
+            (dolist (candidate to-truncate)
+              (pcase-let ((`(,content-index ,part-index) candidate))
+                (let* ((content-entry (elt contents content-index))
+                       (parts (plist-get content-entry :parts))
+                       (part (elt parts part-index))
+                       (function-response (plist-get part :functionResponse))
+                       (response (plist-get function-response :response)))
+                  (plist-put response :content replacement)
+                  (cl-incf truncated)))))))
       truncated)))
 
 (defun my/gptel--trim-reasoning-content (info)
@@ -748,21 +811,25 @@ EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'."
 
 (defconst my/gptel--compaction-passes
   `((1 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i 1 t))
-       "gptel: Pass 1: trimmed %d tool result(s), now %dKB")
-    (2 my/gptel--trim-reasoning-content
-       "gptel: Pass 2: stripped reasoning from %d message(s), now %dKB")
-    (3 my/gptel--reduce-tools-for-retry
-       "gptel: Pass 3: removed %d unused tool def(s), now %dKB")
-    (4 ,(lambda (_info)
-          (and (fboundp 'my/gptel--trim-context-images)
-               (my/gptel--trim-context-images)))
-       "gptel: Pass 4: trimmed %d context image(s), now %dKB")
-    (5 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i 3 t))
-       "gptel: Pass 5: truncated %d remaining tool results, now %dKB")
-    (6 my/gptel--truncate-old-messages
-       "gptel: Pass 6: truncated %d old message(s), now %dKB")
-    (7 my/gptel--strip-images-from-messages
-       "gptel: Pass 7: stripped %d image(s) from messages, now %dKB"))
+        "gptel: Pass 1: trimmed %d tool result(s), now %dKB")
+    (2 ,(lambda (i) (my/gptel--trim-gemini-function-responses-for-retry i 1 t))
+       "gptel: Pass 2: trimmed %d Gemini function response(s), now %dKB")
+    (3 my/gptel--trim-reasoning-content
+       "gptel: Pass 3: stripped reasoning from %d message(s), now %dKB")
+    (4 my/gptel--reduce-tools-for-retry
+       "gptel: Pass 4: removed %d unused tool def(s), now %dKB")
+    (5 ,(lambda (_info)
+           (and (fboundp 'my/gptel--trim-context-images)
+                (my/gptel--trim-context-images)))
+       "gptel: Pass 5: trimmed %d context image(s), now %dKB")
+    (6 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i 3 t))
+       "gptel: Pass 6: truncated %d remaining tool results, now %dKB")
+    (7 ,(lambda (i) (my/gptel--trim-gemini-function-responses-for-retry i 3 t))
+       "gptel: Pass 7: truncated %d remaining Gemini function response(s), now %dKB")
+    (8 my/gptel--truncate-old-messages
+       "gptel: Pass 8: truncated %d old message(s), now %dKB")
+    (9 my/gptel--strip-images-from-messages
+       "gptel: Pass 9: stripped %d image(s) from messages, now %dKB"))
   "Ordered list of compaction passes for `my/gptel--compact-payload'.
 Each entry is (PASS-NUM TRIM-FN LOG-FMT).
 Passes execute sequentially until payload drops below limit.
@@ -776,22 +843,24 @@ Only runs on the first attempt (retries=0) — retry trimming handles
 subsequent attempts via `my/gptel-auto-retry'.
 
 Applies trimming progressively until under limit or nothing left to trim:
-  1. Trim old tool results (keep 2 recent)
-  2. Strip reasoning_content
-  3. Reduce tools array to only used tools
-  4. Trim context images (oldest first)
-  5. Aggressive tool result trim (keep 0)
-  6. Truncate old user/assistant messages
-  7. Strip images from multimodal messages (last resort)
+  1. Trim old OpenAI-style tool results
+  2. Trim old Gemini-style function responses
+  3. Strip reasoning_content
+  4. Reduce tools array to only used tools
+  5. Trim context images (oldest first)
+  6. Aggressive OpenAI-style tool result trim
+  7. Aggressive Gemini-style function response trim
+  8. Truncate old user/assistant messages
+  9. Strip images from multimodal messages (last resort)
 
 ASSUMPTION: Payload estimation via json-serialize is accurate enough for
   compaction decisions. Estimation errors are logged but don't block.
 ASSUMPTION: Model-specific context limits (my/gptel-model-context-bytes)
   are more precise than global limit for known models.
-ASSUMPTION: Progressive passes (1-7) are ordered by least-to-most destructive.
+ASSUMPTION: Progressive passes (1-9) are ordered by least-to-most destructive.
 
 BEHAVIOR: Estimates payload size, compares to effective byte limit
-  (min of global and model-specific). If over limit, applies 7 passes
+  (min of global and model-specific). If over limit, applies 9 passes
   of increasingly aggressive trimming until under limit or exhausted.
 
 BEHAVIOR: Repairs thinking-enabled model messages BEFORE compaction to
@@ -801,13 +870,13 @@ BEHAVIOR: Repairs thinking-enabled model messages BEFORE compaction to
 EDGE CASE: my/gptel-payload-byte-limit=nil disables pre-send compaction.
 EDGE CASE: Estimation errors (json-serialize fails) return 0 bytes,
   skipping compaction (safe fallback).
-EDGE CASE: Pass 4 (context images) requires my/gptel--trim-context-images
+EDGE CASE: Pass 5 (context images) requires my/gptel--trim-context-images
   from gptel-ext-context-images — gracefully skips if unavailable.
 
-WISDOM: 7-pass progressive approach minimizes context loss:
-  - Pass 1-3: Remove redundant data (old results, unused tools)
-  - Pass 4-5: Remove expensive media (images, all tool results)
-  - Pass 6-7: Nuclear option (truncate conversation, strip all images)
+WISDOM: 9-pass progressive approach minimizes context loss:
+  - Pass 1-4: Remove redundant data (old results, unused tools)
+  - Pass 5-7: Remove expensive media and remaining tool outputs
+  - Pass 8-9: Nuclear option (truncate conversation, strip all images)
   Each pass re-estimates size, stopping early if under limit.
 
 TEST: Create payload >200KB, verify compaction runs and reduces size.

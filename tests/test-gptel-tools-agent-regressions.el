@@ -5752,6 +5752,75 @@ failure."
       (should (= 1 trim-calls))
       (should (> estimate-calls 1)))))
 
+(ert-deftest regression/subagent/payload-compaction-trims-gemini-function-responses ()
+  "Payload compaction should trim Gemini `functionResponse' contents."
+  (cl-labels
+      ((entry
+        (text)
+        (list :role "user"
+              :parts
+              (vector
+               (list :functionResponse
+                     (list :name "read"
+                           :response (list :name "read"
+                                           :content text))))))
+       (response-at
+        (contents index)
+        (plist-get
+         (plist-get
+          (aref (plist-get (aref contents index) :parts) 0)
+          :functionResponse)
+         :response)))
+    (let* ((my/gptel-retry-keep-recent-tool-results 2)
+           (my/gptel-trim-min-bytes 0)
+           (large-a (make-string 6000 ?a))
+           (large-b (make-string 6000 ?b))
+           (large-c (make-string 6000 ?c))
+           (info (list :data
+                       (list :contents
+                             (vector (entry large-a)
+                                     (entry large-b)
+                                     (entry large-c))))))
+      (should (= 2 (my/gptel--trim-gemini-function-responses-for-retry info 1 t)))
+      (let* ((contents (plist-get (plist-get info :data) :contents))
+             (first-response (response-at contents 0))
+             (second-response (response-at contents 1))
+             (third-response (response-at contents 2)))
+        (should (equal (plist-get first-response :content)
+                       my/gptel-retry-truncated-result-text))
+        (should (equal (plist-get second-response :content)
+                       my/gptel-retry-truncated-result-text))
+        (should (equal (plist-get third-response :content) large-c))))))
+
+(ert-deftest regression/subagent/payload-compaction-handles-gemini-format ()
+  "Pre-send compaction should reduce Gemini `:contents' payloads."
+  (cl-labels
+      ((entry
+        (text)
+        (list :role "user"
+              :parts
+              (vector
+               (list :functionResponse
+                     (list :name "read"
+                           :response (list :name "read"
+                                           :content text)))))))
+    (let* ((my/gptel-payload-byte-limit 10000)
+           (my/gptel-retry-keep-recent-tool-results 2)
+           (my/gptel-trim-min-bytes 0)
+           (large-a (make-string 6000 ?a))
+           (large-b (make-string 6000 ?b))
+           (large-c (make-string 6000 ?c))
+           (info (list :retries 0
+                       :data
+                       (list :contents
+                             (vector (entry large-a)
+                                     (entry large-b)
+                                     (entry large-c)))))
+           (fsm (gptel-make-fsm :info info)))
+      (should (> (my/gptel--estimate-payload-bytes info) my/gptel-payload-byte-limit))
+      (my/gptel--compact-payload fsm)
+      (should (< (my/gptel--estimate-payload-bytes info) my/gptel-payload-byte-limit)))))
+
 (ert-deftest regression/subagent/payload-compaction-pass-table-keeps-callable-trim-functions ()
   "Compaction passes must store callables, not raw `(function ...)' forms."
   (dolist (entry my/gptel--compaction-passes)
@@ -5760,8 +5829,8 @@ failure."
       (should (or (functionp trim-fn)
                   (and (symbolp trim-fn) (fboundp trim-fn)))))))
 
-(ert-deftest regression/subagent/payload-compaction-pass-2-remains-callable ()
-  "Compaction should be able to execute pass 2 from the published pass table."
+(ert-deftest regression/subagent/payload-compaction-reasoning-pass-remains-callable ()
+  "Compaction should be able to execute the reasoning pass from the pass table."
   (let ((info (list :data (list :messages (vector (list :role "assistant"
                                                         :content ""
                                                         :reasoning_content "reasoning"))))))
@@ -5773,12 +5842,12 @@ failure."
           (list 2048 0 0)
         (should-not
          (condition-case _err
-             (my/gptel--run-compaction-pass
-              info 2 1024 'bytes 'trimmed-total 'pass
-              (nth 1 (assoc 2 my/gptel--compaction-passes)))
-           (error t)))
+              (my/gptel--run-compaction-pass
+               info 3 1024 'bytes 'trimmed-total 'pass
+               (nth 1 (assoc 3 my/gptel--compaction-passes)))
+            (error t)))
         (should (= trimmed-total 1))
-        (should (= pass 2))
+        (should (= pass 3))
         (should (= bytes 512))))))
 
 (ert-deftest regression/subagent/payload-compaction-pass-accepts-legacy-function-form ()
