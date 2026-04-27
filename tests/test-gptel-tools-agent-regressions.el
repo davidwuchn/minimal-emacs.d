@@ -8281,6 +8281,8 @@ failure."
                        loaded))
        (should (member (expand-file-name "lisp/modules/gptel-ext-retry.el" "/tmp/project")
                        loaded))
+       (should (member (expand-file-name "lisp/modules/gptel-ext-tool-sanitize.el" "/tmp/project")
+                       loaded))
        (should (member (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" "/tmp/project")
                        loaded)))))
 
