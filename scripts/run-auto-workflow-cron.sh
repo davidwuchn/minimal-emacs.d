@@ -897,6 +897,17 @@ ensure_worker_daemon() {
         fi
         rc=1
     fi
+    
+    # Kill any stale daemon process before starting a new one to avoid
+    # socket conflicts from leftover processes.
+    local stale_pid
+    stale_pid="$(worker_daemon_pid || true)"
+    if [ -n "$stale_pid" ]; then
+        echo "Killing stale daemon: $SERVER_NAME (pid: $stale_pid)" >&2
+        kill -9 "$stale_pid" 2>/dev/null || true
+        sleep 0.5
+    fi
+    
     # Keep the dedicated workflow daemon truly headless. A GUI-attached Emacs
     # daemon can die when its X/Wayland connection disappears, which is fatal
     # for long-running cron/worker runs. Load the worktree's normal init so the
