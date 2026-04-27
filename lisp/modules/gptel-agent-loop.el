@@ -99,7 +99,7 @@ Prevents infinite loops when model outputs planning text without tool calls."
 (defcustom gptel-agent-loop-continuation-context-limit 3000
   "Maximum characters of accumulated output to include in continuation prompts.
 Prevents prompt bloat for long-running tasks. Set to nil for unlimited."
-  :type '(choice (const :tag "Unlimited" nil) integer)
+  :type '(choice (const :tag "Unlimited" nil) (integer 1 *))
   :group 'gptel-agent-loop)
 
 (defcustom gptel-agent-loop-continuation-prompt
