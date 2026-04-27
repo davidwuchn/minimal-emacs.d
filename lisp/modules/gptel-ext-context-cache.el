@@ -321,8 +321,7 @@ for a partial match (case-insensitive).  Returns nil if not found."
             (and (listp alist)
                  (my/gptel--alist-partial-match alist key))
           hash-value))
-    (and (listp alist) (stringp key) (not (string-empty-p key))
-         (my/gptel--alist-partial-match alist key))))
+    (and (listp alist) (my/gptel--alist-partial-match alist key))))
 
 (defun my/gptel--alist-partial-match (alist search-str)
   "Find best matching entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
@@ -359,17 +358,18 @@ Handles both symbol and string model identifiers with case-insensitive fallback.
   (let ((model-str (cond
                     ((stringp model) model)
                     ((symbolp model) (symbol-name model))
-                    (t (return-from my/gptel--lookup-context-window-in-gptel-tables nil)))))
-    (catch 'found
-      (dolist (var (my/gptel--gptel-model-tables))
-        (let* ((table (symbol-value var))
-               (entry (assoc-string model-str table t)))
-          (when entry
-            (let ((cw (my/gptel--normalize-context-window
-                       (plist-get (cdr entry) :context-window))))
-              (when (and (integerp cw) (> cw 0))
-                (throw 'found cw))))))
-      nil)))
+                    (t nil))))
+    (when model-str
+      (catch 'found
+        (dolist (var (my/gptel--gptel-model-tables))
+          (let* ((table (symbol-value var))
+                 (entry (assoc-string model-str table t)))
+            (when entry
+              (let ((cw (my/gptel--normalize-context-window
+                         (plist-get (cdr entry) :context-window))))
+                (when (and (integerp cw) (> cw 0))
+                  (throw 'found cw))))))
+        nil))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -844,8 +844,11 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
         (when (and cw (integerp cw))
           (puthash model-id cw my/gptel--context-window-cache))
         cw))
-     ((let ((meta (my/gptel-get-model-metadata model-id)))
-        (plist-get meta :context-window)))
+     ((let* ((meta (my/gptel-get-model-metadata model-id))
+             (cw (plist-get meta :context-window)))
+        (when (and cw (integerp cw) (> cw 0))
+          (puthash model-id cw my/gptel--context-window-cache))
+        cw))
      (t my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
