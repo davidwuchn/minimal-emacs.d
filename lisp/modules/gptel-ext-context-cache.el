@@ -321,8 +321,7 @@ for a partial match (case-insensitive).  Returns nil if not found."
             (and (listp alist)
                  (my/gptel--alist-partial-match alist key))
           hash-value))
-    (and (listp alist) (stringp key) (not (string-empty-p key))
-         (my/gptel--alist-partial-match alist key))))
+    (and (listp alist) (my/gptel--alist-partial-match alist key))))
 
 (defun my/gptel--alist-partial-match (alist search-str)
   "Find best matching entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
