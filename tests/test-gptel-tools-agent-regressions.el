@@ -16,6 +16,7 @@
 (require 'gptel-agent-loop)
 (require 'gptel-benchmark-llm)
 (require 'gptel-benchmark-subagent)
+(require 'gptel-benchmark-instincts)
 (require 'gptel-ext-retry)
 (require 'gptel-ext-fsm)
 (require 'gptel-ext-fsm-utils)
@@ -18254,8 +18255,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                    messages)))
       (delete-directory project-root t))))
 
-(ert-deftest regression/instincts/weekly-job-headless-skips-batch-commit ()
-  "Headless instincts weekly jobs should not mutate git directly."
+(ert-deftest regression/instincts/weekly-job-headless-commits-batch ()
+  "Headless instincts weekly jobs should commit batch updates."
   (let ((gptel-auto-workflow--headless t)
         (messages nil)
         (gptel-benchmark-instincts--accumulator (make-hash-table :test 'equal))
@@ -18272,11 +18273,11 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                (lambda (fmt &rest args)
                  (push (apply #'format fmt args) messages))))
-      (should (= (gptel-benchmark-instincts-weekly-job) 0))
-      (should-not batch-called)
+      (should (= (gptel-benchmark-instincts-weekly-job) 1))
+      (should batch-called)
       (should (seq-some
                (lambda (msg)
-                 (string-match-p "Pending batch updates require manual review" msg))
+                 (string-match-p "Weekly evolution cycle complete" msg))
                messages)))))
 
 (ert-deftest regression/mementum/sync-synthesis-timeout-aborts-request-buffer ()
