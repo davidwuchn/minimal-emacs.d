@@ -131,7 +131,6 @@ under `lexical-binding: t'.")
     ;; DeepSeek
     ("deepseek-v4-flash" . 1000000)
     ("deepseek-v4-pro" . 1000000)
-    ("deepseek-coder" . 16384)
     ;; MiniMax
     ("minimax-m2.7-highspeed" . 196608)
     ("minimax-m2.7" . 196608)
