@@ -18192,7 +18192,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                 messages)))))
 
 (ert-deftest regression/mementum/headless-synthesis-requires-human-approval ()
-  "Headless synthesis should not auto-approve or save knowledge pages."
+  "Headless synthesis should auto-save knowledge pages without prompting."
   (let ((gptel-auto-workflow--headless t)
         (saved nil)
         (prompted nil)
@@ -18216,12 +18216,12 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda (fmt &rest args)
                  (push (apply #'format fmt args) messages))))
       (gptel-mementum--handle-synthesis-result "workflow" nil content)
-      (should-not saved)
+      (should saved)
       (should-not prompted)
       (should-not displayed)
       (should (seq-some
                (lambda (msg)
-                 (string-match-p "human approval required before saving" msg))
+                 (string-match-p "Auto-saving.*in headless mode" msg))
                messages)))))
 
 (ert-deftest regression/mementum/save-knowledge-page-does-not-auto-commit ()
