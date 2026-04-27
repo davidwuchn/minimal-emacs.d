@@ -275,7 +275,7 @@ Returns error message string on failure, nil on success."
      (list :tool-count 0)
      (lambda (result)
        (setq actual result)))
-    (should (equal "Error: Programmatic execution finished without calling result"
+    (should (equal "Error: Programmatic execution finished without calling result (used 0 tools)"
                    actual))))
 
 (defun test-sandbox--eval-real-expr (expr &optional bindings)
