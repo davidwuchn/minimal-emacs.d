@@ -618,7 +618,8 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 (defun gptel-agent-loop--handle-empty-response (state resp)
   "Handle empty string RESP for STATE.
 Returns non-nil if result was delivered."
-  (when (and (stringp resp) (string-blank-p resp))
+  (when (and (gptel-agent-loop--task-p state)
+             (stringp resp) (string-blank-p resp))
     (if (= (gptel-agent-loop--task-step-count state) 0)
         (gptel-agent-loop--deliver-result
          state
@@ -633,7 +634,8 @@ Returns non-nil if result was delivered."
 (defun gptel-agent-loop--handle-max-steps-reached (state resp)
   "Handle STATE when max steps were reached and RESP is final turn.
 Returns non-nil if result was delivered."
-  (when (and (gptel-agent-loop--task-max-steps-reached state)
+  (when (and (gptel-agent-loop--task-p state)
+             (gptel-agent-loop--task-max-steps-reached state)
              (not (gptel-agent-loop--task-summary-requested state)))
     (setf (gptel-agent-loop--task-summary-requested state) t)
     (if gptel-agent-loop-hard-loop
@@ -651,7 +653,8 @@ Returns non-nil if result was delivered."
   "Handle STATE when summary was requested and RESP is summary turn.
 USE-TOOLS indicates whether tools were requested.
 Returns non-nil if result was delivered."
-  (when (and (gptel-agent-loop--task-summary-requested state)
+  (when (and (gptel-agent-loop--task-p state)
+             (gptel-agent-loop--task-summary-requested state)
              (not use-tools))
     (gptel-agent-loop--deliver-result
      state
@@ -662,7 +665,8 @@ Returns non-nil if result was delivered."
 (defun gptel-agent-loop--handle-continuation (state resp)
   "Handle STATE when continuation is needed after RESP.
 Returns non-nil if result was delivered."
-  (when (gptel-agent-loop--continuation-needed-p state resp)
+  (when (and (gptel-agent-loop--task-p state)
+             (gptel-agent-loop--continuation-needed-p state resp))
     (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
       (if gptel-agent-loop-hard-loop
           (progn
@@ -681,11 +685,12 @@ Returns non-nil if result was delivered."
 (defun gptel-agent-loop--handle-final-response (state resp)
   "Handle STATE when RESP is a final response to deliver.
 Returns non-nil if result was delivered."
-  (gptel-agent-loop--deliver-result
-   state
-   (gptel-agent-loop--build-final-result state resp)
-   t)
-  t)
+  (when (gptel-agent-loop--task-p state)
+    (gptel-agent-loop--deliver-result
+     state
+     (gptel-agent-loop--build-final-result state "")
+     t)
+    t))
 
 (defun gptel-agent-loop--handle-string-response (state resp use-tools)
   "Handle string response RESP for STATE.
