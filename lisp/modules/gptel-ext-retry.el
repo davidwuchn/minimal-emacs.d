@@ -767,9 +767,7 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("glm-4.7"            . 350000)
     ("MiniMax-M2.5"       . 300000)
     ("deepseek-v4-flash"  . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
-    ("deepseek-v4-pro"    . 3000000)
-    ("deepseek-chat"      . 3000000)
-    ("deepseek-reasoner"  . 3000000))
+    ("deepseek-v4-pro"    . 3000000))
   "Approximate max JSON byte size per model.
 
 Computed as context window × ~3.5 bytes/token, minus output reservation.

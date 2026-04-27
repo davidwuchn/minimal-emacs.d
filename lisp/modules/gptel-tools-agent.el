@@ -7421,11 +7421,10 @@ failover advances past transient timeout or provider-pressure failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6-code-preview")
+    ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-    ("Gemini" . "gemini-3.1-pro-preview"))
+    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
 Each entry is (BACKEND . MODEL), where BACKEND matches the agent preset backend
@@ -7446,11 +7445,10 @@ DashScope and others when rate-limited or unavailable."
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6-code-preview")
+    ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-    ("Gemini" . "gemini-3.1-pro-preview"))
+    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after provider rate limits.
 
 Headless executor prefers MiniMax by default. When the active executor backend
@@ -7471,22 +7469,21 @@ run can advance through this list instead of repeatedly hammering the same provi
 (defconst gptel-auto-workflow--legacy-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-chat")
+    ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Previous default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
 
 (defconst gptel-auto-workflow--current-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6-code-preview")
+    ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-    ("Gemini" . "gemini-3.1-pro-preview"))
+    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Current runtime default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
 
 (defconst gptel-auto-workflow--legacy-executor-rate-limit-fallbacks
-  '(("DeepSeek" . "deepseek-chat")
+  '(("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("DashScope" . "qwen3.6-plus")
     ("Gemini" . "gemini-3.1-pro-preview"))
@@ -7498,11 +7495,10 @@ run can advance through this list instead of repeatedly hammering the same provi
 
 (defconst gptel-auto-workflow--current-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6-code-preview")
+    ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-    ("Gemini" . "gemini-3.1-pro-preview"))
+    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Current runtime default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
 
 (defvar gptel-auto-workflow--runtime-subagent-provider-overrides nil

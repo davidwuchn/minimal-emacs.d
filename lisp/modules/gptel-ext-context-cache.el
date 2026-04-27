@@ -131,8 +131,6 @@ under `lexical-binding: t'.")
     ;; DeepSeek
     ("deepseek-v4-flash" . 1000000)
     ("deepseek-v4-pro" . 1000000)
-    ("deepseek-chat" . 1000000)
-    ("deepseek-reasoner" . 1000000)
     ("deepseek-coder" . 16384)
     ;; MiniMax
     ("minimax-m2.7-highspeed" . 196608)
@@ -239,16 +237,6 @@ Sources:
      :pricing-input 12.0 :pricing-output 24.0
      :max-output 384000
      :description "DeepSeek V4 Pro - 1M context, thinking-enabled reasoning model")
-    ("deepseek-chat"
-     :context-window 1000000
-     :pricing-input 1.0 :pricing-output 2.0
-     :max-output 384000
-     :description "Deprecated alias for DeepSeek V4 Flash (thinking disabled)")
-    ("deepseek-reasoner"
-     :context-window 1000000
-     :pricing-input 1.0 :pricing-output 2.0
-     :max-output 384000
-     :description "Deprecated alias for DeepSeek V4 Flash (thinking enabled)")
     ;; MiniMax
     ("minimax-m2.7-highspeed"
      :context-window 196608
@@ -733,12 +721,10 @@ Description: %s"
      :rate-limit "Varies, check dashboard"
      :pricing-model "Per-token, Flash low-cost and Pro premium"
      :features (streaming tools reasoning)
-     :notes "Both V4 models support 1M context, 384K output, and thinking mode; deepseek-chat/reasoner are deprecated aliases."
+     :notes "Both V4 models support 1M context, 384K output, and thinking mode"
      :context-windows
      ((deepseek-v4-flash . 1000000)
-      (deepseek-v4-pro . 1000000)
-      (deepseek-chat . 1000000)
-      (deepseek-reasoner . 1000000)))
+      (deepseek-v4-pro . 1000000)))
 
     (moonshot
      :description "Moonshot AI - Kimi models"
