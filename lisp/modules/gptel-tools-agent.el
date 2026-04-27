@@ -9858,10 +9858,11 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
                  gptel-auto-workflow--cron-job-running)
              (numberp gptel-auto-workflow-status-refresh-interval)
              (> gptel-auto-workflow-status-refresh-interval 0))
-    (setq gptel-auto-workflow--status-refresh-timer
-          (run-with-timer gptel-auto-workflow-status-refresh-interval
-                          gptel-auto-workflow-status-refresh-interval
-                          #'gptel-auto-workflow--refresh-status-if-running))))
+    (let* ((interval (min (max gptel-auto-workflow-status-refresh-interval 5) 3600)))
+      (setq gptel-auto-workflow--status-refresh-timer
+            (run-with-timer interval
+                            interval
+                            #'gptel-auto-workflow--refresh-status-if-running)))))
 
 (defun gptel-auto-workflow--start-status-refresh-timer ()
   "Start the workflow status refresh timer if a workflow run is active."
