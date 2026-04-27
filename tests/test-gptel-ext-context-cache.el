@@ -232,11 +232,11 @@
   "String fallback should match string-keyed tables without signaling."
   (test--context-cache-setup)
   (let ((test-table-symbol (make-symbol "test-gptel-models")))
-    (set test-table-symbol '(("MiniMax-M2.5" :context-window 196608)))
+    (set test-table-symbol '(("minimax-m2.7-highspeed" :context-window 196608)))
     (unwind-protect
         (cl-letf (((symbol-function 'my/gptel--gptel-model-tables)
                    (lambda () (list test-table-symbol))))
-           (should (= (my/gptel--lookup-context-window-in-gptel-tables "minimax-m2.5")
+           (should (= (my/gptel--lookup-context-window-in-gptel-tables "minimax-m2.7-highspeed")
                       196608)))
       (makunbound test-table-symbol))))
 

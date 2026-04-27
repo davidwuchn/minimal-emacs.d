@@ -1,7 +1,7 @@
 ---
 name: nucleus-gptel-plan
 backend: MiniMax
-model: minimax-m2.5
+model: minimax-m2.7-highspeed
 max-tokens: 16384
 temperature: 0.3
 description: Nucleus planning agent (read-only, MiniMax)

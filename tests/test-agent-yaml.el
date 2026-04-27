@@ -28,13 +28,10 @@
     "glm-5"
     "deepseek-v4-flash"
     "deepseek-v4-pro"
-    "deepseek-chat"
-    "deepseek-reasoner"
-    "deepseek-coder"
     "kimi-k2.5"
     "minimax-m2.7-highspeed"
     "minimax-m2.7"
-    "minimax-m2.5")
+    "minimax-m2.7-highspeed")
   "List of known model names for validation.")
 
 ;;; YAML parsing
