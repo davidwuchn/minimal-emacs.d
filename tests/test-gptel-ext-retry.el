@@ -517,6 +517,52 @@
   "Curl exit code 7 (connection refused) should be detected as transient."
   (should (test--transient-error-p "curl: (7) Failed to connect" nil)))
 
+(ert-deftest retry/curl-sentinel/suppresses-quit ()
+  "Curl sentinel wrappers should not leak raw quit signals."
+  (let ((called nil)
+        (logged nil))
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (setq logged (apply #'format fmt args)))))
+      (my/gptel--curl-sentinel-protect-quit
+       (lambda (_process _status)
+         (setq called t)
+         (signal 'quit nil))
+       nil "finished\n"))
+    (should called)
+    (should (string-match-p "suppressed quit in curl sentinel" logged))))
+
+(ert-deftest retry/curl-sentinel/callback-quit-continues-cleanup ()
+  "A callback quit should be converted so the original sentinel can finish."
+  (let* ((info (list :callback (lambda (&rest _args)
+                                 (signal 'quit nil))))
+         (proc-buf (generate-new-buffer " *retry-curl-sentinel-test*"))
+         (process (make-process :name "retry-curl-sentinel-test"
+                                :buffer proc-buf
+                                :command '("true")
+                                :noquery t))
+         (fsm (gptel-make-fsm :info info))
+         (cleanup-ran nil)
+         (logged nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'message)
+                   (lambda (fmt &rest args)
+                     (setq logged (apply #'format fmt args)))))
+          (let ((gptel--request-alist (list (cons process (list fsm)))))
+            (my/gptel--curl-sentinel-protect-quit
+             (lambda (_process _status)
+               (funcall (plist-get info :callback) "response" info)
+               (setq cleanup-ran t))
+             process "finished\n")))
+      (when (process-live-p process)
+        (delete-process process))
+      (when (buffer-live-p proc-buf)
+        (kill-buffer proc-buf)))
+    (should cleanup-ran)
+    (should (equal "Callback quit" (plist-get info :status)))
+    (should (string-match-p "Callback quit" (plist-get info :error)))
+    (should (string-match-p "suppressed quit in curl callback" logged))))
+
 (provide 'test-gptel-ext-retry)
 
 ;;; test-gptel-ext-retry.el ends here

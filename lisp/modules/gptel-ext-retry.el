@@ -910,5 +910,56 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
 
 (advice-add 'gptel-curl-get-response :before #'my/gptel--compact-payload)
 
+(defun my/gptel--process-name-safe (process)
+  "Return PROCESS name, tolerating nil or dead processes."
+  (if (processp process)
+      (process-name process)
+    "<unknown>"))
+
+(defun my/gptel--curl-sentinel-protect-quit (orig process status)
+  "Run curl sentinel ORIG for PROCESS and STATUS without leaking `quit'.
+Process sentinels run asynchronously.  A raw `quit' from the request callback
+aborts gptel's sentinel before it can remove the request from
+`gptel--request-alist', delete the curl process, and kill its buffer."
+  (let* ((request (and (processp process)
+                       (boundp 'gptel--request-alist)
+                       (alist-get process gptel--request-alist)))
+         (fsm (car-safe request))
+         (info (and fsm (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
+         (callback (and (consp info) (plist-get info :callback)))
+         (wrapped nil))
+    (unwind-protect
+        (condition-case err
+            (progn
+              (when callback
+                (setq wrapped t)
+                (plist-put
+                 info :callback
+                 (lambda (&rest args)
+                   (condition-case callback-err
+                       (apply callback args)
+                     (quit
+                      (plist-put info :error
+                                 (format "Callback quit: %s"
+                                         (error-message-string callback-err)))
+                      (plist-put info :status "Callback quit")
+                      (message "gptel: suppressed quit in curl callback for %s: %s"
+                               (my/gptel--process-name-safe process)
+                               (error-message-string callback-err))
+                      nil)))))
+              (funcall orig process status))
+          (quit
+           (message "gptel: suppressed quit in curl sentinel for %s: %s"
+                    (my/gptel--process-name-safe process)
+                    (error-message-string err))))
+      (when wrapped
+        (plist-put info :callback callback)))))
+
+(with-eval-after-load 'gptel-request
+  (advice-add 'gptel-curl--sentinel
+              :around #'my/gptel--curl-sentinel-protect-quit)
+  (advice-add 'gptel-curl--stream-cleanup
+              :around #'my/gptel--curl-sentinel-protect-quit))
+
 (provide 'gptel-ext-retry)
 ;;; gptel-ext-retry.el ends here
