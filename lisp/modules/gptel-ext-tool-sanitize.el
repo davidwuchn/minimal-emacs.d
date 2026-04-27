@@ -314,7 +314,7 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
               (let* ((existing-count (alist-get fp run-counts nil nil #'string=))
                      (current-run
                       (if (and prev-fp (equal prev-fp fp))
-                          (1+ existing-count)
+                          (1+ (or existing-count 0))
                         1)))
                 (setf (alist-get fp run-counts nil t #'string=) current-run)
                 (when (>= current-run n)
@@ -324,7 +324,7 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                                  (car (split-string fp ":" t)) current-run)))
                     (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
                              (car (split-string fp ":" t)) current-run)
-                    (plist-put info :doom-loop-run-counts run-counts)
+                    (setq info (plist-put info :doom-loop-run-counts run-counts))
                     (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
                     (funcall (plist-get info :callback) error-message info))
                   (setq aborted t)
@@ -332,7 +332,7 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                   (cl-return-from my/gptel--detect-doom-loop))
                 (setq prev-fp fp)))
             (unless aborted
-              (plist-put info :doom-loop-run-counts run-counts)
+              (setq info (plist-put info :doom-loop-run-counts run-counts))
               (setf (gptel-fsm-info fsm) info))))))))
 
 (cl-defun my/gptel--detect-inspection-thrash (fsm)
