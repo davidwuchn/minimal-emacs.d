@@ -68,14 +68,17 @@
              (or (not (functionp confirm))
                  (apply confirm arg-values))))))
 
-(defun test-sandbox--check-tool (tool-spec arg-values)
+(defun test-sandbox--check-tool (tool-spec arg-values &optional requested-tool-name)
   "Validate TOOL-SPEC with ARG-VALUES for sandbox execution.
+REQUESTED-TOOL-NAME is used when TOOL-SPEC is nil.
 Returns error message string on failure, nil on success."
   (condition-case err
       (progn
+        (let ((tool-name (or requested-tool-name
+                             (and tool-spec
+                                  (test-gptel-tool-name tool-spec)))))
         (unless tool-spec
-          (error "Unknown tool requested by Programmatic"))
-        (let ((tool-name (test-gptel-tool-name tool-spec)))
+            (error "Unknown tool %s requested by Programmatic" tool-name))
           (unless (test-sandbox--allowed-tool-p tool-name)
             (error "Tool %s is not allowed inside Programmatic %s mode"
                    tool-name (test-sandbox--current-profile)))
@@ -83,9 +86,9 @@ Returns error message string on failure, nil on success."
             (error "Tool %s is not supported inside Programmatic v1"
                    tool-name))
           (when (and (test-sandbox--confirm-required-p tool-spec arg-values)
-                     (not (test-sandbox--confirm-supported-p tool-name)))
+                      (not (test-sandbox--confirm-supported-p tool-name)))
             (error "Tool %s requires confirmation and is not supported inside Programmatic %s mode"
-                   tool-name (test-sandbox--current-profile))))
+                     tool-name (test-sandbox--current-profile))))
         nil)
     (error (error-message-string err))))
 
@@ -126,6 +129,11 @@ Returns error message string on failure, nil on success."
 (ert-deftest sandbox/check-tool/blocks-nil-tool-spec ()
   "nil tool-spec should be rejected."
   (should (stringp (test-sandbox--check-tool nil nil))))
+
+(ert-deftest sandbox/check-tool/nil-tool-spec-names-requested-tool ()
+  "Unknown-tool errors should include the requested tool name."
+  (should (equal "Unknown tool MissingTool requested by Programmatic"
+                 (test-sandbox--check-tool nil nil "MissingTool"))))
 
 (ert-deftest sandbox/check-tool/blocks-programmatic-tool ()
   "Programmatic tool should be blocked (no recursion)."

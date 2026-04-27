@@ -484,21 +484,20 @@ CALLBACK receives non-nil when approved and nil when rejected."
                    (setf (plist-get state :aggregate-preview-shown) t))
                  (funcall callback approved))))))
 
-(defun gptel-sandbox--check-tool (tool-spec arg-values)
-  "Validate TOOL-SPEC with ARG-VALUES for sandbox execution."
+(defun gptel-sandbox--check-tool (tool-name tool-spec arg-values)
+  "Validate TOOL-NAME and TOOL-SPEC with ARG-VALUES for sandbox execution."
   (unless tool-spec
-    (error "Unknown tool requested by Programmatic"))
-  (let ((tool-name (gptel-tool-name tool-spec)))
-    (unless (gptel-sandbox--allowed-tool-p tool-name)
-      (error "Tool %s is not allowed inside Programmatic %s mode"
-             tool-name (gptel-sandbox--current-profile)))
-    (when (string= tool-name "Programmatic")
-      (error "Tool %s requires confirmation or recursion and is not supported inside Programmatic v1"
-             tool-name))
-    (when (and (gptel-sandbox--confirm-required-p tool-spec arg-values)
-               (not (gptel-sandbox--confirm-supported-p tool-name)))
-      (error "Tool %s requires confirmation and is not supported inside Programmatic %s mode"
-             tool-name (gptel-sandbox--current-profile)))))
+    (error "Unknown tool %s requested by Programmatic" tool-name))
+  (unless (gptel-sandbox--allowed-tool-p tool-name)
+    (error "Tool %s is not allowed inside Programmatic %s mode"
+           tool-name (gptel-sandbox--current-profile)))
+  (when (string= tool-name "Programmatic")
+    (error "Tool %s requires confirmation or recursion and is not supported inside Programmatic v1"
+           tool-name))
+  (when (and (gptel-sandbox--confirm-required-p tool-spec arg-values)
+             (not (gptel-sandbox--confirm-supported-p tool-name)))
+    (error "Tool %s requires confirmation and is not supported inside Programmatic %s mode"
+           tool-name (gptel-sandbox--current-profile))))
 
 (defun gptel-sandbox--truncate-result (text)
   "Return TEXT, truncating and persisting to a temp file if needed."
@@ -562,7 +561,7 @@ can consume lists, vectors, plists, and alists as readable data."
                       nil))
          (arg-values (and tool-spec
                           (gptel-sandbox--resolve-tool-args tool-spec arg-forms env))))
-    (gptel-sandbox--check-tool tool-spec arg-values)
+    (gptel-sandbox--check-tool tool-name tool-spec arg-values)
     (cl-incf (plist-get state :tool-count))
     (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
       (error "Programmatic exceeded max nested tool calls (%d)"

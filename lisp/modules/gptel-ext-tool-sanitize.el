@@ -98,6 +98,41 @@ Messages the repair and updates the :name property in place."
         (message "gptel: repairing tool call %S -> %S" current-name correct-name)
         (plist-put tc :name correct-name)))))
 
+(defun my/gptel--tool-dispatch-error-message (err)
+  "Return a tool-result string for dispatch error ERR."
+  (format "Error: %s" (error-message-string err)))
+
+(defun my/gptel--complete-tool-dispatch-error (fsm err)
+  "Record ERR as the current unresolved tool result for FSM.
+Return non-nil when the error was converted into a tool result."
+  (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
+              (tool-use (plist-get info :tool-use))
+              (tool-call (cl-find-if-not (lambda (tc) (plist-get tc :result))
+                                         tool-use)))
+    (let* ((name (plist-get tool-call :name))
+           (tools (my/gptel--normalize-tool-list (plist-get info :tools)))
+           (tool-spec (and (stringp name)
+                           (cl-find-if (lambda (ts)
+                                         (equal (gptel-tool-name ts) name))
+                                       tools)))
+           (message-text (my/gptel--tool-dispatch-error-message err)))
+      (message "gptel: tool dispatch error for %s: %s"
+               (or name "<unknown>") message-text)
+      (if (fboundp 'gptel--process-tool-call)
+          (gptel--process-tool-call fsm tool-spec tool-call message-text)
+        (plist-put tool-call :result message-text))
+      t)))
+
+(defun my/gptel--handle-tool-use-with-error-result (orig fsm)
+  "Run ORIG for FSM, turning dispatch errors into tool results.
+This protects async tool dispatch, where gptel does not wrap the initial
+`apply' in `condition-case'."
+  (condition-case err
+      (funcall orig fsm)
+    (error
+     (unless (my/gptel--complete-tool-dispatch-error fsm err)
+       (signal (car err) (cdr err))))))
+
 (defun my/gptel--sanitize-tool-calls (fsm)
   "Remove nil/unknown-named tool calls from FSM before execution.
 
@@ -376,6 +411,7 @@ Uses last-wins so the most recently registered struct takes precedence."
   (advice-add 'gptel--handle-tool-use :before #'my/gptel--sanitize-tool-calls)
   (advice-add 'gptel--handle-tool-use :before #'my/gptel--detect-doom-loop)
   (advice-add 'gptel--handle-tool-use :before #'my/gptel--detect-inspection-thrash)
+  (advice-add 'gptel--handle-tool-use :around #'my/gptel--handle-tool-use-with-error-result)
   ;; Dedup tools before serialization
   (advice-add 'gptel--parse-tools     :around #'my/gptel--dedup-tools-before-parse))
 

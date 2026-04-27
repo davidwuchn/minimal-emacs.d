@@ -600,5 +600,34 @@
       (when (buffer-live-p request-buffer)
         (kill-buffer request-buffer)))))
 
+(ert-deftest sanitize/tool-dispatch/async-contract-error-becomes-tool-result ()
+  "Escaped async dispatch errors should complete the current tool call."
+  (require 'gptel-ext-tool-sanitize)
+  (let* ((request-buffer (generate-new-buffer " *dispatch-error*"))
+         (edit-tool
+          (gptel--make-tool :name "Edit"
+                            :function #'ignore
+                            :description "edit"
+                            :args nil
+                            :async t))
+         (tool-call (list :name "Edit" :args '(:file_path "x.el")))
+         (info (list :tool-use (list tool-call)
+                     :tools (list edit-tool)
+                     :buffer request-buffer))
+         (fsm (gptel-make-fsm :info info)))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'gptel--fsm-transition)
+                     (lambda (&rest _) nil)))
+            (my/gptel--handle-tool-use-with-error-result
+             (lambda (_fsm)
+               (user-error "Tool Contract Violation (Edit): missing or null required argument `new_str`"))
+             fsm))
+          (should (string-prefix-p "Error: Tool Contract Violation"
+                                   (plist-get tool-call :result)))
+          (should (string-match-p "new_str" (plist-get tool-call :result))))
+      (when (buffer-live-p request-buffer)
+        (kill-buffer request-buffer)))))
+
 (provide 'test-gptel-ext-tool-sanitize)
 ;;; test-gptel-ext-tool-sanitize.el ends here
