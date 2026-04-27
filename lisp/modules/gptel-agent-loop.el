@@ -696,7 +696,8 @@ Returns non-nil if result was delivered."
   "Handle string response RESP for STATE.
 USE-TOOLS indicates whether tools were requested on this turn.
 Returns non-nil if result was delivered."
-  (and (gptel-agent-loop--task-p state)
+  (and (stringp resp)
+       (gptel-agent-loop--task-p state)
        (or (gptel-agent-loop--handle-max-steps-reached state resp)
            (gptel-agent-loop--handle-summary-turn state resp use-tools)
            (gptel-agent-loop--handle-empty-response state resp)
