@@ -694,7 +694,7 @@ Returns non-nil if result was delivered."
   (when (gptel-agent-loop--task-p state)
     (gptel-agent-loop--deliver-result
      state
-     (gptel-agent-loop--build-final-result state "")
+     (gptel-agent-loop--build-final-result state resp)
      t)
     t))
 
