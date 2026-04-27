@@ -187,9 +187,8 @@ memory after long sessions or if tasks appear stuck."
     (maphash
      (lambda (id state)
        (when (gptel-agent-loop--task-finished state)
-         ;; Cancel any lingering timer
-         (when (timerp (gptel-agent-loop--task-timeout-timer state))
-           (cancel-timer (gptel-agent-loop--task-timeout-timer state)))
+         (gptel-agent-loop--cancel-timer-if-active
+          (gptel-agent-loop--task-timeout-timer state))
          (remhash id gptel-agent-loop--active-tasks)
          (cl-incf count)))
      gptel-agent-loop--active-tasks)
@@ -225,12 +224,17 @@ memory after long sessions or if tasks appear stuck."
   (puthash (gptel-agent-loop--task-id state) state gptel-agent-loop--active-tasks)
   state)
 
+(defun gptel-agent-loop--cancel-timer-if-active (timer)
+  "Cancel TIMER if it's an active timer, safely."
+  (when (timerp timer)
+    (cancel-timer timer)))
+
 (defun gptel-agent-loop--cleanup-state (state)
   "Remove STATE from active task bookkeeping."
-  (when (timerp (gptel-agent-loop--task-timeout-timer state))
-    (cancel-timer (gptel-agent-loop--task-timeout-timer state)))
-  (when (timerp (gptel-agent-loop--task-continuation-timer state))
-    (cancel-timer (gptel-agent-loop--task-continuation-timer state)))
+  (gptel-agent-loop--cancel-timer-if-active
+   (gptel-agent-loop--task-timeout-timer state))
+  (gptel-agent-loop--cancel-timer-if-active
+   (gptel-agent-loop--task-continuation-timer state))
   (remhash (gptel-agent-loop--task-id state) gptel-agent-loop--active-tasks)
   (when (eq gptel-agent-loop--state state)
     (setq gptel-agent-loop--state nil)))
@@ -512,8 +516,8 @@ Assumes STATE is a valid task structure."
   "Schedule a request for STATE with PROMPT.
 USE-TOOLS determines tool usage.  DELAY defaults to 0.1 seconds.
 Cancels any pending continuation timer before scheduling a new one."
-  (when (timerp (gptel-agent-loop--task-continuation-timer state))
-    (cancel-timer (gptel-agent-loop--task-continuation-timer state)))
+  (gptel-agent-loop--cancel-timer-if-active
+   (gptel-agent-loop--task-continuation-timer state))
   (let ((timer (run-with-timer (or delay 0.1) nil
                                (lambda ()
                                  (gptel-agent-loop--request state prompt use-tools nil)))))
@@ -779,9 +783,8 @@ Cache behavior:
   "Create timeout timer for STATE, canceling any existing timer first."
   (when (and state (gptel-agent-loop--task-p state)
              (numberp gptel-agent-loop-timeout) (> gptel-agent-loop-timeout 0))
-    (let ((existing-timer (gptel-agent-loop--task-timeout-timer state)))
-      (when (timerp existing-timer)
-        (cancel-timer existing-timer)))
+    (gptel-agent-loop--cancel-timer-if-active
+     (gptel-agent-loop--task-timeout-timer state))
     (let* ((timeout gptel-agent-loop-timeout)
            (timer (run-with-timer
                    timeout nil
