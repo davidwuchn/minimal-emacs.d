@@ -96,8 +96,8 @@ Model is configured in YAML frontmatter (single source of truth):
 
 | Use Case | Model | YAML File |
 |----------|-------|-----------|
-| **Plan preset** | `minimax-m2.5` | `assistant/agents/plan_agent.md` |
-| **Agent preset** | `minimax-m2.5` | `assistant/agents/code_agent.md` |
+| **Plan preset** | `minimax-m2.7-highspeed` | `assistant/agents/plan_agent.md` |
+| **Agent preset** | `minimax-m2.7-highspeed` | `assistant/agents/code_agent.md` |
 | **Subagents** | per-agent YAML | `assistant/agents/*.md` |
 
 ### Backend Fallback Chain

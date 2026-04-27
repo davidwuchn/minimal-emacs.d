@@ -104,5 +104,5 @@ Single source of truth: `config.json`
 | `deepseek` | deepseek-v4-flash, deepseek-v4-pro |
 | `moonshot` | kimi-k2.5, kimi-for-coding |
 | `google` | gemini-3.1-pro-preview |
-| `minimax` | minimax-m2.5, minimax-m2.7 |
+| `minimax` | minimax-m2.7-highspeed, minimax-m2.7 |
 | `z-ai` | glm-4.7, glm-5 |

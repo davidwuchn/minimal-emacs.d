@@ -164,7 +164,7 @@ Sources:
 - Gemini: https://openrouter.ai/models/google/gemini-2.5-pro-preview
 - Claude: https://openrouter.ai/models/anthropic/claude-sonnet-4
 - DeepSeek: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
-- MiniMax: https://openrouter.ai/models/minimax/minimax-m2.5")
+- MiniMax: https://openrouter.ai/models/minimax/minimax-m2.7-highspeed")
 
 (defvar my/gptel--known-model-metadata
   '(;; Qwen (Alibaba via DashScope) - VISION ENABLED
@@ -773,8 +773,7 @@ Description: %s"
      :notes "M2.5/M2.7/M2.7-highspeed: 196k context. Highspeed favors lower-latency agent workflows."
      :context-windows
      ((minimax-m2.7-highspeed . 196608)
-      (minimax-m2.7 . 196608)
-      (minimax-m2.5 . 196608))))
+      (minimax-m2.7 . 196608))))
 
   "Provider usage contracts: rate limits, pricing models, features, and notes.
 Use `my/gptel-show-provider-contract' to query.")
