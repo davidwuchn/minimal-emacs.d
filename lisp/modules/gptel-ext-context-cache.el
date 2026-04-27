@@ -135,7 +135,6 @@ under `lexical-binding: t'.")
     ("minimax-m2.7-highspeed" . 196608)
     ("minimax-m2.7" . 196608)
     ("MiniMax-M2.5" . 196608)
-    ("minimax-m2.1" . 196608)
     ;; Kimi/Moonshot
     ("kimi-k2.6" . 262144)
     ("kimi-k2.5" . 262144)
@@ -252,12 +251,7 @@ Sources:
      :pricing-input 0.27 :pricing-output 0.95
      :max-output 16384
      :description "MiniMax M2.5 - 196k context, SWE-bench 80.2%, agent workflows")
-    ("minimax-m2.1"
-     :context-window 196608
-     :pricing-input 0.27 :pricing-output 0.95
-     :max-output 16384
-     :description "MiniMax M2.1 - 10B params, coding/agentic, 196k context")
-    ;; GPT
+     ;; GPT
     ("gpt-4o"
      :context-window 128000
      :pricing-input 2.5 :pricing-output 10.0
