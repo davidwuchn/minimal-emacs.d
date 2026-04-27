@@ -4925,8 +4925,17 @@ empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD' is absent."
                       (string-match-p
                        "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
                        output))))
-         (string-empty-p unmerged-files)
-         (string-empty-p worktree-status))))
+          (string-empty-p unmerged-files)
+          (string-empty-p worktree-status))))
+
+(defun gptel-auto-workflow--unmerged-files ()
+  "Return newline-separated unmerged files in the current git worktree."
+  (string-trim
+   (or (ignore-errors
+         (gptel-auto-workflow--git-cmd
+          "git diff --name-only --diff-filter=U 2>/dev/null"
+          30))
+       "")))
 
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
   "Merge OPTIMIZE-BRANCH to staging using cherry-pick.
@@ -4988,31 +4997,38 @@ Uses the staging worktree instead of switching branches in the root repo."
                    (message "[auto-workflow] Cherry-pick empty (already in staging)")
                     (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
                     :already-integrated)
-                  (t
-                   (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                   (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
-                            (my/gptel--sanitize-for-logging cherry-output 160))
-                   (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
-                                 (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
-                       nil
-                     (let* ((merge-result
-                             (gptel-auto-workflow--git-result
-                              (format "git merge -X theirs %s --no-ff -m %s"
-                                      (shell-quote-argument optimize-ref)
-                                      (shell-quote-argument merge-message))
-                              180))
-                            (merge-output (car merge-result)))
-                       (cond
-                        ((= 0 (cdr merge-result)) t)
-                         ((string-match-p "Already up[ -]to[- ]date" merge-output)
-                          :already-integrated)
-                        (t
-                         (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
-                         (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                         (gptel-auto-workflow--prepare-staging-merge-base reset-target)
-                         (message "[auto-workflow] Merge also failed: %s"
-                                  (my/gptel--sanitize-for-logging merge-output 160))
-                         nil)))))))))))))))
+                   (t
+                    (let ((unmerged-files (gptel-auto-workflow--unmerged-files)))
+                      (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                      (if (gptel-auto-workflow--non-empty-string-p unmerged-files)
+                          (progn
+                            (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                            (message "[auto-workflow] Cherry-pick conflicted; refusing merge fallback. Conflicted files: %s"
+                                     (my/gptel--sanitize-for-logging unmerged-files 160))
+                            nil)
+                        (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
+                                 (my/gptel--sanitize-for-logging cherry-output 160))
+                        (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                                      (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
+                            nil
+                          (let* ((merge-result
+                                  (gptel-auto-workflow--git-result
+                                   (format "git merge -X theirs %s --no-ff -m %s"
+                                           (shell-quote-argument optimize-ref)
+                                           (shell-quote-argument merge-message))
+                                   180))
+                                 (merge-output (car merge-result)))
+                            (cond
+                             ((= 0 (cdr merge-result)) t)
+                             ((string-match-p "Already up[ -]to[- ]date" merge-output)
+                              :already-integrated)
+                             (t
+                              (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
+                              (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                              (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                              (message "[auto-workflow] Merge also failed: %s"
+                                       (my/gptel--sanitize-for-logging merge-output 160))
+                              nil)))))))))))))))))
 
 
 
