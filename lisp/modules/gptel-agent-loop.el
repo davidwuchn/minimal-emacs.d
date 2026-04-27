@@ -553,7 +553,8 @@ Retries when error is transient and retry budget remains."
   "Build request callback for STATE.
 REQUEST-PROMPT and USE-TOOLS are reused on retries."
   (lambda (resp info)
-    (let ((ov (plist-get info :context))
+    (let ((info (or info (list)))
+          (ov (plist-get info :context))
           (error-data (plist-get info :error)))
       (cond
        ((gptel-agent-loop--task-finished state)
