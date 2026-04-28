@@ -492,10 +492,11 @@ not planning more work. Uses pre-compiled pattern for performance on hot path."
 
 (defun gptel-agent-loop--increment-continuation-count (state)
   "Increment and return the new continuation count for STATE.
-Returns nil if STATE is not a valid task structure."
-  (when (gptel-agent-loop--task-p state)
-    (setf (gptel-agent-loop--task-continuation-count state)
-          (1+ (gptel-agent-loop--continuation-count state)))))
+Returns 0 if STATE is not a valid task structure."
+  (if (gptel-agent-loop--task-p state)
+      (setf (gptel-agent-loop--task-continuation-count state)
+            (1+ (gptel-agent-loop--continuation-count state)))
+    0))
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP."
