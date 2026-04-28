@@ -2160,19 +2160,21 @@ subagent callback fired, and avoids reusing a deleted worktree as
                  caller-default-directory
                  user-emacs-directory
                  temporary-file-directory)
+                temporary-file-directory))
+           (restored-default-directory
+            (or (my/gptel--first-existing-directory
+                 caller-default-directory
+                 user-emacs-directory
+                 temporary-file-directory)
                 temporary-file-directory)))
       (unwind-protect
           (with-current-buffer safe-buffer
             (setq default-directory safe-default-directory)
             (funcall callback result))
-        (when (buffer-live-p safe-buffer)
-          (with-current-buffer safe-buffer
-            (setq default-directory
-                  (or (my/gptel--first-existing-directory
-                       caller-default-directory
-                       user-emacs-directory
-                       temporary-file-directory)
-                      temporary-file-directory))))))))
+        (ignore-errors
+          (when (buffer-live-p safe-buffer)
+            (with-current-buffer safe-buffer
+              (setq default-directory restored-default-directory))))))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
