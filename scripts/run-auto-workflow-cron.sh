@@ -281,26 +281,55 @@ stale_active_snapshot_recoverable() {
         snapshot_file_stale_for_recovery "$MESSAGES_FILE"
 }
 
-worker_daemon_pid() {
+worker_daemon_pids() {
     ps -eo pid=,args= | awk -v marker="--bg-daemon=$SERVER_NAME" '
-        index($0, marker) { print $1; exit }
+        index($0, marker) { print $1 }
     '
 }
 
+worker_daemon_pid() {
+    worker_daemon_pids | head -1
+}
+
 discard_stale_worker_daemon() {
+    local pids
     local pid
-    pid="$(worker_daemon_pid || true)"
-    if [ -n "$pid" ]; then
-        kill "$pid" 2>/dev/null || true
-        for _ in $(seq 1 20); do
-            if ! kill -0 "$pid" 2>/dev/null; then
+    pids="$(worker_daemon_pids || true)"
+    if [ -n "$pids" ]; then
+        for pid in $pids; do
+            kill "$pid" 2>/dev/null || true
+        done
+        for _ in $(seq 1 30); do
+            local any_alive=0
+            for pid in $pids; do
+                if kill -0 "$pid" 2>/dev/null; then
+                    any_alive=1
+                    break
+                fi
+            done
+            if [ "$any_alive" -eq 0 ]; then
                 break
             fi
-            sleep 0.1
+            sleep 0.2
         done
-        if kill -0 "$pid" 2>/dev/null; then
-            kill -9 "$pid" 2>/dev/null || true
+        for pid in $pids; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
+    # Clean up socket files to prevent "already running" errors
+    local uid
+    uid="$(id -u)"
+    for base in "${TMPDIR:-/tmp}" "/tmp"; do
+        local socket_dir="$base/emacs$uid"
+        if [ -S "$socket_dir/$SERVER_NAME" ]; then
+            rm -f "$socket_dir/$SERVER_NAME"
         fi
+    done
+    local runtime_dir="${XDG_RUNTIME_DIR:-}"
+    if [ -n "$runtime_dir" ] && [ -S "$runtime_dir/emacs/$SERVER_NAME" ]; then
+        rm -f "$runtime_dir/emacs/$SERVER_NAME"
     fi
     STALE_DAEMON_RECOVERED=1
     rewrite_status_idle
@@ -900,12 +929,18 @@ ensure_worker_daemon() {
     
     # Kill any stale daemon process before starting a new one to avoid
     # socket conflicts from leftover processes.
-    local stale_pid
-    stale_pid="$(worker_daemon_pid || true)"
-    if [ -n "$stale_pid" ]; then
-        echo "Killing stale daemon: $SERVER_NAME (pid: $stale_pid)" >&2
-        kill -9 "$stale_pid" 2>/dev/null || true
-        sleep 0.5
+    local stale_pids
+    stale_pids="$(worker_daemon_pids || true)"
+    if [ -n "$stale_pids" ]; then
+        local pid_count
+        pid_count="$(echo "$stale_pids" | wc -l | tr -d ' ')"
+        if [ "$pid_count" -gt 1 ]; then
+            echo "WARNING: Found $pid_count $SERVER_NAME daemons running. Killing all..." >&2
+        else
+            echo "Killing stale daemon: $SERVER_NAME (pid: $stale_pids)" >&2
+        fi
+        discard_stale_worker_daemon
+        sleep 1
     fi
     
     # Keep the dedicated workflow daemon truly headless. A GUI-attached Emacs
