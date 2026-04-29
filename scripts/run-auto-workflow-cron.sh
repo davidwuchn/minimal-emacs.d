@@ -783,8 +783,16 @@ wrap_emacs_eval() {
         env_elisp="$env_elisp (setenv \"SSH_AUTH_SOCK\" \"$(lisp_escape "$ssh_auth_sock")\")"
     fi
 
-    if [ -z "$git_ssh_command" ] && [ "$(uname -s)" = "Darwin" ] && [ -n "$ssh_auth_sock" ]; then
-        git_ssh_command='ssh -o BatchMode=yes -o IdentitiesOnly=yes -o UseKeychain=yes -o AddKeysToAgent=yes'
+    if [ -z "$git_ssh_command" ] && [ -n "$ssh_auth_sock" ]; then
+        # Apple's built-in ssh supports UseKeychain/AddKeysToAgent extensions.
+        # Homebrew OpenSSH (OpenSSL backend) does not. Detect and adapt.
+        if [ "${SSH_FALLBACK:-0}" -eq 1 ] && [ -x /usr/bin/ssh ]; then
+            git_ssh_command='/usr/bin/ssh -o BatchMode=yes -o IdentitiesOnly=yes -o UseKeychain=yes -o AddKeysToAgent=yes'
+        elif ssh -o UseKeychain=yes -V 2>/dev/null; then
+            git_ssh_command='ssh -o BatchMode=yes -o IdentitiesOnly=yes -o UseKeychain=yes -o AddKeysToAgent=yes'
+        else
+            git_ssh_command='ssh -o BatchMode=yes -o IdentitiesOnly=yes'
+        fi
     fi
 
     if [ -n "$git_ssh_command" ]; then
@@ -793,6 +801,48 @@ wrap_emacs_eval() {
 
     printf '(with-current-buffer (get-buffer-create "*copilot-auto-workflow-eval*")%s %s)' \
            "$env_elisp" "$body"
+}
+
+ensure_ssh_keys_loaded() {
+    # Apple's built-in ssh auto-loads keys from Keychain via UseKeychain.
+    # Homebrew OpenSSH needs keys explicitly added to the agent.
+    if ssh -o UseKeychain=yes -V 2>/dev/null; then
+        return 0  # Apple ssh handles this automatically
+    fi
+
+    [ -n "${SSH_AUTH_SOCK:-}" ] || return 0
+
+    # Check if agent already has keys loaded
+    if ssh-add -l >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Try to add common key paths without prompting (BatchMode prevents interaction)
+    local key_added=0
+    for key in \
+        "$HOME/.ssh/id_ed25519" \
+        "$HOME/.ssh/id_ecdsa" \
+        "$HOME/.ssh/id_rsa" \
+        "$HOME/.ssh/github_ed25519"; do
+        if [ -f "$key" ] && SSH_ASKPASS=false ssh-add "$key" </dev/null 2>/dev/null; then
+            key_added=1
+            break
+        fi
+    done
+
+    if [ "$key_added" -eq 0 ]; then
+        # Homebrew OpenSSH can't use macOS Keychain. Fall back to Apple's
+        # built-in ssh for git operations if available.
+        if [ -x /usr/bin/ssh ]; then
+            echo "WARNING: No keys in ssh-agent. Falling back to Apple's built-in ssh for git." >&2
+            SSH_FALLBACK=1
+        else
+            echo "WARNING: No SSH keys loaded in agent for Homebrew OpenSSH." >&2
+            echo "  Run: ssh-add ~/.ssh/id_ed25519" >&2
+            echo "  Or use Apple's built-in ssh: export PATH=/usr/bin:\$PATH" >&2
+        fi
+    fi
+    return 0
 }
 
 workflow_action_elisp() {
@@ -942,6 +992,9 @@ ensure_worker_daemon() {
         discard_stale_worker_daemon
         sleep 1
     fi
+    
+    # Ensure SSH keys are loaded in agent (needed by Homebrew OpenSSH)
+    ensure_ssh_keys_loaded
     
     # Keep the dedicated workflow daemon truly headless. A GUI-attached Emacs
     # daemon can die when its X/Wayland connection disappears, which is fatal
