@@ -360,16 +360,18 @@ Handles both symbol and string model identifiers with case-insensitive fallback.
                     ((symbolp model) (symbol-name model))
                     (t nil))))
     (when model-str
-      (catch 'found
-        (dolist (var (my/gptel--gptel-model-tables))
-          (let* ((table (symbol-value var))
-                 (entry (assoc-string model-str table t)))
-            (when entry
-              (let ((cw (my/gptel--normalize-context-window
-                         (plist-get (cdr entry) :context-window))))
-                (when (and (integerp cw) (> cw 0))
-                  (throw 'found cw))))))
-        nil))))
+      (or (gethash model-str my/gptel--gptel-tables-cw-cache)
+          (catch 'found
+            (dolist (var (my/gptel--gptel-model-tables))
+              (let* ((table (symbol-value var))
+                     (entry (assoc-string model-str table t)))
+                (when entry
+                  (let ((cw (my/gptel--normalize-context-window
+                             (plist-get (cdr entry) :context-window))))
+                    (when (and (integerp cw) (> cw 0))
+                      (puthash model-str cw my/gptel--gptel-tables-cw-cache)
+                      (throw 'found cw))))))
+            nil)))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -488,6 +490,19 @@ Image tokens are counted from `gptel-context' if available."
 
 ;; Load cache at require time
 (my/gptel--cache-load-context-windows)
+
+(defun my/gptel--seed-cache-from-known-models ()
+  "Seed context-window cache from known-model alist for O(1) lookups."
+  (dolist (entry my/gptel--known-model-context-windows)
+    (when (consp entry)
+      (let ((key (car entry)) (val (cdr entry)))
+        (when (and (stringp key)
+                   (not (gethash key my/gptel--context-window-cache))
+                   (integerp val)
+                   (natnump val))
+          (puthash key val my/gptel--context-window-cache))))))
+
+(my/gptel--seed-cache-from-known-models)
 
 ;;; Seeding and Refresh
 
