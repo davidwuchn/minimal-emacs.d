@@ -1,7 +1,7 @@
 ---
 name: explorer
 backend: MiniMax
-model: minimax-m2.5
+model: minimax-m2.7-highspeed
 max-tokens: 8192
 temperature: 0.2
 description: Deep codebase analysis subagent. Read-only exploration with high synthesis value (MiniMax).

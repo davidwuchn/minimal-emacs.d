@@ -286,8 +286,8 @@ Model is configured in YAML frontmatter (single source of truth). Edit `assistan
 
 | Role | Model | YAML File |
 |------|-------|-----------|
-| **Plan Agent** | `minimax-m2.5` | `plan_agent.md` |
-| **Action Agent** | `minimax-m2.5` | `code_agent.md` |
+| **Plan Agent** | `minimax-m2.7-highspeed` | `plan_agent.md` |
+| **Action Agent** | `minimax-m2.7-highspeed` | `code_agent.md` |
 | **Subagents** | per-agent | `executor.md`, `researcher.md`, etc. |
 
 *Note: Subagents spawned via `RunAgent` or `Agent` are entirely stateless. Network requests still benefit from `my/gptel-auto-retry`, and the RunAgent loop itself retries transient subagent failures with a fixed short delay.*

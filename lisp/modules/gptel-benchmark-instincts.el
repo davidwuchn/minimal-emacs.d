@@ -507,21 +507,16 @@ Runs every Sunday at 00:00."
 
   (gptel-mementum-weekly-job)
 
-  (if (bound-and-true-p gptel-auto-workflow--headless)
-      (progn
-        (when (> (hash-table-count gptel-benchmark-instincts--accumulator) 0)
-          (message "[instincts] Pending batch updates require manual review; skipping headless commit"))
-        0)
-    (let ((files-updated (gptel-benchmark-instincts-commit-batch)))
-      (when (> files-updated 0)
-        (let ((default-directory (or (bound-and-true-p mementum-root)
-                                     (expand-file-name "~/.emacs.d")))
-              (commit-msg (format "instincts evolution: weekly batch update (%s)"
-                                  (format-time-string "%Y-%m-%d"))))
-          (shell-command "git add mementum/knowledge/*.md")
-          (shell-command (concat "git commit -m " (shell-quote-argument commit-msg)))
-          (message "[instincts] Weekly evolution cycle complete: %s" commit-msg)))
-      files-updated)))
+  (let ((files-updated (gptel-benchmark-instincts-commit-batch)))
+    (when (> files-updated 0)
+      (let ((default-directory (or (bound-and-true-p mementum-root)
+                                   (expand-file-name "~/.emacs.d")))
+            (commit-msg (format "instincts evolution: weekly batch update (%s)"
+                                (format-time-string "%Y-%m-%d"))))
+        (shell-command "git add mementum/knowledge/*.md")
+        (shell-command (concat "git commit -m " (shell-quote-argument commit-msg)))
+        (message "[instincts] Weekly evolution cycle complete: %s" commit-msg)))
+    files-updated))
 
 ;;; Interactive Commands
 

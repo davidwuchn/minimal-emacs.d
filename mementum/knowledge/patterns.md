@@ -77,7 +77,7 @@ Migrated from LEARNING.md (32 patterns).
 - **`vterm-mode-hook` can run before Evil's final state settles**: Pair `evil-set-initial-state` with a next-event-loop correction.
 - **Deferred package helpers should `require`, not just `featurep`**: Either the helper itself must `(require 'B nil t)` or local config should advise/wrap to load on demand.
 - **Cross-file helper calls need the defining file loaded**: Ensure all required files are loaded before calling functions that aren't autoloaded.
-- **Synchronous helper calls need fast non-reasoning models**: For synchronous paths, bind gptel to a fast model like `minimax-m2.5`.
+- **Synchronous helper calls need fast non-reasoning models**: For synchronous paths, bind gptel to a fast model like `minimax-m2.7-highspeed`.
 - **Command-generation helpers must validate model output**: Wrap output with a sanitizer that strips formatting and rejects garbage.
 - **Dirvish async helpers are sensitive to the spawned Emacs binary**: Pin `dirvish-emacs-bin` to the current `invocation-directory`/`invocation-name`.
 - **`gptel--fsm-last` is not always a bare struct**: Normalize first through a coercion helper.

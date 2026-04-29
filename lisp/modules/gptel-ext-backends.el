@@ -38,7 +38,7 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "api.minimaxi.com"))
     :stream t
     :curl-args '("--http1.1" "--max-time" "900" "--connect-timeout" "30")
-    :models '(minimax-m2.7-highspeed minimax-m2.7 minimax-m2.5 minimax-m2.1)))
+    :models '(minimax-m2.7-highspeed minimax-m2.7)))
 
 (defvar gptel--dashscope
   (gptel-make-dashscope "DashScope"
@@ -75,13 +75,9 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "api.deepseek.com"))
     :stream t
     :models '((deepseek-v4-flash
-               :request-params (:thinking (:type "disabled")))
-              (deepseek-v4-pro
                :request-params (:thinking (:type "enabled")
                                 :reasoning_effort "high"))
-              (deepseek-chat
-               :request-params (:thinking (:type "disabled")))
-              (deepseek-reasoner
+              (deepseek-v4-pro
                :request-params (:thinking (:type "enabled")
                                 :reasoning_effort "high")))))
 
