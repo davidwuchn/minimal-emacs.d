@@ -5668,10 +5668,32 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                      :analyzer-patterns ""
                      :agent-output ""))
               (funcall finish nil))
-          (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                 (merge-result
-                  (gptel-auto-workflow--merge-to-staging optimize-branch))
-                 (already-integrated-p (eq merge-result :already-integrated))
+           (let* ((config-check (gptel-auto-workflow--check-protected-configs optimize-branch))
+                  (config-ok (car config-check))
+                  (config-reason (cdr config-check)))
+             (if (not config-ok)
+                 (progn
+                   (message "[auto-workflow] ✗ Protected config regression BLOCKED merge: %s"
+                            config-reason)
+                   (gptel-auto-experiment-log-tsv
+                    (gptel-auto-workflow--current-run-id)
+                    (list :target "staging-config"
+                          :id 0
+                          :hypothesis "Protected config check"
+                          :score-before 0
+                          :score-after 0
+                          :kept nil
+                          :duration 0
+                          :grader-quality 0
+                          :grader-reason "protected-config-regression"
+                          :comparator-reason config-reason
+                          :analyzer-patterns ""
+                          :agent-output ""))
+                   (funcall finish nil))
+               (let* ((staging-base (gptel-auto-workflow--current-staging-head))
+                      (merge-result
+                       (gptel-auto-workflow--merge-to-staging optimize-branch))
+                      (already-integrated-p (eq merge-result :already-integrated))
                  (finish-publish
                   (lambda (&optional retried)
                     (gptel-auto-workflow--delete-staging-worktree)
@@ -5939,6 +5961,54 @@ Prevents scope creep where executor touches many unrelated files.
 Set to 0 to disable the check."
   :type 'integer
   :group 'gptel-auto-workflow)
+
+(defcustom gptel-auto-workflow-protected-configs
+  '(("assistant/agents/code_agent.md" . "minimax-m2.7-highspeed")
+    ("assistant/agents/plan_agent.md" . "minimax-m2.7-highspeed")
+    ("assistant/agents/comparator.md" . "minimax-m2.7-highspeed")
+    ("assistant/agents/explorer_agent.md" . "minimax-m2.7-highspeed")
+    ("assistant/agents/introspector.md" . "minimax-m2.7-highspeed"))
+  "Protected configuration files and their expected values.
+Each element is (FILE . EXPECTED-VALUE).  If an experiment changes
+FILE so that it no longer contains EXPECTED-VALUE, the merge is blocked.
+Prevents regressions like model downgrades."
+  :type '(alist :key-type string :value-type string)
+  :group 'gptel-auto-workflow)
+
+(defun gptel-auto-workflow--check-protected-configs (optimize-branch)
+  "Check that OPTIMIZE-BRANCH does not regress protected configs.
+Returns (ok-p . reason) where REASON is nil if safe, or a description
+of the regression if blocked."
+  (let ((regressions nil))
+    (dolist (protected gptel-auto-workflow-protected-configs)
+      (let* ((file (car protected))
+             (expected (cdr protected))
+             (proj-root (gptel-auto-workflow--project-root))
+             (default-directory proj-root)
+             (staging-content
+              (gptel-auto-workflow--git-result
+               (format "git show staging:%s" (shell-quote-argument file))
+               30))
+             (experiment-content
+              (gptel-auto-workflow--git-result
+               (format "git show %s:%s"
+                       (shell-quote-argument optimize-branch)
+                       (shell-quote-argument file))
+               30)))
+        (when (and (= 0 (cdr staging-content))
+                   (= 0 (cdr experiment-content)))
+          (let ((staging-has-it (string-match-p (regexp-quote expected)
+                                                (car staging-content)))
+                (experiment-has-it (string-match-p (regexp-quote expected)
+                                                   (car experiment-content))))
+            (when (and staging-has-it (not experiment-has-it))
+              (push (format "%s: lost %s" file expected) regressions))))))
+    (if regressions
+        (progn
+          (message "[auto-workflow] ⚠ Protected config regression detected: %s"
+                   (mapconcat #'identity regressions "; "))
+          (cons nil (mapconcat #'identity regressions "; ")))
+      (cons t nil))))
 
 (defun gptel-auto-experiment--check-scope ()
   "Return (ok-p . changed-files) for current experiment.
