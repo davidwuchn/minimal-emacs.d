@@ -704,7 +704,8 @@ Returns non-nil if result was delivered."
 (defun gptel-agent-loop--handle-final-response (state resp)
   "Handle STATE when RESP is a final response to deliver.
 Returns non-nil if result was delivered."
-  (when (gptel-agent-loop--task-p state)
+  (when (and (gptel-agent-loop--task-p state)
+             (not (gptel-agent-loop--task-finished state)))
     (gptel-agent-loop--deliver-result
      state
      (gptel-agent-loop--build-final-result state "")
