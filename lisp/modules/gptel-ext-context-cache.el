@@ -93,6 +93,10 @@ Reduces repeated iterations through model tables.")
 Must be `defvar' (not `let') so the `setq' in the cache file reaches it
 under `lexical-binding: t'.")
 
+(defvar my/gptel--gptel-model-tables-cache nil
+  "Cached result of gptel model table symbols lookup.
+Avoids repeated filtering of the same symbol list.")
+
 (defvar my/gptel--known-model-context-windows
   '(;; Qwen (Alibaba) - NOTE: Qwen3.5-Plus and Qwen3-Max have 1M context!
     ("qwen3-coder-next" . 131072)
@@ -474,8 +478,10 @@ Image tokens are counted from `gptel-context' if available."
 
 (defun my/gptel--gptel-model-tables ()
   "Return list of gptel model table symbols to search.
-Filters to only bound variables."
-  (seq-filter #'boundp '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models)))
+Filters to only bound variables. Result is cached for performance."
+  (or my/gptel--gptel-model-tables-cache
+      (setq my/gptel--gptel-model-tables-cache
+            (seq-filter #'boundp '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models)))))
 
 (defun my/gptel--seed-cache-from-gptel-model-tables ()
   "Seed context-window cache from gptel's built-in model tables."
