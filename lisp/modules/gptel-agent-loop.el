@@ -352,18 +352,6 @@ Truncates accumulated output to last
             gptel-agent-loop-continuation-prompt
             context)))
 
-(defun gptel-agent-loop--find-valid-marker (marker-sources buffer)
-  "Find a valid marker from MARKER-SOURCES in BUFFER.
-MARKER-SOURCES is a list of candidate markers or nil values.
-Returns first marker that is a markerp with valid position in BUFFER,
-or a new point-marker in BUFFER if none found."
-  (or (cl-some (lambda (m)
-                 (when (and (markerp m) (numberp (marker-position m))
-                            (eq (marker-buffer m) buffer))
-                   m))
-               marker-sources)
-      (with-current-buffer buffer (point-marker))))
-
 (defun gptel-agent-loop--summary-prompt-for (state)
   "Build max-steps summary prompt for STATE."
   (format "%s\n\nOriginal task:\n%s\n\nWork completed so far:\n%s"
@@ -704,11 +692,10 @@ Returns non-nil if result was delivered."
 (defun gptel-agent-loop--handle-final-response (state resp)
   "Handle STATE when RESP is a final response to deliver.
 Returns non-nil if result was delivered."
-  (when (and (gptel-agent-loop--task-p state)
-             (not (gptel-agent-loop--task-finished state)))
+  (when (gptel-agent-loop--task-p state)
     (gptel-agent-loop--deliver-result
      state
-     (gptel-agent-loop--build-final-result state "")
+     (gptel-agent-loop--build-final-result state resp)
      t)
     t))
 
@@ -764,14 +751,17 @@ Cache behavior:
                                    (let ((buf (plist-get fsm-info :buffer)))
                                      (and (buffer-live-p buf) buf))
                                    (current-buffer)))
-                   (task-marker (gptel-agent-loop--task-tracking-marker state))
-                   (fsm-marker (plist-get fsm-info :tracking-marker))
-                   (fsm-position (plist-get fsm-info :position))
-                   (where (gptel-agent-loop--find-valid-marker
-                           (list task-marker fsm-marker fsm-position) parent-buf))
+                   (where (or
+                           (let ((tm (gptel-agent-loop--task-tracking-marker state)))
+                             (when (and (markerp tm) (numberp (marker-position tm))) tm))
+                           (let ((tm (plist-get fsm-info :tracking-marker)))
+                             (when (and (markerp tm) (numberp (marker-position tm))) tm))
+                           (let ((pos (plist-get fsm-info :position)))
+                             (when (and (markerp pos) (numberp (marker-position pos))) pos))
+                           (with-current-buffer parent-buf (point-marker))))
                    (tracking-marker
-                    (or task-marker
-                        (if (and where (marker-buffer where))
+                    (or (gptel-agent-loop--task-tracking-marker state)
+                        (if (and where (eq (marker-buffer where) parent-buf))
                             (copy-marker where)
                           (with-current-buffer parent-buf (point-marker)))))
                    (callback (gptel-agent-loop--make-callback state prompt use-tools))

@@ -767,7 +767,9 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("glm-4.7"            . 350000)
     ("MiniMax-M2.5"       . 300000)
     ("deepseek-v4-flash"  . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
-    ("deepseek-v4-pro"    . 3000000))
+    ("deepseek-v4-pro"    . 3000000)
+    ("deepseek-chat"      . 3000000)
+    ("deepseek-reasoner"  . 3000000))
   "Approximate max JSON byte size per model.
 
 Computed as context window × ~3.5 bytes/token, minus output reservation.
@@ -894,7 +896,9 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
               (message "gptel: Payload %dKB exceeds %dKB limit, compacting..."
                        (/ bytes 1024) (/ limit 1024))
               (let ((my/gptel-retry-keep-recent-tool-results
-                     (or my/gptel-retry-keep-recent-tool-results 2)))
+                     (if (null my/gptel-retry-keep-recent-tool-results)
+                         2
+                       my/gptel-retry-keep-recent-tool-results)))
                 (cl-loop for (pass-num trim-fn log-fmt) in my/gptel--compaction-passes
                          while (> bytes limit)
                          do (my/gptel--run-compaction-pass

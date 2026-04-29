@@ -10,14 +10,8 @@
 ;; GIT & UI 
 ;; ==============================================================================
 
-;; Ensure ELPA transient is loaded before magit to avoid
-;; `transient--set-layout' void function error with built-in transient.
-(use-package transient
-  :ensure t)
-
 (use-package magit
   :ensure t
-  :after transient
   :bind (("C-x g" . magit-status)))
 
 (use-package nerd-icons

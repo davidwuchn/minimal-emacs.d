@@ -11,13 +11,6 @@
 (setq user-emacs-directory (expand-file-name "var/" minimal-emacs-user-directory))
 (setq package-user-dir (expand-file-name "elpa" user-emacs-directory))
 
-;; Ensure ELPA transient shadows built-in before magit loads.
-;; Magit 4.5.0+ requires `transient--set-layout' which is missing
-;; from the built-in transient in Emacs 30.2.
-(let ((elpa-transient (car (directory-files package-user-dir t "^transient-[0-9]"))))
-  (when (and elpa-transient (file-directory-p elpa-transient))
-    (add-to-list 'load-path elpa-transient)))
-
 ;; Add git submodule packages to load-path
 ;; These are packages from our forks tracked as submodules in packages/
 (dolist (pkg-dir '("gptel" "gptel-agent" "ai-code"))
