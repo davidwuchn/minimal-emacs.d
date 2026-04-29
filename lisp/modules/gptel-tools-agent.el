@@ -3050,9 +3050,10 @@ If branch exists locally, deletes it first to avoid conflicts."
         (progn
           (make-directory (file-name-directory worktree-dir) t)
           (let ((default-directory proj-root))
-            (setq base-ref (gptel-auto-workflow--staging-main-ref))
-            (unless base-ref
-              (error "missing main ref for experiment worktree"))
+             (setq base-ref (or (gptel-auto-workflow--current-staging-head)
+                                (gptel-auto-workflow--staging-main-ref)))
+             (unless base-ref
+               (error "missing base ref for experiment worktree (staging or main)"))
             (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
             (call-process "git" nil stderr-buffer nil "worktree" "prune")
             (dolist (existing-worktree
