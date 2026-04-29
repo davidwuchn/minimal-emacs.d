@@ -67,9 +67,10 @@ Returns a hash table mapping test-id to list of results."
 
 (defun gptel-benchmark--result-passed-p (result)
   "Extract pass/fail status from RESULT.
-Returns t if the result passed, nil otherwise."
+Returns t if the result passed, nil otherwise.
+Returns nil for missing or malformed grade data."
   (let ((grade (plist-get result :grade)))
-    (plist-get grade :passed)))
+    (and (listp grade) (plist-get grade :passed))))
 
 (defun gptel-benchmark--flaky-test-p (results)
   "Check if RESULTS show inconsistent pass/fail across runs.
@@ -143,16 +144,22 @@ RESULTS is a list of benchmark results for a single test-id."
 ;;; Summary Generation
 
 (defun gptel-benchmark-generate-summary (data)
-  "Generate summary statistics from benchmark DATA."
+  "Generate summary statistics from benchmark DATA.
+Skips entries with missing :grade or :percentage fields."
   (let ((total-tests (length data))
-        (avg-score 0))
+        (avg-score 0)
+        (scored-count 0))
     (dolist (result data)
-      (let ((grade (plist-get result :grade)))
-        (cl-incf avg-score (plist-get grade :percentage))))
-    (when (> total-tests 0)
-      (setq avg-score (/ avg-score total-tests)))
+      (let* ((grade (plist-get result :grade))
+             (pct (and (listp grade) (plist-get grade :percentage))))
+        (when (numberp pct)
+          (cl-incf avg-score pct)
+          (cl-incf scored-count))))
+    (when (> scored-count 0)
+      (setq avg-score (/ avg-score scored-count)))
     (list :total-tests total-tests
-          :average-score avg-score)))
+          :average-score avg-score
+          :scored-count scored-count)))
 
 (defun gptel-benchmark-generate-improvement-plan (analysis)
   "Generate improvement plan based on ANALYSIS."
