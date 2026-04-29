@@ -486,6 +486,10 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--check-tool (tool-name tool-spec arg-values)
   "Validate TOOL-NAME and TOOL-SPEC with ARG-VALUES for sandbox execution."
+  (unless tool-name
+    (error "Tool name cannot be nil"))
+  (unless (or (symbolp tool-name) (stringp tool-name))
+    (error "Tool name must be a symbol or string, got: %S" tool-name))
   (unless tool-spec
     (error "Unknown tool %s requested by Programmatic" tool-name))
   (unless (gptel-sandbox--allowed-tool-p tool-name)
