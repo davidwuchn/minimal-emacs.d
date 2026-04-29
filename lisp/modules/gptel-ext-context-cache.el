@@ -352,7 +352,7 @@ Handles both symbol and string model identifiers with case-insensitive fallback.
             (when entry
               (let ((cw (my/gptel--normalize-context-window
                          (plist-get (cdr entry) :context-window))))
-                (when (and (integerp cw) (> cw 0))
+                (when (my/gptel--positive-integer-p cw)
                   (throw 'found cw))))))
         nil))))
 (defun my/gptel--model-id-string (&optional model)
@@ -378,6 +378,10 @@ raw tokens."
    ((< n 1000) (round (* n 1000)))
    ;; Larger values are already in raw tokens
    (t (round n))))
+
+(defun my/gptel--positive-integer-p (n)
+  "Return N if it is a positive integer, otherwise nil."
+  (and (integerp n) (> n 0) n))
 
 (defun my/gptel--openrouter-entry-context-window (entry)
   "Extract valid context_window from an OpenRouter model ENTRY alist.
@@ -493,7 +497,7 @@ Filters to only bound variables. Result is cached for performance."
                (cw (plist-get plist :context-window))
                (tokens (my/gptel--normalize-context-window cw))
                (id (my/gptel--model-id-string model)))
-          (when (and (stringp id) (integerp tokens) (> tokens 0))
+          (when (and (stringp id) (my/gptel--positive-integer-p tokens))
             (puthash id tokens my/gptel--context-window-cache)
             (puthash id plist my/gptel--model-metadata-cache)))))))
 
@@ -825,12 +829,12 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        my/gptel--known-model-context-windows
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
-        (when (and cw (integerp cw))
+        (when (my/gptel--positive-integer-p cw)
           (puthash model-id cw my/gptel--context-window-cache))
         cw))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
              (cw (plist-get meta :context-window)))
-        (when (and cw (integerp cw) (> cw 0))
+        (when (my/gptel--positive-integer-p cw)
           (puthash model-id cw my/gptel--context-window-cache))
         cw))
      (t my/gptel-default-context-window))))
