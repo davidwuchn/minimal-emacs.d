@@ -158,10 +158,10 @@
   (case platform
     :macos
     ;; Parse netstat output. Fields: CIDR, GATEWAY, FLAGS, IFACE.
-    ;; Exclude: link# gateways, 100.x gateways (Tailscale), loopback.
-    ;; macOS shortens CIDRs (128.108 means 128.108.0.0/16) - accept with or without /.
+    ;; Exclude: link# gateways, 100.x gateways (Tailscale), loopback,
+    ;; MAC address gateways (ARP entries), IPv6 routes.
     (let [result (shell {:out :string} "sh" "-c"
-                        "netstat -rn | awk '$1 ~ /^[1-9]/ && $2 !~ /^link#/ && $2 !~ /^100\\./ && $2 !~ /^127/ {print $1, $2}'")]
+                        "netstat -rn | awk '$1 ~ /^[1-9]/ && $2 !~ /^link#/ && $2 !~ /^100\\./ && $2 !~ /^127/ && $2 ~ /\\./ && $1 !~ /:/ {print $1, $2}'")]
       (when (zero? (:exit result))
         (into {}
               (keep (fn [line]
