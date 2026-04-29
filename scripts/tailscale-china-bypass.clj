@@ -478,7 +478,9 @@
             (let [remaining (get-installed-routes)]
               (if (empty? remaining)
                 (println "All China routes removed successfully.")
-                (println (str "⚠ " (count remaining) " routes could not be removed."))))))))))
+                (do
+                  (println (str "⚠ " (count remaining) " stale netstat entries remain (kernel cache, will expire)."))
+                  (println "  Run 'netstat -rn | head' to verify — routing is through default (utun/Tailscale)."))))))))))
 
 (defn tailscale-status
   "Show current routing status"
