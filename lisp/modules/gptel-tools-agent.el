@@ -2152,17 +2152,20 @@ This prevents `Selecting deleted buffer' errors when callback side effects
 delete the request or file buffer that happened to be current when the
 subagent callback fired, and avoids reusing a deleted worktree as
 `default-directory'."
-  (when (functionp callback)
-    (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
-           (safe-default-directory
-            (or (my/gptel--first-existing-directory
-                 default-directory
-                 user-emacs-directory
-                 temporary-file-directory)
-                temporary-file-directory)))
-      (with-current-buffer safe-buffer
-        (setq default-directory safe-default-directory)
-        (funcall callback result)))))
+  (cond ((functionp callback)
+         (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
+                (safe-default-directory
+                 (or (my/gptel--first-existing-directory
+                      default-directory
+                      user-emacs-directory
+                      temporary-file-directory)
+                     temporary-file-directory)))
+           (with-current-buffer safe-buffer
+             (setq default-directory safe-default-directory)
+             (funcall callback result))))
+        (t
+         (message "[nucleus] Warning: my/gptel--invoke-callback-safely skipped invalid callback: %S"
+                  (type-of callback)))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
