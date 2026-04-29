@@ -207,9 +207,9 @@ it when the current transient implementation is too old."
                   (when (not (fboundp 'transient--set-layout))
                     (gptel-auto-workflow--install-elpa-package root 'transient)))))
     (when-let* ((dir dir)
-               (lib (cl-find-if #'file-readable-p
-                                (list (expand-file-name "transient.elc" dir)
-                                      (expand-file-name "transient.el" dir)))))
+                (lib (cl-find-if #'file-readable-p
+                                 (list (expand-file-name "transient.elc" dir)
+                                       (expand-file-name "transient.el" dir)))))
       (setq load-path (cons dir (delete dir load-path)))
       (when (or (not (fboundp 'transient--set-layout))
                 (let ((current-lib (locate-library "transient")))
@@ -240,7 +240,7 @@ it when the current transient implementation is too old."
            (when (fboundp 'gptel-auto-workflow-bootstrap--elpa-dirs)
              (gptel-auto-workflow-bootstrap--elpa-dirs root))))
     (dolist (dir (reverse dirs))
-     (when (file-directory-p dir)
+      (when (file-directory-p dir)
         (setq load-path (cons dir (delete dir load-path)))))
     dirs))
 
@@ -473,7 +473,7 @@ Uses robust timeout mechanism to prevent blocking indefinitely."
          (start-time (current-time))
          (timer nil))
     (unwind-protect
-      (progn
+        (progn
           (setq process (gptel-auto-workflow--register-shell-process
                          (start-process-shell-command "shell-timeout" buffer command)))
           ;; Set up a timer to force timeout even if accept-process-output blocks
@@ -625,10 +625,10 @@ allowed for compatibility with isolated tests."
   "Return non-nil when COMMIT-HASH is preserved under an auto-workflow ref."
   (and (gptel-auto-workflow--non-empty-string-p commit-hash)
        (= 0 (cdr (gptel-auto-workflow--git-result
-                   (format "git show-ref --verify --quiet %s"
-                           (shell-quote-argument
-                            (gptel-auto-workflow--tracking-ref commit-hash)))
-                   30)))))
+                  (format "git show-ref --verify --quiet %s"
+                          (shell-quote-argument
+                           (gptel-auto-workflow--tracking-ref commit-hash)))
+                  30)))))
 
 (defun gptel-auto-workflow--pin-tracked-commit (commit-hash)
   "Preserve COMMIT-HASH under a private auto-workflow ref.
@@ -636,11 +636,11 @@ Returns non-nil when the ref exists after the call."
   (and (gptel-auto-workflow--non-empty-string-p commit-hash)
        (gptel-auto-workflow--commit-exists-p commit-hash)
        (= 0 (cdr (gptel-auto-workflow--git-result
-                   (format "git update-ref %s %s"
-                           (shell-quote-argument
-                            (gptel-auto-workflow--tracking-ref commit-hash))
-                           (shell-quote-argument commit-hash))
-                   30)))))
+                  (format "git update-ref %s %s"
+                          (shell-quote-argument
+                           (gptel-auto-workflow--tracking-ref commit-hash))
+                          (shell-quote-argument commit-hash))
+                  30)))))
 
 (defun gptel-auto-workflow--commit-tracked-in-ledgers-p (commit-hash)
   "Return non-nil when COMMIT-HASH still appears in any readable tracking ledger."
@@ -661,10 +661,10 @@ Returns non-nil when the ref exists after the call."
   (when (and (gptel-auto-workflow--non-empty-string-p commit-hash)
              (gptel-auto-workflow--tracked-commit-pinned-p commit-hash))
     (= 0 (cdr (gptel-auto-workflow--git-result
-                (format "git update-ref -d %s"
-                        (shell-quote-argument
-                         (gptel-auto-workflow--tracking-ref commit-hash)))
-                30)))))
+               (format "git update-ref -d %s"
+                       (shell-quote-argument
+                        (gptel-auto-workflow--tracking-ref commit-hash)))
+               30)))))
 
 (defun gptel-auto-workflow--tracked-entries ()
   "Return unique tracked commit entries from all readable ledgers."
@@ -727,9 +727,9 @@ Returns non-nil when at least one entry was removed."
   "Return non-nil when COMMIT-HASH resolves to an existing commit object."
   (and (gptel-auto-workflow--non-empty-string-p commit-hash)
        (= 0 (cdr (gptel-auto-workflow--git-result
-                    (format "git cat-file -e %s^{commit}"
-                           (shell-quote-argument commit-hash))
-                   30)))))
+                  (format "git cat-file -e %s^{commit}"
+                          (shell-quote-argument commit-hash))
+                  30)))))
 
 (defun gptel-auto-workflow--commit-patch-equivalent-p (commit-hash branch)
   "Return non-nil when COMMIT-HASH's patch is already represented in BRANCH."
@@ -770,7 +770,7 @@ the workflow base before scanning tracked ledgers."
                         (shell-quote-argument ref)))))
           (when (or (not (string-empty-p ancestor-check))
                     (gptel-auto-workflow--commit-patch-equivalent-p commit-hash ref))
-             (setq integrated t)))))))
+            (setq integrated t)))))))
 
 (defun gptel-auto-workflow--resolve-ref-commit-hash (ref)
   "Return normalized commit hash for REF, or nil when REF cannot be resolved."
@@ -1174,9 +1174,9 @@ immediate cache hits."
   (or (not (stringp result))
       (and (not (string-empty-p result))
            (not (string-match-p
-                  (concat
-                   "\\`Error:"
-                   "\\|\\`Warning:.*not available"
+                 (concat
+                  "\\`Error:"
+                  "\\|\\`Warning:.*not available"
                   "\\|throttling"
                   "\\|rate.limit"
                   "\\|quota exceeded"
@@ -1302,16 +1302,16 @@ large-result truncation, and result caching."
         (cl-progv syms vals
           (gptel--apply-preset preset)
           (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
-                  (parent-fsm
-                   (and (boundp 'gptel--fsm-last)
-                        (fboundp 'my/gptel--coerce-fsm)
-                        (my/gptel--coerce-fsm gptel--fsm-last)))
-                  (info (and parent-fsm
-                             (ignore-errors (gptel-fsm-info parent-fsm))))
+                 (parent-fsm
+                  (and (boundp 'gptel--fsm-last)
+                       (fboundp 'my/gptel--coerce-fsm)
+                       (my/gptel--coerce-fsm gptel--fsm-last)))
+                 (info (and parent-fsm
+                            (ignore-errors (gptel-fsm-info parent-fsm))))
                  (info-buf (plist-get info :buffer))
                  (parent-buf (or (when (buffer-live-p info-buf)
-                                    info-buf)
-                                  (current-buffer)))
+                                   info-buf)
+                                 (current-buffer)))
                  (where (or (let ((tm (plist-get info :tracking-marker)))
                               (and (markerp tm) (marker-position tm) tm))
                             (let ((pos (plist-get info :position)))
@@ -1323,12 +1323,12 @@ large-result truncation, and result caching."
                  (child-fsm (gptel-make-fsm :table gptel-send--transitions
                                             :handlers gptel-agent-request--handlers))
                  (previous-fsm-local-p (local-variable-p 'gptel--fsm-last parent-buf))
-                  (previous-fsm (and previous-fsm-local-p
-                                     (buffer-local-value 'gptel--fsm-last parent-buf)))
-                  (previous-fsm-valid-p
-                   (and previous-fsm
-                        (or (not (fboundp 'my/gptel--coerce-fsm))
-                            (my/gptel--coerce-fsm previous-fsm))))
+                 (previous-fsm (and previous-fsm-local-p
+                                    (buffer-local-value 'gptel--fsm-last parent-buf)))
+                 (previous-fsm-valid-p
+                  (and previous-fsm
+                       (or (not (fboundp 'my/gptel--coerce-fsm))
+                           (my/gptel--coerce-fsm previous-fsm))))
                  (partial (format "%s result for task: %s\n\n"
                                   (capitalize (or agent-type "agent"))
                                   (or description "unknown"))))
@@ -1895,7 +1895,7 @@ TIMESTAMP defaults to `current-time'."
                                (my/gptel--path-within-directory-p dir activity-dir))
                           (and file
                                (my/gptel--path-within-directory-p file activity-dir))))
-              (my/gptel--agent-task-note-activity task-id activity-time))))
+             (my/gptel--agent-task-note-activity task-id activity-time))))
        my/gptel--agent-task-state))))
 
 (defun my/gptel--ignore-agent-activity-message-p (text)
@@ -2051,16 +2051,16 @@ same routed experiment buffer from re-entering a later retry."
      my/gptel--agent-task-state)
     (dolist (task-id overlap-ids)
       (remhash task-id my/gptel--agent-task-state))
-     (dolist (request-buf (delete-dups request-buffers))
-       (when (and (buffer-live-p request-buf)
-                  (fboundp 'gptel-abort))
-          (condition-case err
-              (gptel-abort request-buf)
-            (error
-             (message "[nucleus] Failed to abort overlapping subagent buffer %s: %s"
-                      (buffer-name request-buf)
-                      (my/gptel--sanitize-for-logging
-                       (error-message-string err) 160))))))
+    (dolist (request-buf (delete-dups request-buffers))
+      (when (and (buffer-live-p request-buf)
+                 (fboundp 'gptel-abort))
+        (condition-case err
+            (gptel-abort request-buf)
+          (error
+           (message "[nucleus] Failed to abort overlapping subagent buffer %s: %s"
+                    (buffer-name request-buf)
+                    (my/gptel--sanitize-for-logging
+                     (error-message-string err) 160))))))
     (length overlap-ids)))
 
 (defun my/gptel--call-gptel-agent-task (callback agent-type description prompt)
@@ -2094,7 +2094,7 @@ its async continuation layer in the worker daemon."
     (setq task-runner
           (cond
            ((and headless-auto-workflow
-                  (fboundp 'my/gptel-agent--task-override))
+                 (fboundp 'my/gptel-agent--task-override))
             #'my/gptel-agent--task-override)
            ((fboundp 'gptel-agent--task) #'gptel-agent--task)
            ((fboundp 'my/gptel-agent--task-override)
@@ -2152,27 +2152,20 @@ This prevents `Selecting deleted buffer' errors when callback side effects
 delete the request or file buffer that happened to be current when the
 subagent callback fired, and avoids reusing a deleted worktree as
 `default-directory'."
-  (when (functionp callback)
-    (let* ((caller-default-directory default-directory)
-           (safe-buffer (get-buffer-create " *gptel-callback*"))
-           (safe-default-directory
-            (or (my/gptel--first-existing-directory
-                 caller-default-directory
-                 user-emacs-directory
-                 temporary-file-directory)
-                temporary-file-directory)))
-      (unwind-protect
-          (with-current-buffer safe-buffer
-            (setq default-directory safe-default-directory)
-            (funcall callback result))
-        (when (buffer-live-p safe-buffer)
-          (with-current-buffer safe-buffer
-            (setq default-directory
-                  (or (my/gptel--first-existing-directory
-                       caller-default-directory
-                       user-emacs-directory
-                       temporary-file-directory)
-                      temporary-file-directory))))))))
+  (cond ((functionp callback)
+         (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
+                (safe-default-directory
+                 (or (my/gptel--first-existing-directory
+                      default-directory
+                      user-emacs-directory
+                      temporary-file-directory)
+                     temporary-file-directory)))
+           (with-current-buffer safe-buffer
+             (setq default-directory safe-default-directory)
+             (funcall callback result))))
+        (t
+         (message "[nucleus] Warning: my/gptel--invoke-callback-safely skipped invalid callback: %S"
+                  (type-of callback)))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
@@ -2221,29 +2214,29 @@ Uses hash table keyed by task-id to support parallel execution."
               (if (not state)
                   (message "[nucleus] Ignoring stale subagent %s callback after reset"
                            agent-type)
-                 ;; Atomic test-and-set: mark done before acting to prevent
-                 ;; double-invocation if gptel-abort fires synchronously in timeout.
-                 (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                 (unless already-done
-                   (my/gptel--cancel-agent-task-timers state)
-                   (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
-                            agent-type (float-time (time-since start-time))
-                            (if (stringp result) (length result) 0))
-                   (funcall restore-origin-fsm child-fsm)
+                ;; Atomic test-and-set: mark done before acting to prevent
+                ;; double-invocation if gptel-abort fires synchronously in timeout.
+                (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                (unless already-done
+                  (my/gptel--cancel-agent-task-timers state)
+                  (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
+                           agent-type (float-time (time-since start-time))
+                           (if (stringp result) (length result) 0))
+                  (funcall restore-origin-fsm child-fsm)
                   (unwind-protect
                       (my/gptel--invoke-callback-safely callback result)
                     (remhash task-id my/gptel--agent-task-state))))))))
     (cl-labels
-         ((finish-timeout (state timeout-seconds timeout-suffix
-                                 &optional timeout-kind total-elapsed-seconds)
-            (puthash task-id (plist-put state :done t)
-                     my/gptel--agent-task-state)
-            (my/gptel--cancel-agent-task-timers state)
-            (if (eq timeout-kind :idle)
-                (message "[nucleus] Subagent %s timed out after %ds idle timeout (%.1fs total runtime), aborting request"
-                         agent-type timeout-seconds (or total-elapsed-seconds 0.0))
-              (message "[nucleus] Subagent %s timed out after %ds%s, aborting request"
-                       agent-type timeout-seconds timeout-suffix))
+        ((finish-timeout (state timeout-seconds timeout-suffix
+                                &optional timeout-kind total-elapsed-seconds)
+           (puthash task-id (plist-put state :done t)
+                    my/gptel--agent-task-state)
+           (my/gptel--cancel-agent-task-timers state)
+           (if (eq timeout-kind :idle)
+               (message "[nucleus] Subagent %s timed out after %ds idle timeout (%.1fs total runtime), aborting request"
+                        agent-type timeout-seconds (or total-elapsed-seconds 0.0))
+             (message "[nucleus] Subagent %s timed out after %ds%s, aborting request"
+                      agent-type timeout-seconds timeout-suffix))
            (my/gptel--cleanup-agent-request-buffer state)
            (let ((timeout-result
                   (if (eq timeout-kind :idle)
@@ -2251,10 +2244,10 @@ Uses hash table keyed by task-id to support parallel execution."
                               description agent-type timeout-seconds (or total-elapsed-seconds 0.0))
                     (format "Error: Task \"%s\" (%s) timed out after %ds%s."
                             description agent-type timeout-seconds timeout-suffix))))
-              (funcall restore-origin-fsm child-fsm)
-              (unwind-protect
-                  (my/gptel--invoke-callback-safely callback timeout-result)
-                (remhash task-id my/gptel--agent-task-state))))
+             (funcall restore-origin-fsm child-fsm)
+             (unwind-protect
+                 (my/gptel--invoke-callback-safely callback timeout-result)
+               (remhash task-id my/gptel--agent-task-state))))
          (rearm-timeout (state)
            (when task-timeout
              (when (timerp (plist-get state :timeout-timer))
@@ -2317,8 +2310,8 @@ Uses hash table keyed by task-id to support parallel execution."
                                (finish-timeout
                                 state timeout-seconds timeout-suffix
                                 timeout-kind total-elapsed)))))))))
-                (puthash task-id state my/gptel--agent-task-state)))
-            state)
+               (puthash task-id state my/gptel--agent-task-state)))
+           state)
          (note-buffer-activity (state)
            (when uses-idle-timeout
              (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
@@ -2358,21 +2351,21 @@ Uses hash table keyed by task-id to support parallel execution."
                                   (time-subtract hard-deadline (current-time)))))
                            (hard-expired (and remaining-hard
                                               (<= remaining-hard 0))))
-                       (if (and task-timeout
-                                (or hard-expired
-                                    (and (not uses-idle-timeout)
-                                         (>= elapsed task-timeout))))
-                           (finish-timeout
-                            state
-                            (if hard-expired hard-timeout task-timeout)
-                            (if hard-expired " total runtime" "")
-                            (if hard-expired :hard-runtime :timeout)
-                            elapsed)
-                         (when (or (bound-and-true-p gptel-auto-workflow--running)
-                                   (bound-and-true-p gptel-auto-workflow--cron-job-running))
-                           (gptel-auto-workflow--update-progress)
-                           (gptel-auto-workflow--persist-status))
-                         (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
+                      (if (and task-timeout
+                               (or hard-expired
+                                   (and (not uses-idle-timeout)
+                                        (>= elapsed task-timeout))))
+                          (finish-timeout
+                           state
+                           (if hard-expired hard-timeout task-timeout)
+                           (if hard-expired " total runtime" "")
+                           (if hard-expired :hard-runtime :timeout)
+                           elapsed)
+                        (when (or (bound-and-true-p gptel-auto-workflow--running)
+                                  (bound-and-true-p gptel-auto-workflow--cron-job-running))
+                          (gptel-auto-workflow--update-progress)
+                          (gptel-auto-workflow--persist-status))
+                        (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
                                  agent-type elapsed)))))))))
         (puthash task-id (list :done nil
                                :timeout-timer nil
@@ -2385,7 +2378,7 @@ Uses hash table keyed by task-id to support parallel execution."
                                :last-activity-time (current-time)
                                :agent-type agent-type
                                :activity-dir activity-dir)
-                   my/gptel--agent-task-state)
+                 my/gptel--agent-task-state)
         (when task-timeout
           (let ((state (gethash task-id my/gptel--agent-task-state)))
             (rearm-timeout state)))
@@ -2404,10 +2397,10 @@ Uses hash table keyed by task-id to support parallel execution."
                         (puthash task-id state my/gptel--agent-task-state)
                         (let ((request-buf (my/gptel--agent-task-request-buffer state)))
                           (when (buffer-live-p request-buf)
-                           (when-let* ((task-env (plist-get state :process-environment))
-                                       ((fboundp 'gptel-auto-workflow--persist-subagent-process-environment)))
-                             (gptel-auto-workflow--persist-subagent-process-environment
-                              request-buf task-env))
+                            (when-let* ((task-env (plist-get state :process-environment))
+                                        ((fboundp 'gptel-auto-workflow--persist-subagent-process-environment)))
+                              (gptel-auto-workflow--persist-subagent-process-environment
+                               request-buf task-env))
                             (with-current-buffer request-buf
                               (when (local-variable-p 'gptel--fsm-last)
                                 (setq child-fsm gptel--fsm-last)
@@ -2424,15 +2417,15 @@ Uses hash table keyed by task-id to support parallel execution."
                   (error
                    (setq launch-error err)))
               (unless request-started
-                 (funcall restore-origin-fsm)))
-             (when launch-error
-               (let ((state (gethash task-id my/gptel--agent-task-state)))
-                 (when state
-                   (my/gptel--cancel-agent-task-timers state)
-                   (remhash task-id my/gptel--agent-task-state))
-                 (funcall restore-origin-fsm child-fsm)
-                 (my/gptel--cleanup-agent-request-buffer state)
-                 (message "[nucleus] Subagent %s failed before startup completed: %s"
+                (funcall restore-origin-fsm)))
+            (when launch-error
+              (let ((state (gethash task-id my/gptel--agent-task-state)))
+                (when state
+                  (my/gptel--cancel-agent-task-timers state)
+                  (remhash task-id my/gptel--agent-task-state))
+                (funcall restore-origin-fsm child-fsm)
+                (my/gptel--cleanup-agent-request-buffer state)
+                (message "[nucleus] Subagent %s failed before startup completed: %s"
                          agent-type
                          (my/gptel--sanitize-for-logging
                           (error-message-string launch-error) 160))
@@ -2969,11 +2962,11 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
                  user-emacs-directory
                  temporary-file-directory)
                 temporary-file-directory))
-            (tracked
-             (delete-dups
-              (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
-                    (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root))))
-            (killed 0))
+           (tracked
+            (delete-dups
+             (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
+                   (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root))))
+           (killed 0))
       (cl-labels
           ((defer-kill (buf attempts-left)
              (run-at-time
@@ -3057,9 +3050,10 @@ If branch exists locally, deletes it first to avoid conflicts."
         (progn
           (make-directory (file-name-directory worktree-dir) t)
           (let ((default-directory proj-root))
-            (setq base-ref (gptel-auto-workflow--staging-main-ref))
-            (unless base-ref
-              (error "missing main ref for experiment worktree"))
+             (setq base-ref (or (gptel-auto-workflow--current-staging-head)
+                                (gptel-auto-workflow--staging-main-ref)))
+             (unless base-ref
+               (error "missing base ref for experiment worktree (staging or main)"))
             (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
             (call-process "git" nil stderr-buffer nil "worktree" "prune")
             (dolist (existing-worktree
@@ -3100,11 +3094,11 @@ If branch exists locally, deletes it first to avoid conflicts."
               (when (gptel-auto-workflow--worktree-needs-submodule-hydration-p worktree-dir)
                 (unless (gptel-auto-workflow--ensure-staging-submodules-ready worktree-dir)
                   (error "failed to hydrate experiment submodules in %s" worktree-dir))))
-          (kill-buffer stderr-buffer)
-          (message "[auto-workflow] Created: %s" branch)
-          (puthash target (list :worktree-dir worktree-dir :current-branch branch)
-                   gptel-auto-workflow--worktree-state)
-          worktree-dir))
+            (kill-buffer stderr-buffer)
+            (message "[auto-workflow] Created: %s" branch)
+            (puthash target (list :worktree-dir worktree-dir :current-branch branch)
+                     gptel-auto-workflow--worktree-state)
+            worktree-dir))
       (error
        (when (buffer-live-p stderr-buffer)
          (kill-buffer stderr-buffer))
@@ -3255,55 +3249,55 @@ diverged local state does not leak into workflow branches."
           (let* ((status-result (gptel-auto-workflow--git-result
                                  "git status --porcelain"
                                  60))
-                  (clean-main (and (= 0 (cdr status-result))
-                                   (string-empty-p (string-trim (car status-result)))))
+                 (clean-main (and (= 0 (cdr status-result))
+                                  (string-empty-p (string-trim (car status-result)))))
                  (ahead-result (and clean-main
                                     (gptel-auto-workflow--git-result
                                      (format "git rev-list --left-right --count %s...main"
                                              remote-main)
                                      60)))
-                   (ahead-counts (and ahead-result
-                                     (= 0 (cdr ahead-result))
-                                     (split-string (string-trim (car ahead-result))
-                                                    "[[:space:]]+" t)))
-                  (behind-count (and (= (length ahead-counts) 2)
-                                     (string-to-number (nth 0 ahead-counts))))
-                  (ahead-count (and (= (length ahead-counts) 2)
-                                    (string-to-number (nth 1 ahead-counts))))
-                   (ahead-only-main (and clean-main
-                                         (numberp behind-count)
-                                         (numberp ahead-count)
-                                         (= behind-count 0)
-                                         (> ahead-count 0)))
-                   (subject-result (and ahead-only-main
-                                        (gptel-auto-workflow--git-result
-                                        (format "git log --format=%%s %s..main" remote-main)
-                                        60)))
-                   (ahead-subjects (and subject-result
-                                        (= 0 (cdr subject-result))
-                                        (split-string (string-trim-right (car subject-result))
-                                                      "\n"
-                                                     t))))
-              (if ahead-only-main
-                  (if (and (consp ahead-subjects)
-                           (cl-every
-                            #'gptel-auto-workflow--autonomous-maintenance-commit-subject-p
-                            ahead-subjects))
-                      (progn
-                        (message "[auto-workflow] Local main only contains autonomous maintenance commits; using %s as workflow base"
-                                 remote-main)
-                        remote-main)
-                    (message "[auto-workflow] Local main is clean and ahead of %s; using main as workflow base"
-                             remote-main)
-                    "main")
-                (message "[auto-workflow] Local main differs from %s; using %s as workflow base"
-                         remote-main remote-main)
-                remote-main))))
+                 (ahead-counts (and ahead-result
+                                    (= 0 (cdr ahead-result))
+                                    (split-string (string-trim (car ahead-result))
+                                                  "[[:space:]]+" t)))
+                 (behind-count (and (= (length ahead-counts) 2)
+                                    (string-to-number (nth 0 ahead-counts))))
+                 (ahead-count (and (= (length ahead-counts) 2)
+                                   (string-to-number (nth 1 ahead-counts))))
+                 (ahead-only-main (and clean-main
+                                       (numberp behind-count)
+                                       (numberp ahead-count)
+                                       (= behind-count 0)
+                                       (> ahead-count 0)))
+                 (subject-result (and ahead-only-main
+                                      (gptel-auto-workflow--git-result
+                                       (format "git log --format=%%s %s..main" remote-main)
+                                       60)))
+                 (ahead-subjects (and subject-result
+                                      (= 0 (cdr subject-result))
+                                      (split-string (string-trim-right (car subject-result))
+                                                    "\n"
+                                                    t))))
+            (if ahead-only-main
+                (if (and (consp ahead-subjects)
+                         (cl-every
+                          #'gptel-auto-workflow--autonomous-maintenance-commit-subject-p
+                          ahead-subjects))
+                    (progn
+                      (message "[auto-workflow] Local main only contains autonomous maintenance commits; using %s as workflow base"
+                               remote-main)
+                      remote-main)
+                  (message "[auto-workflow] Local main is clean and ahead of %s; using main as workflow base"
+                           remote-main)
+                  "main")
+              (message "[auto-workflow] Local main differs from %s; using %s as workflow base"
+                       remote-main remote-main)
+              remote-main))))
        (have-remote
         remote-main)
-        (have-main
-         "main")
-        (t
+       (have-main
+        "main")
+       (t
         (message "[auto-workflow] Missing main ref for staging sync")
         nil)))))
 
@@ -3346,11 +3340,11 @@ when the remote staging branch is absent."
          ((= 2 (cdr remote-probe))
           (gptel-auto-workflow--staging-main-ref))
          (t
-           (message "[auto-workflow] Failed to probe %s/%s for staging sync: %s"
-                    remote
-                    staging
-                    (my/gptel--sanitize-for-logging (car remote-probe) 160))
-           nil))))))
+          (message "[auto-workflow] Failed to probe %s/%s for staging sync: %s"
+                   remote
+                   staging
+                   (my/gptel--sanitize-for-logging (car remote-probe) 160))
+          nil))))))
 
 (defun gptel-auto-workflow--ref-ancestor-p (ancestor descendant)
   "Return non-nil when ANCESTOR is already contained in DESCENDANT."
@@ -3375,7 +3369,7 @@ remote staging branch."
              (format "git merge --ff-only %s" main-q)
              180))
            (ff-output (car ff-result)))
-       (cond
+      (cond
        ((= 0 (cdr ff-result))
         (gptel-auto-workflow--finalize-refreshed-staging-submodules worktree main-ref))
        ((string-match-p "Already up[ -]to[- ]date" ff-output)
@@ -3489,7 +3483,7 @@ Returns worktree path or nil on failure."
   (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
          (default-directory proj-root)
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
-                                 "var/tmp/experiments"))
+                                "var/tmp/experiments"))
          (worktree-dir (expand-file-name
                         (format "%s/staging-verify" worktree-base-dir)
                         proj-root))
@@ -3651,10 +3645,10 @@ root, since one may have a fresher submodule checkout than the other."
                        (list (gptel-auto-workflow--worktree-base-root)
                              (gptel-auto-workflow--worktree-base-repo-root)))
                  :test #'string=))
-          (git-dirs
-           (mapcar (lambda (root)
-                     (gptel-auto-workflow--submodule-checkout-git-dir-at-root root path))
-                   roots)))
+         (git-dirs
+          (mapcar (lambda (root)
+                    (gptel-auto-workflow--submodule-checkout-git-dir-at-root root path))
+                  roots)))
     (cl-remove-duplicates (delq nil git-dirs) :test #'string=)))
 
 (defun gptel-auto-workflow--normalize-shared-submodule-core-worktree (path git-dir)
@@ -3722,9 +3716,9 @@ superproject-managed `.git/modules/...` store."
          (repo-git-dir (gptel-auto-workflow--worktree-base-git-common-dir))
          (module-git-dir (and repo-git-dir
                               (expand-file-name (format "modules/%s" path) repo-git-dir)))
-          (candidates (cl-remove-duplicates
-                       (append checkout-git-dirs (delq nil (list module-git-dir)))
-                       :test #'string=)))
+         (candidates (cl-remove-duplicates
+                      (append checkout-git-dirs (delq nil (list module-git-dir)))
+                      :test #'string=)))
     (cl-find-if (lambda (git-dir)
                   (gptel-auto-workflow--git-dir-has-commit-p
                    (gptel-auto-workflow--normalize-shared-submodule-core-worktree
@@ -4080,29 +4074,29 @@ This avoids broken linked-worktree submodule metadata under `.git/worktrees/.../
               (setq failure
                     (format "Missing shared submodule repo for %s: %s"
                             path shared-git-dir)))
-              (t
-                (let ((cleanup-error
-                       (gptel-auto-workflow--cleanup-staging-submodule-worktree root path)))
-                  (if cleanup-error
-                      (setq failure cleanup-error)
-                    (make-directory (file-name-directory target) t)
-                    (gptel-auto-workflow--normalize-shared-submodule-core-worktree
-                     path shared-git-dir)
-                    (setq add-result
-                          (unwind-protect
-                              (gptel-auto-workflow--git-result
-                               (format "git --git-dir=%s worktree add --detach --force %s %s"
-                                       (shell-quote-argument shared-git-dir)
-                                       (shell-quote-argument target)
-                                       (shell-quote-argument commit))
-                               180)
-                            (gptel-auto-workflow--normalize-shared-submodule-core-worktree
-                             path shared-git-dir)))
-                    (if (= 0 (cdr add-result))
-                        (push (format "%s=%s" path (gptel-auto-workflow--truncate-hash commit))
-                              hydrated)
-                      (setq failure
-                           (format "Failed to hydrate %s: %s" path (car add-result)))))))))))
+             (t
+              (let ((cleanup-error
+                     (gptel-auto-workflow--cleanup-staging-submodule-worktree root path)))
+                (if cleanup-error
+                    (setq failure cleanup-error)
+                  (make-directory (file-name-directory target) t)
+                  (gptel-auto-workflow--normalize-shared-submodule-core-worktree
+                   path shared-git-dir)
+                  (setq add-result
+                        (unwind-protect
+                            (gptel-auto-workflow--git-result
+                             (format "git --git-dir=%s worktree add --detach --force %s %s"
+                                     (shell-quote-argument shared-git-dir)
+                                     (shell-quote-argument target)
+                                     (shell-quote-argument commit))
+                             180)
+                          (gptel-auto-workflow--normalize-shared-submodule-core-worktree
+                           path shared-git-dir)))
+                  (if (= 0 (cdr add-result))
+                      (push (format "%s=%s" path (gptel-auto-workflow--truncate-hash commit))
+                            hydrated)
+                    (setq failure
+                          (format "Failed to hydrate %s: %s" path (car add-result)))))))))))
       (if failure
           (cons failure 1)
         (cons (if hydrated
@@ -4250,8 +4244,8 @@ cherry-pick, not the full branch delta against staging."
               "No changes detected in review commit.")
              ((not (= 0 (cdr diff-result)))
               (format "Error generating diff: %s" diff-output))
-              (t
-               diff-output))))))))))
+             (t
+              diff-output))))))))))
 
 (defun gptel-auto-workflow--review-attachment-files (worktree changed-files)
   "Return reviewer file attachments for CHANGED-FILES in WORKTREE.
@@ -4794,32 +4788,32 @@ verification passes."
      "ensure staging branch exists"
      (lambda ()
        (when staging
-          (let* ((staging-q (shell-quote-argument staging))
-                 (remote-staging (gptel-auto-workflow--shared-remote-ref staging))
-                 (remote-staging-q (shell-quote-argument remote-staging))
-                 (remote-staging-refspec
-                  (gptel-auto-workflow--shared-remote-refspec staging))
-                 (remote-staging-refspec-q (shell-quote-argument remote-staging-refspec))
-                 (local-exists
-                  (= 0 (cdr (gptel-auto-workflow--git-result
+         (let* ((staging-q (shell-quote-argument staging))
+                (remote-staging (gptel-auto-workflow--shared-remote-ref staging))
+                (remote-staging-q (shell-quote-argument remote-staging))
+                (remote-staging-refspec
+                 (gptel-auto-workflow--shared-remote-refspec staging))
+                (remote-staging-refspec-q (shell-quote-argument remote-staging-refspec))
+                (local-exists
+                 (= 0 (cdr (gptel-auto-workflow--git-result
                             (format "git rev-parse --verify %s" staging-q)
                             60)))))
            (cond
             (local-exists
              (message "[auto-workflow] %s branch exists locally" staging)
              t)
-             ((= 0 (cdr (gptel-auto-workflow--git-result
-                         (format "git ls-remote --exit-code --heads %s %s"
-                                 remote
-                                 staging-q)
-                         60)))
-              (message "[auto-workflow] Creating local %s from %s/%s" staging remote staging)
-              (and (= 0 (cdr (gptel-auto-workflow--git-result
-                              (format "git fetch %s %s" remote remote-staging-refspec-q)
-                              180)))
-                   (= 0 (cdr (gptel-auto-workflow--git-result
-                              (format "git branch %s %s" staging-q remote-staging-q)
-                              180)))))
+            ((= 0 (cdr (gptel-auto-workflow--git-result
+                        (format "git ls-remote --exit-code --heads %s %s"
+                                remote
+                                staging-q)
+                        60)))
+             (message "[auto-workflow] Creating local %s from %s/%s" staging remote staging)
+             (and (= 0 (cdr (gptel-auto-workflow--git-result
+                             (format "git fetch %s %s" remote remote-staging-refspec-q)
+                             180)))
+                  (= 0 (cdr (gptel-auto-workflow--git-result
+                             (format "git branch %s %s" staging-q remote-staging-q)
+                             180)))))
             (t
              (let ((main-ref (gptel-auto-workflow--staging-main-ref)))
                (if (not main-ref)
@@ -4925,8 +4919,8 @@ empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD' is absent."
                       (string-match-p
                        "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
                        output))))
-          (string-empty-p unmerged-files)
-          (string-empty-p worktree-status))))
+         (string-empty-p unmerged-files)
+         (string-empty-p worktree-status))))
 
 (defun gptel-auto-workflow--unmerged-files ()
   "Return newline-separated unmerged files in the current git worktree."
@@ -4983,10 +4977,10 @@ Uses the staging worktree instead of switching branches in the root repo."
                      (cond
                       ((= 0 (cdr commit-result))
                        t)
-                       ((gptel-auto-workflow--empty-cherry-pick-state-p (car commit-result) t)
-                        (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --skip" 60))
-                        (message "[auto-workflow] Cherry-pick empty after apply (already in staging)")
-                        :already-integrated)
+                      ((gptel-auto-workflow--empty-cherry-pick-state-p (car commit-result) t)
+                       (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --skip" 60))
+                       (message "[auto-workflow] Cherry-pick empty after apply (already in staging)")
+                       :already-integrated)
                       (t
                        (message "[auto-workflow] Commit failed after cherry-pick: %s"
                                 (my/gptel--sanitize-for-logging (car commit-result) 160))
@@ -4995,40 +4989,40 @@ Uses the staging worktree instead of switching branches in the root repo."
                        (string-match-p "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
                                        cherry-output))
                    (message "[auto-workflow] Cherry-pick empty (already in staging)")
-                    (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                    :already-integrated)
-                   (t
-                    (let ((unmerged-files (gptel-auto-workflow--unmerged-files)))
-                      (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                      (if (gptel-auto-workflow--non-empty-string-p unmerged-files)
-                          (progn
-                            (gptel-auto-workflow--prepare-staging-merge-base reset-target)
-                            (message "[auto-workflow] Cherry-pick conflicted; refusing merge fallback. Conflicted files: %s"
-                                     (my/gptel--sanitize-for-logging unmerged-files 160))
-                            nil)
-                        (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
-                                 (my/gptel--sanitize-for-logging cherry-output 160))
-                        (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
-                                      (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
-                            nil
-                          (let* ((merge-result
-                                  (gptel-auto-workflow--git-result
-                                   (format "git merge -X theirs %s --no-ff -m %s"
-                                           (shell-quote-argument optimize-ref)
-                                           (shell-quote-argument merge-message))
-                                   180))
-                                 (merge-output (car merge-result)))
-                            (cond
-                             ((= 0 (cdr merge-result)) t)
-                             ((string-match-p "Already up[ -]to[- ]date" merge-output)
-                              :already-integrated)
-                             (t
-                              (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
-                              (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                              (gptel-auto-workflow--prepare-staging-merge-base reset-target)
-                              (message "[auto-workflow] Merge also failed: %s"
-                                       (my/gptel--sanitize-for-logging merge-output 160))
-                              nil)))))))))))))))))
+                   (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                   :already-integrated)
+                  (t
+                   (let ((unmerged-files (gptel-auto-workflow--unmerged-files)))
+                     (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                     (if (gptel-auto-workflow--non-empty-string-p unmerged-files)
+                         (progn
+                           (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                           (message "[auto-workflow] Cherry-pick conflicted; refusing merge fallback. Conflicted files: %s"
+                                    (my/gptel--sanitize-for-logging unmerged-files 160))
+                           nil)
+                       (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
+                                (my/gptel--sanitize-for-logging cherry-output 160))
+                       (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                                     (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
+                           nil
+                         (let* ((merge-result
+                                 (gptel-auto-workflow--git-result
+                                  (format "git merge -X theirs %s --no-ff -m %s"
+                                          (shell-quote-argument optimize-ref)
+                                          (shell-quote-argument merge-message))
+                                  180))
+                                (merge-output (car merge-result)))
+                           (cond
+                            ((= 0 (cdr merge-result)) t)
+                            ((string-match-p "Already up[ -]to[- ]date" merge-output)
+                             :already-integrated)
+                            (t
+                             (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
+                             (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                             (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                             (message "[auto-workflow] Merge also failed: %s"
+                                      (my/gptel--sanitize-for-logging merge-output 160))
+                             nil)))))))))))))))))
 
 
 
@@ -5076,24 +5070,24 @@ Returns (success-p . output)."
         (progn
           (message "[auto-workflow] Staging worktree not found")
           (cons nil "Staging worktree not found"))
-       (message "[auto-workflow] Verifying staging...")
-       (let* ((default-directory worktree)
-              (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
-              (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
-              (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
-              (submodule-note
-               (and syntax-pass
-                    (not submodule-pass)
-                    (let ((note (car-safe submodules)))
-                      (if (gptel-auto-workflow--non-empty-string-p note)
-                          note
-                        "Staging submodule hydration failed"))))
-              (_ (when submodule-note
-                   (with-current-buffer output-buffer
-                     (insert submodule-note "\n"))))
-              (test-result (when (and submodule-pass test-script (file-exists-p test-script))
-                             (gptel-auto-workflow--call-process-with-watchdog
-                              "bash" nil output-buffer nil test-script "unit")))
+      (message "[auto-workflow] Verifying staging...")
+      (let* ((default-directory worktree)
+             (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
+             (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+             (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
+             (submodule-note
+              (and syntax-pass
+                   (not submodule-pass)
+                   (let ((note (car-safe submodules)))
+                     (if (gptel-auto-workflow--non-empty-string-p note)
+                         note
+                       "Staging submodule hydration failed"))))
+             (_ (when submodule-note
+                  (with-current-buffer output-buffer
+                    (insert submodule-note "\n"))))
+             (test-result (when (and submodule-pass test-script (file-exists-p test-script))
+                            (gptel-auto-workflow--call-process-with-watchdog
+                             "bash" nil output-buffer nil test-script "unit")))
              (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
                               (let ((process-environment
                                      (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
@@ -5117,22 +5111,22 @@ Returns (success-p . output)."
               (goto-char (point-max))
               (unless (bolp)
                 (insert "\n"))
-               (insert "\n"
-                       (let ((note (cdr-safe baseline-check)))
-                         (if (gptel-auto-workflow--non-empty-string-p note)
-                             note
-                           "Staging verification failed against main baseline"))
-                       "\n"))
-             (setq output (with-current-buffer output-buffer (buffer-string)))))
-         (kill-buffer output-buffer)
-         (setq result (and syntax-pass submodule-pass checks-pass))
-         (message "[auto-workflow] Staging verification: %s"
-                  (if result
-                      "PASS"
-                    (format "FAIL (%s)"
-                            (gptel-auto-workflow--summarize-staging-verification-output
-                             output))))
-         (cons result output)))))
+              (insert "\n"
+                      (let ((note (cdr-safe baseline-check)))
+                        (if (gptel-auto-workflow--non-empty-string-p note)
+                            note
+                          "Staging verification failed against main baseline"))
+                      "\n"))
+            (setq output (with-current-buffer output-buffer (buffer-string)))))
+        (kill-buffer output-buffer)
+        (setq result (and syntax-pass submodule-pass checks-pass))
+        (message "[auto-workflow] Staging verification: %s"
+                 (if result
+                     "PASS"
+                   (format "FAIL (%s)"
+                           (gptel-auto-workflow--summarize-staging-verification-output
+                            output))))
+        (cons result output)))))
 
 
 
@@ -5174,14 +5168,14 @@ ACTION is a short description used in failure messages."
                                branch
                                remote-head))
                       remote
-                       branch-q)
-             (format "git push %s %s" remote branch-q)))
+                      branch-q)
+            (format "git push %s %s" remote branch-q)))
          (push-result
           (gptel-auto-workflow--with-skipped-submodule-sync
            (lambda ()
-              (gptel-auto-workflow--git-result
-               push-command
-               push-timeout))))
+             (gptel-auto-workflow--git-result
+              push-command
+              push-timeout))))
          (push-output (car push-result)))
     (cond
      ((= 0 (cdr push-result))
@@ -5266,8 +5260,8 @@ initial remote-advance rejection. Returns a plist with keys `:success',
             (gptel-auto-workflow--retry-staging-publish-after-remote-advance
              optimize-branch
              (1- remaining)))
-         (list :success nil
-               :reason 'staging-sync-failed
+        (list :success nil
+              :reason 'staging-sync-failed
               :output (format "Failed to sync staging from updated %s/%s"
                               remote
                               (gptel-auto-workflow--require-staging-branch)))))
@@ -5530,9 +5524,9 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                       (boundp 'gptel-auto-workflow--run-id)
                       gptel-auto-workflow--run-id))
          (finish (gptel-auto-workflow--make-idempotent-callback
-                   (lambda (success &optional reason)
-                     (gptel-auto-workflow--invoke-staging-completion
-                      completion-callback success reason)))))
+                  (lambda (success &optional reason)
+                    (gptel-auto-workflow--invoke-staging-completion
+                     completion-callback success reason)))))
     (when disproven-undefined-blocker
       (message "[auto-workflow] Reviewer undefined-function blocker disproven locally for %s; continuing"
                disproven-undefined-blocker))
@@ -5674,32 +5668,32 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                      :analyzer-patterns ""
                      :agent-output ""))
               (funcall finish nil))
-              (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                     (merge-result
-                      (gptel-auto-workflow--merge-to-staging optimize-branch))
-                     (already-integrated-p (eq merge-result :already-integrated))
-                     (finish-publish
-                      (lambda (&optional retried)
-                        (gptel-auto-workflow--delete-staging-worktree)
-                        (if (not (gptel-auto-workflow--run-callback-live-p run-id))
-                            (progn
-                              (message "[auto-workflow] Skipping stale staging publish for %s; run %s is no longer active"
-                                       optimize-branch run-id)
-                              (funcall finish nil "stale-staging-publish"))
-                          (if already-integrated-p
-                              (progn
-                                (message
-                                 (if retried
-                                     "[auto-workflow] Candidate already present in staging after refresh; published staging sync only."
-                                   "[auto-workflow] Candidate already present in staging; published staging sync only."))
-                                (funcall finish nil "already-in-staging"))
+          (let* ((staging-base (gptel-auto-workflow--current-staging-head))
+                 (merge-result
+                  (gptel-auto-workflow--merge-to-staging optimize-branch))
+                 (already-integrated-p (eq merge-result :already-integrated))
+                 (finish-publish
+                  (lambda (&optional retried)
+                    (gptel-auto-workflow--delete-staging-worktree)
+                    (if (not (gptel-auto-workflow--run-callback-live-p run-id))
+                        (progn
+                          (message "[auto-workflow] Skipping stale staging publish for %s; run %s is no longer active"
+                                   optimize-branch run-id)
+                          (funcall finish nil "stale-staging-publish"))
+                      (if already-integrated-p
+                          (progn
                             (message
                              (if retried
-                                 "[auto-workflow] ✓ Staging pushed after refreshing remote advance."
-                               "[auto-workflow] ✓ Staging pushed. Human must merge to main."))
-                            (funcall finish t))))))
-                (if (not merge-result)
-                    (progn
+                                 "[auto-workflow] Candidate already present in staging after refresh; published staging sync only."
+                               "[auto-workflow] Candidate already present in staging; published staging sync only."))
+                            (funcall finish nil "already-in-staging"))
+                        (message
+                         (if retried
+                             "[auto-workflow] ✓ Staging pushed after refreshing remote advance."
+                           "[auto-workflow] ✓ Staging pushed. Human must merge to main."))
+                        (funcall finish t))))))
+            (if (not merge-result)
+                (progn
                   (message "[auto-workflow] ✗ Merge to staging failed, aborting")
                   (gptel-auto-experiment-log-tsv
                    (gptel-auto-workflow--current-run-id)
@@ -5714,8 +5708,8 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                          :grader-reason "staging-merge-failed"
                          :comparator-reason
                          (format "Failed to merge %s to staging" optimize-branch)
-                          :analyzer-patterns ""
-                          :agent-output ""))
+                         :analyzer-patterns ""
+                         :agent-output ""))
                   (funcall finish nil))
               (when already-integrated-p
                 (message "[auto-workflow] Candidate changes already present in staging; verifying staged sync only"))
@@ -5861,15 +5855,15 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                (or (and proj-root
                         (not (file-equal-p proj-root worktree)))
                    (gptel-auto-workflow--worktree-needs-submodule-hydration-p worktree))))
-          (default-directory worktree)
-          (process-environment
-           (gptel-auto-workflow--isolated-state-environment
-            "copilot-auto-workflow-test-"
-            (list "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1")))
-          (isolated-status-file (getenv "AUTO_WORKFLOW_STATUS_FILE"))
-           (test-script (expand-file-name "scripts/run-tests.sh" worktree))
-           (output-buffer (generate-new-buffer "*test-output*"))
-           result)
+         (default-directory worktree)
+         (process-environment
+          (gptel-auto-workflow--isolated-state-environment
+           "copilot-auto-workflow-test-"
+           (list "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1")))
+         (isolated-status-file (getenv "AUTO_WORKFLOW_STATUS_FILE"))
+         (test-script (expand-file-name "scripts/run-tests.sh" worktree))
+         (output-buffer (generate-new-buffer "*test-output*"))
+         result)
     (unwind-protect
         (if (not (file-executable-p test-script))
             (progn
@@ -5882,46 +5876,46 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                                    (gptel-auto-workflow--hydrate-staging-submodules worktree)))
                  (hydrate-pass (or (not hydrate-submodules-p)
                                    (= 0 (cdr hydrate-result)))))
-             (if (not hydrate-pass)
-                 (progn
-                   (with-current-buffer output-buffer
-                     (insert (car hydrate-result) "\n"))
-                   (message "[auto-experiment] ✗ Submodule hydration failed: %s"
-                            (my/gptel--sanitize-for-logging (car hydrate-result) 200))
-                   (cons nil (with-current-buffer output-buffer (buffer-string))))
-               (cl-labels
-                   ((run-tests-once (attempt)
-                      (message "[auto-experiment] Running tests%s..."
-                               (if (> attempt 1)
-                                   (format " (attempt %d)" attempt)
-                                 ""))
-                      (with-current-buffer output-buffer
-                        (erase-buffer))
-                      (let ((exit-code
-                             (gptel-auto-workflow--call-process-with-watchdog
-                              test-script nil output-buffer nil "unit")))
-                        (with-current-buffer output-buffer
-                          (cons (zerop exit-code) (buffer-string))))))
-                 (setq result (run-tests-once 1))
-                 (unless (car result)
-                   (let ((first-output (cdr result)))
-                     (message "[auto-experiment] Retrying tests after failure")
-                     (sleep-for 1)
-                     (let ((retry-result (run-tests-once 2)))
-                       (setq result
-                             (if (car retry-result)
-                                 retry-result
-                               (cons nil
-                                     (format "Initial test run failed:\n%s\n\nRetry failed:\n%s"
-                                             first-output
-                                             (cdr retry-result))))))))
-                 (when (car result)
-                   (message "[auto-experiment] ✓ Tests passed"))
-                 result))))
-       (when (buffer-live-p output-buffer)
-         (kill-buffer output-buffer))
-       (when (file-exists-p isolated-status-file)
-         (delete-file isolated-status-file)))))
+            (if (not hydrate-pass)
+                (progn
+                  (with-current-buffer output-buffer
+                    (insert (car hydrate-result) "\n"))
+                  (message "[auto-experiment] ✗ Submodule hydration failed: %s"
+                           (my/gptel--sanitize-for-logging (car hydrate-result) 200))
+                  (cons nil (with-current-buffer output-buffer (buffer-string))))
+              (cl-labels
+                  ((run-tests-once (attempt)
+                     (message "[auto-experiment] Running tests%s..."
+                              (if (> attempt 1)
+                                  (format " (attempt %d)" attempt)
+                                ""))
+                     (with-current-buffer output-buffer
+                       (erase-buffer))
+                     (let ((exit-code
+                            (gptel-auto-workflow--call-process-with-watchdog
+                             test-script nil output-buffer nil "unit")))
+                       (with-current-buffer output-buffer
+                         (cons (zerop exit-code) (buffer-string))))))
+                (setq result (run-tests-once 1))
+                (unless (car result)
+                  (let ((first-output (cdr result)))
+                    (message "[auto-experiment] Retrying tests after failure")
+                    (sleep-for 1)
+                    (let ((retry-result (run-tests-once 2)))
+                      (setq result
+                            (if (car retry-result)
+                                retry-result
+                              (cons nil
+                                    (format "Initial test run failed:\n%s\n\nRetry failed:\n%s"
+                                            first-output
+                                            (cdr retry-result))))))))
+                (when (car result)
+                  (message "[auto-experiment] ✓ Tests passed"))
+                result))))
+      (when (buffer-live-p output-buffer)
+        (kill-buffer output-buffer))
+      (when (file-exists-p isolated-status-file)
+        (delete-file isolated-status-file)))))
 
 (defcustom gptel-auto-experiment-require-tests t
   "When non-nil, require tests to pass before merging experiment to staging.
@@ -6223,9 +6217,9 @@ least `gptel-auto-experiment-repeat-focus-threshold' previous attempts."
         (when matches
           (let* ((sorted (sort matches (lambda (a b) (> (cdr a) (cdr b)))))
                  (best (car sorted)))
-             (list :symbol (car best)
-                   :count (cdr best)
-                   :matches (nreverse sorted))))))))
+            (list :symbol (car best)
+                  :count (cdr best)
+                  :matches (nreverse sorted))))))))
 
 (defun gptel-auto-experiment--subagent-raw-result (result)
   "Return raw transient error text from RESULT, or nil when unavailable."
@@ -6537,7 +6531,7 @@ intended hypothesis. TARGET and WORKTREE identify the actual edited file."
         "- Run the normal benchmark and required tests against the changed worktree.\n"
         "COMMIT:\n"
         "- No commit was created before timeout; only keep the change if benchmark and review gates pass.\n"
-       "Task completed with partial work ready for workflow evaluation.")
+        "Task completed with partial work ready for workflow evaluation.")
        hypothesis
        target
        (my/gptel--sanitize-for-logging output 200)))))
@@ -6649,9 +6643,9 @@ still improves."
                       (format "Rejected: score tie without >= %.2f quality gain"
                               gptel-auto-experiment-min-quality-gain-on-score-tie)))))
      (t
-       (list :winner (if (string= winner "tie") "B" winner)
-             :note (and (string= winner "tie")
-                        "Kept: score improved despite combined tie"))))))
+      (list :winner (if (string= winner "tie") "B" winner)
+            :note (and (string= winner "tie")
+                       "Kept: score improved despite combined tie"))))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
@@ -6707,55 +6701,55 @@ Then on a new line, briefly explain why (1 sentence)."
                                       decision-threshold
                                       decision-threshold
                                       decision-threshold)))
-           (with-current-buffer decide-buffer
-             (gptel-auto-experiment--call-aux-subagent-with-retry
-              "comparator"
-              (lambda (cb)
-                (gptel-benchmark-call-subagent
-                 'comparator
-                 "Compare experiment results"
-                 compare-prompt
-                 cb))
-              (lambda (result)
-                (let* ((response (if (stringp result) result (format "%S" result)))
-                       (reported-winner (or (gptel-auto-experiment--parse-comparator-winner response)
-                                            "unparsed"))
-                       (winner expected-winner)
-                       (override (not (string= reported-winner expected-winner)))
-                       (keep (string= winner "B")))
-                  (my/gptel--invoke-callback-safely
-                   callback
-                   (list :keep keep
-                         :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
-                                            (if override
-                                                (format "Comparator override: %s -> %s | "
-                                                        reported-winner winner)
-                                              "")
-                                            winner score-before score-after
-                                            quality-before quality-after
-                                            combined-before combined-after
-                                            (if gate-note
-                                                (format " | %s" gate-note)
-                                              ""))
-                         :improvement (list :score (- score-after score-before)
-                                            :quality (- quality-after quality-before)
-                                            :combined (- combined-after combined-before)))))))))
+          (with-current-buffer decide-buffer
+            (gptel-auto-experiment--call-aux-subagent-with-retry
+             "comparator"
+             (lambda (cb)
+               (gptel-benchmark-call-subagent
+                'comparator
+                "Compare experiment results"
+                compare-prompt
+                cb))
+             (lambda (result)
+               (let* ((response (if (stringp result) result (format "%S" result)))
+                      (reported-winner (or (gptel-auto-experiment--parse-comparator-winner response)
+                                           "unparsed"))
+                      (winner expected-winner)
+                      (override (not (string= reported-winner expected-winner)))
+                      (keep (string= winner "B")))
+                 (my/gptel--invoke-callback-safely
+                  callback
+                  (list :keep keep
+                        :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
+                                           (if override
+                                               (format "Comparator override: %s -> %s | "
+                                                       reported-winner winner)
+                                             "")
+                                           winner score-before score-after
+                                           quality-before quality-after
+                                           combined-before combined-after
+                                           (if gate-note
+                                               (format " | %s" gate-note)
+                                             ""))
+                        :improvement (list :score (- score-after score-before)
+                                           :quality (- quality-after quality-before)
+                                           :combined (- combined-after combined-before)))))))))
       (let ((winner expected-winner)
             (keep (string= expected-winner "B")))
         (my/gptel--invoke-callback-safely
          callback
          (list :keep keep
-                :reasoning (format "Local: Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
-                                   winner
-                                   score-before score-after
-                                   quality-before quality-after
-                                   combined-before combined-after
-                                   (if gate-note
-                                       (format " | %s" gate-note)
-                                     ""))
-                :improvement (list :score (- score-after score-before)
-                                   :quality (- quality-after quality-before)
-                                   :combined (- combined-after combined-before))))))))
+               :reasoning (format "Local: Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
+                                  winner
+                                  score-before score-after
+                                  quality-before quality-after
+                                  combined-before combined-after
+                                  (if gate-note
+                                      (format " | %s" gate-note)
+                                    ""))
+               :improvement (list :score (- score-after score-before)
+                                  :quality (- quality-after quality-before)
+                                  :combined (- combined-after combined-before))))))))
 
 (defun gptel-auto-experiment--strong-grade-pass-p (grade-score grade-total)
   "Return non-nil when GRADE-SCORE reflects a strong pass.
@@ -6824,43 +6818,43 @@ Speculative or purely defensive hardening language does not count."
   (let ((grade-signals
          (gptel-auto-experiment--grade-explanation-text grade-details)))
     (when (stringp grade-signals)
-    (let ((case-fold-search t))
-      (and
-       (string-match-p
-        (rx (or (seq (or "fixes"
-                         "fixed"
-                         "resolves"
-                         "resolved"
-                         "corrects"
-                         "corrected"
-                         "eliminates"
-                         "eliminated"
-                         "addresses"
-                         "addressed")
-                     (* (not (any ".\n")))
-                     (or "bug"
-                         "bugs"
-                         "runtime error"
-                         "runtime errors"
-                         "crash"
-                         "crashes"
-                         "security hole"
-                         "security issue"
-                         "state corruption"
-                         "logic failure"
-                         "correctness bug"
-                         "correctness bugs"
-                         "functional regression"
-                         "functional regressions"))
-                "genuine bug"
-                "genuine bugs"
-                 "actual functional bug"
-                 "actual functional bugs"
-                 "demonstrably buggy"))
-        grade-signals)
-        (not
-         (gptel-auto-experiment--speculative-correctness-language-p
-          grade-signals)))))))
+      (let ((case-fold-search t))
+        (and
+         (string-match-p
+          (rx (or (seq (or "fixes"
+                           "fixed"
+                           "resolves"
+                           "resolved"
+                           "corrects"
+                           "corrected"
+                           "eliminates"
+                           "eliminated"
+                           "addresses"
+                           "addressed")
+                       (* (not (any ".\n")))
+                       (or "bug"
+                           "bugs"
+                           "runtime error"
+                           "runtime errors"
+                           "crash"
+                           "crashes"
+                           "security hole"
+                           "security issue"
+                           "state corruption"
+                           "logic failure"
+                           "correctness bug"
+                           "correctness bugs"
+                           "functional regression"
+                           "functional regressions"))
+                  "genuine bug"
+                  "genuine bugs"
+                  "actual functional bug"
+                  "actual functional bugs"
+                  "demonstrably buggy"))
+          grade-signals)
+         (not
+          (gptel-auto-experiment--speculative-correctness-language-p
+           grade-signals)))))))
 
 (defun gptel-auto-experiment--normal-grade-details-p (grade-details)
   "Return non-nil when GRADE-DETAILS is a normal rubric result."
@@ -6889,25 +6883,25 @@ correctness fix, and no explicit rejection from the local decision gate."
          (gate-rejected-p
           (and (stringp reasoning)
                (string-match-p (rx "Rejected:") reasoning)))
-          (correctness-fix-p
-           (gptel-auto-experiment--grader-indicates-correctness-fix-p
-             grade-details))
+         (correctness-fix-p
+          (gptel-auto-experiment--grader-indicates-correctness-fix-p
+           grade-details))
          (speculative-hypothesis-p
           (gptel-auto-experiment--speculative-correctness-language-p
            hypothesis))
          (override-note
-           "Override: keep non-regressing high-confidence tie with passing tests"))
+          "Override: keep non-regressing high-confidence tie with passing tests"))
     (if (or (not (listp decision))
             (plist-get decision :keep)
             (not tests-passed)
-             (<= score-delta (- decision-threshold))
-             (<= quality-delta 0)
-             (<= combined-delta 0)
-             gate-rejected-p
-             (not correctness-fix-p)
-             speculative-hypothesis-p
-             (not (gptel-auto-experiment--strong-grade-pass-p
-                   grade-score grade-total)))
+            (<= score-delta (- decision-threshold))
+            (<= quality-delta 0)
+            (<= combined-delta 0)
+            gate-rejected-p
+            (not correctness-fix-p)
+            speculative-hypothesis-p
+            (not (gptel-auto-experiment--strong-grade-pass-p
+                  grade-score grade-total)))
         decision
       (let ((promoted (copy-sequence decision)))
         (setq promoted (plist-put promoted :keep t))
@@ -7326,30 +7320,30 @@ failures do not masquerade as published kept results. When a second argument is
 supplied on failure, use it as the downgrade reason."
   (gptel-auto-workflow--make-idempotent-callback
    (lambda (&rest success-args)
-      (let* ((staging-reported-p (not (null success-args)))
-             (staging-succeeded (car-safe success-args))
-             (failure-reason-arg (cadr success-args))
-             (failure-reason
-              (cond
-               ((stringp failure-reason-arg)
-                failure-reason-arg)
-               ((and failure-reason-arg
-                     (symbolp failure-reason-arg))
-                (symbol-name failure-reason-arg))
-               (t
-                "staging-flow-failed")))
-             (final-result
-              (if (or (not staging-reported-p) staging-succeeded)
-                  exp-result
-                (let ((failed-result (and (listp exp-result)
-                                           (plist-put (copy-sequence exp-result) :kept nil))))
-                  (when failed-result
-                    (plist-put failed-result :comparator-reason failure-reason))
-                  (or failed-result exp-result)))))
-        (when (functionp log-fn)
-          (funcall log-fn run-id final-result))
-        (when (and callback (functionp callback))
-          (funcall callback final-result))))))
+     (let* ((staging-reported-p (not (null success-args)))
+            (staging-succeeded (car-safe success-args))
+            (failure-reason-arg (cadr success-args))
+            (failure-reason
+             (cond
+              ((stringp failure-reason-arg)
+               failure-reason-arg)
+              ((and failure-reason-arg
+                    (symbolp failure-reason-arg))
+               (symbol-name failure-reason-arg))
+              (t
+               "staging-flow-failed")))
+            (final-result
+             (if (or (not staging-reported-p) staging-succeeded)
+                 exp-result
+               (let ((failed-result (and (listp exp-result)
+                                         (plist-put (copy-sequence exp-result) :kept nil))))
+                 (when failed-result
+                   (plist-put failed-result :comparator-reason failure-reason))
+                 (or failed-result exp-result)))))
+       (when (functionp log-fn)
+         (funcall log-fn run-id final-result))
+       (when (and callback (functionp callback))
+         (funcall callback final-result))))))
 
 (defun gptel-auto-workflow--invoke-staging-completion (callback success &optional reason)
   "Invoke staging CALLBACK with SUCCESS and optional REASON.
@@ -7421,10 +7415,11 @@ failover advances past transient timeout or provider-pressure failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("Gemini" . "gemini-3.1-pro-preview"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
 Each entry is (BACKEND . MODEL), where BACKEND matches the agent preset backend
@@ -7445,10 +7440,11 @@ DashScope and others when rate-limited or unavailable."
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("Gemini" . "gemini-3.1-pro-preview"))
   "Ordered backend/model fallbacks for executor after provider rate limits.
 
 Headless executor prefers MiniMax by default. When the active executor backend
@@ -7469,21 +7465,22 @@ run can advance through this list instead of repeatedly hammering the same provi
 (defconst gptel-auto-workflow--legacy-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-v4-flash")
+    ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Previous default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
 
 (defconst gptel-auto-workflow--current-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("Gemini" . "gemini-3.1-pro-preview"))
   "Current runtime default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
 
 (defconst gptel-auto-workflow--legacy-executor-rate-limit-fallbacks
-  '(("DeepSeek" . "deepseek-v4-flash")
+  '(("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("DashScope" . "qwen3.6-plus")
     ("Gemini" . "gemini-3.1-pro-preview"))
@@ -7495,10 +7492,11 @@ run can advance through this list instead of repeatedly hammering the same provi
 
 (defconst gptel-auto-workflow--current-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("Gemini" . "gemini-3.1-pro-preview"))
   "Current runtime default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
 
 (defvar gptel-auto-workflow--runtime-subagent-provider-overrides nil
@@ -7812,10 +7810,10 @@ REASON is only used for logging."
        (not (gptel-auto-experiment--aborted-agent-output-p error-output))
        (or (gptel-auto-experiment--shared-transient-error-p error-output)
            (gptel-auto-experiment--provider-usage-limit-error-p error-output)
-            (let ((case-fold-search t))
-              (string-match-p
-               "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
-               error-output)))))
+           (let ((case-fold-search t))
+             (string-match-p
+              "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+              error-output)))))
 
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
@@ -7850,8 +7848,8 @@ REASON is only used for logging."
       (and (stringp error-output)
            (let ((case-fold-search t))
              (string-match-p
-               "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
-               error-output)))))
+              "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
+              error-output)))))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
@@ -7985,15 +7983,15 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
               (error-category (car error-info))
               (grader-only-failure
                (gptel-auto-experiment--grader-only-failure-p output grade-error-output)))
-          (if (and (not grade-passed)
-                   (gptel-auto-experiment--should-retry-grader-p
-                    output grade-error-output error-category retries))
-              (progn
-                (gptel-auto-experiment--note-api-pressure
-                 target error-category grade-error-output "grader" nil)
-                (let ((retry-delay
-                       (gptel-auto-experiment--retry-delay-seconds
-                        grade-error-output retries)))
+         (if (and (not grade-passed)
+                  (gptel-auto-experiment--should-retry-grader-p
+                   output grade-error-output error-category retries))
+             (progn
+               (gptel-auto-experiment--note-api-pressure
+                target error-category grade-error-output "grader" nil)
+               (let ((retry-delay
+                      (gptel-auto-experiment--retry-delay-seconds
+                       grade-error-output retries)))
                  (message "[auto-exp] Retrying grader (attempt %d/%d) after %ds delay"
                           (1+ retries) gptel-auto-experiment-max-grader-retries retry-delay)
                  (run-with-timer
@@ -8013,15 +8011,15 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
                           (setq final-grade
                                 (plist-put final-grade :grader-only-failure t)))
                         (funcall callback final-grade)))))))
-            (when (and (not grade-passed)
-                       (memq error-category '(:api-rate-limit :api-error)))
-              (gptel-auto-experiment--note-api-pressure
-               target error-category error-source
-               (if grader-only-failure "grader" "executor")
-               (not grader-only-failure)))
-            (let ((final-grade (copy-sequence grade)))
-              (when grade-error-output
-                (setq final-grade
+           (when (and (not grade-passed)
+                      (memq error-category '(:api-rate-limit :api-error)))
+             (gptel-auto-experiment--note-api-pressure
+              target error-category error-source
+              (if grader-only-failure "grader" "executor")
+              (not grader-only-failure)))
+           (let ((final-grade (copy-sequence grade)))
+             (when grade-error-output
+               (setq final-grade
                      (plist-put final-grade :error-source grade-error-output)))
              (when grader-only-failure
                (setq final-grade
@@ -8070,49 +8068,49 @@ RETRY-COUNT tracks current retry attempt."
         (attempt-logs nil))
     (gptel-auto-experiment-run
      target experiment-id max-experiments baseline baseline-code-quality previous-results
-      (lambda (result)
-        (let* ((agent-output (plist-get result :agent-output))
-               (raw-error (or (plist-get result :error)
-                              (and (gptel-auto-experiment--agent-error-p agent-output)
-                                   agent-output)))
-               (grader-only-failure (plist-get result :grader-only-failure))
-               (quota-source raw-error)
-               (retry-delay
-                (gptel-auto-experiment--retry-delay-seconds
-                 (or raw-error agent-output)
-                 retries))
-               (error-type (plist-get result :comparator-reason))
-               (hard-timeout
-                (gptel-auto-experiment--hard-timeout-p raw-error))
-               (quota-exhausted
-                (or gptel-auto-experiment--quota-exhausted
-                    (gptel-auto-experiment--hard-quota-stops-run-p
-                     "executor" quota-source)))
-               (api-rate-limit-category
-                (memq error-type '(:api-rate-limit)))
-               (timeout-category
-                (memq error-type '(:timeout)))
-               (inspection-thrash-failure
-                (gptel-auto-experiment--inspection-thrash-result-p result))
-               (retryable-category
-                (or api-rate-limit-category
-                    (and (not hard-timeout)
-                         timeout-category)))
-               (retryable-failure
-                (and (not grader-only-failure)
-                     (or retryable-category
-                         inspection-thrash-failure
-                         (and raw-error
-                              (not hard-timeout)
-                              (gptel-auto-experiment--is-retryable-error-p raw-error)))))
-                (retry-history
-                 (gptel-auto-experiment--retry-history previous-results result)))
-           (gptel-auto-workflow--restore-live-target-file target workflow-root)
-           (when quota-exhausted
-             (setq gptel-auto-experiment--quota-exhausted t))
-           (if (and (not quota-exhausted)
-                    (< retries gptel-auto-experiment-max-retries)
-                   retryable-failure)
+     (lambda (result)
+       (let* ((agent-output (plist-get result :agent-output))
+              (raw-error (or (plist-get result :error)
+                             (and (gptel-auto-experiment--agent-error-p agent-output)
+                                  agent-output)))
+              (grader-only-failure (plist-get result :grader-only-failure))
+              (quota-source raw-error)
+              (retry-delay
+               (gptel-auto-experiment--retry-delay-seconds
+                (or raw-error agent-output)
+                retries))
+              (error-type (plist-get result :comparator-reason))
+              (hard-timeout
+               (gptel-auto-experiment--hard-timeout-p raw-error))
+              (quota-exhausted
+               (or gptel-auto-experiment--quota-exhausted
+                   (gptel-auto-experiment--hard-quota-stops-run-p
+                    "executor" quota-source)))
+              (api-rate-limit-category
+               (memq error-type '(:api-rate-limit)))
+              (timeout-category
+               (memq error-type '(:timeout)))
+              (inspection-thrash-failure
+               (gptel-auto-experiment--inspection-thrash-result-p result))
+              (retryable-category
+               (or api-rate-limit-category
+                   (and (not hard-timeout)
+                        timeout-category)))
+              (retryable-failure
+               (and (not grader-only-failure)
+                    (or retryable-category
+                        inspection-thrash-failure
+                        (and raw-error
+                             (not hard-timeout)
+                             (gptel-auto-experiment--is-retryable-error-p raw-error)))))
+              (retry-history
+               (gptel-auto-experiment--retry-history previous-results result)))
+         (gptel-auto-workflow--restore-live-target-file target workflow-root)
+         (when quota-exhausted
+           (setq gptel-auto-experiment--quota-exhausted t))
+         (if (and (not quota-exhausted)
+                  (< retries gptel-auto-experiment-max-retries)
+                  retryable-failure)
              (progn
                (setq attempt-logs nil)
                (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
@@ -8123,15 +8121,15 @@ RETRY-COUNT tracks current retry attempt."
                                  (if (gptel-auto-workflow--run-callback-live-p run-id)
                                      (gptel-auto-workflow--call-in-run-context
                                       workflow-root
-                                       (lambda ()
-                                         (gptel-auto-experiment--run-with-retry
-                                          target experiment-id max-experiments baseline baseline-code-quality
+                                      (lambda ()
+                                        (gptel-auto-experiment--run-with-retry
+                                         target experiment-id max-experiments baseline baseline-code-quality
                                          retry-history callback (1+ retries)))
-                                       retry-buffer
-                                       workflow-root)
-                                    (progn
-                                      (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
-                                               experiment-id run-id)
+                                      retry-buffer
+                                      workflow-root)
+                                   (progn
+                                     (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
+                                              experiment-id run-id)
                                      (funcall callback
                                               (list :target target
                                                     :id experiment-id
@@ -8166,8 +8164,8 @@ Also logs agent-output snippet for debugging when category is :unknown."
    ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
     (cons :api-rate-limit "API rate limit exceeded"))
    ((let ((case-fold-search t))
-       (string-match-p "overloaded_error\\|cluster overloaded\\|529\\|负载较高"
-                       agent-output))
+      (string-match-p "overloaded_error\\|cluster overloaded\\|529\\|负载较高"
+                      agent-output))
     (cons :api-rate-limit "Provider overloaded"))
    ((gptel-auto-experiment--provider-auth-error-p agent-output)
     (cons :api-error "Provider authorization failed"))
@@ -8177,30 +8175,30 @@ Also logs agent-output snippet for debugging when category is :unknown."
       (string-match-p "timeout\\|timed out\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
                       agent-output))
     (cons :timeout "Experiment timed out"))
-    ((let ((case-fold-search t))
-       (string-match-p "server_error\\|WebClientRequestException" agent-output))
-     (cons :api-error "Provider server error"))
-    ((gptel-auto-experiment--shared-transient-error-p agent-output)
-     (cons :api-error "Transient provider response error"))
-    ((string-match-p "error.*executor\\|failed to finish" agent-output)
-     (cons :tool-error "Tool execution failed"))
+   ((let ((case-fold-search t))
+      (string-match-p "server_error\\|WebClientRequestException" agent-output))
+    (cons :api-error "Provider server error"))
+   ((gptel-auto-experiment--shared-transient-error-p agent-output)
+    (cons :api-error "Transient provider response error"))
+   ((string-match-p "error.*executor\\|failed to finish" agent-output)
+    (cons :tool-error "Tool execution failed"))
    ((string-match-p "could not finish" agent-output)
     (cons :api-error "API request failed"))
-    ((string-match-p "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output)
-     (cons :tool-error (format "Tool unavailable: %s" (gptel-auto-experiment--error-snippet agent-output))))
-    ((string-match-p "^Error:" agent-output)
-     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
-       (message "[auto-experiment] Executor error: %s" snippet)
-       (cons :tool-error snippet)))
-    ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
-     (cons :grader-failed "Executor succeeded, grader returned score 0"))
-    ((let ((case-fold-search t))
-       (string-match-p "\\bBLOCKED:" agent-output))
-     (cons :tool-error (gptel-auto-experiment--error-snippet agent-output)))
-    ((string-match-p "error\\|failed\\|exception" agent-output)
-     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
-       (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
-       (cons :unknown (format "Error pattern: %s" snippet))))
+   ((string-match-p "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output)
+    (cons :tool-error (format "Tool unavailable: %s" (gptel-auto-experiment--error-snippet agent-output))))
+   ((string-match-p "^Error:" agent-output)
+    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
+      (message "[auto-experiment] Executor error: %s" snippet)
+      (cons :tool-error snippet)))
+   ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
+    (cons :grader-failed "Executor succeeded, grader returned score 0"))
+   ((let ((case-fold-search t))
+      (string-match-p "\\bBLOCKED:" agent-output))
+    (cons :tool-error (gptel-auto-experiment--error-snippet agent-output)))
+   ((string-match-p "error\\|failed\\|exception" agent-output)
+    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
+      (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
+      (cons :unknown (format "Error pattern: %s" snippet))))
    (t
     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
       (message "[auto-experiment] No error pattern found, snippet: %s" (my/gptel--sanitize-for-logging snippet))
@@ -8307,35 +8305,35 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          ;; Capture the experiment timeout lexically because later analyzer
          ;; callbacks run after this outer let frame exits.
          (experiment-timeout gptel-auto-experiment-time-budget)
-          (run-id gptel-auto-workflow--run-id)
-          (workflow-root (gptel-auto-workflow--resolve-run-root))
-          ;; The subagent timeout wrapper owns executor timeout/abort behavior.
-          (my/gptel-agent-task-timeout experiment-timeout)
-          (start-time (float-time))
-          (finished nil)
-          (provisional-commit-hash nil)
-          (executor-prompt nil))
+         (run-id gptel-auto-workflow--run-id)
+         (workflow-root (gptel-auto-workflow--resolve-run-root))
+         ;; The subagent timeout wrapper owns executor timeout/abort behavior.
+         (my/gptel-agent-task-timeout experiment-timeout)
+         (start-time (float-time))
+         (finished nil)
+         (provisional-commit-hash nil)
+         (executor-prompt nil))
     (if (not worktree)
         (funcall callback (list :target target :error "Failed to create worktree"))
       (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
         (gptel-auto-experiment-analyze
          previous-results
          (lambda (analysis)
-            (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
-              (let* ((patterns (when analysis (plist-get analysis :patterns)))
-                     (prompt (gptel-auto-experiment-build-prompt
-                              target experiment-id max-experiments analysis baseline previous-results)))
-                (setq executor-prompt prompt)
-                ;; Routing handled by gptel-auto-workflow--advice-task-override
-                (my/gptel--run-agent-tool-with-timeout
-                 experiment-timeout
-                 (lambda (agent-output)
-                   (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
-                     (if (gptel-auto-experiment--stale-run-p run-id)
-                         (unless finished
-                           (setq finished t)
-                           (message "[auto-experiment] Ignoring stale executor callback for %s experiment %d; run %s is no longer active"
-                                    target experiment-id run-id)
+           (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
+             (let* ((patterns (when analysis (plist-get analysis :patterns)))
+                    (prompt (gptel-auto-experiment-build-prompt
+                             target experiment-id max-experiments analysis baseline previous-results)))
+               (setq executor-prompt prompt)
+               ;; Routing handled by gptel-auto-workflow--advice-task-override
+               (my/gptel--run-agent-tool-with-timeout
+                experiment-timeout
+                (lambda (agent-output)
+                  (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
+                    (if (gptel-auto-experiment--stale-run-p run-id)
+                        (unless finished
+                          (setq finished t)
+                          (message "[auto-experiment] Ignoring stale executor callback for %s experiment %d; run %s is no longer active"
+                                   target experiment-id run-id)
                           (funcall callback
                                    (gptel-auto-experiment--stale-run-result
                                     target experiment-id)))
@@ -8392,459 +8390,459 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                  (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
                                    (if (gptel-auto-experiment--stale-run-p run-id)
                                        (unless finished
-                                        (setq finished t)
-                                        (message "[auto-experiment] Ignoring stale grader callback for %s experiment %d; run %s is no longer active"
-                                                 target experiment-id run-id)
-                                       (funcall callback
-                                                (gptel-auto-experiment--stale-run-result
-                                                 target experiment-id)))
-                                   (let* ((grade-score (plist-get grade :score))
-                                          (grade-total (plist-get grade :total))
-                                          (grade-passed (plist-get grade :passed))
-                                          (grade-details (plist-get grade :details))
-                                          (hypothesis (gptel-auto-experiment--extract-hypothesis effective-agent-output)))
-                                      (message "[auto-exp] Grade result: score=%s/%s passed=%s"
-                                               grade-score grade-total grade-passed)
-                                      (when (and effective-agent-output (> (length effective-agent-output) 0))
-                                        (message "[auto-exp] Agent preview: %s"
-                                                (my/gptel--sanitize-for-logging effective-agent-output 100)))
+                                         (setq finished t)
+                                         (message "[auto-experiment] Ignoring stale grader callback for %s experiment %d; run %s is no longer active"
+                                                  target experiment-id run-id)
+                                         (funcall callback
+                                                  (gptel-auto-experiment--stale-run-result
+                                                   target experiment-id)))
+                                     (let* ((grade-score (plist-get grade :score))
+                                            (grade-total (plist-get grade :total))
+                                            (grade-passed (plist-get grade :passed))
+                                            (grade-details (plist-get grade :details))
+                                            (hypothesis (gptel-auto-experiment--extract-hypothesis effective-agent-output)))
+                                       (message "[auto-exp] Grade result: score=%s/%s passed=%s"
+                                                grade-score grade-total grade-passed)
+                                       (when (and effective-agent-output (> (length effective-agent-output) 0))
+                                         (message "[auto-exp] Agent preview: %s"
+                                                  (my/gptel--sanitize-for-logging effective-agent-output 100)))
                                        ;; Check if grader passed
                                        (if (not grade-passed)
-                                            ;; Grader failures should classify from grader details when
-                                            ;; they carry the real transient/API error instead of the
-                                            ;; executor's normal success output.
-                                            (let* ((normal-grade-rejection
-                                                    (gptel-auto-experiment--normal-grade-details-p
-                                                     grade-details))
-                                                   (grade-error-output
-                                                    (and (not normal-grade-rejection)
-                                                         (or (plist-get grade :error-source)
-                                                             (gptel-auto-experiment--grade-failure-error-output
-                                                              grade-details effective-agent-output))))
-                                                   (error-source (and (not normal-grade-rejection)
-                                                                      (or grade-error-output effective-agent-output)))
-                                                    (error-info (and error-source
-                                                                     (gptel-auto-experiment--categorize-error
-                                                                      error-source)))
-                                                    (error-category (car-safe error-info))
-                                                    (grader-only-failure
-                                                    (and (not normal-grade-rejection)
-                                                         (plist-get grade :grader-only-failure))))
-                                              (setq finished t)
-                                              ;; Log the failure
-                                              (let ((exp-result (list :target target
+                                           ;; Grader failures should classify from grader details when
+                                           ;; they carry the real transient/API error instead of the
+                                           ;; executor's normal success output.
+                                           (let* ((normal-grade-rejection
+                                                   (gptel-auto-experiment--normal-grade-details-p
+                                                    grade-details))
+                                                  (grade-error-output
+                                                   (and (not normal-grade-rejection)
+                                                        (or (plist-get grade :error-source)
+                                                            (gptel-auto-experiment--grade-failure-error-output
+                                                             grade-details effective-agent-output))))
+                                                  (error-source (and (not normal-grade-rejection)
+                                                                     (or grade-error-output effective-agent-output)))
+                                                  (error-info (and error-source
+                                                                   (gptel-auto-experiment--categorize-error
+                                                                    error-source)))
+                                                  (error-category (car-safe error-info))
+                                                  (grader-only-failure
+                                                   (and (not normal-grade-rejection)
+                                                        (plist-get grade :grader-only-failure))))
+                                             (setq finished t)
+                                             ;; Log the failure
+                                             (let ((exp-result (list :target target
                                                                      :id experiment-id
                                                                      :hypothesis hypothesis
                                                                      :score-before baseline
-                                                                    :score-after 0
+                                                                     :score-after 0
                                                                      :kept nil
                                                                      :duration (- (float-time) start-time)
-                                                                      :grader-quality grade-score
-                                                                      :grader-reason grade-details
-                                                                      :comparator-reason
-                                                                      (cond
-                                                                       (normal-grade-rejection
-                                                                        "grader-rejected")
-                                                                       (grader-only-failure
-                                                                        (gptel-auto-experiment--grader-only-error-label
-                                                                         error-category))
-                                                                       (t
-                                                                        (symbol-name (or error-category :unknown))))
-                                                                       :analyzer-patterns (format "%s" patterns)
-                                                                       :agent-output effective-agent-output)))
-                                                (when grade-error-output
-                                                  (setq exp-result
-                                                        (plist-put exp-result :error grade-error-output)))
-                                              (when grader-only-failure
-                                                (setq exp-result
-                                                      (plist-put exp-result :grader-only-failure t)))
-                                              (funcall log-fn
-                                                       run-id exp-result)
-                                              (funcall callback exp-result)))
-                                       ;; Grader passed - create a provisional commit so the
-                                       ;; benchmark/scope logic can diff against HEAD~1.
-                                       (let ((default-directory experiment-worktree))
-                                         (setq provisional-commit-hash
-                                               (gptel-auto-workflow--create-provisional-experiment-commit
-                                                target hypothesis
-                                                (max 300 gptel-auto-workflow-git-timeout))))
-                                       (let* ((bench (gptel-auto-experiment-benchmark t))
-                                              (passed (plist-get bench :passed))
-                                              (validation-error (plist-get bench :validation-error))
-                                              (tests-passed (plist-get bench :tests-passed))
-                                              (score-after (plist-get bench :eight-keys)))
-                                         (if passed
-                                              (let
-	                                             ((code-quality
-	                                               (or (gptel-auto-experiment--code-quality-score) 0.5)))
-                                               (gptel-auto-experiment-decide
-                                                (list :score baseline :code-quality baseline-code-quality)
-                                                (list :score score-after :code-quality code-quality :output
-	                                                  effective-agent-output)
-                                                (lambda (decision)
-	                                              (unless finished
-	                                                (setq finished t)
-	                                                (let*
-	                                                    ((decision
-	                                                      (gptel-auto-experiment--promote-correctness-fix-decision
-	                                                       decision
-	                                                       tests-passed
-	                                                       grade-score
-	                                                       grade-total
-	                                                       grade-details
-	                                                       hypothesis))
-	                                                     (keep (plist-get decision :keep))
-		                                                 (reasoning (plist-get decision :reasoning))
-		                                                 (exp-result
-		                                                  (list :target target :id experiment-id :hypothesis
-		                                                        hypothesis :score-before baseline :score-after
-		                                                        score-after :code-quality code-quality :kept
-		                                                        keep :duration (- (float-time) start-time)
-		                                                        :grader-quality grade-score :grader-reason
-		                                                        (plist-get grade :details) :comparator-reason
-		                                                        reasoning :analyzer-patterns
-		                                                        (format "%s" patterns) :agent-output
-		                                                        effective-agent-output)))
-	                                                  (if keep
-		                                                  (let* ((msg
-			                                                      (format
-			                                                       "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\n\nEVIDENCE: Nucleus valid, tests in staging\nScore: %.2f → %.2f (+%.0f%%)"
-			                                                       target
-			                                                       (gptel-auto-experiment--summarize hypothesis)
-			                                                       hypothesis baseline score-after
-			                                                       (if (> baseline 0)
-			                                                           (* 100
-				                                                          (/ (- score-after baseline) baseline))
-			                                                         0)))
-			                                                     (default-directory experiment-worktree)
-			                                                     (commit-timeout
-			                                                      (max 300 gptel-auto-workflow-git-timeout))
-			                                                     (finalize
-			                                                      (gptel-auto-experiment--make-kept-result-callback
-			                                                       run-id exp-result log-fn callback)))
-		                                                    (gptel-auto-workflow--assert-main-untouched)
-		                                                    (message "[auto-experiment] ✓ Committing improvement for %s" target)
-		                                                    (if (and (gptel-auto-workflow--stage-worktree-changes
-			                                                          (format "Stage experiment changes for %s" target)
-			                                                          60)
-			                                                         (gptel-auto-workflow--promote-provisional-commit
-			                                                          msg
-			                                                          (format "Commit experiment changes for %s" target)
-			                                                          provisional-commit-hash
-			                                                          commit-timeout))
-		                                                        (progn
-			                                                      (setq provisional-commit-hash nil)
-			                                                      (gptel-auto-workflow--track-commit experiment-id
-							                                                                         target
-							                                                                         experiment-worktree)
-			                                                      (setq gptel-auto-experiment--best-score score-after
-			                                                            gptel-auto-experiment--no-improvement-count 0)
-			                                                      (if gptel-auto-experiment-auto-push
-			                                                          (progn
-			                                                            (message "[auto-experiment] Pushing to %s" experiment-branch)
-			                                                            (if (gptel-auto-workflow--push-branch-with-lease
-				                                                             experiment-branch
-				                                                             (format "Push optimize branch %s" experiment-branch)
-				                                                             180)
-				                                                            (if gptel-auto-workflow-use-staging
-				                                                                (gptel-auto-workflow--staging-flow
-					                                                             experiment-branch
-					                                                             finalize)
-				                                                              (funcall finalize))
-				                                                          (let ((failed-result
-					                                                             (plist-put (copy-sequence exp-result)
-						                                                                    :comparator-reason
-						                                                                    "optimize-push-failed")))
-				                                                            (setq failed-result (plist-put failed-result :kept nil))
-				                                                            (funcall log-fn run-id failed-result)
-				                                                            (funcall callback failed-result))))
-			                                                        (funcall finalize)))
-		                                                      (let ((failed-result
-			                                                         (plist-put (copy-sequence exp-result)
-				                                                                :comparator-reason
-				                                                                "experiment-commit-failed")))
-		                                                        (gptel-auto-workflow--drop-provisional-commit
-			                                                     provisional-commit-hash
-			                                                     (format "Drop provisional commit for %s" target))
-		                                                        (setq provisional-commit-hash nil)
-		                                                        (setq failed-result (plist-put failed-result :kept nil))
-		                                                        (funcall log-fn run-id failed-result)
-		                                                        (funcall callback failed-result))))
-	                                                    (let ((default-directory experiment-worktree))
-		                                                  (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
-		                                                  (magit-git-success "checkout" "--" ".")
-		                                                  (gptel-auto-workflow--drop-provisional-commit
-		                                                   provisional-commit-hash
-		                                                   (format "Discard provisional commit for %s" target))
-		                                                  (setq provisional-commit-hash nil)
-		                                                  (cl-incf gptel-auto-experiment--no-improvement-count)
-		                                                  (funcall log-fn
-			                                                       run-id exp-result)
-		                                                  (funcall callback exp-result))))))))
-                                           (if (and (gptel-auto-experiment--teachable-validation-error-p
-                                                     target validation-error)
-                                                    (not (bound-and-true-p gptel-auto-experiment--in-retry)))
-                                                (let ((default-directory experiment-worktree)
-                                                      (gptel-auto-experiment--in-retry t))
-                                                  (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
-                                                  (message "[auto-experiment] ✗ %s"
-                                                           (my/gptel--sanitize-for-logging validation-error 200))
-                                                  (gptel-auto-experiment--prepare-validation-retry-worktree
-                                                   target provisional-commit-hash)
-                                                  (setq provisional-commit-hash nil)
-                                                  (let ((gptel-auto-experiment-active-grace
-                                                         gptel-auto-experiment-validation-retry-active-grace))
-                                                    (my/gptel--run-agent-tool-with-timeout
-                                                     gptel-auto-experiment-validation-retry-time-budget
-                                                    (lambda (retry-output)
-                                                      (let ((gptel-auto-experiment--grading-target target)
-                                                            (gptel-auto-experiment--grading-worktree experiment-worktree))
-                                                        (gptel-auto-experiment--grade-with-retry
-                                                         retry-output
-                                                         (lambda (retry-grade)
-                                                           (if (plist-get retry-grade :passed)
-                                                               (let ((retry-bench (gptel-auto-experiment-benchmark t)))
-                                                                 (if (plist-get retry-bench :passed)
-                                                                     (let* ((retry-score (plist-get retry-bench :eight-keys))
-                                                                            (retry-quality
-                                                                             (or (gptel-auto-experiment--code-quality-score) 0.5))
-                                                                            (retry-hypothesis
-                                                                             (gptel-auto-experiment--extract-hypothesis retry-output)))
-                                                                       (message "[auto-experiment] ✓ Retry succeeded")
-                                                                       (gptel-auto-experiment-decide
-                                                                        (list :score baseline
-                                                                              :code-quality baseline-code-quality)
-                                                                        (list :score retry-score
-                                                                              :code-quality retry-quality
-                                                                              :output retry-output)
-                                                                        (lambda (decision)
-                                                                          (unless finished
-                                                                            (setq finished t)
-		                                                                            (let* ((decision
-		                                                                                    (gptel-auto-experiment--promote-correctness-fix-decision
-		                                                                                     decision
-		                                                                                     (plist-get retry-bench :tests-passed)
-		                                                                                     (plist-get retry-grade :score)
-		                                                                                     (plist-get retry-grade :total)
-		                                                                                     (plist-get retry-grade :details)
-		                                                                                     retry-hypothesis))
-		                                                                                   (keep (plist-get decision :keep))
-		                                                                                   (reasoning (plist-get decision :reasoning))
-		                                                                                   (exp-result
-		                                                                                    (list :target target
-                                                                                          :id experiment-id
-                                                                                          :hypothesis retry-hypothesis
-                                                                                          :score-before baseline
-                                                                                          :score-after retry-score
-                                                                                          :code-quality retry-quality
-                                                                                          :validation-retry t
-                                                                                          :kept keep
-                                                                                          :duration (- (float-time) start-time)
-                                                                                          :grader-quality (plist-get retry-grade :score)
-                                                                                          :grader-reason (plist-get retry-grade :details)
-                                                                                          :comparator-reason reasoning
-                                                                                          :analyzer-patterns (format "%s" patterns)
-                                                                                          :agent-output retry-output
-                                                                                          :retries 1)))
-                                                                              (if keep
-                                                                                  (let* ((msg (format "◈ Retry: fix validation in %s"
-								                                                                      target))
-									                                                     (default-directory experiment-worktree)
-									                                                     (commit-timeout
-									                                                      (max 300 gptel-auto-workflow-git-timeout))
-									                                                     (finalize
-									                                                      (gptel-auto-experiment--make-kept-result-callback
-									                                                       run-id exp-result log-fn callback)))
-								                                                    (gptel-auto-workflow--assert-main-untouched)
-								                                                    (if (and (gptel-auto-workflow--stage-worktree-changes
-									                                                          (format "Stage retry changes for %s" target)
-									                                                          60)
-									                                                         (gptel-auto-workflow--promote-provisional-commit
-									                                                          msg
-									                                                          (format "Commit retry changes for %s" target)
-									                                                          provisional-commit-hash
-									                                                          commit-timeout))
-									                                                    (progn
+                                                                     :grader-quality grade-score
+                                                                     :grader-reason grade-details
+                                                                     :comparator-reason
+                                                                     (cond
+                                                                      (normal-grade-rejection
+                                                                       "grader-rejected")
+                                                                      (grader-only-failure
+                                                                       (gptel-auto-experiment--grader-only-error-label
+                                                                        error-category))
+                                                                      (t
+                                                                       (symbol-name (or error-category :unknown))))
+                                                                     :analyzer-patterns (format "%s" patterns)
+                                                                     :agent-output effective-agent-output)))
+                                               (when grade-error-output
+                                                 (setq exp-result
+                                                       (plist-put exp-result :error grade-error-output)))
+                                               (when grader-only-failure
+                                                 (setq exp-result
+                                                       (plist-put exp-result :grader-only-failure t)))
+                                               (funcall log-fn
+                                                        run-id exp-result)
+                                               (funcall callback exp-result)))
+                                         ;; Grader passed - create a provisional commit so the
+                                         ;; benchmark/scope logic can diff against HEAD~1.
+                                         (let ((default-directory experiment-worktree))
+                                           (setq provisional-commit-hash
+                                                 (gptel-auto-workflow--create-provisional-experiment-commit
+                                                  target hypothesis
+                                                  (max 300 gptel-auto-workflow-git-timeout))))
+                                         (let* ((bench (gptel-auto-experiment-benchmark t))
+                                                (passed (plist-get bench :passed))
+                                                (validation-error (plist-get bench :validation-error))
+                                                (tests-passed (plist-get bench :tests-passed))
+                                                (score-after (plist-get bench :eight-keys)))
+                                           (if passed
+                                               (let
+	                                               ((code-quality
+	                                                 (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                                                 (gptel-auto-experiment-decide
+                                                  (list :score baseline :code-quality baseline-code-quality)
+                                                  (list :score score-after :code-quality code-quality :output
+	                                                    effective-agent-output)
+                                                  (lambda (decision)
+	                                                (unless finished
+	                                                  (setq finished t)
+	                                                  (let*
+	                                                      ((decision
+	                                                        (gptel-auto-experiment--promote-correctness-fix-decision
+	                                                         decision
+	                                                         tests-passed
+	                                                         grade-score
+	                                                         grade-total
+	                                                         grade-details
+	                                                         hypothesis))
+	                                                       (keep (plist-get decision :keep))
+		                                                   (reasoning (plist-get decision :reasoning))
+		                                                   (exp-result
+		                                                    (list :target target :id experiment-id :hypothesis
+		                                                          hypothesis :score-before baseline :score-after
+		                                                          score-after :code-quality code-quality :kept
+		                                                          keep :duration (- (float-time) start-time)
+		                                                          :grader-quality grade-score :grader-reason
+		                                                          (plist-get grade :details) :comparator-reason
+		                                                          reasoning :analyzer-patterns
+		                                                          (format "%s" patterns) :agent-output
+		                                                          effective-agent-output)))
+	                                                    (if keep
+		                                                    (let* ((msg
+			                                                        (format
+			                                                         "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\n\nEVIDENCE: Nucleus valid, tests in staging\nScore: %.2f → %.2f (+%.0f%%)"
+			                                                         target
+			                                                         (gptel-auto-experiment--summarize hypothesis)
+			                                                         hypothesis baseline score-after
+			                                                         (if (> baseline 0)
+			                                                             (* 100
+				                                                            (/ (- score-after baseline) baseline))
+			                                                           0)))
+			                                                       (default-directory experiment-worktree)
+			                                                       (commit-timeout
+			                                                        (max 300 gptel-auto-workflow-git-timeout))
+			                                                       (finalize
+			                                                        (gptel-auto-experiment--make-kept-result-callback
+			                                                         run-id exp-result log-fn callback)))
+		                                                      (gptel-auto-workflow--assert-main-untouched)
+		                                                      (message "[auto-experiment] ✓ Committing improvement for %s" target)
+		                                                      (if (and (gptel-auto-workflow--stage-worktree-changes
+			                                                            (format "Stage experiment changes for %s" target)
+			                                                            60)
+			                                                           (gptel-auto-workflow--promote-provisional-commit
+			                                                            msg
+			                                                            (format "Commit experiment changes for %s" target)
+			                                                            provisional-commit-hash
+			                                                            commit-timeout))
+		                                                          (progn
+			                                                        (setq provisional-commit-hash nil)
+			                                                        (gptel-auto-workflow--track-commit experiment-id
+							                                                                           target
+							                                                                           experiment-worktree)
+			                                                        (setq gptel-auto-experiment--best-score score-after
+			                                                              gptel-auto-experiment--no-improvement-count 0)
+			                                                        (if gptel-auto-experiment-auto-push
+			                                                            (progn
+			                                                              (message "[auto-experiment] Pushing to %s" experiment-branch)
+			                                                              (if (gptel-auto-workflow--push-branch-with-lease
+				                                                               experiment-branch
+				                                                               (format "Push optimize branch %s" experiment-branch)
+				                                                               180)
+				                                                              (if gptel-auto-workflow-use-staging
+				                                                                  (gptel-auto-workflow--staging-flow
+					                                                               experiment-branch
+					                                                               finalize)
+				                                                                (funcall finalize))
+				                                                            (let ((failed-result
+					                                                               (plist-put (copy-sequence exp-result)
+						                                                                      :comparator-reason
+						                                                                      "optimize-push-failed")))
+				                                                              (setq failed-result (plist-put failed-result :kept nil))
+				                                                              (funcall log-fn run-id failed-result)
+				                                                              (funcall callback failed-result))))
+			                                                          (funcall finalize)))
+		                                                        (let ((failed-result
+			                                                           (plist-put (copy-sequence exp-result)
+				                                                                  :comparator-reason
+				                                                                  "experiment-commit-failed")))
+		                                                          (gptel-auto-workflow--drop-provisional-commit
+			                                                       provisional-commit-hash
+			                                                       (format "Drop provisional commit for %s" target))
+		                                                          (setq provisional-commit-hash nil)
+		                                                          (setq failed-result (plist-put failed-result :kept nil))
+		                                                          (funcall log-fn run-id failed-result)
+		                                                          (funcall callback failed-result))))
+	                                                      (let ((default-directory experiment-worktree))
+		                                                    (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
+		                                                    (magit-git-success "checkout" "--" ".")
+		                                                    (gptel-auto-workflow--drop-provisional-commit
+		                                                     provisional-commit-hash
+		                                                     (format "Discard provisional commit for %s" target))
+		                                                    (setq provisional-commit-hash nil)
+		                                                    (cl-incf gptel-auto-experiment--no-improvement-count)
+		                                                    (funcall log-fn
+			                                                         run-id exp-result)
+		                                                    (funcall callback exp-result))))))))
+                                             (if (and (gptel-auto-experiment--teachable-validation-error-p
+                                                       target validation-error)
+                                                      (not (bound-and-true-p gptel-auto-experiment--in-retry)))
+                                                 (let ((default-directory experiment-worktree)
+                                                       (gptel-auto-experiment--in-retry t))
+                                                   (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
+                                                   (message "[auto-experiment] ✗ %s"
+                                                            (my/gptel--sanitize-for-logging validation-error 200))
+                                                   (gptel-auto-experiment--prepare-validation-retry-worktree
+                                                    target provisional-commit-hash)
+                                                   (setq provisional-commit-hash nil)
+                                                   (let ((gptel-auto-experiment-active-grace
+                                                          gptel-auto-experiment-validation-retry-active-grace))
+                                                     (my/gptel--run-agent-tool-with-timeout
+                                                      gptel-auto-experiment-validation-retry-time-budget
+                                                      (lambda (retry-output)
+                                                        (let ((gptel-auto-experiment--grading-target target)
+                                                              (gptel-auto-experiment--grading-worktree experiment-worktree))
+                                                          (gptel-auto-experiment--grade-with-retry
+                                                           retry-output
+                                                           (lambda (retry-grade)
+                                                             (if (plist-get retry-grade :passed)
+                                                                 (let ((retry-bench (gptel-auto-experiment-benchmark t)))
+                                                                   (if (plist-get retry-bench :passed)
+                                                                       (let* ((retry-score (plist-get retry-bench :eight-keys))
+                                                                              (retry-quality
+                                                                               (or (gptel-auto-experiment--code-quality-score) 0.5))
+                                                                              (retry-hypothesis
+                                                                               (gptel-auto-experiment--extract-hypothesis retry-output)))
+                                                                         (message "[auto-experiment] ✓ Retry succeeded")
+                                                                         (gptel-auto-experiment-decide
+                                                                          (list :score baseline
+                                                                                :code-quality baseline-code-quality)
+                                                                          (list :score retry-score
+                                                                                :code-quality retry-quality
+                                                                                :output retry-output)
+                                                                          (lambda (decision)
+                                                                            (unless finished
+                                                                              (setq finished t)
+		                                                                      (let* ((decision
+		                                                                              (gptel-auto-experiment--promote-correctness-fix-decision
+		                                                                               decision
+		                                                                               (plist-get retry-bench :tests-passed)
+		                                                                               (plist-get retry-grade :score)
+		                                                                               (plist-get retry-grade :total)
+		                                                                               (plist-get retry-grade :details)
+		                                                                               retry-hypothesis))
+		                                                                             (keep (plist-get decision :keep))
+		                                                                             (reasoning (plist-get decision :reasoning))
+		                                                                             (exp-result
+		                                                                              (list :target target
+                                                                                            :id experiment-id
+                                                                                            :hypothesis retry-hypothesis
+                                                                                            :score-before baseline
+                                                                                            :score-after retry-score
+                                                                                            :code-quality retry-quality
+                                                                                            :validation-retry t
+                                                                                            :kept keep
+                                                                                            :duration (- (float-time) start-time)
+                                                                                            :grader-quality (plist-get retry-grade :score)
+                                                                                            :grader-reason (plist-get retry-grade :details)
+                                                                                            :comparator-reason reasoning
+                                                                                            :analyzer-patterns (format "%s" patterns)
+                                                                                            :agent-output retry-output
+                                                                                            :retries 1)))
+                                                                                (if keep
+                                                                                    (let* ((msg (format "◈ Retry: fix validation in %s"
+								                                                                        target))
+									                                                       (default-directory experiment-worktree)
+									                                                       (commit-timeout
+									                                                        (max 300 gptel-auto-workflow-git-timeout))
+									                                                       (finalize
+									                                                        (gptel-auto-experiment--make-kept-result-callback
+									                                                         run-id exp-result log-fn callback)))
+								                                                      (gptel-auto-workflow--assert-main-untouched)
+								                                                      (if (and (gptel-auto-workflow--stage-worktree-changes
+									                                                            (format "Stage retry changes for %s" target)
+									                                                            60)
+									                                                           (gptel-auto-workflow--promote-provisional-commit
+									                                                            msg
+									                                                            (format "Commit retry changes for %s" target)
+									                                                            provisional-commit-hash
+									                                                            commit-timeout))
+									                                                      (progn
+									                                                        (setq provisional-commit-hash nil)
+									                                                        (gptel-auto-workflow--track-commit experiment-id
+												                                                                               target
+												                                                                               experiment-worktree)
+                                                                                            (setq gptel-auto-experiment--best-score retry-score
+                                                                                                  gptel-auto-experiment--no-improvement-count 0)
+                                                                                            (if gptel-auto-experiment-auto-push
+                                                                                                (progn
+                                                                                                  (message "[auto-experiment] Pushing to %s" experiment-branch)
+                                                                                                  (if (gptel-auto-workflow--push-branch-with-lease
+                                                                                                       experiment-branch
+                                                                                                       (format "Push optimize branch %s" experiment-branch)
+                                                                                                       180)
+                                                                                                      (if gptel-auto-workflow-use-staging
+                                                                                                          (gptel-auto-workflow--staging-flow
+                                                                                                           experiment-branch
+                                                                                                           finalize)
+                                                                                                        (funcall finalize))
+                                                                                                    (let ((failed-result
+                                                                                                           (plist-put (copy-sequence exp-result)
+                                                                                                                      :comparator-reason
+                                                                                                                      "retry-push-failed")))
+                                                                                                      (setq failed-result (plist-put failed-result :kept nil))
+                                                                                                      (funcall log-fn run-id failed-result)
+                                                                                                      (funcall callback failed-result))))
+                                                                                              (funcall finalize)))
+								                                                        (let ((failed-result
+									                                                           (plist-put (copy-sequence exp-result)
+											                                                              :comparator-reason
+											                                                              "retry-commit-failed")))
+									                                                      (gptel-auto-workflow--drop-provisional-commit
+									                                                       provisional-commit-hash
+									                                                       (format "Drop provisional commit for %s" target))
 									                                                      (setq provisional-commit-hash nil)
-									                                                      (gptel-auto-workflow--track-commit experiment-id
-												                                                                             target
-												                                                                             experiment-worktree)
-                                                                                          (setq gptel-auto-experiment--best-score retry-score
-                                                                                                gptel-auto-experiment--no-improvement-count 0)
-                                                                                          (if gptel-auto-experiment-auto-push
-                                                                                              (progn
-                                                                                                (message "[auto-experiment] Pushing to %s" experiment-branch)
-                                                                                                (if (gptel-auto-workflow--push-branch-with-lease
-                                                                                                     experiment-branch
-                                                                                                     (format "Push optimize branch %s" experiment-branch)
-                                                                                                     180)
-                                                                                                    (if gptel-auto-workflow-use-staging
-                                                                                                        (gptel-auto-workflow--staging-flow
-                                                                                                         experiment-branch
-                                                                                                         finalize)
-                                                                                                      (funcall finalize))
-                                                                                                  (let ((failed-result
-                                                                                                         (plist-put (copy-sequence exp-result)
-                                                                                                                    :comparator-reason
-                                                                                                                    "retry-push-failed")))
-                                                                                                    (setq failed-result (plist-put failed-result :kept nil))
-                                                                                                    (funcall log-fn run-id failed-result)
-                                                                                                    (funcall callback failed-result))))
-                                                                                            (funcall finalize)))
-								                                                      (let ((failed-result
-									                                                         (plist-put (copy-sequence exp-result)
-											                                                            :comparator-reason
-											                                                            "retry-commit-failed")))
-									                                                    (gptel-auto-workflow--drop-provisional-commit
-									                                                     provisional-commit-hash
-									                                                     (format "Drop provisional commit for %s" target))
-									                                                    (setq provisional-commit-hash nil)
-									                                                    (setq failed-result (plist-put failed-result :kept nil))
-									                                                    (funcall log-fn run-id failed-result)
-									                                                    (funcall callback failed-result))))
-							                                                    (let ((default-directory experiment-worktree))
-								                                                  (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
-								                                                  (magit-git-success "checkout" "--" ".")
-								                                                  (gptel-auto-workflow--drop-provisional-commit
-								                                                   provisional-commit-hash
-								                                                   (format "Discard provisional commit for %s" target))
-								                                                  (setq provisional-commit-hash nil)
-								                                                  (cl-incf gptel-auto-experiment--no-improvement-count)
-								                                                  (funcall log-fn
-									                                                       run-id exp-result)
-                                                                                  (funcall callback exp-result))))))))
-                                                                   (setq finished t)
-                                                                   (message "[auto-experiment] ✗ Retry still failed validation")
-                                                                   (let* ((retry-hypothesis
-                                                                           (gptel-auto-experiment--extract-hypothesis retry-output))
-                                                                          (retry-validation-error
-                                                                           (plist-get retry-bench :validation-error))
-                                                                          (retry-tests-passed
-                                                                           (plist-get retry-bench :tests-passed))
-                                                                          (reason
-                                                                           (cond
-                                                                            (retry-validation-error retry-validation-error)
-                                                                            ((not (plist-get retry-bench :nucleus-passed))
-                                                                             "nucleus-validation-failed")
-                                                                            ((not retry-tests-passed)
-                                                                             "tests-failed")
-                                                                            (t "verification-failed")))
-                                                                          (exp-result
-                                                                           (list :target target
-                                                                                 :id experiment-id
-                                                                                 :hypothesis retry-hypothesis
-                                                                                 :score-before baseline
-                                                                                 :score-after 0
-                                                                                 :validation-retry t
-                                                                                 :kept nil
-                                                                                 :duration (- (float-time) start-time)
-                                                                                 :grader-quality (plist-get retry-grade :score)
-                                                                                 :grader-reason (plist-get retry-grade :details)
-                                                                                 :comparator-reason reason
-                                                                                 :analyzer-patterns (format "%s" patterns)
-                                                                                 :agent-output retry-output
-                                                                                 :retries 1
-                                                                                 :validation-error retry-validation-error)))
-                                                                     (funcall log-fn
-                                                                              run-id exp-result)
-                                                                     (gptel-auto-workflow--drop-provisional-commit
-                                                                      provisional-commit-hash
-                                                                      (format "Drop provisional commit for %s" target))
-                                                                     (setq provisional-commit-hash nil)
-                                                                     (funcall callback exp-result))))
-                                                              (setq finished t)
-                                                              (let* ((retry-hypothesis
-                                                                      (gptel-auto-experiment--extract-hypothesis retry-output))
-                                                                     (retry-grade-details
-                                                                      (plist-get retry-grade :details))
-                                                                     (normal-grade-rejection
-                                                                      (gptel-auto-experiment--normal-grade-details-p
-                                                                       retry-grade-details))
-                                                                     (retry-grade-error-output
-                                                                      (and (not normal-grade-rejection)
-                                                                           (or (plist-get retry-grade :error-source)
-                                                                               (gptel-auto-experiment--grade-failure-error-output
-                                                                                retry-grade-details retry-output))))
-                                                                     (grader-only-failure
-                                                                      (and (not normal-grade-rejection)
-                                                                           (or (plist-get retry-grade :grader-only-failure)
-                                                                               (gptel-auto-experiment--grader-only-failure-p
-                                                                                retry-output retry-grade-error-output))))
-                                                                     (retry-error-category
-                                                                      (and retry-grade-error-output
-                                                                           (car (gptel-auto-experiment--categorize-error
-                                                                                 retry-grade-error-output))))
-                                                                     (reason
-                                                                      (if retry-grade-error-output
-                                                                          (if grader-only-failure
-                                                                              (gptel-auto-experiment--grader-only-error-label
-                                                                               retry-error-category)
-                                                                            (symbol-name (or retry-error-category :unknown)))
-                                                                        "retry-grade-rejected"))
-                                                                     (exp-result
-                                                                      (list :target target
-                                                                            :id experiment-id
-                                                                            :hypothesis retry-hypothesis
-                                                                            :score-before baseline
-                                                                            :score-after 0
-                                                                            :validation-retry t
-                                                                            :kept nil
-                                                                            :duration (- (float-time) start-time)
-                                                                            :grader-quality (plist-get retry-grade :score)
-                                                                            :grader-reason retry-grade-details
-                                                                            :comparator-reason reason
-                                                                            :analyzer-patterns (format "%s" patterns)
-                                                                            :agent-output retry-output
-                                                                            :retries 1)))
-                                                                (when retry-grade-error-output
-                                                                  (setq exp-result
-                                                                        (plist-put exp-result :error retry-grade-error-output)))
-                                                                (when grader-only-failure
-                                                                  (setq exp-result
-                                                                        (plist-put exp-result :grader-only-failure t)))
-                                                                (funcall log-fn
-                                                                         run-id exp-result)
-                                                                (gptel-auto-workflow--drop-provisional-commit
-                                                                 provisional-commit-hash
-                                                                 (format "Drop provisional commit for %s" target))
-                                                                (setq provisional-commit-hash nil)
-                                                                (funcall callback exp-result)))))))
-                                                    "executor"
-                                                    (format "Retry: fix validation error in %s" target)
-                                                    (gptel-auto-experiment--make-retry-prompt
-                                                     target validation-error executor-prompt)
-                                                    nil "false" nil)))
-                                             (let ((default-directory experiment-worktree))
-                                               (setq finished t)
-                                               (magit-git-success "checkout" "--" ".")
-                                               (gptel-auto-workflow--drop-provisional-commit
-                                                provisional-commit-hash
-                                                (format "Discard provisional commit for %s" target))
-                                               (setq provisional-commit-hash nil)
-                                               (let* ((reason
-                                                       (cond (validation-error validation-error)
-                                                             ((not (plist-get bench :nucleus-passed))
-                                                              "nucleus-validation-failed")
-                                                             ((not tests-passed) "tests-failed")
-                                                             (t "verification-failed")))
-                                                      (exp-result
-                                                       (list :target target
-                                                             :id experiment-id
-                                                             :hypothesis hypothesis
-                                                             :score-before baseline
-                                                             :score-after 0
-                                                             :kept nil
-                                                             :duration (- (float-time) start-time)
-                                                             :grader-quality grade-score
-                                                             :grader-reason (plist-get grade :details)
-                                                             :comparator-reason reason
-                                                             :analyzer-patterns (format "%s" patterns)
-                                                             :agent-output agent-output)))
-                                                 (message "[auto-experiment] ✗ %s for %s" reason target)
-                                                 (funcall log-fn
-                                                          run-id exp-result)
-                                                 (funcall callback exp-result))))))
-                                       )))))))))))))
+									                                                      (setq failed-result (plist-put failed-result :kept nil))
+									                                                      (funcall log-fn run-id failed-result)
+									                                                      (funcall callback failed-result))))
+							                                                      (let ((default-directory experiment-worktree))
+								                                                    (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
+								                                                    (magit-git-success "checkout" "--" ".")
+								                                                    (gptel-auto-workflow--drop-provisional-commit
+								                                                     provisional-commit-hash
+								                                                     (format "Discard provisional commit for %s" target))
+								                                                    (setq provisional-commit-hash nil)
+								                                                    (cl-incf gptel-auto-experiment--no-improvement-count)
+								                                                    (funcall log-fn
+									                                                         run-id exp-result)
+                                                                                    (funcall callback exp-result))))))))
+                                                                     (setq finished t)
+                                                                     (message "[auto-experiment] ✗ Retry still failed validation")
+                                                                     (let* ((retry-hypothesis
+                                                                             (gptel-auto-experiment--extract-hypothesis retry-output))
+                                                                            (retry-validation-error
+                                                                             (plist-get retry-bench :validation-error))
+                                                                            (retry-tests-passed
+                                                                             (plist-get retry-bench :tests-passed))
+                                                                            (reason
+                                                                             (cond
+                                                                              (retry-validation-error retry-validation-error)
+                                                                              ((not (plist-get retry-bench :nucleus-passed))
+                                                                               "nucleus-validation-failed")
+                                                                              ((not retry-tests-passed)
+                                                                               "tests-failed")
+                                                                              (t "verification-failed")))
+                                                                            (exp-result
+                                                                             (list :target target
+                                                                                   :id experiment-id
+                                                                                   :hypothesis retry-hypothesis
+                                                                                   :score-before baseline
+                                                                                   :score-after 0
+                                                                                   :validation-retry t
+                                                                                   :kept nil
+                                                                                   :duration (- (float-time) start-time)
+                                                                                   :grader-quality (plist-get retry-grade :score)
+                                                                                   :grader-reason (plist-get retry-grade :details)
+                                                                                   :comparator-reason reason
+                                                                                   :analyzer-patterns (format "%s" patterns)
+                                                                                   :agent-output retry-output
+                                                                                   :retries 1
+                                                                                   :validation-error retry-validation-error)))
+                                                                       (funcall log-fn
+                                                                                run-id exp-result)
+                                                                       (gptel-auto-workflow--drop-provisional-commit
+                                                                        provisional-commit-hash
+                                                                        (format "Drop provisional commit for %s" target))
+                                                                       (setq provisional-commit-hash nil)
+                                                                       (funcall callback exp-result))))
+                                                               (setq finished t)
+                                                               (let* ((retry-hypothesis
+                                                                       (gptel-auto-experiment--extract-hypothesis retry-output))
+                                                                      (retry-grade-details
+                                                                       (plist-get retry-grade :details))
+                                                                      (normal-grade-rejection
+                                                                       (gptel-auto-experiment--normal-grade-details-p
+                                                                        retry-grade-details))
+                                                                      (retry-grade-error-output
+                                                                       (and (not normal-grade-rejection)
+                                                                            (or (plist-get retry-grade :error-source)
+                                                                                (gptel-auto-experiment--grade-failure-error-output
+                                                                                 retry-grade-details retry-output))))
+                                                                      (grader-only-failure
+                                                                       (and (not normal-grade-rejection)
+                                                                            (or (plist-get retry-grade :grader-only-failure)
+                                                                                (gptel-auto-experiment--grader-only-failure-p
+                                                                                 retry-output retry-grade-error-output))))
+                                                                      (retry-error-category
+                                                                       (and retry-grade-error-output
+                                                                            (car (gptel-auto-experiment--categorize-error
+                                                                                  retry-grade-error-output))))
+                                                                      (reason
+                                                                       (if retry-grade-error-output
+                                                                           (if grader-only-failure
+                                                                               (gptel-auto-experiment--grader-only-error-label
+                                                                                retry-error-category)
+                                                                             (symbol-name (or retry-error-category :unknown)))
+                                                                         "retry-grade-rejected"))
+                                                                      (exp-result
+                                                                       (list :target target
+                                                                             :id experiment-id
+                                                                             :hypothesis retry-hypothesis
+                                                                             :score-before baseline
+                                                                             :score-after 0
+                                                                             :validation-retry t
+                                                                             :kept nil
+                                                                             :duration (- (float-time) start-time)
+                                                                             :grader-quality (plist-get retry-grade :score)
+                                                                             :grader-reason retry-grade-details
+                                                                             :comparator-reason reason
+                                                                             :analyzer-patterns (format "%s" patterns)
+                                                                             :agent-output retry-output
+                                                                             :retries 1)))
+                                                                 (when retry-grade-error-output
+                                                                   (setq exp-result
+                                                                         (plist-put exp-result :error retry-grade-error-output)))
+                                                                 (when grader-only-failure
+                                                                   (setq exp-result
+                                                                         (plist-put exp-result :grader-only-failure t)))
+                                                                 (funcall log-fn
+                                                                          run-id exp-result)
+                                                                 (gptel-auto-workflow--drop-provisional-commit
+                                                                  provisional-commit-hash
+                                                                  (format "Drop provisional commit for %s" target))
+                                                                 (setq provisional-commit-hash nil)
+                                                                 (funcall callback exp-result)))))))
+                                                      "executor"
+                                                      (format "Retry: fix validation error in %s" target)
+                                                      (gptel-auto-experiment--make-retry-prompt
+                                                       target validation-error executor-prompt)
+                                                      nil "false" nil)))
+                                               (let ((default-directory experiment-worktree))
+                                                 (setq finished t)
+                                                 (magit-git-success "checkout" "--" ".")
+                                                 (gptel-auto-workflow--drop-provisional-commit
+                                                  provisional-commit-hash
+                                                  (format "Discard provisional commit for %s" target))
+                                                 (setq provisional-commit-hash nil)
+                                                 (let* ((reason
+                                                         (cond (validation-error validation-error)
+                                                               ((not (plist-get bench :nucleus-passed))
+                                                                "nucleus-validation-failed")
+                                                               ((not tests-passed) "tests-failed")
+                                                               (t "verification-failed")))
+                                                        (exp-result
+                                                         (list :target target
+                                                               :id experiment-id
+                                                               :hypothesis hypothesis
+                                                               :score-before baseline
+                                                               :score-after 0
+                                                               :kept nil
+                                                               :duration (- (float-time) start-time)
+                                                               :grader-quality grade-score
+                                                               :grader-reason (plist-get grade :details)
+                                                               :comparator-reason reason
+                                                               :analyzer-patterns (format "%s" patterns)
+                                                               :agent-output agent-output)))
+                                                   (message "[auto-experiment] ✗ %s for %s" reason target)
+                                                   (funcall log-fn
+                                                            run-id exp-result)
+                                                   (funcall callback exp-result))))))
+                                         )))))))))))))
                 "executor"
                 (format "Experiment %d: optimize %s" experiment-id target)
                 executor-prompt
@@ -9010,13 +9008,13 @@ Adapts max-experiments based on API error rate."
      loop-buffer
      workflow-root)
     (let* ((original-max gptel-auto-experiment-max-per-target)
-         (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
-         (threshold gptel-auto-experiment-no-improvement-threshold)
-         (run-id gptel-auto-workflow--run-id)
-         (results nil)
-         (best-score (let ((score (gptel-auto-workflow--plist-get baseline :eight-keys nil)))
-                       (if (numberp score) score 0.0)))
-         (no-improvement-count 0))
+           (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
+           (threshold gptel-auto-experiment-no-improvement-threshold)
+           (run-id gptel-auto-workflow--run-id)
+           (results nil)
+           (best-score (let ((score (gptel-auto-workflow--plist-get baseline :eight-keys nil)))
+                         (if (numberp score) score 0.0)))
+           (no-improvement-count 0))
       (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
                target best-score max-exp)
       (cl-labels ((run-next (exp-id)
@@ -9041,34 +9039,34 @@ Adapts max-experiments based on API error rate."
                        target exp-id max-exp
                        best-score
                        baseline-code-quality
-                        results
-                        (lambda (result)
-                          (push result results)
-                          (gptel-auto-workflow--update-progress)
-                          (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
-                                 (kept (gptel-auto-workflow--plist-get result :kept nil))
-                                 (quality-after
-                                  (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
-                                 (hard-timeout
-                                  (gptel-auto-experiment--result-hard-timeout-p result))
-                                 (grader-only-failure
-                                  (plist-get result :grader-only-failure))
-                                 (next-exp-id (1+ exp-id)))
-                            (when grader-only-failure
-                              (message "[auto-experiment] Final grader-only failure for %s in experiment %d; stopping further experiments for this target"
-                                       target exp-id)
-                              (setq max-exp exp-id))
-                            (when kept
-                              (setq best-score score-after
-                                    baseline-code-quality quality-after
+                       results
+                       (lambda (result)
+                         (push result results)
+                         (gptel-auto-workflow--update-progress)
+                         (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
+                                (kept (gptel-auto-workflow--plist-get result :kept nil))
+                                (quality-after
+                                 (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
+                                (hard-timeout
+                                 (gptel-auto-experiment--result-hard-timeout-p result))
+                                (grader-only-failure
+                                 (plist-get result :grader-only-failure))
+                                (next-exp-id (1+ exp-id)))
+                           (when grader-only-failure
+                             (message "[auto-experiment] Final grader-only failure for %s in experiment %d; stopping further experiments for this target"
+                                      target exp-id)
+                             (setq max-exp exp-id))
+                           (when kept
+                             (setq best-score score-after
+                                   baseline-code-quality quality-after
                                    no-improvement-count 0))
-                             (when (and (not kept)
-                                        score-after
-                                        (<= score-after best-score))
-                               (cl-incf no-improvement-count))
-                            (when hard-timeout
-                              (message "[auto-experiment] Hard timeout for %s in experiment %d; skipping retries for this attempt and continuing if budget remains"
-                                       target exp-id))
+                           (when (and (not kept)
+                                      score-after
+                                      (<= score-after best-score))
+                             (cl-incf no-improvement-count))
+                           (when hard-timeout
+                             (message "[auto-experiment] Hard timeout for %s in experiment %d; skipping retries for this attempt and continuing if budget remains"
+                                      target exp-id))
                            (let ((continue
                                   (lambda ()
                                     (if (gptel-auto-workflow--run-callback-live-p run-id)
@@ -9881,11 +9879,11 @@ Interactive command to recover from hung workflow state."
   (gptel-auto-workflow--stop-status-refresh-timer)
   (gptel-auto-workflow--terminate-active-shell-processes)
   (setq gptel-auto-workflow--running nil
-         gptel-auto-workflow--cron-job-running nil
-         gptel-auto-workflow--run-id nil
-         gptel-auto-workflow--run-project-root nil
-         gptel-auto-workflow--current-project nil
-         gptel-auto-workflow--current-target nil)
+        gptel-auto-workflow--cron-job-running nil
+        gptel-auto-workflow--run-id nil
+        gptel-auto-workflow--run-project-root nil
+        gptel-auto-workflow--current-project nil
+        gptel-auto-workflow--current-target nil)
   (setq gptel-auto-workflow--stats
         (plist-put gptel-auto-workflow--stats :phase "idle"))
   (gptel-auto-workflow--persist-status)
@@ -10265,8 +10263,8 @@ into staging or main."
          (worktree-base (expand-file-name worktree-base-dir proj-root))
          (optimize-dir (expand-file-name "optimize" worktree-base))
          (suffix (gptel-auto-workflow--experiment-suffix))
-          (pattern (format "%s\\(?:-r[[:alnum:]]+\\)?-exp"
-                           (regexp-quote suffix)))
+         (pattern (format "%s\\(?:-r[[:alnum:]]+\\)?-exp"
+                          (regexp-quote suffix)))
          (removed 0)
          (removed-branches (make-hash-table :test 'equal)))
     (let ((default-directory proj-root))
@@ -10398,22 +10396,22 @@ into staging or main."
          (finish
           (gptel-auto-workflow--make-idempotent-callback
            (lambda ()
-              (let ((final-phase (if gptel-auto-experiment--quota-exhausted
-                                     "quota-exhausted"
-                                   "complete")))
-                (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-                (gptel-auto-workflow--stop-status-refresh-timer)
-                (setq gptel-auto-workflow--running nil
-                      gptel-auto-workflow--run-project-root nil
-                      gptel-auto-workflow--current-target nil
-                      gptel-auto-workflow--current-project nil)
-                (setq gptel-auto-workflow--stats
-                      (plist-put gptel-auto-workflow--stats :phase final-phase))
-                (message "[auto-workflow] Complete: %d experiments, %d targets improved"
-                         (length all-results) kept-count)
-                (gptel-auto-workflow--persist-status)
-                (when completion-callback
-                  (funcall completion-callback all-results)))))))
+             (let ((final-phase (if gptel-auto-experiment--quota-exhausted
+                                    "quota-exhausted"
+                                  "complete")))
+               (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+               (gptel-auto-workflow--stop-status-refresh-timer)
+               (setq gptel-auto-workflow--running nil
+                     gptel-auto-workflow--run-project-root nil
+                     gptel-auto-workflow--current-target nil
+                     gptel-auto-workflow--current-project nil)
+               (setq gptel-auto-workflow--stats
+                     (plist-put gptel-auto-workflow--stats :phase final-phase))
+               (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+                        (length all-results) kept-count)
+               (gptel-auto-workflow--persist-status)
+               (when completion-callback
+                 (funcall completion-callback all-results)))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)
@@ -11204,10 +11202,10 @@ Shows preview and asks for human approval before saving."
              (line-count (with-temp-buffer (insert extracted) (count-lines 1 (point-max)))))
         (if (< line-count 50)
             (message "[mementum] Skip '%s': only %d lines (need ≥50)" topic line-count)
-           (if (bound-and-true-p gptel-auto-workflow--headless)
-               (progn
-                 (message "[mementum] Auto-saving '%s' in headless mode (%d lines)" topic line-count)
-                 (gptel-mementum--save-knowledge-page topic files extracted))
+          (if (bound-and-true-p gptel-auto-workflow--headless)
+              (progn
+                (message "[mementum] Auto-saving '%s' in headless mode (%d lines)" topic line-count)
+                (gptel-mementum--save-knowledge-page topic files extracted))
             (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
               (with-current-buffer preview-buffer
                 (erase-buffer)

@@ -215,7 +215,7 @@ AND the same arguments count; different tools or different args do not."
   :type 'integer
   :group 'gptel)
 
-(defcustom my/gptel-inspection-thrash-threshold 25
+(defcustom my/gptel-inspection-thrash-threshold 40
   "Number of same-file read-only inspections allowed before aborting a turn.
 This catches agents that keep exploring one file with `Code_Inspect', `Read',
 or `Grep' but never switch to a write-capable tool."
@@ -229,7 +229,7 @@ streak should be treated as a stuck turn."
   :type 'integer
   :group 'gptel)
 
-(defcustom my/gptel-inspection-thrash-max-extra 25
+(defcustom my/gptel-inspection-thrash-max-extra 40
   "Maximum extra same-file inspection-thrash steps granted to large files."
   :type 'integer
   :group 'gptel)

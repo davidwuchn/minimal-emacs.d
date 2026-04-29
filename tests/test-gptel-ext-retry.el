@@ -30,7 +30,9 @@
     (glm-5              . 350000)
     (glm-4\.7           . 350000)
     (deepseek-v4-flash  . 3000000)
-    (deepseek-v4-pro    . 3000000)))
+    (deepseek-v4-pro    . 3000000)
+    (deepseek-chat      . 3000000)
+    (deepseek-reasoner  . 3000000)))
 
 ;;; Test helpers
 

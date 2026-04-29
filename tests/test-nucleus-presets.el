@@ -36,13 +36,13 @@
                 ((string-match-p "code_agent.md" file)
                  (list 'agent
                        :name "nucleus-gptel-agent"
-                       :model "minimax-m2.7-highspeed"
+                       :model "minimax-m2.5"
                        :system "Test system prompt"))
                 (t nil))))
             ((symbol-function 'file-readable-p)
               (lambda (file) (string-match-p "code_agent.md" file))))
     (let ((model (nucleus--read-agent-model "/path/to/code_agent.md")))
-      (should (eq model 'minimax-m2.7-highspeed)))))
+      (should (eq model 'minimax-m2.5)))))
 
 (ert-deftest test-nucleus-read-agent-model-plan ()
   "Test reading plan agent model from YAML."
@@ -52,13 +52,13 @@
                 ((string-match-p "plan_agent.md" file)
                  (list 'agent
                        :name "nucleus-gptel-plan"
-                       :model "minimax-m2.7-highspeed"
+                       :model "minimax-m2.5"
                        :system "Test plan prompt"))
                 (t nil))))
             ((symbol-function 'file-readable-p)
               (lambda (file) (string-match-p "plan_agent.md" file))))
     (let ((model (nucleus--read-agent-model "/path/to/plan_agent.md")))
-      (should (eq model 'minimax-m2.7-highspeed)))))
+      (should (eq model 'minimax-m2.5)))))
 
 (ert-deftest test-nucleus-read-agent-model-missing-file ()
   "Test that missing file returns nil."
@@ -78,7 +78,7 @@
                (lambda (&rest _) nil))
               ((symbol-function 'gptel-agent-read-file)
                (lambda (&rest _)
-                 (list 'agent :model "minimax-m2.7-highspeed" :system "Test system")))
+                 (list 'agent :model "minimax-m2.5" :system "Test system")))
               ((symbol-function 'file-readable-p)
                (lambda (_file) t))
               ((symbol-function 'nucleus--refresh-open-gptel-buffers)
