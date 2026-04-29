@@ -511,9 +511,9 @@ Returns 0 if STATE is not a valid task structure."
     0))
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
-  "Return non-nil when STATE should continue after RESP."
-  (and (gptel-agent-loop--task-p state)
-       gptel-agent-loop-force-completion
+  "Return non-nil when STATE should continue after RESP.
+Assumes caller has validated that STATE is a valid task structure."
+  (and gptel-agent-loop-force-completion
        (< (gptel-agent-loop--continuation-count state)
           gptel-agent-loop-max-continuations)
        (not (gptel-agent-loop--task-max-steps-reached state))
