@@ -152,25 +152,30 @@
 
 (defn get-installed-routes
   "Read currently installed China bypass routes from the routing table.
-   Returns a map of {cidr gateway} for routes that look like China bypass entries."
+   Returns a map of {cidr gateway} for routes to physical interfaces.
+   Excludes Tailscale IPs (100.x) and loopback."
   []
   (case platform
     :macos
-    ;; Parse netstat output: "CIDR   GATEWAY   FLAGS   ..."
+    ;; Parse netstat output. Fields: CIDR, GATEWAY, FLAGS, IFACE.
+    ;; Exclude: link# gateways, 100.x gateways (Tailscale), loopback.
+    ;; macOS shortens CIDRs (128.108 means 128.108.0.0/16) - accept with or without /.
     (let [result (shell {:out :string} "sh" "-c"
-                        "netstat -rn | awk '$1 ~ /^[1-9]/ && $3 !~ /10[0-9]\\\\./ {print $1, $2}'")]
+                        "netstat -rn | awk '$1 ~ /^[1-9]/ && $2 !~ /^link#/ && $2 !~ /^100\\./ && $2 !~ /^127/ {print $1, $2}'")]
       (when (zero? (:exit result))
         (into {}
               (keep (fn [line]
-                      (when-let [[cidr gateway] (seq (str/split line #" "))]
-                        (when (and cidr gateway
-                                   (str/includes? cidr "/")
-                                   (not (str/blank? gateway)))
-                          [(str/trim cidr) (str/trim gateway)]))))
+                      (let [parts (str/split (str/trim line) #" +")]
+                        (when (>= (count parts) 2)
+                          (let [cidr (first parts)
+                                gateway (second parts)]
+                            (when (and (not (str/blank? cidr))
+                                       (not (str/blank? gateway)))
+                              [cidr gateway]))))))
               (str/split-lines (:out result)))))
     :linux
     (let [result (shell {:out :string} "sh" "-c"
-                        "ip route show | awk '/^[1-9]/ && !/via 100\\\\./ {print $1, $3}'")]
+                        "ip route show | awk '/^[1-9]/ && !/via 100\\./ && !/dev lo/ {print $1, $3}'")]
       (when (zero? (:exit result))
         (into {}
               (keep (fn [line]
