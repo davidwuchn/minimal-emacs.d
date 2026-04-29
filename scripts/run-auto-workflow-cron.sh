@@ -281,26 +281,55 @@ stale_active_snapshot_recoverable() {
         snapshot_file_stale_for_recovery "$MESSAGES_FILE"
 }
 
-worker_daemon_pid() {
+worker_daemon_pids() {
     ps -eo pid=,args= | awk -v marker="--bg-daemon=$SERVER_NAME" '
-        index($0, marker) { print $1; exit }
+        index($0, marker) { print $1 }
     '
 }
 
+worker_daemon_pid() {
+    worker_daemon_pids | head -1
+}
+
 discard_stale_worker_daemon() {
+    local pids
     local pid
-    pid="$(worker_daemon_pid || true)"
-    if [ -n "$pid" ]; then
-        kill "$pid" 2>/dev/null || true
-        for _ in $(seq 1 20); do
-            if ! kill -0 "$pid" 2>/dev/null; then
+    pids="$(worker_daemon_pids || true)"
+    if [ -n "$pids" ]; then
+        for pid in $pids; do
+            kill "$pid" 2>/dev/null || true
+        done
+        for _ in $(seq 1 30); do
+            local any_alive=0
+            for pid in $pids; do
+                if kill -0 "$pid" 2>/dev/null; then
+                    any_alive=1
+                    break
+                fi
+            done
+            if [ "$any_alive" -eq 0 ]; then
                 break
             fi
-            sleep 0.1
+            sleep 0.2
         done
-        if kill -0 "$pid" 2>/dev/null; then
-            kill -9 "$pid" 2>/dev/null || true
+        for pid in $pids; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
+    # Clean up socket files to prevent "already running" errors
+    local uid
+    uid="$(id -u)"
+    for base in "${TMPDIR:-/tmp}" "/tmp"; do
+        local socket_dir="$base/emacs$uid"
+        if [ -S "$socket_dir/$SERVER_NAME" ]; then
+            rm -f "$socket_dir/$SERVER_NAME"
         fi
+    done
+    local runtime_dir="${XDG_RUNTIME_DIR:-}"
+    if [ -n "$runtime_dir" ] && [ -S "$runtime_dir/emacs/$SERVER_NAME" ]; then
+        rm -f "$runtime_dir/emacs/$SERVER_NAME"
     fi
     STALE_DAEMON_RECOVERED=1
     rewrite_status_idle
@@ -754,8 +783,16 @@ wrap_emacs_eval() {
         env_elisp="$env_elisp (setenv \"SSH_AUTH_SOCK\" \"$(lisp_escape "$ssh_auth_sock")\")"
     fi
 
-    if [ -z "$git_ssh_command" ] && [ "$(uname -s)" = "Darwin" ] && [ -n "$ssh_auth_sock" ]; then
-        git_ssh_command='ssh -o BatchMode=yes -o IdentitiesOnly=yes -o UseKeychain=yes -o AddKeysToAgent=yes'
+    if [ -z "$git_ssh_command" ] && [ -n "$ssh_auth_sock" ]; then
+        # Apple's built-in ssh supports UseKeychain/AddKeysToAgent extensions.
+        # Homebrew OpenSSH (OpenSSL backend) does not. Detect and adapt.
+        if [ "${SSH_FALLBACK:-0}" -eq 1 ] && [ -x /usr/bin/ssh ]; then
+            git_ssh_command='/usr/bin/ssh -o BatchMode=yes -o IdentitiesOnly=yes -o UseKeychain=yes -o AddKeysToAgent=yes'
+        elif ssh -o UseKeychain=yes -V 2>/dev/null; then
+            git_ssh_command='ssh -o BatchMode=yes -o IdentitiesOnly=yes -o UseKeychain=yes -o AddKeysToAgent=yes'
+        else
+            git_ssh_command='ssh -o BatchMode=yes -o IdentitiesOnly=yes'
+        fi
     fi
 
     if [ -n "$git_ssh_command" ]; then
@@ -764,6 +801,48 @@ wrap_emacs_eval() {
 
     printf '(with-current-buffer (get-buffer-create "*copilot-auto-workflow-eval*")%s %s)' \
            "$env_elisp" "$body"
+}
+
+ensure_ssh_keys_loaded() {
+    # Apple's built-in ssh auto-loads keys from Keychain via UseKeychain.
+    # Homebrew OpenSSH needs keys explicitly added to the agent.
+    if ssh -o UseKeychain=yes -V 2>/dev/null; then
+        return 0  # Apple ssh handles this automatically
+    fi
+
+    [ -n "${SSH_AUTH_SOCK:-}" ] || return 0
+
+    # Check if agent already has keys loaded
+    if ssh-add -l >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Try to add common key paths without prompting (BatchMode prevents interaction)
+    local key_added=0
+    for key in \
+        "$HOME/.ssh/id_ed25519" \
+        "$HOME/.ssh/id_ecdsa" \
+        "$HOME/.ssh/id_rsa" \
+        "$HOME/.ssh/github_ed25519"; do
+        if [ -f "$key" ] && SSH_ASKPASS=false ssh-add "$key" </dev/null 2>/dev/null; then
+            key_added=1
+            break
+        fi
+    done
+
+    if [ "$key_added" -eq 0 ]; then
+        # Homebrew OpenSSH can't use macOS Keychain. Fall back to Apple's
+        # built-in ssh for git operations if available.
+        if [ -x /usr/bin/ssh ]; then
+            echo "WARNING: No keys in ssh-agent. Falling back to Apple's built-in ssh for git." >&2
+            SSH_FALLBACK=1
+        else
+            echo "WARNING: No SSH keys loaded in agent for Homebrew OpenSSH." >&2
+            echo "  Run: ssh-add ~/.ssh/id_ed25519" >&2
+            echo "  Or use Apple's built-in ssh: export PATH=/usr/bin:\$PATH" >&2
+        fi
+    fi
+    return 0
 }
 
 workflow_action_elisp() {
@@ -900,13 +979,22 @@ ensure_worker_daemon() {
     
     # Kill any stale daemon process before starting a new one to avoid
     # socket conflicts from leftover processes.
-    local stale_pid
-    stale_pid="$(worker_daemon_pid || true)"
-    if [ -n "$stale_pid" ]; then
-        echo "Killing stale daemon: $SERVER_NAME (pid: $stale_pid)" >&2
-        kill -9 "$stale_pid" 2>/dev/null || true
-        sleep 0.5
+    local stale_pids
+    stale_pids="$(worker_daemon_pids || true)"
+    if [ -n "$stale_pids" ]; then
+        local pid_count
+        pid_count="$(echo "$stale_pids" | wc -l | tr -d ' ')"
+        if [ "$pid_count" -gt 1 ]; then
+            echo "WARNING: Found $pid_count $SERVER_NAME daemons running. Killing all..." >&2
+        else
+            echo "Killing stale daemon: $SERVER_NAME (pid: $stale_pids)" >&2
+        fi
+        discard_stale_worker_daemon
+        sleep 1
     fi
+    
+    # Ensure SSH keys are loaded in agent (needed by Homebrew OpenSSH)
+    ensure_ssh_keys_loaded
     
     # Keep the dedicated workflow daemon truly headless. A GUI-attached Emacs
     # daemon can die when its X/Wayland connection disappears, which is fatal
