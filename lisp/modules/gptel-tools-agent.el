@@ -5780,7 +5780,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                             (gptel-auto-workflow--log-staging-step-failure
                              'staging-push-failed optimize-branch push-output)
                             (gptel-auto-workflow--reset-staging-after-failure staging-base)
-                            (funcall finish nil))))))))))))))))
+                            (funcall finish nil))))))))))))))))))
 
 
 ;;; Multi-Project Support
