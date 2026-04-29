@@ -625,7 +625,8 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 
 (defun gptel-agent-loop--handle-empty-response (state resp)
   "Handle empty string RESP for STATE.
-Called only from `handle-string-response' when RESP is confirmed string and STATE is task-p.
+Called only from `handle-string-response' when RESP is
+confirmed string and STATE is task-p.
 Returns non-nil if result was delivered."
   (when (string-blank-p resp)
     (if (= (gptel-agent-loop--task-step-count state) 0)
