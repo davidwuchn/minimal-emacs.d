@@ -16,7 +16,6 @@
 (require 'gptel-agent-loop)
 (require 'gptel-benchmark-llm)
 (require 'gptel-benchmark-subagent)
-(require 'gptel-benchmark-instincts)
 (require 'gptel-ext-retry)
 (require 'gptel-ext-fsm)
 (require 'gptel-ext-fsm-utils)
@@ -1086,7 +1085,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
               ((symbol-function 'gptel-auto-workflow--activate-provider-failover)
                (lambda (agent-type preset reason)
                  (setq failover-call (list agent-type preset reason))
-                 '("moonshot" . "kimi-k2.6")))
+                 '("moonshot" . "kimi-k2.6-code-preview")))
               ((symbol-function 'message)
                (lambda (&rest _args) nil)))
       (with-temp-buffer
@@ -3838,7 +3837,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (cl-letf (((symbol-function 'gptel--get-api-key)
                (lambda () "token")))
       (let ((header (gptel-backend-header gptel--moonshot)))
-        (should (equal (funcall header '(:model kimi-k2.6))
+        (should (equal (funcall header '(:model kimi-k2.6-code-preview))
                        '(("Authorization" . "Bearer token")
                          ("User-Agent" . "KimiCLI/1.3"))))))))
 
@@ -4182,7 +4181,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             :models '(qwen3.5-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
-         (preset '(:backend "moonshot" :model "kimi-k2.6"))
+         (preset '(:backend "moonshot" :model "kimi-k2.6-code-preview"))
          (access-terminated-error
           "Error: Task executor could not finish task \"x\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")")
          (gptel-auto-workflow--headless t)
@@ -4192,11 +4191,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("moonshot" . "kimi-k2.6")
+            ("moonshot" . "kimi-k2.6-code-preview")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("moonshot" . "kimi-k2.6")
+            ("moonshot" . "kimi-k2.6-code-preview")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
@@ -4234,7 +4233,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             :models '(qwen3.5-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
-         (preset '(:backend "moonshot" :model "kimi-k2.6"))
+         (preset '(:backend "moonshot" :model "kimi-k2.6-code-preview"))
          (usage-limit-error
           "Error: Task grader could not finish task \"Grade output\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")")
          (gptel-auto-workflow--headless t)
@@ -4244,11 +4243,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("moonshot" . "kimi-k2.6")
+            ("moonshot" . "kimi-k2.6-code-preview")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("moonshot" . "kimi-k2.6")
+            ("moonshot" . "kimi-k2.6-code-preview")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow--rate-limited-backends '("MiniMax"))
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
@@ -4341,7 +4340,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (gptel-auto-workflow-persistent-headless t)
          (gptel-auto-workflow--current-project "/tmp/project")
          (gptel-auto-workflow--runtime-subagent-provider-overrides
-          '(("executor" . ("DeepSeek" . "deepseek-v4-flash")))))
+          '(("executor" . ("DeepSeek" . "deepseek-chat")))))
     (unwind-protect
         (progn
           (set 'gptel--dashscope dashscope-backend)
@@ -4417,7 +4416,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   (let* ((legacy-headless
           '("analyzer" "grader" "reviewer"))
          (legacy-rate-limit
-          '(("DeepSeek" . "deepseek-v4-flash")
+          '(("DeepSeek" . "deepseek-chat")
             ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
             ("DashScope" . "qwen3.6-plus")
             ("Gemini" . "gemini-3.1-pro-preview")))
@@ -4474,7 +4473,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (old-rate-limit-customized (get 'gptel-auto-workflow-executor-rate-limit-fallbacks
                                          'customized-value))
          (custom-headless '("executor"))
-         (custom-rate-limit '(("DeepSeek" . "deepseek-v4-flash"))))
+         (custom-rate-limit '(("DeepSeek" . "deepseek-chat"))))
     (unwind-protect
         (progn
           (setq gptel-auto-workflow-headless-fallback-agents custom-headless
@@ -4482,7 +4481,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (put 'gptel-auto-workflow-headless-fallback-agents 'customized-value '(("executor")))
           (put 'gptel-auto-workflow-executor-rate-limit-fallbacks
                'customized-value
-               '((("DeepSeek" . "deepseek-v4-flash"))))
+               '((("DeepSeek" . "deepseek-chat"))))
           (should-not (gptel-auto-workflow--migrate-legacy-provider-defaults))
           (should (equal gptel-auto-workflow-headless-fallback-agents custom-headless))
           (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks custom-rate-limit)))
@@ -4716,7 +4715,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
               ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
                (lambda (&rest _args) t))
               ((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
-               (lambda (&rest _args) '("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
+               (lambda (&rest _args) '("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")))
               ((symbol-function 'run-with-timer)
                (lambda (_secs _repeat fn &rest args)
                  (cl-incf scheduled-retries)
@@ -5585,7 +5584,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
               ((symbol-function 'gptel-auto-workflow--activate-provider-failover)
                (lambda (agent-type preset reason)
                  (setq failover-call (list agent-type preset reason))
-                 '("moonshot" . "kimi-k2.6")))
+                 '("moonshot" . "kimi-k2.6-code-preview")))
               ((symbol-function 'message)
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment-analyze
@@ -18192,7 +18191,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                 messages)))))
 
 (ert-deftest regression/mementum/headless-synthesis-requires-human-approval ()
-  "Headless synthesis should auto-save knowledge pages without prompting."
+  "Headless synthesis should not auto-approve or save knowledge pages."
   (let ((gptel-auto-workflow--headless t)
         (saved nil)
         (prompted nil)
@@ -18216,12 +18215,12 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda (fmt &rest args)
                  (push (apply #'format fmt args) messages))))
       (gptel-mementum--handle-synthesis-result "workflow" nil content)
-      (should saved)
+      (should-not saved)
       (should-not prompted)
       (should-not displayed)
       (should (seq-some
                (lambda (msg)
-                 (string-match-p "Auto-saving.*in headless mode" msg))
+                 (string-match-p "human approval required before saving" msg))
                messages)))))
 
 (ert-deftest regression/mementum/save-knowledge-page-does-not-auto-commit ()
@@ -18255,8 +18254,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                    messages)))
       (delete-directory project-root t))))
 
-(ert-deftest regression/instincts/weekly-job-headless-commits-batch ()
-  "Headless instincts weekly jobs should commit batch updates."
+(ert-deftest regression/instincts/weekly-job-headless-skips-batch-commit ()
+  "Headless instincts weekly jobs should not mutate git directly."
   (let ((gptel-auto-workflow--headless t)
         (messages nil)
         (gptel-benchmark-instincts--accumulator (make-hash-table :test 'equal))
@@ -18273,11 +18272,11 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                (lambda (fmt &rest args)
                  (push (apply #'format fmt args) messages))))
-      (should (= (gptel-benchmark-instincts-weekly-job) 1))
-      (should batch-called)
+      (should (= (gptel-benchmark-instincts-weekly-job) 0))
+      (should-not batch-called)
       (should (seq-some
                (lambda (msg)
-                 (string-match-p "Weekly evolution cycle complete" msg))
+                 (string-match-p "Pending batch updates require manual review" msg))
                messages)))))
 
 (ert-deftest regression/mementum/sync-synthesis-timeout-aborts-request-buffer ()

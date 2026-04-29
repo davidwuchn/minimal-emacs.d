@@ -1,7 +1,7 @@
 ---
 name: nucleus-gptel-agent
 backend: MiniMax
-model: minimax-m2.7-highspeed
+model: minimax-m2.5
 max-tokens: 16384
 temperature: 0.3
 description: Nucleus execution agent (MiniMax)
