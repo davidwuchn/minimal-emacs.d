@@ -42,7 +42,13 @@
   "Check if a string is a valid CIDR notation (e.g. 1.2.3.0/24)"
   [s]
   (when (and (string? s) (not (str/blank? s)))
-    (re-matches #"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,2}" (str/trim s))))
+    (let [match (re-matches #"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})" (str/trim s))]
+      (when match
+        (let [octets (mapv #(Integer/parseInt %) (rest match))
+              prefix (Integer/parseInt (nth match 5))]
+          (when (and (every? #(<= % 255) octets)
+                     (<= prefix 32))
+            s))))))
 
 (defn ensure-cache-dir
   "Ensure cache directory exists"
@@ -51,10 +57,11 @@
     (.mkdirs (.getParentFile cache-dir))))
 
 (defn cache-valid?
-  "Check if cache file exists and is not too old"
+  "Check if cache file exists, has content, and is not too old"
   []
   (let [f (io/file cache-file)]
     (and (.exists f)
+         (> (.length f) 0)
          (< (/ (- (System/currentTimeMillis) (.lastModified f))
                (* 1000 60 60))
             cache-max-age-hours))))
@@ -130,16 +137,52 @@
             aggregated))))))
 
 (defn get-default-gateway
-  "Get the default gateway for direct China traffic (physical interface)"
+  "Get the default gateway for direct China traffic (physical interface).
+   Filters out virtual interfaces (utun, bridge, vmnet) and link# entries."
   []
   (case platform
     :macos
-    (let [result (shell {:out :string} "sh" "-c" "netstat -rn | grep '^default' | grep -v 'link#' | grep -v 'utun' | head -1 | awk '{print $2}'")]
+    (let [result (shell {:out :string} "sh" "-c"
+                        "netstat -rn | awk '/^default/ && !/link#/ && !/utun/ && !/bridge/ && !/vmnet/ {print $2; exit}'")]
       (str/trim (:out result)))
     :linux
     (let [result (shell {:out :string} "sh" "-c" "ip route show default | awk '{print $3}'")]
       (str/trim (:out result)))
     (throw (ex-info (str "Unsupported platform: " platform) {}))))
+
+(defn get-installed-routes
+  "Read currently installed China bypass routes from the routing table.
+   Returns a map of {cidr gateway} for routes to physical interfaces.
+   Excludes Tailscale IPs (100.x) and loopback."
+  []
+  (case platform
+    :macos
+    ;; Parse netstat output. Fields: CIDR, GATEWAY, FLAGS, IFACE.
+    ;; Exclude: link# gateways, 100.x gateways (Tailscale), loopback,
+    ;; MAC address gateways (ARP entries), IPv6 routes.
+    (let [result (shell {:out :string} "sh" "-c"
+                        "netstat -rn | awk '$1 ~ /^[1-9]/ && $2 !~ /^link#/ && $2 !~ /^100\\./ && $2 !~ /^127/ && $2 ~ /\\./ && $1 !~ /:/ {print $1, $2}'")]
+      (when (zero? (:exit result))
+        (into {}
+              (keep (fn [line]
+                      (let [parts (str/split (str/trim line) #" +")]
+                        (when (>= (count parts) 2)
+                          (let [cidr (first parts)
+                                gateway (second parts)]
+                            (when (and (not (str/blank? cidr))
+                                       (not (str/blank? gateway)))
+                              [cidr gateway]))))))
+              (str/split-lines (:out result)))))
+    :linux
+    (let [result (shell {:out :string} "sh" "-c"
+                        "ip route show | awk '/^[1-9]/ && !/via 100\\./ && !/dev lo/ {print $1, $3}'")]
+      (when (zero? (:exit result))
+        (into {}
+              (keep (fn [line]
+                      (when-let [[cidr _ via gateway] (seq (str/split line #" "))]
+                        (when (and cidr gateway)
+                          [(str/trim cidr) (str/trim gateway)]))))
+              (str/split-lines (:out result)))))))
 
 (defn get-tailscale-interface
   "Get the Tailscale interface name"
@@ -164,7 +207,6 @@
   (let [[network prefix] (str/split cidr #"/")
         prefix-num (Integer/parseInt prefix)
         octets (str/split network #"\.")
-        ;; Keep octets based on prefix length
         keep-octets (cond
                       (<= prefix-num 8) 1
                       (<= prefix-num 16) 2
@@ -193,42 +235,31 @@
         pwd)))
 
 (defn add-routes-batch
-  "Add multiple routes in a single batch - larger batches for speed"
+  "Add multiple routes - execute each individually to handle spaces in commands"
   [cidrs gateway]
   (case platform
     :macos
-    (let [route-commands (str/join "\n"
-                                   (map #(str "route add -net " % " " gateway) cidrs))
-          result (shell {:out :string :err :string :continue true :in route-commands}
-                        "sudo" "-n" "sh" "-c" "while read cmd; do eval $cmd 2>/dev/null || true; done")]
-      (when (not (zero? (:exit result)))
-        (println "Warning: Some routes may have failed to add")))
+    (doseq [cidr cidrs]
+      (shell {:out :string :err :string :continue true}
+             "sudo" "-n" "route" "-n" "add" "-net" cidr gateway))
     :linux
-    (let [route-commands (str/join "\n"
-                                   (map #(str "ip route add " % " via " gateway) cidrs))
-          result (shell {:out :string :err :string :continue true :in route-commands}
-                        "sudo" "-n" "sh" "-c" "while read cmd; do $cmd 2>/dev/null || true; done")]
-      (when (not (zero? (:exit result)))
-        (println "Warning: Some routes may have failed to add")))))
+    (doseq [cidr cidrs]
+      (shell {:out :string :err :string :continue true}
+             "sudo" "-n" "ip" "route" "add" cidr "via" gateway))))
 
 (defn delete-routes-batch
-  "Delete multiple routes in a single batch - larger batches for speed"
-  [cidrs]
+  "Delete multiple routes. Uses macOS short CIDR format for correct matching."
+  [routes]
   (case platform
     :macos
-    (let [route-commands (str/join "\n"
-                                   (map #(str "route delete -net " %) cidrs))
-          result (shell {:out :string :err :string :continue true :in route-commands}
-                        "sudo" "-n" "sh" "-c" "while read cmd; do eval $cmd 2>/dev/null || true; done")]
-      (when (not (zero? (:exit result)))
-        (println "Warning: Some routes may have failed to delete")))
+    (doseq [[cidr gateway] routes]
+      ;; macOS route delete needs the exact format shown in netstat (short CIDR)
+      (shell {:out :string :err :string :continue true}
+             "sudo" "-n" "route" "-n" "delete" "-net" cidr gateway))
     :linux
-    (let [route-commands (str/join "\n"
-                                   (map #(str "ip route del " %) cidrs))
-          result (shell {:out :string :err :string :continue true :in route-commands}
-                        "sudo" "-n" "sh" "-c" "while read cmd; do $cmd 2>/dev/null || true; done")]
-      (when (not (zero? (:exit result)))
-        (println "Warning: Some routes may have failed to delete")))))
+    (doseq [[cidr gateway] routes]
+      (shell {:out :string :err :string :continue true}
+             "sudo" "-n" "ip" "route" "del" cidr))))
 
 (defn add-route
   "Add a route for China IP via default gateway (bypass Tailscale)"
@@ -236,7 +267,7 @@
   (case platform
     :macos
     (let [result (shell {:out :string :err :string :continue true}
-                        "sudo" "-n" "route" "-q" "-n" "add" "-net" cidr gateway)]
+                        "sudo" "-n" "route" "-n" "add" "-net" cidr gateway)]
       (when (and (not (zero? (:exit result)))
                  (not (str/includes? (:err result) "File exists")))
         (println "Warning: Failed to add route for" cidr ":" (:err result))))
@@ -249,14 +280,20 @@
 
 (defn delete-route
   "Delete a route for China IP"
-  [cidr]
+  [cidr gateway]
   (case platform
     :macos
     (shell {:out :string :err :string :continue true}
-           "sudo" "-n" "route" "-q" "-n" "delete" "-net" cidr)
+           "sudo" "-n" "route" "-n" "delete" "-net" cidr gateway)
     :linux
     (shell {:out :string :err :string :continue true}
            "sudo" "-n" "ip" "route" "del" cidr)))
+
+(defn ip-to-long
+  "Convert IP address string to long"
+  [ip]
+  (let [parts (mapv #(Long/parseLong %) (str/split ip #"\."))]
+    (reduce (fn [acc part] (+ (bit-shift-left acc 8) part)) 0 parts)))
 
 (defn ip-in-cidr?
   "Check if an IP address falls within a CIDR range"
@@ -264,14 +301,10 @@
   (when (valid-cidr? cidr)
     (let [[network prefix] (str/split cidr #"/")
           prefix-len (Integer/parseInt prefix)
-          ip-parts (mapv #(Integer/parseInt %) (str/split ip #"\."))
-          net-parts (mapv #(Integer/parseInt %) (str/split network #"\."))
-          mask (bit-shift-left -1 (- 32 prefix-len))
-          ip-int (reduce (fn [acc part] (+ (bit-shift-left acc 8) part)) 0 ip-parts)
-          net-int (reduce (fn [acc part] (+ (bit-shift-left acc 8) part)) 0 net-parts)
-          ip-masked (bit-and ip-int mask)
-          net-masked (bit-and net-int mask)]
-      (= ip-masked net-masked))))
+          ip-long (ip-to-long ip)
+          net-long (ip-to-long network)
+          mask (bit-not (dec (bit-shift-left 1 (- 32 prefix-len))))]
+      (= (bit-and ip-long mask) (bit-and net-long mask)))))
 
 (defn check-route
   "Check if a route exists for CIDR. Platform-specific."
@@ -381,6 +414,13 @@
                     (println (str "✓ " name " (" test-ip "): PASS - Direct access")))))
               (println (str "⚠ " name " (" test-ip "): IP not in China CIDR ranges")))))))))
 
+(defn gateway-reachable?
+  "Check if gateway is reachable via ping"
+  [gateway]
+  (let [result (shell {:out :string :err :string :continue true}
+                      "ping" "-c" "1" "-t" "1" gateway)]
+    (zero? (:exit result))))
+
 (defn tailscale-up
   "Configure routing to bypass China IPs through default gateway"
   []
@@ -393,6 +433,9 @@
         (println (str "Found " (count china-cidrs) " China CIDR blocks"))
         (println (str "Default gateway: " gateway))
         (println (str "Tailscale interface: " tailscale-iface))
+        (if (gateway-reachable? gateway)
+          (println "✓ Gateway reachable")
+          (println "⚠ WARNING: Gateway does not respond to ping. Routes may not work!"))
         (println "\nAdding routes to bypass Tailscale for China IPs...")
         (println "(This requires sudo privileges)")
         (println "Tip: Run 'sudo -v' first to cache credentials, or you'll be prompted for each batch)")
@@ -414,23 +457,30 @@
 (defn tailscale-down
   "Remove China bypass routes"
   []
-  (let [china-cidrs (vec (fetch-china-ips))]
-    (if (empty? china-cidrs)
-      (println "No China IP ranges to remove.")
+  (println "Reading installed routes from system routing table...")
+  (let [installed-routes (get-installed-routes)]
+    (if (empty? installed-routes)
+      (println "No China bypass routes found in routing table.")
       (do
-        (println (str "Removing " (count china-cidrs) " China bypass routes..."))
+        (println (str "Found " (count installed-routes) " China bypass routes to remove"))
         (println "(This requires sudo privileges)")
         (println "Tip: Run 'sudo -v' first to cache credentials")
 
-        ;; Delete routes in larger batches for maximum speed
-        (println "Removing routes in batches of 500...")
-        (let [start-time (System/currentTimeMillis)]
-          (doseq [[batch-idx batch] (map-indexed vector (partition-all 500 china-cidrs))]
+        (let [routes-vec (vec installed-routes)
+              start-time (System/currentTimeMillis)]
+          (doseq [[batch-idx batch] (map-indexed vector (partition-all 500 routes-vec))]
             (when (zero? (mod batch-idx 10))
-              (println (str "Progress: " (* batch-idx 500) "/" (count china-cidrs))))
-            (delete-routes-batch batch))
+              (println (str "Progress: " (* batch-idx 500) "/" (count routes-vec))))
+            (delete-routes-batch (vec batch)))
           (let [elapsed (/ (- (System/currentTimeMillis) start-time) 1000.0)]
-            (println (str "\n✓ Removed " (count china-cidrs) " routes in " elapsed " seconds"))))))))
+            (println (str "\n✓ Removed " (count routes-vec) " routes in " elapsed " seconds"))
+            ;; Verify removal
+            (let [remaining (get-installed-routes)]
+              (if (empty? remaining)
+                (println "All China routes removed successfully.")
+                (do
+                  (println (str "⚠ " (count remaining) " stale netstat entries remain (kernel cache, will expire)."))
+                  (println "  Run 'netstat -rn | head' to verify — routing is through default (utun/Tailscale)."))))))))))
 
 (defn tailscale-status
   "Show current routing status"
