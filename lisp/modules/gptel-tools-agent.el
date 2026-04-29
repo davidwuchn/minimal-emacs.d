@@ -2162,7 +2162,9 @@ subagent callback fired, and avoids reusing a deleted worktree as
                 temporary-file-directory)))
       (with-current-buffer safe-buffer
         (setq default-directory safe-default-directory)
-        (funcall callback result)))))
+        (condition-case-unless-debug err
+            (funcall callback result)
+          (error (message "[gptel-tools] Callback error: %s" (error-message-string err)) nil))))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
