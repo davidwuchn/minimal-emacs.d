@@ -287,8 +287,6 @@ START-LINE and END-LINE specify the line range to return."
                (format "Error: start-line %d is invalid (must be >= 1)" start-line))
               ((> start total-lines)
                (format "Error: start-line %d exceeds total lines (%d)" start-line total-lines))
-              ((> (or end-line 0) total-lines)
-               (format "Error: end-line %d exceeds total lines (%d)" end-line total-lines))
               ((> start end)
                (format "Error: start-line (%d) exceeds end-line (%d)" start-line end-line))
               (t
