@@ -504,19 +504,18 @@ CALLBACK receives non-nil when approved and nil when rejected."
   (let ((text (gptel-sandbox--render-result text)))
     (if (<= (length text) my/gptel-programmatic-result-limit)
         text
-      (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
-                            (my/gptel-make-temp-file "programmatic-" nil ".txt")
-                          (make-temp-file "programmatic-" nil ".txt")))
-             (suffix (format "\n...[Programmatic result truncated. Full result saved to: %s]..."
-                             temp-file))
-             (suffix-len (length suffix))
-             (limit my/gptel-programmatic-result-limit))
-        (with-temp-file temp-file
-          (insert text))
-        (if (>= suffix-len limit)
-            (format "%s" suffix)
-          (let ((head-len (- limit suffix-len)))
-            (format "%s%s" (substring text 0 (min head-len (length text))) suffix)))))))
+      (let ((temp-file (if (fboundp 'my/gptel-make-temp-file)
+                           (my/gptel-make-temp-file "programmatic-" nil ".txt")
+                         (make-temp-file "programmatic-" nil ".txt"))))
+        (write-file temp-file)
+        (insert text)
+        (let ((suffix (format "\n...[Programmatic result truncated. Full result saved to: %s]..."
+                              temp-file))
+              (suffix-len (length suffix))
+              (limit my/gptel-programmatic-result-limit))
+          (if (>= suffix-len limit)
+              suffix
+            (format "%s%s" (substring text 0 (- limit suffix-len)) suffix)))))))
 
 (defun gptel-sandbox--format-error (message)
   "Format MESSAGE as a sandbox error string."
