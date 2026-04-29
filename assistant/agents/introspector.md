@@ -1,7 +1,7 @@
 ---
 name: introspector
 backend: MiniMax
-model: minimax-m2.5
+model: minimax-m2.7-highspeed
 max-tokens: 4096
 temperature: 0.3
 description: Introspector for Emacs APIs (MiniMax)
