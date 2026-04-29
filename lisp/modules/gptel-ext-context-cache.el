@@ -355,25 +355,37 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
     default))
 
 
+(defconst my/gptel--gptel-tables-miss-sentinel (make-symbol "gptel-tables-miss")
+  "Sentinel for negative cache hits in gptel table lookups.
+Avoids re-iterating tables for models that are not present.")
+
 (defun my/gptel--lookup-context-window-in-gptel-tables (model)
   "Look up context window for MODEL in gptel's built-in model tables.
 Returns the context window in tokens, or nil if not found.
-Handles both symbol and string model identifiers with case-insensitive fallback."
+Handles both symbol and string model identifiers with case-insensitive fallback.
+Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scans."
   (let ((model-str (cond
                     ((stringp model) model)
                     ((symbolp model) (symbol-name model))
                     (t nil))))
     (when model-str
-      (catch 'found
-        (dolist (var (my/gptel--gptel-model-tables))
-          (let* ((table (symbol-value var))
-                 (entry (assoc-string model-str table t)))
-            (when entry
-              (let ((cw (my/gptel--normalize-context-window
-                         (plist-get (cdr entry) :context-window))))
-                (when (my/gptel--positive-integer-p cw)
-                  (throw 'found cw))))))
-        nil))))
+      (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache my/gptel--cache-sentinel)))
+        (cond
+         ((eq cached my/gptel--gptel-tables-miss-sentinel) nil)
+         ((not (eq cached my/gptel--cache-sentinel)) cached)
+         (t
+          (catch 'found
+            (dolist (var (my/gptel--gptel-model-tables))
+              (let* ((table (symbol-value var))
+                     (entry (assoc-string model-str table t)))
+                (when entry
+                  (let ((cw (my/gptel--normalize-context-window
+                             (plist-get (cdr entry) :context-window))))
+                    (when (my/gptel--positive-integer-p cw)
+                      (puthash model-str cw my/gptel--gptel-tables-cw-cache)
+                      (throw 'found cw))))))
+            (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache)
+            nil)))))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
