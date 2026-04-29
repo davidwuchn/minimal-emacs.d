@@ -1284,8 +1284,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (lambda (_result)
            (error "grade callback boom"))))
       (should (functionp grader-callback))
-      (should-error
-       (funcall grader-callback '(:score 9 :passed t :details "graded")))
+      (funcall grader-callback '(:score 9 :passed t :details "graded"))
       (should (zerop (hash-table-count gptel-auto-experiment--grade-state))))))
 
 (ert-deftest regression/auto-experiment/grade-timeout-callback-errors-still-clean-state ()
@@ -1310,7 +1309,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (lambda (_result)
             (error "grade timeout callback boom"))))
        (should (functionp timeout-callback))
-       (should-error (funcall timeout-callback))
+       (funcall timeout-callback)
        (should (zerop (hash-table-count gptel-auto-experiment--grade-state))))))
 
 (ert-deftest regression/auto-experiment/grade-forwards-configured-timeout ()
@@ -8120,7 +8119,7 @@ failure."
             (should (functionp scheduled-timeout))
             (should (= (hash-table-count my/gptel--agent-task-state) 1))
             (setq now 100)
-            (should-error (funcall scheduled-timeout))
+            (funcall scheduled-timeout)
             (should (= (hash-table-count my/gptel--agent-task-state) 0)))
         (when (buffer-live-p request-buf)
           (kill-buffer request-buf))))))

@@ -8097,12 +8097,11 @@ RETRY-COUNT tracks current retry attempt."
                    (and (not hard-timeout)
                         timeout-category)))
               (retryable-failure
-               (and (not grader-only-failure)
-                    (or retryable-category
-                        inspection-thrash-failure
-                        (and raw-error
-                             (not hard-timeout)
-                             (gptel-auto-experiment--is-retryable-error-p raw-error)))))
+                (and (not grader-only-failure)
+                     (or retryable-category
+                         (and raw-error
+                              (not hard-timeout)
+                              (gptel-auto-experiment--is-retryable-error-p raw-error)))))
               (retry-history
                (gptel-auto-experiment--retry-history previous-results result)))
          (gptel-auto-workflow--restore-live-target-file target workflow-root)
