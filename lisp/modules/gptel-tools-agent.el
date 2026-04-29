@@ -5691,9 +5691,9 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                           :agent-output ""))
                    (funcall finish nil))
                (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                      (merge-result
-                       (gptel-auto-workflow--merge-to-staging optimize-branch))
-                      (already-integrated-p (eq merge-result :already-integrated))
+                 (merge-result
+                  (gptel-auto-workflow--merge-to-staging optimize-branch))
+                 (already-integrated-p (eq merge-result :already-integrated))
                  (finish-publish
                   (lambda (&optional retried)
                     (gptel-auto-workflow--delete-staging-worktree)
@@ -5780,7 +5780,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                             (gptel-auto-workflow--log-staging-step-failure
                              'staging-push-failed optimize-branch push-output)
                             (gptel-auto-workflow--reset-staging-after-failure staging-base)
-                            (funcall finish nil))))))))))))))))
+                             (funcall finish nil))))))))))))))))))
 
 
 ;;; Multi-Project Support
@@ -5961,7 +5961,6 @@ Prevents scope creep where executor touches many unrelated files.
 Set to 0 to disable the check."
   :type 'integer
   :group 'gptel-auto-workflow)
-
 (defcustom gptel-auto-workflow-protected-configs
   '(("assistant/agents/code_agent.md" . "minimax-m2.7-highspeed")
     ("assistant/agents/plan_agent.md" . "minimax-m2.7-highspeed")
@@ -6009,6 +6008,7 @@ of the regression if blocked."
                    (mapconcat #'identity regressions "; "))
           (cons nil (mapconcat #'identity regressions "; ")))
       (cons t nil))))
+
 
 (defun gptel-auto-experiment--check-scope ()
   "Return (ok-p . changed-files) for current experiment.
