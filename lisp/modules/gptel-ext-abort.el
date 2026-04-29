@@ -18,12 +18,12 @@
   "Fast interruption and timeouts for gptel requests."
   :group 'gptel)
 
-(defcustom my/gptel-curl-connect-timeout 10
+(defcustom my/gptel-curl-connect-timeout 20
   "Seconds to wait for curl to connect."
   :type 'integer
   :group 'my/gptel-interrupt)
 
-(defcustom my/gptel-curl-max-time 90
+(defcustom my/gptel-curl-max-time 180
   "Maximum seconds for a single gptel curl request."
   :type 'integer
   :group 'my/gptel-interrupt)

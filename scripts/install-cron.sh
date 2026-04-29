@@ -88,12 +88,71 @@ import sys
 existing_path, rendered_path, output_path, begin_marker, end_marker = sys.argv[1:]
 existing = Path(existing_path).read_text(encoding="utf-8")
 rendered = Path(rendered_path).read_text(encoding="utf-8").rstrip() + "\n"
-pattern = re.compile(
+
+# Strip markers from rendered content to detect duplicate raw blocks
+rendered_raw = rendered.replace(begin_marker + "\n", "").replace(end_marker + "\n", "")
+
+managed_pattern = re.compile(
     rf"(?ms)^[ \t]*{re.escape(begin_marker)}\n.*?^[ \t]*{re.escape(end_marker)}\n?"
 )
 
-if pattern.search(existing):
-    merged = pattern.sub(rendered, existing, count=1)
+# First: remove any duplicate raw content (without markers) that matches rendered content
+# This handles legacy installs that added content before the managed block system
+lines = existing.split("\n")
+cleaned_lines = []
+skip_until_next_section = False
+in_raw_block = False
+raw_block_lines = []
+
+for i, line in enumerate(lines):
+    if line.strip() == begin_marker.strip():
+        # Skip everything inside managed block (will be replaced below)
+        in_raw_block = False
+        skip_until_next_section = True
+        continue
+    if skip_until_next_section:
+        if line.strip() == end_marker.strip():
+            skip_until_next_section = False
+        continue
+
+    # Detect raw cron blocks that match rendered content
+    # A raw block starts with a comment header and ends with cron jobs
+    if line.startswith("# Auto-Workflow") or line.startswith("# -" * 10):
+        # Check if this looks like a duplicate of our rendered content
+        # by looking for characteristic patterns
+        block_start = i
+        block_lines = [line]
+        j = i + 1
+        while j < len(lines):
+            block_lines.append(lines[j])
+            # Stop at next major section or end of file
+            if lines[j].startswith("# ---") and j > block_start + 3:
+                break
+            if lines[j].startswith("# >>>") or lines[j].startswith("# <<<"):
+                break
+            j += 1
+
+        block_text = "\n".join(block_lines) + "\n"
+        # Check if this block contains the same cron jobs as rendered content
+        # by looking for active (uncommented) cron lines
+        active_cron_re = re.compile(r"^\d")
+        rendered_active = [l for l in rendered_raw.split("\n") if active_cron_re.match(l)]
+        block_active = [l for l in block_text.split("\n") if active_cron_re.match(l)]
+
+        if rendered_active and block_active and set(rendered_active) == set(block_active):
+            # This is a duplicate raw block - skip it
+            i = j
+            continue
+        else:
+            cleaned_lines.append(line)
+    else:
+        cleaned_lines.append(line)
+
+existing = "\n".join(cleaned_lines)
+
+# Now handle the managed block
+if managed_pattern.search(existing):
+    merged = managed_pattern.sub(rendered, existing, count=1)
 else:
     merged = existing.rstrip()
     if merged:

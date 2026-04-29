@@ -291,6 +291,21 @@ worker_daemon_pid() {
     worker_daemon_pids | head -1
 }
 
+clean_orphaned_sockets() {
+    local uid
+    uid="$(id -u)"
+    for base in "${TMPDIR:-/tmp}" "/tmp"; do
+        local socket_dir="$base/emacs$uid"
+        if [ -S "$socket_dir/$SERVER_NAME" ]; then
+            rm -f "$socket_dir/$SERVER_NAME"
+        fi
+    done
+    local runtime_dir="${XDG_RUNTIME_DIR:-}"
+    if [ -n "$runtime_dir" ] && [ -S "$runtime_dir/emacs/$SERVER_NAME" ]; then
+        rm -f "$runtime_dir/emacs/$SERVER_NAME"
+    fi
+}
+
 discard_stale_worker_daemon() {
     local pids
     local pid
@@ -318,19 +333,7 @@ discard_stale_worker_daemon() {
             fi
         done
     fi
-    # Clean up socket files to prevent "already running" errors
-    local uid
-    uid="$(id -u)"
-    for base in "${TMPDIR:-/tmp}" "/tmp"; do
-        local socket_dir="$base/emacs$uid"
-        if [ -S "$socket_dir/$SERVER_NAME" ]; then
-            rm -f "$socket_dir/$SERVER_NAME"
-        fi
-    done
-    local runtime_dir="${XDG_RUNTIME_DIR:-}"
-    if [ -n "$runtime_dir" ] && [ -S "$runtime_dir/emacs/$SERVER_NAME" ]; then
-        rm -f "$runtime_dir/emacs/$SERVER_NAME"
-    fi
+    clean_orphaned_sockets
     STALE_DAEMON_RECOVERED=1
     rewrite_status_idle
 }
@@ -992,6 +995,10 @@ ensure_worker_daemon() {
         discard_stale_worker_daemon
         sleep 1
     fi
+    
+    # Always clean up orphaned sockets even if no stale PIDs found.
+    # Daemons can crash without cleaning up their socket files.
+    clean_orphaned_sockets
     
     # Ensure SSH keys are loaded in agent (needed by Homebrew OpenSSH)
     ensure_ssh_keys_loaded
