@@ -21,13 +21,17 @@
 ;; Ensure ELPA transient shadows the built-in version.
 ;; Newer Magit requires `transient--set-layout' which the built-in
 ;; transient (Emacs < 30) does not provide.  Prepend the ELPA
-;; directory so it is found first.
+;; directory so it is found first, and force-reload if the built-in
+;; version was already loaded.
 (let ((elpa-transient-dir
        (car (directory-files
              package-user-dir t
              "^transient-[0-9]"))))
   (when elpa-transient-dir
-    (add-to-list 'load-path elpa-transient-dir)))
+    (add-to-list 'load-path elpa-transient-dir)
+    (when (featurep 'transient)
+      (unload-feature 'transient t))
+    (load "transient" nil 'nomessage)))
 
 ;; Prevent package-refresh-contents network hang on startup.
 ;; Load archive-contents from cache instead of fetching from network.
