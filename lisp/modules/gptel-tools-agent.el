@@ -2167,12 +2167,7 @@ subagent callback fired, and avoids reusing a deleted worktree as
             (funcall callback result))
         (when (buffer-live-p safe-buffer)
           (with-current-buffer safe-buffer
-            (setq default-directory
-                  (or (my/gptel--first-existing-directory
-                       caller-default-directory
-                       user-emacs-directory
-                       temporary-file-directory)
-                      temporary-file-directory))))))))
+            (setq default-directory caller-default-directory)))))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
