@@ -246,7 +246,7 @@ done."
       (when (> (length candidates) keep)
         (let* ((ordered-candidates (nreverse candidates))
                (to-truncate (seq-take ordered-candidates
-                                      (- (length ordered-candidates) keep))))
+                                      (max 0 (- (length ordered-candidates) keep)))))
           (when (or (= my/gptel-trim-min-bytes 0)
                     (>= bytes-saved my/gptel-trim-min-bytes))
             (dolist (candidate to-truncate)
