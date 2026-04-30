@@ -5691,9 +5691,9 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                           :agent-output ""))
                    (funcall finish nil))
                (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                      (merge-result
-                       (gptel-auto-workflow--merge-to-staging optimize-branch))
-                      (already-integrated-p (eq merge-result :already-integrated))
+                 (merge-result
+                  (gptel-auto-workflow--merge-to-staging optimize-branch))
+                 (already-integrated-p (eq merge-result :already-integrated))
                  (finish-publish
                   (lambda (&optional retried)
                     (gptel-auto-workflow--delete-staging-worktree)
@@ -5961,7 +5961,6 @@ Prevents scope creep where executor touches many unrelated files.
 Set to 0 to disable the check."
   :type 'integer
   :group 'gptel-auto-workflow)
-
 (defcustom gptel-auto-workflow-protected-configs
   '(("assistant/agents/code_agent.md" . "minimax-m2.7-highspeed")
     ("assistant/agents/plan_agent.md" . "minimax-m2.7-highspeed")
@@ -6009,6 +6008,7 @@ of the regression if blocked."
                    (mapconcat #'identity regressions "; "))
           (cons nil (mapconcat #'identity regressions "; ")))
       (cons t nil))))
+
 
 (defun gptel-auto-experiment--check-scope ()
   "Return (ok-p . changed-files) for current experiment.
@@ -7485,7 +7485,7 @@ failover advances past transient timeout or provider-pressure failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6-code-preview")
+    ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
@@ -7510,7 +7510,7 @@ DashScope and others when rate-limited or unavailable."
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6-code-preview")
+    ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
@@ -7542,7 +7542,7 @@ run can advance through this list instead of repeatedly hammering the same provi
 
 (defconst gptel-auto-workflow--current-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6-code-preview")
+    ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
@@ -7562,7 +7562,7 @@ run can advance through this list instead of repeatedly hammering the same provi
 
 (defconst gptel-auto-workflow--current-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6-code-preview")
+    ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
@@ -7882,8 +7882,8 @@ REASON is only used for logging."
            (gptel-auto-experiment--provider-usage-limit-error-p error-output)
            (let ((case-fold-search t))
              (string-match-p
-              "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
-              error-output)))))
+               "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\"\\|Malformed JSON"
+               error-output)))))
 
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
@@ -7918,8 +7918,8 @@ REASON is only used for logging."
       (and (stringp error-output)
            (let ((case-fold-search t))
              (string-match-p
-              "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
-              error-output)))))
+               "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|Malformed JSON"
+               error-output)))))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
@@ -8177,11 +8177,20 @@ RETRY-COUNT tracks current retry attempt."
          (gptel-auto-workflow--restore-live-target-file target workflow-root)
          (when quota-exhausted
            (setq gptel-auto-experiment--quota-exhausted t))
-         (if (and (not quota-exhausted)
-                  (< retries gptel-auto-experiment-max-retries)
-                  retryable-failure)
-             (progn
-               (setq attempt-logs nil)
+          (if (and (not quota-exhausted)
+                   (< retries gptel-auto-experiment-max-retries)
+                   retryable-failure)
+              (progn
+                (when (and raw-error
+                           (or (gptel-auto-experiment--provider-pressure-error-p raw-error)
+                               (gptel-auto-experiment--is-retryable-error-p raw-error)))
+                  (condition-case nil
+                      (gptel-auto-workflow--activate-provider-failover
+                       "executor"
+                       (gptel-auto-workflow--get-active-agent-preset "executor")
+                       raw-error)
+                    (error nil)))
+                (setq attempt-logs nil)
                (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
                         experiment-id (1+ retries) gptel-auto-experiment-max-retries
                         retry-delay)
@@ -8238,8 +8247,8 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :api-rate-limit "Provider overloaded"))
    ((gptel-auto-experiment--provider-auth-error-p agent-output)
     (cons :api-error "Provider authorization failed"))
-   ((string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format" agent-output)
-    (cons :api-error "API parameter error (invalid JSON format)"))
+    ((string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format\\|Malformed JSON" agent-output)
+     (cons :api-error "API parameter error (invalid JSON format)"))
    ((let ((case-fold-search t))
       (string-match-p "timeout\\|timed out\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
                       agent-output))
@@ -8346,6 +8355,9 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
   "Run single experiment. Call CALLBACK with result plist.
 BASELINE-CODE-QUALITY is the initial code quality score.
 LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
+  ;; Clear per-experiment provider overrides so MiniMax gets first crack
+  ;; at each new experiment. Rate-limited backends still stay blacklisted.
+  (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))

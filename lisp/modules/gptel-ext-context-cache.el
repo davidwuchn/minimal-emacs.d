@@ -369,11 +369,7 @@ Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scan
                     ((symbolp model) (symbol-name model))
                     (t nil))))
     (when model-str
-      (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache my/gptel--cache-sentinel)))
-        (cond
-         ((eq cached my/gptel--gptel-tables-miss-sentinel) nil)
-         ((not (eq cached my/gptel--cache-sentinel)) cached)
-         (t
+      (or (gethash model-str my/gptel--gptel-tables-cw-cache)
           (catch 'found
             (dolist (var (my/gptel--gptel-model-tables))
               (let* ((table (symbol-value var))
@@ -381,11 +377,10 @@ Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scan
                 (when entry
                   (let ((cw (my/gptel--normalize-context-window
                              (plist-get (cdr entry) :context-window))))
-                    (when (my/gptel--positive-integer-p cw)
+                    (when (and (integerp cw) (> cw 0))
                       (puthash model-str cw my/gptel--gptel-tables-cw-cache)
                       (throw 'found cw))))))
-            (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache)
-            nil)))))))
+            nil)))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -508,6 +503,19 @@ Image tokens are counted from `gptel-context' if available."
 
 ;; Load cache at require time
 (my/gptel--cache-load-context-windows)
+
+(defun my/gptel--seed-cache-from-known-models ()
+  "Seed context-window cache from known-model alist for O(1) lookups."
+  (dolist (entry my/gptel--known-model-context-windows)
+    (when (consp entry)
+      (let ((key (car entry)) (val (cdr entry)))
+        (when (and (stringp key)
+                   (not (gethash key my/gptel--context-window-cache))
+                   (integerp val)
+                   (natnump val))
+          (puthash key val my/gptel--context-window-cache))))))
+
+(my/gptel--seed-cache-from-known-models)
 
 ;;; Seeding and Refresh
 
