@@ -657,7 +657,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
   "Evaluate BODY forms sequentially, handling async tool-calls.
 CALLBACK receives final outcome plist."
   (if (null body)
-      (funcall callback (list :continue t :done nil))
+      (funcall callback (list :done t :result nil))
     (gptel-sandbox--eval-statement
      (car body) env state
      (lambda (outcome)
