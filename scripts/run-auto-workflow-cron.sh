@@ -1010,7 +1010,9 @@ ensure_worker_daemon() {
     # worker uses the same package/module graph as interactive Emacs.
     hydrate_missing_worktree_submodules
     seed_worker_daemon_shared_var
+    # Disable native compilation for workflow daemon to avoid stale cache issues
     env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+        EMACSNATIVELOADPATH= \
         MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
         MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
         "$EMACS" --init-directory="$DIR" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
