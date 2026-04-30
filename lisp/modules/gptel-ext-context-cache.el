@@ -93,6 +93,10 @@ Reduces repeated iterations through model tables.")
 Must be `defvar' (not `let') so the `setq' in the cache file reaches it
 under `lexical-binding: t'.")
 
+(defvar my/gptel--gptel-model-tables-cache nil
+  "Cached result of gptel model table symbols lookup.
+Avoids repeated filtering of the same symbol list.")
+
 (defvar my/gptel--known-model-context-windows
   '(;; Qwen (Alibaba) - NOTE: Qwen3.5-Plus and Qwen3-Max have 1M context!
     ("qwen3-coder-next" . 131072)
@@ -332,10 +336,15 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
     default))
 
 
+(defconst my/gptel--gptel-tables-miss-sentinel (make-symbol "gptel-tables-miss")
+  "Sentinel for negative cache hits in gptel table lookups.
+Avoids re-iterating tables for models that are not present.")
+
 (defun my/gptel--lookup-context-window-in-gptel-tables (model)
   "Look up context window for MODEL in gptel's built-in model tables.
 Returns the context window in tokens, or nil if not found.
-Handles both symbol and string model identifiers with case-insensitive fallback."
+Handles both symbol and string model identifiers with case-insensitive fallback.
+Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scans."
   (let ((model-str (cond
                     ((stringp model) model)
                     ((symbolp model) (symbol-name model))
@@ -375,6 +384,10 @@ raw tokens."
    ((< n 1000) (round (* n 1000)))
    ;; Larger values are already in raw tokens
    (t (round n))))
+
+(defun my/gptel--positive-integer-p (n)
+  "Return N if it is a positive integer, otherwise nil."
+  (and (integerp n) (> n 0) n))
 
 (defun my/gptel--openrouter-entry-context-window (entry)
   "Extract valid context_window from an OpenRouter model ENTRY alist.
@@ -475,8 +488,10 @@ Image tokens are counted from `gptel-context' if available."
 
 (defun my/gptel--gptel-model-tables ()
   "Return list of gptel model table symbols to search.
-Filters to only bound variables."
-  (seq-filter #'boundp '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models)))
+Filters to only bound variables. Result is cached for performance."
+  (or my/gptel--gptel-model-tables-cache
+      (setq my/gptel--gptel-model-tables-cache
+            (seq-filter #'boundp '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models)))))
 
 (defun my/gptel--seed-cache-from-gptel-model-tables ()
   "Seed context-window cache from gptel's built-in model tables."
@@ -822,12 +837,12 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        my/gptel--known-model-context-windows
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
-        (when (and cw (integerp cw))
+        (when (my/gptel--positive-integer-p cw)
           (puthash model-id cw my/gptel--context-window-cache))
         cw))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
              (cw (plist-get meta :context-window)))
-        (when (and cw (integerp cw) (> cw 0))
+        (when (my/gptel--positive-integer-p cw)
           (puthash model-id cw my/gptel--context-window-cache))
         cw))
      (t my/gptel-default-context-window))))

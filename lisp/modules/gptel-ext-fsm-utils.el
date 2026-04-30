@@ -136,7 +136,8 @@ TEST: (my/gptel--fsm-get-by-id \"unknown\") => nil
 
 BUILDS ON DISCOVERY: O(1) lookup enables efficient FSM retrieval
 in performance-critical nested agent scenarios."
-  (gethash id my/gptel--fsm-registry))
+  (and (stringp id)
+       (gethash id my/gptel--fsm-registry)))
 
 (defun my/gptel--fsm-get-id (fsm)
   "Retrieve FSM ID from registry by FSM struct.
@@ -156,7 +157,8 @@ duplication across coerce-fsm and other functions.
 
 PROACTIVE MITIGATION: Centralizes FSM→ID lookup logic, preventing
 inconsistent lookups if registry structure changes."
-  (gethash fsm my/gptel--fsm-registry))
+  (and fsm
+       (gethash fsm my/gptel--fsm-registry)))
 
 ;;; FSM Predicates and Coercion
 
@@ -268,7 +270,22 @@ where first FSM was always returned (potentially wrong parent FSM).
 
 PROACTIVE MITIGATION: Uses registration order as proxy for nesting level,
 avoiding need for explicit parent-child tracking."
-  (car (last (my/gptel--collect-all-fsms object))))
+  (let ((last-fsm nil)
+        (seen (make-hash-table :test 'eq)))
+    (cl-labels ((collect-last (obj)
+                  (cond
+                   ((null obj) nil)
+                   ((and (consp obj) (gethash obj seen)) nil)
+                   ((consp obj)
+                    (puthash obj t seen)
+                    (collect-last (car obj))
+                    (collect-last (cdr obj)))
+                   ((my/gptel--fsm-p obj)
+                    (unless (gethash obj seen)
+                      (puthash obj t seen)
+                      (setq last-fsm obj))))))
+      (collect-last object)
+      last-fsm)))
 
 (defun my/gptel--collect-all-fsms (object)
   "Collect all FSMs found in OBJECT as a list.
