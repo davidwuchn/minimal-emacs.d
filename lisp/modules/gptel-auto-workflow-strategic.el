@@ -390,12 +390,12 @@ Logs when fallback to regex parsing is used."
                (gptel-auto-workflow--response-snippet normalized-response 120))
       nil)
      (t
-      (let ((targets (gptel-auto-workflow--parse-json-targets
-                      normalized-response proj-root max-targets)))
-        (if targets
-            targets
+      (let ((json-targets (gptel-auto-workflow--parse-json-targets
+                           normalized-response proj-root max-targets)))
+        (if json-targets
+            json-targets
           (progn
-            (message "[auto-workflow] JSON parse failed, using regex fallback")
+            (message "[auto-workflow] JSON parse returned no targets, trying regex fallback")
             (gptel-auto-workflow--parse-regex-targets
              normalized-response proj-root max-targets))))))))
 
