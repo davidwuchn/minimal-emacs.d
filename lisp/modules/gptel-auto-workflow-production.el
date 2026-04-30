@@ -4,6 +4,7 @@
 ;; It runs automatically when the auto-workflow daemon is active.
 
 (require 'cl-lib)
+(require 'gptel-auto-workflow-evolution)
 
 ;; ─── Configuration ───
 

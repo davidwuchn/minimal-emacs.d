@@ -11,6 +11,23 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
+
+;; ─── Helpers ───
+
+(defvar gptel-auto-workflow--git-learning-repo-root nil
+  "Cached git repository root for git-learning.
+Captured at load time to avoid worktree issues.")
+
+(defun gptel-auto-workflow--git-learning-repo-root ()
+  "Return the git repository root for git-learning.
+Uses cached value from load time, or detects from current directory."
+  (or gptel-auto-workflow--git-learning-repo-root
+      (setq gptel-auto-workflow--git-learning-repo-root
+            (string-trim
+             (shell-command-to-string
+              "git rev-parse --show-toplevel 2>/dev/null || echo ''")))))
+
 ;; ─── Configuration ───
 
 (defcustom gptel-auto-workflow-git-learning-enabled t
@@ -27,13 +44,20 @@
 
 (defun gptel-auto-workflow--git-experiment-commits ()
   "Extract experiment commits from git history.
-Returns list of plists with :branch :target :hypothesis :merged :date :score"
-  (let ((commits nil)
-        (merge-commits
-         (split-string
-          (shell-command-to-string
-           "git log --grep='Merge optimize/' --format='%H|%s|%ci' --reverse")
-          "\n" t)))
+Returns list of plists with :branch :target :hypothesis :merged :date :score.
+Always runs git commands from the main repo root to avoid worktree issues."
+  (let* ((repo-root (or (gptel-auto-workflow--git-learning-repo-root)
+                        (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                             (gptel-auto-workflow--worktree-base-root))))
+         (git-cmd (if (and repo-root (not (string-empty-p repo-root)))
+                      (format "git -C '%s' " repo-root)
+                    "git "))
+         (commits nil)
+         (merge-commits
+          (split-string
+           (shell-command-to-string
+            (concat git-cmd "log --grep='Merge optimize/' --format='%H|%s|%ci' --reverse"))
+           "\n" t)))
     (dolist (merge merge-commits)
       ;; Match "Merge optimize/BRANCH-NAME ..." - branch name has no spaces
       (when (string-match "Merge optimize/\\([^ ]+\\)" merge)
@@ -43,8 +67,9 @@ Returns list of plists with :branch :target :hypothesis :merged :date :score"
                (exp-commit
                 (string-trim
                  (shell-command-to-string
-                  (format "git log --format='%%H|%%s' %s --not origin/main --not origin/staging | head -1"
-                          full-branch)))))
+                  (concat git-cmd
+                          (format "log --format='%%H|%%s' %s --not origin/main --not origin/staging | head -1"
+                                  full-branch))))))
           (when (string-match "\\([a-f0-9]+\\)|\\(.+\\)" exp-commit)
             (let ((exp-hash (match-string 1 exp-commit))
                   (message (match-string 2 exp-commit)))
@@ -262,6 +287,13 @@ Combines target, category, and temporal analysis."
                ""
                (gptel-auto-workflow--git-format-temporal-patterns commits))
          "\n")))))
+
+;; ─── Init ───
+
+;; Cache repo root at load time to avoid worktree issues later
+(when (and (null gptel-auto-workflow--git-learning-repo-root)
+           (fboundp 'gptel-auto-workflow--git-learning-repo-root))
+  (gptel-auto-workflow--git-learning-repo-root))
 
 (provide 'gptel-auto-workflow-git-learning)
 ;;; gptel-auto-workflow-git-learning.el ends here

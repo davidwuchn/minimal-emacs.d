@@ -54,6 +54,12 @@
 (require 'gptel-workflow-benchmark)
 (require 'gptel-skill-benchmark)
 
+;; Load self-evolution system (mementum + git facts → knowledge injection)
+(require 'gptel-auto-workflow-git-learning)
+(require 'gptel-auto-workflow-evolution)
+(require 'gptel-auto-workflow-mementum)
+(require 'gptel-auto-workflow-production)
+
 ;; Enable daily benchmark integration (auto-collect metrics on skill/workflow runs)
 (gptel-benchmark-daily-setup)
 
