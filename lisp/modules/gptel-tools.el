@@ -287,8 +287,6 @@ START-LINE and END-LINE specify the line range to return."
                (format "Error: start-line %d is invalid (must be >= 1)" start-line))
               ((> start total-lines)
                (format "Error: start-line %d exceeds total lines (%d)" start-line total-lines))
-              ((> (or end-line 0) total-lines)
-               (format "Error: end-line %d exceeds total lines (%d)" end-line total-lines))
               ((> start end)
                (format "Error: start-line (%d) exceeds end-line (%d)" start-line end-line))
               (t
@@ -299,21 +297,28 @@ START-LINE and END-LINE specify the line range to return."
                          total-lines
                          (string-join (seq-subseq lines (1- start) end) "\n")))))))))))
 
+(defun gptel-tools--wrap-result-callback (tool-cb tool-name no-result-msg)
+  "Create a standardized callback wrapper for async tool results.
+TOOL-CB is the callback to invoke with processed results.
+TOOL-NAME is the tool name for error messages.
+NO-RESULT-MSG is the message when result is nil."
+  (lambda (result)
+    (cond
+     ((null result)
+      (funcall tool-cb no-result-msg))
+     ((and (stringp result) (string-match-p "^Error:" result))
+      (funcall tool-cb result))
+     ((stringp result)
+      (funcall tool-cb result))
+     (t
+      (funcall tool-cb (format "%s: unexpected result type: %s" tool-name (type-of result)))))))
+
 (defun my/gptel-web-search-safe (tool-cb query &optional count)
   "Web search with error handling.
 Wraps `gptel-agent--web-search-eww' with better error recovery."
   (condition-case err
       (gptel-agent--web-search-eww
-       (lambda (result)
-         (cond
-          ((null result)
-           (funcall tool-cb "WebSearch returned no results."))
-          ((and (stringp result) (string-match-p "^Error:" result))
-           (funcall tool-cb result))
-          ((stringp result)
-           (funcall tool-cb result))
-          (t
-           (funcall tool-cb (format "WebSearch: unexpected result type: %s" (type-of result))))))
+       (gptel-tools--wrap-result-callback tool-cb "WebSearch" "WebSearch returned no results.")
        query count)
     (error
      (funcall tool-cb (format "WebSearch error: %s" (error-message-string err))))))
@@ -323,16 +328,7 @@ Wraps `gptel-agent--web-search-eww' with better error recovery."
 Wraps `gptel-agent--read-url' with better error recovery."
   (condition-case err
       (gptel-agent--read-url
-       (lambda (result)
-         (cond
-          ((null result)
-           (funcall tool-cb "WebFetch returned no content."))
-          ((and (stringp result) (string-match-p "^Error:" result))
-           (funcall tool-cb result))
-          ((stringp result)
-           (funcall tool-cb result))
-          (t
-           (funcall tool-cb (format "WebFetch: unexpected result type: %s" (type-of result))))))
+       (gptel-tools--wrap-result-callback tool-cb "WebFetch" "WebFetch returned no content.")
        url)
     (error
      (funcall tool-cb (format "WebFetch error: %s" (error-message-string err))))))

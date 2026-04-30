@@ -348,9 +348,12 @@ supports a small, explicit whitelist of pure operations."
          (values nil))
     (dolist (arg spec-args (nreverse values))
       (let* ((name (plist-get arg :name))
-             (key (intern (concat ":" name)))
-             (value-form (gethash key arg-map gptel-sandbox--missing-marker)))
+             (key (and (stringp name) (intern (concat ":" name))))
+             (value-form (if key (gethash key arg-map gptel-sandbox--missing-marker)
+                          gptel-sandbox--missing-marker)))
         (cond
+         ((not key)
+          (error "Invalid tool spec: argument missing :name property"))
          ((eq value-form gptel-sandbox--missing-marker)
           (if (plist-get arg :optional)
               (push nil values)
@@ -486,6 +489,10 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--check-tool (tool-name tool-spec arg-values)
   "Validate TOOL-NAME and TOOL-SPEC with ARG-VALUES for sandbox execution."
+  (unless tool-name
+    (error "Tool name cannot be nil"))
+  (unless (or (symbolp tool-name) (stringp tool-name))
+    (error "Tool name must be a symbol or string, got: %S" tool-name))
   (unless tool-spec
     (error "Unknown tool %s requested by Programmatic" tool-name))
   (unless (gptel-sandbox--allowed-tool-p tool-name)
@@ -653,7 +660,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
   "Evaluate BODY forms sequentially, handling async tool-calls.
 CALLBACK receives final outcome plist."
   (if (null body)
-      (funcall callback (list :continue t :done nil))
+      (funcall callback (list :done t :result nil))
     (gptel-sandbox--eval-statement
      (car body) env state
      (lambda (outcome)
