@@ -1,33 +1,45 @@
 # Mementum State
 
-> Last session: 2026-04-30 11:08
+> Last session: 2026-04-30 16:15
 
 ## Total Improvements: 242+ Real Code Fixes (33 new today)
 
-### Session Summary: 2026-04-30 (Self-Evolution System Deployed)
+### Session Summary: 2026-04-30 (E2E Run + Staging Fixes)
 
-**Action:** Built and deployed self-evolving auto-workflow that learns from benchmark + git history
+**Action:** Ran E2E workflow, monitored Messages buffer, identified and fixed staging blockers
 
-**Result:** ✅ Self-evolution cycle running, knowledge base regenerated with fresh data
+**Result:** ✅ Staging verification now passes (baseline comparison working)
 
-**New System:**
-- `gptel-auto-workflow-evolution.el` — Extract → Verify → Synthesize pipeline (357 lines)
-- `gptel-auto-workflow-git-learning.el` — Git history pattern extraction (267 lines)
-- `gptel-auto-workflow-mementum.el` — Memory bridge for experiment records (259 lines)
-- `gptel-auto-workflow-production.el` — Timer-based auto-evolution + dashboard (150 lines)
+**Fixes Applied:**
+1. **Fixed syntax error in staging** (`lisp/modules/gptel-tools-code.el:279`)
+   - Extra `)` from sandbox experiment blocked ALL staging merges
+   - Commit: `6abee320` on origin/staging
+   
+2. **Verified baseline check works**
+   - Staging verification allows 11 pre-existing test failures from main
+   - Only NEW failures cause rejection
 
-**Integration:**
-- Analyzer prompts now read from `mementum/knowledge/self-evolution.md`
-- Executor prompts include synthesized success patterns
-- Evolution triggers every 5 experiments + every 6 hours via cron
-- Lowered quality threshold: 0.10 → 0.03 (based on 254 experiments)
+**Current Run (2026-04-30T140008Z-699c):**
+| Exp | Target | Decision | Issue |
+|-----|--------|----------|-------|
+| 1 | gptel-tools-agent.el | Discarded | Syntax error in generated code |
+| 2 | gptel-tools-agent.el | Staging passed | No score improvement |
+| 3 | gptel-tools-agent.el | Discarded | No improvement |
+| 1-2 | gptel-ext-context-cache.el | Timeout | 600s idle timeout |
 
-**Knowledge Base (regenerated 2026-04-30 11:08):**
-- 211 active experiment branches, 42.7% merge rate
-- Top success: refactoring 31%, safety 25%, bug-fix 23%, performance 18%
-- Top targets: agent (76), loop (45), cache (31)
+**Remaining Problems:**
+1. **AI generates code with syntax errors** (missing closing parens)
+   - Validation catches it but after grader already runs (wastes API calls)
+   - Retry mechanism times out trying to fix
+   
+2. **Experiments timeout on large files**
+   - gptel-ext-context-cache.el needs >600s
+   - gptel-tools-agent.el also timing out
 
-**Daemon:** Restarted with clean function cache
+**Staging Status:**
+- Verification: PASS (baseline comparison working)
+- No new experiment merges from current run
+- Ready for future experiments once AI issues resolved
 
 **Commit:** `30434299` — ⚒ Self-evolution: git facts + benchmark verify → mementum knowledge → prompt injection
 
