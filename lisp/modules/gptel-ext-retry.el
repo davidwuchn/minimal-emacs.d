@@ -810,9 +810,9 @@ EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'."
     (min global-limit model-limit)))
 
 (defconst my/gptel--compaction-passes
-  `((1 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i 1 t))
+  `((1 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i nil t))
         "gptel: Pass 1: trimmed %d tool result(s), now %dKB")
-    (2 ,(lambda (i) (my/gptel--trim-gemini-function-responses-for-retry i 1 t))
+    (2 ,(lambda (i) (my/gptel--trim-gemini-function-responses-for-retry i nil t))
        "gptel: Pass 2: trimmed %d Gemini function response(s), now %dKB")
     (3 my/gptel--trim-reasoning-content
        "gptel: Pass 3: stripped reasoning from %d message(s), now %dKB")
@@ -822,9 +822,9 @@ EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'."
            (and (fboundp 'my/gptel--trim-context-images)
                 (my/gptel--trim-context-images)))
        "gptel: Pass 5: trimmed %d context image(s), now %dKB")
-    (6 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i 3 t))
+    (6 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i nil t))
        "gptel: Pass 6: truncated %d remaining tool results, now %dKB")
-    (7 ,(lambda (i) (my/gptel--trim-gemini-function-responses-for-retry i 3 t))
+    (7 ,(lambda (i) (my/gptel--trim-gemini-function-responses-for-retry i nil t))
        "gptel: Pass 7: truncated %d remaining Gemini function response(s), now %dKB")
     (8 my/gptel--truncate-old-messages
        "gptel: Pass 8: truncated %d old message(s), now %dKB")
