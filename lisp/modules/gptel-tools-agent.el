@@ -8195,6 +8195,7 @@ RETRY-COUNT tracks current retry attempt."
               (retryable-failure
                 (and (not grader-only-failure)
                      (or retryable-category
+                         inspection-thrash-failure
                          (and raw-error
                               (not hard-timeout)
                               (gptel-auto-experiment--is-retryable-error-p raw-error)))))
