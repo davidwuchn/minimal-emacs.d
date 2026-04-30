@@ -357,7 +357,7 @@ Handles both symbol :type 'text and string :type \"text\"."
   (cl-loop for i from 0 below (length content-vec)
            for part = (aref content-vec i)
            when (and (listp part)
-                     (memq (plist-get part :type) '(text "text"))
+                     (member (plist-get part :type) '(text "text"))
                      (stringp (plist-get part :text)))
            do
            (let* ((text (plist-get part :text))
