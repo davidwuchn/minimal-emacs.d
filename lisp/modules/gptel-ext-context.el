@@ -477,13 +477,14 @@ Returns plist with :strategy and :context keys."
               :context last-task
               :reason "Large conversation, delegating with task only"))))))
 
-(defun my/gptel--do-auto-delegate (prompt callback &optional buffer)
+(defun my/gptel--do-auto-delegate (prompt callback &optional buffer tokens)
   "Auto-delegate to subagent when context is too large.
 PROMPT is the pending user request. CALLBACK receives the result.
-BUFFER is the gptel buffer (default current)."
+BUFFER is the gptel buffer (default current).
+TOKENS is optional pre-computed token count to avoid redundant recalculation."
   (let* ((buf (or buffer (current-buffer)))
          (buffer-string (with-current-buffer buf (buffer-string)))
-         (tokens (with-current-buffer buf (my/gptel--current-tokens)))
+         (tokens (or tokens (with-current-buffer buf (my/gptel--current-tokens))))
          (last-task (my/gptel--extract-last-task buffer-string))
          (context-info (my/gptel--smart-delegate-context buffer-string last-task))
          (strategy (plist-get context-info :strategy))
@@ -528,7 +529,7 @@ ORIG-FN is `gptel-request'. PROMPT and ARGS are passed through."
                      (if (and (integerp window) (> window 0))
                          (* 100 (/ (float tokens) window))
                        0))
-            (my/gptel--do-auto-delegate prompt callback))
+            (my/gptel--do-auto-delegate prompt callback nil tokens))
         (apply orig-fn prompt args)))))
 
 (defun my/gptel-auto-delegate-enable ()
