@@ -16,6 +16,21 @@
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
 
+;; ─── Helpers ───
+
+(defvar gptel-auto-workflow--evolution-repo-root nil
+  "Cached git repository root for self-evolution.
+Captured at load time to avoid worktree issues.")
+
+(defun gptel-auto-workflow--evolution-repo-root ()
+  "Return the git repository root for self-evolution.
+Uses cached value from load time, or detects from current directory."
+  (or gptel-auto-workflow--evolution-repo-root
+      (setq gptel-auto-workflow--evolution-repo-root
+            (string-trim
+             (shell-command-to-string
+              "git rev-parse --show-toplevel 2>/dev/null || echo ''")))))
+
 ;; ─── Benchmark Parsing ───
 
 (defun gptel-auto-workflow--parse-all-results ()
@@ -90,11 +105,18 @@
 
 (defun gptel-auto-workflow--git-raw-facts ()
   "Extract raw facts from git history.
-Returns plist with :merged-commits :abandoned-branches :target-frequency."
-  (let* ((all-branches-raw
+Returns plist with :merged-commits :abandoned-branches :target-frequency.
+Always runs git commands from the main repo root to avoid worktree issues."
+  (let* ((repo-root (or (gptel-auto-workflow--evolution-repo-root)
+                        (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                             (gptel-auto-workflow--worktree-base-root))))
+         (git-cmd (if (and repo-root (not (string-empty-p repo-root)))
+                      (format "git -C '%s' " repo-root)
+                    "git "))
+         (all-branches-raw
           (split-string
            (shell-command-to-string
-            "git branch -r --list 'origin/optimize/*'")
+            (concat git-cmd "branch -r --list 'origin/optimize/*'"))
            "\n" t))
          (all-branches
           (cl-remove-if #'null
@@ -105,7 +127,7 @@ Returns plist with :merged-commits :abandoned-branches :target-frequency."
          (merge-commits
           (split-string
            (shell-command-to-string
-            "git log --grep='Merge optimize/' --format='%s'")
+            (concat git-cmd "log --grep='Merge optimize/' --format='%s'"))
            "\n" t))
          (merged-branches
           (cl-remove-duplicates
@@ -352,6 +374,13 @@ Extract → Verify → Synthesize → (Inject happens on next prompt)."
   (message "[auto-workflow] Running self-evolution cycle...")
   (gptel-auto-workflow--evolution-synthesize)
   (message "[auto-workflow] Self-evolution cycle complete."))
+
+;; ─── Init ───
+
+;; Cache repo root at load time to avoid worktree issues later
+(when (and (null gptel-auto-workflow--evolution-repo-root)
+           (fboundp 'gptel-auto-workflow--evolution-repo-root))
+  (gptel-auto-workflow--evolution-repo-root))
 
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here
