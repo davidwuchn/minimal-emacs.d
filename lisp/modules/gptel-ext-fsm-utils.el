@@ -270,7 +270,22 @@ where first FSM was always returned (potentially wrong parent FSM).
 
 PROACTIVE MITIGATION: Uses registration order as proxy for nesting level,
 avoiding need for explicit parent-child tracking."
-  (car-safe (last (my/gptel--collect-all-fsms object))))
+  (let ((last-fsm nil)
+        (seen (make-hash-table :test 'eq)))
+    (cl-labels ((collect-last (obj)
+                  (cond
+                   ((null obj) nil)
+                   ((and (consp obj) (gethash obj seen)) nil)
+                   ((consp obj)
+                    (puthash obj t seen)
+                    (collect-last (car obj))
+                    (collect-last (cdr obj)))
+                   ((my/gptel--fsm-p obj)
+                    (unless (gethash obj seen)
+                      (puthash obj t seen)
+                      (setq last-fsm obj))))))
+      (collect-last object)
+      last-fsm)))
 
 (defun my/gptel--collect-all-fsms (object)
   "Collect all FSMs found in OBJECT as a list.
