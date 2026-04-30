@@ -7,7 +7,6 @@
 Uses loaded skills and Eight Keys breakdown for focused improvements."
   (let* ((worktree-path (or (gptel-auto-workflow--get-worktree-dir target)
                             (gptel-auto-workflow--project-root)))
-         ;; SECURITY: Use shell-quote-argument to prevent shell injection
          (worktree-quoted (shell-quote-argument worktree-path))
          (git-history (shell-command-to-string
                        (format "cd %s && git log --oneline -20 2>/dev/null || echo 'no history'"
@@ -127,19 +126,19 @@ Make minimal, targeted changes to CODE, not documentation.
 5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
 6. Implement the CODE change minimally using Edit tool
 7. BEFORE finishing, verify your changes have balanced parentheses:
-   - Run: emacs --batch --eval "(find-file \"%s\") (emacs-lisp-mode) (condition-case err (scan-sexps (point-min) (point-max)) (error (message \"ERROR: %s\" err)))"
+   - Run: emacs --batch --eval \"(find-file \\\"%%s\\\") (emacs-lisp-mode) (condition-case err (scan-sexps (point-min) (point-max)) (error (message \\\"ERROR: %%s\\\" err)))\"
    - If you see an error, FIX IT before submitting
 8. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
 9. DO NOT run git add, git commit, git push, or stage changes yourself.
    Leave edits uncommitted in the worktree; the auto-workflow controller
    handles grading, commit creation, review, and staging.
 10. FINAL RESPONSE must include:
-   - CHANGED: exact file path(s) and function/variable names touched
-   - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
-   - VERIFY: exact command(s) run and whether they passed or failed
-   - COMMIT: always \"not committed\" (workflow controller handles commits)
+    - CHANGED: exact file path(s) and function/variable names touched
+    - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
+    - VERIFY: exact command(s) run and whether they passed or failed
+    - COMMIT: always \"not committed\" (workflow controller handles commits)
 11. End the final response with: Task completed
-12. NEVER reply with only "Done", only a commit message, or a vague success claim
+12. NEVER reply with only \"Done\", only a commit message, or a vague success claim
 
 CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
 DO NOT add comments, docstrings, or documentation.
@@ -154,9 +153,8 @@ Example HYPOTHESES:
             experiment-id max-experiments target
             worktree-path
             target-full-path
-            target-full-path
+            large-target-guidance
             (or controller-focus "")
-            (or large-target-guidance "")
             (or inspection-thrash-contract "")
             (or patterns "No previous experiments")
             (or suggestions "None")

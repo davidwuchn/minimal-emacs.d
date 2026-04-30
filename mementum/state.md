@@ -4,44 +4,39 @@
 
 ## Total Improvements: 242+ Real Code Fixes (33 new today)
 
-### Session Summary: 2026-04-30 (E2E Run + Staging Fixes)
+### Session Summary: 2026-04-30 Evening (Module Split + E2E Fixes)
 
-**Action:** Ran E2E workflow, monitored Messages buffer, identified and fixed staging blockers
+**Action:** Split monolithic gptel-tools-agent.el into 14 focused modules
 
-**Result:** ✅ Staging verification now passes (baseline comparison working)
+**Result:** ✅ All modules under 1000 lines, all loading successfully
 
-**Fixes Applied:**
-1. **Fixed syntax error in staging** (`lisp/modules/gptel-tools-code.el:279`)
-   - Extra `)` from sandbox experiment blocked ALL staging merges
-   - Commit: `6abee320` on origin/staging
-   
-2. **Verified baseline check works**
-   - Staging verification allows 11 pre-existing test failures from main
-   - Only NEW failures cause rejection
+**Split:**
+- gptel-tools-agent-base.el (959) - utilities, validation, shell
+- gptel-tools-agent-git.el (994) - git operations, orphan tracking
+- gptel-tools-agent-subagent.el (997) - subagent caching, delegation
+- gptel-tools-agent-worktree.el (981) - worktree management
+- gptel-tools-agent-staging-baseline.el (995) - staging baseline & review
+- gptel-tools-agent-staging-merge.el (922) - staging merge & verify
+- gptel-tools-agent-benchmark.el (914) - benchmark & evaluation
+- gptel-tools-agent-prompt-analyze.el (401) - prompt analysis
+- gptel-tools-agent-prompt-build.el (655) - prompt construction
+- gptel-tools-agent-error.el (615) - error analysis, retry logic
+- gptel-tools-agent-experiment-core.el (647) - single experiment
+- gptel-tools-agent-experiment-loop.el (956) - experiment loop
+- gptel-tools-agent-main.el (941) - main entry point
+- gptel-tools-agent-research.el (575) - autonomous research
 
-**Current Run (2026-04-30T140008Z-699c):**
-| Exp | Target | Decision | Issue |
-|-----|--------|----------|-------|
-| 1 | gptel-tools-agent.el | Discarded | Syntax error in generated code |
-| 2 | gptel-tools-agent.el | Staging passed | No score improvement |
-| 3 | gptel-tools-agent.el | Discarded | No improvement |
-| 1-2 | gptel-ext-context-cache.el | Timeout | 600s idle timeout |
+**Impact:**
+- Individual modules can be targeted (smaller surface area)
+- Easier to review and understand
+- No more 11,481-line monolith
 
-**Remaining Problems:**
-1. **AI generates code with syntax errors** (missing closing parens)
-   - Validation catches it but after grader already runs (wastes API calls)
-   - Retry mechanism times out trying to fix
-   
-2. **Experiments timeout on large files**
-   - gptel-ext-context-cache.el needs >600s
-   - gptel-tools-agent.el also timing out
+**Previous Fixes (E2E Run):**
+1. Fixed syntax error in staging (`lisp/modules/gptel-tools-code.el:279`)
+2. Verified baseline comparison works (allows pre-existing failures)
+3. Fixed strategic analyzer syntax error (unbalanced parens)
 
-**Staging Status:**
-- Verification: PASS (baseline comparison working)
-- No new experiment merges from current run
-- Ready for future experiments once AI issues resolved
-
-**Commit:** `30434299` — ⚒ Self-evolution: git facts + benchmark verify → mementum knowledge → prompt injection
+**Commit:** `72a55288` — Δ split gptel-tools-agent.el into 14 modules
 
 ### Session Summary: 2026-04-11 Evening (Remote Sync + Submodule Update)
 
