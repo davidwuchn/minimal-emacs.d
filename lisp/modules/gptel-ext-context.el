@@ -202,6 +202,22 @@ Returns (tokens window threshold-fraction percentage-threshold)."
          (percentage-threshold (* window threshold-fraction)))
     (list tokens window threshold-fraction percentage-threshold)))
 
+(defun my/gptel--tokens-from-threshold (values)
+  "Extract tokens from VALUES returned by `my/gptel--threshold-values'."
+  (nth 0 values))
+
+(defun my/gptel--window-from-threshold (values)
+  "Extract context window from VALUES returned by `my/gptel--threshold-values'."
+  (nth 1 values))
+
+(defun my/gptel--fraction-from-threshold (values)
+  "Extract threshold fraction from VALUES returned by `my/gptel--threshold-values'."
+  (nth 2 values))
+
+(defun my/gptel--threshold-from-threshold (values)
+  "Extract computed threshold from VALUES returned by `my/gptel--threshold-values'."
+  (nth 3 values))
+
 (defun my/gptel--current-tokens ()
   "Return estimated token count for current buffer."
   (let* ((chars (buffer-size))
@@ -233,10 +249,10 @@ Only returns t when tokens >= threshold% of context window.
 Uses backend-specific thresholds (lower for DashScope)."
   (let* ((chars (buffer-size))
          (threshold-values (my/gptel--threshold-values))
-         (tokens (nth 0 threshold-values))
-         (window (nth 1 threshold-values))
-         (threshold-fraction (nth 2 threshold-values))
-         (threshold (nth 3 threshold-values))
+         (tokens (my/gptel--tokens-from-threshold threshold-values))
+         (window (my/gptel--window-from-threshold threshold-values))
+         (threshold-fraction (my/gptel--fraction-from-threshold threshold-values))
+         (threshold (my/gptel--threshold-from-threshold threshold-values))
          (needed (and my/gptel-auto-compact-enabled
                       (bound-and-true-p gptel-mode)
                       (>= chars my/gptel-auto-compact-min-chars)
@@ -256,10 +272,10 @@ Uses backend-specific thresholds (lower for DashScope)."
   "Show current model's context window for debugging."
   (interactive)
   (let* ((threshold-values (my/gptel--threshold-values))
-         (tokens (nth 0 threshold-values))
-         (window (nth 1 threshold-values))
-         (threshold-fraction (nth 2 threshold-values))
-         (threshold (nth 3 threshold-values))
+         (tokens (my/gptel--tokens-from-threshold threshold-values))
+         (window (my/gptel--window-from-threshold threshold-values))
+         (threshold-fraction (my/gptel--fraction-from-threshold threshold-values))
+         (threshold (my/gptel--threshold-from-threshold threshold-values))
          (model gptel-model)
          (model-id (my/gptel--model-id-string model))
          (cached (and model-id (gethash model-id my/gptel--context-window-cache)))
@@ -419,10 +435,10 @@ Hook for `gptel-post-response-functions'."
   "Return non-nil if context exceeds auto-delegation threshold."
   (when my/gptel-auto-delegate-enabled
     (let* ((threshold-values (my/gptel--threshold-values))
-           (tokens (nth 0 threshold-values))
-           (window (nth 1 threshold-values))
-           (threshold-fraction (nth 2 threshold-values))
-           (percentage-threshold (nth 3 threshold-values))
+           (tokens (my/gptel--tokens-from-threshold threshold-values))
+           (window (my/gptel--window-from-threshold threshold-values))
+           (threshold-fraction (my/gptel--fraction-from-threshold threshold-values))
+           (percentage-threshold (my/gptel--threshold-from-threshold threshold-values))
            (absolute-threshold my/gptel-auto-delegate-threshold-absolute))
       (or (and absolute-threshold (>= tokens absolute-threshold))
           (>= tokens percentage-threshold)))))
