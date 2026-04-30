@@ -55,6 +55,8 @@
 (require 'gptel-skill-benchmark)
 
 ;; Load self-evolution system (mementum + git facts → knowledge injection)
+;; Ensure tools-agent loads first (evolution modules depend on it)
+(require 'gptel-tools-agent)
 (require 'gptel-auto-workflow-git-learning)
 (require 'gptel-auto-workflow-evolution)
 (require 'gptel-auto-workflow-mementum)

@@ -202,9 +202,17 @@ Reports which backend was used."
          (usages nil)
          (lsp-retries my/gptel-lsp-retry-max)
          (lsp-ready nil)
-         (backend "unknown"))
+         (backend "unknown")
+         ;; Skip LSP in auto-workflow experiments (no LSP server in worktrees)
+         (workflow-running (or (and (boundp 'gptel-auto-workflow--running)
+                                    gptel-auto-workflow--running)
+                               (and (boundp 'gptel-auto-workflow--cron-job-running)
+                                    gptel-auto-workflow--cron-job-running))))
     ;; LSP retry loop - check server availability on each iteration
-    (while (and (> lsp-retries 0) (not lsp-ready))
+    ;; Skip entirely in workflow experiments to avoid timeouts
+    (while (and (not workflow-running)
+                (> lsp-retries 0)
+                (not lsp-ready))
       (let* ((lsp-server (and (fboundp 'eglot-current-server)
                               (eglot-current-server)))
              (backend-type (and lsp-server (xref-find-backend))))
@@ -226,7 +234,7 @@ Reports which backend was used."
                                     refs)))
                   (setq lsp-retries (my/gptel--lsp-retry-wait lsp-retries my/gptel-lsp-retry-max "[LSP] Waiting for server... (%d retries left)"))))
             (error
-             (setq lsp-retries (my/gptel--lsp-retry-wait lsp-retries my/gptel-lsp-retry-max "[LSP] Connection error, retrying... (%d left)")))))))
+             (setq lsp-retries (my/gptel--lsp-retry-wait lsp-retries my/gptel-lsp-retry-max "[LSP] Connection error, retrying... (%d left)"))))))))
     (unless usages
       (let ((git-result (my/gptel--git-grep-usages symbol-name root)))
         (if git-result
