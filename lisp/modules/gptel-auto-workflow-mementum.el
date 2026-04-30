@@ -73,7 +73,7 @@ EXPERIMENT is a plist with :target :hypothesis :score-before :score-after
            (score-after (plist-get experiment :score-after))
            (quality (plist-get experiment :code-quality))
            (grader-q (plist-get experiment :grader-quality))
-           (change-type (gptel-auto-experiment--categorize-hypothesis hypothesis))
+           (change-type (gptel-auto-workflow--categorize-hypothesis hypothesis))
            (slug (gptel-auto-workflow--mementum-slug
                   (format "%s-%s" target hypothesis))))
       (pcase decision
