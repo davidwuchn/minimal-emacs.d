@@ -292,17 +292,17 @@ requires string values. Recursively processes nested :properties and :items."
 (defun my/gptel--sanitize-tool-props (props)
   "Recursively sanitize :type symbols in tool properties PROPS."
   (cl-loop for (key val) on props by #'cddr
-           when (listp val)
+           when (cl-listp val)
            do
            (my/gptel--sanitize-type-symbol val)
            (when-let* ((items (plist-get val :items))
-                       ((listp items)))
+                       ((cl-listp items)))
              (my/gptel--sanitize-type-symbol items)
              (when-let* ((item-props (plist-get items :properties))
-                         ((listp item-props)))
+                         ((cl-listp item-props)))
                (my/gptel--sanitize-tool-props item-props)))
            (when-let* ((nested-props (plist-get val :properties))
-                       ((listp nested-props)))
+                       ((cl-listp nested-props)))
              (my/gptel--sanitize-tool-props nested-props))))
 
 (defun my/gptel--pre-serialize-sanitize-messages (info _uuid _include-headers)
