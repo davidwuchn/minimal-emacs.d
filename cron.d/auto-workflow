@@ -35,6 +35,7 @@ PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
 
 #0 23,3,7,11,15,19 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh auto-workflow >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 #0 */4 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh research >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+#0 */6 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh evolution >> $HOME/.emacs.d/var/tmp/cron/evolution.log 2>&1
 #0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
 #0 5 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
 
@@ -45,6 +46,7 @@ PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
 
 #0 10,14,18 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh auto-workflow >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 #0 */4 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh research >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+#0 */6 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh evolution >> $HOME/.emacs.d/var/tmp/cron/evolution.log 2>&1
 #0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
 #0 5 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
 
@@ -55,5 +57,6 @@ PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
 
 #0 */4 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh auto-workflow >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 #0 */6 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh research >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+#0 */6 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh evolution >> $HOME/.emacs.d/var/tmp/cron/evolution.log 2>&1
 #0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
 #0 5 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
