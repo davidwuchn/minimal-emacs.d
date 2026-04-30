@@ -7882,8 +7882,8 @@ REASON is only used for logging."
            (gptel-auto-experiment--provider-usage-limit-error-p error-output)
            (let ((case-fold-search t))
              (string-match-p
-              "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
-              error-output)))))
+               "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\"\\|Malformed JSON"
+               error-output)))))
 
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
@@ -7918,8 +7918,8 @@ REASON is only used for logging."
       (and (stringp error-output)
            (let ((case-fold-search t))
              (string-match-p
-              "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
-              error-output)))))
+               "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|Malformed JSON"
+               error-output)))))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
@@ -8177,11 +8177,20 @@ RETRY-COUNT tracks current retry attempt."
          (gptel-auto-workflow--restore-live-target-file target workflow-root)
          (when quota-exhausted
            (setq gptel-auto-experiment--quota-exhausted t))
-         (if (and (not quota-exhausted)
-                  (< retries gptel-auto-experiment-max-retries)
-                  retryable-failure)
-             (progn
-               (setq attempt-logs nil)
+          (if (and (not quota-exhausted)
+                   (< retries gptel-auto-experiment-max-retries)
+                   retryable-failure)
+              (progn
+                (when (and raw-error
+                           (or (gptel-auto-experiment--provider-pressure-error-p raw-error)
+                               (gptel-auto-experiment--is-retryable-error-p raw-error)))
+                  (condition-case nil
+                      (gptel-auto-workflow--activate-provider-failover
+                       "executor"
+                       (gptel-auto-workflow--get-active-agent-preset "executor")
+                       raw-error)
+                    (error nil)))
+                (setq attempt-logs nil)
                (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
                         experiment-id (1+ retries) gptel-auto-experiment-max-retries
                         retry-delay)
@@ -8238,8 +8247,8 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :api-rate-limit "Provider overloaded"))
    ((gptel-auto-experiment--provider-auth-error-p agent-output)
     (cons :api-error "Provider authorization failed"))
-   ((string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format" agent-output)
-    (cons :api-error "API parameter error (invalid JSON format)"))
+    ((string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format\\|Malformed JSON" agent-output)
+     (cons :api-error "API parameter error (invalid JSON format)"))
    ((let ((case-fold-search t))
       (string-match-p "timeout\\|timed out\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
                       agent-output))
