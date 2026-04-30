@@ -268,12 +268,13 @@ with a warning logged for debugging."
 Returns a new alist with accumulated values.
 TOTALS is an alist of (score-type . accumulated-value).
 SCORES-ALIST is an alist of (score-type . current-score).
-Handles nil scores by treating them as 0.
+Handles nil or non-numeric scores by treating them as 0.
 Returns TOTALS unchanged if SCORES-ALIST is nil."
   (if (null scores-alist)
       totals
     (cl-loop for (score-type . current) in totals
-             for score = (or (alist-get score-type scores-alist) 0.0)
+             for raw-score = (alist-get score-type scores-alist)
+             for score = (if (numberp raw-score) raw-score 0.0)
              collect (cons score-type (+ current score)))))
 
 (defun gptel-benchmark--extract-score-types (scores)
