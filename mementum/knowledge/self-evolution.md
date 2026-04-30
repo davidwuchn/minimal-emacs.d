@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-04-30 11:08
+updated: 2026-04-30 11:46
 ---
 
 # Self-Evolution Knowledge Base
@@ -13,11 +13,11 @@ updated: 2026-04-30 11:08
 
 ## Git History Facts
 
-- Active experiment branches: 211
-- Historical merges: 546
+- Active experiment branches: 213
+- Historical merges: 548
 - Active branches merged: 90
-- Active branches abandoned: 121
-- Active merge rate: 42.7%
+- Active branches abandoned: 123
+- Active merge rate: 42.3%
 
 ### Target Frequency
 
@@ -28,30 +28,31 @@ updated: 2026-04-30 11:08
 - `sandbox`: 10 experiments
 - `projects`: 10 experiments
 - `utils`: 9 experiments
+- `core`: 6 experiments
 - `context`: 6 experiments
-- `core`: 5 experiments
 - `sanitize`: 2 experiments
 - `code`: 2 experiments
 - `subagent`: 1 experiments
+- `strategic`: 1 experiments
 - `memory`: 1 experiments
 - `evolution`: 1 experiments
 - `benchmark`: 1 experiments
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 23% verified (45/193 experiments)
-- **performance**: 18% verified (4/22 experiments)
+- **bug-fix**: 24% verified (46/195 experiments)
+- **performance**: 17% verified (4/23 experiments)
 - **refactoring**: 31% verified (20/65 experiments)
-- **safety**: 25% verified (12/48 experiments)
+- **safety**: 24% verified (12/49 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
 1. **refactoring** - 31% kept (65 experiments)
-2. **safety** - 25% kept (48 experiments)
-3. **bug-fix** - 23% kept (193 experiments)
-4. **performance** - 18% kept (22 experiments)
+2. **safety** - 24% kept (49 experiments)
+3. **bug-fix** - 24% kept (195 experiments)
+4. **performance** - 17% kept (23 experiments)
 
 ## Critical Guidance for Maximum Success
 
@@ -97,7 +98,7 @@ Which change types work best for each target file:
 
 ### `gptel-benchmark-core.el`
 
-- **bug-fix**: 53% (17 experiments)
+- **bug-fix**: 56% (18 experiments)
 
 ### `gptel-ext-context-cache.el`
 
