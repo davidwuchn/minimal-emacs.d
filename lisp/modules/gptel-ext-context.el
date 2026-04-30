@@ -454,7 +454,8 @@ Returns a short description of what the user was asking for."
   "Build context for subagent delegation.
 BUFFER-STRING is the full conversation. LAST-TASK is the extracted task.
 Returns plist with :strategy and :context keys."
-  (if (not (stringp buffer-string))
+  (if (or (not (stringp buffer-string))
+          (string-empty-p buffer-string))
       (list :strategy 'task-only
             :context (or last-task "Continue the task")
             :reason "Empty or invalid buffer")
