@@ -147,6 +147,19 @@ falls back to the user's Emacs configuration directory."
             (push rel-path targets)))))
     (reverse targets)))
 
+(defun gptel-auto-workflow--filter-large-files (files max-lines)
+  "Filter FILES to exclude those with more than MAX-LINES lines.
+Returns list of (file . line-count) for files under the limit."
+  (let (result)
+    (dolist (file files (reverse result))
+      (when (file-exists-p file)
+        (let ((count
+               (with-temp-buffer
+                 (insert-file-contents file)
+                 (count-lines (point-min) (point-max)))))
+          (when (<= count max-lines)
+            (push (cons file count) result)))))))
+
 (defun gptel-auto-workflow--target-in-root-repo-p (abs-path proj-root)
   "Return non-nil when ABS-PATH belongs to the same git repo as PROJ-ROOT."
   (when (and (stringp abs-path) (stringp proj-root) (not (string-empty-p abs-path)))
@@ -173,9 +186,16 @@ Scans only root-repo targets that can be integrated into staging."
           :todos (shell-command-to-string
                   (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
                           safe-root))
-          :file-list (shell-command-to-string
-                      (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                              safe-root)))))
+          :file-list (let ((all-files (split-string
+                                      (shell-command-to-string
+                                       (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                                               safe-root))
+                                      "\n" t)))
+                        (mapconcat (lambda (f) (format "%s" f))
+                                   (mapcar #'car
+                                           (gptel-auto-workflow--filter-large-files
+                                            all-files 1000))
+                                   "\n"))))))
 
 (defun gptel-auto-workflow--research-patterns (callback)
   "Research code patterns.
@@ -238,10 +258,14 @@ RESEARCH FINDINGS:
 TASK: Select exactly %d files from lisp/modules/ to optimize.
 Do NOT choose files from packages/ or any nested git repo. Those are optimized separately and cannot be merged into the root staging branch by this workflow.
 
+SIZE CONSTRAINT: Skip files over 1000 lines. They are too large for focused experiments.
+Example: gptel-tools-agent.el (11,481 lines) is EXCLUDED. Focus on smaller files.
+
 %s
 
 PRIORITIZE: Files with actual bugs, missing validation, or error handling gaps.
 AVOID: Recently-refactored files with no remaining issues.
+AVOID: Files over 1000 lines (too large for focused changes).
 
 OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
