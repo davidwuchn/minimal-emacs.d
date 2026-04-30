@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-04-30 13:24
+updated: 2026-04-30 15:00
 ---
 
 # Self-Evolution Knowledge Base
@@ -32,7 +32,7 @@ updated: 2026-04-30 13:24
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 0% verified (0/22 experiments)
+- **bug-fix**: 0% verified (0/31 experiments)
 - **performance**: 0% verified (0/5 experiments)
 - **refactoring**: 0% verified (0/7 experiments)
 - **safety**: 0% verified (0/8 experiments)
@@ -41,7 +41,7 @@ updated: 2026-04-30 13:24
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **bug-fix** - 0% kept (22 experiments)
+1. **bug-fix** - 0% kept (31 experiments)
 2. **performance** - 0% kept (5 experiments)
 3. **refactoring** - 0% kept (7 experiments)
 4. **safety** - 0% kept (8 experiments)
@@ -63,8 +63,16 @@ Which change types work best for each target file:
 
 ### `gptel-tools-agent.el`
 
-- **bug-fix**: 0% (9 experiments)
+- **bug-fix**: 0% (12 experiments)
 - **refactoring**: 0% (6 experiments)
+
+### `gptel-benchmark-core.el`
+
+- **bug-fix**: 0% (3 experiments)
+
+### `gptel-auto-workflow-strategic.el`
+
+- **bug-fix**: 0% (3 experiments)
 
 ### `gptel-ext-retry.el`
 
