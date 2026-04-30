@@ -295,20 +295,19 @@ CALLBACK receives list of target files."
           (request-analyzer 0))
       (funcall callback nil))))
 
-(defun gptel-auto-workflow--validate-and-add-target (file proj-root targets max-targets)
+(defun gptel-auto-workflow--validate-and-add-target (file proj-root targets)
   "Validate FILE and add to TARGETS if it exists.
 FILE can be a string path or a JSON object (alist) with file/path/target keys.
+Caller is responsible for enforcing max-targets limit.
 Returns updated targets list."
   (cond
    ((gptel-auto-workflow--json-object-p file)
     (let ((extracted-file (or (alist-get 'file file)
                               (alist-get 'path file)
                               (alist-get 'target file))))
-      (gptel-auto-workflow--validate-and-add-target
-       extracted-file proj-root targets max-targets)))
+      (gptel-auto-workflow--validate-and-add-target extracted-file proj-root targets)))
    ((not (stringp file)) targets)
    ((not (and (stringp proj-root) (not (string-empty-p proj-root)))) targets)
-   ((>= (length targets) max-targets) targets)
    (t
     (let ((abs-path (if (file-name-absolute-p file)
                         file
@@ -363,9 +362,9 @@ Returns list of validated relative paths, up to MAX-TARGETS."
   (let ((candidates-list (if (listp candidates) candidates (list candidates)))
         (targets '()))
     (dolist (file candidates-list (reverse targets))
-      (unless (>= (length targets) max-targets)
+      (when (< (length targets) max-targets)
         (let ((new-targets (gptel-auto-workflow--validate-and-add-target
-                             file proj-root targets max-targets)))
+                             file proj-root targets)))
           (when (consp new-targets)
             (setq targets new-targets)))))))
 
