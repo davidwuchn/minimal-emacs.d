@@ -287,8 +287,15 @@ CALLBACK receives list of target files."
 
 (defun gptel-auto-workflow--validate-and-add-target (file proj-root targets max-targets)
   "Validate FILE and add to TARGETS if it exists.
+FILE can be a string path or a JSON object (alist) with file/path/target keys.
 Returns updated targets list."
   (cond
+   ((gptel-auto-workflow--json-object-p file)
+    (let ((extracted-file (or (alist-get 'file file)
+                              (alist-get 'path file)
+                              (alist-get 'target file))))
+      (gptel-auto-workflow--validate-and-add-target
+       extracted-file proj-root targets max-targets)))
    ((not (stringp file)) targets)
    ((not (and (stringp proj-root) (not (string-empty-p proj-root)))) targets)
    ((>= (length targets) max-targets) targets)
