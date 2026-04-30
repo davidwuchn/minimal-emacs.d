@@ -1,8 +1,35 @@
 # Mementum State
 
-> Last session: 2026-04-11 23:30
+> Last session: 2026-04-30 11:08
 
 ## Total Improvements: 242+ Real Code Fixes (33 new today)
+
+### Session Summary: 2026-04-30 (Self-Evolution System Deployed)
+
+**Action:** Built and deployed self-evolving auto-workflow that learns from benchmark + git history
+
+**Result:** ✅ Self-evolution cycle running, knowledge base regenerated with fresh data
+
+**New System:**
+- `gptel-auto-workflow-evolution.el` — Extract → Verify → Synthesize pipeline (357 lines)
+- `gptel-auto-workflow-git-learning.el` — Git history pattern extraction (267 lines)
+- `gptel-auto-workflow-mementum.el` — Memory bridge for experiment records (259 lines)
+- `gptel-auto-workflow-production.el` — Timer-based auto-evolution + dashboard (150 lines)
+
+**Integration:**
+- Analyzer prompts now read from `mementum/knowledge/self-evolution.md`
+- Executor prompts include synthesized success patterns
+- Evolution triggers every 5 experiments + every 6 hours via cron
+- Lowered quality threshold: 0.10 → 0.03 (based on 254 experiments)
+
+**Knowledge Base (regenerated 2026-04-30 11:08):**
+- 211 active experiment branches, 42.7% merge rate
+- Top success: refactoring 31%, safety 25%, bug-fix 23%, performance 18%
+- Top targets: agent (76), loop (45), cache (31)
+
+**Daemon:** Restarted with clean function cache
+
+**Commit:** `30434299` — ⚒ Self-evolution: git facts + benchmark verify → mementum knowledge → prompt injection
 
 ### Session Summary: 2026-04-11 Evening (Remote Sync + Submodule Update)
 
