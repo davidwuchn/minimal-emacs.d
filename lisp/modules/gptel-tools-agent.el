@@ -20,6 +20,9 @@
 (declare-function my/gptel--transient-error-p "gptel-ext-retry" (error-data http-status))
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 
+;; Ensure evolution production module is loaded for timer and hook variables
+(require 'gptel-auto-workflow-production nil t)
+
 ;; Forward declaration for variable defined in gptel-auto-workflow-projects.el.
 ;; Do not initialize it here, or later `defvar' initializers in the projects
 ;; module will be skipped and leave the shared table bound to nil.

@@ -194,7 +194,7 @@ RunAgent was registered, leaving it out of the buffer's tool list."
                               (cl-remove-if (lambda (tc) (memq tc pruned))
                                             tool-use)))
         (setf (gptel-fsm-info fsm) info)
-        (when (= 0 (length (plist-get info :tool-use)))
+        (when (null (plist-get info :tool-use))
           (message "gptel: all tool calls were malformed, advancing FSM to DONE")
           (when gptel-mode (gptel--update-status " Ready" 'success))
           (funcall (plist-get info :callback)
@@ -311,26 +311,27 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                  (aborted nil))
             (setq info (plist-put info :doom-loop-fingerprints (append fps new-fps)))
             (dolist (fp new-fps)
-              (let* ((existing-count (alist-get fp run-counts nil nil #'string=))
-                     (current-run
-                      (if (and prev-fp (equal prev-fp fp))
-                          (1+ (or existing-count 0))
-                        1)))
-                (setf (alist-get fp run-counts nil t #'string=) current-run)
-                (when (>= current-run n)
-                  (let ((error-message
-                         (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
+              (when fp
+                (let* ((existing-count (alist-get fp run-counts nil nil #'string=))
+                       (current-run
+                        (if (and prev-fp (equal prev-fp fp))
+                            (1+ (or existing-count 0))
+                          1)))
+                  (setf (alist-get fp run-counts nil t #'string=) current-run)
+                  (when (>= current-run n)
+                    (let ((error-message
+                           (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
  with identical arguments.  Try a different approach or break the task into smaller steps."
-                                 (car (split-string fp ":" t)) current-run)))
-                    (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
-                             (car (split-string fp ":" t)) current-run)
-                    (setq info (plist-put info :doom-loop-run-counts run-counts))
-                    (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
-                    (funcall (plist-get info :callback) error-message info))
-                  (setq aborted t)
-                  (gptel--fsm-transition fsm 'DONE)
-                  (cl-return-from my/gptel--detect-doom-loop))
-                (setq prev-fp fp)))
+                                   (car (split-string fp ":" t)) current-run)))
+                      (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
+                               (car (split-string fp ":" t)) current-run)
+                      (setq info (plist-put info :doom-loop-run-counts run-counts))
+                      (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
+                      (funcall (plist-get info :callback) error-message info))
+                    (setq aborted t)
+                    (gptel--fsm-transition fsm 'DONE)
+                    (cl-return-from my/gptel--detect-doom-loop))
+                  (setq prev-fp fp))))
             (unless aborted
               (setq info (plist-put info :doom-loop-run-counts run-counts))
               (setf (gptel-fsm-info fsm) info))))))))
