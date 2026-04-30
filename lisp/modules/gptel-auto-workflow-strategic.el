@@ -195,7 +195,7 @@ Scans only root-repo targets that can be integrated into staging."
                                    (mapcar #'car
                                            (gptel-auto-workflow--filter-large-files
                                             all-files 1000))
-                                   "\n"))))))
+                                     "\n")))))
 
 (defun gptel-auto-workflow--research-patterns (callback)
   "Research code patterns.
