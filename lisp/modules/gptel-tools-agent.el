@@ -8355,6 +8355,9 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
   "Run single experiment. Call CALLBACK with result plist.
 BASELINE-CODE-QUALITY is the initial code quality score.
 LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
+  ;; Clear per-experiment provider overrides so MiniMax gets first crack
+  ;; at each new experiment. Rate-limited backends still stay blacklisted.
+  (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
