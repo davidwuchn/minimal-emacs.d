@@ -474,7 +474,7 @@ Returns plist with :strategy and :context keys."
               :reason "Short conversation, full context safe"))
        (t
         (list :strategy 'task-only
-              :context last-task
+              :context (or last-task "Continue the task")
               :reason "Large conversation, delegating with task only"))))))
 
 (defun my/gptel--do-auto-delegate (prompt callback &optional buffer)
