@@ -426,6 +426,8 @@ Returns t on success, signals error on failure."
                 ;; FSM → ID mapping: validate ID format and bidirectional consistency
                 ((my/gptel--fsm-p key)
                  (let ((id value))
+                   (unless (stringp id)
+                     (error "FSM registry invariant violated: FSM→ID value must be string, got %S" id))
                    (unless (my/gptel--fsm-id-valid-p id)
                      (error "FSM registry invariant violated: invalid ID format in FSM→ID mapping: %s" id))
                    (let ((fsm-via-id (gethash id my/gptel--fsm-registry)))
