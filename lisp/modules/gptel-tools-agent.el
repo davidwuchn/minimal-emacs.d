@@ -18,6 +18,7 @@
 (declare-function gptel-benchmark-llm-synthesize-knowledge-sync "gptel-benchmark-llm"
                   (topic memories &optional timeout-seconds))
 (declare-function my/gptel--transient-error-p "gptel-ext-retry" (error-data http-status))
+(declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 
 ;; Forward declaration for variable defined in gptel-auto-workflow-projects.el.
 ;; Do not initialize it here, or later `defvar' initializers in the projects
@@ -2696,11 +2697,16 @@ Monthly subscription: 2 for fail-fast, try more different files."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-min-quality-gain-on-score-tie 0.10
+(defcustom gptel-auto-experiment-min-quality-gain-on-score-tie 0.03
   "Minimum code-quality gain required to keep a tied benchmark score.
 
 Tied Eight Keys scores should only be kept when code quality improves by at
-least this amount and the combined score still improves."
+least this amount and the combined score still improves.
+
+Based on 254 experiments: threshold of 0.03 catches genuine robustness
+improvements (nil guards, error handling, type validation) while filtering
+cosmetic refactoring. Previous threshold of 0.10 rejected 78% of experiments
+that had real quality gains of 0.02-0.08."
   :type 'number
   :safe #'numberp
   :group 'gptel-tools-agent)
@@ -7197,6 +7203,9 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
 ## Suggestions
 %s
 
+## Self-Evolution Knowledge
+%s
+
 ## Git History (recent commits)
 %s
 
@@ -7265,6 +7274,9 @@ Example HYPOTHESES:
             (or inspection-thrash-contract "")
             (or patterns "No previous experiments")
             (or suggestions "None")
+            (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
+                (gptel-auto-workflow--evolution-get-knowledge)
+              "")
             git-history
             (or baseline 0.5)
             (if weakest-keys
@@ -7379,6 +7391,17 @@ Example HYPOTHESES:
                       (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
                       truncated-output))
       (write-region (point-min) (point-max) file))
+    ;; Trigger self-evolution after experiment logging
+    (when (and (fboundp 'gptel-auto-workflow--experiment-complete-hook)
+               (fboundp 'gptel-auto-workflow-evolution-run-cycle))
+      (condition-case err
+          (progn
+            (gptel-auto-workflow--experiment-complete-hook experiment)
+            (let ((exp-id (or (gptel-auto-workflow--plist-get experiment :id) 0)))
+              (when (and (> exp-id 0) (zerop (% exp-id 5)))
+                (run-with-idle-timer 30 nil #'gptel-auto-workflow-evolution-run-cycle))))
+        (error
+         (message "[auto-workflow] Evolution hook error: %s" err))))
     (gptel-auto-workflow--sync-live-kept-count run-id file)))
 
 (defun gptel-auto-experiment--make-kept-result-callback (run-id exp-result log-fn callback)

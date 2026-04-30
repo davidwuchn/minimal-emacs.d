@@ -30,6 +30,8 @@
 (require 'json)
 (require 'gptel-tools-agent)
 
+(declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
+
 (defcustom gptel-auto-workflow-strategic-selection t
   "When non-nil, use LLM-based target selection.
 When nil, use static targets from gptel-auto-workflow-targets.
@@ -236,6 +238,11 @@ RESEARCH FINDINGS:
 TASK: Select exactly %d files from lisp/modules/ to optimize.
 Do NOT choose files from packages/ or any nested git repo. Those are optimized separately and cannot be merged into the root staging branch by this workflow.
 
+%s
+
+PRIORITIZE: Files with actual bugs, missing validation, or error handling gaps.
+AVOID: Recently-refactored files with no remaining issues.
+
 OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
           (or (plist-get context :file-list) "")
@@ -245,7 +252,10 @@ OUTPUT JSON ONLY:
           (if (or (null research-findings) (string-empty-p research-findings))
               "Not available (research disabled)"
             (truncate-string-to-width research-findings 1000 nil nil "..."))
-          max-targets))
+          max-targets
+          (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
+              (gptel-auto-workflow--evolution-get-knowledge)
+            "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results")))
 
 (defun gptel-auto-workflow--ask-analyzer-with-findings (research-findings callback)
   "Ask analyzer with optional RESEARCH-FINDINGS for target selection.

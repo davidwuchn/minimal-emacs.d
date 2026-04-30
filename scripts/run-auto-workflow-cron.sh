@@ -11,7 +11,7 @@ case "$ACTION" in
     *) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-copilot-auto-workflow}" ;;
 esac
 case "$ACTION" in
-    mementum|instincts) SNAPSHOT_NAME="$ACTION" ;;
+    mementum|instincts|evolution) SNAPSHOT_NAME="$ACTION" ;;
     *)
         case "$SERVER_NAME" in
             copilot-auto-workflow) SNAPSHOT_NAME="auto-workflow" ;;
@@ -24,7 +24,7 @@ DAEMON_LOG="$DIR/var/tmp/cron/${SERVER_NAME}.log"
 MESSAGES_FILE="${AUTO_WORKFLOW_MESSAGES_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_NAME}-messages-tail.txt}"
 MESSAGES_CHARS="${AUTO_WORKFLOW_MESSAGES_CHARS:-16000}"
 case "$ACTION" in
-    mementum|instincts) SNAPSHOT_CACHE_NAME="$ACTION" ;;
+    mementum|instincts|evolution) SNAPSHOT_CACHE_NAME="$ACTION" ;;
     *) SNAPSHOT_CACHE_NAME="$SERVER_NAME" ;;
 esac
 SNAPSHOT_PATHS_FILE="${AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_CACHE_NAME}-snapshot-paths.txt}"
@@ -857,6 +857,7 @@ workflow_action_elisp() {
         research) dispatch="(gptel-auto-workflow-queue-all-research)" ;;
         mementum) dispatch="(gptel-auto-workflow-queue-all-mementum)" ;;
         instincts) dispatch="(gptel-auto-workflow-queue-all-instincts)" ;;
+        evolution) dispatch="(when (fboundp 'gptel-auto-workflow-evolution-run-cycle) (gptel-auto-workflow-evolution-run-cycle))" ;;
         *) return 1 ;;
     esac
 
@@ -1048,6 +1049,9 @@ case "$ACTION" in
     instincts)
         ELISP="$(workflow_action_elisp "instincts")"
         ;;
+    evolution)
+        ELISP="$(workflow_action_elisp "evolution")"
+        ;;
     status)
         ELISP="(and (fboundp 'gptel-auto-workflow--status-plist)
                     (gptel-auto-workflow--status-plist))"
@@ -1065,7 +1069,7 @@ case "$ACTION" in
         ELISP="$(stop_action_elisp)"
         ;;
     *)
-        echo "Usage: $0 {auto-workflow|research|mementum|instincts|status|messages|stop}" >&2
+        echo "Usage: $0 {auto-workflow|research|mementum|instincts|evolution|status|messages|stop}" >&2
         exit 2
         ;;
 esac

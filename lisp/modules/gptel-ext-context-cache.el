@@ -135,14 +135,10 @@ Avoids repeated filtering of the same symbol list.")
     ;; DeepSeek
     ("deepseek-v4-flash" . 1000000)
     ("deepseek-v4-pro" . 1000000)
-    ("deepseek-chat" . 1000000)
-    ("deepseek-reasoner" . 1000000)
-    ("deepseek-coder" . 16384)
     ;; MiniMax
     ("minimax-m2.7-highspeed" . 196608)
     ("minimax-m2.7" . 196608)
     ("MiniMax-M2.5" . 196608)
-    ("minimax-m2.1" . 196608)
     ;; Kimi/Moonshot
     ("kimi-k2.6" . 262144)
     ("kimi-k2.5" . 262144)
@@ -171,7 +167,7 @@ Sources:
 - Gemini: https://openrouter.ai/models/google/gemini-2.5-pro-preview
 - Claude: https://openrouter.ai/models/anthropic/claude-sonnet-4
 - DeepSeek: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
-- MiniMax: https://openrouter.ai/models/minimax/minimax-m2.5")
+- MiniMax: https://openrouter.ai/models/minimax/minimax-m2.7-highspeed")
 
 (defvar my/gptel--known-model-metadata
   '(;; Qwen (Alibaba via DashScope) - VISION ENABLED
@@ -243,16 +239,6 @@ Sources:
      :pricing-input 12.0 :pricing-output 24.0
      :max-output 384000
      :description "DeepSeek V4 Pro - 1M context, thinking-enabled reasoning model")
-    ("deepseek-chat"
-     :context-window 1000000
-     :pricing-input 1.0 :pricing-output 2.0
-     :max-output 384000
-     :description "Deprecated alias for DeepSeek V4 Flash (thinking disabled)")
-    ("deepseek-reasoner"
-     :context-window 1000000
-     :pricing-input 1.0 :pricing-output 2.0
-     :max-output 384000
-     :description "Deprecated alias for DeepSeek V4 Flash (thinking enabled)")
     ;; MiniMax
     ("minimax-m2.7-highspeed"
      :context-window 196608
@@ -269,12 +255,7 @@ Sources:
      :pricing-input 0.27 :pricing-output 0.95
      :max-output 16384
      :description "MiniMax M2.5 - 196k context, SWE-bench 80.2%, agent workflows")
-    ("minimax-m2.1"
-     :context-window 196608
-     :pricing-input 0.27 :pricing-output 0.95
-     :max-output 16384
-     :description "MiniMax M2.1 - 10B params, coding/agentic, 196k context")
-    ;; GPT
+     ;; GPT
     ("gpt-4o"
      :context-window 128000
      :pricing-input 2.5 :pricing-output 10.0
@@ -369,18 +350,17 @@ Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scan
                     ((symbolp model) (symbol-name model))
                     (t nil))))
     (when model-str
-      (or (gethash model-str my/gptel--gptel-tables-cw-cache)
-          (catch 'found
-            (dolist (var (my/gptel--gptel-model-tables))
-              (let* ((table (symbol-value var))
-                     (entry (assoc-string model-str table t)))
-                (when entry
+      (catch 'found
+        (dolist (var (my/gptel--gptel-model-tables))
+          (let ((table (symbol-value var)))
+            (when (listp table)
+              (let ((entry (assoc-string model-str table t)))
+                (when (and (consp entry) (plist-member (cdr entry) :context-window))
                   (let ((cw (my/gptel--normalize-context-window
-                             (plist-get (cdr entry) :context-window))))
+                              (plist-get (cdr entry) :context-window))))
                     (when (and (integerp cw) (> cw 0))
-                      (puthash model-str cw my/gptel--gptel-tables-cw-cache)
-                      (throw 'found cw))))))
-            nil)))))
+                      (throw 'found cw))))))))
+        nil))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -504,19 +484,6 @@ Image tokens are counted from `gptel-context' if available."
 ;; Load cache at require time
 (my/gptel--cache-load-context-windows)
 
-(defun my/gptel--seed-cache-from-known-models ()
-  "Seed context-window cache from known-model alist for O(1) lookups."
-  (dolist (entry my/gptel--known-model-context-windows)
-    (when (consp entry)
-      (let ((key (car entry)) (val (cdr entry)))
-        (when (and (stringp key)
-                   (not (gethash key my/gptel--context-window-cache))
-                   (integerp val)
-                   (natnump val))
-          (puthash key val my/gptel--context-window-cache))))))
-
-(my/gptel--seed-cache-from-known-models)
-
 ;;; Seeding and Refresh
 
 (defun my/gptel--gptel-model-tables ()
@@ -529,16 +496,18 @@ Filters to only bound variables. Result is cached for performance."
 (defun my/gptel--seed-cache-from-gptel-model-tables ()
   "Seed context-window cache from gptel's built-in model tables."
   (dolist (var (my/gptel--gptel-model-tables))
-    (dolist (entry (symbol-value var))
-      (when (and (consp entry) (symbolp (car entry)))
-        (let* ((model (car entry))
-               (plist (cdr entry))
-               (cw (plist-get plist :context-window))
-               (tokens (my/gptel--normalize-context-window cw))
-               (id (my/gptel--model-id-string model)))
-          (when (and (stringp id) (my/gptel--positive-integer-p tokens))
-            (puthash id tokens my/gptel--context-window-cache)
-            (puthash id plist my/gptel--model-metadata-cache)))))))
+    (let ((table (symbol-value var)))
+      (when (listp table)
+        (dolist (entry table)
+          (when (and (consp entry) (symbolp (car entry)) (plist-member (cdr entry) :context-window))
+            (let* ((model (car entry))
+                   (plist (cdr entry))
+                   (cw (plist-get plist :context-window))
+                   (tokens (my/gptel--normalize-context-window cw))
+                   (id (my/gptel--model-id-string model)))
+              (when (and (stringp id) (integerp tokens) (> tokens 0))
+                (puthash id tokens my/gptel--context-window-cache)
+                (puthash id plist my/gptel--model-metadata-cache)))))))))
 
 (defun my/gptel--openrouter-curl-command (url connect-timeout max-time key)
   "Build curl command list for OpenRouter API request.
@@ -763,12 +732,10 @@ Description: %s"
      :rate-limit "Varies, check dashboard"
      :pricing-model "Per-token, Flash low-cost and Pro premium"
      :features (streaming tools reasoning)
-     :notes "Both V4 models support 1M context, 384K output, and thinking mode; deepseek-chat/reasoner are deprecated aliases."
+     :notes "Both V4 models support 1M context, 384K output, and thinking mode"
      :context-windows
      ((deepseek-v4-flash . 1000000)
-      (deepseek-v4-pro . 1000000)
-      (deepseek-chat . 1000000)
-      (deepseek-reasoner . 1000000)))
+      (deepseek-v4-pro . 1000000)))
 
     (moonshot
      :description "Moonshot AI - Kimi models"
@@ -818,8 +785,7 @@ Description: %s"
      :notes "M2.5/M2.7/M2.7-highspeed: 196k context. Highspeed favors lower-latency agent workflows."
      :context-windows
      ((minimax-m2.7-highspeed . 196608)
-      (minimax-m2.7 . 196608)
-      (minimax-m2.5 . 196608))))
+      (minimax-m2.7 . 196608))))
 
   "Provider usage contracts: rate limits, pricing models, features, and notes.
 Use `my/gptel-show-provider-contract' to query.")
@@ -866,7 +832,7 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
   (require 'gptel)
   (let ((model-id (my/gptel--model-id-string gptel-model)))
     (cond
-     ((string= model-id "nil") my/gptel-default-context-window)
+     ((or (string= model-id "nil") (string-empty-p model-id)) my/gptel-default-context-window)
      ((my/gptel--cache-or-alist-lookup my/gptel--context-window-cache
                                        my/gptel--known-model-context-windows
                                        model-id))
