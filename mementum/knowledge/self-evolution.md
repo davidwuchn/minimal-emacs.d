@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-04-30 10:37
+updated: 2026-04-30 11:08
 ---
 
 # Self-Evolution Knowledge Base
@@ -39,19 +39,30 @@ updated: 2026-04-30 10:37
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 24% verified (45/191 experiments)
+- **bug-fix**: 23% verified (45/193 experiments)
 - **performance**: 18% verified (4/22 experiments)
 - **refactoring**: 31% verified (20/65 experiments)
-- **safety**: 27% verified (12/45 experiments)
+- **safety**: 25% verified (12/48 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
 1. **refactoring** - 31% kept (65 experiments)
-2. **safety** - 27% kept (45 experiments)
-3. **bug-fix** - 24% kept (191 experiments)
+2. **safety** - 25% kept (48 experiments)
+3. **bug-fix** - 23% kept (193 experiments)
 4. **performance** - 18% kept (22 experiments)
+
+## Critical Guidance for Maximum Success
+
+To ensure your changes are KEPT (not discarded):
+
+1. **Improve BOTH score AND quality** - Changes that improve only one metric often get discarded
+2. **Target the weakest keys** - Focus on the specific Eight Keys with lowest scores
+3. **Make minimal, focused changes** - Large changes often reduce quality despite good intentions
+4. **Verify before submitting** - Run tests and confirm both score and quality improve
+5. **Avoid 'safety theater'** - Adding ignore-errors or nil guards that don't fix real bugs reduces quality
+
 
 ## Per-Target Success Patterns
 
@@ -59,8 +70,9 @@ Which change types work best for each target file:
 
 ### `gptel-tools-agent.el`
 
-- **refactoring**: 40% (5 experiments)
+- **refactoring**: 33% (6 experiments)
 - **bug-fix**: 23% (35 experiments)
+- **safety**: 0% (4 experiments)
 
 ### `gptel-agent-loop.el`
 
