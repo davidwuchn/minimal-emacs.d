@@ -7247,17 +7247,20 @@ Make minimal, targeted changes to CODE, not documentation.
 4. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
 5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
 6. Implement the CODE change minimally using Edit tool
-7. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
-8. DO NOT run git add, git commit, git push, or stage changes yourself.
+7. BEFORE finishing, verify your changes have balanced parentheses:
+   - Run: emacs --batch --eval "(find-file \"%s\") (emacs-lisp-mode) (condition-case err (scan-sexps (point-min) (point-max)) (error (message \"ERROR: %s\" err)))"
+   - If you see an error, FIX IT before submitting
+8. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
+9. DO NOT run git add, git commit, git push, or stage changes yourself.
    Leave edits uncommitted in the worktree; the auto-workflow controller
    handles grading, commit creation, review, and staging.
-9. FINAL RESPONSE must include:
+10. FINAL RESPONSE must include:
    - CHANGED: exact file path(s) and function/variable names touched
    - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
    - VERIFY: exact command(s) run and whether they passed or failed
    - COMMIT: always \"not committed\" (workflow controller handles commits)
-10. End the final response with: Task completed
-11. NEVER reply with only \"Done\", only a commit message, or a vague success claim
+11. End the final response with: Task completed
+12. NEVER reply with only "Done", only a commit message, or a vague success claim
 
 CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
 DO NOT add comments, docstrings, or documentation.
@@ -7271,6 +7274,7 @@ Example HYPOTHESES:
 - HYPOTHESIS: Fixing the off-by-one error in the loop will correct the boundary case"
             experiment-id max-experiments target
             worktree-path
+            target-full-path
             target-full-path
             (or controller-focus "")
             (or large-target-guidance "")
@@ -8487,12 +8491,63 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                   (message "[auto-exp] Repeated focus on %s after %d prior non-kept attempts; discarding without grading"
                                            symbol count)
                                   (magit-git-success "checkout" "--" "."))
-                                (cl-incf gptel-auto-experiment--no-improvement-count)
-                                (funcall log-fn run-id exp-result)
-                                (funcall callback exp-result))
-                            (let ((gptel-auto-experiment--grading-target target)
-                                  (gptel-auto-experiment--grading-worktree experiment-worktree))
-                              (gptel-auto-experiment--grade-with-retry
+                                 (cl-incf gptel-auto-experiment--no-improvement-count)
+                                 (funcall log-fn run-id exp-result)
+                                 (funcall callback exp-result))
+                             ;; Validate syntax BEFORE calling grader to avoid wasting API calls
+                             (let ((validation-error
+                                    (when target
+                                      (gptel-auto-experiment--validate-code
+                                       (expand-file-name target experiment-worktree)))))
+                               (if validation-error
+                                   (progn
+                                     (message "[auto-exp] ✗ Pre-grade validation failed: %s"
+                                              (my/gptel--sanitize-for-logging validation-error 200))
+                                     ;; Trigger retry or fail immediately without grader
+                                     (let ((default-directory experiment-worktree)
+                                           (gptel-auto-experiment--grading-target target)
+                                           (gptel-auto-experiment--grading-worktree experiment-worktree))
+                                       (if (and (gptel-auto-experiment--teachable-validation-error-p
+                                                 target validation-error)
+                                                (not (bound-and-true-p gptel-auto-experiment--in-retry)))
+                                           (progn
+                                             (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
+                                             (gptel-auto-experiment--prepare-validation-retry-worktree
+                                              target provisional-commit-hash)
+                                             (setq provisional-commit-hash nil)
+                                             (let ((gptel-auto-experiment-active-grace
+                                                    gptel-auto-experiment-validation-retry-active-grace))
+                                               (my/gptel--run-agent-tool-with-timeout
+                                                gptel-auto-experiment-validation-retry-time-budget
+                                                (lambda (retry-output)
+                                                  ;; Treat retry output as new executor output
+                                                  (funcall executor-callback retry-output))
+                                                executor-prompt)))
+                                         ;; Non-teachable or already retrying: fail fast
+                                         (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
+                                                             effective-agent-output))
+                                                (exp-result
+                                                 (list :target target
+                                                       :id experiment-id
+                                                       :hypothesis hypothesis
+                                                       :score-before baseline
+                                                       :score-after 0
+                                                       :code-quality baseline-code-quality
+                                                       :kept nil
+                                                       :duration (- (float-time) start-time)
+                                                       :grader-quality 0
+                                                       :grader-reason validation-error
+                                                       :comparator-reason "validation-failed"
+                                                       :analyzer-patterns (format "%s" patterns)
+                                                       :agent-output effective-agent-output
+                                                       :validation-error validation-error)))
+                                           (setq finished t)
+                                           (cl-incf gptel-auto-experiment--no-improvement-count)
+                                           (funcall log-fn run-id exp-result)
+                                           (funcall callback exp-result)))))
+                                 (let ((gptel-auto-experiment--grading-target target)
+                                       (gptel-auto-experiment--grading-worktree experiment-worktree))
+                                   (gptel-auto-experiment--grade-with-retry
                                effective-agent-output
                                (lambda (grade)
                                  (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
