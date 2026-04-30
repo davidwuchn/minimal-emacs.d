@@ -618,7 +618,7 @@ Runs asynchronously; returns nil immediately."
                 (entry (and valid-data
                             (seq-find (lambda (e)
                                         (let ((id (alist-get 'id e)))
-                                          (and (stringp id) (string= id model-id))))
+                                          (and (stringp id) (string-equal id model-id))))
                                       valid-data)))
                 (cw (and entry (alist-get 'context_length entry))))
            (if (and (integerp cw) (> cw 0))
