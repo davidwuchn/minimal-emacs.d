@@ -1,35 +1,42 @@
 # Mementum State
 
-> Last session: 2026-04-30 11:08
+> Last session: 2026-04-30 16:15
 
 ## Total Improvements: 242+ Real Code Fixes (33 new today)
 
-### Session Summary: 2026-04-30 (Self-Evolution System Deployed)
+### Session Summary: 2026-04-30 Evening (Module Split + E2E Fixes)
 
-**Action:** Built and deployed self-evolving auto-workflow that learns from benchmark + git history
+**Action:** Split monolithic gptel-tools-agent.el into 14 focused modules
 
-**Result:** ✅ Self-evolution cycle running, knowledge base regenerated with fresh data
+**Result:** ✅ All modules under 1000 lines, all loading successfully
 
-**New System:**
-- `gptel-auto-workflow-evolution.el` — Extract → Verify → Synthesize pipeline (357 lines)
-- `gptel-auto-workflow-git-learning.el` — Git history pattern extraction (267 lines)
-- `gptel-auto-workflow-mementum.el` — Memory bridge for experiment records (259 lines)
-- `gptel-auto-workflow-production.el` — Timer-based auto-evolution + dashboard (150 lines)
+**Split:**
+- gptel-tools-agent-base.el (959) - utilities, validation, shell
+- gptel-tools-agent-git.el (994) - git operations, orphan tracking
+- gptel-tools-agent-subagent.el (997) - subagent caching, delegation
+- gptel-tools-agent-worktree.el (981) - worktree management
+- gptel-tools-agent-staging-baseline.el (995) - staging baseline & review
+- gptel-tools-agent-staging-merge.el (922) - staging merge & verify
+- gptel-tools-agent-benchmark.el (914) - benchmark & evaluation
+- gptel-tools-agent-prompt-analyze.el (401) - prompt analysis
+- gptel-tools-agent-prompt-build.el (655) - prompt construction
+- gptel-tools-agent-error.el (615) - error analysis, retry logic
+- gptel-tools-agent-experiment-core.el (647) - single experiment
+- gptel-tools-agent-experiment-loop.el (956) - experiment loop
+- gptel-tools-agent-main.el (941) - main entry point
+- gptel-tools-agent-research.el (575) - autonomous research
 
-**Integration:**
-- Analyzer prompts now read from `mementum/knowledge/self-evolution.md`
-- Executor prompts include synthesized success patterns
-- Evolution triggers every 5 experiments + every 6 hours via cron
-- Lowered quality threshold: 0.10 → 0.03 (based on 254 experiments)
+**Impact:**
+- Individual modules can be targeted (smaller surface area)
+- Easier to review and understand
+- No more 11,481-line monolith
 
-**Knowledge Base (regenerated 2026-04-30 11:08):**
-- 211 active experiment branches, 42.7% merge rate
-- Top success: refactoring 31%, safety 25%, bug-fix 23%, performance 18%
-- Top targets: agent (76), loop (45), cache (31)
+**Previous Fixes (E2E Run):**
+1. Fixed syntax error in staging (`lisp/modules/gptel-tools-code.el:279`)
+2. Verified baseline comparison works (allows pre-existing failures)
+3. Fixed strategic analyzer syntax error (unbalanced parens)
 
-**Daemon:** Restarted with clean function cache
-
-**Commit:** `30434299` — ⚒ Self-evolution: git facts + benchmark verify → mementum knowledge → prompt injection
+**Commit:** `72a55288` — Δ split gptel-tools-agent.el into 14 modules
 
 ### Session Summary: 2026-04-11 Evening (Remote Sync + Submodule Update)
 
