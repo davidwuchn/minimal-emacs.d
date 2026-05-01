@@ -953,13 +953,13 @@ TIMESTAMP defaults to `current-time'."
 (defun my/gptel--ignore-agent-activity-message-p (text)
   "Return non-nil when TEXT is unrelated chatter for executor activity."
   (or (and (stringp text)
-           (not (null (string-match-p
-                       "\\`Cleaning up the recentf list\\(?:\\.\\.\\.\\(?:done.*\\)?\\)?\\'"
-                       text))))
+           (string-match-p
+            "\\`Cleaning up the recentf list\\(?:\\.\\.\\.\\(?:done.*\\)?\\)?\\'"
+            text))
       (and (stringp text)
-           (not (null (string-match-p
-                       "\\`File .+ removed from the recentf list\\'"
-                       text))))
+           (string-match-p
+            "\\`File .+ removed from the recentf list\\'"
+            text))
       (and (stringp text)
            (string-match "\\`Wrote \\(.+\\)\\'" text)
            (string-prefix-p "gptel-curl-data"
