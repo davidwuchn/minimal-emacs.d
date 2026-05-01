@@ -141,6 +141,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                 (lambda (retry-output)
                                                   ;; Treat retry output as new executor output
                                                   (funcall executor-callback retry-output))
+                                                "executor"
+                                                "Validation retry"
                                                 executor-prompt)))
                                          ;; Non-teachable or already retrying: fail fast
                                          (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
