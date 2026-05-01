@@ -308,25 +308,36 @@ for a partial match (case-insensitive).  Returns nil if not found."
           hash-value))
     (and (listp alist) (my/gptel--alist-partial-match alist key))))
 
+
+(defvar my/gptel--alist-partial-match-cache (make-hash-table :test 'equal)
+  "Cache for `my/gptel--alist-partial-match' results.
+Maps (alist-hash . search-str) to match result for O(1) repeated lookups.")
+
 (defun my/gptel--alist-partial-match (alist search-str)
   "Find best matching entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
 Returns the cdr (value) of the matching entry, or nil if no match.
 Matches if the alist key is a prefix of SEARCH-STR.
-When multiple entries match, returns the one with the longest key for most specific match."
+When multiple entries match, returns the one with the longest key for most specific match.
+Results are cached in `my/gptel--alist-partial-match-cache' for performance."
   (when (and (consp alist) (stringp search-str) (not (string-empty-p search-str)))
-    (let ((best-match my/gptel--alist-match-sentinel)
-          (best-key-len 0))
-      (dolist (entry alist)
-        (when (consp entry)
-          (let ((entry-key (car entry)))
-            (when (stringp entry-key)
-              (when (string-prefix-p entry-key search-str t)
-                (let ((key-len (length entry-key)))
-                  (when (> key-len best-key-len)
-                    (setq best-key-len key-len)
-                    (setq best-match (cdr entry)))))))))
-      (unless (eq best-match my/gptel--alist-match-sentinel)
-        best-match))))
+    (let* ((alist-id (sxhash alist))
+           (cache-key (cons alist-id search-str)))
+      (or (gethash cache-key my/gptel--alist-partial-match-cache)
+          (let ((best-match my/gptel--alist-match-sentinel)
+                (best-key-len 0))
+            (dolist (entry alist)
+              (when (consp entry)
+                (let ((entry-key (car entry)))
+                  (when (stringp entry-key)
+                    (when (string-prefix-p entry-key search-str t)
+                      (let ((key-len (length entry-key)))
+                        (when (> key-len best-key-len)
+                          (setq best-key-len key-len)
+                          (setq best-match (cdr entry)))))))))
+            (let ((result (unless (eq best-match my/gptel--alist-match-sentinel)
+                            best-match)))
+              (puthash cache-key result my/gptel--alist-partial-match-cache)
+              result))))))
 
 (defun my/gptel--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.

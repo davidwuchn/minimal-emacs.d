@@ -1,12 +1,25 @@
 # Mementum State
 
-> Last session: 2026-05-01 10:25
+> Last session: 2026-05-01 16:27
 
-## Current Session: 2026-05-01 Auto-Workflow Repair
+## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Verified Cache Optimization
 
-**Status:** Prompt `%s` blocker fixed; retry run active.
+**Status:** Prompt `%s` blocker fixed; remote staging/cache updates merged; retry run active.
 
-**Done:**
+**Done (This Session):**
+- Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
+- Commit: `8624a5e9` — ⊘ fix: write staging-pending directly to TSV, bypass log-fn
+- **Verified fix working**: Run `2026-05-01T150007Z-b5d4` completed successfully with staging-pending row persisted in TSV.
+- **Cache optimization merged**: `825514fe` — Merge optimize/cache-neopi5-r150007zb5d4-exp1 for verification
+  - File: `lisp/modules/gptel-ext-context-cache.el` (+25/-14 lines)
+  - Optimization: Added memoization cache for `my/gptel--alist-partial-match` (O(n) → O(1))
+  - Grade: 9/9, Tests: PASS, Staging review: PASSED
+- Synced `main` and `staging` to `256afdf0` (includes remote fix `9738c05a` for gptel-request subagent operations).
+- Cleaned 15 zombie `aw-complete-*` processes.
+- Removed 69 stale experiment directories (>14 days old).
+- All unit tests pass (1733 tests, 0 unexpected).
+
+**Previous Session:**
 - Restored `lisp/modules/gptel-tools-agent-experiment-core.el` to syntax-valid state after the callback/context conversion left an extra final close paren.
 - Kept the executor callback lexical so validation retry reuses the same executor callback path.
 - Fixed validation retry recursion by replacing the ineffective lexical `bound-and-true-p` guard with a captured `validation-retry-active` flag.
@@ -28,11 +41,11 @@
 - Live workflow daemon prompt probe returned `(nil 7419)`: no raw `find-file "%s"`, concrete `emacs -Q --batch --eval` present.
 
 **Important State:**
+- Previous successful experiment: `2026-05-01T150007Z-b5d4` (1/1 kept → merged to staging/main), `gptel-ext-context-cache.el` memoization cache (O(n) → O(1)), score 9/9.
 - `./scripts/run-auto-workflow-cron.sh status` reports active run `2026-05-01T162409Z-4de2` with 3 targets, phase `running`.
 - Current live messages show the retry passed the old `%s` blocker: executor started for `lisp/modules/gptel-ext-retry.el`, wrote the target file, and no new `%s` callback error appeared after `r162409z4de2`.
-- Local staging worktree `var/tmp/experiments/staging-verify` is clean and `staging` is ahead of `origin/staging` by 6 commits, ending at `48888050 Merge optimize/loop-neopi5-r091051zace2-exp1 for verification`.
-- `main` and `origin/main` are synced at `b52756c5` after pushing the retry recursion fix.
-- Unrelated local work remains: `mementum/knowledge/self-evolution.md`, modified `packages/gptel`, and untracked `mementum/memories/insight-*` files.
+- Remote `origin/main` advanced to `5f97e0e4` with cache optimization + remote gptel-request fix; local merge in progress to integrate it before pushing prompt fix.
+- Unrelated local work remains stashed: `mementum/knowledge/self-evolution.md` timestamp update.
 
 **Tooling Rule:**
 - Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.
