@@ -1,10 +1,10 @@
 # Mementum State
 
-> Last session: 2026-05-01 17:15
+> Last session: 2026-05-01 17:25
 
 ## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Verified Cache Optimization
 
-**Status:** Synced to `origin/main`; messages wrapper fixed; incoming defensive-code validator regressions fixed locally; retry run had 1 kept result when last checked.
+**Status:** `main` pushed at `a5e2b30c`; run `2026-05-01T162409Z-4de2` completed with 1 kept result; stale completed-run status wrapper fix is local/uncommitted.
 
 **Done (This Session):**
 - Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
@@ -36,6 +36,9 @@
 - Fixed incoming defensive-code validator regression: invalid regexp removed, detection now inspects removed `git diff` lines instead of final file content.
 - Fixed strategic JSON target extraction for string-key alists by accepting string keys in `gptel-auto-workflow--json-object-p`.
 - Made `gptel-auto-workflow-behavioral-tests.el` self-contained with `cl-lib` and a declaration for the strategic extractor.
+- Committed and pushed `a5e2b30c` (`⊘ fix: stabilize auto-workflow validation and messages`) to `origin/main`.
+- Run `2026-05-01T162409Z-4de2` completed: 7 experiments, 1 target improved (`gptel-ext-context.el` stale callback running-flag fix), staging pushed after remote refresh.
+- Patched local wrapper stale-status handling: active persisted snapshots with `[auto-workflow] All projects processed:` in messages now clear to non-running status.
 
 **Verification:**
 - `emacs -Q --batch --eval '(with-temp-buffer (insert-file-contents "lisp/modules/gptel-tools-agent-experiment-core.el") (emacs-lisp-mode) (check-parens))'` passed.
@@ -50,13 +53,13 @@
 - Behavioral smoke test `gptel-auto-workflow--run-behavioral-tests` for `gptel-auto-workflow-strategic.el` passed.
 - ERT selectors passed: `regression/auto-workflow/validate-code-` (8/8) and defensive/string-key selector (3/3).
 - `check-parens` passed for changed Elisp files: benchmark, strategic, behavioral tests.
+- Stale-status wrapper verification passed: `bash -n scripts/run-auto-workflow-cron.sh`, ERT selector for completed-running-status + messages-refresh (2/2), and live `status` now reports `:running nil :phase "complete"` for `2026-05-01T162409Z-4de2`.
 
 **Important State:**
 - Previous successful experiment: `2026-05-01T150007Z-b5d4` (1/1 kept → merged to staging/main), `gptel-ext-context-cache.el` memoization cache (O(n) → O(1)), score 9/9.
-- `./scripts/run-auto-workflow-cron.sh status` reports active run `2026-05-01T162409Z-4de2` with 3 targets, phase `running`, kept=1.
-- Current workflow passed the old `%s` blocker. Retry target produced 2 normal discards; context target exp1 was kept and pushed to staging after refreshing an advanced remote; context exp2 discarded; context exp3 active.
-- Local `main` is synced with `origin/main` (`f7470e55`) with local uncommitted fixes on top.
-- Uncommitted changes: validator/strategic/behavioral fixes, cron messages wrapper fix, regression tests, `mementum/state.md`, and `mementum/knowledge/self-evolution.md` timestamp update.
+- `./scripts/run-auto-workflow-cron.sh status` reports completed run `2026-05-01T162409Z-4de2`, kept=1/3, results at `var/tmp/experiments/2026-05-01T162409Z-4de2/results.tsv`.
+- `origin/staging` contains kept merge `1e3b17e2` (`Merge optimize/context-imacpro.taila8bdd.ts.net-r162409z4de2-exp1 for verification`); `origin/main` contains pushed validation/messages fix `a5e2b30c`.
+- Local uncommitted follow-up changes: stale completed-run status wrapper fix + regression, `mementum/state.md` update.
 
 **Tooling Rule:**
 - Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.

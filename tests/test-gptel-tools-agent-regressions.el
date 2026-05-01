@@ -10659,6 +10659,40 @@ failure."
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
+(ert-deftest regression/auto-workflow/cron-wrapper-clears-completed-running-status ()
+  "Wrapper status should clear active snapshots after completion appears in messages."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient
+          (test-auto-workflow--write-shell-script "fake-emacsclient" "exit 1"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 3 :phase \"running\" :run-id \"2026-05-01T162409Z-4de2\" :results \"var/tmp/experiments/2026-05-01T162409Z-4de2/results.tsv\")\n"))
+          (with-temp-file messages-file
+            (insert "[auto-workflow] Complete: 7 experiments, 1 targets improved\n")
+            (insert "[auto-workflow] All projects processed: /tmp/repo/:success\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running nil" output))
+            (should (string-match-p ":phase \"idle\"" output))
+            (should (string-match-p "2026-05-01T162409Z-4de2/results.tsv" output))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
+
 (ert-deftest regression/auto-workflow/cron-wrapper-hydrates-empty-submodule-dirs-before-daemon-start ()
   "Wrapper auto-workflow should hydrate empty configured submodule dirs before daemon start."
   (let* ((repo-root (make-temp-file "aw-cron-repo" t))
