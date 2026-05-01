@@ -1,10 +1,10 @@
 # Mementum State
 
-> Last session: 2026-05-01 17:25
+> Last session: 2026-05-01 17:54
 
 ## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Verified Cache Optimization
 
-**Status:** `main` pushed at `a5e2b30c`; run `2026-05-01T162409Z-4de2` completed with 1 kept result; stale completed-run status wrapper fix is local/uncommitted.
+**Status:** `main` clean and pushed through `53032d62`; run `2026-05-01T162409Z-4de2` completed with 1 kept result and that fix is promoted to `main`.
 
 **Done (This Session):**
 - Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
@@ -38,7 +38,9 @@
 - Made `gptel-auto-workflow-behavioral-tests.el` self-contained with `cl-lib` and a declaration for the strategic extractor.
 - Committed and pushed `a5e2b30c` (`⊘ fix: stabilize auto-workflow validation and messages`) to `origin/main`.
 - Run `2026-05-01T162409Z-4de2` completed: 7 experiments, 1 target improved (`gptel-ext-context.el` stale callback running-flag fix), staging pushed after remote refresh.
-- Patched local wrapper stale-status handling: active persisted snapshots with `[auto-workflow] All projects processed:` in messages now clear to non-running status.
+- Committed and pushed `7ca73244` (`⊘ fix: clear completed auto-workflow status`): active persisted snapshots with `[auto-workflow] All projects processed:` in messages now clear to non-running status.
+- Integrated two remote advances while pushing, resolving generated self-evolution and benchmark validator conflicts; final merge commit `71737f2f` pushed.
+- Promoted kept context fix to `main` as `53032d62` (`⊘ fix: clear stale compact callback state`): stale compaction callbacks clear `my/gptel-auto-compact-running`; callback condition-case structure fixed.
 
 **Verification:**
 - `emacs -Q --batch --eval '(with-temp-buffer (insert-file-contents "lisp/modules/gptel-tools-agent-experiment-core.el") (emacs-lisp-mode) (check-parens))'` passed.
@@ -54,12 +56,15 @@
 - ERT selectors passed: `regression/auto-workflow/validate-code-` (8/8) and defensive/string-key selector (3/3).
 - `check-parens` passed for changed Elisp files: benchmark, strategic, behavioral tests.
 - Stale-status wrapper verification passed: `bash -n scripts/run-auto-workflow-cron.sh`, ERT selector for completed-running-status + messages-refresh (2/2), and live `status` now reports `:running nil :phase "complete"` for `2026-05-01T162409Z-4de2`.
+- After final remote merges, focused wrapper/validator ERT selector passed 6/6; `git diff --check` and `check-parens` passed for benchmark.
+- Context promotion verification passed: stale-callback regression 1/1, full `context/` selector 19/19, `check-parens` for context module/tests, and `git diff --check`.
 
 **Important State:**
 - Previous successful experiment: `2026-05-01T150007Z-b5d4` (1/1 kept → merged to staging/main), `gptel-ext-context-cache.el` memoization cache (O(n) → O(1)), score 9/9.
 - `./scripts/run-auto-workflow-cron.sh status` reports completed run `2026-05-01T162409Z-4de2`, kept=1/3, results at `var/tmp/experiments/2026-05-01T162409Z-4de2/results.tsv`.
-- `origin/staging` contains kept merge `1e3b17e2` (`Merge optimize/context-imacpro.taila8bdd.ts.net-r162409z4de2-exp1 for verification`); `origin/main` contains pushed validation/messages fix `a5e2b30c`.
-- Local uncommitted follow-up changes: stale completed-run status wrapper fix + regression, `mementum/state.md` update.
+- `origin/main` contains pushed validation/messages fix `a5e2b30c`, stale completed-status fix `7ca73244`, remote-merge resolution `71737f2f`, and context stale-callback fix `53032d62`.
+- `origin/staging` was force-updated back to `a60d0237`, so the kept staging merge `1e3b17e2` no longer exists on remote staging; the underlying patch is now on `main` via `53032d62`.
+- Working tree was clean before this state update; only `mementum/state.md` changed now.
 
 **Tooling Rule:**
 - Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.
