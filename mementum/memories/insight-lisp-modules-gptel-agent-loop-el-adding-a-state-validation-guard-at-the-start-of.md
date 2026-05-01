@@ -1,9 +1,9 @@
-# Insight: 2026-05-01 18:30
+# Insight: 2026-05-01 18:34
 
 **Target:** lisp/modules/gptel-agent-loop.el
 **Change type:** safety
 **Hypothesis:** Adding a state validation guard at the start of `gptel-agent-loop--continuation-needed-p` will prevent runtime errors when state is nil or invalid, matching the defensive pattern used in similar functions like `gptel-agent-loop--increment-continuation-count`.
-**Decision:** staging-pending
+**Decision:** nil
 
 Unexpected experiment outcome.
 
