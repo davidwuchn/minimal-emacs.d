@@ -86,6 +86,14 @@ gptel preset.")
 (defvar gptel-sandbox--missing-marker (make-symbol "gptel-sandbox-missing")
   "Sentinel value for detecting missing symbol lookups in sandbox env.")
 
+(defconst gptel-sandbox--error-prefix "Error: "
+  "Prefix string used to identify sandbox error results.")
+
+(defun gptel-sandbox--error-result-p (value)
+  "Return non-nil if VALUE is a sandbox error string."
+  (and (stringp value)
+       (string-prefix-p gptel-sandbox--error-prefix value)))
+
 (defun gptel-sandbox--parse-forms (code)
   "Parse CODE into a list of Lisp forms."
   (let ((forms nil)
@@ -531,7 +539,7 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--wrap-result (result)
   "Wrap RESULT for callback, avoiding double-wrapping of error strings."
-  (if (and (stringp result) (string-prefix-p "Error: " result))
+  (if (gptel-sandbox--error-result-p result)
       result
     (gptel-sandbox--format-result result)))
 
@@ -631,7 +639,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
                     (if (and (consp expr) (eq (car expr) 'tool-call))
                         (gptel-sandbox--execute-tool
                          (lambda (value)
-                           (if (string-prefix-p "Error: " value)
+                           (if (gptel-sandbox--error-result-p value)
                                (funcall callback (list :done t :result value))
                              (gptel-sandbox--bind-result symbol value env)
                              (setq remaining (cdr remaining))
@@ -645,7 +653,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
     (`(tool-call ,tool-name . ,arg-forms)
      (gptel-sandbox--execute-tool
       (lambda (value)
-        (if (string-prefix-p "Error: " value)
+        (if (gptel-sandbox--error-result-p value)
             (funcall callback (list :done t :result value))
           (gptel-sandbox--bind-last-value value env)
           (funcall callback (list :continue t :done nil))))
