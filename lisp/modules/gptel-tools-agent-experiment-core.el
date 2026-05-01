@@ -150,7 +150,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                    (funcall executor-callback retry-output))
                                                  "executor"
                                                  "Validation retry"
-                                                 executor-prompt)))
+                                                       executor-prompt
+                                                       nil nil nil
+                                                       gptel-auto-experiment-validation-retry-active-grace)))
                                          ;; Non-teachable or already retrying: fail fast
                                          (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
                                                              effective-agent-output))
@@ -604,7 +606,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                       (format "Retry: fix validation error in %s" target)
                                                       (gptel-auto-experiment--make-retry-prompt
                                                        target validation-error executor-prompt)
-                                                      nil "false" nil)))
+								   nil "false" nil
+								   gptel-auto-experiment-validation-retry-active-grace)))
                                                (let ((default-directory experiment-worktree))
                                                  (setq finished t)
                                                  (magit-git-success "checkout" "--" ".")

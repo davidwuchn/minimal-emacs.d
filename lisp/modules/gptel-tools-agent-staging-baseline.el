@@ -27,6 +27,7 @@
                180)))
          (unless (= 0 (cdr add-result))
            (error "git worktree add failed: %s" (car add-result))))
+       (gptel-auto-workflow--seed-worktree-runtime-var worktree-dir)
        (unwind-protect
            (funcall fn worktree-dir)
          (gptel-auto-workflow--cleanup-staging-submodule-worktrees worktree-dir)

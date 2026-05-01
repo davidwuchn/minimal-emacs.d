@@ -17,6 +17,7 @@
 (require 'gptel-tools-agent-base)
 (require 'gptel-tools-agent-git)
 (require 'gptel-tools-agent-subagent)
+(require 'gptel-tools-agent-runtime)
 (require 'gptel-tools-agent-worktree)
 (require 'gptel-tools-agent-staging-baseline)
 (require 'gptel-tools-agent-staging-merge)

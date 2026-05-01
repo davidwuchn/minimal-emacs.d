@@ -547,20 +547,19 @@ INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil
                                          include-history-bool include-diff-bool))))
 
 (defun my/gptel--run-agent-tool-with-timeout (timeout callback agent-name description prompt
-                                                      &optional files include-history include-diff)
-  "Run `my/gptel--run-agent-tool' with TIMEOUT forced for this one dispatch."
+                                                      &optional files include-history include-diff active-grace)
+  "Run `my/gptel--run-agent-tool' with TIMEOUT and optional ACTIVE-GRACE."
   (let ((previous-timeout my/gptel-agent-task-timeout)
-        (previous-hard-timeout my/gptel-agent-task-hard-timeout))
+        (previous-hard-timeout my/gptel-agent-task-hard-timeout)
+        (grace (or active-grace gptel-auto-experiment-active-grace)))
     (unwind-protect
         (progn
           (setq my/gptel-agent-task-timeout timeout)
           (setq my/gptel-agent-task-hard-timeout
                 (and (equal agent-name "executor")
-                     (integerp timeout)
-                     (> timeout 0)
-                     (integerp gptel-auto-experiment-active-grace)
-                     (> gptel-auto-experiment-active-grace 0)
-                     (+ timeout gptel-auto-experiment-active-grace)))
+                     (integerp timeout) (> timeout 0)
+                     (integerp grace) (> grace 0)
+                     (+ timeout grace)))
           (my/gptel--run-agent-tool callback agent-name description prompt
                                     files include-history include-diff))
       (setq my/gptel-agent-task-timeout previous-timeout

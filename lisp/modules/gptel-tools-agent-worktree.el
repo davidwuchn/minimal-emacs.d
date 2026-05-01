@@ -126,10 +126,10 @@ If branch exists locally, deletes it first to avoid conflicts."
         (progn
           (make-directory (file-name-directory worktree-dir) t)
           (let ((default-directory proj-root))
-             (setq base-ref (or (gptel-auto-workflow--current-staging-head)
-                                (gptel-auto-workflow--staging-main-ref)))
-             (unless base-ref
-               (error "missing base ref for experiment worktree (staging or main)"))
+            (setq base-ref (or (gptel-auto-workflow--current-staging-head)
+                               (gptel-auto-workflow--staging-main-ref)))
+            (unless base-ref
+              (error "missing base ref for experiment worktree (staging or main)"))
             (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
             (call-process "git" nil stderr-buffer nil "worktree" "prune")
             (dolist (existing-worktree
@@ -167,6 +167,7 @@ If branch exists locally, deletes it first to avoid conflicts."
                   (message "[auto-workflow] Git stderr: %s" stderr-preview))
                 (error "git worktree add failed with exit code %s: %s"
                        exit-code (or stderr-preview "no output")))
+              (gptel-auto-workflow--seed-worktree-runtime-var worktree-dir)
               (when (gptel-auto-workflow--worktree-needs-submodule-hydration-p worktree-dir)
                 (unless (gptel-auto-workflow--ensure-staging-submodules-ready worktree-dir)
                   (error "failed to hydrate experiment submodules in %s" worktree-dir))))
@@ -587,6 +588,7 @@ Returns worktree path or nil on failure."
                    180)))
              (unless (= 0 (cdr add-result))
                (error "git worktree add failed: %s" (car add-result))))
+           (gptel-auto-workflow--seed-worktree-runtime-var worktree-dir)
            (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
            (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
            worktree-dir))))))
