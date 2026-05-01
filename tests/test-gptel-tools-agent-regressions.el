@@ -990,8 +990,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (string-match-p "Comparator override: unparsed -> B" (plist-get decision :reasoning)))
     (should (string-match-p "Winner: B" (plist-get decision :reasoning)))))
 
-(ert-deftest regression/auto-experiment/decide-rejects-score-tie-with-small-quality-gain ()
-  "Comparator should reject tied scores without a meaningful quality gain."
+(ert-deftest regression/auto-experiment/decide-keeps-score-tie-with-small-quality-gain ()
+  "Comparator may keep tied scores with the configured quality gain."
   (let ((gptel-auto-experiment-use-subagents t)
         decision)
     (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
@@ -1004,9 +1004,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (lambda (result)
            (setq decision result)))))
     (should decision)
-    (should-not (plist-get decision :keep))
-    (should (string-match-p "Comparator override: B -> A" (plist-get decision :reasoning)))
-    (should (string-match-p "Rejected: score tie without >= 0.10 quality gain"
+    (should (plist-get decision :keep))
+    (should-not (string-match-p "Comparator override:" (plist-get decision :reasoning)))
+    (should (string-match-p "Kept: score tie with >= 0.03 quality gain"
                             (plist-get decision :reasoning)))))
 
 (ert-deftest regression/auto-experiment/decide-rejects-score-tie-without-combined-improvement ()
@@ -12363,13 +12363,13 @@ failure."
                         (string-match-p
                          (regexp-quote "(setenv \"SSH_AUTH_SOCK\" \"/tmp/test-agent.sock\")")
                          elisp)
-                        (if (eq system-type 'darwin)
-                            (and (string-match-p
-                                  (regexp-quote "(setenv \"GIT_SSH_COMMAND\"")
-                                  elisp)
-                                 (string-match-p "UseKeychain=yes" elisp)
-                                 (string-match-p "AddKeysToAgent=yes" elisp))
-                          t)))
+                         (string-match-p
+                          (regexp-quote "(setenv \"GIT_SSH_COMMAND\"")
+                          elisp)
+                         (if (eq system-type 'darwin)
+                             (or (string-match-p "UseKeychain=yes" elisp)
+                                 (string-match-p "IdentitiesOnly=yes" elisp))
+                           t)))
                      elisp-payloads))))
       (delete-directory status-dir t)
        (delete-directory fake-bin t)

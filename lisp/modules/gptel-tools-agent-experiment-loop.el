@@ -274,6 +274,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--status-refresh-timer nil
   "Timer that keeps the persisted workflow status snapshot fresh.")
 
+(defvar gptel-auto-workflow--force-idle-status-overwrite nil
+  "When non-nil, allow an idle status snapshot to replace an active snapshot.")
+
 (defvar gptel-auto-workflow--last-progress-time nil
   "Timestamp of last progress update.")
 
@@ -436,7 +439,8 @@ Relative paths are resolved from the project root."
     ;; idle placeholder view of workflow state. The shell wrapper already owns
     ;; stale-active detection; this guard prevents bogus idle rewrites with
     ;; synthetic run ids while a real run is still active elsewhere.
-    (when (and (gptel-auto-workflow--status-placeholder-p status)
+    (when (and (not gptel-auto-workflow--force-idle-status-overwrite)
+               (gptel-auto-workflow--status-placeholder-p status)
                (gptel-auto-workflow--status-active-p existing-status)
                (not (gptel-auto-workflow--status-owned-by-current-run-p
                      existing-status)))

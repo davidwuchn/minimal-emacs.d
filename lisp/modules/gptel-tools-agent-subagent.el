@@ -223,9 +223,13 @@ subagent callback fired, and avoids reusing a deleted worktree as
                       user-emacs-directory
                       temporary-file-directory)
                      temporary-file-directory)))
-           (with-current-buffer safe-buffer
-             (setq default-directory safe-default-directory)
-             (funcall callback result))))
+            (condition-case err
+                (with-current-buffer safe-buffer
+                  (setq default-directory safe-default-directory)
+                  (funcall callback result))
+              (error
+               (message "[nucleus] Callback error ignored after cleanup: %S" err)
+               nil))))
         (t
          (message "[nucleus] Warning: my/gptel--invoke-callback-safely skipped invalid callback: %S"
                   (type-of callback)))))

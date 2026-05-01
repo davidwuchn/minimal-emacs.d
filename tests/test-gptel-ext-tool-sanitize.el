@@ -373,10 +373,10 @@
         (progn
           (with-temp-file file
             (insert (make-string 32768 ?x)))
-          (should (= my/gptel-inspection-thrash-threshold 25))
+          (should (= my/gptel-inspection-thrash-threshold 40))
           (should (= my/gptel-inspection-thrash-bytes-per-extra-step 8192))
-          (should (= my/gptel-inspection-thrash-max-extra 25))
-          (should (= (my/gptel--inspection-thrash-threshold-for-file file) 29)))
+          (should (= my/gptel-inspection-thrash-max-extra 40))
+          (should (= (my/gptel--inspection-thrash-threshold-for-file file) 44)))
       (when (file-exists-p file)
         (delete-file file)))))
 

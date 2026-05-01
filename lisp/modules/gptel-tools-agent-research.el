@@ -457,9 +457,8 @@ Shows preview and asks for human approval before saving."
         (if (< line-count 50)
             (message "[mementum] Skip '%s': only %d lines (need ≥50)" topic line-count)
           (if (bound-and-true-p gptel-auto-workflow--headless)
-              (progn
-                (message "[mementum] Auto-saving '%s' in headless mode (%d lines)" topic line-count)
-                (gptel-mementum--save-knowledge-page topic files extracted))
+              (message "[mementum] Skip '%s': human approval required before saving in headless mode (%d lines)"
+                       topic line-count)
             (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
               (with-current-buffer preview-buffer
                 (erase-buffer)

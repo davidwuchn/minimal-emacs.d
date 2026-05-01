@@ -505,7 +505,7 @@ Uses robust timeout mechanism to prevent blocking indefinitely."
             ;; Small delay to prevent busy-waiting
             (sit-for 0.01))
           ;; Cancel timer if still active
-          (when timer
+          (when (timerp timer)
             (cancel-timer timer)
             (setq timer nil))
           ;; Handle timeout or collect results
@@ -522,7 +522,7 @@ Uses robust timeout mechanism to prevent blocking indefinitely."
                 (setq result (buffer-string))))
             (cons result (or exit-code 0))))
       ;; Cleanup
-      (when timer
+      (when (timerp timer)
         (cancel-timer timer))
       (when process
         (gptel-auto-workflow--unregister-shell-process process))

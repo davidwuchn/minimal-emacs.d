@@ -76,7 +76,8 @@ Interactive command to recover from hung workflow state."
         gptel-auto-workflow--current-target nil)
   (setq gptel-auto-workflow--stats
         (plist-put gptel-auto-workflow--stats :phase "idle"))
-  (gptel-auto-workflow--persist-status)
+  (let ((gptel-auto-workflow--force-idle-status-overwrite t))
+    (gptel-auto-workflow--persist-status))
   (when gptel-auto-workflow--watchdog-timer
     (cancel-timer gptel-auto-workflow--watchdog-timer)
     (setq gptel-auto-workflow--watchdog-timer nil))
