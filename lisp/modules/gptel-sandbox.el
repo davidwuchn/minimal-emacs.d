@@ -254,12 +254,9 @@ Used by `and' and `or' to share short-circuit evaluation logic."
           (throw 'gptel-sandbox-short-circuit value))))))
 
 (defun gptel-sandbox--apply-builtin (func args env)
-  "Apply built-in function FUNC to evaluated ARGS in ENV."
-  (let ((evaluated-args (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args)))
-    (condition-case err
-        (apply func evaluated-args)
-      (error
-       (error "Programmatic builtin %s failed: %s" func (error-message-string err))))))
+  "Apply built-in function FUNC to evaluated ARGS in ENV.
+Errors propagate to the outer condition-case in `execute-tool'."
+  (apply func (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args)))
 
 (defun gptel-sandbox--eval-expr (expr env)
   "Evaluate pure sandbox expression EXPR in ENV.

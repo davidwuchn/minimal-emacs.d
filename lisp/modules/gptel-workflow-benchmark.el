@@ -33,6 +33,10 @@
 
 ;;; Helpers
 
+(defun gptel-workflow--result-scores (result)
+  "Extract scores plist from RESULT entry."
+  (plist-get result :scores))
+
 (defun gptel-workflow--tool-calls-list (run)
   "Return tool-calls from RUN as a list (handles vector)."
   (let ((tc (gptel-workflow-run-tool-calls run)))
@@ -658,11 +662,10 @@ TEST-ID is the test case ID."
         (avg-efficiency 0.0)
         (avg-completion 0.0))
     (dolist (r results)
-      (let ((scores (cdr r)))
-        (when scores
-          (cl-incf avg-overall (or (plist-get scores :overall-score) 0))
-          (cl-incf avg-efficiency (or (plist-get scores :efficiency-score) 0))
-          (cl-incf avg-completion (or (plist-get scores :completion-score) 0)))))
+      (when-let ((scores (gptel-workflow--result-scores r)))
+        (cl-incf avg-overall (or (plist-get scores :overall-score) 0))
+        (cl-incf avg-efficiency (or (plist-get scores :efficiency-score) 0))
+        (cl-incf avg-completion (or (plist-get scores :completion-score) 0))))
     (list :total-tests total
           :avg-overall (if (> total 0) (/ avg-overall total) 0.0)
           :avg-efficiency (if (> total 0) (/ avg-efficiency total) 0.0)
@@ -812,9 +815,8 @@ Returns plist with :patterns, :issues, and :recommendations."
         (low-efficiency 0)
         (tool-usage (make-hash-table :test 'equal)))
     (dolist (r results)
-      (let* ((scores (plist-get r :scores))
-             (metrics (plist-get r :metrics)))
-        (when scores
+      (let ((metrics (plist-get r :metrics)))
+        (when-let ((scores (gptel-workflow--result-scores r)))
           (when (< (or (plist-get scores :completion-score) 1.0) 0.7)
             (cl-incf low-completion))
           (when (< (or (plist-get scores :efficiency-score) 1.0) 0.7)
