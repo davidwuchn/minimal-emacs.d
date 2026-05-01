@@ -418,8 +418,6 @@ Hook for `gptel-post-response-functions'."
   (when my/gptel-auto-delegate-enabled
     (let* ((threshold-values (my/gptel--threshold-values))
            (tokens (nth 0 threshold-values))
-           (window (nth 1 threshold-values))
-           (threshold-fraction (nth 2 threshold-values))
            (percentage-threshold (nth 3 threshold-values))
            (absolute-threshold my/gptel-auto-delegate-threshold-absolute))
       (or (and absolute-threshold (>= tokens absolute-threshold))
