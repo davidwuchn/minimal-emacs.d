@@ -179,6 +179,8 @@ Raises an error if PAIRS is malformed."
 (defun gptel-sandbox--eval-let (bindings body env sequentialp)
   "Evaluate let-style BINDINGS and BODY in ENV.
 When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
+  (unless (listp bindings)
+    (error "Programmatic let bindings must be a list, got: %S" bindings))
   (let ((child-env (gptel-sandbox--copy-env env)))
     (if sequentialp
         (dolist (binding bindings)

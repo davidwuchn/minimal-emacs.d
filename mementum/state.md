@@ -1,8 +1,30 @@
 # Mementum State
 
-> Last session: 2026-05-01 17:54
+> Last session: 2026-05-02 00:10
 
-## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Verified Cache Optimization + Inspection-Thrash Fix
+## Current Session: 2026-05-02 Workflow Run Review + Promotion
+
+**Status:** Run `2026-05-01T180001Z-811b` completed (3/3 targets improved, 3 kept commits). Promoted 1 real fix to `main`; skipped 2 false positives.
+
+**Done (This Session):**
+- **Reviewed run `2026-05-01T180001Z-811b`**: 8 experiments across 3 targets, 3 kept, 2 pre-grade validation failures.
+  - `gptel-auto-workflow-strategic.el`: exp1 kept (`d69e70cb`) — **false positive**, `when`→`unless` is logically equivalent. Skipped for main promotion.
+  - `gptel-ext-context.el`: exp1 kept (`2710a5c2`) — marginal defensive change, `zerop` already safe. Skipped for main promotion.
+  - `gptel-sandbox.el`: exp1 kept (`51966c24`) — **real improvement**, `listp` guard prevents cryptic `dolist` errors on malformed bindings. **Promoted to main**.
+- **Promoted sandbox fix**: Cherry-picked `51966c24` onto `main` as `a86750f1`, merged remote advance, pushed `2111c3f6`.
+  - Byte-compile verified for `lisp/modules/gptel-sandbox.el`.
+  - Full regression suite: 224/287 pass (27 pre-existing failures unrelated to sandbox change).
+- **Pre-grade validation working**: 2 experiments caught by defensive-code removal detection and `cl-return-from` validation.
+- **Remote staging race handled**: Workflow auto-recovered via fetch/merge/retry when `origin/staging` advanced during push.
+
+**Key Decisions:**
+- Do not promote behavior-equivalent refactors (strategic `when`→`unless`) to main even if grader approves.
+- Do not promote marginally defensive changes (context window validation) unless they fix a real observable bug.
+- Promote fail-fast safety guards (sandbox `listp` check) that improve error messages and prevent crashes.
+
+**Next Steps:**
+- Monitor next workflow run for new targets.
+- Continue evaluating kept patches with skepticism; verify claimed bug fixes against actual code behavior.
 
 **Status:** `main` has inspection-thrash fixes staged; run `2026-05-01T180002Z-7ee1` still running with inspection-thrash errors being addressed.
 
