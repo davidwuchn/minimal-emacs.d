@@ -469,8 +469,11 @@ Returns non-nil if error state was handled."
    ((gptel-auto-workflow--json-object-p item)
     (gptel-auto-workflow--normalize-target-candidate
      (or (alist-get 'file item)
+         (cdr (assoc "file" item))
          (alist-get 'path item)
-         (alist-get 'target item))))
+         (cdr (assoc "path" item))
+         (alist-get 'target item)
+         (cdr (assoc "target" item)))))
    (t nil)))
 
 (defun gptel-auto-workflow--nonempty-string-p (s)
