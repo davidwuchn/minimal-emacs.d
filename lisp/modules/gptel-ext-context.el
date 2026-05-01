@@ -283,7 +283,9 @@ Auto-delegate: %s"
              model model-id
              (if cached (format "yes (%d)" cached) "no")
              chars (round tokens) (round text-tokens) (round image-tokens) image-count
-             (if (zerop window) 0.0 (* 100 (/ (float tokens) window)))
+             (if (and (integerp window) (> window 0))
+                 (* 100 (/ (float tokens) window))
+               0)
              delegate-status)))
 
 (defun my/gptel--directive-text (sym)

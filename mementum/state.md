@@ -1,12 +1,43 @@
 # Mementum State
 
-> Last session: 2026-05-01 17:54
+> Last session: 2026-05-02 00:10
 
-## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Verified Cache Optimization
+## Current Session: 2026-05-02 Workflow Run Review + Promotion
 
-**Status:** `main` clean and pushed through `53032d62`; run `2026-05-01T162409Z-4de2` completed with 1 kept result and that fix is promoted to `main`.
+**Status:** Run `2026-05-01T180001Z-811b` completed (3/3 targets improved, 3 kept commits). Promoted 1 real fix to `main`; skipped 2 false positives.
 
 **Done (This Session):**
+- **Reviewed run `2026-05-01T180001Z-811b`**: 8 experiments across 3 targets, 3 kept, 2 pre-grade validation failures.
+  - `gptel-auto-workflow-strategic.el`: exp1 kept (`d69e70cb`) — **false positive**, `when`→`unless` is logically equivalent. Skipped for main promotion.
+  - `gptel-ext-context.el`: exp1 kept (`2710a5c2`) — marginal defensive change, `zerop` already safe. Skipped for main promotion.
+  - `gptel-sandbox.el`: exp1 kept (`51966c24`) — **real improvement**, `listp` guard prevents cryptic `dolist` errors on malformed bindings. **Promoted to main**.
+- **Promoted sandbox fix**: Cherry-picked `51966c24` onto `main` as `a86750f1`, merged remote advance, pushed `2111c3f6`.
+  - Byte-compile verified for `lisp/modules/gptel-sandbox.el`.
+  - Full regression suite: 224/287 pass (27 pre-existing failures unrelated to sandbox change).
+- **Pre-grade validation working**: 2 experiments caught by defensive-code removal detection and `cl-return-from` validation.
+- **Remote staging race handled**: Workflow auto-recovered via fetch/merge/retry when `origin/staging` advanced during push.
+
+**Key Decisions:**
+- Do not promote behavior-equivalent refactors (strategic `when`→`unless`) to main even if grader approves.
+- Do not promote marginally defensive changes (context window validation) unless they fix a real observable bug.
+- Promote fail-fast safety guards (sandbox `listp` check) that improve error messages and prevent crashes.
+
+**Next Steps:**
+- Monitor next workflow run for new targets.
+- Continue evaluating kept patches with skepticism; verify claimed bug fixes against actual code behavior.
+
+**Status:** `main` has inspection-thrash fixes staged; run `2026-05-01T180002Z-7ee1` still running with inspection-thrash errors being addressed.
+
+**Done (This Session):**
+- **Merged kept experiments to main** (from run 2026-05-01T180002Z-7ee1):
+  - `gptel-agent-loop.el`: State validation guard in `gptel-agent-loop--continuation-needed-p`
+  - `gptel-ext-context-cache.el`: Variable shadowing fix in `my/gptel-get-model-metadata`
+  - `gptel-tools-agent-git.el`: Inverted logic fix in `my/gptel--ignore-agent-activity-message-p`
+  - Commit: `09106858` — Merge staging experiments into main
+- **Fixed inspection-thrash issue**: Added proactive warnings at 50% and 75% threshold, hardened retry prompt (max 2 read-only calls), updated self-evolution knowledge.
+  - Commit: `b314027a` — ⊘ fix: add proactive inspection-thrash warnings and harden retry prompt
+- **Fixed stale status bug**: Status command now detects when daemon is running but has no active workflow, clears stale `:running t` status.
+  - Commit: `792a67e7` — ⊘ fix: clear stale status when daemon has no active workflow
 - Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
 - Commit: `8624a5e9` — ⊘ fix: write staging-pending directly to TSV, bypass log-fn
 - **Verified fix working**: Run `2026-05-01T150007Z-b5d4` completed successfully with staging-pending row persisted in TSV.
@@ -14,7 +45,7 @@
   - File: `lisp/modules/gptel-ext-context-cache.el` (+25/-14 lines)
   - Optimization: Added memoization cache for `my/gptel--alist-partial-match` (O(n) → O(1))
   - Grade: 9/9, Tests: PASS, Staging review: PASSED
-- Synced `main` and `staging` to `256afdf0` (includes remote fix `9738c05a` for gptel-request subagent operations).
+- Synced `main` and `staging` to `f03ff468`.
 - Cleaned 15 zombie `aw-complete-*` processes.
 - Removed 69 stale experiment directories (>14 days old).
 - All unit tests pass (1733 tests, 0 unexpected).

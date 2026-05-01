@@ -1146,6 +1146,10 @@ if [ "$ACTION" = "status" ]; then
     if active_snapshot_has_empty_messages_tail; then
         clear_stale_running_status
     fi
+    # If daemon is running but doesn't report active workflow, clear stale status
+    if check_worker_daemon && ! daemon_reports_active_workflow; then
+        clear_stale_running_status
+    fi
     if status_can_use_persisted_active_snapshot; then
         print_status
         exit 0
