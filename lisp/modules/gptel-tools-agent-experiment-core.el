@@ -55,10 +55,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                     (prompt (gptel-auto-experiment-build-prompt
                              target experiment-id max-experiments analysis baseline previous-results)))
                (setq executor-prompt prompt)
-               ;; Routing handled by gptel-auto-workflow--advice-task-override
-               (my/gptel--run-agent-tool-with-timeout
-                experiment-timeout
-                (lambda (agent-output)
+                ;; Routing handled by gptel-auto-workflow--advice-task-override
+                (message "DEBUG-EXPERIMENT: about to call run-agent-tool-with-timeout")
+                (message "DEBUG-EXPERIMENT: timeout=%S agent-name=%S description=%S prompt-len=%d"
+                         experiment-timeout "executor" "Run experiment" (length executor-prompt))
+                (my/gptel--run-agent-tool-with-timeout
+                 experiment-timeout
+                 (lambda (agent-output)
                   (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
                     (if (gptel-auto-experiment--stale-run-p run-id)
                         (unless finished

@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-01 07:10
+updated: 2026-05-01 09:00
 ---
 
 # Self-Evolution Knowledge Base
@@ -13,21 +13,25 @@ updated: 2026-05-01 07:10
 
 ## Git History Facts
 
-- Active experiment branches: 69
+- Active experiment branches: 91
 - Historical merges: 564
 - Active branches merged: 6
-- Active branches abandoned: 63
-- Active merge rate: 8.7%
+- Active branches abandoned: 85
+- Active merge rate: 6.6%
 
 ### Target Frequency
 
-- `agent`: 29 experiments
-- `cache`: 13 experiments
-- `loop`: 11 experiments
-- `utils`: 6 experiments
+- `agent`: 31 experiments
+- `loop`: 15 experiments
+- `cache`: 14 experiments
+- `utils`: 8 experiments
+- `strategic`: 5 experiments
+- `sandbox`: 5 experiments
 - `projects`: 4 experiments
-- `sandbox`: 3 experiments
+- `tools`: 2 experiments
 - `retry`: 2 experiments
+- `core`: 2 experiments
+- `confirm`: 2 experiments
 - `sanitize`: 1 experiments
 
 ## Benchmark-Verified Patterns

@@ -59,11 +59,6 @@
         (message ,format err)
         nil))))
 
-;; Disable native compilation for workflow daemon to prevent stale cache issues
-(when (my/workflow-daemon-p)
-  (setq native-comp-jit-compilation nil)
-  (setq native-comp-enable-subprocesses nil))
-
 ;; These variables are used by auto-workflow in .dir-locals.el files.
 (put 'gptel-auto-workflow-targets 'safe-local-variable
      (lambda (value)
