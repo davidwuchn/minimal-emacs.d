@@ -29,6 +29,11 @@
 **Status:** `main` has inspection-thrash fixes staged; run `2026-05-01T180002Z-7ee1` still running with inspection-thrash errors being addressed.
 
 **Done (This Session):**
+- **Merged kept experiments to main** (from run 2026-05-01T180002Z-7ee1):
+  - `gptel-agent-loop.el`: State validation guard in `gptel-agent-loop--continuation-needed-p`
+  - `gptel-ext-context-cache.el`: Variable shadowing fix in `my/gptel-get-model-metadata`
+  - `gptel-tools-agent-git.el`: Inverted logic fix in `my/gptel--ignore-agent-activity-message-p`
+  - Commit: `09106858` — Merge staging experiments into main
 - **Fixed inspection-thrash issue**: Added proactive warnings at 50% and 75% threshold, hardened retry prompt (max 2 read-only calls), updated self-evolution knowledge.
   - Commit: `b314027a` — ⊘ fix: add proactive inspection-thrash warnings and harden retry prompt
 - **Fixed stale status bug**: Status command now detects when daemon is running but has no active workflow, clears stale `:running t` status.
@@ -40,7 +45,7 @@
   - File: `lisp/modules/gptel-ext-context-cache.el` (+25/-14 lines)
   - Optimization: Added memoization cache for `my/gptel--alist-partial-match` (O(n) → O(1))
   - Grade: 9/9, Tests: PASS, Staging review: PASSED
-- Synced `main` and `staging` to `256afdf0` (includes remote fix `9738c05a` for gptel-request subagent operations).
+- Synced `main` and `staging` to `f03ff468`.
 - Cleaned 15 zombie `aw-complete-*` processes.
 - Removed 69 stale experiment directories (>14 days old).
 - All unit tests pass (1733 tests, 0 unexpected).
