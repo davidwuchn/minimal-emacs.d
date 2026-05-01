@@ -2,11 +2,11 @@
 
 > Last session: 2026-05-01 17:54
 
-## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Verified Cache Optimization
+## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Verified Cache Optimization + Inspection-Thrash Fix
 
-**Status:** `main` clean and pushed through `53032d62`; run `2026-05-01T162409Z-4de2` completed with 1 kept result and that fix is promoted to `main`.
+**Status:** `main` has inspection-thrash fixes staged; run `2026-05-01T180002Z-7ee1` still running with inspection-thrash errors being addressed.
 
-**Done (This Session):**
+**Done (This Session):
 - Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
 - Commit: `8624a5e9` — ⊘ fix: write staging-pending directly to TSV, bypass log-fn
 - **Verified fix working**: Run `2026-05-01T150007Z-b5d4` completed successfully with staging-pending row persisted in TSV.

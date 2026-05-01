@@ -64,13 +64,16 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
                     (when large-target-p
                       (format "This target is large (%d bytes). Broad file surveys are likely to fail.\n"
                               target-bytes))
-                    "Follow this exact opening sequence:\n"
-                    (format "1. The second line after HYPOTHESIS must be exactly `%s`.\n"
-                            focus-line)
-                    "2. Do NOT use Code_Map on the whole file.\n"
-                    "3. Use at most 3 read-only tool calls, all on that same symbol or its direct callers/callees.\n"
-                    "4. Your next tool call after those reads must be a write-capable tool on that same symbol.\n"
-                    "5. Do not inspect a second subsystem before the first edit exists.\n\n"))))
+                     "CRITICAL: You previously failed with inspection-thrash on this file.\n"
+                     "The system will ABORT your turn if you do too many read-only inspections without writing.\n\n"
+                     "Follow this exact opening sequence:\n"
+                     (format "1. The second line after HYPOTHESIS must be exactly `%s`.\n"
+                             focus-line)
+                     "2. Do NOT use Code_Map on the whole file.\n"
+                     "3. Use at most 2 read-only tool calls (Read, Grep, Code_Inspect), all on that same symbol.\n"
+                     "4. Your NEXT tool call MUST be a write (Edit, Write, ApplyPatch) on that same symbol.\n"
+                     "5. If you do more than 2 read-only calls without writing, your turn will be aborted.\n"
+                     "6. Do not inspect a second subsystem before the first edit exists.\n\n"))))
     (format "You are running experiment %d of %d to optimize %s.
 
 ## Working Directory

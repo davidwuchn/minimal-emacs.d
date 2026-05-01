@@ -363,21 +363,34 @@ to a write-capable tool."
                                      (1+ current-run)
                                    1)
                      current-file file)
-               (let ((threshold (my/gptel--inspection-thrash-threshold-for-file file)))
-                 (when (>= current-run threshold)
-                 (let ((abbrev-file (abbreviate-file-name file)))
-                   (let ((error-message
-                          (format "gptel: inspection-thrash aborted — %d consecutive read-only inspections on %s without a write-capable tool. Try editing sooner or narrow the task."
-                                  current-run abbrev-file)))
-                     (message "gptel: inspection-thrash detected — %d read-only inspections on %s without a write, aborting turn"
-                              current-run abbrev-file)
-                     (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
-                     (funcall (plist-get info :callback) error-message info))
-                   (gptel--fsm-transition fsm 'DONE)
-                   (cl-return-from my/gptel--detect-inspection-thrash))))
-               (setf (gptel-fsm-info fsm)
-                     (plist-put info :inspection-thrash-state
-                                (list :file current-file :count current-run))))
+                (let* ((threshold (my/gptel--inspection-thrash-threshold-for-file file))
+                       (abbrev-file (abbreviate-file-name file))
+                       (warning-level
+                        (cond
+                         ((>= current-run threshold) :abort)
+                         ((>= current-run (* threshold 0.75)) :urgent)
+                         ((>= current-run (* threshold 0.5)) :warn)
+                         (t nil))))
+                  (cond
+                   ((eq warning-level :abort)
+                    (let ((error-message
+                           (format "gptel: inspection-thrash aborted — %d consecutive read-only inspections on %s without a write-capable tool. Try editing sooner or narrow the task."
+                                   current-run abbrev-file)))
+                      (message "gptel: inspection-thrash detected — %d read-only inspections on %s without a write, aborting turn"
+                               current-run abbrev-file)
+                      (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
+                      (funcall (plist-get info :callback) error-message info))
+                    (gptel--fsm-transition fsm 'DONE)
+                    (cl-return-from my/gptel--detect-inspection-thrash))
+                   ((eq warning-level :urgent)
+                    (message "gptel: inspection-thrash WARNING — %d/%d read-only inspections on %s. WRITE TO THE FILE NOW or this turn will be aborted."
+                             current-run threshold abbrev-file))
+                   ((eq warning-level :warn)
+                    (message "gptel: inspection-thrash caution — %d/%d read-only inspections on %s. Consider writing to the file soon."
+                             current-run threshold abbrev-file)))
+                  (setf (gptel-fsm-info fsm)
+                        (plist-put info :inspection-thrash-state
+                                   (list :file current-file :count current-run)))))
              (t
              (setq current-file nil
                    current-run 0)
