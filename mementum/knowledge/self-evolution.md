@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-01 12:07
+updated: 2026-05-01 16:13
 ---
 
 # Self-Evolution Knowledge Base
@@ -35,19 +35,19 @@ updated: 2026-05-01 12:07
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 21% verified (169/820 experiments)
+- **bug-fix**: 21% verified (171/826 experiments)
 - **performance**: 36% verified (19/53 experiments)
-- **refactoring**: 35% verified (57/165 experiments)
-- **safety**: 40% verified (77/192 experiments)
+- **refactoring**: 34% verified (58/170 experiments)
+- **safety**: 40% verified (78/194 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **safety** - 40% kept (192 experiments)
+1. **safety** - 40% kept (194 experiments)
 2. **performance** - 36% kept (53 experiments)
-3. **refactoring** - 35% kept (165 experiments)
-4. **bug-fix** - 21% kept (820 experiments)
+3. **refactoring** - 34% kept (170 experiments)
+4. **bug-fix** - 21% kept (826 experiments)
 
 ## Critical Guidance for Maximum Success
 
@@ -108,15 +108,15 @@ Which change types work best for each target file:
 - **safety**: 33% (3 experiments)
 - **bug-fix**: 18% (39 experiments)
 
+### `gptel-auto-workflow-strategic.el`
+
+- **refactoring**: 40% (10 experiments)
+- **bug-fix**: 4% (25 experiments)
+
 ### `gptel-tools-code.el`
 
 - **bug-fix**: 0% (30 experiments)
 - **safety**: 0% (5 experiments)
-
-### `gptel-auto-workflow-strategic.el`
-
-- **refactoring**: 38% (8 experiments)
-- **bug-fix**: 4% (25 experiments)
 
 ### `staging-merge`
 
@@ -127,13 +127,18 @@ Which change types work best for each target file:
 - **bug-fix**: 0% (14 experiments)
 - **other**: 0% (16 experiments)
 
+### `gptel-ext-context.el`
+
+- **bug-fix**: 46% (13 experiments)
+- **refactoring**: 38% (8 experiments)
+
 ### `gptel-auto-workflow-projects.el`
 
 - **bug-fix**: 16% (19 experiments)
 
 ### `gptel-sandbox.el`
 
-- **safety**: 25% (4 experiments)
+- **safety**: 40% (5 experiments)
 - **refactoring**: 25% (4 experiments)
 - **bug-fix**: 20% (10 experiments)
 
@@ -141,11 +146,6 @@ Which change types work best for each target file:
 
 - **safety**: 25% (4 experiments)
 - **bug-fix**: 0% (13 experiments)
-
-### `gptel-ext-context.el`
-
-- **bug-fix**: 44% (9 experiments)
-- **refactoring**: 43% (7 experiments)
 
 ### `gptel-ext-core.el`
 
@@ -155,14 +155,14 @@ Which change types work best for each target file:
 
 - **bug-fix**: 38% (13 experiments)
 
+### `gptel-workflow-benchmark.el`
+
+- **refactoring**: 75% (4 experiments)
+- **bug-fix**: 0% (7 experiments)
+
 ### `gptel-benchmark-subagent.el`
 
 - **bug-fix**: 0% (7 experiments)
-
-### `gptel-workflow-benchmark.el`
-
-- **refactoring**: 67% (3 experiments)
-- **bug-fix**: 0% (4 experiments)
 
 ### `gptel-benchmark-evolution.el`
 
@@ -176,6 +176,32 @@ Which change types work best for each target file:
 
 - **other**: 0% (3 experiments)
 
+## Anti-Patterns Catalog
+
+### Removing Defensive JSON Lookups
+
+**Severity: HIGH**
+
+**Pattern:** Experiment assumes `json-key-type 'symbol` guarantees all keys are symbols, removes string-key lookups.
+
+**Impact:** Silent parsing failures → empty target lists → workflow breakdown.
+
+**Prevention:**
+- NEVER remove defensive code without cross-version testing
+- JSON parsing behavior varies by Emacs version and parser
+- Defensive code is insurance, not dead code
+
+**See:** `mementum/memories/anti-pattern-removing-defensive-json-lookups.md`
+
+## Staging Verification Gaps
+
+Current staging verification missed this bug because:
+- Tests used consistent JSON key types (all symbols)
+- No cross-key-type test cases
+- Experiment was classified as "refactoring" not "bug-fix"
+
+**Fix:** Add mixed key-type JSON test cases to staging verification.
+
 ## Feedback Loop
 
 ```
@@ -185,3 +211,8 @@ Benchmark → Verification → MEMENTUM
      ↑                           ↓
 Prompt Injection ← Knowledge ←─┘
 ```
+
+**New Rule:** When manual fix is required post-staging, automatically:
+1. Create anti-pattern memory
+2. Update verification tests
+3. Inject prevention guidance into next experiment prompts
