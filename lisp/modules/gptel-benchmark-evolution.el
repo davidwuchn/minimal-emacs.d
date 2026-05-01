@@ -536,12 +536,11 @@ Uses 相生 cycle to predict evolution order."
 (defun gptel-benchmark-evolution--find-opportunity (observation)
   "Find evolution opportunity from OBSERVATION."
   (let ((deficient (plist-get observation :element-status)))
-    (when (and (listp deficient)
-               (cl-find-if (lambda (d) (memq (plist-get d :status) '(deficient critical)))
-                           deficient))
-      (plist-get (cl-find-if (lambda (d) (memq (plist-get d :status) '(deficient critical)))
-                             deficient)
-                 :element))))
+    (when (listp deficient)
+      (let ((found (cl-find-if (lambda (d) (memq (plist-get d :status) '(deficient critical)))
+                               deficient)))
+        (when found
+          (plist-get found :element))))))
 
 ;;; Co-Evolution Interface
 
