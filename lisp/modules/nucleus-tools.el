@@ -155,7 +155,7 @@ Handles string, plist, and gptel-tool struct formats."
 
 (defun nucleus--tool-names-from-tools (tools)
   "Return tool name strings from TOOLS list."
-  (delq nil (mapcar #'nucleus--tool-name tools)))
+  (seq-filter #'identity (mapcar #'nucleus--tool-name tools)))
 
 ;;; Tool Sanity Checking
 
