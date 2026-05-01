@@ -12,6 +12,8 @@
 
 (declare-function gptel-auto-workflow--json-target-file
                   "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--json-object-p
+                  "gptel-auto-workflow-strategic")
 
 (defvar gptel-auto-workflow--behavioral-test-suite
   '(("json-target-extraction"
