@@ -4,7 +4,7 @@
 
 ## Current Session: 2026-05-01 Auto-Workflow Repair
 
-**Status:** Source repaired and focused regressions passing.
+**Status:** Prompt `%s` blocker fixed; retry run active.
 
 **Done:**
 - Restored `lisp/modules/gptel-tools-agent-experiment-core.el` to syntax-valid state after the callback/context conversion left an extra final close paren.
@@ -15,15 +15,21 @@
 - Verified `post-early-init.el` already sets the `%s` macro-capture fix for `with-demoted-errors`.
 - Verified wrapper already starts workflow daemons with `MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1` and `MINIMAL_EMACS_WORKFLOW_DAEMON=1`.
 - Re-verified local staging worktree with `./scripts/verify-nucleus.sh`: all Nucleus validations passed.
+- Fixed executor prompt syntax-check instruction so it emits a concrete `emacs -Q --batch --eval ... find-file PATH` command instead of raw `find-file "%s"`.
+- Added regression coverage that rejects raw `find-file "%s"` in experiment prompts and requires the concrete worktree target path.
+- Changed `lisp/modules/gptel-tools-agent.el` to source-load split modules on `load-file`, so long-lived workflow daemons hot-reload patched module definitions instead of keeping stale `require`d code.
 
 **Verification:**
 - `emacs -Q --batch --eval '(with-temp-buffer (insert-file-contents "lisp/modules/gptel-tools-agent-experiment-core.el") (emacs-lisp-mode) (check-parens))'` passed.
 - `emacs -Q --batch -L lisp/modules -f batch-byte-compile lisp/modules/gptel-tools-agent-experiment-core.el` completed with only existing split-module warnings.
 - Focused ERT selector `regression/auto-experiment/\(run-forwards-executor-runagent-args\|retry-forwards-focused-executor-runagent-args\|retry-stops-after-second-validation-failure\|waits-for-staging-flow-before-callback\)` passed 4/4.
 - `/tmp/gptel-callback-error.log` absent.
+- Prompt-builder checks passed: `check-parens`, byte-compile with existing split-module warnings, emitted sexp-check command, and ERT selector `regression/auto-experiment/build-prompt-.*` (3/3).
+- Live workflow daemon prompt probe returned `(nil 7419)`: no raw `find-file "%s"`, concrete `emacs -Q --batch --eval` present.
 
 **Important State:**
-- `./scripts/run-auto-workflow-cron.sh status` reports idle for run `2026-05-01T091051Z-ace2`.
+- `./scripts/run-auto-workflow-cron.sh status` reports active run `2026-05-01T162409Z-4de2` with 3 targets, phase `running`.
+- Current live messages show the retry passed the old `%s` blocker: executor started for `lisp/modules/gptel-ext-retry.el`, wrote the target file, and no new `%s` callback error appeared after `r162409z4de2`.
 - Local staging worktree `var/tmp/experiments/staging-verify` is clean and `staging` is ahead of `origin/staging` by 6 commits, ending at `48888050 Merge optimize/loop-neopi5-r091051zace2-exp1 for verification`.
 - `main` and `origin/main` are synced at `b52756c5` after pushing the retry recursion fix.
 - Unrelated local work remains: `mementum/knowledge/self-evolution.md`, modified `packages/gptel`, and untracked `mementum/memories/insight-*` files.
