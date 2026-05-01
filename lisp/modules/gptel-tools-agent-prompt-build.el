@@ -210,6 +210,48 @@ Example HYPOTHESES:
        (gptel-auto-workflow--plist-get experiment :grader-reason nil))
       "discarded"))
 
+(defun gptel-auto-experiment--staging-pending-result (experiment)
+  "Return a copy of EXPERIMENT labeled as pending staging verification."
+  (let ((pending-result (copy-sequence experiment)))
+    (setq pending-result (plist-put pending-result :kept nil))
+    (setq pending-result (plist-put pending-result :decision "staging-pending"))
+    (setq pending-result (plist-put pending-result :comparator-reason
+                                    "staging-pending"))
+    pending-result))
+
+(defun gptel-auto-experiment--maybe-log-staging-pending (run-id experiment log-fn)
+  "Log EXPERIMENT as staging-pending for RUN-ID when staging is active."
+  (when (and gptel-auto-workflow-use-staging
+             (functionp log-fn))
+    (funcall log-fn run-id
+             (gptel-auto-experiment--staging-pending-result experiment))))
+
+(defun gptel-auto-experiment--drop-replaceable-tsv-rows (experiment-id target)
+  "Drop stale pending rows for EXPERIMENT-ID/TARGET in current TSV buffer.
+Return non-nil when an existing terminal row should prevent appending another
+row for the same experiment and target."
+  (let ((id-key (format "%s" experiment-id))
+        (target-key (format "%s" target))
+        (skip nil))
+    (goto-char (point-min))
+    (forward-line 1)
+    (while (and (not skip) (not (eobp)))
+      (let* ((line-start (line-beginning-position))
+             (line-end (line-end-position))
+             (fields (split-string
+                      (buffer-substring-no-properties line-start line-end)
+                      "\t"))
+             (row-id (nth 0 fields))
+             (row-target (nth 1 fields))
+             (row-decision (nth 7 fields)))
+        (if (and (equal row-id id-key)
+                 (equal row-target target-key))
+            (if (equal row-decision "staging-pending")
+                (delete-region line-start (min (point-max) (1+ line-end)))
+              (setq skip t))
+          (forward-line 1))))
+    skip))
+
 (defun gptel-auto-workflow--kept-target-count-from-results-file (file)
   "Return the number of distinct kept targets recorded in TSV FILE."
   (if (not (file-exists-p file))
@@ -252,28 +294,33 @@ Example HYPOTHESES:
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID."
   (let* ((file (gptel-auto-workflow--ensure-results-file run-id))
+         (experiment-id (gptel-auto-workflow--plist-get experiment :id "?"))
+         (target (gptel-auto-workflow--plist-get experiment :target "?"))
+         (decision (gptel-auto-experiment--tsv-decision-label experiment))
          (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
-                            (truncate-string-to-width agent-output 500 nil nil "..."))))
+                             (truncate-string-to-width agent-output 500 nil nil "..."))))
     (with-temp-buffer
       (insert-file-contents file)
-      (goto-char (point-max))
-      (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n"
-                      (gptel-auto-workflow--plist-get experiment :id "?")
-                      (gptel-auto-workflow--plist-get experiment :target "?")
-                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
-                      (gptel-auto-workflow--plist-get experiment :score-before 0)
-                      (gptel-auto-workflow--plist-get experiment :score-after 0)
-                      (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
-                      (- (gptel-auto-workflow--plist-get experiment :score-after 0)
-                         (gptel-auto-workflow--plist-get experiment :score-before 0))
-                      (gptel-auto-experiment--tsv-decision-label experiment)
-                      (gptel-auto-workflow--plist-get experiment :duration 0)
-                      (gptel-auto-workflow--plist-get experiment :grader-quality "?")
-                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
-                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
-                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
-                      truncated-output))
+      (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
+               experiment-id target)
+        (goto-char (point-max))
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n"
+                        experiment-id
+                        target
+                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
+                        (gptel-auto-workflow--plist-get experiment :score-before 0)
+                        (gptel-auto-workflow--plist-get experiment :score-after 0)
+                        (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
+                        (- (gptel-auto-workflow--plist-get experiment :score-after 0)
+                           (gptel-auto-workflow--plist-get experiment :score-before 0))
+                        decision
+                        (gptel-auto-workflow--plist-get experiment :duration 0)
+                        (gptel-auto-workflow--plist-get experiment :grader-quality "?")
+                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
+                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
+                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
+                        truncated-output)))
       (write-region (point-min) (point-max) file))
     ;; Trigger self-evolution after experiment logging
     (when (and (fboundp 'gptel-auto-workflow--experiment-complete-hook)
@@ -313,8 +360,9 @@ supplied on failure, use it as the downgrade reason."
              (if (or (not staging-reported-p) staging-succeeded)
                  exp-result
                (let ((failed-result (and (listp exp-result)
-                                         (plist-put (copy-sequence exp-result) :kept nil))))
+                                          (plist-put (copy-sequence exp-result) :kept nil))))
                  (when failed-result
+                   (plist-put failed-result :decision nil)
                    (plist-put failed-result :comparator-reason failure-reason))
                  (or failed-result exp-result)))))
        (when (functionp log-fn)

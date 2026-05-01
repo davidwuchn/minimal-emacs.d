@@ -325,11 +325,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 			                                                            (format "Commit experiment changes for %s" target)
 			                                                            provisional-commit-hash
 			                                                            commit-timeout))
-		                                                          (progn
+			                                                          (progn
 			                                                        (setq provisional-commit-hash nil)
 			                                                        (gptel-auto-workflow--track-commit experiment-id
 							                                                                           target
 							                                                                           experiment-worktree)
+			                                                        (gptel-auto-experiment--maybe-log-staging-pending
+							                                                     run-id exp-result log-fn)
 			                                                        (setq gptel-auto-experiment--best-score score-after
 			                                                              gptel-auto-experiment--no-improvement-count 0)
 			                                                        (if gptel-auto-experiment-auto-push
@@ -457,11 +459,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 									                                                            (format "Commit retry changes for %s" target)
 									                                                            provisional-commit-hash
 									                                                            commit-timeout))
-									                                                      (progn
-									                                                        (setq provisional-commit-hash nil)
-									                                                        (gptel-auto-workflow--track-commit experiment-id
-												                                                                               target
-												                                                                               experiment-worktree)
+						                                                      (progn
+		                                                        (setq provisional-commit-hash nil)
+		                                                        (gptel-auto-workflow--track-commit experiment-id
+							                                                                               target
+							                                                                               experiment-worktree)
+                                                                                            (gptel-auto-experiment--maybe-log-staging-pending
+                                                                                             run-id exp-result log-fn)
                                                                                             (setq gptel-auto-experiment--best-score retry-score
                                                                                                   gptel-auto-experiment--no-improvement-count 0)
                                                                                             (if gptel-auto-experiment-auto-push

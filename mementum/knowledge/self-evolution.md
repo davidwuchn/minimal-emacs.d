@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-01 09:27
+updated: 2026-05-01 11:01
 ---
 
 # Self-Evolution Knowledge Base
@@ -13,47 +13,44 @@ updated: 2026-05-01 09:27
 
 ## Git History Facts
 
-- Active experiment branches: 224
-- Historical merges: 564
-- Active branches merged: 92
+- Active experiment branches: 155
+- Historical merges: 566
+- Active branches merged: 23
 - Active branches abandoned: 132
-- Active merge rate: 41.1%
+- Active merge rate: 14.8%
 
 ### Target Frequency
 
-- `agent`: 77 experiments
-- `loop`: 49 experiments
-- `cache`: 31 experiments
-- `sandbox`: 11 experiments
-- `retry`: 11 experiments
-- `projects`: 10 experiments
-- `utils`: 9 experiments
-- `core`: 8 experiments
-- `context`: 6 experiments
+- `agent`: 56 experiments
+- `loop`: 33 experiments
+- `cache`: 20 experiments
+- `utils`: 8 experiments
+- `projects`: 8 experiments
+- `sandbox`: 6 experiments
+- `core`: 6 experiments
+- `strategic`: 5 experiments
+- `context`: 4 experiments
+- `retry`: 3 experiments
 - `tools`: 2 experiments
-- `strategic`: 2 experiments
-- `sanitize`: 2 experiments
-- `code`: 2 experiments
-- `subagent`: 1 experiments
-- `memory`: 1 experiments
-- `evolution`: 1 experiments
+- `confirm`: 2 experiments
+- `sanitize`: 1 experiments
 - `benchmark`: 1 experiments
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 22% verified (47/209 experiments)
-- **performance**: 17% verified (4/24 experiments)
-- **refactoring**: 28% verified (20/71 experiments)
-- **safety**: 25% verified (13/51 experiments)
+- **bug-fix**: 17% verified (234/1413 experiments)
+- **performance**: 38% verified (48/127 experiments)
+- **refactoring**: 37% verified (120/327 experiments)
+- **safety**: 27% verified (90/333 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **refactoring** - 28% kept (71 experiments)
-2. **safety** - 25% kept (51 experiments)
-3. **bug-fix** - 22% kept (209 experiments)
-4. **performance** - 17% kept (24 experiments)
+1. **performance** - 38% kept (127 experiments)
+2. **refactoring** - 37% kept (327 experiments)
+3. **safety** - 27% kept (333 experiments)
+4. **bug-fix** - 17% kept (1413 experiments)
 
 ## Critical Guidance for Maximum Success
 
@@ -72,81 +69,131 @@ Which change types work best for each target file:
 
 ### `gptel-tools-agent.el`
 
-- **refactoring**: 29% (7 experiments)
-- **bug-fix**: 22% (37 experiments)
-- **safety**: 0% (4 experiments)
+- **safety**: 12% (66 experiments)
+- **bug-fix**: 7% (426 experiments)
+- **other**: 7% (15 experiments)
 
 ### `gptel-agent-loop.el`
 
-- **safety**: 57% (7 experiments)
-- **refactoring**: 50% (6 experiments)
-- **bug-fix**: 40% (20 experiments)
-
-### `gptel-auto-workflow-strategic.el`
-
-- **safety**: 44% (9 experiments)
-- **bug-fix**: 12% (17 experiments)
-- **performance**: 0% (3 experiments)
-
-### `staging-merge`
-
-- **other**: 0% (23 experiments)
+- **safety**: 38% (24 experiments)
+- **performance**: 33% (6 experiments)
+- **bug-fix**: 29% (145 experiments)
 
 ### `gptel-benchmark-core.el`
 
-- **bug-fix**: 50% (20 experiments)
+- **refactoring**: 70% (10 experiments)
+- **safety**: 55% (11 experiments)
+- **performance**: 33% (3 experiments)
 
 ### `gptel-ext-retry.el`
 
-- **bug-fix**: 7% (14 experiments)
-- **refactoring**: 0% (5 experiments)
+- **safety**: 33% (9 experiments)
+- **refactoring**: 33% (21 experiments)
+- **bug-fix**: 23% (106 experiments)
 
 ### `gptel-ext-context-cache.el`
 
-- **bug-fix**: 45% (11 experiments)
-- **performance**: 29% (7 experiments)
+- **refactoring**: 57% (7 experiments)
+- **performance**: 47% (17 experiments)
+- **bug-fix**: 26% (102 experiments)
 
-### `gptel-sandbox.el`
+### `gptel-auto-workflow-strategic.el`
 
-- **safety**: 33% (3 experiments)
-- **bug-fix**: 29% (7 experiments)
-- **refactoring**: 0% (3 experiments)
-
-### `staging-review`
-
-- **bug-fix**: 0% (12 experiments)
-
-### `staging-verification`
-
-- **other**: 0% (12 experiments)
-
-### `gptel-benchmark-subagent.el`
-
-- **bug-fix**: 0% (10 experiments)
-
-### `gptel-ext-context.el`
-
-- **bug-fix**: 11% (9 experiments)
-
-### `gptel-auto-workflow-projects.el`
-
-- **bug-fix**: 12% (8 experiments)
-
-### `gptel-ext-core.el`
-
-- **safety**: 25% (4 experiments)
-
-### `gptel-ext-fsm.el`
-
-- **bug-fix**: 0% (3 experiments)
-
-### `gptel-tools-grep.el`
-
-- **bug-fix**: 0% (3 experiments)
+- **refactoring**: 44% (9 experiments)
+- **safety**: 30% (10 experiments)
+- **bug-fix**: 5% (108 experiments)
 
 ### `gptel-tools-code.el`
 
+- **bug-fix**: 6% (52 experiments)
+- **refactoring**: 0% (5 experiments)
+- **safety**: 0% (9 experiments)
+
+### `gptel-sandbox.el`
+
+- **safety**: 83% (6 experiments)
+- **refactoring**: 67% (6 experiments)
+- **bug-fix**: 28% (46 experiments)
+
+### `staging-merge`
+
+- **other**: 0% (36 experiments)
+
+### `gptel-workflow-benchmark.el`
+
+- **safety**: 33% (3 experiments)
+- **bug-fix**: 18% (22 experiments)
+- **refactoring**: 17% (6 experiments)
+
+### `staging-verification`
+
+- **other**: 0% (29 experiments)
+
+### `staging-push`
+
+- **other**: 0% (27 experiments)
+
+### `gptel-benchmark-subagent.el`
+
+- **performance**: 33% (3 experiments)
+- **safety**: 0% (3 experiments)
+- **bug-fix**: 0% (15 experiments)
+
+### `gptel-auto-workflow-projects.el`
+
+- **refactoring**: 60% (5 experiments)
+- **bug-fix**: 12% (16 experiments)
+
+### `staging-review`
+
+- **bug-fix**: 0% (15 experiments)
+- **other**: 0% (6 experiments)
+
+### `gptel-ext-context.el`
+
+- **safety**: 20% (5 experiments)
+- **bug-fix**: 14% (14 experiments)
+
+### `gptel-ext-tool-sanitize.el`
+
+- **bug-fix**: 50% (10 experiments)
+- **refactoring**: 0% (3 experiments)
+- **safety**: 0% (4 experiments)
+
+### `nucleus-tools.el`
+
+- **safety**: 23% (13 experiments)
 - **bug-fix**: 0% (3 experiments)
+
+### `gptel-ext-fsm-utils.el`
+
+- **safety**: 80% (5 experiments)
+- **bug-fix**: 56% (9 experiments)
+
+### `gptel-benchmark-evolution.el`
+
+- **bug-fix**: 0% (9 experiments)
+
+### `gptel-ext-tool-confirm.el`
+
+- **bug-fix**: 0% (6 experiments)
+
+### `gptel-skill-benchmark.el`
+
+- **bug-fix**: 0% (3 experiments)
+- **refactoring**: 0% (3 experiments)
+
+### `gptel-tools.el`
+
+- **bug-fix**: 0% (3 experiments)
+
+### `gptel-benchmark-instincts.el`
+
+- **refactoring**: 0% (3 experiments)
+
+### `gptel-ext-context-images.el`
+
+- **refactoring**: 33% (3 experiments)
 
 ## Feedback Loop
 
