@@ -66,6 +66,21 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
      (shell-quote-argument log-file)
      (shell-quote-argument counter-file))))
 
+(defun test-auto-workflow--write-valid-elisp-target (worktree target)
+  "Create a minimal valid Elisp TARGET inside WORKTREE."
+  (let ((file (expand-file-name target worktree)))
+    (make-directory (file-name-directory file) t)
+    (with-temp-file file
+      (insert ";;; fixture.el --- test fixture -*- lexical-binding: t; -*-\n"))))
+
+(defun test-auto-workflow--valid-worktree-stub (worktree)
+  "Return a `gptel-auto-workflow-create-worktree' stub for WORKTREE.
+The stub creates the requested target file so tests that exercise later
+experiment phases do not trip the real pre-grade target validator."
+  (lambda (target _experiment-id)
+    (test-auto-workflow--write-valid-elisp-target worktree target)
+    worktree))
+
 (ert-deftest regression/auto-workflow/run-tests-uses-bsd-safe-mktemp-templates ()
   "run-tests.sh should use BSD-safe mktemp templates without suffixes after Xs."
   (let* ((repo-root test-auto-workflow--repo-root)
@@ -557,13 +572,15 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                   ((symbol-function 'gptel-auto-experiment-decide)
                    (lambda (&rest _)
                      (error "Retry failure path should not decide keep/discard")))
-                  ((symbol-function 'message)
-                   (lambda (&rest _) nil)))
-          (gptel-auto-experiment-run
-           "lisp/modules/gptel-tools-agent.el"
-           2 5 0.4 0.7 nil
-           (lambda (result)
-             (setq callback-result result)))
+                   ((symbol-function 'message)
+                    (lambda (&rest _) nil)))
+           (test-auto-workflow--write-valid-elisp-target
+            worktree "lisp/modules/gptel-tools-agent.el")
+           (gptel-auto-experiment-run
+            "lisp/modules/gptel-tools-agent.el"
+            2 5 0.4 0.7 nil
+            (lambda (result)
+              (setq callback-result result)))
           (list :callback-result callback-result
                 :logged-results (nreverse logged-results)
                 :tool-calls tool-call
@@ -983,8 +1000,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (string-match-p "Comparator override: unparsed -> B" (plist-get decision :reasoning)))
     (should (string-match-p "Winner: B" (plist-get decision :reasoning)))))
 
-(ert-deftest regression/auto-experiment/decide-rejects-score-tie-with-small-quality-gain ()
-  "Comparator should reject tied scores without a meaningful quality gain."
+(ert-deftest regression/auto-experiment/decide-keeps-score-tie-with-small-quality-gain ()
+  "Comparator may keep tied scores with the configured quality gain."
   (let ((gptel-auto-experiment-use-subagents t)
         decision)
     (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
@@ -997,9 +1014,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (lambda (result)
            (setq decision result)))))
     (should decision)
-    (should-not (plist-get decision :keep))
-    (should (string-match-p "Comparator override: B -> A" (plist-get decision :reasoning)))
-    (should (string-match-p "Rejected: score tie without >= 0.10 quality gain"
+    (should (plist-get decision :keep))
+    (should-not (string-match-p "Comparator override:" (plist-get decision :reasoning)))
+    (should (string-match-p "Kept: score tie with >= 0.03 quality gain"
                             (plist-get decision :reasoning)))))
 
 (ert-deftest regression/auto-experiment/decide-rejects-score-tie-without-combined-improvement ()
@@ -1557,7 +1574,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 (gptel-auto-workflow--running t)
                 (gptel-auto-workflow--run-id "run-timeout-salvage"))
             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                       (lambda (_target _experiment-id) worktree-dir))
+                       (test-auto-workflow--valid-worktree-stub worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree) worktree-buf))
                       ((symbol-function 'gptel-auto-workflow--resolve-run-root)
@@ -1653,7 +1670,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 (gptel-auto-workflow--running t)
                 (gptel-auto-workflow--run-id "run-timeout-no-salvage"))
             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                       (lambda (_target _experiment-id) worktree-dir))
+                       (test-auto-workflow--valid-worktree-stub worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree) worktree-buf))
                       ((symbol-function 'gptel-auto-workflow--resolve-run-root)
@@ -1718,7 +1735,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (temp-dir (make-temp-file "exp-worktree" t)))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -1759,7 +1776,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -1866,7 +1883,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 (gptel-auto-experiment-retry-delay 0)
                 (gptel-auto-experiment--api-error-count 0))
             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                       (lambda (_target _experiment-id) worktree-dir))
+                       (test-auto-workflow--valid-worktree-stub worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree-dir) worktree-buf))
                       ((symbol-function 'gptel-auto-experiment-analyze)
@@ -1941,7 +1958,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -1985,7 +2002,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          "Error: Task grader could not finish task \"Grade output\" (grader) timed out after 120s.")) 
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -2028,7 +2045,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          "HYPOTHESIS: Timeout salvage still produced a plausible edit\nCHANGED:\n- Partial worktree diff captured\nVERIFY:\n- Original timeout: Error: Task \"Experiment 1\" (executor) timed out after 1020s total runtime.\nTask completed"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -2072,7 +2089,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: FAIL - Hypothesis does not match the actual diff. | 2. verification attempted: FAIL - No verification was performed after the timeout salvage. | SUMMARY: SCORE: 3/9"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -2130,7 +2147,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (with-current-buffer exp2-buf
             (setq-local default-directory (file-name-as-directory exp2-dir)))
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) exp2-dir))
+                     (test-auto-workflow--valid-worktree-stub exp2-dir))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                      (lambda (_worktree-dir) exp2-buf))
                     ((symbol-function 'gptel-auto-experiment-analyze)
@@ -2536,7 +2553,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) worktree-dir))
+                     (test-auto-workflow--valid-worktree-stub worktree-dir))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                      (lambda (_worktree-dir) worktree-buf))
                     ((symbol-function 'gptel-auto-experiment-analyze)
@@ -2590,10 +2607,12 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (unwind-protect
         (progn
           (make-directory worktree-dir t)
+          (test-auto-workflow--write-valid-elisp-target
+           worktree-dir "lisp/modules/gptel-tools-agent.el")
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) worktree-dir))
+                     (test-auto-workflow--valid-worktree-stub worktree-dir))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                      (lambda (_worktree-dir) worktree-buf))
                     ((symbol-function 'gptel-auto-experiment-analyze)
@@ -2650,8 +2669,71 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                             "false"
                             nil))))
        (when (buffer-live-p worktree-buf)
-         (kill-buffer worktree-buf))
+        (kill-buffer worktree-buf))
        (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/retry-stops-after-second-validation-failure ()
+  "Validation retry output should not recursively schedule another retry."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/retry-riven-exp1" project-root))
+         (worktree-buf (get-buffer-create "*aw-forward-retry-stop*"))
+         (runagent-calls nil)
+         (validate-calls 0)
+         result)
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (test-auto-workflow--write-valid-elisp-target
+           worktree-dir "lisp/modules/gptel-tools-agent.el")
+          (with-current-buffer worktree-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                     (test-auto-workflow--valid-worktree-stub worktree-dir))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (_worktree-dir) worktree-buf))
+                    ((symbol-function 'gptel-auto-experiment-analyze)
+                     (lambda (_previous-results cb)
+                       (funcall cb nil)))
+                    ((symbol-function 'gptel-auto-experiment-build-prompt)
+                     (lambda (&rest _args) "prompt"))
+                    ((symbol-function 'run-with-timer)
+                     (lambda (&rest _args) :fake-timer))
+                    ((symbol-function 'cancel-timer)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'my/gptel--run-agent-tool)
+                     (lambda (cb &rest args)
+                       (push args runagent-calls)
+                       (funcall cb "HYPOTHESIS: retry still bad")))
+                    ((symbol-function 'gptel-auto-experiment--validate-code)
+                     (lambda (&rest _args)
+                       (cl-incf validate-calls)
+                       "Dangerous pattern"))
+                    ((symbol-function 'gptel-auto-experiment--prepare-validation-retry-worktree)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'gptel-auto-experiment--make-retry-prompt)
+                     (lambda (_target validation-error original-prompt)
+                       (format "retry:%s:%s" validation-error original-prompt)))
+                    ((symbol-function 'magit-git-success)
+                     (lambda (&rest _args) t))
+                    ((symbol-function 'gptel-auto-experiment-log-tsv)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'message)
+                     (lambda (&rest _args) nil)))
+            (with-current-buffer worktree-buf
+              (gptel-auto-experiment-run
+               "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+               (lambda (exp-result)
+                 (setq result exp-result)))))
+          (setq runagent-calls (nreverse runagent-calls))
+          (should result)
+          (should (= (length runagent-calls) 2))
+          (should (= validate-calls 2))
+          (should-not (plist-get result :kept))
+          (should (equal (plist-get result :comparator-reason) "validation-failed"))
+          (should (equal (plist-get result :validation-error) "Dangerous pattern")))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/auto-experiment/build-prompt-requires-concrete-executor-evidence ()
   "Experiment prompt should require structured change evidence in the final reply."
@@ -2781,7 +2863,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 (gptel-auto-experiment-validation-retry-time-budget 240)
                  (gptel-auto-experiment-validation-retry-active-grace 180))
              (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                        (lambda (_target _experiment-id) worktree-dir))
+                        (test-auto-workflow--valid-worktree-stub worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree-dir) worktree-buf))
                       ((symbol-function 'gptel-auto-experiment-analyze)
@@ -2857,7 +2939,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) worktree-dir))
+                     (test-auto-workflow--valid-worktree-stub worktree-dir))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                      (lambda (_worktree-dir) worktree-buf))
                     ((symbol-function 'gptel-auto-experiment-analyze)
@@ -5401,7 +5483,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (with-current-buffer worktree-buf
               (setq-local default-directory (file-name-as-directory worktree-dir)))
             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                       (lambda (_target _experiment-id) worktree-dir))
+                       (test-auto-workflow--valid-worktree-stub worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree-dir) worktree-buf))
                       ((symbol-function 'gptel-auto-experiment-analyze)
@@ -5699,7 +5781,7 @@ failure."
              :agent-output "CHANGED:\n- lisp/modules/gptel-ext-tool-sanitize.el :: `my/gptel--detect-inspection-thrash`\nTask completed"))))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) worktree-dir))
+                   (test-auto-workflow--valid-worktree-stub worktree-dir))
                   ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                    (lambda (_worktree-dir) worktree-buf))
                   ((symbol-function 'gptel-auto-experiment-analyze)
@@ -5917,7 +5999,7 @@ failure."
         (gptel-auto-workflow-use-staging nil))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                    (lambda (&rest _args) nil))
                   ((symbol-function 'gptel-auto-experiment-analyze)
@@ -5987,7 +6069,7 @@ failure."
         (gptel-auto-workflow-use-staging nil))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                    (lambda (&rest _args) nil))
                   ((symbol-function 'gptel-auto-experiment-analyze)
@@ -6129,61 +6211,64 @@ failure."
         (result nil)
         (temp-dir (make-temp-file "exp-worktree" t)))
     (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
-                  ((symbol-function 'gptel-auto-experiment-analyze)
-                   (lambda (_previous-results cb)
-                     (funcall cb '(:patterns nil))))
-                  ((symbol-function 'gptel-auto-experiment-build-prompt)
-                   (lambda (&rest _args) "prompt"))
-                  ((symbol-function 'run-with-timer)
-                   (lambda (&rest _args) :fake-timer))
-                  ((symbol-function 'cancel-timer)
-                   (lambda (&rest _args) nil))
-                  ((symbol-function 'my/gptel--run-agent-tool)
-                   (lambda (cb &rest _args)
-                     (funcall cb "executor output")))
-                  ((symbol-function 'gptel-auto-experiment-grade)
-                   (lambda (_output cb &rest _args)
-                     (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
-                  ((symbol-function 'gptel-auto-experiment-benchmark)
-                   (lambda (&rest _args)
-                     '(:passed nil :nucleus-passed t :tests-passed t :eight-keys 0.4)))
-                  ((symbol-function 'gptel-auto-experiment-decide)
-                   (lambda (&rest _args)
-                     (cl-incf decision-count)))
-                  ((symbol-function 'gptel-auto-experiment-log-tsv)
-                   (lambda (&rest _args) nil))
-                  ((symbol-function 'gptel-auto-experiment--code-quality-score)
-                   (lambda () 0.5))
-                  ((symbol-function 'gptel-auto-workflow--track-commit)
-                   (lambda (&rest _args)
-                     (cl-incf tracked-count)))
-                  ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
-                   (lambda (&rest _args)
-                     (setq provisional-dir default-directory)
-                     nil))
-                  ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
-                   (lambda (&rest _args) t))
-                  ((symbol-function 'gptel-auto-workflow--staging-flow)
-                   (lambda (&rest _args)
-                     (cl-incf staging-count)))
-                  ((symbol-function 'magit-git-success)
-                   (lambda (&rest _args) t))
-                  ((symbol-function 'message)
-                   (lambda (&rest _args) nil)))
-          (gptel-auto-experiment-run
-           "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
-           (lambda (exp-result)
-             (cl-incf callback-count)
-             (setq result exp-result)))
-           (should (= callback-count 1))
-           (should (equal (plist-get result :comparator-reason) "verification-failed"))
-           (should (zerop decision-count))
-           (should (zerop tracked-count))
-           (should (zerop staging-count))
-           (should (equal provisional-dir temp-dir))))
-       (delete-directory temp-dir t)))
+        (progn
+          (test-auto-workflow--write-valid-elisp-target
+           temp-dir "lisp/modules/gptel-tools-agent.el")
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                     (test-auto-workflow--valid-worktree-stub temp-dir))
+                    ((symbol-function 'gptel-auto-experiment-analyze)
+                     (lambda (_previous-results cb)
+                       (funcall cb '(:patterns nil))))
+                    ((symbol-function 'gptel-auto-experiment-build-prompt)
+                     (lambda (&rest _args) "prompt"))
+                    ((symbol-function 'run-with-timer)
+                     (lambda (&rest _args) :fake-timer))
+                    ((symbol-function 'cancel-timer)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                     (lambda (_timeout cb &rest _args)
+                       (funcall cb "executor output")))
+                    ((symbol-function 'gptel-auto-experiment-grade)
+                     (lambda (_output cb &rest _args)
+                       (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
+                    ((symbol-function 'gptel-auto-experiment-benchmark)
+                     (lambda (&rest _args)
+                       '(:passed nil :nucleus-passed t :tests-passed t :eight-keys 0.4)))
+                    ((symbol-function 'gptel-auto-experiment-decide)
+                     (lambda (&rest _args)
+                       (cl-incf decision-count)))
+                    ((symbol-function 'gptel-auto-experiment-log-tsv)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                     (lambda () 0.5))
+                    ((symbol-function 'gptel-auto-workflow--track-commit)
+                     (lambda (&rest _args)
+                       (cl-incf tracked-count)))
+                    ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                     (lambda (&rest _args)
+                       (setq provisional-dir default-directory)
+                       nil))
+                    ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                     (lambda (&rest _args) t))
+                    ((symbol-function 'gptel-auto-workflow--staging-flow)
+                     (lambda (&rest _args)
+                       (cl-incf staging-count)))
+                    ((symbol-function 'magit-git-success)
+                     (lambda (&rest _args) t))
+                    ((symbol-function 'message)
+                     (lambda (&rest _args) nil)))
+            (gptel-auto-experiment-run
+             "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+             (lambda (exp-result)
+               (cl-incf callback-count)
+               (setq result exp-result)))
+            (should (= callback-count 1))
+            (should (equal (plist-get result :comparator-reason) "verification-failed"))
+            (should (zerop decision-count))
+            (should (zerop tracked-count))
+            (should (zerop staging-count))
+            (should (equal provisional-dir temp-dir))))
+       (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-experiment/decision-callback-is-idempotent ()
   "Late duplicate decision callbacks should not repeat side effects."
@@ -6195,8 +6280,11 @@ failure."
         (gptel-auto-experiment-auto-push t)
         (gptel-auto-workflow-use-staging t))
     (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+        (progn
+          (test-auto-workflow--write-valid-elisp-target
+           temp-dir "lisp/modules/gptel-agent-loop.el")
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -6206,9 +6294,9 @@ failure."
                    (lambda (&rest _args) :fake-timer))
                   ((symbol-function 'cancel-timer)
                    (lambda (&rest _args) nil))
-                  ((symbol-function 'my/gptel--run-agent-tool)
-                   (lambda (cb &rest _args)
-                     (funcall cb "executor output")))
+                   ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                    (lambda (_timeout cb &rest _args)
+                      (funcall cb "executor output")))
                   ((symbol-function 'gptel-auto-experiment-grade)
                    (lambda (_output cb &rest _args)
                      (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
@@ -6260,7 +6348,7 @@ failure."
           (should (= track-count 1))
           (should (= staging-count 1))
            (should (= push-count 1))))
-       (delete-directory temp-dir t)))
+       (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-experiment/waits-for-staging-flow-before-callback ()
   "Kept experiments should not complete until async staging flow finishes."
@@ -6273,8 +6361,11 @@ failure."
         (gptel-auto-experiment-auto-push t)
         (gptel-auto-workflow-use-staging t))
     (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+        (progn
+          (test-auto-workflow--write-valid-elisp-target
+           temp-dir "lisp/modules/gptel-agent-loop.el")
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                     (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -6284,9 +6375,9 @@ failure."
                    (lambda (&rest _args) :fake-timer))
                   ((symbol-function 'cancel-timer)
                    (lambda (&rest _args) nil))
-                  ((symbol-function 'my/gptel--run-agent-tool)
-                   (lambda (cb &rest _args)
-                     (funcall cb "executor output")))
+                   ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                    (lambda (_timeout cb &rest _args)
+                      (funcall cb "executor output")))
                   ((symbol-function 'gptel-auto-experiment-grade)
                    (lambda (_output cb &rest _args)
                      (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
@@ -6328,17 +6419,17 @@ failure."
                       t))
                   ((symbol-function 'message)
                     (lambda (&rest _args) nil)))
-          (gptel-auto-experiment-run
-           "lisp/modules/gptel-agent-loop.el" 1 5 0.4 0.5 nil
-           (lambda (_exp-result)
-             (cl-incf callback-count)))
-          (should (= staging-count 1))
-          (should (functionp staging-callback))
-          (should (= track-count 1))
-          (should (= push-count 1))
-           (should (= callback-count 0))
-           (funcall staging-callback t)
-            (should (= callback-count 1)))
+            (gptel-auto-experiment-run
+             "lisp/modules/gptel-agent-loop.el" 1 5 0.4 0.5 nil
+             (lambda (_exp-result)
+               (cl-incf callback-count)))
+            (should (= staging-count 1))
+            (should (functionp staging-callback))
+            (should (= track-count 1))
+            (should (= push-count 1))
+            (should (= callback-count 0))
+            (funcall staging-callback t)
+            (should (= callback-count 1))))
         (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-experiment/staging-callback-failure-logs-discarded-result ()
@@ -6353,80 +6444,91 @@ failure."
         (gptel-auto-experiment-auto-push t)
         (gptel-auto-workflow-use-staging t))
     (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
-                  ((symbol-function 'gptel-auto-experiment-analyze)
-                   (lambda (_previous-results cb)
-                     (funcall cb '(:patterns nil))))
-                  ((symbol-function 'gptel-auto-experiment-build-prompt)
-                   (lambda (&rest _args) "prompt"))
-                  ((symbol-function 'run-with-timer)
-                   (lambda (&rest _args) :fake-timer))
-                  ((symbol-function 'cancel-timer)
-                   (lambda (&rest _args) nil))
-                  ((symbol-function 'my/gptel--run-agent-tool)
-                   (lambda (cb &rest _args)
-                     (funcall cb "executor output")))
-                  ((symbol-function 'gptel-auto-experiment-grade)
-                   (lambda (_output cb &rest _args)
-                     (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
-                  ((symbol-function 'gptel-auto-experiment-benchmark)
-                   (lambda (&rest _args)
-                     '(:passed t :nucleus-passed t :tests-passed t :eight-keys 0.6)))
-                  ((symbol-function 'gptel-auto-experiment-decide)
-                   (lambda (_before _after cb)
-                     (funcall cb '(:keep t :reasoning "Winner: B"))))
-                  ((symbol-function 'gptel-auto-experiment-log-tsv)
-                   (lambda (_run-id result)
-                     (push result logged-results)))
-                  ((symbol-function 'gptel-auto-experiment--code-quality-score)
-                   (lambda () 0.7))
-                  ((symbol-function 'gptel-auto-workflow--track-commit)
-                   (lambda (&rest _args)
-                     (cl-incf track-count)))
-                  ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
-                   (lambda (&rest _args) "abc123"))
-                  ((symbol-function 'gptel-auto-workflow--promote-provisional-commit)
-                   (lambda (&rest _args) t))
-                  ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
-                   (lambda (&rest _args) t))
-                  ((symbol-function 'gptel-auto-workflow--staging-flow)
-                   (lambda (&rest args)
-                     (cl-incf staging-count)
-                     (setq staging-callback (nth 1 args))))
-                  ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
-                   (lambda () t))
-                  ((symbol-function 'gptel-auto-workflow--git-step-success-p)
-                   (lambda (&rest _args) t))
-                  ((symbol-function 'gptel-auto-workflow--commit-step-success-p)
-                   (lambda (&rest _args) t))
-                  ((symbol-function 'gptel-auto-workflow--push-branch-with-lease)
-                   (lambda (&rest _args)
-                     (cl-incf push-count)
-                     t))
-                  ((symbol-function 'magit-git-success)
-                   (lambda (&rest _args) t))
-                  ((symbol-function 'message)
-                   (lambda (&rest _args) nil)))
-          (gptel-auto-experiment-run
-           "lisp/modules/gptel-agent-loop.el" 1 5 0.4 0.5 nil
-           (lambda (exp-result)
-             (push exp-result callback-results)))
-          (should (= staging-count 1))
-          (should (= track-count 1))
-          (should (= push-count 1))
-          (should (functionp staging-callback))
-          (funcall staging-callback nil)
-          (should (= (length logged-results) 1))
-          (should (= (length callback-results) 1))
-          (let ((logged (car logged-results))
-                (completed (car callback-results)))
-            (should-not (plist-get logged :kept))
-            (should (equal (plist-get logged :comparator-reason)
-                           "staging-flow-failed"))
-             (should-not (plist-get completed :kept))
-             (should (equal (plist-get completed :comparator-reason)
-                            "staging-flow-failed"))))
+        (progn
+          (test-auto-workflow--write-valid-elisp-target
+           temp-dir "lisp/modules/gptel-agent-loop.el")
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                     (test-auto-workflow--valid-worktree-stub temp-dir))
+                    ((symbol-function 'gptel-auto-experiment-analyze)
+                     (lambda (_previous-results cb)
+                       (funcall cb '(:patterns nil))))
+                    ((symbol-function 'gptel-auto-experiment-build-prompt)
+                     (lambda (&rest _args) "prompt"))
+                    ((symbol-function 'run-with-timer)
+                     (lambda (&rest _args) :fake-timer))
+                    ((symbol-function 'cancel-timer)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                     (lambda (_timeout cb &rest _args)
+                       (funcall cb "executor output")))
+                    ((symbol-function 'gptel-auto-experiment-grade)
+                     (lambda (_output cb &rest _args)
+                       (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
+                    ((symbol-function 'gptel-auto-experiment-benchmark)
+                     (lambda (&rest _args)
+                       '(:passed t :nucleus-passed t :tests-passed t :eight-keys 0.6)))
+                    ((symbol-function 'gptel-auto-experiment-decide)
+                     (lambda (_before _after cb)
+                       (funcall cb '(:keep t :reasoning "Winner: B"))))
+                    ((symbol-function 'gptel-auto-experiment-log-tsv)
+                     (lambda (_run-id result)
+                       (push result logged-results)))
+                    ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                     (lambda () 0.7))
+                    ((symbol-function 'gptel-auto-workflow--track-commit)
+                     (lambda (&rest _args)
+                       (cl-incf track-count)))
+                    ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                     (lambda (&rest _args) "abc123"))
+                    ((symbol-function 'gptel-auto-workflow--promote-provisional-commit)
+                     (lambda (&rest _args) t))
+                    ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                     (lambda (&rest _args) t))
+                    ((symbol-function 'gptel-auto-workflow--staging-flow)
+                     (lambda (&rest args)
+                       (cl-incf staging-count)
+                       (setq staging-callback (nth 1 args))))
+                    ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
+                     (lambda () t))
+                    ((symbol-function 'gptel-auto-workflow--git-step-success-p)
+                     (lambda (&rest _args) t))
+                    ((symbol-function 'gptel-auto-workflow--commit-step-success-p)
+                     (lambda (&rest _args) t))
+                    ((symbol-function 'gptel-auto-workflow--push-branch-with-lease)
+                     (lambda (&rest _args)
+                       (cl-incf push-count)
+                       t))
+                    ((symbol-function 'magit-git-success)
+                     (lambda (&rest _args) t))
+                    ((symbol-function 'message)
+                     (lambda (&rest _args) nil)))
+            (gptel-auto-experiment-run
+             "lisp/modules/gptel-agent-loop.el" 1 5 0.4 0.5 nil
+             (lambda (exp-result)
+               (push exp-result callback-results)))
+            (should (= staging-count 1))
+            (should (= track-count 1))
+            (should (= push-count 1))
+            (should (functionp staging-callback))
+            (should (= (length logged-results) 1))
+            (let ((pending (car logged-results)))
+              (should-not (plist-get pending :kept))
+              (should (equal (gptel-auto-experiment--tsv-decision-label pending)
+                             "staging-pending")))
+            (funcall staging-callback nil)
+            (should (= (length logged-results) 2))
+            (should (= (length callback-results) 1))
+            (let ((logged (car logged-results))
+                  (pending (cadr logged-results))
+                  (completed (car callback-results)))
+              (should (equal (gptel-auto-experiment--tsv-decision-label pending)
+                             "staging-pending"))
+              (should-not (plist-get logged :kept))
+              (should (equal (plist-get logged :comparator-reason)
+                             "staging-flow-failed"))
+              (should-not (plist-get completed :kept))
+              (should (equal (plist-get completed :comparator-reason)
+                             "staging-flow-failed")))))
       (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-experiment/staging-callback-failure-preserves-custom-reason ()
@@ -6441,8 +6543,11 @@ failure."
         (gptel-auto-experiment-auto-push t)
         (gptel-auto-workflow-use-staging t))
     (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+        (progn
+          (test-auto-workflow--write-valid-elisp-target
+           temp-dir "lisp/modules/gptel-agent-loop.el")
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -6452,9 +6557,9 @@ failure."
                    (lambda (&rest _args) :fake-timer))
                   ((symbol-function 'cancel-timer)
                    (lambda (&rest _args) nil))
-                  ((symbol-function 'my/gptel--run-agent-tool)
-                   (lambda (cb &rest _args)
-                     (funcall cb "executor output")))
+                   ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                    (lambda (_timeout cb &rest _args)
+                      (funcall cb "executor output")))
                   ((symbol-function 'gptel-auto-experiment-grade)
                    (lambda (_output cb &rest _args)
                      (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
@@ -6504,18 +6609,26 @@ failure."
           (should (= track-count 1))
           (should (= push-count 1))
           (should (functionp staging-callback))
-          (funcall staging-callback nil "already-in-staging")
           (should (= (length logged-results) 1))
+          (let ((pending (car logged-results)))
+            (should-not (plist-get pending :kept))
+            (should (equal (gptel-auto-experiment--tsv-decision-label pending)
+                           "staging-pending")))
+          (funcall staging-callback nil "already-in-staging")
+          (should (= (length logged-results) 2))
           (should (= (length callback-results) 1))
           (let ((logged (car logged-results))
+                (pending (cadr logged-results))
                 (completed (car callback-results)))
+            (should (equal (gptel-auto-experiment--tsv-decision-label pending)
+                           "staging-pending"))
             (should-not (plist-get logged :kept))
             (should (equal (plist-get logged :comparator-reason)
                            "already-in-staging"))
             (should-not (plist-get completed :kept))
             (should (equal (plist-get completed :comparator-reason)
                            "already-in-staging"))))
-      (delete-directory temp-dir t))))
+      (delete-directory temp-dir t)))))
 
 (ert-deftest regression/auto-experiment/staging-callback-is-idempotent ()
   "Late duplicate staging callbacks should not finalize the same experiment twice."
@@ -6528,8 +6641,11 @@ failure."
         (gptel-auto-experiment-auto-push t)
         (gptel-auto-workflow-use-staging t))
     (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+        (progn
+          (test-auto-workflow--write-valid-elisp-target
+           temp-dir "lisp/modules/gptel-agent-loop.el")
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -6539,9 +6655,9 @@ failure."
                    (lambda (&rest _args) :fake-timer))
                   ((symbol-function 'cancel-timer)
                    (lambda (&rest _args) nil))
-                  ((symbol-function 'my/gptel--run-agent-tool)
-                   (lambda (cb &rest _args)
-                     (funcall cb "executor output")))
+                   ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                    (lambda (_timeout cb &rest _args)
+                      (funcall cb "executor output")))
                   ((symbol-function 'gptel-auto-experiment-grade)
                    (lambda (_output cb &rest _args)
                      (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
@@ -6593,7 +6709,7 @@ failure."
           (should (functionp staging-callback))
           (funcall staging-callback t)
           (funcall staging-callback t)
-          (should (= callback-count 1)))
+          (should (= callback-count 1))))
       (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-workflow/run-with-targets-is-sequential ()
@@ -6809,6 +6925,84 @@ failure."
                                  "validation-failed"
                                  "staging-worktree-failed"
                                  "api-rate-limit"))))))
+        (delete-directory tmpdir t)))))
+
+(ert-deftest regression/auto-workflow/log-tsv-replaces-staging-pending-row ()
+  "Final staging callbacks should replace pending rows in results.tsv."
+  (let* ((tmpdir (make-temp-file "gptel-tsv-staging-pending" t))
+         (run-id "run-staging-pending")
+         (results-file (expand-file-name
+                        (format "var/tmp/experiments/%s/results.tsv" run-id)
+                        tmpdir))
+         (base-result '(:id 1 :target "one" :hypothesis "h"
+                            :score-before 0.4 :score-after 0.7
+                            :code-quality 0.6 :kept t
+                            :duration 1 :grader-quality 9
+                            :grader-reason "grade passed"
+                            :comparator-reason "Winner: B")))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () tmpdir))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () nil)))
+      (unwind-protect
+          (progn
+            (gptel-auto-experiment-log-tsv
+             run-id
+             (gptel-auto-experiment--staging-pending-result base-result))
+            (gptel-auto-experiment-log-tsv run-id base-result)
+            (with-temp-buffer
+              (insert-file-contents results-file)
+              (forward-line 1)
+              (let (rows decisions)
+                (while (not (eobp))
+                  (let ((fields (split-string
+                                 (buffer-substring-no-properties
+                                  (line-beginning-position)
+                                  (line-end-position))
+                                 "\t")))
+                    (push fields rows)
+                    (push (nth 7 fields) decisions))
+                  (forward-line 1))
+                (should (= (length rows) 1))
+                (should (equal (nreverse decisions) '("kept"))))))
+        (delete-directory tmpdir t)))))
+
+(ert-deftest regression/auto-workflow/log-tsv-keeps-terminal-row-over-late-pending ()
+  "Late duplicate pending logs should not overwrite terminal results.tsv rows."
+  (let* ((tmpdir (make-temp-file "gptel-tsv-terminal-row" t))
+         (run-id "run-terminal-row")
+         (results-file (expand-file-name
+                        (format "var/tmp/experiments/%s/results.tsv" run-id)
+                        tmpdir))
+         (base-result '(:id 1 :target "one" :hypothesis "h"
+                            :score-before 0.4 :score-after 0.7
+                            :code-quality 0.6 :kept t
+                            :duration 1 :grader-quality 9
+                            :grader-reason "grade passed"
+                            :comparator-reason "Winner: B")))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () tmpdir))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () nil)))
+      (unwind-protect
+          (progn
+            (gptel-auto-experiment-log-tsv run-id base-result)
+            (gptel-auto-experiment-log-tsv
+             run-id
+             (gptel-auto-experiment--staging-pending-result base-result))
+            (with-temp-buffer
+              (insert-file-contents results-file)
+              (forward-line 1)
+              (let (decisions)
+                (while (not (eobp))
+                  (push (nth 7 (split-string
+                                (buffer-substring-no-properties
+                                 (line-beginning-position)
+                                 (line-end-position))
+                                "\t"))
+                        decisions)
+                  (forward-line 1))
+                (should (equal (nreverse decisions) '("kept"))))))
         (delete-directory tmpdir t)))))
 
 (ert-deftest regression/auto-workflow/run-with-targets-stops-on-quota-exhaustion ()
@@ -12288,13 +12482,13 @@ failure."
                         (string-match-p
                          (regexp-quote "(setenv \"SSH_AUTH_SOCK\" \"/tmp/test-agent.sock\")")
                          elisp)
-                        (if (eq system-type 'darwin)
-                            (and (string-match-p
-                                  (regexp-quote "(setenv \"GIT_SSH_COMMAND\"")
-                                  elisp)
-                                 (string-match-p "UseKeychain=yes" elisp)
-                                 (string-match-p "AddKeysToAgent=yes" elisp))
-                          t)))
+                         (string-match-p
+                          (regexp-quote "(setenv \"GIT_SSH_COMMAND\"")
+                          elisp)
+                         (if (eq system-type 'darwin)
+                             (or (string-match-p "UseKeychain=yes" elisp)
+                                 (string-match-p "IdentitiesOnly=yes" elisp))
+                           t)))
                      elisp-payloads))))
       (delete-directory status-dir t)
        (delete-directory fake-bin t)
@@ -13118,6 +13312,55 @@ failure."
         (delete-file argv-log))
       (when (file-exists-p emacs-log)
         (delete-file emacs-log))
+       (when (file-exists-p messages-file)
+         (delete-file messages-file)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-messages-warns-on-cached-tail-without-daemon ()
+  "Wrapper messages should label cached tails when the daemon is unreachable."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (messages-file (make-temp-file "aw-messages-tail"))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 1))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1"
+                   (shell-quote-argument emacs-log))))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running nil :kept 0 :total 5 :phase \"idle\" :results \"var/tmp/experiments/2026-04-04/results.tsv\")\n"))
+          (with-temp-file messages-file
+            (insert "cached daemon messages\n"))
+          (let ((output (shell-command-to-string (format "%s messages" script))))
+            (should (string-match-p
+                     "WARNING: showing fallback cached Messages snapshot"
+                     output))
+            (should (string-match-p "Last status:" output))
+            (should (string-match-p "cached daemon messages" output)))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log))
       (when (file-exists-p messages-file)
         (delete-file messages-file)))))
 
@@ -13152,7 +13395,9 @@ failure."
           (with-temp-file messages-file
             (insert "persisted running messages\n"))
           (let ((output (shell-command-to-string (format "%s messages" script))))
-            (should (string-match-p "persisted running messages" output)))
+            (should (string-match-p "persisted running messages" output))
+            (should (string-match-p "WARNING: showing active cached Messages snapshot"
+                                    output)))
           (with-temp-buffer
             (insert-file-contents argv-log)
             (should (string-empty-p (buffer-string))))
@@ -13221,7 +13466,9 @@ failure."
           (with-temp-file messages-file
             (insert "persisted aged messages\n"))
           (let ((output (shell-command-to-string (format "%s messages" script))))
-            (should (string-match-p "persisted aged messages" output)))
+            (should (string-match-p "persisted aged messages" output))
+            (should (string-match-p "WARNING: showing active cached Messages snapshot"
+                                    output)))
           (with-temp-buffer
             (insert-file-contents argv-log)
             (should (string-empty-p (buffer-string))))
@@ -15671,7 +15918,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
           "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) worktree-dir))
+                   (test-auto-workflow--valid-worktree-stub worktree-dir))
                   ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                    (lambda (_worktree-dir) worktree-buf))
                   ((symbol-function 'gptel-auto-experiment-analyze)
@@ -15783,7 +16030,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
           "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) worktree-dir))
+                   (test-auto-workflow--valid-worktree-stub worktree-dir))
                   ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                    (lambda (_worktree-dir) worktree-buf))
                   ((symbol-function 'gptel-auto-experiment-analyze)

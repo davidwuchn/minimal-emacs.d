@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-04-30 15:14
+updated: 2026-05-01 12:07
 ---
 
 # Self-Evolution Knowledge Base
@@ -14,7 +14,7 @@ updated: 2026-04-30 15:14
 ## Git History Facts
 
 - Active experiment branches: 100
-- Historical merges: 563
+- Historical merges: 566
 - Active branches merged: 4
 - Active branches abandoned: 96
 - Active merge rate: 4.0%
@@ -35,19 +35,19 @@ updated: 2026-04-30 15:14
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 21% verified (165/784 experiments)
-- **performance**: 37% verified (19/51 experiments)
-- **refactoring**: 36% verified (56/156 experiments)
-- **safety**: 42% verified (74/175 experiments)
+- **bug-fix**: 21% verified (169/820 experiments)
+- **performance**: 36% verified (19/53 experiments)
+- **refactoring**: 35% verified (57/165 experiments)
+- **safety**: 40% verified (77/192 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **safety** - 42% kept (175 experiments)
-2. **performance** - 37% kept (51 experiments)
-3. **refactoring** - 36% kept (156 experiments)
-4. **bug-fix** - 21% kept (784 experiments)
+1. **safety** - 40% kept (192 experiments)
+2. **performance** - 36% kept (53 experiments)
+3. **refactoring** - 35% kept (165 experiments)
+4. **bug-fix** - 21% kept (820 experiments)
 
 ## Critical Guidance for Maximum Success
 
@@ -78,14 +78,14 @@ Which change types work best for each target file:
 
 ### `gptel-ext-fsm-utils.el`
 
-- **safety**: 63% (27 experiments)
+- **safety**: 58% (31 experiments)
 - **performance**: 25% (8 experiments)
-- **bug-fix**: 17% (71 experiments)
+- **bug-fix**: 17% (72 experiments)
 
 ### `gptel-agent-loop.el`
 
-- **safety**: 33% (6 experiments)
 - **refactoring**: 25% (8 experiments)
+- **safety**: 20% (10 experiments)
 - **bug-fix**: 8% (52 experiments)
 
 ### `gptel-ext-context-cache.el`
@@ -98,69 +98,71 @@ Which change types work best for each target file:
 
 - **bug-fix**: 25% (57 experiments)
 
+### `staging-verification`
+
+- **other**: 0% (56 experiments)
+
 ### `gptel-ext-retry.el`
 
 - **refactoring**: 60% (5 experiments)
-- **bug-fix**: 22% (32 experiments)
-
-### `staging-verification`
-
-- **other**: 0% (37 experiments)
+- **safety**: 33% (3 experiments)
+- **bug-fix**: 18% (39 experiments)
 
 ### `gptel-tools-code.el`
 
 - **bug-fix**: 0% (30 experiments)
 - **safety**: 0% (5 experiments)
 
+### `gptel-auto-workflow-strategic.el`
+
+- **refactoring**: 38% (8 experiments)
+- **bug-fix**: 4% (25 experiments)
+
 ### `staging-merge`
 
 - **other**: 0% (31 experiments)
 
-### `gptel-auto-workflow-strategic.el`
-
-- **refactoring**: 50% (6 experiments)
-- **bug-fix**: 4% (25 experiments)
-
 ### `staging-review`
 
-- **bug-fix**: 0% (13 experiments)
+- **bug-fix**: 0% (14 experiments)
 - **other**: 0% (16 experiments)
 
 ### `gptel-auto-workflow-projects.el`
 
-- **bug-fix**: 17% (18 experiments)
+- **bug-fix**: 16% (19 experiments)
 
-### `gptel-ext-core.el`
+### `gptel-sandbox.el`
 
-- **safety**: 57% (14 experiments)
-
-### `gptel-ext-context.el`
-
-- **refactoring**: 50% (6 experiments)
-- **bug-fix**: 43% (7 experiments)
+- **safety**: 25% (4 experiments)
+- **refactoring**: 25% (4 experiments)
+- **bug-fix**: 20% (10 experiments)
 
 ### `nucleus-tools.el`
 
 - **safety**: 25% (4 experiments)
-- **bug-fix**: 0% (9 experiments)
+- **bug-fix**: 0% (13 experiments)
 
-### `gptel-sandbox.el`
+### `gptel-ext-context.el`
 
-- **refactoring**: 33% (3 experiments)
-- **bug-fix**: 22% (9 experiments)
+- **bug-fix**: 44% (9 experiments)
+- **refactoring**: 43% (7 experiments)
+
+### `gptel-ext-core.el`
+
+- **safety**: 50% (16 experiments)
 
 ### `gptel-benchmark-integrate.el`
 
-- **bug-fix**: 45% (11 experiments)
+- **bug-fix**: 38% (13 experiments)
+
+### `gptel-benchmark-subagent.el`
+
+- **bug-fix**: 0% (7 experiments)
 
 ### `gptel-workflow-benchmark.el`
 
 - **refactoring**: 67% (3 experiments)
 - **bug-fix**: 0% (4 experiments)
-
-### `gptel-benchmark-subagent.el`
-
-- **bug-fix**: 0% (5 experiments)
 
 ### `gptel-benchmark-evolution.el`
 

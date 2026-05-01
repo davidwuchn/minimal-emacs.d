@@ -29,6 +29,7 @@ case "$ACTION" in
 esac
 SNAPSHOT_PATHS_FILE="${AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_CACHE_NAME}-snapshot-paths.txt}"
 STALE_DAEMON_RECOVERED=0
+PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=auto
 
 lisp_escape() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -209,6 +210,26 @@ print_status() {
         cat "$STATUS_FILE"
     else
         default_status
+    fi
+}
+
+print_messages_snapshot() {
+    local reason="${1:-cached}"
+    local daemon_unreachable="${2:-auto}"
+
+    if [ -r "$MESSAGES_FILE" ]; then
+        if [ "$daemon_unreachable" = "yes" ] ||
+           { [ "$daemon_unreachable" = "auto" ] &&
+             ! check_worker_daemon >/dev/null 2>&1; }; then
+            printf '[auto-workflow] WARNING: showing %s cached Messages snapshot; worker daemon is not reachable.\n' "$reason"
+            if [ -r "$STATUS_FILE" ]; then
+                printf '[auto-workflow] Last status: '
+                tr '\n' ' ' <"$STATUS_FILE"
+                printf '\n'
+            fi
+            printf '\n'
+        fi
+        cat "$MESSAGES_FILE"
     fi
 }
 
@@ -450,6 +471,8 @@ PY
 status_can_use_persisted_active_snapshot() {
     local rc
 
+    PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=auto
+
     status_indicates_active_phase || return 1
     status_has_live_run_id || return 1
 
@@ -457,18 +480,21 @@ status_can_use_persisted_active_snapshot() {
         messages)
             if messages_snapshot_fresh &&
                ! daemon_socket_owned_by_worker_daemon; then
+                PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=yes
                 return 0
             fi
             ;;
         status)
             if status_snapshot_fresh &&
                ! daemon_socket_owned_by_worker_daemon; then
+                PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=yes
                 return 0
             fi
             ;;
         *)
             if { status_snapshot_fresh || messages_snapshot_fresh; } &&
                ! daemon_socket_owned_by_worker_daemon; then
+                PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=yes
                 return 0
             fi
             ;;
@@ -477,17 +503,20 @@ status_can_use_persisted_active_snapshot() {
     case "$ACTION" in
         messages)
             if messages_snapshot_fresh && ! daemon_socket_has_owner; then
+                PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=yes
                 return 0
             fi
             ;;
         status)
             if status_snapshot_fresh && ! daemon_socket_has_owner; then
+                PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=yes
                 return 0
             fi
             ;;
         *)
             if { status_snapshot_fresh || messages_snapshot_fresh; } &&
                ! daemon_socket_has_owner; then
+                PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=yes
                 return 0
             fi
             ;;
@@ -497,37 +526,58 @@ status_can_use_persisted_active_snapshot() {
         if daemon_reports_active_workflow; then
             case "$ACTION" in
                 messages)
-                    messages_snapshot_fresh
+                    if messages_snapshot_fresh; then
+                        PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=no
+                        return 0
+                    fi
+                    return 1
                     ;;
                 status)
-                    status_snapshot_fresh
+                    if status_snapshot_fresh; then
+                        PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=no
+                        return 0
+                    fi
+                    return 1
                     ;;
                 *)
-                    status_snapshot_fresh || messages_snapshot_fresh
+                    if status_snapshot_fresh || messages_snapshot_fresh; then
+                        PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=no
+                        return 0
+                    fi
+                    return 1
                     ;;
             esac
-            return $?
         else
             rc=$?
             if [ "$rc" -eq 1 ]; then
                 return 1
             elif [ "$rc" -eq 2 ]; then
+                PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=yes
                 return 0
             fi
         fi
     else
         rc=$?
         if [ "$rc" -eq 2 ]; then
+            PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=yes
             return 0
         fi
     fi
 
     case "$ACTION" in
         messages)
-            messages_snapshot_fresh || daemon_socket_has_owner
+            if messages_snapshot_fresh || daemon_socket_has_owner; then
+                PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=yes
+                return 0
+            fi
+            return 1
             ;;
         *)
-            status_snapshot_fresh || messages_snapshot_fresh || daemon_socket_has_owner
+            if status_snapshot_fresh || messages_snapshot_fresh || daemon_socket_has_owner; then
+                PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE=yes
+                return 0
+            fi
+            return 1
             ;;
     esac
 }
@@ -1104,13 +1154,13 @@ if [ "$ACTION" = "messages" ]; then
         clear_stale_running_status
     fi
     if status_can_use_persisted_active_snapshot && [ -r "$MESSAGES_FILE" ]; then
-        cat "$MESSAGES_FILE"
+        print_messages_snapshot active "$PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE"
         exit 0
     fi
     if ! check_worker_daemon; then
         rc=$?
         if [ -r "$MESSAGES_FILE" ]; then
-            cat "$MESSAGES_FILE"
+            print_messages_snapshot fallback yes
             exit 0
         fi
         if [ "$rc" -eq 1 ]; then
@@ -1125,7 +1175,7 @@ if [ "$ACTION" = "messages" ]; then
     fi
     rc=$?
     if [ -r "$MESSAGES_FILE" ]; then
-        cat "$MESSAGES_FILE"
+        print_messages_snapshot stale yes
         exit 0
     fi
     exit $rc
