@@ -183,9 +183,33 @@ Search backward for PROPERTY equal to VALUE, optionally filtering with PREDICATE
                      (list "- Edit path=a.el diffp=t\n- ApplyPatch patch=...")
                      (lambda (value) (setq approved value))))
          ov)
-         (should approved)
-         (should-not test-tool-confirm--accepted)
-         (should-not (overlay-buffer ov))))))
+          (should approved)
+          (should-not test-tool-confirm--accepted)
+          (should-not (overlay-buffer ov))))))
+
+(ert-deftest tool-confirm/normal-overlay-accept-falls-through ()
+  (let ((callback-called nil)
+        (test-tool-confirm--accepted nil))
+    (with-temp-buffer
+      (let* ((ov (make-overlay (point-min) (point-min)))
+             (response (list (list (gptel-test-tool-create :name "Edit")
+                                   '(:path "foo.el")
+                                   (lambda (value) (setq callback-called value))))))
+        (gptel--accept-tool-calls response ov)
+        (should-not callback-called)
+        (should (equal test-tool-confirm--accepted (list response ov)))))))
+
+(ert-deftest tool-confirm/normal-overlay-reject-falls-through ()
+  (let ((callback-called :not-called)
+        (test-tool-confirm--rejected nil))
+    (with-temp-buffer
+      (let* ((ov (make-overlay (point-min) (point-min)))
+             (response (list (list (gptel-test-tool-create :name "Edit")
+                                   '(:path "foo.el")
+                                   (lambda (value) (setq callback-called value))))))
+        (gptel--reject-tool-calls response ov)
+        (should (eq callback-called :not-called))
+        (should (equal test-tool-confirm--rejected (list response ov)))))))
 
 (ert-deftest tool-confirm/inspect-fsm-coerces-wrapped-fsm-last ()
   (with-temp-buffer
