@@ -683,10 +683,10 @@ Run asynchronously. Use for bulk cache warming."
   "Get metadata for MODEL-ID from cache.
 Returns plist with :context-window, :pricing-input, :pricing-output, etc."
   (require 'gptel)
-  (let* ((model-id (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
+  (let* ((model-id-str (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
     (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
                                      my/gptel--known-model-metadata
-                                     model-id)))
+                                     model-id-str)))
 
 (defun my/gptel-show-model-info (model-id)
   "Show detailed info for MODEL-ID."
