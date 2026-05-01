@@ -1,12 +1,21 @@
 # Mementum State
 
-> Last session: 2026-05-01 10:25
+> Last session: 2026-05-01 14:35
 
-## Current Session: 2026-05-01 Auto-Workflow Repair
+## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix
 
-**Status:** Source repaired and focused regressions passing.
+**Status:** Staging-pending logging fixed, daemon restarted with new code, all unit tests pass.
 
-**Done:**
+**Done (This Session):**
+- Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
+- Commit: `8624a5e9` — ⊘ fix: write staging-pending directly to TSV, bypass log-fn
+- Synced `main` and `staging` to `8624a5e9`.
+- Restarted daemon with new code (PID 3779209).
+- Cleaned 15 zombie `aw-complete-*` processes.
+- Removed 69 stale experiment directories (>14 days old).
+- All unit tests pass (1733 tests, 0 unexpected).
+
+**Previous Session:**
 - Restored `lisp/modules/gptel-tools-agent-experiment-core.el` to syntax-valid state after the callback/context conversion left an extra final close paren.
 - Kept the executor callback lexical so validation retry reuses the same executor callback path.
 - Fixed validation retry recursion by replacing the ineffective lexical `bound-and-true-p` guard with a captured `validation-retry-active` flag.
@@ -23,10 +32,11 @@
 - `/tmp/gptel-callback-error.log` absent.
 
 **Important State:**
-- `./scripts/run-auto-workflow-cron.sh status` reports idle for run `2026-05-01T091051Z-ace2`.
-- Local staging worktree `var/tmp/experiments/staging-verify` is clean and `staging` is ahead of `origin/staging` by 6 commits, ending at `48888050 Merge optimize/loop-neopi5-r091051zace2-exp1 for verification`.
-- `main` and `origin/main` are synced at `b52756c5` after pushing the retry recursion fix.
-- Unrelated local work remains: `mementum/knowledge/self-evolution.md`, modified `packages/gptel`, and untracked `mementum/memories/insight-*` files.
+- `./scripts/run-auto-workflow-cron.sh status` reports idle for run `2026-05-01T123106Z-aad1` (0/4 kept).
+- Local staging worktree `var/tmp/experiments/staging-verify` is clean and synced with `origin/staging` at `8624a5e9`.
+- `main` and `origin/main` are synced at `8624a5e9` after pushing the staging-pending fix.
+- Daemon running (PID 3779209) with latest code.
+- Next scheduled run: 07:00 UTC (~2.5 hours).
 
 **Tooling Rule:**
 - Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.
