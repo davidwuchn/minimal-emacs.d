@@ -7,6 +7,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'json)
 
 (defvar gptel-auto-workflow--behavioral-test-suite

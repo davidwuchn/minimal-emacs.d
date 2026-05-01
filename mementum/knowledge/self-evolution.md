@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-01 16:13
+updated: 2026-05-01 17:13
 ---
 
 # Self-Evolution Knowledge Base
@@ -14,7 +14,7 @@ updated: 2026-05-01 16:13
 ## Git History Facts
 
 - Active experiment branches: 100
-- Historical merges: 566
+- Historical merges: 567
 - Active branches merged: 4
 - Active branches abandoned: 96
 - Active merge rate: 4.0%
@@ -35,7 +35,7 @@ updated: 2026-05-01 16:13
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 21% verified (171/826 experiments)
+- **bug-fix**: 21% verified (171/828 experiments)
 - **performance**: 36% verified (19/53 experiments)
 - **refactoring**: 34% verified (58/170 experiments)
 - **safety**: 40% verified (78/194 experiments)
@@ -47,7 +47,7 @@ Based on verified benchmark patterns (sorted by success rate):
 1. **safety** - 40% kept (194 experiments)
 2. **performance** - 36% kept (53 experiments)
 3. **refactoring** - 34% kept (170 experiments)
-4. **bug-fix** - 21% kept (826 experiments)
+4. **bug-fix** - 21% kept (828 experiments)
 
 ## Critical Guidance for Maximum Success
 
@@ -132,15 +132,15 @@ Which change types work best for each target file:
 - **bug-fix**: 46% (13 experiments)
 - **refactoring**: 38% (8 experiments)
 
-### `gptel-auto-workflow-projects.el`
-
-- **bug-fix**: 16% (19 experiments)
-
 ### `gptel-sandbox.el`
 
 - **safety**: 40% (5 experiments)
 - **refactoring**: 25% (4 experiments)
-- **bug-fix**: 20% (10 experiments)
+- **bug-fix**: 17% (12 experiments)
+
+### `gptel-auto-workflow-projects.el`
+
+- **bug-fix**: 16% (19 experiments)
 
 ### `nucleus-tools.el`
 
@@ -176,32 +176,6 @@ Which change types work best for each target file:
 
 - **other**: 0% (3 experiments)
 
-## Anti-Patterns Catalog
-
-### Removing Defensive JSON Lookups
-
-**Severity: HIGH**
-
-**Pattern:** Experiment assumes `json-key-type 'symbol` guarantees all keys are symbols, removes string-key lookups.
-
-**Impact:** Silent parsing failures → empty target lists → workflow breakdown.
-
-**Prevention:**
-- NEVER remove defensive code without cross-version testing
-- JSON parsing behavior varies by Emacs version and parser
-- Defensive code is insurance, not dead code
-
-**See:** `mementum/memories/anti-pattern-removing-defensive-json-lookups.md`
-
-## Staging Verification Gaps
-
-Current staging verification missed this bug because:
-- Tests used consistent JSON key types (all symbols)
-- No cross-key-type test cases
-- Experiment was classified as "refactoring" not "bug-fix"
-
-**Fix:** Add mixed key-type JSON test cases to staging verification.
-
 ## Feedback Loop
 
 ```
@@ -211,8 +185,3 @@ Benchmark → Verification → MEMENTUM
      ↑                           ↓
 Prompt Injection ← Knowledge ←─┘
 ```
-
-**New Rule:** When manual fix is required post-staging, automatically:
-1. Create anti-pattern memory
-2. Update verification tests
-3. Inject prevention guidance into next experiment prompts

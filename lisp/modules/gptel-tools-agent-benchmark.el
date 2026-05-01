@@ -665,17 +665,30 @@ Returns non-nil if defensive code removal is detected.
 Checks for:
 - Removing string-key fallbacks in JSON parsing
 - Removing or guards without evidence they're unreachable
-- Removing nil checks or error handlers"
-  (let ((patterns
-         '(
-           ;; Pattern 1: Removing cdr/assoc fallbacks (string-key lookups)
-           "cdr\\s-*(assoc\\s-+\""
-           ;; Pattern 2: Removing or branches with alist-get + assoc
-           "alist-get\\s-+'\\w+\\s-*\\(cdr\\s-*(assoc"
-           )))
-    (cl-some (lambda (pattern)
-               (string-match-p pattern content))
-             patterns)))
+- Removing nil checks or error handlers
+
+This function should be called with the git diff content, not the file content.
+It looks for removed lines (starting with '-') that contain defensive patterns."
+  (when (stringp content)
+    (let ((removed-lines nil))
+      ;; Extract removed lines from diff
+      (with-temp-buffer
+        (insert content)
+        (goto-char (point-min))
+        (while (re-search-forward "^-\\([^-].*\\)$" nil t)
+          (push (match-string 1) removed-lines)))
+      ;; Check if any removed line contains defensive code
+      (cl-some
+       (lambda (line)
+         (or
+          ;; Pattern 1: Removed cdr/assoc fallback
+          (string-match-p "cdr\\s-*(assoc\\s-+\"" line)
+          ;; Pattern 2: Removed string-key lookup
+          (string-match-p "assoc\\s-+\"\\(file\\|path\\|target\\)\"" line)
+          ;; Pattern 3: Removed or branch with fallback
+          (and (string-match-p "or\\s-*" line)
+               (string-match-p "alist-get\\|assoc" line))))
+       removed-lines))))
 
 (defun gptel-auto-experiment--validate-code (file)
   "Validate code in FILE for syntax and dangerous patterns.
