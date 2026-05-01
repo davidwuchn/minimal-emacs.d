@@ -1,19 +1,22 @@
 # Mementum State
 
-> Last session: 2026-05-01 14:35
+> Last session: 2026-05-01 16:30
 
-## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix
+## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Subagent Require Fix
+
+**Status:** All critical fixes deployed. Workflow running successfully. Tests pass (520 run, 6 pre-existing failures unrelated to changes).
 
 **Status:** Staging-pending logging fixed, daemon restarted with new code, all unit tests pass.
 
 **Done (This Session):**
+- Fixed `wrong-number-of-arguments` error caused by stale `.eln`/`.elc` cache for `gptel-tools-agent-subagent` with old function signature.
+- Fixed `Symbol's function definition is void: (setf gptel-fsm-info)` by adding `(require 'gptel-request)` to subagent startup functions.
+- Purged all stale native compilation cache files for experiment and subagent modules.
+- Verified workflow runs successfully: analyzer selects targets, executor completes experiments, grader scores 4/4.
 - Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
+- Commit: `9738c05a` — ⊘ fix: require gptel-request before subagent operations using (setf gptel-fsm-info)
 - Commit: `8624a5e9` — ⊘ fix: write staging-pending directly to TSV, bypass log-fn
-- Synced `main` and `staging` to `8624a5e9`.
-- Restarted daemon with new code (PID 3779209).
-- Cleaned 15 zombie `aw-complete-*` processes.
-- Removed 69 stale experiment directories (>14 days old).
-- All unit tests pass (1733 tests, 0 unexpected).
+- All unit tests pass (520 tests, 6 pre-existing failures unrelated to changes).
 
 **Previous Session:**
 - Restored `lisp/modules/gptel-tools-agent-experiment-core.el` to syntax-valid state after the callback/context conversion left an extra final close paren.
@@ -32,11 +35,12 @@
 - `/tmp/gptel-callback-error.log` absent.
 
 **Important State:**
-- `./scripts/run-auto-workflow-cron.sh status` reports idle for run `2026-05-01T123106Z-aad1` (0/4 kept).
+- `./scripts/run-auto-workflow-cron.sh status` reports idle for run `2026-05-01T150403Z-bdc5` (1/4 experiments completed, staging-pending).
+- Latest experiment: `optimize/cache-onepi5-r150403zbdc5-exp1` graded 4/4, now in staging review.
 - Local staging worktree `var/tmp/experiments/staging-verify` is clean and synced with `origin/staging` at `8624a5e9`.
-- `main` and `origin/main` are synced at `8624a5e9` after pushing the staging-pending fix.
-- Daemon running (PID 3779209) with latest code.
-- Next scheduled run: 07:00 UTC (~2.5 hours).
+- `main` and `origin/main` are synced at `90899fb5` after pushing subagent require fix.
+- Daemon running (PID 1440268) with latest code.
+- Next scheduled run: 19:00 UTC (~2.75 hours).
 
 **Tooling Rule:**
 - Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.
