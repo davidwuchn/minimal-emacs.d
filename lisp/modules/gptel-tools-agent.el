@@ -13,22 +13,32 @@
 (require 'gptel-agent)
 (require 'magit-git nil t)
 
-;; Split modules
-(require 'gptel-tools-agent-base)
-(require 'gptel-tools-agent-git)
-(require 'gptel-tools-agent-subagent)
-(require 'gptel-tools-agent-runtime)
-(require 'gptel-tools-agent-worktree)
-(require 'gptel-tools-agent-staging-baseline)
-(require 'gptel-tools-agent-staging-merge)
-(require 'gptel-tools-agent-benchmark)
-(require 'gptel-tools-agent-prompt-analyze)
-(require 'gptel-tools-agent-prompt-build)
-(require 'gptel-tools-agent-error)
-(require 'gptel-tools-agent-experiment-core)
-(require 'gptel-tools-agent-experiment-loop)
-(require 'gptel-tools-agent-main)
-(require 'gptel-tools-agent-research)
+;; Split modules.  Load source files explicitly so cron `load-file' hot-reloads
+;; patched module definitions in long-lived workflow daemons.
+(defun gptel-tools-agent--load-module (feature)
+  "Load split module FEATURE from this directory, falling back to `require'."
+  (let* ((dir (file-name-directory (or load-file-name buffer-file-name)))
+         (source (and dir (expand-file-name (format "%s.el" feature) dir))))
+    (if (and source (file-readable-p source))
+        (load source nil 'nomessage)
+      (require feature))))
+
+(dolist (feature '(gptel-tools-agent-base
+                   gptel-tools-agent-git
+                   gptel-tools-agent-subagent
+                   gptel-tools-agent-runtime
+                   gptel-tools-agent-worktree
+                   gptel-tools-agent-staging-baseline
+                   gptel-tools-agent-staging-merge
+                   gptel-tools-agent-benchmark
+                   gptel-tools-agent-prompt-analyze
+                   gptel-tools-agent-prompt-build
+                   gptel-tools-agent-error
+                   gptel-tools-agent-experiment-core
+                   gptel-tools-agent-experiment-loop
+                   gptel-tools-agent-main
+                   gptel-tools-agent-research))
+  (gptel-tools-agent--load-module feature))
 
 (provide 'gptel-tools-agent)
 ;;; gptel-tools-agent.el ends here
