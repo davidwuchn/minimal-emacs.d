@@ -1,35 +1,77 @@
 # Mementum State
 
-> Last session: 2026-04-30 11:08
+> Last session: 2026-05-01 10:25
+
+## Current Session: 2026-05-01 Auto-Workflow Repair
+
+**Status:** Source repaired and focused regressions passing.
+
+**Done:**
+- Restored `lisp/modules/gptel-tools-agent-experiment-core.el` to syntax-valid state after the callback/context conversion left an extra final close paren.
+- Kept the executor callback lexical so validation retry reuses the same executor callback path.
+- Fixed validation retry recursion by replacing the ineffective lexical `bound-and-true-p` guard with a captured `validation-retry-active` flag.
+- Removed regenerated `lisp/modules/gptel-tools-agent-experiment-core.elc`; keep it absent while testing source changes.
+- Added focused ERT fixture support so auto-experiment tests create valid target files before pre-grade validation.
+- Verified `post-early-init.el` already sets the `%s` macro-capture fix for `with-demoted-errors`.
+- Verified wrapper already starts workflow daemons with `MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1` and `MINIMAL_EMACS_WORKFLOW_DAEMON=1`.
+- Re-verified local staging worktree with `./scripts/verify-nucleus.sh`: all Nucleus validations passed.
+
+**Verification:**
+- `emacs -Q --batch --eval '(with-temp-buffer (insert-file-contents "lisp/modules/gptel-tools-agent-experiment-core.el") (emacs-lisp-mode) (check-parens))'` passed.
+- `emacs -Q --batch -L lisp/modules -f batch-byte-compile lisp/modules/gptel-tools-agent-experiment-core.el` completed with only existing split-module warnings.
+- Focused ERT selector `regression/auto-experiment/\(run-forwards-executor-runagent-args\|retry-forwards-focused-executor-runagent-args\|retry-stops-after-second-validation-failure\|waits-for-staging-flow-before-callback\)` passed 4/4.
+- `/tmp/gptel-callback-error.log` absent.
+
+**Important State:**
+- `./scripts/run-auto-workflow-cron.sh status` reports idle for run `2026-05-01T091051Z-ace2`.
+- Local staging worktree `var/tmp/experiments/staging-verify` is clean and `staging` is ahead of `origin/staging` by 6 commits, ending at `48888050 Merge optimize/loop-neopi5-r091051zace2-exp1 for verification`.
+- `main` and `origin/main` are synced at `b52756c5` after pushing the retry recursion fix.
+- Unrelated local work remains: `mementum/knowledge/self-evolution.md`, modified `packages/gptel`, and untracked `mementum/memories/insight-*` files.
+
+**Tooling Rule:**
+- Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.
+- Use `mise exec cargo:ripgrep -- rg ...` for searches.
+
+**New Memories:**
+- `mementum/memories/mise-ripgrep-tooling.md`
+- `mementum/memories/auto-experiment-validation-fixtures.md`
+- `mementum/memories/lexical-bound-and-true-p-pitfall.md`
 
 ## Total Improvements: 242+ Real Code Fixes (33 new today)
 
-### Session Summary: 2026-04-30 (Self-Evolution System Deployed)
+### Session Summary: 2026-04-30 Evening (Module Split + E2E Fixes)
 
-**Action:** Built and deployed self-evolving auto-workflow that learns from benchmark + git history
+**Action:** Split monolithic gptel-tools-agent.el into 14 focused modules
 
-**Result:** ✅ Self-evolution cycle running, knowledge base regenerated with fresh data
+**Result:** ✅ All modules under 1000 lines, all loading successfully
 
-**New System:**
-- `gptel-auto-workflow-evolution.el` — Extract → Verify → Synthesize pipeline (357 lines)
-- `gptel-auto-workflow-git-learning.el` — Git history pattern extraction (267 lines)
-- `gptel-auto-workflow-mementum.el` — Memory bridge for experiment records (259 lines)
-- `gptel-auto-workflow-production.el` — Timer-based auto-evolution + dashboard (150 lines)
+**Split:**
+- gptel-tools-agent-base.el (959) - utilities, validation, shell
+- gptel-tools-agent-git.el (994) - git operations, orphan tracking
+- gptel-tools-agent-subagent.el (997) - subagent caching, delegation
+- gptel-tools-agent-worktree.el (981) - worktree management
+- gptel-tools-agent-staging-baseline.el (995) - staging baseline & review
+- gptel-tools-agent-staging-merge.el (922) - staging merge & verify
+- gptel-tools-agent-benchmark.el (914) - benchmark & evaluation
+- gptel-tools-agent-prompt-analyze.el (401) - prompt analysis
+- gptel-tools-agent-prompt-build.el (655) - prompt construction
+- gptel-tools-agent-error.el (615) - error analysis, retry logic
+- gptel-tools-agent-experiment-core.el (647) - single experiment
+- gptel-tools-agent-experiment-loop.el (956) - experiment loop
+- gptel-tools-agent-main.el (941) - main entry point
+- gptel-tools-agent-research.el (575) - autonomous research
 
-**Integration:**
-- Analyzer prompts now read from `mementum/knowledge/self-evolution.md`
-- Executor prompts include synthesized success patterns
-- Evolution triggers every 5 experiments + every 6 hours via cron
-- Lowered quality threshold: 0.10 → 0.03 (based on 254 experiments)
+**Impact:**
+- Individual modules can be targeted (smaller surface area)
+- Easier to review and understand
+- No more 11,481-line monolith
 
-**Knowledge Base (regenerated 2026-04-30 11:08):**
-- 211 active experiment branches, 42.7% merge rate
-- Top success: refactoring 31%, safety 25%, bug-fix 23%, performance 18%
-- Top targets: agent (76), loop (45), cache (31)
+**Previous Fixes (E2E Run):**
+1. Fixed syntax error in staging (`lisp/modules/gptel-tools-code.el:279`)
+2. Verified baseline comparison works (allows pre-existing failures)
+3. Fixed strategic analyzer syntax error (unbalanced parens)
 
-**Daemon:** Restarted with clean function cache
-
-**Commit:** `30434299` — ⚒ Self-evolution: git facts + benchmark verify → mementum knowledge → prompt injection
+**Commit:** `72a55288` — Δ split gptel-tools-agent.el into 14 modules
 
 ### Session Summary: 2026-04-11 Evening (Remote Sync + Submodule Update)
 

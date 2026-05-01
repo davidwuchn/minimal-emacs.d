@@ -1,5 +1,11 @@
 ;;; pre-early-init.el --- Pre-early init customizations -*- no-byte-compile: t; lexical-binding: t; -*-
 
+;; Disable native compilation EARLY to prevent stale .eln cache from being
+;; loaded before we can disable it. Must happen before any packages load.
+(when (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
+  (setq native-comp-jit-compilation nil)
+  (setq native-comp-enable-subprocesses nil))
+
 ;; Enable debug mode (setq to nil to disable)
 (setq minimal-emacs-debug t)
 
