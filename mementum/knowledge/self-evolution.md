@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-01 16:13
+updated: 2026-05-01 14:29
 ---
 
 # Self-Evolution Knowledge Base
@@ -13,41 +13,47 @@ updated: 2026-05-01 16:13
 
 ## Git History Facts
 
-- Active experiment branches: 100
+- Active experiment branches: 224
 - Historical merges: 566
-- Active branches merged: 4
-- Active branches abandoned: 96
-- Active merge rate: 4.0%
+- Active branches merged: 92
+- Active branches abandoned: 132
+- Active merge rate: 41.1%
 
 ### Target Frequency
 
-- `agent`: 38 experiments
-- `loop`: 17 experiments
-- `cache`: 16 experiments
-- `projects`: 8 experiments
-- `utils`: 6 experiments
-- `core`: 4 experiments
-- `context`: 4 experiments
-- `sandbox`: 3 experiments
-- `retry`: 2 experiments
-- `sanitize`: 1 experiments
+- `agent`: 77 experiments
+- `loop`: 49 experiments
+- `cache`: 31 experiments
+- `sandbox`: 11 experiments
+- `retry`: 11 experiments
+- `projects`: 10 experiments
+- `utils`: 9 experiments
+- `core`: 8 experiments
+- `context`: 6 experiments
+- `tools`: 2 experiments
+- `strategic`: 2 experiments
+- `sanitize`: 2 experiments
+- `code`: 2 experiments
+- `subagent`: 1 experiments
+- `memory`: 1 experiments
+- `evolution`: 1 experiments
 - `benchmark`: 1 experiments
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 21% verified (171/826 experiments)
-- **performance**: 36% verified (19/53 experiments)
-- **refactoring**: 34% verified (58/170 experiments)
-- **safety**: 40% verified (78/194 experiments)
+- **bug-fix**: 22% verified (47/209 experiments)
+- **performance**: 17% verified (4/24 experiments)
+- **refactoring**: 28% verified (20/71 experiments)
+- **safety**: 25% verified (13/51 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **safety** - 40% kept (194 experiments)
-2. **performance** - 36% kept (53 experiments)
-3. **refactoring** - 34% kept (170 experiments)
-4. **bug-fix** - 21% kept (826 experiments)
+1. **refactoring** - 28% kept (71 experiments)
+2. **safety** - 25% kept (51 experiments)
+3. **bug-fix** - 22% kept (209 experiments)
+4. **performance** - 17% kept (24 experiments)
 
 ## Critical Guidance for Maximum Success
 
@@ -66,141 +72,81 @@ Which change types work best for each target file:
 
 ### `gptel-tools-agent.el`
 
-- **safety**: 45% (29 experiments)
-- **refactoring**: 25% (16 experiments)
-- **performance**: 22% (9 experiments)
-
-### `gptel-ext-tool-sanitize.el`
-
-- **safety**: 47% (34 experiments)
-- **other**: 33% (6 experiments)
-- **performance**: 33% (6 experiments)
-
-### `gptel-ext-fsm-utils.el`
-
-- **safety**: 58% (31 experiments)
-- **performance**: 25% (8 experiments)
-- **bug-fix**: 17% (72 experiments)
+- **refactoring**: 29% (7 experiments)
+- **bug-fix**: 22% (37 experiments)
+- **safety**: 0% (4 experiments)
 
 ### `gptel-agent-loop.el`
 
-- **refactoring**: 25% (8 experiments)
-- **safety**: 20% (10 experiments)
-- **bug-fix**: 8% (52 experiments)
-
-### `gptel-ext-context-cache.el`
-
-- **refactoring**: 50% (4 experiments)
-- **safety**: 50% (4 experiments)
-- **performance**: 27% (11 experiments)
-
-### `gptel-benchmark-core.el`
-
-- **bug-fix**: 25% (57 experiments)
-
-### `staging-verification`
-
-- **other**: 0% (56 experiments)
-
-### `gptel-ext-retry.el`
-
-- **refactoring**: 60% (5 experiments)
-- **safety**: 33% (3 experiments)
-- **bug-fix**: 18% (39 experiments)
+- **safety**: 57% (7 experiments)
+- **refactoring**: 50% (6 experiments)
+- **bug-fix**: 40% (20 experiments)
 
 ### `gptel-auto-workflow-strategic.el`
 
-- **refactoring**: 40% (10 experiments)
-- **bug-fix**: 4% (25 experiments)
-
-### `gptel-tools-code.el`
-
-- **bug-fix**: 0% (30 experiments)
-- **safety**: 0% (5 experiments)
+- **safety**: 44% (9 experiments)
+- **bug-fix**: 12% (17 experiments)
+- **performance**: 0% (3 experiments)
 
 ### `staging-merge`
 
-- **other**: 0% (31 experiments)
+- **other**: 0% (23 experiments)
 
-### `staging-review`
+### `gptel-benchmark-core.el`
 
-- **bug-fix**: 0% (14 experiments)
-- **other**: 0% (16 experiments)
+- **bug-fix**: 50% (20 experiments)
 
-### `gptel-ext-context.el`
+### `gptel-ext-retry.el`
 
-- **bug-fix**: 46% (13 experiments)
-- **refactoring**: 38% (8 experiments)
+- **bug-fix**: 7% (14 experiments)
+- **refactoring**: 0% (5 experiments)
 
-### `gptel-auto-workflow-projects.el`
+### `gptel-ext-context-cache.el`
 
-- **bug-fix**: 16% (19 experiments)
+- **bug-fix**: 45% (11 experiments)
+- **performance**: 29% (7 experiments)
 
 ### `gptel-sandbox.el`
 
-- **safety**: 40% (5 experiments)
-- **refactoring**: 25% (4 experiments)
-- **bug-fix**: 20% (10 experiments)
+- **safety**: 33% (3 experiments)
+- **bug-fix**: 29% (7 experiments)
+- **refactoring**: 0% (3 experiments)
 
-### `nucleus-tools.el`
+### `staging-review`
 
-- **safety**: 25% (4 experiments)
-- **bug-fix**: 0% (13 experiments)
+- **bug-fix**: 0% (12 experiments)
 
-### `gptel-ext-core.el`
+### `staging-verification`
 
-- **safety**: 50% (16 experiments)
-
-### `gptel-benchmark-integrate.el`
-
-- **bug-fix**: 38% (13 experiments)
-
-### `gptel-workflow-benchmark.el`
-
-- **refactoring**: 75% (4 experiments)
-- **bug-fix**: 0% (7 experiments)
+- **other**: 0% (12 experiments)
 
 ### `gptel-benchmark-subagent.el`
 
-- **bug-fix**: 0% (7 experiments)
+- **bug-fix**: 0% (10 experiments)
 
-### `gptel-benchmark-evolution.el`
+### `gptel-ext-context.el`
 
-- **bug-fix**: 0% (4 experiments)
+- **bug-fix**: 11% (9 experiments)
 
-### `gptel-tools.el`
+### `gptel-auto-workflow-projects.el`
 
-- **refactoring**: 100% (3 experiments)
+- **bug-fix**: 12% (8 experiments)
 
-### `staging-push`
+### `gptel-ext-core.el`
 
-- **other**: 0% (3 experiments)
+- **safety**: 25% (4 experiments)
 
-## Anti-Patterns Catalog
+### `gptel-ext-fsm.el`
 
-### Removing Defensive JSON Lookups
+- **bug-fix**: 0% (3 experiments)
 
-**Severity: HIGH**
+### `gptel-tools-grep.el`
 
-**Pattern:** Experiment assumes `json-key-type 'symbol` guarantees all keys are symbols, removes string-key lookups.
+- **bug-fix**: 0% (3 experiments)
 
-**Impact:** Silent parsing failures → empty target lists → workflow breakdown.
+### `gptel-tools-code.el`
 
-**Prevention:**
-- NEVER remove defensive code without cross-version testing
-- JSON parsing behavior varies by Emacs version and parser
-- Defensive code is insurance, not dead code
-
-**See:** `mementum/memories/anti-pattern-removing-defensive-json-lookups.md`
-
-## Staging Verification Gaps
-
-Current staging verification missed this bug because:
-- Tests used consistent JSON key types (all symbols)
-- No cross-key-type test cases
-- Experiment was classified as "refactoring" not "bug-fix"
-
-**Fix:** Add mixed key-type JSON test cases to staging verification.
+- **bug-fix**: 0% (3 experiments)
 
 ## Feedback Loop
 
@@ -211,8 +157,3 @@ Benchmark → Verification → MEMENTUM
      ↑                           ↓
 Prompt Injection ← Knowledge ←─┘
 ```
-
-**New Rule:** When manual fix is required post-staging, automatically:
-1. Create anti-pattern memory
-2. Update verification tests
-3. Inject prevention guidance into next experiment prompts

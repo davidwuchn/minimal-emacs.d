@@ -19,6 +19,13 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (mutation-templates (when skills (gptel-auto-workflow--extract-mutation-templates skills)))
          (suggested-hypothesis (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills)))
          (target-full-path (expand-file-name target worktree-path))
+         (sexp-check-command
+          (format
+           "emacs -Q --batch --eval %s"
+           (shell-quote-argument
+            (format
+             "(progn (find-file %S) (emacs-lisp-mode) (condition-case err (progn (scan-sexps (point-min) (point-max)) (message \"OK\")) (error (message \"ERROR: %%s\" err) (kill-emacs 1))))"
+             target-full-path))))
          (target-bytes (gptel-auto-experiment--target-byte-size target-full-path))
          (recovery-p
           (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results))
@@ -126,7 +133,7 @@ Make minimal, targeted changes to CODE, not documentation.
 5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
 6. Implement the CODE change minimally using Edit tool
 7. BEFORE finishing, verify your changes have balanced parentheses:
-   - Run: emacs --batch --eval \"(find-file \\\"%%s\\\") (emacs-lisp-mode) (condition-case err (scan-sexps (point-min) (point-max)) (error (message \\\"ERROR: %%s\\\" err)))\"
+   - Run: %s
    - If you see an error, FIX IT before submitting
 8. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
 9. DO NOT run git add, git commit, git push, or stage changes yourself.
@@ -175,7 +182,8 @@ Example HYPOTHESES:
               "")
             target
             (/ gptel-auto-experiment-time-budget 60)
-            focus-line)))
+            focus-line
+            sexp-check-command)))
 
 ;;; TSV Logging (Explainable)
 
@@ -219,12 +227,14 @@ Example HYPOTHESES:
                                     "staging-pending"))
     pending-result))
 
-(defun gptel-auto-experiment--maybe-log-staging-pending (run-id experiment log-fn)
-  "Log EXPERIMENT as staging-pending for RUN-ID when staging is active."
-  (when (and gptel-auto-workflow-use-staging
-             (functionp log-fn))
-    (funcall log-fn run-id
-             (gptel-auto-experiment--staging-pending-result experiment))))
+(defun gptel-auto-experiment--maybe-log-staging-pending (run-id experiment _log-fn)
+  "Log EXPERIMENT as staging-pending for RUN-ID when staging is active.
+Writes directly to TSV so the pending row survives regardless of the
+intermediate logging strategy used by the caller."
+  (when gptel-auto-workflow-use-staging
+    (gptel-auto-experiment-log-tsv
+     run-id
+     (gptel-auto-experiment--staging-pending-result experiment))))
 
 (defun gptel-auto-experiment--drop-replaceable-tsv-rows (experiment-id target)
   "Drop stale pending rows for EXPERIMENT-ID/TARGET in current TSV buffer.

@@ -130,6 +130,7 @@ same routed experiment buffer from re-entering a later retry."
   "Invoke the active gptel subagent task runner.
 In headless auto-workflow runs, bypass `gptel-agent-loop-task' to avoid
 its async continuation layer in the worker daemon."
+  (require 'gptel-request)
   (let* ((headless-auto-workflow
           (and (bound-and-true-p gptel-auto-workflow--headless)
                (bound-and-true-p gptel-auto-workflow-persistent-headless)
@@ -172,6 +173,7 @@ its async continuation layer in the worker daemon."
 
 (defun my/gptel--disable-auto-retry-for-fsm (fsm)
   "Mark FSM so global auto-retry advice will not reschedule it."
+  (require 'gptel-request)
   (when (and fsm (fboundp 'gptel-fsm-info))
     (let ((info (ignore-errors (gptel-fsm-info fsm))))
       (when (listp info)
