@@ -48,16 +48,16 @@
 
 ;; DEBUG: Log backtraces for gptel callback errors
 (when (my/workflow-daemon-p)
-  (defmacro with-demoted-errors (format &rest body)
+  (defmacro with-demoted-errors (message-format &rest body)
     "Execute BODY and log full backtrace on any error."
     `(condition-case err
          (progn ,@body)
-       ((debug error)
-        (let ((backtrace-str (with-output-to-string (backtrace))))
-          (with-temp-file "/tmp/gptel-callback-error.log"
-            (insert (format "Error: %S\n\nBacktrace:\n%s\n" err backtrace-str))))
-        (message ,format err)
-        nil))))
+        ((debug error)
+         (let ((backtrace-str (with-output-to-string (backtrace))))
+           (with-temp-file "/tmp/gptel-callback-error.log"
+             (insert (format "Error: %S\n\nBacktrace:\n%s\n" err backtrace-str))))
+         (message ,message-format err)
+         nil))))
 
 ;; Disable native compilation for workflow daemon to prevent stale cache issues
 (when (my/workflow-daemon-p)
