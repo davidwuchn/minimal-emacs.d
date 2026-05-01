@@ -488,7 +488,7 @@ not planning more work. Uses pre-compiled pattern for performance on hot path."
 
 (defun gptel-agent-loop--continuation-count (state)
   "Return continuation count for STATE, defaulting to 0 if nil."
-  (if state
+  (if (gptel-agent-loop--task-p state)
       (or (gptel-agent-loop--task-continuation-count state) 0)
     0))
 
