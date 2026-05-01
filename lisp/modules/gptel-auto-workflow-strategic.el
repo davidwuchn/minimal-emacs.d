@@ -331,6 +331,7 @@ Returns updated targets list."
                               (alist-get 'target file))))
       (gptel-auto-workflow--validate-and-add-target extracted-file proj-root targets)))
    ((not (stringp file)) targets)
+   ((not (gptel-auto-workflow--nonempty-string-p file)) targets)
    ((not (and (stringp proj-root) (not (string-empty-p proj-root)))) targets)
    (t
     (let ((abs-path (if (file-name-absolute-p file)
