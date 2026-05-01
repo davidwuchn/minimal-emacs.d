@@ -550,7 +550,9 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
              (string-match-p my/gptel--transient-http-400-patterns error-msg))
         (and (listp error-data)
              (stringp error-msg)
-             (or (null status) (not (memq status my/gptel--auth-failure-statuses)))
+             (or (null status)
+                 (not (memq status (append my/gptel--auth-failure-statuses
+                                          my/gptel--transient-http-statuses))))
              (string-match-p my/gptel--transient-error-message-patterns
                              (downcase error-msg))))))
 
