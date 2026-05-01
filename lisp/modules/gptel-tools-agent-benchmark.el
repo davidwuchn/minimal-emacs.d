@@ -658,33 +658,47 @@ BLOCKS is the list of block names currently in scope."
            (gptel-auto-experiment--invalid-cl-return-target-in-forms
             (cdr form) blocks)))))))
 
-(defun gptel-auto-experiment--removed-diff-lines (file)
-  "Return removed diff lines for FILE relative to HEAD, or nil.
-Only real removed lines are returned; diff headers such as --- a/file are
-excluded.  If FILE is not in a Git worktree, return nil."
+(defun gptel-auto-experiment--defensive-code-removal-p (content)
+  "Detect if CONTENT removes defensive code patterns.
+Returns non-nil if defensive code removal is detected.
+
+Checks for:
+- Removing string-key fallbacks in JSON parsing
+- Removing or guards without evidence they're unreachable
+- Removing nil checks or error handlers
+
+This function should be called with the git diff content, not the file content.
+It looks for removed lines (starting with '-') that contain defensive patterns."
+  (when (stringp content)
+    (let ((removed-lines nil))
+      ;; Extract removed lines from diff
+      (with-temp-buffer
+        (insert content)
+        (goto-char (point-min))
+        (while (re-search-forward "^-\\([^-].*\\)$" nil t)
+          (push (match-string 1) removed-lines)))
+      ;; Check if any removed line contains defensive code
+      (cl-some
+       (lambda (line)
+         (or
+          ;; Pattern 1: Removed cdr/assoc fallback
+          (string-match-p "cdr\\s-*(assoc\\s-+\"" line)
+          ;; Pattern 2: Removed string-key lookup
+          (string-match-p "assoc\\s-+\"\\(file\\|path\\|target\\)\"" line)
+          ;; Pattern 3: Removed or branch with fallback
+           (and (string-match-p "or\\s-*" line)
+                (string-match-p "alist-get\\|assoc" line))))
+        removed-lines))))
+
+(defun gptel-auto-experiment--diff-against-head (file)
+  "Return git diff content for FILE against HEAD, or nil outside a Git worktree."
   (when-let* ((absolute-file (expand-file-name file))
               (root (locate-dominating-file absolute-file ".git")))
-    (let* ((default-directory root)
-           (relative-file (file-relative-name absolute-file root))
-           (diff (shell-command-to-string
-                  (format "git --no-pager diff --no-ext-diff --unified=0 HEAD -- %s 2>/dev/null"
-                          (shell-quote-argument relative-file)))))
-      (cl-loop for line in (split-string diff "\n")
-               when (and (string-prefix-p "-" line)
-                         (not (string-prefix-p "---" line)))
-               collect (substring line 1)))))
-
-(defun gptel-auto-experiment--defensive-code-removal-p (removed-lines)
-  "Return non-nil if REMOVED-LINES delete defensive JSON fallbacks.
-REMOVED-LINES must be lines removed by an actual diff, not final file content."
-  (let ((patterns
-         '("cdr\\s-*(assoc\\s-+\""
-           "assoc\\s-+\"[^\"]+\"")))
-    (cl-some (lambda (line)
-               (cl-some (lambda (pattern)
-                          (string-match-p pattern line))
-                        patterns))
-             removed-lines)))
+    (let ((default-directory root)
+          (relative-file (file-relative-name absolute-file root)))
+      (shell-command-to-string
+       (format "git --no-pager diff --no-ext-diff --unified=0 HEAD -- %s 2>/dev/null"
+               (shell-quote-argument relative-file))))))
 
 (defun gptel-auto-experiment--validate-code (file)
   "Validate code in FILE for syntax and dangerous patterns.
@@ -711,9 +725,9 @@ Returns nil if valid, or error message string if invalid."
             (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
                    (nreverse forms))
               (format "Dangerous pattern in %s: cl-return-from without cl-block" file))
-            ;; Check removed diff lines, not final content, for deleted fallbacks.
+            ;; Check actual removed diff lines, not final file content.
             (when (gptel-auto-experiment--defensive-code-removal-p
-                   (gptel-auto-experiment--removed-diff-lines file))
+                   (gptel-auto-experiment--diff-against-head file))
               (format "Defensive code removal detected in %s: removing or/assoc fallbacks without proof" file)))))))
 
 (defun gptel-auto-experiment--finish-grade (grade-id callback result

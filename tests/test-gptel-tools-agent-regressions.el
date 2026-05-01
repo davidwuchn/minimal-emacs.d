@@ -14894,31 +14894,35 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                  (cons "Hydrated submodules: packages/ai-code=7830ce4" 0)))
               ((symbol-function 'generate-new-buffer)
                (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
-              ((symbol-function 'call-process)
-               (lambda (_program _in buffer _display script &rest args)
-                  (when (equal script test-script)
-                     (setq test-args args))
-                  (when (equal script verify-script)
-                    (setq verify-skip-env (getenv "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC")))
-                   (with-current-buffer buffer
-                     (insert (format "ran %s%s\n"
-                                     script
-                                    (if args
-                                        (format " %s" (mapconcat #'identity args " "))
-                                      ""))))
-                  0))
-              ((symbol-function 'message)
-               (lambda (&rest _) nil)))
-      (unwind-protect
-           (let ((result (gptel-auto-workflow--verify-staging)))
-             (should (car result))
-             (should (equal hydrated "/tmp/staging"))
-             (should (equal verify-skip-env "1"))
-             (should (equal test-args '("unit")))
-             (should (string-match-p "ran /tmp/staging/scripts/run-tests.sh unit" (cdr result)))
-              (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh" (cdr result))))
-        (when-let ((buf (get-buffer "*test-staging-verify*")))
-          (kill-buffer buf))))))
+               ((symbol-function 'call-process)
+                (lambda (_program _in buffer _display script &rest args)
+                   (when (equal script test-script)
+                      (setq test-args args))
+                   (when (equal script verify-script)
+                     (setq verify-skip-env (getenv "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC")))
+                    (with-current-buffer buffer
+                      (insert (format "ran %s%s\n"
+                                      script
+                                     (if args
+                                         (format " %s" (mapconcat #'identity args " "))
+                                       ""))))
+                   0))
+               ((symbol-function 'gptel-auto-workflow--staging-changed-files)
+                (lambda () nil))
+               ((symbol-function 'gptel-auto-workflow--run-behavioral-tests)
+                (lambda (_) nil))
+               ((symbol-function 'message)
+                (lambda (&rest _) nil)))
+       (unwind-protect
+            (let ((result (gptel-auto-workflow--verify-staging)))
+              (should (car result))
+              (should (equal hydrated "/tmp/staging"))
+              (should (equal verify-skip-env "1"))
+              (should (equal test-args '("unit")))
+              (should (string-match-p "ran /tmp/staging/scripts/run-tests.sh unit" (cdr result)))
+               (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh" (cdr result))))
+         (when-let ((buf (get-buffer "*test-staging-verify*")))
+           (kill-buffer buf))))))
 
 (ert-deftest regression/auto-workflow/check-el-syntax-passes-clean-tree ()
   "Syntax helper should return non-nil for a clean non-empty Elisp tree."
@@ -15042,10 +15046,14 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
                (lambda (_output)
                  (cons nil nil)))
-              ((symbol-function 'generate-new-buffer)
-               (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
-              ((symbol-function 'message)
-               (lambda (&rest _) nil)))
+               ((symbol-function 'generate-new-buffer)
+                (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
+               ((symbol-function 'gptel-auto-workflow--staging-changed-files)
+                (lambda () nil))
+               ((symbol-function 'gptel-auto-workflow--run-behavioral-tests)
+                (lambda (_) nil))
+               ((symbol-function 'message)
+                (lambda (&rest _) nil)))
       (unwind-protect
           (let ((result (gptel-auto-workflow--verify-staging)))
             (should-not (car result))
@@ -16356,34 +16364,38 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                   (cons t "No new staging verification failures vs main baseline")))
               ((symbol-function 'generate-new-buffer)
                (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
-              ((symbol-function 'call-process)
-               (lambda (_program _in buffer _display script &rest args)
-                  (when (equal script test-script)
-                    (setq test-args args))
-                  (with-current-buffer buffer
-                    (insert (format "ran %s%s\n"
-                                    script
-                                    (if args
-                                        (format " %s" (mapconcat #'identity args " "))
-                                      ""))))
-                  (if (equal script test-script)
-                      (progn
-                        (with-current-buffer buffer
-                          (insert "   FAILED   1/10  existing/baseline-failure (0.001 sec)\n"))
-                        1)
-                   0)))
-              ((symbol-function 'message)
-               (lambda (&rest _) nil)))
-      (unwind-protect
-          (let ((result (gptel-auto-workflow--verify-staging)))
-            (should (car result))
-            (should (equal test-args '("unit")))
-            (should (string-match-p "No new staging verification failures vs main baseline"
-                                    (cdr result)))
-            (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh"
-                                    (cdr result))))
-        (when-let ((buf (get-buffer "*test-staging-verify*")))
-          (kill-buffer buf))))))
+               ((symbol-function 'call-process)
+                (lambda (_program _in buffer _display script &rest args)
+                   (when (equal script test-script)
+                     (setq test-args args))
+                   (with-current-buffer buffer
+                     (insert (format "ran %s%s\n"
+                                     script
+                                     (if args
+                                         (format " %s" (mapconcat #'identity args " "))
+                                       ""))))
+                   (if (equal script test-script)
+                       (progn
+                         (with-current-buffer buffer
+                           (insert "   FAILED   1/10  existing/baseline-failure (0.001 sec)\n"))
+                         1)
+                    0)))
+               ((symbol-function 'gptel-auto-workflow--staging-changed-files)
+                (lambda () nil))
+               ((symbol-function 'gptel-auto-workflow--run-behavioral-tests)
+                (lambda (_) nil))
+               ((symbol-function 'message)
+                (lambda (&rest _) nil)))
+       (unwind-protect
+           (let ((result (gptel-auto-workflow--verify-staging)))
+             (should (car result))
+             (should (equal test-args '("unit")))
+             (should (string-match-p "No new staging verification failures vs main baseline"
+                                     (cdr result)))
+             (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh"
+                                     (cdr result))))
+         (when-let ((buf (get-buffer "*test-staging-verify*")))
+           (kill-buffer buf))))))
 
 (ert-deftest regression/auto-workflow/verify-staging-allows-baseline-verify-failures ()
   "Staging verification should pass when verify-nucleus failures match the main baseline."
@@ -16404,34 +16416,38 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                  (cons t "No new staging verification failures vs main baseline")))
               ((symbol-function 'generate-new-buffer)
                (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
-              ((symbol-function 'call-process)
-               (lambda (_program _in buffer _display script &rest args)
-                 (when (equal script test-script)
-                   (setq test-args args))
-                 (with-current-buffer buffer
-                   (insert (format "ran %s%s\n"
-                                   script
-                                   (if args
-                                       (format " %s" (mapconcat #'identity args " "))
-                                     ""))))
-                 (if (equal script verify-script)
-                     (progn
-                       (with-current-buffer buffer
-                         (insert "ERROR: packages/gptel is pinned to old, but tracked branch master is at new.\n"))
-                       1)
-                   0)))
-              ((symbol-function 'message)
-               (lambda (&rest _) nil)))
-      (unwind-protect
-          (let ((result (gptel-auto-workflow--verify-staging)))
-            (should (car result))
-            (should (equal test-args '("unit")))
-            (should (string-match-p "No new staging verification failures vs main baseline"
-                                    (cdr result)))
-            (should (string-match-p "ERROR: packages/gptel is pinned to old"
-                                    (cdr result))))
-        (when-let ((buf (get-buffer "*test-staging-verify*")))
-          (kill-buffer buf))))))
+               ((symbol-function 'call-process)
+                (lambda (_program _in buffer _display script &rest args)
+                  (when (equal script test-script)
+                    (setq test-args args))
+                  (with-current-buffer buffer
+                    (insert (format "ran %s%s\n"
+                                    script
+                                    (if args
+                                        (format " %s" (mapconcat #'identity args " "))
+                                      ""))))
+                  (if (equal script verify-script)
+                      (progn
+                        (with-current-buffer buffer
+                          (insert "ERROR: packages/gptel is pinned to old, but tracked branch master is at new.\n"))
+                        1)
+                    0)))
+               ((symbol-function 'gptel-auto-workflow--staging-changed-files)
+                (lambda () nil))
+               ((symbol-function 'gptel-auto-workflow--run-behavioral-tests)
+                (lambda (_) nil))
+               ((symbol-function 'message)
+                (lambda (&rest _) nil)))
+       (unwind-protect
+           (let ((result (gptel-auto-workflow--verify-staging)))
+             (should (car result))
+             (should (equal test-args '("unit")))
+             (should (string-match-p "No new staging verification failures vs main baseline"
+                                     (cdr result)))
+             (should (string-match-p "ERROR: packages/gptel is pinned to old"
+                                     (cdr result))))
+         (when-let ((buf (get-buffer "*test-staging-verify*")))
+           (kill-buffer buf))))))
 
 (ert-deftest regression/auto-workflow/verify-staging-fails-on-new-regressions ()
   "Staging verification should fail when test failures exceed the main baseline."
@@ -16463,28 +16479,32 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                                     (if args
                                         (format " %s" (mapconcat #'identity args " "))
                                       ""))))
-                  (if (equal script test-script)
-                      (progn
-                       (with-current-buffer buffer
-                         (insert "   FAILED   1/10  new/failure (0.001 sec)\n"))
-                        1)
-                   0)))
-               ((symbol-function 'message)
-               (lambda (fmt &rest args)
-                 (push (apply #'format fmt args) messages))))
-       (unwind-protect
-            (let ((result (gptel-auto-workflow--verify-staging)))
-              (should (equal test-args '("unit")))
-              (should-not (car result))
-              (should (string-match-p "New staging verification failures vs main"
-                                      (cdr result)))
-              (should (cl-some (lambda (msg)
-                                 (string-match-p
-                                  "Staging verification: FAIL (failing tests: new/failure)"
-                                  msg))
-                               messages)))
-           (when-let ((buf (get-buffer "*test-staging-verify*")))
-              (kill-buffer buf))))))
+                   (if (equal script test-script)
+                       (progn
+                        (with-current-buffer buffer
+                          (insert "   FAILED   1/10  new/failure (0.001 sec)\n"))
+                         1)
+                    0)))
+               ((symbol-function 'gptel-auto-workflow--staging-changed-files)
+                (lambda () nil))
+               ((symbol-function 'gptel-auto-workflow--run-behavioral-tests)
+                (lambda (_) nil))
+                ((symbol-function 'message)
+                (lambda (fmt &rest args)
+                  (push (apply #'format fmt args) messages))))
+        (unwind-protect
+             (let ((result (gptel-auto-workflow--verify-staging)))
+               (should (equal test-args '("unit")))
+               (should-not (car result))
+               (should (string-match-p "New staging verification failures vs main"
+                                       (cdr result)))
+               (should (cl-some (lambda (msg)
+                                  (string-match-p
+                                   "Staging verification: FAIL (failing tests: new/failure)"
+                                   msg))
+                                messages)))
+            (when-let ((buf (get-buffer "*test-staging-verify*")))
+               (kill-buffer buf))))))
 
 (ert-deftest regression/auto-workflow/staging-worktree-failure-restores-staging-baseline ()
   "Failed staging worktree creation should restore the pre-merge staging baseline."
