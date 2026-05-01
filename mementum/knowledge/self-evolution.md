@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-01 12:07
+updated: 2026-05-01 17:13
 ---
 
 # Self-Evolution Knowledge Base
@@ -14,7 +14,7 @@ updated: 2026-05-01 12:07
 ## Git History Facts
 
 - Active experiment branches: 100
-- Historical merges: 566
+- Historical merges: 567
 - Active branches merged: 4
 - Active branches abandoned: 96
 - Active merge rate: 4.0%
@@ -35,19 +35,19 @@ updated: 2026-05-01 12:07
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 21% verified (169/820 experiments)
+- **bug-fix**: 21% verified (171/828 experiments)
 - **performance**: 36% verified (19/53 experiments)
-- **refactoring**: 35% verified (57/165 experiments)
-- **safety**: 40% verified (77/192 experiments)
+- **refactoring**: 34% verified (58/170 experiments)
+- **safety**: 40% verified (78/194 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **safety** - 40% kept (192 experiments)
+1. **safety** - 40% kept (194 experiments)
 2. **performance** - 36% kept (53 experiments)
-3. **refactoring** - 35% kept (165 experiments)
-4. **bug-fix** - 21% kept (820 experiments)
+3. **refactoring** - 34% kept (170 experiments)
+4. **bug-fix** - 21% kept (828 experiments)
 
 ## Critical Guidance for Maximum Success
 
@@ -108,15 +108,15 @@ Which change types work best for each target file:
 - **safety**: 33% (3 experiments)
 - **bug-fix**: 18% (39 experiments)
 
+### `gptel-auto-workflow-strategic.el`
+
+- **refactoring**: 40% (10 experiments)
+- **bug-fix**: 4% (25 experiments)
+
 ### `gptel-tools-code.el`
 
 - **bug-fix**: 0% (30 experiments)
 - **safety**: 0% (5 experiments)
-
-### `gptel-auto-workflow-strategic.el`
-
-- **refactoring**: 38% (8 experiments)
-- **bug-fix**: 4% (25 experiments)
 
 ### `staging-merge`
 
@@ -127,25 +127,25 @@ Which change types work best for each target file:
 - **bug-fix**: 0% (14 experiments)
 - **other**: 0% (16 experiments)
 
-### `gptel-auto-workflow-projects.el`
+### `gptel-ext-context.el`
 
-- **bug-fix**: 16% (19 experiments)
+- **bug-fix**: 46% (13 experiments)
+- **refactoring**: 38% (8 experiments)
 
 ### `gptel-sandbox.el`
 
-- **safety**: 25% (4 experiments)
+- **safety**: 40% (5 experiments)
 - **refactoring**: 25% (4 experiments)
-- **bug-fix**: 20% (10 experiments)
+- **bug-fix**: 17% (12 experiments)
+
+### `gptel-auto-workflow-projects.el`
+
+- **bug-fix**: 16% (19 experiments)
 
 ### `nucleus-tools.el`
 
 - **safety**: 25% (4 experiments)
 - **bug-fix**: 0% (13 experiments)
-
-### `gptel-ext-context.el`
-
-- **bug-fix**: 44% (9 experiments)
-- **refactoring**: 43% (7 experiments)
 
 ### `gptel-ext-core.el`
 
@@ -155,14 +155,14 @@ Which change types work best for each target file:
 
 - **bug-fix**: 38% (13 experiments)
 
+### `gptel-workflow-benchmark.el`
+
+- **refactoring**: 75% (4 experiments)
+- **bug-fix**: 0% (7 experiments)
+
 ### `gptel-benchmark-subagent.el`
 
 - **bug-fix**: 0% (7 experiments)
-
-### `gptel-workflow-benchmark.el`
-
-- **refactoring**: 67% (3 experiments)
-- **bug-fix**: 0% (4 experiments)
 
 ### `gptel-benchmark-evolution.el`
 

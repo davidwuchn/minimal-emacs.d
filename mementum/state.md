@@ -1,12 +1,25 @@
 # Mementum State
 
-> Last session: 2026-05-01 10:25
+> Last session: 2026-05-01 17:25
 
-## Current Session: 2026-05-01 Auto-Workflow Repair
+## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Verified Cache Optimization
 
-**Status:** Source repaired and focused regressions passing.
+**Status:** `main` pushed at `a5e2b30c`; run `2026-05-01T162409Z-4de2` completed with 1 kept result; stale completed-run status wrapper fix is local/uncommitted.
 
-**Done:**
+**Done (This Session):**
+- Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
+- Commit: `8624a5e9` — ⊘ fix: write staging-pending directly to TSV, bypass log-fn
+- **Verified fix working**: Run `2026-05-01T150007Z-b5d4` completed successfully with staging-pending row persisted in TSV.
+- **Cache optimization merged**: `825514fe` — Merge optimize/cache-neopi5-r150007zb5d4-exp1 for verification
+  - File: `lisp/modules/gptel-ext-context-cache.el` (+25/-14 lines)
+  - Optimization: Added memoization cache for `my/gptel--alist-partial-match` (O(n) → O(1))
+  - Grade: 9/9, Tests: PASS, Staging review: PASSED
+- Synced `main` and `staging` to `256afdf0` (includes remote fix `9738c05a` for gptel-request subagent operations).
+- Cleaned 15 zombie `aw-complete-*` processes.
+- Removed 69 stale experiment directories (>14 days old).
+- All unit tests pass (1733 tests, 0 unexpected).
+
+**Previous Session:**
 - Restored `lisp/modules/gptel-tools-agent-experiment-core.el` to syntax-valid state after the callback/context conversion left an extra final close paren.
 - Kept the executor callback lexical so validation retry reuses the same executor callback path.
 - Fixed validation retry recursion by replacing the ineffective lexical `bound-and-true-p` guard with a captured `validation-retry-active` flag.
@@ -15,18 +28,38 @@
 - Verified `post-early-init.el` already sets the `%s` macro-capture fix for `with-demoted-errors`.
 - Verified wrapper already starts workflow daemons with `MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1` and `MINIMAL_EMACS_WORKFLOW_DAEMON=1`.
 - Re-verified local staging worktree with `./scripts/verify-nucleus.sh`: all Nucleus validations passed.
+- Fixed executor prompt syntax-check instruction so it emits a concrete `emacs -Q --batch --eval ... find-file PATH` command instead of raw `find-file "%s"`.
+- Added regression coverage that rejects raw `find-file "%s"` in experiment prompts and requires the concrete worktree target path.
+- Changed `lisp/modules/gptel-tools-agent.el` to source-load split modules on `load-file`, so long-lived workflow daemons hot-reload patched module definitions instead of keeping stale `require`d code.
+- Diagnosed `*ERROR*: Unknown message: ...` as `emacsclient --eval` protocol noise from returning large `*Messages*` strings directly; patched `scripts/run-auto-workflow-cron.sh messages` to refresh the daemon messages file first and then `cat` it.
+- Synced `main` to `origin/main` at `f7470e55`.
+- Fixed incoming defensive-code validator regression: invalid regexp removed, detection now inspects removed `git diff` lines instead of final file content.
+- Fixed strategic JSON target extraction for string-key alists by accepting string keys in `gptel-auto-workflow--json-object-p`.
+- Made `gptel-auto-workflow-behavioral-tests.el` self-contained with `cl-lib` and a declaration for the strategic extractor.
+- Committed and pushed `a5e2b30c` (`⊘ fix: stabilize auto-workflow validation and messages`) to `origin/main`.
+- Run `2026-05-01T162409Z-4de2` completed: 7 experiments, 1 target improved (`gptel-ext-context.el` stale callback running-flag fix), staging pushed after remote refresh.
+- Patched local wrapper stale-status handling: active persisted snapshots with `[auto-workflow] All projects processed:` in messages now clear to non-running status.
 
 **Verification:**
 - `emacs -Q --batch --eval '(with-temp-buffer (insert-file-contents "lisp/modules/gptel-tools-agent-experiment-core.el") (emacs-lisp-mode) (check-parens))'` passed.
 - `emacs -Q --batch -L lisp/modules -f batch-byte-compile lisp/modules/gptel-tools-agent-experiment-core.el` completed with only existing split-module warnings.
 - Focused ERT selector `regression/auto-experiment/\(run-forwards-executor-runagent-args\|retry-forwards-focused-executor-runagent-args\|retry-stops-after-second-validation-failure\|waits-for-staging-flow-before-callback\)` passed 4/4.
 - `/tmp/gptel-callback-error.log` absent.
+- Prompt-builder checks passed: `check-parens`, byte-compile with existing split-module warnings, emitted sexp-check command, and ERT selector `regression/auto-experiment/build-prompt-.*` (3/3).
+- Live workflow daemon prompt probe returned `(nil 7419)`: no raw `find-file "%s"`, concrete `emacs -Q --batch --eval` present.
+- `bash -n scripts/run-auto-workflow-cron.sh` passed.
+- ERT selector `regression/auto-workflow/cron-wrapper-messages-refreshes-live-before-cache` passed 1/1.
+- Validator repros now pass: `gptel-tools-agent-benchmark.el` and `gptel-auto-workflow-strategic.el` both return `nil` from `gptel-auto-experiment--validate-code`.
+- Behavioral smoke test `gptel-auto-workflow--run-behavioral-tests` for `gptel-auto-workflow-strategic.el` passed.
+- ERT selectors passed: `regression/auto-workflow/validate-code-` (8/8) and defensive/string-key selector (3/3).
+- `check-parens` passed for changed Elisp files: benchmark, strategic, behavioral tests.
+- Stale-status wrapper verification passed: `bash -n scripts/run-auto-workflow-cron.sh`, ERT selector for completed-running-status + messages-refresh (2/2), and live `status` now reports `:running nil :phase "complete"` for `2026-05-01T162409Z-4de2`.
 
 **Important State:**
-- `./scripts/run-auto-workflow-cron.sh status` reports idle for run `2026-05-01T091051Z-ace2`.
-- Local staging worktree `var/tmp/experiments/staging-verify` is clean and `staging` is ahead of `origin/staging` by 6 commits, ending at `48888050 Merge optimize/loop-neopi5-r091051zace2-exp1 for verification`.
-- `main` and `origin/main` are synced at `b52756c5` after pushing the retry recursion fix.
-- Unrelated local work remains: `mementum/knowledge/self-evolution.md`, modified `packages/gptel`, and untracked `mementum/memories/insight-*` files.
+- Previous successful experiment: `2026-05-01T150007Z-b5d4` (1/1 kept → merged to staging/main), `gptel-ext-context-cache.el` memoization cache (O(n) → O(1)), score 9/9.
+- `./scripts/run-auto-workflow-cron.sh status` reports completed run `2026-05-01T162409Z-4de2`, kept=1/3, results at `var/tmp/experiments/2026-05-01T162409Z-4de2/results.tsv`.
+- `origin/staging` contains kept merge `1e3b17e2` (`Merge optimize/context-imacpro.taila8bdd.ts.net-r162409z4de2-exp1 for verification`); `origin/main` contains pushed validation/messages fix `a5e2b30c`.
+- Local uncommitted follow-up changes: stale completed-run status wrapper fix + regression, `mementum/state.md` update.
 
 **Tooling Rule:**
 - Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.

@@ -290,6 +290,18 @@ active_snapshot_has_empty_messages_tail() {
     [ "$status_dir" = "$messages_dir" ]
 }
 
+active_snapshot_has_completion_marker() {
+    status_looks_active || return 1
+    [ -r "$MESSAGES_FILE" ] || return 1
+    grep -Eq '\[[^]]+\] All projects processed:' "$MESSAGES_FILE"
+}
+
+clear_completed_running_status() {
+    if active_snapshot_has_completion_marker; then
+        rewrite_status_idle
+    fi
+}
+
 snapshot_file_stale_for_recovery() {
     local path="$1"
     ! snapshot_file_fresh "$path" "${AUTO_WORKFLOW_STALE_DAEMON_TTL:-1800}"
@@ -1130,6 +1142,7 @@ EVAL_ELISP="$(wrap_emacs_eval "$ELISP")"
 
 cd "$DIR"
 if [ "$ACTION" = "status" ]; then
+    clear_completed_running_status
     if active_snapshot_has_empty_messages_tail; then
         clear_stale_running_status
     fi
@@ -1150,12 +1163,9 @@ if [ "$ACTION" = "status" ]; then
 fi
 
 if [ "$ACTION" = "messages" ]; then
+    clear_completed_running_status
     if active_snapshot_has_empty_messages_tail; then
         clear_stale_running_status
-    fi
-    if status_can_use_persisted_active_snapshot && [ -r "$MESSAGES_FILE" ]; then
-        print_messages_snapshot active "$PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE"
-        exit 0
     fi
     if ! check_worker_daemon; then
         rc=$?
@@ -1174,6 +1184,10 @@ if [ "$ACTION" = "messages" ]; then
         exit 0
     fi
     rc=$?
+    if status_can_use_persisted_active_snapshot && [ -r "$MESSAGES_FILE" ]; then
+        print_messages_snapshot active "$PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE"
+        exit 0
+    fi
     if [ -r "$MESSAGES_FILE" ]; then
         print_messages_snapshot stale yes
         exit 0

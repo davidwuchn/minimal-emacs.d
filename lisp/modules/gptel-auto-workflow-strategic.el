@@ -426,7 +426,8 @@ Logs when fallback to regex parsing is used."
   "Return non-nil when VALUE looks like a JSON object alist."
   (and (consp value)
        (consp (car value))
-       (symbolp (caar value))))
+       (or (symbolp (caar value))
+           (stringp (caar value)))))
 
 (defun gptel-auto-workflow--handle-analyzer-error-state (targets static-targets callback)
   "Handle analyzer error states and invoke CALLBACK with appropriate targets.

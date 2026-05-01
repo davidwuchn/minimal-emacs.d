@@ -1,6 +1,21 @@
 ;;; gptel-tools-agent-staging-merge.el --- Staging branch protection - merge & verify -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(require 'gptel-auto-workflow-behavioral-tests nil t)
+
+(defun gptel-auto-workflow--staging-changed-files ()
+  "Return list of changed files in current staging worktree.
+Returns nil if not in a staging worktree."
+  (when-let ((worktree gptel-auto-workflow--staging-worktree-dir))
+    (let ((default-directory worktree))
+      (split-string
+       (or (ignore-errors
+             (gptel-auto-workflow--git-cmd
+              "git diff --name-only HEAD~1 HEAD 2>/dev/null"
+              30))
+           "")
+       "\n" t))))
+
 (defun gptel-auto-workflow--empty-cherry-pick-state-p (&optional output allow-missing-head)
   "Return non-nil when the current worktree reflects an already-applied cherry-pick.
 When ALLOW-MISSING-HEAD is non-nil, also treat a clean worktree plus localized
@@ -195,22 +210,35 @@ Returns (success-p . output)."
              (_ (when submodule-note
                   (with-current-buffer output-buffer
                     (insert submodule-note "\n"))))
-             (test-result (when (and submodule-pass test-script (file-exists-p test-script))
-                            (gptel-auto-workflow--call-process-with-watchdog
-                             "bash" nil output-buffer nil test-script "unit")))
-             (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
-                              (let ((process-environment
-                                     (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
-                                           process-environment)))
-                                (gptel-auto-workflow--call-process-with-watchdog
-                                 "bash" nil output-buffer nil verify-script))))
-             (test-pass (and submodule-pass
-                             (or (not (and test-script (file-exists-p test-script)))
-                                 (eq test-result 0))))
-             (verify-pass (and submodule-pass
-                               (or (not (and verify-script (file-exists-p verify-script)))
-                                   (eq verify-result 0))))
-             (checks-pass (and test-pass verify-pass))
+              (test-result (when (and submodule-pass test-script (file-exists-p test-script))
+                             (gptel-auto-workflow--call-process-with-watchdog
+                              "bash" nil output-buffer nil test-script "unit")))
+              (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
+                               (let ((process-environment
+                                      (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
+                                            process-environment)))
+                                 (gptel-auto-workflow--call-process-with-watchdog
+                                  "bash" nil output-buffer nil verify-script))))
+              ;; Run behavioral smoke tests for changed files
+              (behavioral-result (when submodule-pass
+                                   (let ((changed-files (gptel-auto-workflow--staging-changed-files)))
+                                     (when (and changed-files
+                                                (featurep 'gptel-auto-workflow-behavioral-tests))
+                                       (gptel-auto-workflow--run-behavioral-tests changed-files)))))
+              (behavioral-pass (or (null behavioral-result)
+                                   (car behavioral-result)))
+              (_ (when behavioral-result
+                   (with-current-buffer output-buffer
+                     (goto-char (point-max))
+                     (unless (bolp) (insert "\n"))
+                     (insert (cdr behavioral-result) "\n"))))
+              (test-pass (and submodule-pass
+                              (or (not (and test-script (file-exists-p test-script)))
+                                  (eq test-result 0))))
+              (verify-pass (and submodule-pass
+                                (or (not (and verify-script (file-exists-p verify-script)))
+                                    (eq verify-result 0))))
+              (checks-pass (and test-pass verify-pass behavioral-pass))
              (output (with-current-buffer output-buffer (buffer-string))))
         (when (and submodule-pass
                    (not checks-pass))
