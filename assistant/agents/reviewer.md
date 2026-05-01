@@ -77,6 +77,11 @@ Check for Elisp-specific patterns:
 - **`with-current-buffer`**: always guard against killed buffers where relevant
 - **Error boundaries**: functions exposed as gptel tools must handle errors gracefully (return strings, not signal)
 - **`save-excursion`**: use when moving point as a side effect inside a larger operation
+- **Defensive code removal**: FLAG as Critical if a diff removes defensive code without proving it's unreachable in ALL contexts. Examples:
+  - Removing fallback `or` branches (e.g., `(or (alist-get 'key data) (cdr (assoc "key" data)))` → just `(alist-get 'key data)`)
+  - Removing string-key lookups when JSON parsing is involved (keys may be symbols OR strings depending on parser config)
+  - Removing nil checks, type checks, or error handlers without test coverage proving they're unnecessary
+  - **Rule**: If you see defensive code being removed, demand evidence: test files, parser config, or explicit guarantees
 
 ## Scale 3: Architectural
 

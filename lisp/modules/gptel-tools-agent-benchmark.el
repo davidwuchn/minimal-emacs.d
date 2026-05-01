@@ -658,6 +658,25 @@ BLOCKS is the list of block names currently in scope."
            (gptel-auto-experiment--invalid-cl-return-target-in-forms
             (cdr form) blocks)))))))
 
+(defun gptel-auto-experiment--defensive-code-removal-p (content)
+  "Detect if CONTENT removes defensive code patterns.
+Returns non-nil if defensive code removal is detected.
+
+Checks for:
+- Removing string-key fallbacks in JSON parsing
+- Removing or guards without evidence they're unreachable
+- Removing nil checks or error handlers"
+  (let ((patterns
+         '(
+           ;; Pattern 1: Removing cdr/assoc fallbacks (string-key lookups)
+           "cdr\\s-*(assoc\\s-+\""
+           ;; Pattern 2: Removing or branches with alist-get + assoc
+           "alist-get\\s-+'\\w+\\s-*\\(cdr\\s-*(assoc"
+           )))
+    (cl-some (lambda (pattern)
+               (string-match-p pattern content))
+             patterns)))
+
 (defun gptel-auto-experiment--validate-code (file)
   "Validate code in FILE for syntax and dangerous patterns.
 Returns nil if valid, or error message string if invalid."
@@ -682,7 +701,11 @@ Returns nil if valid, or error message string if invalid."
                 (error (format "Syntax error in %s: %s" file err)))))
             (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
                    (nreverse forms))
-              (format "Dangerous pattern in %s: cl-return-from without cl-block" file)))))))
+              (format "Dangerous pattern in %s: cl-return-from without cl-block" file))
+            ;; Check for defensive code removal patterns
+            (when (and (stringp content)
+                       (gptel-auto-experiment--defensive-code-removal-p content))
+              (format "Defensive code removal detected in %s: removing or/assoc fallbacks without proof" file)))))))
 
 (defun gptel-auto-experiment--finish-grade (grade-id callback result
                                                      &optional cancel-timer)
