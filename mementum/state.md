@@ -6,7 +6,11 @@
 
 **Status:** `main` has inspection-thrash fixes staged; run `2026-05-01T180002Z-7ee1` still running with inspection-thrash errors being addressed.
 
-**Done (This Session):
+**Done (This Session):**
+- **Fixed inspection-thrash issue**: Added proactive warnings at 50% and 75% threshold, hardened retry prompt (max 2 read-only calls), updated self-evolution knowledge.
+  - Commit: `b314027a` — ⊘ fix: add proactive inspection-thrash warnings and harden retry prompt
+- **Fixed stale status bug**: Status command now detects when daemon is running but has no active workflow, clears stale `:running t` status.
+  - Commit: `792a67e7` — ⊘ fix: clear stale status when daemon has no active workflow
 - Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
 - Commit: `8624a5e9` — ⊘ fix: write staging-pending directly to TSV, bypass log-fn
 - **Verified fix working**: Run `2026-05-01T150007Z-b5d4` completed successfully with staging-pending row persisted in TSV.

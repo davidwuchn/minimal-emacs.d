@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-01 18:13
+updated: 2026-05-02 00:07
 ---
 
 # Self-Evolution Knowledge Base
@@ -14,7 +14,7 @@ updated: 2026-05-01 18:13
 ## Git History Facts
 
 - Active experiment branches: 100
-- Historical merges: 576
+- Historical merges: 579
 - Active branches merged: 4
 - Active branches abandoned: 96
 - Active merge rate: 4.0%
@@ -35,19 +35,19 @@ updated: 2026-05-01 18:13
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 21% verified (171/828 experiments)
-- **performance**: 36% verified (19/53 experiments)
-- **refactoring**: 34% verified (58/170 experiments)
-- **safety**: 40% verified (78/194 experiments)
+- **bug-fix**: 21% verified (173/833 experiments)
+- **performance**: 35% verified (19/54 experiments)
+- **refactoring**: 33% verified (58/174 experiments)
+- **safety**: 40% verified (79/197 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **safety** - 40% kept (194 experiments)
-2. **performance** - 36% kept (53 experiments)
-3. **refactoring** - 34% kept (170 experiments)
-4. **bug-fix** - 21% kept (828 experiments)
+1. **safety** - 40% kept (197 experiments)
+2. **performance** - 35% kept (54 experiments)
+3. **refactoring** - 33% kept (174 experiments)
+4. **bug-fix** - 21% kept (833 experiments)
 
 ## Critical Guidance for Maximum Success
 
@@ -84,15 +84,15 @@ Which change types work best for each target file:
 
 ### `gptel-agent-loop.el`
 
-- **refactoring**: 25% (8 experiments)
-- **safety**: 20% (10 experiments)
+- **safety**: 25% (12 experiments)
+- **refactoring**: 22% (9 experiments)
 - **bug-fix**: 8% (52 experiments)
 
 ### `gptel-ext-context-cache.el`
 
-- **refactoring**: 50% (4 experiments)
+- **refactoring**: 60% (5 experiments)
 - **safety**: 50% (4 experiments)
-- **performance**: 27% (11 experiments)
+- **performance**: 25% (12 experiments)
 
 ### `gptel-benchmark-core.el`
 
@@ -104,9 +104,9 @@ Which change types work best for each target file:
 
 ### `gptel-ext-retry.el`
 
-- **refactoring**: 60% (5 experiments)
+- **refactoring**: 50% (6 experiments)
 - **safety**: 33% (3 experiments)
-- **bug-fix**: 18% (39 experiments)
+- **bug-fix**: 18% (40 experiments)
 
 ### `gptel-auto-workflow-strategic.el`
 
