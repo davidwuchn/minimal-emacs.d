@@ -667,28 +667,39 @@ Checks for:
 - Removing or guards without evidence they're unreachable
 - Removing nil checks or error handlers
 
-This function should be called with the git diff content, not the file content.
-It looks for removed lines (starting with '-') that contain defensive patterns."
+Works with both git diff content (lines starting with '-') and
+regular file content."
   (when (stringp content)
-    (let ((removed-lines nil))
-      ;; Extract removed lines from diff
+    (let ((removed-lines nil)
+          (is-diff nil))
+      ;; Check if content looks like a diff
       (with-temp-buffer
         (insert content)
         (goto-char (point-min))
-        (while (re-search-forward "^-\\([^-].*\\)$" nil t)
-          (push (match-string 1) removed-lines)))
-      ;; Check if any removed line contains defensive code
-      (cl-some
-       (lambda (line)
-         (or
-          ;; Pattern 1: Removed cdr/assoc fallback
-          (string-match-p "cdr\\s-*(assoc\\s-+\"" line)
-          ;; Pattern 2: Removed string-key lookup
-          (string-match-p "assoc\\s-+\"\\(file\\|path\\|target\\)\"" line)
-          ;; Pattern 3: Removed or branch with fallback
-           (and (string-match-p "or\\s-*" line)
-                (string-match-p "alist-get\\|assoc" line))))
-        removed-lines))))
+        (setq is-diff (re-search-forward "^@@\\|^diff\\|^---" nil t))
+        (goto-char (point-min))
+        ;; Extract removed lines from diff
+        (when is-diff
+          (while (re-search-forward "^-\\([^-].*\\)$" nil t)
+            (push (match-string 1) removed-lines))))
+      (if is-diff
+          ;; Check removed lines in diff
+          (cl-some
+           (lambda (line)
+             (or
+              ;; Pattern 1: Removed cdr/assoc fallback
+              (string-match-p "cdr\\s-*(assoc\\s-+\"" line)
+              ;; Pattern 2: Removed string-key lookup
+              (string-match-p "assoc\\s-+\"\\(file\\|path\\|target\\)\"" line)
+              ;; Pattern 3: Removed or branch with fallback
+              (and (string-match-p "or\\s-*" line)
+                   (string-match-p "alist-get\\|assoc" line))))
+           removed-lines)
+        ;; Check current content for missing defensive patterns
+        ;; Look for alist-get without corresponding string-key fallback
+        (and (string-match-p "alist-get\\s-+'\\(file\\|path\\|target\\)" content)
+             (not (string-match-p "assoc\\s-+\"\\(file\\|path\\|target\\)\"" content))
+             (string-match-p "json\\|alist" content))))))
 
 (defun gptel-auto-experiment--diff-against-head (file)
   "Return git diff content for FILE against HEAD, or nil outside a Git worktree."
