@@ -43,27 +43,30 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          (start-time (float-time))
          (finished nil)
          (provisional-commit-hash nil)
-         (executor-prompt nil))
+         (executor-prompt nil)
+         (executor-callback nil)
+         (validation-retry-active nil))
     (if (not worktree)
         (funcall callback (list :target target :error "Failed to create worktree"))
-      (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
-        (gptel-auto-experiment-analyze
-         previous-results
-         (lambda (analysis)
-           (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
-             (let* ((patterns (when analysis (plist-get analysis :patterns)))
-                    (prompt (gptel-auto-experiment-build-prompt
-                             target experiment-id max-experiments analysis baseline previous-results)))
+      (gptel-auto-experiment--call-in-context
+       experiment-buffer experiment-worktree
+       (lambda ()
+         (gptel-auto-experiment-analyze
+          previous-results
+          (lambda (analysis)
+            (gptel-auto-experiment--call-in-context
+             experiment-buffer experiment-worktree
+             (lambda ()
+               (let* ((patterns (when analysis (plist-get analysis :patterns)))
+                      (prompt (gptel-auto-experiment-build-prompt
+                               target experiment-id max-experiments analysis baseline previous-results)))
                (setq executor-prompt prompt)
-                ;; Routing handled by gptel-auto-workflow--advice-task-override
-                (message "DEBUG-EXPERIMENT: about to call run-agent-tool-with-timeout")
-                (message "DEBUG-EXPERIMENT: timeout=%S agent-name=%S description=%S prompt-len=%d"
-                         experiment-timeout "executor" "Run experiment" (length executor-prompt))
-                (my/gptel--run-agent-tool-with-timeout
-                 experiment-timeout
-                 (lambda (agent-output)
-                  (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
-                    (if (gptel-auto-experiment--stale-run-p run-id)
+               (setq executor-callback
+                     (lambda (agent-output)
+                   (gptel-auto-experiment--call-in-context
+                    experiment-buffer experiment-worktree
+                    (lambda ()
+                      (if (gptel-auto-experiment--stale-run-p run-id)
                         (unless finished
                           (setq finished t)
                           (message "[auto-experiment] Ignoring stale executor callback for %s experiment %d; run %s is no longer active"
@@ -126,27 +129,28 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                      (message "[auto-exp] ✗ Pre-grade validation failed: %s"
                                               (my/gptel--sanitize-for-logging validation-error 200))
                                      ;; Trigger retry or fail immediately without grader
-                                     (let ((default-directory experiment-worktree)
-                                           (gptel-auto-experiment--grading-target target)
-                                           (gptel-auto-experiment--grading-worktree experiment-worktree))
-                                       (if (and (gptel-auto-experiment--teachable-validation-error-p
-                                                 target validation-error)
-                                                (not (bound-and-true-p gptel-auto-experiment--in-retry)))
-                                           (progn
-                                             (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
-                                             (gptel-auto-experiment--prepare-validation-retry-worktree
-                                              target provisional-commit-hash)
-                                             (setq provisional-commit-hash nil)
-                                             (let ((gptel-auto-experiment-active-grace
-                                                    gptel-auto-experiment-validation-retry-active-grace))
-                                               (my/gptel--run-agent-tool-with-timeout
-                                                gptel-auto-experiment-validation-retry-time-budget
-                                                (lambda (retry-output)
-                                                  ;; Treat retry output as new executor output
-                                                  (funcall executor-callback retry-output))
-                                                "executor"
-                                                "Validation retry"
-                                                executor-prompt)))
+                                      (let ((default-directory experiment-worktree)
+                                            (gptel-auto-experiment--grading-target target)
+                                            (gptel-auto-experiment--grading-worktree experiment-worktree))
+                                        (if (and (gptel-auto-experiment--teachable-validation-error-p
+                                                  target validation-error)
+                                                 (not validation-retry-active))
+                                            (progn
+                                              (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
+                                              (gptel-auto-experiment--prepare-validation-retry-worktree
+                                               target provisional-commit-hash)
+                                              (setq provisional-commit-hash nil)
+                                              (setq validation-retry-active t)
+                                              (let ((gptel-auto-experiment-active-grace
+                                                     gptel-auto-experiment-validation-retry-active-grace))
+                                                (my/gptel--run-agent-tool-with-timeout
+                                                 gptel-auto-experiment-validation-retry-time-budget
+                                                 (lambda (retry-output)
+                                                   ;; Treat retry output as new executor output
+                                                   (funcall executor-callback retry-output))
+                                                 "executor"
+                                                 "Validation retry"
+                                                 executor-prompt)))
                                          ;; Non-teachable or already retrying: fail fast
                                          (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
                                                              effective-agent-output))
@@ -173,9 +177,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                        (gptel-auto-experiment--grading-worktree experiment-worktree))
                                    (gptel-auto-experiment--grade-with-retry
                                effective-agent-output
-                               (lambda (grade)
-                                 (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
-                                   (if (gptel-auto-experiment--stale-run-p run-id)
+                                (lambda (grade)
+                                  (gptel-auto-experiment--call-in-context
+                                   experiment-buffer experiment-worktree
+                                   (lambda ()
+                                     (if (gptel-auto-experiment--stale-run-p run-id)
                                        (unless finished
                                          (setq finished t)
                                          (message "[auto-experiment] Ignoring stale grader callback for %s experiment %d; run %s is no longer active"
@@ -629,12 +635,19 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                    (funcall log-fn
                                                             run-id exp-result)
                                                    (funcall callback exp-result))))))
-                                         )))))))))))))
+                                          ))))))))))))))))
+                                   workflow-root))
+               ;; Routing handled by gptel-auto-workflow--advice-task-override
+               (my/gptel--run-agent-tool-with-timeout
+                experiment-timeout
+                executor-callback
                 "executor"
                 (format "Experiment %d: optimize %s" experiment-id target)
                 executor-prompt
-                nil "false" nil))))))))
-  )))
+                nil "false" nil))))))
+             workflow-root)))
+       workflow-root)
+  )
 
 
 
