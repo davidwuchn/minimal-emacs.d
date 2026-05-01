@@ -91,7 +91,7 @@ Each entry: (NAME :file FILE :test FUNCTION).")
     (let* ((json-obj '((file . "gptel-auto-workflow-strategic.el")))
            (targets '())
            (result (gptel-auto-workflow--validate-and-add-target json-obj test-root targets)))
-      (when (or (not (listp result)) (null result))
+      (when (or (not (listp result)) (not (member "gptel-auto-workflow-strategic.el" result)))
         (push "JSON object input should extract and validate file" errors)
         (setq passed nil)))
     
