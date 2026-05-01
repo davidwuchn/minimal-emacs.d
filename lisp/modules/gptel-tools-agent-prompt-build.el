@@ -219,12 +219,14 @@ Example HYPOTHESES:
                                     "staging-pending"))
     pending-result))
 
-(defun gptel-auto-experiment--maybe-log-staging-pending (run-id experiment log-fn)
-  "Log EXPERIMENT as staging-pending for RUN-ID when staging is active."
-  (when (and gptel-auto-workflow-use-staging
-             (functionp log-fn))
-    (funcall log-fn run-id
-             (gptel-auto-experiment--staging-pending-result experiment))))
+(defun gptel-auto-experiment--maybe-log-staging-pending (run-id experiment _log-fn)
+  "Log EXPERIMENT as staging-pending for RUN-ID when staging is active.
+Writes directly to TSV so the pending row survives regardless of the
+intermediate logging strategy used by the caller."
+  (when gptel-auto-workflow-use-staging
+    (gptel-auto-experiment-log-tsv
+     run-id
+     (gptel-auto-experiment--staging-pending-result experiment))))
 
 (defun gptel-auto-experiment--drop-replaceable-tsv-rows (experiment-id target)
   "Drop stale pending rows for EXPERIMENT-ID/TARGET in current TSV buffer.
