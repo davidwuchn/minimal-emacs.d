@@ -452,7 +452,7 @@ failover advances past transient timeout or provider-pressure failures.")
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-flash")
+    ("DeepSeek" . "deepseek-v4-pro")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
@@ -476,7 +476,7 @@ DashScope and others when rate-limited or unavailable."
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-flash")
+    ("DeepSeek" . "deepseek-v4-pro")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after provider rate limits.
 
@@ -507,7 +507,7 @@ run can advance through this list instead of repeatedly hammering the same provi
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-flash")
+    ("DeepSeek" . "deepseek-v4-pro")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Current runtime default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
 
@@ -526,7 +526,7 @@ run can advance through this list instead of repeatedly hammering the same provi
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-flash")
+    ("DeepSeek" . "deepseek-v4-pro")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Current runtime default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
 
