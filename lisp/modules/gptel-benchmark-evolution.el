@@ -229,6 +229,20 @@ Implements: output → input transformation."
 
 ;;; Capability Emergence
 
+(defun gptel-benchmark-evolution--maybe-emerge (cap-name threshold-mult description capabilities-set emergences-set history-set cycle)
+  "Check if CAP-NAME capability should emerge and update state.
+THRESHOLD-MULT is multiplier for cycle threshold.
+DESCRIPTION is human-readable label.
+CAPABILITIES-SET, EMERGENCES-SET, HISTORY-SET are mutable lists.
+Returns (capabilities . emergences) dotted pair."
+  (when (and (>= cycle (* threshold-mult gptel-benchmark-evolution-cycle-threshold))
+             (not (memq cap-name capabilities-set)))
+    (push cap-name capabilities-set)
+    (cl-incf emergences-set)
+    (push (cons cycle cap-name) history-set)
+    (message "[evolution] Capability emerged: %s" description))
+  (cons capabilities-set emergences-set))
+
 (defun gptel-benchmark-evolution-check-capabilities ()
   "Check if new capabilities have emerged.
 Engine + Query + Graph + Introspection + History + Knowledge + Memory = SYSTEM"
@@ -238,39 +252,24 @@ Engine + Query + Graph + Introspection + History + Knowledge + Memory = SYSTEM"
         (emergence-history (plist-get gptel-benchmark-evolution-state :emergence-history)))
     (when (and (>= cycle gptel-benchmark-evolution-cycle-threshold)
                (< (length capabilities) 7))
-      (when (and (>= cycle (* 1 gptel-benchmark-evolution-cycle-threshold))
-                 (not (memq 'interface capabilities)))
-        (push 'interface capabilities)
-        (cl-incf emergences)
-        (push (cons cycle 'interface) emergence-history)
-        (message "[evolution] Capability emerged: Interface (Engine + Query)"))
-      (when (and (>= cycle (* 2 gptel-benchmark-evolution-cycle-threshold))
-                 (not (memq 'capability capabilities)))
-        (push 'capability capabilities)
-        (cl-incf emergences)
-        (push (cons cycle 'capability) emergence-history)
-        (message "[evolution] Capability emerged: Capability (Engine + Graph)"))
-      (when (and (>= cycle (* 3 gptel-benchmark-evolution-cycle-threshold))
-                 (not (memq 'self-awareness capabilities)))
-        (push 'self-awareness capabilities)
-        (cl-incf emergences)
-        (push (cons cycle 'self-awareness) emergence-history)
-        (message "[evolution] Capability emerged: Self-awareness (Engine + Introspection)"))
-      (when (and (>= cycle (* 4 gptel-benchmark-evolution-cycle-threshold))
-                 (not (memq 'extension capabilities)))
-        (push 'extension capabilities)
-        (cl-incf emergences)
-        (push (cons cycle 'extension) emergence-history)
-        (message "[evolution] Capability emerged: Extension (Graph + API)"))
-      (when (and (>= cycle (* 5 gptel-benchmark-evolution-cycle-threshold))
-                 (not (memq 'memory capabilities)))
-        (push 'memory capabilities)
-        (cl-incf emergences)
-        (push (cons cycle 'memory) emergence-history)
-        (message "[evolution] Capability emerged: Memory (Query + History + Knowledge)")))
-    (setf (plist-get gptel-benchmark-evolution-state :capabilities) capabilities)
-    (setf (plist-get gptel-benchmark-evolution-state :emergences) emergences)
-    (setf (plist-get gptel-benchmark-evolution-state :emergence-history) emergence-history)))
+      (let* ((result (gptel-benchmark-evolution--maybe-emerge 'interface 1 "Interface (Engine + Query)" capabilities emergences emergence-history cycle))
+             (capabilities (car result))
+             (emergences (cdr result))
+             (result (gptel-benchmark-evolution--maybe-emerge 'capability 2 "Capability (Engine + Graph)" capabilities emergences emergence-history cycle))
+             (capabilities (car result))
+             (emergences (cdr result))
+             (result (gptel-benchmark-evolution--maybe-emerge 'self-awareness 3 "Self-awareness (Engine + Introspection)" capabilities emergences emergence-history cycle))
+             (capabilities (car result))
+             (emergences (cdr result))
+             (result (gptel-benchmark-evolution--maybe-emerge 'extension 4 "Extension (Graph + API)" capabilities emergences emergence-history cycle))
+             (capabilities (car result))
+             (emergences (cdr result))
+             (result (gptel-benchmark-evolution--maybe-emerge 'memory 5 "Memory (Query + History + Knowledge)" capabilities emergences emergence-history cycle))
+             (capabilities (car result))
+             (emergences (cdr result)))
+        (setf (plist-get gptel-benchmark-evolution-state :capabilities) capabilities)
+        (setf (plist-get gptel-benchmark-evolution-state :emergences) emergences)
+        (setf (plist-get gptel-benchmark-evolution-state :emergence-history) emergence-history)))))
 
 (defun gptel-benchmark-evolution-emergence-rate ()
   "Calculate capability emergence rate.
