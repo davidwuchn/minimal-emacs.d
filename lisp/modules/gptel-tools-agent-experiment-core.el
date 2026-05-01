@@ -44,7 +44,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          (finished nil)
          (provisional-commit-hash nil)
          (executor-prompt nil)
-         (executor-callback nil))
+         (executor-callback nil)
+         (validation-retry-active nil))
     (if (not worktree)
         (funcall callback (list :target target :error "Failed to create worktree"))
       (gptel-auto-experiment--call-in-context
@@ -128,27 +129,28 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                      (message "[auto-exp] ✗ Pre-grade validation failed: %s"
                                               (my/gptel--sanitize-for-logging validation-error 200))
                                      ;; Trigger retry or fail immediately without grader
-                                     (let ((default-directory experiment-worktree)
-                                           (gptel-auto-experiment--grading-target target)
-                                           (gptel-auto-experiment--grading-worktree experiment-worktree))
-                                       (if (and (gptel-auto-experiment--teachable-validation-error-p
-                                                 target validation-error)
-                                                (not (bound-and-true-p gptel-auto-experiment--in-retry)))
-                                           (progn
-                                             (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
-                                             (gptel-auto-experiment--prepare-validation-retry-worktree
-                                              target provisional-commit-hash)
-                                             (setq provisional-commit-hash nil)
-                                             (let ((gptel-auto-experiment-active-grace
-                                                    gptel-auto-experiment-validation-retry-active-grace))
-                                               (my/gptel--run-agent-tool-with-timeout
-                                                gptel-auto-experiment-validation-retry-time-budget
-                                                (lambda (retry-output)
-                                                  ;; Treat retry output as new executor output
-                                                  (funcall executor-callback retry-output))
-                                                "executor"
-                                                "Validation retry"
-                                                executor-prompt)))
+                                      (let ((default-directory experiment-worktree)
+                                            (gptel-auto-experiment--grading-target target)
+                                            (gptel-auto-experiment--grading-worktree experiment-worktree))
+                                        (if (and (gptel-auto-experiment--teachable-validation-error-p
+                                                  target validation-error)
+                                                 (not validation-retry-active))
+                                            (progn
+                                              (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
+                                              (gptel-auto-experiment--prepare-validation-retry-worktree
+                                               target provisional-commit-hash)
+                                              (setq provisional-commit-hash nil)
+                                              (setq validation-retry-active t)
+                                              (let ((gptel-auto-experiment-active-grace
+                                                     gptel-auto-experiment-validation-retry-active-grace))
+                                                (my/gptel--run-agent-tool-with-timeout
+                                                 gptel-auto-experiment-validation-retry-time-budget
+                                                 (lambda (retry-output)
+                                                   ;; Treat retry output as new executor output
+                                                   (funcall executor-callback retry-output))
+                                                 "executor"
+                                                 "Validation retry"
+                                                 executor-prompt)))
                                          ;; Non-teachable or already retrying: fail fast
                                          (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
                                                              effective-agent-output))
