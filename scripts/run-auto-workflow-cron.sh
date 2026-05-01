@@ -1233,14 +1233,57 @@ if status_indicates_running; then
     exit 0
 fi
 
-if run_emacsclient_eval "$EVAL_ELISP" 10; then
-    exit 0
+# Run workflow with crash recovery
+MAX_RESTARTS=3
+RESTART_COUNT=0
+WORKFLOW_COMPLETED=0
+
+while [ "$WORKFLOW_COMPLETED" -eq 0 ] && [ "$RESTART_COUNT" -lt "$MAX_RESTARTS" ]; do
+    if run_emacsclient_eval "$EVAL_ELISP" 10; then
+        WORKFLOW_COMPLETED=1
+        exit 0
+    fi
+    
+    rc=$?
+    if [ "$rc" -eq 124 ] && status_indicates_running; then
+        echo "already-running"
+        exit 0
+    fi
+    
+    # Check if daemon crashed
+    if ! check_worker_daemon; then
+        RESTART_COUNT=$((RESTART_COUNT + 1))
+        echo "[auto-workflow] Daemon crashed during workflow (restart $RESTART_COUNT/$MAX_RESTARTS)" >&2
+        
+        # Clear stale state
+        clear_stale_running_status
+        
+        # Kill any remaining stale processes
+        discard_stale_worker_daemon
+        sleep 2
+        
+        # Restart daemon
+        ensure_worker_daemon
+        sleep 5
+        
+        # Re-check
+        if ! check_worker_daemon; then
+            echo "[auto-workflow] Failed to restart daemon after crash" >&2
+            exit 1
+        fi
+        
+        echo "[auto-workflow] Daemon restarted, resuming workflow..." >&2
+        # Continue loop to retry
+    else
+        # Daemon still alive but workflow failed for another reason
+        echo "[auto-workflow] Workflow failed with rc=$rc (daemon still alive)" >&2
+        exit "$rc"
+    fi
+done
+
+if [ "$WORKFLOW_COMPLETED" -eq 0 ]; then
+    echo "[auto-workflow] Workflow failed after $MAX_RESTARTS restart attempts" >&2
+    exit 1
 fi
 
-rc=$?
-if [ "$rc" -eq 124 ] && status_indicates_running; then
-    echo "already-running"
-    exit 0
-fi
-
-exit "$rc"
+exit 0
