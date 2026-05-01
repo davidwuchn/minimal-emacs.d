@@ -1,16 +1,20 @@
 # Mementum State
 
-> Last session: 2026-05-01 14:35
+> Last session: 2026-05-01 15:15
 
-## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix
+## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Verified Cache Optimization
 
-**Status:** Staging-pending logging fixed, daemon restarted with new code, all unit tests pass.
+**Status:** Workflow fully operational. Staging-pending fix verified with successful experiment run. Cache optimization merged to main.
 
 **Done (This Session):**
 - Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
 - Commit: `8624a5e9` — ⊘ fix: write staging-pending directly to TSV, bypass log-fn
-- Synced `main` and `staging` to `8624a5e9`.
-- Restarted daemon with new code (PID 3779209).
+- **Verified fix working**: Run `2026-05-01T150007Z-b5d4` completed successfully with staging-pending row persisted in TSV.
+- **Cache optimization merged**: `825514fe` — Merge optimize/cache-neopi5-r150007zb5d4-exp1 for verification
+  - File: `lisp/modules/gptel-ext-context-cache.el` (+25/-14 lines)
+  - Optimization: Added memoization cache for `my/gptel--alist-partial-match` (O(n) → O(1))
+  - Grade: 9/9, Tests: PASS, Staging review: PASSED
+- Synced `main` and `staging` to `256afdf0` (includes remote fix `9738c05a` for gptel-request subagent operations).
 - Cleaned 15 zombie `aw-complete-*` processes.
 - Removed 69 stale experiment directories (>14 days old).
 - All unit tests pass (1733 tests, 0 unexpected).
@@ -32,11 +36,11 @@
 - `/tmp/gptel-callback-error.log` absent.
 
 **Important State:**
-- `./scripts/run-auto-workflow-cron.sh status` reports idle for run `2026-05-01T123106Z-aad1` (0/4 kept).
-- Local staging worktree `var/tmp/experiments/staging-verify` is clean and synced with `origin/staging` at `8624a5e9`.
-- `main` and `origin/main` are synced at `8624a5e9` after pushing the staging-pending fix.
-- Daemon running (PID 3779209) with latest code.
-- Next scheduled run: 07:00 UTC (~2.5 hours).
+- `./scripts/run-auto-workflow-cron.sh status` reports idle for run `2026-05-01T150007Z-b5d4` (1/1 kept → merged to staging/main).
+- Last successful experiment: `gptel-ext-context-cache.el` — memoization cache (O(n) → O(1)), score 9/9.
+- Local staging worktree `var/tmp/experiments/staging-verify` is clean and synced with `origin/staging` at `256afdf0`.
+- `main` and `origin/main` are synced at `256afdf0` (includes cache optimization + remote gptel-request fix).
+- Next scheduled cron run: 11:00 UTC (~2.75 hours).
 
 **Tooling Rule:**
 - Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.
