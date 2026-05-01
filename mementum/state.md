@@ -1,10 +1,10 @@
 # Mementum State
 
-> Last session: 2026-05-01 16:27
+> Last session: 2026-05-01 17:15
 
 ## Current Session: 2026-05-01 Auto-Workflow Repair + Staging-Pending Fix + Verified Cache Optimization
 
-**Status:** Prompt `%s` blocker fixed; remote staging/cache updates merged; retry run active.
+**Status:** Synced to `origin/main`; messages wrapper fixed; incoming defensive-code validator regressions fixed locally; retry run had 1 kept result when last checked.
 
 **Done (This Session):**
 - Fixed staging-pending results not appearing in `results.tsv`: `maybe-log-staging-pending` now writes directly to TSV instead of being intercepted by `run-with-retry`'s `attempt-logs` batching.
@@ -31,6 +31,11 @@
 - Fixed executor prompt syntax-check instruction so it emits a concrete `emacs -Q --batch --eval ... find-file PATH` command instead of raw `find-file "%s"`.
 - Added regression coverage that rejects raw `find-file "%s"` in experiment prompts and requires the concrete worktree target path.
 - Changed `lisp/modules/gptel-tools-agent.el` to source-load split modules on `load-file`, so long-lived workflow daemons hot-reload patched module definitions instead of keeping stale `require`d code.
+- Diagnosed `*ERROR*: Unknown message: ...` as `emacsclient --eval` protocol noise from returning large `*Messages*` strings directly; patched `scripts/run-auto-workflow-cron.sh messages` to refresh the daemon messages file first and then `cat` it.
+- Synced `main` to `origin/main` at `f7470e55`.
+- Fixed incoming defensive-code validator regression: invalid regexp removed, detection now inspects removed `git diff` lines instead of final file content.
+- Fixed strategic JSON target extraction for string-key alists by accepting string keys in `gptel-auto-workflow--json-object-p`.
+- Made `gptel-auto-workflow-behavioral-tests.el` self-contained with `cl-lib` and a declaration for the strategic extractor.
 
 **Verification:**
 - `emacs -Q --batch --eval '(with-temp-buffer (insert-file-contents "lisp/modules/gptel-tools-agent-experiment-core.el") (emacs-lisp-mode) (check-parens))'` passed.
@@ -39,13 +44,19 @@
 - `/tmp/gptel-callback-error.log` absent.
 - Prompt-builder checks passed: `check-parens`, byte-compile with existing split-module warnings, emitted sexp-check command, and ERT selector `regression/auto-experiment/build-prompt-.*` (3/3).
 - Live workflow daemon prompt probe returned `(nil 7419)`: no raw `find-file "%s"`, concrete `emacs -Q --batch --eval` present.
+- `bash -n scripts/run-auto-workflow-cron.sh` passed.
+- ERT selector `regression/auto-workflow/cron-wrapper-messages-refreshes-live-before-cache` passed 1/1.
+- Validator repros now pass: `gptel-tools-agent-benchmark.el` and `gptel-auto-workflow-strategic.el` both return `nil` from `gptel-auto-experiment--validate-code`.
+- Behavioral smoke test `gptel-auto-workflow--run-behavioral-tests` for `gptel-auto-workflow-strategic.el` passed.
+- ERT selectors passed: `regression/auto-workflow/validate-code-` (8/8) and defensive/string-key selector (3/3).
+- `check-parens` passed for changed Elisp files: benchmark, strategic, behavioral tests.
 
 **Important State:**
 - Previous successful experiment: `2026-05-01T150007Z-b5d4` (1/1 kept → merged to staging/main), `gptel-ext-context-cache.el` memoization cache (O(n) → O(1)), score 9/9.
-- `./scripts/run-auto-workflow-cron.sh status` reports active run `2026-05-01T162409Z-4de2` with 3 targets, phase `running`.
-- Current live messages show the retry passed the old `%s` blocker: executor started for `lisp/modules/gptel-ext-retry.el`, wrote the target file, and no new `%s` callback error appeared after `r162409z4de2`.
-- Remote `origin/main` advanced to `5f97e0e4` with cache optimization + remote gptel-request fix; local merge in progress to integrate it before pushing prompt fix.
-- Unrelated local work remains stashed: `mementum/knowledge/self-evolution.md` timestamp update.
+- `./scripts/run-auto-workflow-cron.sh status` reports active run `2026-05-01T162409Z-4de2` with 3 targets, phase `running`, kept=1.
+- Current workflow passed the old `%s` blocker. Retry target produced 2 normal discards; context target exp1 was kept and pushed to staging after refreshing an advanced remote; context exp2 discarded; context exp3 active.
+- Local `main` is synced with `origin/main` (`f7470e55`) with local uncommitted fixes on top.
+- Uncommitted changes: validator/strategic/behavioral fixes, cron messages wrapper fix, regression tests, `mementum/state.md`, and `mementum/knowledge/self-evolution.md` timestamp update.
 
 **Tooling Rule:**
 - Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.

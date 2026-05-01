@@ -1153,10 +1153,6 @@ if [ "$ACTION" = "messages" ]; then
     if active_snapshot_has_empty_messages_tail; then
         clear_stale_running_status
     fi
-    if status_can_use_persisted_active_snapshot && [ -r "$MESSAGES_FILE" ]; then
-        print_messages_snapshot active "$PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE"
-        exit 0
-    fi
     if ! check_worker_daemon; then
         rc=$?
         if [ -r "$MESSAGES_FILE" ]; then
@@ -1174,6 +1170,10 @@ if [ "$ACTION" = "messages" ]; then
         exit 0
     fi
     rc=$?
+    if status_can_use_persisted_active_snapshot && [ -r "$MESSAGES_FILE" ]; then
+        print_messages_snapshot active "$PERSISTED_SNAPSHOT_DAEMON_UNREACHABLE"
+        exit 0
+    fi
     if [ -r "$MESSAGES_FILE" ]; then
         print_messages_snapshot stale yes
         exit 0

@@ -10,6 +10,9 @@
 (require 'cl-lib)
 (require 'json)
 
+(declare-function gptel-auto-workflow--json-target-file
+                  "gptel-auto-workflow-strategic")
+
 (defvar gptel-auto-workflow--behavioral-test-suite
   '(("json-target-extraction"
      :file "lisp/modules/gptel-auto-workflow-strategic.el"
