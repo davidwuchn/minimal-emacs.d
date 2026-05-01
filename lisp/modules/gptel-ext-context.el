@@ -232,18 +232,16 @@ Returns (tokens window threshold-fraction percentage-threshold)."
 Only returns t when tokens >= threshold% of context window.
 Uses backend-specific thresholds (lower for DashScope)."
   (let* ((chars (buffer-size))
+         (buffer-ready (and my/gptel-auto-compact-enabled
+                            (bound-and-true-p gptel-mode)
+                            (>= chars my/gptel-auto-compact-min-chars)))
          (threshold-values (my/gptel--threshold-values))
          (tokens (nth 0 threshold-values))
          (window (nth 1 threshold-values))
          (threshold-fraction (nth 2 threshold-values))
          (threshold (nth 3 threshold-values))
-         (needed (and my/gptel-auto-compact-enabled
-                      (bound-and-true-p gptel-mode)
-                      (>= chars my/gptel-auto-compact-min-chars)
-                      (>= tokens threshold))))
-    (when (and my/gptel-auto-compact-enabled
-               (bound-and-true-p gptel-mode)
-               (>= chars my/gptel-auto-compact-min-chars))
+         (needed (and buffer-ready (>= tokens threshold))))
+    (when buffer-ready
       (message "[compact] Check: %d tokens vs %d threshold (window: %d, %.0f%%, backend: %s) -> %s"
                (round tokens)
                (round threshold) window
@@ -423,8 +421,6 @@ Hook for `gptel-post-response-functions'."
   (when my/gptel-auto-delegate-enabled
     (let* ((threshold-values (my/gptel--threshold-values))
            (tokens (nth 0 threshold-values))
-           (window (nth 1 threshold-values))
-           (threshold-fraction (nth 2 threshold-values))
            (percentage-threshold (nth 3 threshold-values))
            (absolute-threshold my/gptel-auto-delegate-threshold-absolute))
       (or (and absolute-threshold (>= tokens absolute-threshold))
@@ -432,8 +428,11 @@ Hook for `gptel-post-response-functions'."
 
 (defun my/gptel--buffer-lines (buffer-string)
   "Return lines from BUFFER-STRING as a list.
-Helper function to avoid duplicate split-string calls."
-  (and (stringp buffer-string) (split-string buffer-string "\n")))
+Helper function to avoid duplicate split-string calls.
+Returns empty list for nil or non-string input to prevent errors."
+  (if (and (stringp buffer-string) (not (string-empty-p buffer-string)))
+      (split-string buffer-string "\n")
+    nil))
 
 (defun my/gptel--extract-last-task-from-lines (lines)
   "Extract the most recent task/request from LINES.
