@@ -11,9 +11,11 @@
 ;;; Code:
 
 (require 'ert)
+(require 'cl-lib)
 
 (declare-function my/gptel--threshold-values "gptel-ext-context")
 (declare-function my/gptel--maybe-auto-delegate-advice "gptel-ext-context")
+(declare-function my/gptel--do-compact "gptel-ext-context")
 
 ;;; Mock variables
 
@@ -261,6 +263,34 @@
     (with-temp-buffer
       (insert (make-string 100000 ?x))
       (should-not (test-auto-compact-needed-p)))))
+
+(ert-deftest context/auto-compact/stale-callback-clears-running-flag ()
+  "A stale compaction callback must not leave the buffer permanently running."
+  (load-file "lisp/modules/gptel-ext-context.el")
+  (let (captured-callback)
+    (with-temp-buffer
+      (let ((gptel-directives '((compact . "Summarize this buffer")))
+            (my/gptel-auto-compact-confirm nil)
+            (my/gptel-auto-compact-preview nil)
+            (my/gptel-auto-compact-running nil)
+            (my/gptel-auto-compact-request-id nil))
+        (insert (make-string 5000 ?x))
+        (cl-letf (((symbol-function 'my/gptel--current-tokens)
+                   (lambda () 2000))
+                  ((symbol-function 'my/gptel--context-window)
+                   (lambda () 128000))
+                  ((symbol-function 'gptel-request)
+                   (lambda (&rest args)
+                     (setq captured-callback (plist-get (cdr args) :callback))
+                     t))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (should (my/gptel--do-compact))
+          (should my/gptel-auto-compact-running)
+          (should captured-callback)
+          (setq my/gptel-auto-compact-request-id "newer-request")
+          (funcall captured-callback "summary" nil)
+          (should-not my/gptel-auto-compact-running))))))
 
 (provide 'test-gptel-ext-context)
 ;;; test-gptel-ext-context.el ends here
