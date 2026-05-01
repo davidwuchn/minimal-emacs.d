@@ -1,6 +1,38 @@
 # Mementum State
 
-> Last session: 2026-04-30 16:15
+> Last session: 2026-05-01 10:05
+
+## Current Session: 2026-05-01 Auto-Workflow Repair
+
+**Status:** Source repaired and focused regressions passing.
+
+**Done:**
+- Restored `lisp/modules/gptel-tools-agent-experiment-core.el` to syntax-valid state after the callback/context conversion left an extra final close paren.
+- Kept the executor callback lexical so validation retry reuses the same executor callback path.
+- Removed regenerated `lisp/modules/gptel-tools-agent-experiment-core.elc`; keep it absent while testing source changes.
+- Added focused ERT fixture support so auto-experiment tests create valid target files before pre-grade validation.
+- Verified `post-early-init.el` already sets the `%s` macro-capture fix for `with-demoted-errors`.
+- Verified wrapper already starts workflow daemons with `MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1` and `MINIMAL_EMACS_WORKFLOW_DAEMON=1`.
+- Re-verified local staging worktree with `./scripts/verify-nucleus.sh`: all Nucleus validations passed.
+
+**Verification:**
+- `emacs -Q --batch --eval '(with-temp-buffer (insert-file-contents "lisp/modules/gptel-tools-agent-experiment-core.el") (emacs-lisp-mode) (check-parens))'` passed.
+- `emacs -Q --batch -L lisp/modules -f batch-byte-compile lisp/modules/gptel-tools-agent-experiment-core.el` completed with only existing split-module warnings.
+- Focused ERT selector `regression/auto-experiment/\(run-forwards-executor-runagent-args\|retry-forwards-focused-executor-runagent-args\|waits-for-staging-flow-before-callback\)` passed 3/3.
+- `/tmp/gptel-callback-error.log` absent.
+
+**Important State:**
+- `./scripts/run-auto-workflow-cron.sh status` reports idle for run `2026-05-01T091051Z-ace2`.
+- Local staging worktree `var/tmp/experiments/staging-verify` is clean and `staging` is ahead of `origin/staging` by 6 commits, ending at `48888050 Merge optimize/loop-neopi5-r091051zace2-exp1 for verification`.
+- `origin/main` advanced to `bb0070ff` during fetch; local main still showed `31133dc8` in staging log context.
+
+**Tooling Rule:**
+- Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.
+- Use `mise exec cargo:ripgrep -- rg ...` for searches.
+
+**New Memories:**
+- `mementum/memories/mise-ripgrep-tooling.md`
+- `mementum/memories/auto-experiment-validation-fixtures.md`
 
 ## Total Improvements: 242+ Real Code Fixes (33 new today)
 

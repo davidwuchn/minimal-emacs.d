@@ -66,6 +66,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
      (shell-quote-argument log-file)
      (shell-quote-argument counter-file))))
 
+(defun test-auto-workflow--write-valid-elisp-target (worktree target)
+  "Create a minimal valid Elisp TARGET inside WORKTREE."
+  (let ((file (expand-file-name target worktree)))
+    (make-directory (file-name-directory file) t)
+    (with-temp-file file
+      (insert ";;; fixture.el --- test fixture -*- lexical-binding: t; -*-\n"))))
+
 (ert-deftest regression/auto-workflow/run-tests-uses-bsd-safe-mktemp-templates ()
   "run-tests.sh should use BSD-safe mktemp templates without suffixes after Xs."
   (let* ((repo-root test-auto-workflow--repo-root)
@@ -2590,6 +2597,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (unwind-protect
         (progn
           (make-directory worktree-dir t)
+          (test-auto-workflow--write-valid-elisp-target
+           worktree-dir "lisp/modules/gptel-tools-agent.el")
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
@@ -6273,8 +6282,11 @@ failure."
         (gptel-auto-experiment-auto-push t)
         (gptel-auto-workflow-use-staging t))
     (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+        (progn
+          (test-auto-workflow--write-valid-elisp-target
+           temp-dir "lisp/modules/gptel-agent-loop.el")
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                     (lambda (_target _experiment-id) temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -6328,17 +6340,17 @@ failure."
                       t))
                   ((symbol-function 'message)
                     (lambda (&rest _args) nil)))
-          (gptel-auto-experiment-run
-           "lisp/modules/gptel-agent-loop.el" 1 5 0.4 0.5 nil
-           (lambda (_exp-result)
-             (cl-incf callback-count)))
-          (should (= staging-count 1))
-          (should (functionp staging-callback))
-          (should (= track-count 1))
-          (should (= push-count 1))
-           (should (= callback-count 0))
-           (funcall staging-callback t)
-            (should (= callback-count 1)))
+            (gptel-auto-experiment-run
+             "lisp/modules/gptel-agent-loop.el" 1 5 0.4 0.5 nil
+             (lambda (_exp-result)
+               (cl-incf callback-count)))
+            (should (= staging-count 1))
+            (should (functionp staging-callback))
+            (should (= track-count 1))
+            (should (= push-count 1))
+            (should (= callback-count 0))
+            (funcall staging-callback t)
+            (should (= callback-count 1))))
         (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-experiment/staging-callback-failure-logs-discarded-result ()
