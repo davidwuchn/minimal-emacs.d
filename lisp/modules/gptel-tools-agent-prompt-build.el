@@ -318,22 +318,23 @@ row for the same experiment and target."
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n"
-                        experiment-id
-                        target
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
-                        (gptel-auto-workflow--plist-get experiment :score-before 0)
-                        (gptel-auto-workflow--plist-get experiment :score-after 0)
-                        (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
-                        (- (gptel-auto-workflow--plist-get experiment :score-after 0)
-                           (gptel-auto-workflow--plist-get experiment :score-before 0))
-                        decision
-                        (gptel-auto-workflow--plist-get experiment :duration 0)
-                        (gptel-auto-workflow--plist-get experiment :grader-quality "?")
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
-                        truncated-output)))
+       (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n"
+                         experiment-id
+                         target
+                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
+                         (gptel-auto-workflow--plist-get experiment :score-before 0)
+                         (gptel-auto-workflow--plist-get experiment :score-after 0)
+                         (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
+                         (- (gptel-auto-workflow--plist-get experiment :score-after 0)
+                            (gptel-auto-workflow--plist-get experiment :score-before 0))
+                         decision
+                         (gptel-auto-workflow--plist-get experiment :duration 0)
+                         (gptel-auto-workflow--plist-get experiment :grader-quality "?")
+                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
+                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
+                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
+                         truncated-output
+                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown")))))
       (write-region (point-min) (point-max) file))
     ;; Trigger self-evolution after experiment logging
     (when (and (fboundp 'gptel-auto-workflow--experiment-complete-hook)

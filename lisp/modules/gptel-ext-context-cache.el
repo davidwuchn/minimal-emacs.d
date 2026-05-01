@@ -361,17 +361,24 @@ Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scan
                     ((symbolp model) (symbol-name model))
                     (t nil))))
     (when model-str
-      (catch 'found
-        (dolist (var (my/gptel--gptel-model-tables))
-          (let ((table (symbol-value var)))
-            (when (listp table)
-              (let ((entry (assoc-string model-str table t)))
-                (when (and (consp entry) (plist-member (cdr entry) :context-window))
-                  (let ((cw (my/gptel--normalize-context-window
-                              (plist-get (cdr entry) :context-window))))
-                    (when (and (integerp cw) (> cw 0))
-                      (throw 'found cw))))))))
-        nil))))
+      (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache)))
+        (if (eq cached my/gptel--gptel-tables-miss-sentinel)
+            nil
+          (or cached
+              (let ((result (catch 'found
+                              (dolist (var (my/gptel--gptel-model-tables))
+                                (let ((table (symbol-value var)))
+                                  (when (listp table)
+                                    (let ((entry (assoc-string model-str table t)))
+                                      (when (and (consp entry) (plist-member (cdr entry) :context-window))
+                                        (let ((cw (my/gptel--normalize-context-window
+                                                    (plist-get (cdr entry) :context-window))))
+                                          (when (and (integerp cw) (> cw 0))
+                                            (throw 'found cw))))))))
+                              nil)))
+                (puthash model-str (or result my/gptel--gptel-tables-miss-sentinel)
+                         my/gptel--gptel-tables-cw-cache)
+                result)))))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -683,10 +690,10 @@ Run asynchronously. Use for bulk cache warming."
   "Get metadata for MODEL-ID from cache.
 Returns plist with :context-window, :pricing-input, :pricing-output, etc."
   (require 'gptel)
-  (let* ((model-id (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
+  (let* ((model-id-str (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
     (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
                                      my/gptel--known-model-metadata
-                                     model-id)))
+                                     model-id-str)))
 
 (defun my/gptel-show-model-info (model-id)
   "Show detailed info for MODEL-ID."

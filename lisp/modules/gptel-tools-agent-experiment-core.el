@@ -40,14 +40,15 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          (workflow-root (gptel-auto-workflow--resolve-run-root))
          ;; The subagent timeout wrapper owns executor timeout/abort behavior.
          (my/gptel-agent-task-timeout experiment-timeout)
-         (start-time (float-time))
-         (finished nil)
-         (provisional-commit-hash nil)
-         (executor-prompt nil)
-         (executor-callback nil)
-         (validation-retry-active nil))
+          (start-time (float-time))
+          (finished nil)
+          (provisional-commit-hash nil)
+          (executor-prompt nil)
+          (executor-callback nil)
+          (validation-retry-active nil)
+          (experiment-backend nil))
     (if (not worktree)
-        (funcall callback (list :target target :error "Failed to create worktree"))
+        (funcall callback (list :target target :error "Failed to create worktree" :backend "none"))
       (gptel-auto-experiment--call-in-context
        experiment-buffer experiment-worktree
        (lambda ()
@@ -97,20 +98,21 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                      (reason
                                       (format "Repeated focus on `%s` after %d prior non-kept attempts; choose a different function or subsystem."
                                               symbol count))
-                                     (exp-result
-                                      (list :target target
-                                            :id experiment-id
-                                            :hypothesis hypothesis
-                                            :score-before baseline
-                                            :score-after 0
-                                            :code-quality baseline-code-quality
-                                            :kept nil
-                                            :duration (- (float-time) start-time)
-                                            :grader-quality 0
-                                            :grader-reason reason
-                                            :comparator-reason "repeated-focus-symbol"
-                                            :analyzer-patterns (format "%s" patterns)
-                                            :agent-output effective-agent-output)))
+                                      (exp-result
+                                       (list :target target
+                                             :id experiment-id
+                                             :hypothesis hypothesis
+                                             :score-before baseline
+                                             :score-after 0
+                                             :code-quality baseline-code-quality
+                                             :kept nil
+                                             :duration (- (float-time) start-time)
+                                             :grader-quality 0
+                                             :grader-reason reason
+                                             :comparator-reason "repeated-focus-symbol"
+                                             :analyzer-patterns (format "%s" patterns)
+                                             :agent-output effective-agent-output
+                                             :backend experiment-backend)))
                                 (setq finished t)
                                 (let ((default-directory experiment-worktree))
                                   (message "[auto-exp] Repeated focus on %s after %d prior non-kept attempts; discarding without grading"
@@ -156,21 +158,22 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                          ;; Non-teachable or already retrying: fail fast
                                          (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
                                                              effective-agent-output))
-                                                (exp-result
-                                                 (list :target target
-                                                       :id experiment-id
-                                                       :hypothesis hypothesis
-                                                       :score-before baseline
-                                                       :score-after 0
-                                                       :code-quality baseline-code-quality
-                                                       :kept nil
-                                                       :duration (- (float-time) start-time)
-                                                       :grader-quality 0
-                                                       :grader-reason validation-error
-                                                       :comparator-reason "validation-failed"
-                                                       :analyzer-patterns (format "%s" patterns)
-                                                       :agent-output effective-agent-output
-                                                       :validation-error validation-error)))
+                                                 (exp-result
+                                                  (list :target target
+                                                        :id experiment-id
+                                                        :hypothesis hypothesis
+                                                        :score-before baseline
+                                                        :score-after 0
+                                                        :code-quality baseline-code-quality
+                                                        :kept nil
+                                                        :duration (- (float-time) start-time)
+                                                        :grader-quality 0
+                                                        :grader-reason validation-error
+                                                        :comparator-reason "validation-failed"
+                                                        :analyzer-patterns (format "%s" patterns)
+                                                        :agent-output effective-agent-output
+                                                        :validation-error validation-error
+                                                        :backend experiment-backend)))
                                            (setq finished t)
                                            (cl-incf gptel-auto-experiment--no-improvement-count)
                                            (funcall log-fn run-id exp-result)
@@ -243,8 +246,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                         error-category))
                                                                       (t
                                                                        (symbol-name (or error-category :unknown))))
-                                                                     :analyzer-patterns (format "%s" patterns)
-                                                                     :agent-output effective-agent-output)))
+                                                                      :analyzer-patterns (format "%s" patterns)
+                                                                      :agent-output effective-agent-output
+                                                                      :backend experiment-backend)))
                                                (when grade-error-output
                                                  (setq exp-result
                                                        (plist-put exp-result :error grade-error-output)))
@@ -297,7 +301,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 		                                                          (plist-get grade :details) :comparator-reason
 		                                                          reasoning :analyzer-patterns
 		                                                          (format "%s" patterns) :agent-output
-		                                                          effective-agent-output)))
+		                                                          effective-agent-output
+                                                          :backend experiment-backend)))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format
@@ -439,8 +444,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                             :grader-reason (plist-get retry-grade :details)
                                                                                             :comparator-reason reasoning
                                                                                             :analyzer-patterns (format "%s" patterns)
-                                                                                            :agent-output retry-output
-                                                                                            :retries 1)))
+                                                                                             :agent-output retry-output
+                                                                                             :retries 1
+                                                                                             :backend experiment-backend)))
                                                                                 (if keep
                                                                                     (let* ((msg (format "◈ Retry: fix validation in %s"
 								                                                                        target))
@@ -540,8 +546,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                    :comparator-reason reason
                                                                                    :analyzer-patterns (format "%s" patterns)
                                                                                    :agent-output retry-output
-                                                                                   :retries 1
-                                                                                   :validation-error retry-validation-error)))
+                                                                                    :retries 1
+                                                                                    :validation-error retry-validation-error
+                                                                                    :backend experiment-backend)))
                                                                        (funcall log-fn
                                                                                 run-id exp-result)
                                                                        (gptel-auto-workflow--drop-provisional-commit
@@ -591,8 +598,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                              :grader-reason retry-grade-details
                                                                              :comparator-reason reason
                                                                              :analyzer-patterns (format "%s" patterns)
-                                                                             :agent-output retry-output
-                                                                             :retries 1)))
+                                                                              :agent-output retry-output
+                                                                              :retries 1
+                                                                              :backend experiment-backend)))
                                                                  (when retry-grade-error-output
                                                                    (setq exp-result
                                                                          (plist-put exp-result :error retry-grade-error-output)))
@@ -636,16 +644,23 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                :grader-quality grade-score
                                                                :grader-reason (plist-get grade :details)
                                                                :comparator-reason reason
-                                                               :analyzer-patterns (format "%s" patterns)
-                                                               :agent-output agent-output)))
+                                                                :analyzer-patterns (format "%s" patterns)
+                                                                :agent-output agent-output
+                                                                :backend experiment-backend)))
                                                    (message "[auto-experiment] ✗ %s for %s" reason target)
                                                    (funcall log-fn
                                                             run-id exp-result)
                                                    (funcall callback exp-result))))))
                                           ))))))))))))))))
-                                   workflow-root))
+                                    workflow-root))
+               ;; Capture backend before executor runs
+               (setq experiment-backend
+                     (when (and (boundp 'gptel-backend) gptel-backend)
+                       (if (fboundp 'gptel-backend-name)
+                           (gptel-backend-name gptel-backend)
+                         "unknown")))
                ;; Routing handled by gptel-auto-workflow--advice-task-override
-               (my/gptel--run-agent-tool-with-timeout
+                (my/gptel--run-agent-tool-with-timeout
                 experiment-timeout
                 executor-callback
                 "executor"
