@@ -73,6 +73,14 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (with-temp-file file
       (insert ";;; fixture.el --- test fixture -*- lexical-binding: t; -*-\n"))))
 
+(defun test-auto-workflow--valid-worktree-stub (worktree)
+  "Return a `gptel-auto-workflow-create-worktree' stub for WORKTREE.
+The stub creates the requested target file so tests that exercise later
+experiment phases do not trip the real pre-grade target validator."
+  (lambda (target _experiment-id)
+    (test-auto-workflow--write-valid-elisp-target worktree target)
+    worktree))
+
 (ert-deftest regression/auto-workflow/run-tests-uses-bsd-safe-mktemp-templates ()
   "run-tests.sh should use BSD-safe mktemp templates without suffixes after Xs."
   (let* ((repo-root test-auto-workflow--repo-root)
@@ -564,13 +572,15 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                   ((symbol-function 'gptel-auto-experiment-decide)
                    (lambda (&rest _)
                      (error "Retry failure path should not decide keep/discard")))
-                  ((symbol-function 'message)
-                   (lambda (&rest _) nil)))
-          (gptel-auto-experiment-run
-           "lisp/modules/gptel-tools-agent.el"
-           2 5 0.4 0.7 nil
-           (lambda (result)
-             (setq callback-result result)))
+                   ((symbol-function 'message)
+                    (lambda (&rest _) nil)))
+           (test-auto-workflow--write-valid-elisp-target
+            worktree "lisp/modules/gptel-tools-agent.el")
+           (gptel-auto-experiment-run
+            "lisp/modules/gptel-tools-agent.el"
+            2 5 0.4 0.7 nil
+            (lambda (result)
+              (setq callback-result result)))
           (list :callback-result callback-result
                 :logged-results (nreverse logged-results)
                 :tool-calls tool-call
@@ -1564,7 +1574,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 (gptel-auto-workflow--running t)
                 (gptel-auto-workflow--run-id "run-timeout-salvage"))
             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                       (lambda (_target _experiment-id) worktree-dir))
+                       (test-auto-workflow--valid-worktree-stub worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree) worktree-buf))
                       ((symbol-function 'gptel-auto-workflow--resolve-run-root)
@@ -1660,7 +1670,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 (gptel-auto-workflow--running t)
                 (gptel-auto-workflow--run-id "run-timeout-no-salvage"))
             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                       (lambda (_target _experiment-id) worktree-dir))
+                       (test-auto-workflow--valid-worktree-stub worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree) worktree-buf))
                       ((symbol-function 'gptel-auto-workflow--resolve-run-root)
@@ -1725,7 +1735,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (temp-dir (make-temp-file "exp-worktree" t)))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -1766,7 +1776,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -1873,7 +1883,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 (gptel-auto-experiment-retry-delay 0)
                 (gptel-auto-experiment--api-error-count 0))
             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                       (lambda (_target _experiment-id) worktree-dir))
+                       (test-auto-workflow--valid-worktree-stub worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree-dir) worktree-buf))
                       ((symbol-function 'gptel-auto-experiment-analyze)
@@ -1948,7 +1958,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -1992,7 +2002,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          "Error: Task grader could not finish task \"Grade output\" (grader) timed out after 120s.")) 
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -2035,7 +2045,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          "HYPOTHESIS: Timeout salvage still produced a plausible edit\nCHANGED:\n- Partial worktree diff captured\nVERIFY:\n- Original timeout: Error: Task \"Experiment 1\" (executor) timed out after 1020s total runtime.\nTask completed"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -2079,7 +2089,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: FAIL - Hypothesis does not match the actual diff. | 2. verification attempted: FAIL - No verification was performed after the timeout salvage. | SUMMARY: SCORE: 3/9"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -2137,7 +2147,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (with-current-buffer exp2-buf
             (setq-local default-directory (file-name-as-directory exp2-dir)))
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) exp2-dir))
+                     (test-auto-workflow--valid-worktree-stub exp2-dir))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                      (lambda (_worktree-dir) exp2-buf))
                     ((symbol-function 'gptel-auto-experiment-analyze)
@@ -2543,7 +2553,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) worktree-dir))
+                     (test-auto-workflow--valid-worktree-stub worktree-dir))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                      (lambda (_worktree-dir) worktree-buf))
                     ((symbol-function 'gptel-auto-experiment-analyze)
@@ -2602,7 +2612,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) worktree-dir))
+                     (test-auto-workflow--valid-worktree-stub worktree-dir))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                      (lambda (_worktree-dir) worktree-buf))
                     ((symbol-function 'gptel-auto-experiment-analyze)
@@ -2678,7 +2688,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) worktree-dir))
+                     (test-auto-workflow--valid-worktree-stub worktree-dir))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                      (lambda (_worktree-dir) worktree-buf))
                     ((symbol-function 'gptel-auto-experiment-analyze)
@@ -2853,7 +2863,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 (gptel-auto-experiment-validation-retry-time-budget 240)
                  (gptel-auto-experiment-validation-retry-active-grace 180))
              (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                        (lambda (_target _experiment-id) worktree-dir))
+                        (test-auto-workflow--valid-worktree-stub worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree-dir) worktree-buf))
                       ((symbol-function 'gptel-auto-experiment-analyze)
@@ -2929,7 +2939,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) worktree-dir))
+                     (test-auto-workflow--valid-worktree-stub worktree-dir))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                      (lambda (_worktree-dir) worktree-buf))
                     ((symbol-function 'gptel-auto-experiment-analyze)
@@ -5473,7 +5483,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (with-current-buffer worktree-buf
               (setq-local default-directory (file-name-as-directory worktree-dir)))
             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                       (lambda (_target _experiment-id) worktree-dir))
+                       (test-auto-workflow--valid-worktree-stub worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree-dir) worktree-buf))
                       ((symbol-function 'gptel-auto-experiment-analyze)
@@ -5771,7 +5781,7 @@ failure."
              :agent-output "CHANGED:\n- lisp/modules/gptel-ext-tool-sanitize.el :: `my/gptel--detect-inspection-thrash`\nTask completed"))))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) worktree-dir))
+                   (test-auto-workflow--valid-worktree-stub worktree-dir))
                   ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                    (lambda (_worktree-dir) worktree-buf))
                   ((symbol-function 'gptel-auto-experiment-analyze)
@@ -5989,7 +5999,7 @@ failure."
         (gptel-auto-workflow-use-staging nil))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                    (lambda (&rest _args) nil))
                   ((symbol-function 'gptel-auto-experiment-analyze)
@@ -6059,7 +6069,7 @@ failure."
         (gptel-auto-workflow-use-staging nil))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                    (lambda (&rest _args) nil))
                   ((symbol-function 'gptel-auto-experiment-analyze)
@@ -6205,7 +6215,7 @@ failure."
           (test-auto-workflow--write-valid-elisp-target
            temp-dir "lisp/modules/gptel-tools-agent.el")
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) temp-dir))
+                     (test-auto-workflow--valid-worktree-stub temp-dir))
                     ((symbol-function 'gptel-auto-experiment-analyze)
                      (lambda (_previous-results cb)
                        (funcall cb '(:patterns nil))))
@@ -6274,7 +6284,7 @@ failure."
           (test-auto-workflow--write-valid-elisp-target
            temp-dir "lisp/modules/gptel-agent-loop.el")
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -6355,7 +6365,7 @@ failure."
           (test-auto-workflow--write-valid-elisp-target
            temp-dir "lisp/modules/gptel-agent-loop.el")
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) temp-dir))
+                     (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -6438,7 +6448,7 @@ failure."
           (test-auto-workflow--write-valid-elisp-target
            temp-dir "lisp/modules/gptel-agent-loop.el")
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) temp-dir))
+                     (test-auto-workflow--valid-worktree-stub temp-dir))
                     ((symbol-function 'gptel-auto-experiment-analyze)
                      (lambda (_previous-results cb)
                        (funcall cb '(:patterns nil))))
@@ -6537,7 +6547,7 @@ failure."
           (test-auto-workflow--write-valid-elisp-target
            temp-dir "lisp/modules/gptel-agent-loop.el")
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -6635,7 +6645,7 @@ failure."
           (test-auto-workflow--write-valid-elisp-target
            temp-dir "lisp/modules/gptel-agent-loop.el")
           (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
+                   (test-auto-workflow--valid-worktree-stub temp-dir))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results cb)
                      (funcall cb '(:patterns nil))))
@@ -15908,7 +15918,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
           "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) worktree-dir))
+                   (test-auto-workflow--valid-worktree-stub worktree-dir))
                   ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                    (lambda (_worktree-dir) worktree-buf))
                   ((symbol-function 'gptel-auto-experiment-analyze)
@@ -16020,7 +16030,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
           "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) worktree-dir))
+                   (test-auto-workflow--valid-worktree-stub worktree-dir))
                   ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                    (lambda (_worktree-dir) worktree-buf))
                   ((symbol-function 'gptel-auto-experiment-analyze)
