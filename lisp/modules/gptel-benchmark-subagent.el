@@ -652,9 +652,9 @@ Returns plist with :significant and :confidence."
   (let* ((scores-a (gptel-benchmark--extract-overall-scores results-a))
          (scores-b (gptel-benchmark--extract-overall-scores results-b))
          (mean-a (if (and scores-a (> (length scores-a) 0))
-                     (/ (apply #'+ scores-a) (length scores-a)) 0))
+                     (/ (float (apply #'+ scores-a)) (length scores-a)) 0.0))
          (mean-b (if (and scores-b (> (length scores-b) 0))
-                     (/ (apply #'+ scores-b) (length scores-b)) 0))
+                     (/ (float (apply #'+ scores-b)) (length scores-b)) 0.0))
          (diff (abs (- mean-a mean-b))))
     (list :difference diff
           :significant (> diff 0.1)
