@@ -161,27 +161,26 @@ Returns t if all files pass syntax check, nil otherwise."
         nil)
     (let ((errors nil)
           (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
-      (dolist (file (or files nil) (null errors))
-        (when (file-readable-p file)
-          (condition-case err
-              (with-temp-buffer
-                (insert-file-contents file)
-                ;; Parse with `emacs-lisp-mode' so syntax-propertize handles
-                ;; reader forms correctly, but suppress mode hooks so staging
-                ;; verification cannot trip unrelated editor setup.
-                (delay-mode-hooks
-                  (emacs-lisp-mode))
-                (goto-char (point-min))
-                (while (not (eobp))
-                  (forward-sexp)))
-            (error
-             (let ((msg (format "SYNTAX ERROR: %s: %s"
-                                (file-relative-name file directory)
-                                (error-message-string err))))
-               (push msg errors)
-               (when (buffer-live-p output-buffer)
-                 (with-current-buffer output-buffer
-                   (insert msg "\n")))))))))))
+      (when (listp files)
+        (dolist (file files (null errors))
+          (when (and (stringp file)
+                     (file-readable-p file))
+            (condition-case err
+                (with-temp-buffer
+                  (insert-file-contents file)
+                  (delay-mode-hooks
+                    (emacs-lisp-mode))
+                  (goto-char (point-min))
+                  (while (not (eobp))
+                    (forward-sexp)))
+              (error
+               (let ((msg (format "SYNTAX ERROR: %s: %s"
+                                  (file-relative-name file directory)
+                                  (error-message-string err))))
+                 (push msg errors)
+                 (when (buffer-live-p output-buffer)
+                   (with-current-buffer output-buffer
+                     (insert msg "\n"))))))))))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.
@@ -280,61 +279,68 @@ Returns (success-p . output)."
 
 (defun gptel-auto-workflow--remote-branch-head (remote branch &optional timeout)
   "Return BRANCH head on REMOTE, or nil when the branch is absent."
-  (let* ((branch-q (shell-quote-argument branch))
-         (remote-result
-          (gptel-auto-workflow--git-result
-           (format "git ls-remote --exit-code --heads %s %s" remote branch-q)
-           (or timeout 60))))
-    (and (= 0 (cdr remote-result))
-         (gptel-auto-workflow--parse-remote-head branch (car remote-result)))))
+  (if (or (null remote) (null branch)
+          (string-empty-p remote) (string-empty-p branch))
+      nil
+    (let* ((branch-q (shell-quote-argument branch))
+           (remote-result
+            (gptel-auto-workflow--git-result
+             (format "git ls-remote --exit-code --heads %s %s" remote branch-q)
+             (or timeout 60))))
+      (and (= 0 (cdr remote-result))
+           (gptel-auto-workflow--parse-remote-head branch (car remote-result))))))
 
 (defun gptel-auto-workflow--push-branch-with-lease (branch action &optional timeout)
   "Push BRANCH to the shared remote, using `--force-with-lease' when it already exists.
 ACTION is a short description used in failure messages."
-  (let* ((remote (gptel-auto-workflow--shared-remote))
-         (branch-q (shell-quote-argument branch))
-         (push-timeout (or timeout 180))
-         (remote-head
-          (gptel-auto-workflow--remote-branch-head remote branch 60))
-         (local-head
-          (gptel-auto-workflow--current-head-hash))
-         (push-command
-          (if remote-head
-              (format "git push %s %s %s"
-                      (shell-quote-argument
-                       (format "--force-with-lease=%s:%s"
-                               branch
-                               remote-head))
-                      remote
-                      branch-q)
-            (format "git push %s %s" remote branch-q)))
-         (push-result
-          (gptel-auto-workflow--with-skipped-submodule-sync
-           (lambda ()
-             (gptel-auto-workflow--git-result
-              push-command
-              push-timeout))))
-         (push-output (car push-result)))
-    (cond
-     ((= 0 (cdr push-result))
-      t)
-     ((and local-head
-           (equal local-head
-                  (gptel-auto-workflow--remote-branch-head remote branch 60)))
-      (message "[auto-workflow] %s reached %s despite the initial push error"
-               action remote)
-      t)
-     ((and (< push-timeout 360)
-           (stringp push-output)
-           (string-match-p "Command timed out after" push-output))
-      (message "[auto-workflow] %s timed out after %ds; retrying once with %ds"
-               action push-timeout 360)
-      (gptel-auto-workflow--push-branch-with-lease branch action 360))
-     (t
-      (message "[auto-workflow] %s failed: %s"
-               action
-               (my/gptel--sanitize-for-logging push-output 160))
-      nil))))
+  (if (or (null branch) (string-empty-p branch))
+      (progn
+        (message "[auto-workflow] %s failed: nil or empty branch" action)
+        nil)
+    (let* ((remote (gptel-auto-workflow--shared-remote))
+           (branch-q (shell-quote-argument branch))
+           (push-timeout (or timeout 180))
+           (remote-head
+            (gptel-auto-workflow--remote-branch-head remote branch 60))
+           (local-head
+            (gptel-auto-workflow--current-head-hash))
+           (push-command
+            (if remote-head
+                (format "git push %s %s %s"
+                        (shell-quote-argument
+                         (format "--force-with-lease=%s:%s"
+                                 branch
+                                 remote-head))
+                        remote
+                        branch-q)
+              (format "git push %s %s" remote branch-q)))
+           (push-result
+            (gptel-auto-workflow--with-skipped-submodule-sync
+             (lambda ()
+               (gptel-auto-workflow--git-result
+                push-command
+                push-timeout))))
+           (push-output (car push-result)))
+      (cond
+       ((= 0 (cdr push-result))
+        t)
+       ((and local-head
+             (equal local-head
+                    (gptel-auto-workflow--remote-branch-head remote branch 60)))
+        (message "[auto-workflow] %s reached %s despite the initial push error"
+                 action remote)
+        t)
+       ((and (< push-timeout 360)
+             (stringp push-output)
+             (string-match-p "Command timed out after" push-output))
+        (message "[auto-workflow] %s timed out after %ds; retrying once with %ds"
+                 action push-timeout 360)
+        (gptel-auto-workflow--push-branch-with-lease branch action 360))
+       (t
+        (message "[auto-workflow] %s failed: %s"
+                 action
+                 (my/gptel--sanitize-for-logging push-output 160))
+        nil)))))
 
 (defun gptel-auto-workflow--push-staging ()
   "Push staging branch to the shared remote after successful verification.
