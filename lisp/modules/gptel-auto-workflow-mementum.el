@@ -234,32 +234,49 @@ Updates auto-workflow-evolution.md with patterns from recent experiments."
                             (* 100 (nth 3 best-cat))))))
         (insert "\n"))
 
-      (message "[auto-workflow] Synthesized knowledge to %s" knowledge-file))))
+      (message "[auto-workflow] Synthesized knowledge to %s" knowledge-file)
+      ;; Invalidate auto-workflow-evolution cache
+      (when (fboundp 'gptel-auto-workflow--knowledge-cache-invalidate)
+        (gptel-auto-workflow--knowledge-cache-invalidate 'auto-workflow-evolution)
+        (message "[knowledge-cache] Invalidated auto-workflow-evolution")))))
 
 ;; ─── Prompt Integration ───
 
 (defun gptel-auto-workflow--mementum-get-knowledge-for-prompt ()
   "Get synthesized knowledge text for prompt injection.
-Returns a string or empty string if no knowledge available."
-  (let* ((knowledge-file (expand-file-name
-                          "mementum/knowledge/auto-workflow-evolution.md"
-                          (gptel-auto-workflow--worktree-base-root))))
-    (if (file-exists-p knowledge-file)
-        (with-temp-buffer
-          (insert-file-contents knowledge-file)
-          ;; Skip frontmatter
-          (goto-char (point-min))
-          (when (looking-at "---")
-            (forward-line 1)
-            (while (not (looking-at "---"))
-              (forward-line 1))
-            (forward-line 1))
-          (let ((content (buffer-string)))
-            (if (> (length content) 2000)
-                (concat (substring content 0 1500)
-                        "\n\n... [truncated for brevity] ...")
-              content))))
-      ""))
+Returns a string or empty string if no knowledge available.
+Uses cache to avoid repeated file reads."
+  (let ((cached (when (fboundp 'gptel-auto-workflow--knowledge-cache-get)
+                  (gptel-auto-workflow--knowledge-cache-get 'auto-workflow-evolution))))
+    (if cached
+        (progn
+          (message "[knowledge-cache] Hit for auto-workflow-evolution (%d chars)" (length cached))
+          cached)
+      (let* ((knowledge-file (expand-file-name
+                              "mementum/knowledge/auto-workflow-evolution.md"
+                              (gptel-auto-workflow--worktree-base-root))))
+        (if (file-exists-p knowledge-file)
+            (let ((content
+                   (with-temp-buffer
+                     (insert-file-contents knowledge-file)
+                     ;; Skip frontmatter
+                     (goto-char (point-min))
+                     (when (looking-at "---")
+                       (forward-line 1)
+                       (while (not (looking-at "---"))
+                         (forward-line 1))
+                       (forward-line 1))
+                     (let ((content (buffer-string)))
+                       (if (> (length content) 2000)
+                           (concat (substring content 0 1500)
+                                   "\n\n... [truncated for brevity] ...")
+                         content)))))
+              (when (fboundp 'gptel-auto-workflow--knowledge-cache-set)
+                (gptel-auto-workflow--knowledge-cache-set 'auto-workflow-evolution content)
+                (message "[knowledge-cache] Miss for auto-workflow-evolution, cached %d chars"
+                         (length content)))
+              content)
+          "")))))
 
 ;; ─── Batch Job ───
 
