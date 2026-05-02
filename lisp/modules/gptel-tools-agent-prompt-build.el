@@ -1199,5 +1199,29 @@ Returns the candidate string, or nil if none valid."
     ;; If no fully valid candidate, pick highest scoring
     (car (car validated-candidates))))
 
+;; ─── Frontier-Aware Target Filtering ───
+
+(defun gptel-auto-workflow--filter-frontier-saturated-targets (targets)
+  "Filter out targets with saturated Pareto frontiers from TARGETS list.
+Returns filtered list, or nil if all targets saturated.
+Saturated means: >=3 Pareto experiments, >=4 axes, quality>=0.8."
+  (let ((filtered '())
+        (saturated-count 0))
+    (dolist (target targets)
+      (if (and (fboundp 'gptel-auto-experiment--frontier-saturated-p)
+               (gptel-auto-experiment--frontier-saturated-p target))
+          (progn
+            (setq saturated-count (1+ saturated-count))
+            (message "[frontier-filter] %s is SATURATED, skipping" target))
+        (push target filtered)))
+    (message "[frontier-filter] %d/%d targets saturated, %d remaining"
+             saturated-count (length targets) (length filtered))
+    ;; If all saturated, return nil to signal we need fresh targets
+    (if (null filtered)
+        (progn
+          (message "[frontier-filter] WARNING: All %d targets saturated!" (length targets))
+          nil)
+      (nreverse filtered))))
+
 (provide 'gptel-tools-agent-prompt-build)
 ;;; gptel-tools-agent-prompt-build.el ends here
