@@ -258,11 +258,11 @@ Returns alist of target → (category success-rate count)."
 This is the CENTRAL function of self-evolution.
 Writes to optimization-skills/ as skill files that the prompt builder consumes."
   (when gptel-auto-workflow-evolution-enabled
-    (let* ((git-facts (gptel-auto-workflow--git-raw-facts))
+    (let* ((_git-facts (gptel-auto-workflow--git-raw-facts))
             (skills-dir (expand-file-name "assistant/skills/auto-workflow"
                                           (gptel-auto-workflow--worktree-base-root)))
-            (token-skill-file (expand-file-name "token-efficiency.md" skills-dir))
-            (mutation-skill-file (expand-file-name "mutations.md" skills-dir)))
+            (_token-skill-file (expand-file-name "token-efficiency.md" skills-dir))
+            (_mutation-skill-file (expand-file-name "mutations.md" skills-dir)))
 
       (make-directory skills-dir t)
 
@@ -451,8 +451,7 @@ Writes to optimization-skills/ as skill files that the prompt builder consumes."
         (insert "Prompt Injection ← Knowledge ←─┘\n")
         (insert "```\n")))
 
-      (message "[auto-workflow] Synthesized self-evolution knowledge to %s"
-               evolution-file)
+      (message "[auto-workflow] Synthesized self-evolution skills")
       ;; Invalidate self-evolution cache so next prompt gets fresh knowledge
       (when (fboundp 'gptel-auto-workflow--knowledge-cache-invalidate)
         (gptel-auto-workflow--knowledge-cache-invalidate 'self-evolution)

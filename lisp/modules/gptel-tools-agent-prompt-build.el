@@ -3,9 +3,15 @@
 
 ;; ─── Knowledge Cache ───
 
+(defvar gptel-auto-workflow--skills)
+(defvar gptel-auto-experiment-large-target-byte-threshold)
+(defvar gptel-auto-workflow--last-prompt-sections)
+(defvar gptel-auto-experiment-time-budget)
+(defvar gptel-auto-workflow-use-staging)
+
 (defvar gptel-auto-workflow--knowledge-cache (make-hash-table :test 'equal)
   "Hash table mapping knowledge keys to cached content.
-Keys: 'self-evolution or topic names like 'context-cache.
+Keys: \\='self-evolution or topic names like \\='context-cache.
 Values: (content . timestamp) cons cells.
 Cache is invalidated after synthesis runs.")
 
@@ -23,7 +29,6 @@ Returns cached content or nil if missing/stale."
   (let ((entry (gethash key gptel-auto-workflow--knowledge-cache)))
     (when entry
       (let ((content (car entry))
-            (timestamp (cdr entry))
             (age (float-time (time-subtract (current-time) (cdr entry)))))
         (if (< age gptel-auto-workflow--knowledge-cache-max-age)
             content
@@ -45,7 +50,7 @@ Returns cached content or nil if missing/stale."
   "Return cache statistics as string."
   (let ((count 0)
         (total-age 0))
-    (maphash (lambda (key entry)
+    (maphash (lambda (_key entry)
                (setq count (1+ count))
                (setq total-age (+ total-age (float-time (time-subtract (current-time) (cdr entry))))))
              gptel-auto-workflow--knowledge-cache)
@@ -171,8 +176,12 @@ Implements section-level A/B testing to identify effective prompt components."
                      "3. Use at most 2 read-only tool calls (Read, Grep, Code_Inspect), all on that same symbol.\n"
                      "4. Your NEXT tool call MUST be a write (Edit, Write, ApplyPatch) on that same symbol.\n"
                      "5. If you do more than 2 read-only calls without writing, your turn will be aborted.\n"
-                     "6. Do not inspect a second subsystem before the first edit exists.\n\n"))))
-    (format "You are running experiment %d of %d to optimize %s.
+                      "6. Do not inspect a second subsystem before the first edit exists.\n\n"))))
+     ;; Record which sections were included for logging
+     (setq gptel-auto-workflow--last-prompt-sections
+           (mapconcat #'symbol-name included-sections ","))
+     ;; Return the built prompt
+     (format "You are running experiment %d of %d to optimize %s.
 
 ## Working Directory
 %s
@@ -300,10 +309,7 @@ Example HYPOTHESES:
             target
             (/ gptel-auto-experiment-time-budget 60)
             focus-line
-            sexp-check-command))
-    ;; Record which sections were included for logging
-    (setq gptel-auto-workflow--last-prompt-sections
-          (mapconcat #'symbol-name included-sections ","))
+             sexp-check-command)))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.
@@ -511,7 +517,7 @@ row for the same experiment and target."
                                0)
                            (or (gptel-auto-experiment--tsv-escape
                                 (gptel-auto-workflow--plist-get experiment :sections-included "all"))
-                               "all")))))
+                               "all"))))
 
       (write-region (point-min) (point-max) file))
     ;; Trigger self-evolution after experiment logging

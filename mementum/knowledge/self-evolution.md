@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-02 10:27
+updated: 2026-05-02 15:27
 ---
 
 # Self-Evolution Knowledge Base
@@ -13,23 +13,23 @@ updated: 2026-05-02 10:27
 
 ## Git History Facts
 
-- Active experiment branches: 109
+- Active experiment branches: 113
 - Historical merges: 588
 - Active branches merged: 7
-- Active branches abandoned: 102
-- Active merge rate: 6.4%
+- Active branches abandoned: 106
+- Active merge rate: 6.2%
 
 ### Target Frequency
 
 - `agent`: 31 experiments
-- `cache`: 16 experiments
+- `cache`: 18 experiments
 - `loop`: 15 experiments
 - `utils`: 8 experiments
 - `strategic`: 8 experiments
-- `sandbox`: 6 experiments
+- `sandbox`: 7 experiments
+- `retry`: 4 experiments
 - `projects`: 4 experiments
 - `tests`: 3 experiments
-- `retry`: 3 experiments
 - `core`: 3 experiments
 - `tools`: 2 experiments
 - `runtime`: 2 experiments
@@ -41,19 +41,19 @@ updated: 2026-05-02 10:27
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 24% verified (57/233 experiments)
-- **performance**: 17% verified (4/24 experiments)
-- **refactoring**: 28% verified (22/78 experiments)
-- **safety**: 28% verified (18/64 experiments)
+- **bug-fix**: 25% verified (60/243 experiments)
+- **performance**: 16% verified (4/25 experiments)
+- **refactoring**: 28% verified (22/80 experiments)
+- **safety**: 26% verified (18/68 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **refactoring** - 28% kept (78 experiments)
-2. **safety** - 28% kept (64 experiments)
-3. **bug-fix** - 24% kept (233 experiments)
-4. **performance** - 17% kept (24 experiments)
+1. **refactoring** - 28% kept (80 experiments)
+2. **safety** - 26% kept (68 experiments)
+3. **bug-fix** - 25% kept (243 experiments)
+4. **performance** - 16% kept (25 experiments)
 
 ## Critical Guidance for Maximum Success
 
@@ -88,28 +88,28 @@ Which change types work best for each target file:
 - **bug-fix**: 17% (18 experiments)
 - **performance**: 0% (3 experiments)
 
+### `gptel-ext-retry.el`
+
+- **bug-fix**: 10% (20 experiments)
+- **refactoring**: 0% (5 experiments)
+
+### `gptel-benchmark-core.el`
+
+- **bug-fix**: 46% (24 experiments)
+
 ### `staging-merge`
 
 - **other**: 0% (23 experiments)
 
-### `gptel-benchmark-core.el`
-
-- **bug-fix**: 48% (23 experiments)
-
-### `gptel-ext-retry.el`
-
-- **bug-fix**: 6% (17 experiments)
-- **refactoring**: 0% (5 experiments)
-
 ### `gptel-ext-context-cache.el`
 
-- **bug-fix**: 45% (11 experiments)
+- **bug-fix**: 47% (15 experiments)
 - **performance**: 29% (7 experiments)
 
 ### `gptel-sandbox.el`
 
-- **safety**: 40% (5 experiments)
 - **bug-fix**: 33% (9 experiments)
+- **safety**: 29% (7 experiments)
 - **refactoring**: 0% (3 experiments)
 
 ### `gptel-ext-context.el`

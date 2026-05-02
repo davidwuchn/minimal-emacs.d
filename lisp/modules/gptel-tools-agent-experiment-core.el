@@ -1,6 +1,11 @@
 ;;; gptel-tools-agent-experiment-core.el --- Single experiment execution -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(defvar gptel-auto-workflow--current-target)
+(defvar gptel-auto-experiment-time-budget)
+(defvar gptel-auto-workflow--run-id)
+(defvar gptel-auto-experiment--no-improvement-count)
+
 (defun gptel-auto-experiment-run (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional log-fn)
   "Run single experiment. Call CALLBACK with result plist.
 BASELINE-CODE-QUALITY is the initial code quality score.
@@ -23,23 +28,23 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          ;; operate in the correct context. Each worktree = one session.
          (default-directory experiment-worktree)
          (log-fn (or log-fn #'gptel-auto-experiment-log-tsv))
-         ;; Get project buffer for overlay routing (ensure hash table exists)
-         (project-buf (when (and (boundp 'gptel-auto-workflow--current-project)
-                                 gptel-auto-workflow--current-project)
-                        (gptel-auto-workflow--hash-get-bound
-                         'gptel-auto-workflow--project-buffers
-                         (expand-file-name gptel-auto-workflow--current-project))))
-         ;; Disable preview for headless auto-workflow
-         (gptel-tools-preview-enabled nil)
-         ;; Disable tool confirmations for headless auto-workflow
-         (gptel-confirm-tool-calls nil)
+          ;; Get project buffer for overlay routing (ensure hash table exists)
+          (_project-buf (when (and (boundp 'gptel-auto-workflow--current-project)
+                                   gptel-auto-workflow--current-project)
+                          (gptel-auto-workflow--hash-get-bound
+                           'gptel-auto-workflow--project-buffers
+                           (expand-file-name gptel-auto-workflow--current-project))))
+          ;; Disable preview for headless auto-workflow
+          (_gptel-tools-preview-enabled nil)
+          ;; Disable tool confirmations for headless auto-workflow
+          (_gptel-confirm-tool-calls nil)
          ;; Capture the experiment timeout lexically because later analyzer
          ;; callbacks run after this outer let frame exits.
          (experiment-timeout gptel-auto-experiment-time-budget)
          (run-id gptel-auto-workflow--run-id)
          (workflow-root (gptel-auto-workflow--resolve-run-root))
-         ;; The subagent timeout wrapper owns executor timeout/abort behavior.
-         (my/gptel-agent-task-timeout experiment-timeout)
+          ;; The subagent timeout wrapper owns executor timeout/abort behavior.
+          (_my/gptel-agent-task-timeout experiment-timeout)
           (start-time (float-time))
           (finished nil)
           (provisional-commit-hash nil)
@@ -131,9 +136,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                      (message "[auto-exp] ✗ Pre-grade validation failed: %s"
                                               (my/gptel--sanitize-for-logging validation-error 200))
                                      ;; Trigger retry or fail immediately without grader
-                                      (let ((default-directory experiment-worktree)
-                                            (gptel-auto-experiment--grading-target target)
-                                            (gptel-auto-experiment--grading-worktree experiment-worktree))
+                                       (let ((default-directory experiment-worktree)
+                                             (_gptel-auto-experiment--grading-target target)
+                                             (_gptel-auto-experiment--grading-worktree experiment-worktree))
                                         (if (and (gptel-auto-experiment--teachable-validation-error-p
                                                   target validation-error)
                                                  (not validation-retry-active))
@@ -143,8 +148,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                target provisional-commit-hash)
                                               (setq provisional-commit-hash nil)
                                               (setq validation-retry-active t)
-                                              (let ((gptel-auto-experiment-active-grace
-                                                     gptel-auto-experiment-validation-retry-active-grace))
+                                               (let ((_gptel-auto-experiment-active-grace
+                                                      gptel-auto-experiment-validation-retry-active-grace))
                                                 (my/gptel--run-agent-tool-with-timeout
                                                  gptel-auto-experiment-validation-retry-time-budget
                                                  (lambda (retry-output)
