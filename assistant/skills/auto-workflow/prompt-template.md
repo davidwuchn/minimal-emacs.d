@@ -76,7 +76,10 @@ F. **Memory Management** — Fix leaks, optimize allocation, cleanup patterns
 
 ## Instructions
 1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
-2. Generate **3 candidate hypotheses** for this target. For each, write a one-line description.
+2. Generate **3 candidate hypotheses** for this target. Format them EXACTLY as:
+   CANDIDATE_1: [one-line description]
+   CANDIDATE_2: [one-line description]
+   CANDIDATE_3: [one-line description]
 3. Pick the **strongest candidate** based on: likelihood of improvement, minimal change, alignment with weakest keys and underexplored axes.
 4. If a Controller-Selected Starting Symbol is present, line 2 must be exactly `{{focus-line}}`
 5. If a Mandatory Focus Contract is present, obey it exactly; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys

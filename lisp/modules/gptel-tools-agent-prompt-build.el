@@ -548,7 +548,7 @@ row for the same experiment and target."
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\n"
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\n"
                           experiment-id
                           target
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
@@ -572,7 +572,18 @@ row for the same experiment and target."
                                 "all")
                            (or (gptel-auto-experiment--tsv-escape
                                 (gptel-auto-workflow--plist-get experiment :exploration-axis "?"))
-                                "?"))))
+                                "?")
+                           (or (gptel-auto-experiment--tsv-escape
+                                (let ((candidates (gptel-auto-workflow--plist-get experiment :candidate-validation)))
+                                  (if candidates
+                                      (mapconcat (lambda (c)
+                                                   (format "%s:%.1f:%s"
+                                                           (substring (car c) 0 (min 20 (length (car c))))
+                                                           (plist-get (cdr c) :score)
+                                                           (if (plist-get (cdr c) :valid) "V" "X")))
+                                                 candidates ";")
+                                    "")))
+                                ""))))
 
       (write-region (point-min) (point-max) file))
     ;; Trigger self-evolution after experiment logging
@@ -1106,6 +1117,87 @@ Returns string indicating whether target is saturated or needs more work."
   (if (gptel-auto-experiment--frontier-saturated-p target)
       (format "## Target Status: SATURATED\n%s has sufficient Pareto-optimal experiments. Consider moving to other targets.\n\n" target)
     (format "## Target Status: ACTIVE\n%s needs more experiments to saturate frontier.\n\n" target)))
+
+;; ─── Batch Validation for Multi-Candidate Hypotheses ───
+
+(defun gptel-auto-experiment--extract-candidates (agent-output)
+  "Extract up to 3 candidate hypotheses from AGENT-OUTPUT.
+Returns list of strings, or nil if no candidates found."
+  (when (stringp agent-output)
+    (let (candidates)
+      (with-temp-buffer
+        (insert agent-output)
+        (goto-char (point-min))
+        (while (re-search-forward "^CANDIDATE_\\([123]\\):\\s-*\\(.+\\)$" nil t)
+          (push (match-string 2) candidates)))
+      (nreverse candidates))))
+
+(defun gptel-auto-experiment--validate-candidate-safely (candidate target-full-path)
+  "Run cheap validation checks on CANDIDATE for TARGET-FULL-PATH.
+Returns plist with :valid t/nil, :errors list, :score 0-1.
+Does NOT modify the filesystem - operates on a temp copy."
+  (let ((temp-file (make-temp-file "auto-workflow-candidate-"))
+        (errors '())
+        (score 0.0))
+    (unwind-protect
+        (progn
+          ;; Copy target to temp file
+          (when (file-exists-p target-full-path)
+            (copy-file target-full-path temp-file t))
+          
+          ;; Check 1: Candidate describes actual code change (not docs)
+          (if (or (string-match-p "\\bcomment\\b\\|\\bdocstring\\b\\|\\bdocumentation\\b" candidate)
+                  (string-match-p "\\badd\\s-+comments\\b\\|\\badd\\s-+doc\\b" candidate))
+              (push "Candidate mentions documentation/comments" errors)
+            (setq score (+ score 0.2)))
+          
+          ;; Check 2: Candidate is specific (mentions function/variable)
+          (if (string-match-p "\\b\\(function\\|variable\\|defun\\|defvar\\|method\\|class\\)\\b" candidate)
+              (setq score (+ score 0.2))
+            (push "Candidate lacks specific code reference" errors))
+          
+          ;; Check 3: Candidate targets a real improvement type
+          (if (string-match-p "\\b\\(bug\\|fix\\|error\\|performance\\|cache\\|optimize\\|refactor\\|extract\\|duplicate\\|validation\\|guard\\|test\\|memory\\|leak\\)\\b" candidate)
+              (setq score (+ score 0.2))
+            (push "Candidate lacks improvement keywords" errors))
+          
+          ;; Check 4: Candidate is not too vague
+          (if (> (length candidate) 20)
+              (setq score (+ score 0.2))
+            (push "Candidate description too short" errors))
+          
+          ;; Check 5: Candidate doesn't repeat common anti-patterns
+          (if (string-match-p "\\boptimize\\s-+code\\b\\|\\bimprove\\s-+performance\\b\\|\\bmake\\s-+better\\b" candidate)
+              (push "Candidate uses vague improvement language" errors)
+            (setq score (+ score 0.2)))
+          
+          (list :valid (null errors)
+                :errors (nreverse errors)
+                :score score))
+      (when (file-exists-p temp-file)
+        (delete-file temp-file)))))
+
+(defun gptel-auto-experiment--batch-validate-candidates (agent-output target-full-path)
+  "Validate all candidates from AGENT-OUTPUT for TARGET-FULL-PATH.
+Returns list of (candidate . validation-result) pairs, sorted by score descending."
+  (let* ((candidates (gptel-auto-experiment--extract-candidates agent-output))
+         (validated (mapcar (lambda (cand)
+                              (cons cand (gptel-auto-experiment--validate-candidate-safely
+                                          cand target-full-path)))
+                            candidates)))
+    (sort validated (lambda (a b)
+                      (> (plist-get (cdr a) :score)
+                         (plist-get (cdr b) :score))))))
+
+(defun gptel-auto-experiment--select-best-candidate (validated-candidates)
+  "Select best candidate from VALIDATED-CANDIDATES.
+Returns the candidate string, or nil if none valid."
+  (catch 'found
+    (dolist (pair validated-candidates)
+      (when (plist-get (cdr pair) :valid)
+        (throw 'found (car pair))))
+    ;; If no fully valid candidate, pick highest scoring
+    (car (car validated-candidates))))
 
 (provide 'gptel-tools-agent-prompt-build)
 ;;; gptel-tools-agent-prompt-build.el ends here
