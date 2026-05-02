@@ -862,7 +862,7 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
         (cond
-         ((eq cw my/gptel--gptel-tables-miss-sentinel)
+         ((null cw)
           (puthash model-id my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache)
           nil)
          ((my/gptel--positive-integer-p cw)
