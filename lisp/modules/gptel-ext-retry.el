@@ -549,6 +549,9 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
     (or (and (stringp error-data)
              (string-match-p my/gptel--transient-error-string-patterns
                              (downcase error-data)))
+        (and (symbolp error-data)
+             (string-match-p my/gptel--transient-error-string-patterns
+                             (downcase (symbol-name error-data))))
         (and (numberp status) (memq status my/gptel--transient-http-statuses))
         (and (numberp status)
              (= status 400)
