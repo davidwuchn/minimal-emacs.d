@@ -234,6 +234,8 @@ Supported shape:
 
 (defun gptel-sandbox--lookup (symbol env)
   "Look up SYMBOL in ENV or signal an error."
+  (unless (hash-table-p env)
+    (error "Programmatic sandbox lookup requires a hash table environment, got: %S" env))
   (let ((value (gethash symbol env gptel-sandbox--missing-marker)))
     (if (eq value gptel-sandbox--missing-marker)
         (error "Unknown symbol in Programmatic sandbox: %S" symbol)
