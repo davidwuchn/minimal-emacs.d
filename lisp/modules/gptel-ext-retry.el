@@ -162,7 +162,7 @@ has disabled retry trimming (nil). This allows pre-send compaction to work
 independently of retry settings.
 
 Returns the number of messages truncated, or 0 if nothing was done."
-  (if (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p))
+  (if (or (null info) (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p)))
       0
     (let* ((data (plist-get info :data))
            (messages (and data (plist-get data :messages)))
