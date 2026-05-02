@@ -225,6 +225,30 @@ Returns alist of target → (category success-rate count)."
                      (> (cl-reduce #'+ (mapcar (lambda (x) (nth 2 x)) (cdr a)))
                         (cl-reduce #'+ (mapcar (lambda (x) (nth 2 x)) (cdr b)))))))))
 
+(defun gptel-auto-workflow--evolution-pending-drafts ()
+  "Scan mementum knowledge drafts and return list of (topic age-days preview)."
+  (let* ((drafts-dir (expand-file-name "mementum/knowledge/drafts"
+                                       (gptel-auto-workflow--worktree-base-root)))
+         (drafts '())
+         (now (current-time)))
+    (when (file-directory-p drafts-dir)
+      (dolist (file (directory-files drafts-dir t "\\.md$"))
+        (let* ((topic (file-name-sans-extension (file-name-nondirectory file)))
+               (mtime (file-attribute-modification-time (file-attributes file)))
+               (age-days (/ (float-time (time-subtract now mtime)) 86400))
+               (preview (with-temp-buffer
+                          (insert-file-contents file)
+                          (goto-char (point-min))
+                          (when (looking-at "---")
+                            (forward-line 1)
+                            (while (not (looking-at "---"))
+                              (forward-line 1))
+                            (forward-line 1))
+                          (buffer-substring (point) (min (+ (point) 300) (point-max))))))
+          (push (list topic age-days preview) drafts))))
+    ;; Sort by age descending (oldest first)
+    (sort drafts (lambda (a b) (> (nth 1 a) (nth 1 b))))))
+
 ;; ─── Phase 3: Synthesize ──→ Mementum as Knowledge ───
 
 (defun gptel-auto-workflow--evolution-synthesize ()
@@ -331,6 +355,21 @@ This is the CENTRAL function of self-evolution."
                     (insert (format "- **%s**: %.0f%% (%d experiments)\n"
                                     cat (* 100 rate) count))))
                 (insert "\n")))))
+
+        ;; Section 5: Pending Mementum Drafts
+        (insert "## Pending Knowledge Drafts\n\n")
+        (let ((drafts (gptel-auto-workflow--evolution-pending-drafts)))
+          (if (null drafts)
+              (insert "*No pending drafts awaiting review.*\n")
+            (insert (format "*%d draft(s) awaiting human review:*\n\n" (length drafts)))
+            (dolist (draft drafts)
+              (let ((topic (nth 0 draft))
+                    (age (nth 1 draft))
+                    (preview (nth 2 draft)))
+                (insert (format "### `%s`\n\n" topic))
+                (insert (format "- **Age:** %.1f days\n" age))
+                (insert (format "- **Preview:** %s\n\n" preview))))))
+        (insert "\n")
 
         (insert "## Feedback Loop\n\n")
         (insert "```\n")

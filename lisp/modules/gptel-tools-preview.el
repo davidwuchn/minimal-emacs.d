@@ -341,7 +341,8 @@ Returns (SANITIZED-PATCH . WARNING) or (nil . ERROR) if invalid."
   (cond
    ((not (stringp patch))
     (cons nil "Patch must be a string"))
-   ((and (> gptel-tools-preview-max-patch-size 0)
+   ((and (stringp patch)
+         (> gptel-tools-preview-max-patch-size 0)
          (> (length patch) gptel-tools-preview-max-patch-size))
     (cons nil (format "Patch too large (%d chars, max %d)"
                       (length patch) gptel-tools-preview-max-patch-size)))

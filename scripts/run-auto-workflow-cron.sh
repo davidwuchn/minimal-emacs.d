@@ -917,7 +917,7 @@ workflow_action_elisp() {
     case "$action" in
         auto-workflow) dispatch="(gptel-auto-workflow-queue-all-projects)" ;;
         research) dispatch="(gptel-auto-workflow-queue-all-research)" ;;
-        mementum) dispatch="(gptel-auto-workflow-queue-all-mementum)" ;;
+        mementum) dispatch="(progn (setq gptel-mementum-headless-auto-approve (quote draft)) (gptel-auto-workflow-queue-all-mementum))" ;;
         instincts) dispatch="(gptel-auto-workflow-queue-all-instincts)" ;;
         evolution) dispatch="(when (fboundp 'gptel-auto-workflow-evolution-run-cycle) (gptel-auto-workflow-evolution-run-cycle))" ;;
         *) return 1 ;;
@@ -1077,7 +1077,7 @@ ensure_worker_daemon() {
         EMACSNATIVELOADPATH= \
         MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
         MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-        "$EMACS" --init-directory="$DIR" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
+        "$EMACS" --init-directory="$DIR" --daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
     for _ in $(seq 1 50); do
         if check_worker_daemon; then
             rc=0
