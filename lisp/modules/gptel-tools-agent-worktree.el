@@ -558,7 +558,8 @@ repo."
 Never touches project root - all verification happens in the worktree.
 Returns worktree path or nil on failure."
   (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
-         (default-directory proj-root)
+         (default-directory (or proj-root
+                                 (gptel-auto-workflow--default-dir)))
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
                                 "var/tmp/experiments"))
          (worktree-dir (expand-file-name
