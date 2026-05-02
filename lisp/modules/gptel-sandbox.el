@@ -573,6 +573,8 @@ can consume lists, vectors, plists, and alists as readable data."
                       nil))
          (arg-values (and tool-spec
                           (gptel-sandbox--resolve-tool-args tool-spec arg-forms env))))
+    (unless tool-spec
+      (error "Unknown tool %s requested by Programmatic" tool-name))
     (gptel-sandbox--check-tool tool-name tool-spec arg-values)
     (cl-incf (plist-get state :tool-count))
     (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
