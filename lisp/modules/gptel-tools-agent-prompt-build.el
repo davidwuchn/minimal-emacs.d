@@ -91,6 +91,88 @@ Returns the adjusted max chars value."
       (message "[prompt-efficiency] Skill-guided compression: %d chars" compression)))
   gptel-auto-workflow--topic-knowledge-max-chars)
 
+;;; Section A/B Testing
+
+(defvar gptel-auto-workflow--ab-test-sections
+  '(suggestions self-evolution topic-specific git-history
+    axis-performance cross-target-patterns failure-patterns)
+  "Prompt sections that can be individually included/excluded for A/B testing.")
+
+(defvar gptel-auto-workflow--ab-test-omit-rate 0.2
+  "Probability of randomly omitting a section to gather A/B data.")
+
+(defvar gptel-auto-workflow--ab-test-min-samples 10
+  "Minimum experiments before using A/B data for section selection.")
+
+(defun gptel-auto-workflow--analyze-section-performance ()
+  "Analyze which prompt sections correlate with success.
+Returns hash table: section-name -> (kept-count . total-count)."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (section-stats (make-hash-table :test 'equal)))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (decision (nth 7 fields))
+                 (sections-str (or (nth 16 fields) "all"))
+                 (kept (equal decision "kept")))
+            (when (not (equal sections-str "all"))
+              (dolist (section (split-string sections-str ","))
+                (let* ((key (intern section))
+                       (current (gethash key section-stats '(0 . 0)))
+                       (curr-kept (car current))
+                       (curr-total (cdr current)))
+                  (puthash key
+                           (cons (if kept (1+ curr-kept) curr-kept)
+                                 (1+ curr-total))
+                           section-stats))))
+          (forward-line 1))))
+    section-stats))
+
+(defun gptel-auto-workflow--select-ab-test-sections ()
+  "Select which prompt sections to include based on A/B test data.
+Returns list of section symbols to include.
+With insufficient data, includes all sections.
+With sufficient data, includes only sections with positive correlation."
+  (let* ((section-stats (gptel-auto-workflow--analyze-section-performance))
+         (total-experiments 0)
+         (effective-sections '()))
+    ;; Count total experiments with section tracking
+    (maphash (lambda (_ stats)
+               (setq total-experiments (+ total-experiments (cdr stats))))
+             section-stats)
+    (cond
+     ;; Not enough data: include all, occasionally omit random section for exploration
+     ((< total-experiments gptel-auto-workflow--ab-test-min-samples)
+      (if (< (random 100) (* 100 gptel-auto-workflow--ab-test-omit-rate))
+          ;; Randomly omit one section to gather data
+          (let ((to-omit (nth (random (length gptel-auto-workflow--ab-test-sections))
+                              gptel-auto-workflow--ab-test-sections)))
+            (message "[ab-test] Omitting %s for exploration (data gathering phase)" to-omit)
+            (remove to-omit gptel-auto-workflow--ab-test-sections))
+        gptel-auto-workflow--ab-test-sections))
+     ;; Sufficient data: include only effective sections
+     (t
+      (dolist (section gptel-auto-workflow--ab-test-sections)
+        (let* ((stats (gethash section section-stats '(0 . 0)))
+               (kept (car stats))
+               (total (cdr stats))
+               (rate (if (> total 0) (/ (float kept) total) 0.5)))
+          (when (or (= total 0)  ; no data yet, give benefit of doubt
+                    (>= rate 0.3))  ; at least 30% success rate
+            (push section effective-sections))))
+      (message "[ab-test] Selected sections (%d/%d): %s"
+               (length effective-sections)
+               (length gptel-auto-workflow--ab-test-sections)
+               (mapconcat #'symbol-name effective-sections ","))
+      (nreverse effective-sections))))))
+
 (defun gptel-auto-workflow--load-skill-content (skill-name)
   "Load SKILL-NAME from assistant/skills/ directories.
 Returns skill content string or empty string if not found.
@@ -353,10 +435,13 @@ Implements section-level A/B testing to identify effective prompt components."
                                           (format "## Hypothesis Templates\n%s"
                                                   (mapconcat (lambda (tmpl) (format "- %s" tmpl)) mutation-templates "\n"))
                                         ""))
-               (axis-guidance . ,(or (gptel-auto-experiment--format-axis-guidance
-                                      (gptel-auto-experiment--get-underexplored-axis target)) ""))
+                (axis-guidance . ,(or (gptel-auto-experiment--format-axis-guidance
+                                       (gptel-auto-experiment--get-underexplored-axis target)) ""))
+                (axis-performance . ,(gptel-auto-experiment--format-axis-performance target))
                 (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
                 (saturation-status . ,(gptel-auto-experiment--frontier-saturation-guidance target))
+                (failure-patterns . ,(gptel-auto-experiment--format-failure-patterns target))
+                (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
                 (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
                (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
                (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
@@ -1223,6 +1308,240 @@ Saturated means: >=3 Pareto experiments, >=4 axes, quality>=0.8."
           (message "[frontier-filter] WARNING: All %d targets saturated!" (length targets))
           nil)
       (nreverse filtered))))
+
+;;; Axis Analysis and Adaptive Weighting
+
+(defun gptel-auto-experiment--get-axis-stats (target)
+  "Calculate exploration statistics for TARGET from TSV history.
+Returns plist with :counts (axis->count), :successes (axis->kept-count),
+:rates (axis->success-rate), :total-experiments."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (counts (make-hash-table :test 'equal))
+        (successes (make-hash-table :test 'equal))
+        (total 0))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (line-target (nth 1 fields))
+                 (decision (nth 7 fields))
+                 (axis (or (nth 17 fields) "?")))
+            (when (and (equal line-target target)
+                       (not (equal axis "?"))
+                       (not (string-empty-p axis)))
+              (setq total (1+ total))
+              (puthash axis (1+ (gethash axis counts 0)) counts)
+              (when (equal decision "kept")
+                (puthash axis (1+ (gethash axis successes 0)) successes))))
+          (forward-line 1))))
+    (let ((rates (make-hash-table :test 'equal)))
+      (maphash (lambda (axis count)
+                 (let ((success-count (gethash axis successes 0)))
+                   (puthash axis (/ (float success-count) count) rates)))
+               counts)
+      (list :counts counts
+            :successes successes
+            :rates rates
+            :total-experiments total))))
+
+(defun gptel-auto-experiment--get-underexplored-axis (target)
+  "Find least-explored axis for TARGET.
+Returns axis letter (A-F) or nil if insufficient data."
+  (let* ((stats (gptel-auto-experiment--get-axis-stats target))
+         (counts (plist-get stats :counts))
+         (axes '("A" "B" "C" "D" "E" "F"))
+         (min-count most-positive-fixnum)
+         (underexplored nil))
+    (dolist (axis axes)
+      (let ((count (gethash axis counts 0)))
+        (when (< count min-count)
+          (setq min-count count)
+          (setq underexplored axis))))
+    ;; Only suggest underexplored axis if we have some data
+    (when (and underexplored
+               (> (plist-get stats :total-experiments) 0))
+      underexplored)))
+
+(defun gptel-auto-experiment--get-axis-success-rates (target)
+  "Get formatted success rates per axis for TARGET.
+Returns string describing which axes have been most successful."
+  (let* ((stats (gptel-auto-experiment--get-axis-stats target))
+         (rates (plist-get stats :rates))
+         (counts (plist-get stats :counts))
+          (axis-names '(("A" . "Error Handling")
+                        ("B" . "Performance")
+                        ("C" . "Refactoring")
+                        ("D" . "Safety")
+                        ("E" . "Test Coverage")
+                        ("F" . "Memory Management")))
+         (results '()))
+    (dolist (pair axis-names)
+      (let* ((axis (car pair))
+             (name (cdr pair))
+             (count (gethash axis counts 0))
+             (rate (if (> count 0)
+                      (gethash axis rates 0.0)
+                    nil)))
+        (when (and rate (> count 0))
+          (push (list :axis axis :name name :count count :rate rate) results))))
+    ;; Sort by success rate descending
+    (setq results (sort results (lambda (a b)
+                                  (> (plist-get a :rate)
+                                     (plist-get b :rate)))))
+    (if (null results)
+        "No historical axis data yet."
+      (concat "Historical success rates by axis:\n"
+              (mapconcat (lambda (r)
+                           (format "- %s (%s): %.0f%% success (%d experiments)"
+                                   (plist-get r :axis)
+                                   (plist-get r :name)
+                                   (* 100 (plist-get r :rate))
+                                   (plist-get r :count)))
+                         results
+                         "\n")))))
+
+(defun gptel-auto-experiment--format-axis-guidance (axis)
+  "Format guidance for exploring AXIS.
+Returns string with axis description and rationale."
+  (when axis
+    (let* ((axis-info (assoc axis
+                             '(("A" . "Error Handling")
+                               ("B" . "Performance")
+                               ("C" . "Refactoring")
+                               ("D" . "Safety")
+                               ("E" . "Test Coverage")
+                               ("F" . "Memory Management"))))
+           (axis-name (cdr axis-info)))
+      (concat "## Exploration Guidance\n"
+              "Priority axis: " axis " (" axis-name ") — least explored for this target.\n"
+              "Consider: "
+              (pcase axis
+                ("A" "adding validation, fixing error handling gaps, improving error messages")
+                ("B" "reducing complexity, adding caching, optimizing hot paths")
+                ("C" "extracting functions, removing duplication, improving naming")
+                ("D" "adding guards, type checking, boundary validation")
+                ("E" "adding missing tests for existing functionality")
+                ("F" "fixing memory leaks, optimizing allocation, improving cleanup")
+                (_ "general improvements"))
+              ".\n\n"))))
+
+(defun gptel-auto-experiment--format-axis-performance (target)
+  "Format axis performance history for TARGET.
+Returns string showing which axes have been most successful."
+  (let ((rates-str (gptel-auto-experiment--get-axis-success-rates target)))
+    (concat "## Axis Performance History\n"
+            rates-str
+            "\n\nRecommendation: Prioritize axes with higher success rates, but also explore underexplored axes to build frontier coverage.\n\n")))
+
+;;; Failure Pattern Injection
+
+(defun gptel-auto-experiment--get-common-failure-reasons (target &optional n)
+  "Get most common failure reasons for TARGET from TSV.
+Returns list of (reason . count) pairs, sorted by frequency.
+Optional N limits number of reasons (default 3)."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (reasons (make-hash-table :test 'equal))
+        (total-failures 0))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (line-target (nth 1 fields))
+                 (decision (nth 7 fields))
+                 (reason (nth 11 fields))) ; comparator_reason column
+            (when (and (equal line-target target)
+                       (not (equal decision "kept"))
+                       reason
+                       (not (string-empty-p reason))
+                       (not (equal reason "N/A")))
+              (setq total-failures (1+ total-failures))
+              (puthash reason (1+ (gethash reason reasons 0)) reasons)))
+          (forward-line 1))))
+    ;; Convert to sorted list
+    (let ((pairs '()))
+      (maphash (lambda (reason count)
+                 (push (cons reason count) pairs))
+               reasons)
+      (setq pairs (sort pairs (lambda (a b) (> (cdr a) (cdr b)))))
+      (seq-take pairs (or n 3)))))
+
+(defun gptel-auto-experiment--format-failure-patterns (target)
+  "Format common failure patterns for TARGET as prompt guidance.
+Returns string warning about common rejection reasons, or empty string."
+  (let ((reasons (gptel-auto-experiment--get-common-failure-reasons target 3)))
+    (if (null reasons)
+        ""
+      (concat "## Common Failure Patterns (AVOID THESE)\n"
+              "Recent experiments on this target were discarded for these reasons:\n"
+              (mapconcat (lambda (pair)
+                           (format "- %s (%d times)"
+                                   (car pair) (cdr pair)))
+                         reasons
+                         "\n")
+              "\n\nTo succeed, actively avoid the patterns above.\n\n"))))
+
+;;; Cross-Target Pattern Transfer
+
+(defun gptel-auto-experiment--get-successful-patterns-from-others (target &optional n)
+  "Get successful experiment patterns from OTHER targets (not TARGET).
+Returns list of plists with :target :axis :hypothesis for kept experiments.
+Optional N limits results (default 5)."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (patterns '()))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1) ; skip header
+        (while (and (not (eobp)) (< (length patterns) (or n 5)))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (line-target (nth 1 fields))
+                 (decision (nth 7 fields))
+                 (axis (or (nth 17 fields) "?"))
+                 (hypothesis (nth 2 fields)))
+            (when (and (not (equal line-target target))
+                       (equal decision "kept")
+                       hypothesis
+                       (not (string-empty-p hypothesis))
+                       (not (equal axis "?")))
+              (push (list :target line-target
+                          :axis axis
+                          :hypothesis (truncate-string-to-width hypothesis 100 nil nil "..."))
+                    patterns)))
+          (forward-line 1))))
+    (nreverse patterns)))
+
+(defun gptel-auto-experiment--format-cross-target-patterns (target)
+  "Format successful patterns from other targets as suggestions.
+Returns string with transferable insights, or empty string if none."
+  (let ((patterns (gptel-auto-experiment--get-successful-patterns-from-others target 5)))
+    (if (null patterns)
+        ""
+      (concat "## Successful Patterns from Other Targets\n"
+              "These approaches worked well on similar files:\n"
+              (mapconcat (lambda (p)
+                           (format "- [%s on %s] %s"
+                                   (plist-get p :axis)
+                                   (file-name-nondirectory (plist-get p :target))
+                                   (plist-get p :hypothesis)))
+                         patterns
+                         "\n")
+              "\n\nConsider adapting these patterns to this target if applicable.\n\n"))))
 
 (provide 'gptel-tools-agent-prompt-build)
 ;;; gptel-tools-agent-prompt-build.el ends here
