@@ -269,5 +269,67 @@ Returns new strategy name or nil if rejected."
       (message "[strategy-evolution] ACCEPTED %s (axis %s)" new-name axis)
       new-name)))
 
+;;; Periodic Strategy Evolution
+
+(defun gptel-auto-workflow--maybe-evolve-strategy (target)
+  "Maybe evolve a new strategy for TARGET based on recent performance.
+Called periodically from the experiment loop.
+If current strategy is underperforming, tries to generate a new one."
+  (when (and gptel-auto-workflow--strategy-evolution-enabled
+             (fboundp 'gptel-auto-workflow--select-best-strategy))
+    (let* ((current-strategy gptel-auto-workflow--active-strategy)
+           (current-perf (gptel-auto-workflow--get-strategy-performance current-strategy))
+           (current-success-rate (plist-get current-perf :success-rate))
+           (current-total (plist-get current-perf :total)))
+      ;; Only evolve if we have enough data and performance is mediocre
+      (when (and (>= current-total 5)  ; At least 5 experiments
+                 (<= current-success-rate 0.4))  ; 40% or less success
+        (message "[strategy] Current strategy '%s' has %.0f%% success rate, triggering evolution"
+                 current-strategy (* 100 current-success-rate))
+        ;; Pick an exploitation axis that's been least explored
+        (let* ((axis-perf (make-hash-table :test 'equal))
+               (all-axes '("A" "B" "C" "D" "E" "F")))
+          ;; Count experiments per axis for current strategy
+          (let ((eval-file (expand-file-name gptel-auto-workflow--strategy-evaluations-file
+                                            (gptel-auto-workflow--project-root))))
+            (when (file-exists-p eval-file)
+              (with-temp-buffer
+                (insert-file-contents eval-file)
+                (goto-char (point-min))
+                (while (not (eobp))
+                  (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
+                    (when (not (string-empty-p line))
+                      (condition-case nil
+                          (let* ((entry (json-read-from-string line))
+                                 (entry-strategy (cdr (assoc 'strategy entry)))
+                                 (entry-axis (cdr (assoc 'axis entry))))
+                            (when (and (equal entry-strategy current-strategy)
+                                       entry-axis)
+                              (puthash entry-axis
+                                       (1+ (gethash entry-axis axis-perf 0))
+                                       axis-perf)))
+                        (error nil)))
+                    (forward-line 1))))))
+          ;; Find least explored axis
+          (let ((min-count most-positive-fixnum)
+                (target-axis nil))
+            (dolist (axis all-axes)
+              (let ((count (gethash axis axis-perf 0)))
+                (when (< count min-count)
+                  (setq min-count count)
+                  (setq target-axis axis))))
+            ;; Evolve strategy
+            (let ((new-strategy
+                   (gptel-auto-workflow--evolve-strategy
+                    current-strategy
+                    (format "Improve strategy by targeting axis %s (%s)"
+                            target-axis
+                            (cdr (assoc target-axis gptel-auto-workflow--strategy-evolution-axes)))
+                    target-axis)))
+              (when new-strategy
+                (message "[strategy] Evolved new strategy: %s" new-strategy)
+                ;; Switch to new strategy if it passed validation
+                (setq gptel-auto-workflow--active-strategy new-strategy))))))))
+
 (provide 'gptel-tools-agent-strategy-evolver)
 ;;; gptel-tools-agent-strategy-evolver.el ends here

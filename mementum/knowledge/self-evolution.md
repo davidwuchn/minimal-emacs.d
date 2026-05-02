@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-02 16:27
+updated: 2026-05-02 19:52
 ---
 
 # Self-Evolution Knowledge Base
@@ -13,47 +13,48 @@ updated: 2026-05-02 16:27
 
 ## Git History Facts
 
-- Active experiment branches: 113
+- Active experiment branches: 114
 - Historical merges: 588
-- Active branches merged: 7
-- Active branches abandoned: 106
-- Active merge rate: 6.2%
+- Active branches merged: 11
+- Active branches abandoned: 103
+- Active merge rate: 9.6%
 
 ### Target Frequency
 
 - `agent`: 31 experiments
 - `cache`: 18 experiments
-- `loop`: 15 experiments
+- `loop`: 17 experiments
 - `utils`: 8 experiments
-- `strategic`: 8 experiments
-- `sandbox`: 7 experiments
-- `retry`: 4 experiments
+- `strategic`: 6 experiments
+- `sandbox`: 6 experiments
+- `retry`: 5 experiments
+- `tests`: 4 experiments
 - `projects`: 4 experiments
-- `tests`: 3 experiments
-- `core`: 3 experiments
 - `tools`: 2 experiments
 - `runtime`: 2 experiments
 - `merge`: 2 experiments
 - `git`: 2 experiments
+- `core`: 2 experiments
 - `confirm`: 2 experiments
 - `sanitize`: 1 experiments
+- `preview`: 1 experiments
 - `context`: 1 experiments
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 25% verified (60/243 experiments)
-- **performance**: 16% verified (4/25 experiments)
-- **refactoring**: 28% verified (22/80 experiments)
-- **safety**: 26% verified (18/68 experiments)
+- **bug-fix**: 0% verified (0/54 experiments)
+- **performance**: 0% verified (0/9 experiments)
+- **refactoring**: 0% verified (0/11 experiments)
+- **safety**: 0% verified (0/11 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **refactoring** - 28% kept (80 experiments)
-2. **safety** - 26% kept (68 experiments)
-3. **bug-fix** - 25% kept (243 experiments)
-4. **performance** - 16% kept (25 experiments)
+1. **bug-fix** - 0% kept (54 experiments)
+2. **performance** - 0% kept (9 experiments)
+3. **refactoring** - 0% kept (11 experiments)
+4. **safety** - 0% kept (11 experiments)
 
 ## Critical Guidance for Maximum Success
 
@@ -72,86 +73,32 @@ Which change types work best for each target file:
 
 ### `gptel-tools-agent.el`
 
-- **refactoring**: 29% (7 experiments)
-- **bug-fix**: 22% (37 experiments)
-- **safety**: 0% (4 experiments)
-
-### `gptel-agent-loop.el`
-
-- **safety**: 57% (7 experiments)
-- **refactoring**: 50% (6 experiments)
-- **bug-fix**: 41% (22 experiments)
+- **bug-fix**: 0% (16 experiments)
+- **refactoring**: 0% (6 experiments)
 
 ### `gptel-auto-workflow-strategic.el`
 
-- **safety**: 36% (11 experiments)
-- **bug-fix**: 17% (18 experiments)
-- **performance**: 0% (3 experiments)
-
-### `gptel-ext-retry.el`
-
-- **bug-fix**: 10% (20 experiments)
-- **refactoring**: 0% (5 experiments)
+- **bug-fix**: 0% (9 experiments)
 
 ### `gptel-benchmark-core.el`
 
-- **bug-fix**: 46% (24 experiments)
-
-### `staging-merge`
-
-- **other**: 0% (23 experiments)
+- **bug-fix**: 0% (7 experiments)
 
 ### `gptel-ext-context-cache.el`
 
-- **bug-fix**: 47% (15 experiments)
-- **performance**: 29% (7 experiments)
-
-### `gptel-sandbox.el`
-
-- **bug-fix**: 33% (9 experiments)
-- **safety**: 29% (7 experiments)
-- **refactoring**: 0% (3 experiments)
-
-### `gptel-ext-context.el`
-
-- **safety**: 25% (4 experiments)
-- **bug-fix**: 15% (13 experiments)
-
-### `staging-review`
-
-- **bug-fix**: 0% (12 experiments)
-
-### `staging-verification`
-
-- **other**: 0% (12 experiments)
-
-### `gptel-benchmark-subagent.el`
-
-- **bug-fix**: 0% (10 experiments)
-
-### `gptel-auto-workflow-projects.el`
-
-- **bug-fix**: 11% (9 experiments)
+- **performance**: 0% (4 experiments)
 
 ### `gptel-auto-workflow-behavioral-tests.el`
 
-- **safety**: 50% (4 experiments)
+- **bug-fix**: 0% (3 experiments)
 
-### `gptel-ext-core.el`
-
-- **safety**: 25% (4 experiments)
-
-### `gptel-ext-fsm.el`
+### `gptel-ext-retry.el`
 
 - **bug-fix**: 0% (3 experiments)
 
-### `gptel-tools-grep.el`
+## Auto-Approved Knowledge Pages
 
-- **bug-fix**: 0% (3 experiments)
-
-### `gptel-tools-code.el`
-
-- **bug-fix**: 0% (3 experiments)
+*No auto-approved knowledge pages yet.*
 
 ## Feedback Loop
 
