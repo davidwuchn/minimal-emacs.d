@@ -49,6 +49,10 @@
               (if (symbolp tool) (symbol-name tool) tool)))
           (gptel-workflow--tool-calls-list run)))
 
+(defun gptel-workflow--tool-symbols (tool-calls)
+  "Return list of tool symbols from TOOL-CALLS."
+  (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls))
+
 (defun gptel-workflow--phase-active-p (run phase)
   "Return non-nil if PHASE is active in RUN's phase trace."
   (cl-find phase (gptel-workflow-run-phase-trace run)
@@ -219,7 +223,7 @@ Returns list of phase entries."
   "Detect P1 phase from TOOL-CALLS.
 P1 = Understand → Explore → Decide → Present
 Indicators: grep/read tools used, no edit/write yet."
-  (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
+  (let ((tools (gptel-workflow--tool-symbols tool-calls)))
     (when (and (or (memq 'grep tools)
                    (memq 'Grep tools)
                    (cl-member "grep" tools :test #'equal :key #'symbol-name))
@@ -235,7 +239,7 @@ Indicators: grep/read tools used, no edit/write yet."
   "Detect P2 phase from TOOL-CALLS and OUTPUT.
 P2 = refine (plan created, updates made)
 Indicators: plan file mentioned, Updates in output, or edit tools used."
-  (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
+  (let ((tools (gptel-workflow--tool-symbols tool-calls)))
     (when (or (string-match-p "[Pp]lan" output)
               (string-match-p "[Uu]pdates" output)
               (memq 'edit tools)
@@ -253,7 +257,7 @@ Indicators: plan file mentioned, Updates in output, or edit tools used."
   "Detect P3 phase from TOOL-CALLS.
 P3 = preview (preview_file_change tool called)
 Indicators: preview tool used."
-  (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
+  (let ((tools (gptel-workflow--tool-symbols tool-calls)))
     (when (or (memq 'preview_file_change tools)
               (memq 'Preview tools)
               (cl-member "preview" tools :test #'equal :key #'symbol-name)
