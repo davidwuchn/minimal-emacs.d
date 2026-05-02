@@ -545,7 +545,7 @@ Returns new strategy name or nil if rejected."
                                :name candidate-name
                                :output output
                                :output-length (length output))
-                          valid-candidates))))))))
+                           valid-candidates)))))))))
     
     ;; Pick best candidate (longest output = most content, heuristic for completeness)
     (when valid-candidates
@@ -643,7 +643,7 @@ If current strategy is underperforming, tries to generate a new one."
               (when new-strategy
                 (message "[strategy] Evolved new strategy: %s" new-strategy)
                 ;; Switch to new strategy if it passed validation
-                (setq gptel-auto-workflow--active-strategy new-strategy))))))))))
+                 (setq gptel-auto-workflow--active-strategy new-strategy)))))))))
 
 (provide 'gptel-tools-agent-strategy-evolver)
 ;;; gptel-tools-agent-strategy-evolver.el ends here
