@@ -359,6 +359,7 @@ Implements section-level A/B testing to identify effective prompt components."
                 (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
                 (saturation-status . ,(gptel-auto-experiment--frontier-saturation-guidance target))
                 (failure-patterns . ,(gptel-auto-experiment--format-failure-patterns target))
+                (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
                 (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
                (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
                (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
@@ -1408,6 +1409,57 @@ Returns string warning about common rejection reasons, or empty string."
                          reasons
                          "\n")
               "\n\nTo succeed, actively avoid the patterns above.\n\n"))))
+
+;;; Cross-Target Pattern Transfer
+
+(defun gptel-auto-experiment--get-successful-patterns-from-others (target &optional n)
+  "Get successful experiment patterns from OTHER targets (not TARGET).
+Returns list of plists with :target :axis :hypothesis for kept experiments.
+Optional N limits results (default 5)."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (patterns '()))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1) ; skip header
+        (while (and (not (eobp)) (< (length patterns) (or n 5)))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (line-target (nth 1 fields))
+                 (decision (nth 7 fields))
+                 (axis (or (nth 17 fields) "?"))
+                 (hypothesis (nth 2 fields)))
+            (when (and (not (equal line-target target))
+                       (equal decision "kept")
+                       hypothesis
+                       (not (string-empty-p hypothesis))
+                       (not (equal axis "?")))
+              (push (list :target line-target
+                          :axis axis
+                          :hypothesis (truncate-string-to-width hypothesis 100 nil nil "..."))
+                    patterns)))
+          (forward-line 1))))
+    (nreverse patterns)))
+
+(defun gptel-auto-experiment--format-cross-target-patterns (target)
+  "Format successful patterns from other targets as suggestions.
+Returns string with transferable insights, or empty string if none."
+  (let ((patterns (gptel-auto-experiment--get-successful-patterns-from-others target 5)))
+    (if (null patterns)
+        ""
+      (concat "## Successful Patterns from Other Targets\n"
+              "These approaches worked well on similar files:\n"
+              (mapconcat (lambda (p)
+                           (format "- [%s on %s] %s"
+                                   (plist-get p :axis)
+                                   (file-name-nondirectory (plist-get p :target))
+                                   (plist-get p :hypothesis)))
+                         patterns
+                         "\n")
+              "\n\nConsider adapting these patterns to this target if applicable.\n\n"))))
 
 (provide 'gptel-tools-agent-prompt-build)
 ;;; gptel-tools-agent-prompt-build.el ends here
