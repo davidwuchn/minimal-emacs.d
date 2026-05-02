@@ -194,19 +194,23 @@ Uses git CLI directly to avoid magit issues."
     (when worktree-dir
       (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
       (when (file-exists-p worktree-dir)
-        (let ((proj-root (gptel-auto-workflow--worktree-base-root)))
-          (condition-case err
-              (let ((default-directory proj-root))
-                ;; Remove worktree
-                (let ((exit-code (call-process "git" nil nil nil
-                                               "worktree" "remove" worktree-dir)))
-                  (unless (eq exit-code 0)
-                    (error "git worktree remove failed with exit code %s" exit-code)))
-                ;; Delete the branch
-                (when branch
-                  (call-process "git" nil nil nil "branch" "-D" branch)))
-            (error
-             (message "[auto-workflow] Failed to delete worktree: %s" err))))))
+        (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
+               (safe-root (and (stringp proj-root)
+                              (file-directory-p proj-root)
+                              proj-root)))
+          (when safe-root
+            (condition-case err
+                (let ((default-directory safe-root))
+                  ;; Remove worktree
+                  (let ((exit-code (call-process "git" nil nil nil
+                                                 "worktree" "remove" worktree-dir)))
+                    (unless (eq exit-code 0)
+                      (error "git worktree remove failed with exit code %s" exit-code)))
+                  ;; Delete the branch
+                  (when branch
+                    (call-process "git" nil nil nil "branch" "-D" branch)))
+              (error
+               (message "[auto-workflow] Failed to delete worktree: %s" err)))))))
     (gptel-auto-workflow--clear-worktree-state target)))
 
 ;;; Staging Branch Protection
