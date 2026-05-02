@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-02 09:27
+updated: 2026-05-02 10:27
 ---
 
 # Self-Evolution Knowledge Base
@@ -13,36 +13,35 @@ updated: 2026-05-02 09:27
 
 ## Git History Facts
 
-- Active experiment branches: 117
+- Active experiment branches: 109
 - Historical merges: 588
-- Active branches merged: 11
-- Active branches abandoned: 106
-- Active merge rate: 9.4%
+- Active branches merged: 7
+- Active branches abandoned: 102
+- Active merge rate: 6.4%
 
 ### Target Frequency
 
 - `agent`: 31 experiments
-- `loop`: 17 experiments
-- `cache`: 17 experiments
+- `cache`: 16 experiments
+- `loop`: 15 experiments
 - `utils`: 8 experiments
 - `strategic`: 8 experiments
-- `sandbox`: 8 experiments
-- `retry`: 5 experiments
-- `tests`: 4 experiments
+- `sandbox`: 6 experiments
 - `projects`: 4 experiments
+- `tests`: 3 experiments
+- `retry`: 3 experiments
+- `core`: 3 experiments
 - `tools`: 2 experiments
 - `runtime`: 2 experiments
 - `merge`: 2 experiments
 - `git`: 2 experiments
-- `core`: 2 experiments
 - `confirm`: 2 experiments
 - `sanitize`: 1 experiments
-- `preview`: 1 experiments
 - `context`: 1 experiments
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 24% verified (56/230 experiments)
+- **bug-fix**: 24% verified (57/233 experiments)
 - **performance**: 17% verified (4/24 experiments)
 - **refactoring**: 28% verified (22/78 experiments)
 - **safety**: 28% verified (18/64 experiments)
@@ -53,7 +52,7 @@ Based on verified benchmark patterns (sorted by success rate):
 
 1. **refactoring** - 28% kept (78 experiments)
 2. **safety** - 28% kept (64 experiments)
-3. **bug-fix** - 24% kept (230 experiments)
+3. **bug-fix** - 24% kept (233 experiments)
 4. **performance** - 17% kept (24 experiments)
 
 ## Critical Guidance for Maximum Success
@@ -93,14 +92,14 @@ Which change types work best for each target file:
 
 - **other**: 0% (23 experiments)
 
+### `gptel-benchmark-core.el`
+
+- **bug-fix**: 48% (23 experiments)
+
 ### `gptel-ext-retry.el`
 
 - **bug-fix**: 6% (17 experiments)
 - **refactoring**: 0% (5 experiments)
-
-### `gptel-benchmark-core.el`
-
-- **bug-fix**: 50% (20 experiments)
 
 ### `gptel-ext-context-cache.el`
 

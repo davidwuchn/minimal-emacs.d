@@ -360,8 +360,8 @@ Implements section-level A/B testing to identify effective prompt components."
                (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
                (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
                (focus-line . ,focus-line)
-                 (sexp-check-command . ,sexp-check-command))))
-        (gptel-auto-workflow--substitute-template template variables))))
+               (sexp-check-command . ,sexp-check-command))))
+       (gptel-auto-workflow--substitute-template template variables))))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.

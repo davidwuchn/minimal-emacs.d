@@ -57,7 +57,7 @@ Uses cached value from load time, or detects from current directory."
                            (score-after (string-to-number (or (nth 4 fields) "0")))
                            (quality (string-to-number (or (nth 5 fields) "0")))
                            (delta-str (or (nth 6 fields) "+0.00"))
-                            (decision (nth 7 fields))
+                           (decision (nth 7 fields))
                              (grader-q (string-to-number (or (nth 9 fields) "0")))
                              (prompt-chars (string-to-number (or (nth 15 fields) "0"))))
                        (push (list :target target
@@ -456,7 +456,7 @@ Writes to optimization-skills/ as skill files that the prompt builder consumes."
       ;; Invalidate self-evolution cache so next prompt gets fresh knowledge
       (when (fboundp 'gptel-auto-workflow--knowledge-cache-invalidate)
         (gptel-auto-workflow--knowledge-cache-invalidate 'self-evolution)
-        (message "[knowledge-cache] Invalidated self-evolution")))))
+        (message "[knowledge-cache] Invalidated self-evolution")))
 
 ;; ─── Phase 4: Inject ──→ Prompts Read from Mementum ───
 
