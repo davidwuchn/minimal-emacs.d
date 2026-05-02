@@ -63,10 +63,21 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
             (gptel-auto-experiment--call-in-context
              experiment-buffer experiment-worktree
              (lambda ()
-               (let* ((patterns (when analysis (plist-get analysis :patterns)))
-                      (prompt (gptel-auto-experiment-build-prompt
-                               target experiment-id max-experiments analysis baseline previous-results)))
-               (setq executor-prompt prompt)
+                (let* ((patterns (when analysis (plist-get analysis :patterns)))
+                       ;; Select prompt-building strategy based on historical performance
+                       (strategy-name (if (and (boundp 'gptel-auto-workflow--strategy-evolution-enabled)
+                                               gptel-auto-workflow--strategy-evolution-enabled
+                                               (fboundp 'gptel-auto-workflow--select-best-strategy))
+                                          (gptel-auto-workflow--select-best-strategy target)
+                                        "template-default"))
+                       (prompt (if (and (fboundp 'gptel-auto-experiment-build-prompt-with-strategy)
+                                        (not (equal strategy-name "template-default")))
+                                   (gptel-auto-experiment-build-prompt-with-strategy
+                                    strategy-name target experiment-id max-experiments analysis baseline previous-results)
+                                 (gptel-auto-experiment-build-prompt
+                                  target experiment-id max-experiments analysis baseline previous-results))))
+                  (message "[strategy] Using strategy '%s' for %s experiment %d" strategy-name target experiment-id)
+                  (setq executor-prompt prompt)
                (setq executor-callback
                      (lambda (agent-output)
                    (gptel-auto-experiment--call-in-context
@@ -351,7 +362,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                             (list (car pair)
                                                                   :score (plist-get (cdr pair) :score)
                                                                   :valid (plist-get (cdr pair) :valid)))
-                                                          candidate-validation)))))
+                                                          candidate-validation))
+                          :strategy strategy-name)))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format
@@ -498,13 +510,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                              :backend experiment-backend
                                                                                              :prompt-chars (length executor-prompt)
                                                                                              :exploration-axis (gptel-auto-experiment--extract-axis retry-output)
-                                                                                             :candidate-validation (when candidate-validation
-                                                                                                                     (mapcar (lambda (pair)
-                                                                                                                               (list (car pair)
-                                                                                                                                     :score (plist-get (cdr pair) :score)
-                                                                                                                                     :valid (plist-get (cdr pair) :valid)))
-                                                                                                                             candidate-validation)))))
-                                                                                (if keep
+                                                                                              :candidate-validation (when candidate-validation
+                                                                                                                      (mapcar (lambda (pair)
+                                                                                                                                (list (car pair)
+                                                                                                                                      :score (plist-get (cdr pair) :score)
+                                                                                                                                      :valid (plist-get (cdr pair) :valid)))
+                                                                                                                              candidate-validation))
+                                                                                               :strategy strategy-name)))
+                                                                                  (if keep
                                                                                     (let* ((msg (format "◈ Retry: fix validation in %s"
 								                                                                        target))
 									                                                       (default-directory experiment-worktree)
