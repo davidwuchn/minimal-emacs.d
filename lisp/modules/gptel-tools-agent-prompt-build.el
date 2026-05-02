@@ -353,8 +353,9 @@ Implements section-level A/B testing to identify effective prompt components."
                                           (format "## Hypothesis Templates\n%s"
                                                   (mapconcat (lambda (tmpl) (format "- %s" tmpl)) mutation-templates "\n"))
                                         ""))
-               (axis-guidance . ,(or (gptel-auto-experiment--format-axis-guidance
-                                      (gptel-auto-experiment--get-underexplored-axis target)) ""))
+                (axis-guidance . ,(or (gptel-auto-experiment--format-axis-guidance
+                                       (gptel-auto-experiment--get-underexplored-axis target)) ""))
+                (axis-performance . ,(gptel-auto-experiment--format-axis-performance target))
                 (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
                 (saturation-status . ,(gptel-auto-experiment--frontier-saturation-guidance target))
                 (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
@@ -1223,6 +1224,136 @@ Saturated means: >=3 Pareto experiments, >=4 axes, quality>=0.8."
           (message "[frontier-filter] WARNING: All %d targets saturated!" (length targets))
           nil)
       (nreverse filtered))))
+
+;;; Axis Analysis and Adaptive Weighting
+
+(defun gptel-auto-experiment--get-axis-stats (target)
+  "Calculate exploration statistics for TARGET from TSV history.
+Returns plist with :counts (axis->count), :successes (axis->kept-count),
+:rates (axis->success-rate), :total-experiments."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (counts (make-hash-table :test 'equal))
+        (successes (make-hash-table :test 'equal))
+        (total 0))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (line-target (nth 1 fields))
+                 (decision (nth 7 fields))
+                 (axis (or (nth 17 fields) "?")))
+            (when (and (equal line-target target)
+                       (not (equal axis "?"))
+                       (not (string-empty-p axis)))
+              (setq total (1+ total))
+              (puthash axis (1+ (gethash axis counts 0)) counts)
+              (when (equal decision "kept")
+                (puthash axis (1+ (gethash axis successes 0)) successes))))
+          (forward-line 1))))
+    (let ((rates (make-hash-table :test 'equal)))
+      (maphash (lambda (axis count)
+                 (let ((success-count (gethash axis successes 0)))
+                   (puthash axis (/ (float success-count) count) rates)))
+               counts)
+      (list :counts counts
+            :successes successes
+            :rates rates
+            :total-experiments total))))
+
+(defun gptel-auto-experiment--get-underexplored-axis (target)
+  "Find least-explored axis for TARGET.
+Returns axis letter (A-F) or nil if insufficient data."
+  (let* ((stats (gptel-auto-experiment--get-axis-stats target))
+         (counts (plist-get stats :counts))
+         (axes '("A" "B" "C" "D" "E" "F"))
+         (min-count most-positive-fixnum)
+         (underexplored nil))
+    (dolist (axis axes)
+      (let ((count (gethash axis counts 0)))
+        (when (< count min-count)
+          (setq min-count count)
+          (setq underexplored axis))))
+    ;; Only suggest underexplored axis if we have some data
+    (when (and underexplored
+               (> (plist-get stats :total-experiments) 0))
+      underexplored)))
+
+(defun gptel-auto-experiment--get-axis-success-rates (target)
+  "Get formatted success rates per axis for TARGET.
+Returns string describing which axes have been most successful."
+  (let* ((stats (gptel-auto-experiment--get-axis-stats target))
+         (rates (plist-get stats :rates))
+         (counts (plist-get stats :counts))
+         (axis-names '("A" . "Error Handling")
+                       '("B" . "Performance")
+                       '("C" . "Refactoring")
+                       '("D" . "Safety")
+                       '("E" . "Test Coverage")
+                       '("F" . "Memory Management"))
+         (results '()))
+    (dolist (pair axis-names)
+      (let* ((axis (car pair))
+             (name (cdr pair))
+             (count (gethash axis counts 0))
+             (rate (if (> count 0)
+                      (gethash axis rates 0.0)
+                    nil)))
+        (when (and rate (> count 0))
+          (push (list :axis axis :name name :count count :rate rate) results))))
+    ;; Sort by success rate descending
+    (setq results (sort results (lambda (a b)
+                                  (> (plist-get a :rate)
+                                     (plist-get b :rate)))))
+    (if (null results)
+        "No historical axis data yet."
+      (concat "Historical success rates by axis:\n"
+              (mapconcat (lambda (r)
+                           (format "- %s (%s): %.0f%% success (%d experiments)"
+                                   (plist-get r :axis)
+                                   (plist-get r :name)
+                                   (* 100 (plist-get r :rate))
+                                   (plist-get r :count)))
+                         results
+                         "\n")))))
+
+(defun gptel-auto-experiment--format-axis-guidance (axis)
+  "Format guidance for exploring AXIS.
+Returns string with axis description and rationale."
+  (when axis
+    (let* ((axis-info (assoc axis
+                             '(("A" . "Error Handling")
+                               ("B" . "Performance")
+                               ("C" . "Refactoring")
+                               ("D" . "Safety")
+                               ("E" . "Test Coverage")
+                               ("F" . "Memory Management"))))
+           (axis-name (cdr axis-info)))
+      (concat "## Exploration Guidance\n"
+              "Priority axis: " axis " (" axis-name ") — least explored for this target.\n"
+              "Consider: "
+              (pcase axis
+                ("A" "adding validation, fixing error handling gaps, improving error messages")
+                ("B" "reducing complexity, adding caching, optimizing hot paths")
+                ("C" "extracting functions, removing duplication, improving naming")
+                ("D" "adding guards, type checking, boundary validation")
+                ("E" "adding missing tests for existing functionality")
+                ("F" "fixing memory leaks, optimizing allocation, improving cleanup")
+                (_ "general improvements"))
+              ".\n\n"))))
+
+(defun gptel-auto-experiment--format-axis-performance (target)
+  "Format axis performance history for TARGET.
+Returns string showing which axes have been most successful."
+  (let ((rates-str (gptel-auto-experiment--get-axis-success-rates target)))
+    (concat "## Axis Performance History\n"
+            rates-str
+            "\n\nRecommendation: Prioritize axes with higher success rates, but also explore underexplored axes to build frontier coverage.\n\n")))
 
 (provide 'gptel-tools-agent-prompt-build)
 ;;; gptel-tools-agent-prompt-build.el ends here

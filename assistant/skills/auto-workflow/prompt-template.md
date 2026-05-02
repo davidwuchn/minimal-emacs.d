@@ -41,6 +41,8 @@ Overall Eight Keys score: {{baseline}}
 
 {{axis-guidance}}
 
+{{axis-performance}}
+
 {{frontier-guidance}}
 
 {{saturation-status}}
