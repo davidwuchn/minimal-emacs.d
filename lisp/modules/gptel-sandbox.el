@@ -191,7 +191,7 @@ When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
           (pcase-let ((`(,symbol ,value-form)
                        (gptel-sandbox--normalize-binding binding)))
             (let ((value (gptel-sandbox--eval-expr value-form child-env)))
-              (puthash symbol value child-env))))
+              (gptel-sandbox--bind-result symbol value child-env))))
       (dolist (binding bindings)
         (pcase-let ((`(,symbol . ,value)
                      (gptel-sandbox--eval-let-binding binding env)))
