@@ -481,20 +481,26 @@ Image tokens are counted from `gptel-context' if available."
     (my/gptel--cache-save-context-windows)))
 
 (defun my/gptel--cache-load-context-windows ()
-  "Load cached context windows from `my/gptel-context-window-cache-file'."
+  "Load cached context windows from `my/gptel-context-window-cache-file'.
+
+Uses transactional loading: loads into a temporary hash table first,
+then atomically replaces the main cache. If loading fails, the
+existing cache is preserved."
   (when (file-readable-p my/gptel-context-window-cache-file)
     (condition-case err
-        (progn
-          (clrhash my/gptel--context-window-cache)
+        (let* ((temp-cache (make-hash-table :test 'equal))
+               (temp-data nil)
+               (temp-refresh nil))
           (setq my/gptel--context-window-cache-data nil
                 my/gptel--context-window-cache-last-refresh nil)
           (load my/gptel-context-window-cache-file nil t)
           (when (listp my/gptel--context-window-cache-data)
             (dolist (kv my/gptel--context-window-cache-data)
               (let ((key (car kv)) (val (cdr kv)))
-                (cond
-                 ((and (stringp key) (integerp val))
-                  (puthash key val my/gptel--context-window-cache))))))
+                (when (and (stringp key) (integerp val))
+                  (puthash key val temp-cache)))))
+          (clrhash my/gptel--context-window-cache)
+          (maphash (lambda (k v) (puthash k v my/gptel--context-window-cache)) temp-cache)
           (setq my/gptel--context-window-cache-data nil))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
