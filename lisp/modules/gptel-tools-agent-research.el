@@ -679,6 +679,11 @@ Synthesis verification:
              (if verification
                  (format " [confidence: %.0f%%]" (* 100 (plist-get verification :confidence)))
                ""))
+    ;; Invalidate cache for this topic so next prompt gets fresh knowledge
+    (when (fboundp 'gptel-auto-workflow--knowledge-cache-invalidate)
+      (let ((cache-key (intern (concat "topic-" topic))))
+        (gptel-auto-workflow--knowledge-cache-invalidate cache-key)
+        (message "[knowledge-cache] Invalidated %s" cache-key)))
     know-file))
 
 

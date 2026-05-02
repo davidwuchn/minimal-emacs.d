@@ -412,28 +412,45 @@ This is the CENTRAL function of self-evolution."
         (insert "```\n")))
 
       (message "[auto-workflow] Synthesized self-evolution knowledge to %s"
-               evolution-file))))
+               evolution-file)
+      ;; Invalidate self-evolution cache so next prompt gets fresh knowledge
+      (when (fboundp 'gptel-auto-workflow--knowledge-cache-invalidate)
+        (gptel-auto-workflow--knowledge-cache-invalidate 'self-evolution)
+        (message "[knowledge-cache] Invalidated self-evolution")))))
 
 ;; ─── Phase 4: Inject ──→ Prompts Read from Mementum ───
 
 (defun gptel-auto-workflow--evolution-get-knowledge ()
   "Get self-evolution knowledge for prompt injection.
-This is the ONLY interface between mementum and prompts."
-  (let ((evolution-file (expand-file-name
-                         "mementum/knowledge/self-evolution.md"
-                         (gptel-auto-workflow--worktree-base-root))))
-    (if (file-exists-p evolution-file)
-        (with-temp-buffer
-          (insert-file-contents evolution-file)
-          (goto-char (point-min))
-          ;; Skip frontmatter
-          (when (looking-at "---")
-            (forward-line 1)
-            (while (not (looking-at "---"))
-              (forward-line 1))
-            (forward-line 1))
-          (buffer-string))
-      "")))
+This is the ONLY interface between mementum and prompts.
+Uses cache to avoid repeated file reads."
+  (let ((cached (when (fboundp 'gptel-auto-workflow--knowledge-cache-get)
+                  (gptel-auto-workflow--knowledge-cache-get 'self-evolution))))
+    (if cached
+        (progn
+          (message "[knowledge-cache] Hit for self-evolution (%d chars)" (length cached))
+          cached)
+      (let ((evolution-file (expand-file-name
+                             "mementum/knowledge/self-evolution.md"
+                             (gptel-auto-workflow--worktree-base-root))))
+        (if (file-exists-p evolution-file)
+            (let ((content
+                   (with-temp-buffer
+                     (insert-file-contents evolution-file)
+                     (goto-char (point-min))
+                     ;; Skip frontmatter
+                     (when (looking-at "---")
+                       (forward-line 1)
+                       (while (not (looking-at "---"))
+                         (forward-line 1))
+                       (forward-line 1))
+                     (buffer-string))))
+              (when (fboundp 'gptel-auto-workflow--knowledge-cache-set)
+                (gptel-auto-workflow--knowledge-cache-set 'self-evolution content)
+                (message "[knowledge-cache] Miss for self-evolution, cached %d chars"
+                         (length content)))
+              content)
+          "")))))
 
 ;; ─── Integration ───
 
