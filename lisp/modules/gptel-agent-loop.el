@@ -244,11 +244,13 @@ memory after long sessions or if tasks appear stuck."
   (or (gptel-agent-loop--task-accumulated-output state) ""))
 
 (defun gptel-agent-loop--append-output (state text)
-  "Append TEXT to STATE's accumulated output."
-  (setf (gptel-agent-loop--task-accumulated-output state)
-        (concat (gptel-agent-loop--safe-accumulated-output state)
-                text
-                (unless (string-suffix-p "\n" text) "\n"))))
+  "Append TEXT to STATE's accumulated output.
+Returns nil if TEXT is not a string (defensive guard)."
+  (when (stringp text)
+    (setf (gptel-agent-loop--task-accumulated-output state)
+          (concat (gptel-agent-loop--safe-accumulated-output state)
+                  text
+                  (unless (string-suffix-p "\n" text) "\n")))))
 
 (defun gptel-agent-loop--result-prefix (state)
   "Return the standard result prefix for STATE."
