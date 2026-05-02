@@ -361,17 +361,24 @@ Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scan
                     ((symbolp model) (symbol-name model))
                     (t nil))))
     (when model-str
-      (catch 'found
-        (dolist (var (my/gptel--gptel-model-tables))
-          (let ((table (symbol-value var)))
-            (when (listp table)
-              (let ((entry (assoc-string model-str table t)))
-                (when (and (consp entry) (plist-member (cdr entry) :context-window))
-                  (let ((cw (my/gptel--normalize-context-window
-                              (plist-get (cdr entry) :context-window))))
-                    (when (and (integerp cw) (> cw 0))
-                      (throw 'found cw))))))))
-        nil))))
+      (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache)))
+        (if (eq cached my/gptel--gptel-tables-miss-sentinel)
+            nil
+          (or cached
+              (let ((result (catch 'found
+                              (dolist (var (my/gptel--gptel-model-tables))
+                                (let ((table (symbol-value var)))
+                                  (when (listp table)
+                                    (let ((entry (assoc-string model-str table t)))
+                                      (when (and (consp entry) (plist-member (cdr entry) :context-window))
+                                        (let ((cw (my/gptel--normalize-context-window
+                                                    (plist-get (cdr entry) :context-window))))
+                                          (when (and (integerp cw) (> cw 0))
+                                            (throw 'found cw))))))))
+                              nil)))
+                (puthash model-str (or result my/gptel--gptel-tables-miss-sentinel)
+                         my/gptel--gptel-tables-cw-cache)
+                result)))))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -399,6 +406,12 @@ raw tokens."
 (defun my/gptel--positive-integer-p (n)
   "Return N if it is a positive integer, otherwise nil."
   (and (integerp n) (> n 0) n))
+
+(defun my/gptel--cache-context-window (model-id cw)
+  "Cache CW for MODEL-ID if positive integer. Return CW."
+  (when (my/gptel--positive-integer-p cw)
+    (puthash model-id cw my/gptel--context-window-cache))
+  cw)
 
 (defun my/gptel--openrouter-entry-context-window (entry)
   "Extract valid context_window from an OpenRouter model ENTRY alist.
@@ -848,14 +861,10 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        my/gptel--known-model-context-windows
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
-        (when (my/gptel--positive-integer-p cw)
-          (puthash model-id cw my/gptel--context-window-cache))
-        cw))
+        (my/gptel--cache-context-window model-id cw)))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
              (cw (plist-get meta :context-window)))
-        (when (my/gptel--positive-integer-p cw)
-          (puthash model-id cw my/gptel--context-window-cache))
-        cw))
+        (my/gptel--cache-context-window model-id cw)))
      (t my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer

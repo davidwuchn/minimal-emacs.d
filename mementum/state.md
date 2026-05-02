@@ -1,10 +1,25 @@
 # Mementum State
 
-> Last session: 2026-05-02 00:10
+> Last session: 2026-05-02 02:30
 
-## Current Session: 2026-05-02 Workflow Run Review + Promotion
+## Current Session: 2026-05-02 Workflow Run Complete + 4/4 Targets Improved
 
-**Status:** Run `2026-05-01T180001Z-811b` completed (3/3 targets improved, 3 kept commits). Promoted 1 real fix to `main`; skipped 2 false positives.
+**Status:** Run `2026-05-02T003729Z-8346` completed (4/4 targets improved, 4 kept commits). All merged to `origin/staging`. Ready for promotion review.
+
+**Done (This Session):**
+- **New workflow run `2026-05-02T003729Z-8346`**: 4 targets, 4 kept, 5 discarded, 2 pre-grade validation failures.
+  - `gptel-auto-workflow-behavioral-tests.el`: exp1 kept (`947a90e`) — Fixed Test 4 weak assertion, score 9/9, quality 0.68
+  - `gptel-ext-retry.el`: exp1 kept (`f2015d8`) — Nil guard for `info` parameter, score 4/4, quality 0.82
+  - `gptel-sandbox.el`: exp1 kept (`3525834`) — Fixed non-sequential let binding bug, score 9/9, quality 0.93
+  - `gptel-agent-loop.el`: exp1 kept (`7218a42`) — Input validation for pattern matching, score 5/5, quality 0.92
+- **All 4 commits merged to staging** and pushed to `origin/staging` after review+verification passed.
+- **Self-evolution cycle ran** and synthesized updated knowledge to `mementum/knowledge/self-evolution.md`.
+
+**Previous Session:**
+- **Reviewed run `2026-05-01T180001Z-811b`**: 8 experiments across 3 targets, 3 kept, 2 pre-grade validation failures.
+  - `gptel-auto-workflow-strategic.el`: exp1 kept (`d69e70cb`) — **false positive**, `when`→`unless` is logically equivalent. Skipped for main promotion.
+  - `gptel-ext-context.el`: exp1 kept (`2710a5c2`) — marginal defensive change, `zerop` already safe. Skipped for main promotion.
+  - `gptel-sandbox.el`: exp1 kept (`51966c24`) — **real improvement**, `listp` guard prevents cryptic `dolist` errors on malformed bindings. **Promoted to main**.
 
 **Done (This Session):**
 - **Reviewed run `2026-05-01T180001Z-811b`**: 8 experiments across 3 targets, 3 kept, 2 pre-grade validation failures.
