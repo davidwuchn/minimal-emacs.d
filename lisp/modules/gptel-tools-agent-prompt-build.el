@@ -355,8 +355,9 @@ Implements section-level A/B testing to identify effective prompt components."
                                         ""))
                (axis-guidance . ,(or (gptel-auto-experiment--format-axis-guidance
                                       (gptel-auto-experiment--get-underexplored-axis target)) ""))
-               (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
-               (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
+                (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
+                (saturation-status . ,(gptel-auto-experiment--frontier-saturation-guidance target))
+                (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
                (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
                (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
                (focus-line . ,focus-line)

@@ -43,6 +43,8 @@ Overall Eight Keys score: {{baseline}}
 
 {{frontier-guidance}}
 
+{{saturation-status}}
+
 {{agent-behavior}}
 
 ## Objective
