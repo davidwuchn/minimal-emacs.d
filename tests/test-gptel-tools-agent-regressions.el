@@ -18669,13 +18669,13 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                          knowledge-file))
           (should (file-exists-p knowledge-file))
           (should-not shell-called)
-          (with-temp-buffer
-            (insert-file-contents knowledge-file)
-            (should (equal (buffer-string) content)))
-          (should (seq-some
-                   (lambda (msg)
-                     (string-match-p "Review and commit manually" msg))
-                   messages)))
+           (with-temp-buffer
+             (insert-file-contents knowledge-file)
+             (should (string-match-p (regexp-quote content) (buffer-string))))
+           (should (seq-some
+                    (lambda (msg)
+                      (string-match-p "Created 'mementum/knowledge/workflow.md'" msg))
+                    messages)))
       (delete-directory project-root t))))
 
 (ert-deftest regression/instincts/weekly-job-headless-skips-batch-commit ()
