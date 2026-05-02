@@ -506,8 +506,9 @@ Called only from `handle-continuation' which is called from
 `handle-string-response' when STATE is task-p."
   (and (gptel-agent-loop--task-p state)
        gptel-agent-loop-force-completion
-       (< (gptel-agent-loop--continuation-count state)
-          gptel-agent-loop-max-continuations)
+       (or (null gptel-agent-loop-max-continuations)
+           (< (gptel-agent-loop--continuation-count state)
+              gptel-agent-loop-max-continuations))
        (not (gptel-agent-loop--task-max-steps-reached state))
        (not (gptel-agent-loop--seems-complete-p resp))
        (not (gptel-agent-loop--looks-like-finishing-p resp))
