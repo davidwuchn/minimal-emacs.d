@@ -917,7 +917,7 @@ workflow_action_elisp() {
     case "$action" in
         auto-workflow) dispatch="(gptel-auto-workflow-queue-all-projects)" ;;
         research) dispatch="(gptel-auto-workflow-queue-all-research)" ;;
-        mementum) dispatch="(gptel-auto-workflow-queue-all-mementum)" ;;
+        mementum) dispatch="(progn (setq gptel-mementum-headless-auto-approve (quote draft)) (gptel-auto-workflow-queue-all-mementum))" ;;
         instincts) dispatch="(gptel-auto-workflow-queue-all-instincts)" ;;
         evolution) dispatch="(when (fboundp 'gptel-auto-workflow-evolution-run-cycle) (gptel-auto-workflow-evolution-run-cycle))" ;;
         *) return 1 ;;

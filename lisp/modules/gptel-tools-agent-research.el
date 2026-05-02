@@ -229,8 +229,48 @@ Run weekly via cron."
                         (cl-incf decayed)))))))))))
     (message "[mementum] Decay: %d decayed, %d archived" decayed archived)))
 
+(defcustom gptel-mementum-topic-generic-stopwords
+  '("gptel" "auto" "workflow" "the" "and" "fix" "bug" "test" "for" "with"
+    "from" "cache" "file" "code" "error" "function" "var" "def" "el")
+  "Generic words to ignore when detecting topics from memory filenames."
+  :type '(repeat string)
+  :group 'gptel-mementum)
+
+(defun gptel-mementum--extract-topic (slug)
+  "Extract meaningful topic from memory filename SLUG.
+Strips leading emoji (💡, ❌, ✅, etc.) and common prefixes like
+'insight-lisp-modules-' before processing.
+Returns a topic string or nil if no meaningful topic found.
+Prefers multi-segment prefixes over single words to avoid false positives."
+  (let* ((clean-slug (replace-regexp-in-string "^[💡❌✅🔄🎯🌀🔁]+[-_]" "" slug))
+         ;; Strip common experiment prefixes
+         (clean-slug (replace-regexp-in-string "^insight-lisp-modules-" "" clean-slug))
+         (parts (split-string clean-slug "[-_]"))
+         (stopwords gptel-mementum-topic-generic-stopwords)
+         ;; For very long filenames (>5 parts), skip common prefixes and use segment 3-4
+         (prefix-len (length parts))
+         (candidates
+          (if (> prefix-len 5)
+              ;; Long names like "insight-lisp-modules-MODULE-el-desc..." → use MODULE
+              (cl-loop for n from (min 4 (- prefix-len 2)) downto 2
+                       collect (string-join (seq-take parts n) "-"))
+            ;; Normal length: try 3, 2, 1 segments
+            (cl-loop for n from (min 3 prefix-len) downto 1
+                     collect (string-join (seq-take parts n) "-"))))
+         (best nil))
+    ;; Find longest non-stopword prefix with meaningful length
+    (dolist (candidate candidates)
+      (when (and (not best)
+                 (> (length candidate) 3)
+                 (not (member candidate stopwords)))
+        (setq best candidate)))
+    ;; Fallback: if all parts are stopwords, use the clean slug
+    (or best (when (> (length clean-slug) 3) clean-slug))))
+
 (defun gptel-mementum-check-synthesis-candidates ()
   "Check for topics with ≥3 memories and suggest synthesis.
+Groups memories by meaningful topic prefixes to avoid false positives
+from generic words like 'gptel' or 'auto'.
 Returns list of synthesis candidates."
   (let* ((memories-dir (expand-file-name "mementum/memories"
                                          (gptel-auto-workflow--project-root)))
@@ -238,18 +278,30 @@ Returns list of synthesis candidates."
          (candidates '()))
     (when (file-exists-p memories-dir)
       (dolist (file (directory-files memories-dir t "\\.md$"))
-        (let ((slug (file-name-sans-extension (file-name-nondirectory file))))
-          (dolist (topic (split-string slug "[-_]"))
-            (when (> (length topic) 3)
-              (puthash topic (cons file (gethash topic by-topic)) by-topic)))))
+        (let* ((slug (file-name-sans-extension (file-name-nondirectory file)))
+               (topic (gptel-mementum--extract-topic slug)))
+          (when topic
+            (puthash topic (cons file (gethash topic by-topic)) by-topic))))
       (maphash
        (lambda (topic files)
          (when (>= (length files) 3)
-           (push (list :topic topic :count (length files) :files files) candidates)))
-       by-topic))
+           (push (list :topic topic :count (length files) :files (nreverse files)) candidates)))
+       by-topic)
+      ;; Sort by count descending, then topic name
+      (setq candidates
+            (sort candidates
+                  (lambda (a b)
+                    (let ((ca (plist-get a :count))
+                          (cb (plist-get b :count)))
+                      (if (= ca cb)
+                          (string< (plist-get a :topic) (plist-get b :topic))
+                        (> ca cb)))))))
     (when candidates
-      (message "[mementum] Synthesis candidates: %s"
-               (mapcar (lambda (c) (plist-get c :topic)) candidates)))
+      (message "[mementum] Synthesis candidates (%d): %s"
+               (length candidates)
+               (mapconcat (lambda (c)
+                            (format "%s(%d)" (plist-get c :topic) (plist-get c :count)))
+                          candidates " ")))
     candidates))
 
 (defvar gptel-mementum--pending-llm-buffers nil
@@ -448,28 +500,52 @@ Ensures agents are loaded once before processing batch."
              (length cands))
     synthesized))
 
+(defcustom gptel-mementum-headless-auto-approve nil
+  "When non-nil, auto-approve synthesis in headless mode.
+When nil (default), headless mode skips synthesis to avoid unreviewed writes.
+When t, saves directly to `mementum/knowledge/'.
+When `draft', saves to `mementum/knowledge/drafts/' for later review."
+  :type '(choice (const :tag "Skip in headless" nil)
+                 (const :tag "Auto-approve" t)
+                 (const :tag "Save to drafts" draft))
+  :group 'gptel-mementum)
+
 (defun gptel-mementum--handle-synthesis-result (topic files result)
   "Handle LLM synthesis RESULT for TOPIC from FILES.
-Shows preview and asks for human approval before saving."
+Shows preview and asks for human approval before saving.
+In headless mode, respects `gptel-mementum-headless-auto-approve'."
   (condition-case err
       (let* ((extracted (gptel-mementum--extract-content result))
-             (line-count (with-temp-buffer (insert extracted) (count-lines 1 (point-max)))))
-        (if (< line-count 50)
-            (message "[mementum] Skip '%s': only %d lines (need ≥50)" topic line-count)
-          (if (bound-and-true-p gptel-auto-workflow--headless)
-              (message "[mementum] Skip '%s': human approval required before saving in headless mode (%d lines)"
-                       topic line-count)
-            (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
-              (with-current-buffer preview-buffer
-                (erase-buffer)
-                (insert (format "# Synthesis Preview: %s\n\n" topic))
-                (insert (format "Generated: %d lines\n\n" line-count))
-                (insert "## Generated Knowledge Page\n\n")
-                (insert extracted)
-                (goto-char (point-min)))
-              (display-buffer preview-buffer)
-              (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
-                (gptel-mementum--save-knowledge-page topic files extracted))))))
+             (line-count (with-temp-buffer (insert extracted) (count-lines 1 (point-max))))
+             (headless (bound-and-true-p gptel-auto-workflow--headless))
+             (auto-approve (and headless gptel-mementum-headless-auto-approve)))
+        (cond
+         ((< line-count 50)
+          (message "[mementum] Skip '%s': only %d lines (need ≥50)" topic line-count))
+         ((and headless (not auto-approve))
+          (message "[mementum] Skip '%s': human approval required before saving in headless mode (%d lines)"
+                   topic line-count))
+         (auto-approve
+          (let* ((draft-p (eq auto-approve 'draft))
+                 (saved-file (gptel-mementum--save-knowledge-page
+                              topic files extracted draft-p)))
+            (message "[mementum] %s '%s' (%d lines): %s"
+                     (if draft-p "Drafted" "Created")
+                     topic line-count
+                     (file-relative-name saved-file
+                                         (gptel-auto-workflow--project-root)))))
+         (t
+          (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
+            (with-current-buffer preview-buffer
+              (erase-buffer)
+              (insert (format "# Synthesis Preview: %s\n\n" topic))
+              (insert (format "Generated: %d lines\n\n" line-count))
+              (insert "## Generated Knowledge Page\n\n")
+              (insert extracted)
+              (goto-char (point-min)))
+            (display-buffer preview-buffer)
+            (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
+              (gptel-mementum--save-knowledge-page topic files extracted))))))
     (error
      (message "[mementum] Error handling synthesis for '%s': %s" topic err))))
 
@@ -534,18 +610,22 @@ Returns the content between the first --- and end, or the whole result."
         (substring result start)
       result)))
 
-(defun gptel-mementum--save-knowledge-page (topic files content)
-  "Save synthesized CONTENT as knowledge page for TOPIC from FILES."
-  (let* ((know-dir (expand-file-name "mementum/knowledge" (gptel-auto-workflow--project-root)))
+(defun gptel-mementum--save-knowledge-page (topic files content &optional draft)
+  "Save synthesized CONTENT as knowledge page for TOPIC from FILES.
+When DRAFT is non-nil, save to `mementum/knowledge/drafts/' instead."
+  (let* ((base-dir (gptel-auto-workflow--project-root))
+         (know-dir (expand-file-name (if draft
+                                         "mementum/knowledge/drafts"
+                                       "mementum/knowledge")
+                                     base-dir))
          (know-file (expand-file-name (format "%s.md" topic) know-dir)))
     (make-directory know-dir t)
     (with-temp-file know-file
       (insert content))
-    (message "[mementum] Created knowledge page draft: %s (%d lines)"
-             know-file
+    (message "[mementum] %s '%s' (%d lines)"
+             (if draft "Drafted" "Created")
+             (file-relative-name know-file base-dir)
              (with-temp-buffer (insert content) (count-lines 1 (point-max))))
-    (message "[mementum] Review and commit manually: %s"
-             (file-relative-name know-file (gptel-auto-workflow--project-root)))
     know-file))
 
 
