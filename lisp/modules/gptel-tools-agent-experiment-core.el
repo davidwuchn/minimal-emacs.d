@@ -157,18 +157,37 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                target provisional-commit-hash)
                                               (setq provisional-commit-hash nil)
                                               (setq validation-retry-active t)
-                                              (let ((gptel-auto-experiment-active-grace
-                                                     gptel-auto-experiment-validation-retry-active-grace))
-                                                (my/gptel--run-agent-tool-with-timeout
-                                                 gptel-auto-experiment-validation-retry-time-budget
-                                                 (lambda (retry-output)
-                                                   ;; Treat retry output as new executor output
-                                                   (funcall executor-callback retry-output))
-                                                 "executor"
-                                                 "Validation retry"
-                                                       executor-prompt
-                                                       nil nil nil
-                                                       gptel-auto-experiment-validation-retry-active-grace)))
+                                               (let* ((gptel-auto-experiment-active-grace
+                                                       gptel-auto-experiment-validation-retry-active-grace)
+                                                      (retry-prompt
+                                                       (if candidate-validation
+                                                           (concat executor-prompt
+                                                                   "\n\n## PREVIOUS ATTEMPT FAILED\n"
+                                                                   "Validation error: " validation-error "\n"
+                                                                   "Candidate validation results:\n"
+                                                                   (mapconcat
+                                                                    (lambda (pair)
+                                                                      (format "- %s: score=%.1f, valid=%s"
+                                                                              (substring (car pair) 0 (min 30 (length (car pair))))
+                                                                              (plist-get (cdr pair) :score)
+                                                                              (if (plist-get (cdr pair) :valid) "yes" "no")))
+                                                                    candidate-validation
+                                                                    "\n")
+                                                                   "\n## INSTRUCTIONS FOR RETRY\n"
+                                                                   "The previous implementation failed validation. "
+                                                                   "If you have remaining valid candidates, implement one of those instead. "
+                                                                   "Otherwise, fix the validation error while keeping the same approach.\n")
+                                                         executor-prompt)))
+                                                 (my/gptel--run-agent-tool-with-timeout
+                                                  gptel-auto-experiment-validation-retry-time-budget
+                                                  (lambda (retry-output)
+                                                    ;; Treat retry output as new executor output
+                                                    (funcall executor-callback retry-output))
+                                                  "executor"
+                                                  "Validation retry"
+                                                  retry-prompt
+                                                  nil nil nil
+                                                  gptel-auto-experiment-validation-retry-active-grace)))
                                          ;; Non-teachable or already retrying: fail fast
                                          (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
                                                              effective-agent-output))
