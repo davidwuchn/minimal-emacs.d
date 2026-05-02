@@ -500,6 +500,10 @@ CALLBACK receives non-nil when approved and nil when rejected."
     (error "Tool name must be a symbol or string, got: %S" tool-name))
   (unless tool-spec
     (error "Unknown tool %s requested by Programmatic" tool-name))
+  (unless (and (recordp tool-spec)
+               (eq (type-of tool-spec) 'gptel-tool))
+    (error "Invalid tool spec for %s: expected gptel-tool struct, got: %S"
+           tool-name (type-of tool-spec)))
   (unless (gptel-sandbox--allowed-tool-p tool-name)
     (error "Tool %s is not allowed inside Programmatic %s mode"
            tool-name (gptel-sandbox--current-profile)))
