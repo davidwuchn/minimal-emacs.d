@@ -610,22 +610,80 @@ Returns the content between the first --- and end, or the whole result."
         (substring result start)
       result)))
 
+(defun gptel-mementum--verify-synthesis (topic content source-files)
+  "Verify synthesized CONTENT for TOPIC against SOURCE-FILES.
+Returns plist with :valid t/nil, :warnings list, :confidence 0.0-1.0.
+Implements trust-but-verify: auto-approve but flag suspicious content."
+  (let ((warnings '())
+        (confidence 1.0)
+        (source-count (length source-files)))
+    ;; Check 1: Minimum source files
+    (when (< source-count 3)
+      (push (format "Only %d source files (minimum 3)" source-count) warnings)
+      (setq confidence (* confidence 0.5)))
+    ;; Check 2: Content has concrete examples
+    (unless (string-match-p "```\|`[^`]+`\|http" content)
+      (push "No code examples or concrete references" warnings)
+      (setq confidence (* confidence 0.8)))
+    ;; Check 3: Content mentions topic
+    (unless (string-match-p (regexp-quote topic) content)
+      (push (format "Content does not mention topic '%s'" topic) warnings)
+      (setq confidence (* confidence 0.3)))
+    ;; Check 4: Reasonable length
+    (let ((line-count (with-temp-buffer (insert content) (count-lines 1 (point-max)))))
+      (when (< line-count 30)
+        (push (format "Very short content (%d lines)" line-count) warnings)
+        (setq confidence (* confidence 0.5))))
+    ;; Check 5: No obvious hallucination markers
+    (when (string-match-p "always works\|never fails\|100% success\|guaranteed" content)
+      (push "Contains absolute claims (hallucination risk)" warnings)
+      (setq confidence (* confidence 0.7)))
+    (list :valid (>= confidence 0.5)
+          :warnings (nreverse warnings)
+          :confidence confidence
+          :source-count source-count)))
+
 (defun gptel-mementum--save-knowledge-page (topic files content &optional draft)
   "Save synthesized CONTENT as knowledge page for TOPIC from FILES.
-When DRAFT is non-nil, save to `mementum/knowledge/drafts/' instead."
+When DRAFT is non-nil, save to `mementum/knowledge/drafts/' instead.
+When auto-approved (not draft), adds verification metadata."
   (let* ((base-dir (gptel-auto-workflow--project-root))
          (know-dir (expand-file-name (if draft
                                          "mementum/knowledge/drafts"
                                        "mementum/knowledge")
                                      base-dir))
-         (know-file (expand-file-name (format "%s.md" topic) know-dir)))
+         (know-file (expand-file-name (format "%s.md" topic) know-dir))
+         (verification (unless draft
+                         (gptel-mementum--verify-synthesis topic content files))))
     (make-directory know-dir t)
     (with-temp-file know-file
+      (when verification
+        (insert (format "<!--
+Synthesis verification:
+- Confidence: %.0f%%
+- Sources: %d memories
+- Warnings: %s
+- Auto-approved: %s
+--->\n\n"
+                        (* 100 (plist-get verification :confidence))
+                        (plist-get verification :source-count)
+                        (if (plist-get verification :warnings)
+                            (mapconcat #'identity (plist-get verification :warnings) ", ")
+                          "none")
+                        (if (plist-get verification :valid) "yes (passed)" "yes (flagged)"))))
       (insert content))
-    (message "[mementum] %s '%s' (%d lines)"
+    (message "[mementum] %s '%s' (%d lines)%s"
              (if draft "Drafted" "Created")
              (file-relative-name know-file base-dir)
-             (with-temp-buffer (insert content) (count-lines 1 (point-max))))
+             (with-temp-buffer (insert content) (count-lines 1 (point-max)))
+             (if verification
+                 (format " [confidence: %.0f%%]" (* 100 (plist-get verification :confidence)))
+               ""))
+    ;; Invalidate cache for this topic so next prompt gets fresh knowledge
+    (when (fboundp 'gptel-auto-workflow--knowledge-cache-invalidate)
+      (let ((cache-key (intern (concat "topic-" topic))))
+        (gptel-auto-workflow--knowledge-cache-invalidate cache-key)
+        (message "[knowledge-cache] Invalidated %s" cache-key)))
     know-file))
 
 

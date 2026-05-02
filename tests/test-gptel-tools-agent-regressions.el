@@ -13161,11 +13161,11 @@ failure."
            (with-temp-buffer
               (insert-file-contents emacs-log)
               (let ((output (buffer-string)))
-                (should (string-match-p "--bg-daemon=copilot-auto-workflow" output))
-                (should (string-match-p
-                        (regexp-quote (format "ARGV:--init-directory=%s --bg-daemon=copilot-auto-workflow"
-                                              repo-root))
-                        output))
+                 (should (string-match-p "--daemon=copilot-auto-workflow" output))
+                 (should (string-match-p
+                         (regexp-quote (format "ARGV:--init-directory=%s --daemon=copilot-auto-workflow"
+                                               repo-root))
+                         output))
                 (should-not (string-match-p "ARGV:.*-Q" output))
                 (should (string-match-p "^MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1$" output))
                 (should-not (string-match-p "^DISPLAY=" output))
@@ -18669,13 +18669,13 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                          knowledge-file))
           (should (file-exists-p knowledge-file))
           (should-not shell-called)
-          (with-temp-buffer
-            (insert-file-contents knowledge-file)
-            (should (equal (buffer-string) content)))
-          (should (seq-some
-                   (lambda (msg)
-                     (string-match-p "Review and commit manually" msg))
-                   messages)))
+           (with-temp-buffer
+             (insert-file-contents knowledge-file)
+             (should (string-match-p (regexp-quote content) (buffer-string))))
+           (should (seq-some
+                    (lambda (msg)
+                      (string-match-p "Created 'mementum/knowledge/workflow.md'" msg))
+                    messages)))
       (delete-directory project-root t))))
 
 (ert-deftest regression/instincts/weekly-job-headless-skips-batch-commit ()

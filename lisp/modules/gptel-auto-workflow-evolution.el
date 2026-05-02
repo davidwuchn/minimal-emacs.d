@@ -356,19 +356,50 @@ This is the CENTRAL function of self-evolution."
                                     cat (* 100 rate) count))))
                 (insert "\n")))))
 
-        ;; Section 5: Pending Mementum Drafts
-        (insert "## Pending Knowledge Drafts\n\n")
-        (let ((drafts (gptel-auto-workflow--evolution-pending-drafts)))
-          (if (null drafts)
-              (insert "*No pending drafts awaiting review.*\n")
-            (insert (format "*%d draft(s) awaiting human review:*\n\n" (length drafts)))
-            (dolist (draft drafts)
-              (let ((topic (nth 0 draft))
-                    (age (nth 1 draft))
-                    (preview (nth 2 draft)))
+        ;; Section 5: Auto-Approved Knowledge (Trust-but-Verify)
+        (insert "## Auto-Approved Knowledge Pages\n\n")
+        (let ((knowledge-dir (expand-file-name "mementum/knowledge"
+                                               (gptel-auto-workflow--worktree-base-root)))
+              (auto-approved '()))
+          (when (file-directory-p knowledge-dir)
+            (dolist (file (directory-files knowledge-dir t "\\.md$"))
+              (unless (member (file-name-nondirectory file) '("self-evolution.md"))
+                (with-temp-buffer
+                  (insert-file-contents file)
+                  (goto-char (point-min))
+                  (when (looking-at "<!--")
+                    (let ((topic (file-name-sans-extension (file-name-nondirectory file)))
+                          (confidence 0)
+                          (sources 0)
+                          (warnings nil)
+                          (valid nil))
+                      (when (re-search-forward "Confidence: \\([0-9]+\\)%" nil t)
+                        (setq confidence (string-to-number (match-string 1))))
+                      (when (re-search-forward "Sources: \\([0-9]+\\)" nil t)
+                        (setq sources (string-to-number (match-string 1))))
+                      (when (re-search-forward "Warnings: \\(.+\\)$" nil t)
+                        (let ((warn-str (match-string 1)))
+                          (unless (string= warn-str "none")
+                            (setq warnings (split-string warn-str ", ")))))
+                      (when (re-search-forward "Auto-approved: yes (\\(passed\\|flagged\\))" nil t)
+                        (setq valid (string= (match-string 1) "passed")))
+                      (push (list topic confidence sources warnings valid) auto-approved)))))))
+          (if (null auto-approved)
+              (insert "*No auto-approved knowledge pages yet.*\n")
+            (insert (format "*%d knowledge page(s) auto-approved (trust-but-verify):*\n\n" (length auto-approved)))
+            (dolist (page (sort auto-approved (lambda (a b) (> (nth 1 a) (nth 1 b)))))
+              (let ((topic (nth 0 page))
+                    (confidence (nth 1 page))
+                    (sources (nth 2 page))
+                    (warnings (nth 3 page))
+                    (valid (nth 4 page)))
                 (insert (format "### `%s`\n\n" topic))
-                (insert (format "- **Age:** %.1f days\n" age))
-                (insert (format "- **Preview:** %s\n\n" preview))))))
+                (insert (format "- **Confidence:** %d%%\n" confidence))
+                (insert (format "- **Sources:** %d memories\n" sources))
+                (insert (format "- **Status:** %s\n" (if valid "✓ Passed" "⚠ Flagged")))
+                (when warnings
+                  (insert (format "- **Warnings:** %s\n" (mapconcat #'identity warnings ", "))))
+                (insert "\n")))))
         (insert "\n")
 
         (insert "## Feedback Loop\n\n")
@@ -381,28 +412,45 @@ This is the CENTRAL function of self-evolution."
         (insert "```\n")))
 
       (message "[auto-workflow] Synthesized self-evolution knowledge to %s"
-               evolution-file))))
+               evolution-file)
+      ;; Invalidate self-evolution cache so next prompt gets fresh knowledge
+      (when (fboundp 'gptel-auto-workflow--knowledge-cache-invalidate)
+        (gptel-auto-workflow--knowledge-cache-invalidate 'self-evolution)
+        (message "[knowledge-cache] Invalidated self-evolution")))))
 
 ;; ─── Phase 4: Inject ──→ Prompts Read from Mementum ───
 
 (defun gptel-auto-workflow--evolution-get-knowledge ()
   "Get self-evolution knowledge for prompt injection.
-This is the ONLY interface between mementum and prompts."
-  (let ((evolution-file (expand-file-name
-                         "mementum/knowledge/self-evolution.md"
-                         (gptel-auto-workflow--worktree-base-root))))
-    (if (file-exists-p evolution-file)
-        (with-temp-buffer
-          (insert-file-contents evolution-file)
-          (goto-char (point-min))
-          ;; Skip frontmatter
-          (when (looking-at "---")
-            (forward-line 1)
-            (while (not (looking-at "---"))
-              (forward-line 1))
-            (forward-line 1))
-          (buffer-string))
-      "")))
+This is the ONLY interface between mementum and prompts.
+Uses cache to avoid repeated file reads."
+  (let ((cached (when (fboundp 'gptel-auto-workflow--knowledge-cache-get)
+                  (gptel-auto-workflow--knowledge-cache-get 'self-evolution))))
+    (if cached
+        (progn
+          (message "[knowledge-cache] Hit for self-evolution (%d chars)" (length cached))
+          cached)
+      (let ((evolution-file (expand-file-name
+                             "mementum/knowledge/self-evolution.md"
+                             (gptel-auto-workflow--worktree-base-root))))
+        (if (file-exists-p evolution-file)
+            (let ((content
+                   (with-temp-buffer
+                     (insert-file-contents evolution-file)
+                     (goto-char (point-min))
+                     ;; Skip frontmatter
+                     (when (looking-at "---")
+                       (forward-line 1)
+                       (while (not (looking-at "---"))
+                         (forward-line 1))
+                       (forward-line 1))
+                     (buffer-string))))
+              (when (fboundp 'gptel-auto-workflow--knowledge-cache-set)
+                (gptel-auto-workflow--knowledge-cache-set 'self-evolution content)
+                (message "[knowledge-cache] Miss for self-evolution, cached %d chars"
+                         (length content)))
+              content)
+          "")))))
 
 ;; ─── Integration ───
 
