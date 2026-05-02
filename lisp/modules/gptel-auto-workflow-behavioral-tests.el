@@ -15,10 +15,16 @@
 (declare-function gptel-auto-workflow--json-object-p
                   "gptel-auto-workflow-strategic")
 
+(declare-function gptel-auto-workflow--validate-and-add-target
+                  "gptel-auto-workflow-strategic")
+
 (defvar gptel-auto-workflow--behavioral-test-suite
   '(("json-target-extraction"
      :file "lisp/modules/gptel-auto-workflow-strategic.el"
-     :test gptel-auto-workflow--test-json-target-extraction))
+     :test gptel-auto-workflow--test-json-target-extraction)
+    ("validate-and-add-target"
+     :file "lisp/modules/gptel-auto-workflow-strategic.el"
+     :test gptel-auto-workflow--test-validate-and-add-target))
   "Alist of behavioral tests.
 Each entry: (NAME :file FILE :test FUNCTION).")
 
@@ -51,6 +57,51 @@ Each entry: (NAME :file FILE :test FUNCTION).")
     (let ((result (gptel-auto-workflow--json-target-file nil)))
       (when result
         (push "Nil handling failed" errors)
+        (setq passed nil)))
+    
+    (cons passed (nreverse errors))))
+
+(defun gptel-auto-workflow--test-validate-and-add-target ()
+  "Test that validate-and-add-target handles edge cases correctly."
+  (let ((passed t)
+        (errors nil)
+        (test-root (expand-file-name "lisp/modules/" user-emacs-directory)))
+    ;; Test 1: Non-string input should return targets unchanged
+    (let* ((targets '("existing.el"))
+           (result (gptel-auto-workflow--validate-and-add-target 123 test-root targets)))
+      (when (not (equal result targets))
+        (push "Non-string input should return targets unchanged" errors)
+        (setq passed nil)))
+    
+    ;; Test 2: Empty proj-root should return targets unchanged
+    (let* ((targets '("existing.el"))
+           (result (gptel-auto-workflow--validate-and-add-target "test.el" "" targets)))
+      (when (not (equal result targets))
+        (push "Empty proj-root should return targets unchanged" errors)
+        (setq passed nil)))
+    
+    ;; Test 3: Nil proj-root should return targets unchanged
+    (let* ((targets '("existing.el"))
+           (result (gptel-auto-workflow--validate-and-add-target "test.el" nil targets)))
+      (when (not (equal result targets))
+        (push "Nil proj-root should return targets unchanged" errors)
+        (setq passed nil)))
+    
+    ;; Test 4: JSON object input should extract and validate
+    (let* ((json-obj '((file . "gptel-auto-workflow-strategic.el")))
+           (targets '())
+           (result (gptel-auto-workflow--validate-and-add-target json-obj test-root targets)))
+      (when (or (not (listp result)) (not (member "gptel-auto-workflow-strategic.el" result)))
+        (push "JSON object input should extract and validate file" errors)
+        (setq passed nil)))
+    
+    ;; Test 5: Duplicate target should not be added
+    (let* ((existing "gptel-auto-workflow-strategic.el")
+           (targets (list existing))
+           (result (gptel-auto-workflow--validate-and-add-target
+                    (expand-file-name existing test-root) test-root targets)))
+      (when (or (not (equal result targets)) (/= (length result) 1))
+        (push "Duplicate target should not be added twice" errors)
         (setq passed nil)))
     
     (cons passed (nreverse errors))))

@@ -589,8 +589,18 @@ allowed for compatibility with isolated tests."
           (or run-id (gptel-auto-workflow--current-run-id))))
 
 (defconst gptel-auto-workflow--results-tsv-header
-  "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\n"
+  "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\n"
   "Header row written to auto-workflow results.tsv artifacts.")
+
+(defun gptel-auto-experiment--extract-axis (agent-output)
+  "Extract exploration axis (A-F) from AGENT-OUTPUT.
+Looks for AXIS: X or Axis: X pattern. Returns single letter or question mark."
+  (if (stringp agent-output)
+      (let ((case-fold-search t))
+        (if (string-match "AXIS:[[:space:]]*\([A-Fa-f]\)" agent-output)
+            (upcase (match-string 1 agent-output))
+          "?"))
+    "?"))
 
 (defun gptel-auto-workflow--results-file-path (&optional run-id)
   "Return the absolute results.tsv path for RUN-ID or the active run."

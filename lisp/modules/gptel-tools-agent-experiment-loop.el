@@ -1,6 +1,8 @@
 ;;; gptel-tools-agent-experiment-loop.el --- Experiment loop, status management -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(declare-function gptel-auto-experiment--frontier-saturated-p "gptel-tools-agent-prompt-build" (target &optional min-frontier-size min-axes min-quality))
+(declare-function gptel-auto-experiment--compute-frontier "gptel-tools-agent-prompt-build" (target))
 
 (defun gptel-auto-experiment--extract-last-explicit-hypothesis (output pattern)
   "Return the last non-placeholder hypothesis in OUTPUT matching PATTERN."
@@ -148,9 +150,29 @@ Adapts max-experiments based on API error rate."
              baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
      loop-buffer
      workflow-root)
-    (let* ((original-max gptel-auto-experiment-max-per-target)
-           (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
-           (threshold gptel-auto-experiment-no-improvement-threshold)
+     (let* ((original-max gptel-auto-experiment-max-per-target)
+            (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
+            ;; Adjust max-exp based on frontier size: underexplored targets get more experiments
+            (max-exp (if (fboundp 'gptel-auto-experiment--compute-frontier)
+                         (let* ((frontier (gptel-auto-experiment--compute-frontier target))
+                                (frontier-size (length frontier)))
+                           (cond
+                            ;; No frontier yet: extra experiments to bootstrap
+                            ((= frontier-size 0)
+                             (message "[auto-workflow] %s has no frontier yet; allowing +2 experiments" target)
+                             (+ max-exp 2))
+                            ;; Small frontier: allow more experiments
+                            ((< frontier-size 3)
+                             (message "[auto-workflow] %s frontier size %d; allowing +1 experiment" target frontier-size)
+                             (+ max-exp 1))
+                            ;; Large frontier: reduce experiments
+                            ((> frontier-size 6)
+                             (message "[auto-workflow] %s frontier size %d; reducing by 1" target frontier-size)
+                             (max 2 (1- max-exp)))
+                            ;; Medium frontier: keep default
+                            (t max-exp)))
+                       max-exp))
+            (threshold gptel-auto-experiment-no-improvement-threshold)
            (run-id gptel-auto-workflow--run-id)
            (results nil)
            (best-score (let ((score (gptel-auto-workflow--plist-get baseline :eight-keys nil)))
@@ -163,20 +185,27 @@ Adapts max-experiments based on API error rate."
                       (message "[auto-workflow] Provider quota exhausted; stopping early for %s"
                                target)
                       (setq max-exp (min max-exp (1- exp-id))))
-                    (when (and (>= gptel-auto-experiment--api-error-count
-                                   gptel-auto-experiment--api-error-threshold)
-                               (< exp-id max-exp))
-                      (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
-                               gptel-auto-experiment--api-error-count target)
-                      (setq max-exp (1- exp-id)))
-                    (if (or (> exp-id max-exp)
-                            (>= no-improvement-count threshold))
-                        (progn
-                          (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
-                                   target (length results)
-                                   best-score)
-                          (funcall callback (nreverse results)))
-                      (gptel-auto-experiment--run-with-retry
+                     (when (and (>= gptel-auto-experiment--api-error-count
+                                    gptel-auto-experiment--api-error-threshold)
+                                (< exp-id max-exp))
+                       (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
+                                gptel-auto-experiment--api-error-count target)
+                       (setq max-exp (1- exp-id)))
+                     ;; Check frontier saturation: stop if target sufficiently explored
+                     (when (and (fboundp 'gptel-auto-experiment--frontier-saturated-p)
+                                (gptel-auto-experiment--frontier-saturated-p target)
+                                (< exp-id max-exp))
+                       (message "[auto-workflow] Target %s frontier saturated; stopping early"
+                                target)
+                       (setq max-exp (1- exp-id)))
+                     (if (or (> exp-id max-exp)
+                             (>= no-improvement-count threshold))
+                         (progn
+                           (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
+                                    target (length results)
+                                    best-score)
+                           (funcall callback (nreverse results)))
+                       (gptel-auto-experiment--run-with-retry
                        target exp-id max-exp
                        best-score
                        baseline-code-quality
@@ -205,10 +234,15 @@ Adapts max-experiments based on API error rate."
                                       score-after
                                       (<= score-after best-score))
                              (cl-incf no-improvement-count))
-                           (when hard-timeout
-                             (message "[auto-experiment] Hard timeout for %s in experiment %d; skipping retries for this attempt and continuing if budget remains"
-                                      target exp-id))
-                           (let ((continue
+                            (when hard-timeout
+                              (message "[auto-experiment] Hard timeout for %s in experiment %d; skipping retries for this attempt and continuing if budget remains"
+                                       target exp-id))
+                            ;; Trigger strategy evolution periodically
+                            (when (and (fboundp 'gptel-auto-workflow--maybe-evolve-strategy)
+                                       (zerop (% next-exp-id 5)))
+                              (message "[strategy] Triggering strategy evolution after %d experiments" next-exp-id)
+                              (gptel-auto-workflow--maybe-evolve-strategy target))
+                            (let ((continue
                                   (lambda ()
                                     (if (gptel-auto-workflow--run-callback-live-p run-id)
                                         (gptel-auto-workflow--call-in-run-context

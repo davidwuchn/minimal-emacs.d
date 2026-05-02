@@ -162,7 +162,7 @@ has disabled retry trimming (nil). This allows pre-send compaction to work
 independently of retry settings.
 
 Returns the number of messages truncated, or 0 if nothing was done."
-  (if (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p))
+  (if (or (null info) (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p)))
       0
     (let* ((data (plist-get info :data))
            (messages (and data (plist-get data :messages)))
@@ -175,7 +175,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
         (let ((tool-indices
                (my/gptel--collect-message-indices
                 messages
-                (lambda (msg) (equal (plist-get msg :role) "tool")))))
+                (lambda (msg) (my/gptel--message-role-p msg "tool")))))
           (when (> (length tool-indices) keep)
             (let ((to-truncate (seq-take tool-indices (- (length tool-indices) keep))))
               ;; Single pass: collect candidates and calculate bytes-saved
@@ -285,7 +285,7 @@ Returns the number of messages whose reasoning_content was stripped."
                (my/gptel--collect-message-indices
                 messages
                 (lambda (msg)
-                  (and (equal (plist-get msg :role) "assistant")
+                  (and (my/gptel--message-role-p msg "assistant")
                        (not (plist-get msg :tool_calls))
                        (plist-get msg :reasoning_content)
                        (not (equal "" (plist-get msg :reasoning_content))))))))
@@ -414,6 +414,13 @@ Returns the number of messages truncated, or 0 if nothing was done."
                 (plist-put msg :content truncation-text)
                 (cl-incf truncated))))))
       truncated)))
+
+(defun my/gptel--message-role-p (msg role)
+  "Return non-nil if MSG has ROLE.
+ROLE is a string like \"tool\", \"assistant\", \"user\", etc.
+Handles nil MSG gracefully (returns nil).
+ASSUMPTION: Role values are strings, compared with `equal'."
+  (and msg (equal (plist-get msg :role) role)))
 
 (defun my/gptel--collect-message-indices (messages predicate)
   "Collect indices of messages in MESSAGES vector matching PREDICATE.

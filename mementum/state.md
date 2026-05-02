@@ -1,10 +1,58 @@
 # Mementum State
 
-> Last session: 2026-05-02 00:10
+> Last session: 2026-05-02 21:55
 
-## Current Session: 2026-05-02 Workflow Run Review + Promotion
+## Current Session: 2026-05-02 Meta-Harness Strategy Evolution
 
-**Status:** Run `2026-05-01T180001Z-811b` completed (3/3 targets improved, 3 kept commits). Promoted 1 real fix to `main`; skipped 2 false positives.
+**Status:** Strategy evolution implementation is in progress and locally verified with targeted smoke tests. Do not assume cron has exercised it yet.
+
+**Done (This Session):**
+- Added Meta-Harness strategy modules to `gptel-tools-agent.el` loader: `gptel-tools-agent-strategy-harness` and `gptel-tools-agent-strategy-evolver` now load with the workflow stack.
+- Added strategy frontier injection to `assistant/skills/auto-workflow/prompt-template.md` via `{{strategy-frontier}}` and prompt-build variable substitution.
+- Added strategy evaluation recording from `gptel-auto-experiment-log-tsv`, writing independent metrics via `gptel-auto-workflow--record-strategy-evaluation`.
+- Hardened strategy evolution runtime path:
+  - Unique strategy names now scan existing `strategy-evolved-NNNN.el` files, avoiding overwrite of `evolved-0001`.
+  - Removed invalid non-`cl-block` `return-from` usage.
+  - Added required `cl-lib`, `json`, `subr-x` dependencies.
+  - Fixed strategy template quoting with `%S` so generated metadata is loadable.
+  - Fixed strategy prototype temp files to use `.el` suffix.
+  - Fixed build-function extraction regexp.
+  - Suppressed metadata persistence during prototype validation to avoid candidate side effects.
+  - Strategy loading now registers loadable strategies even if generated code omits self-registration.
+- Verified:
+  - `scan-sexps` passed for modified strategy/prompt/loader modules.
+  - `batch-byte-compile` completed for modified modules with warnings only (mostly existing split-module forward references).
+  - Smoke tests passed for strategy template/prototype validation, candidate parsing/renaming, and strategy evaluation recording.
+  - `git diff --check` passed.
+  - Removed generated `.elc`, smoke metadata, and smoke `evaluations.jsonl` artifacts.
+
+**Important Notes:**
+- Existing unrelated dirty files remain: `assistant/skills/auto-workflow/SKILL.md`, `mementum/knowledge/self-evolution.md`, `packages/gptel`, `packages/gptel-agent`.
+- Strategy proposer still depends on live `gptel-request`; smoke tests covered deterministic local pieces, not provider response quality.
+- `assistant/strategies/evaluations.jsonl` is intentionally absent until real experiments populate it.
+
+**Next Steps:**
+- Let next workflow run populate real strategy evaluations and confirm periodic evolution triggers only after enough low-performing data.
+- Review generated strategy files before trusting them for long-running cron.
+
+## Previous Session: 2026-05-02 Workflow Run Complete + 4/4 Targets Improved
+
+**Status:** Run `2026-05-02T003729Z-8346` completed (4/4 targets improved, 4 kept commits). All merged to `origin/staging`. Ready for promotion review.
+
+**Done (This Session):**
+- **New workflow run `2026-05-02T003729Z-8346`**: 4 targets, 4 kept, 5 discarded, 2 pre-grade validation failures.
+  - `gptel-auto-workflow-behavioral-tests.el`: exp1 kept (`947a90e`) — Fixed Test 4 weak assertion, score 9/9, quality 0.68
+  - `gptel-ext-retry.el`: exp1 kept (`f2015d8`) — Nil guard for `info` parameter, score 4/4, quality 0.82
+  - `gptel-sandbox.el`: exp1 kept (`3525834`) — Fixed non-sequential let binding bug, score 9/9, quality 0.93
+  - `gptel-agent-loop.el`: exp1 kept (`7218a42`) — Input validation for pattern matching, score 5/5, quality 0.92
+- **All 4 commits merged to staging** and pushed to `origin/staging` after review+verification passed.
+- **Self-evolution cycle ran** and synthesized updated knowledge to `mementum/knowledge/self-evolution.md`.
+
+**Previous Session:**
+- **Reviewed run `2026-05-01T180001Z-811b`**: 8 experiments across 3 targets, 3 kept, 2 pre-grade validation failures.
+  - `gptel-auto-workflow-strategic.el`: exp1 kept (`d69e70cb`) — **false positive**, `when`→`unless` is logically equivalent. Skipped for main promotion.
+  - `gptel-ext-context.el`: exp1 kept (`2710a5c2`) — marginal defensive change, `zerop` already safe. Skipped for main promotion.
+  - `gptel-sandbox.el`: exp1 kept (`51966c24`) — **real improvement**, `listp` guard prevents cryptic `dolist` errors on malformed bindings. **Promoted to main**.
 
 **Done (This Session):**
 - **Reviewed run `2026-05-01T180001Z-811b`**: 8 experiments across 3 targets, 3 kept, 2 pre-grade validation failures.
@@ -98,8 +146,10 @@
 - Working tree was clean before this state update; only `mementum/state.md` changed now.
 
 **Tooling Rule:**
-- Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.
-- Use `mise exec cargo:ripgrep -- rg ...` for searches.
+- Always use `which rg` to find the correct ripgrep path dynamically.
+- Current location: `/home/davidwu/.local/share/mise/installs/cargo-ripgrep/latest/bin/rg`
+- Do not hardcode rg paths; use `$(which rg)` or `executable-find` in Elisp.
+- **FIXED**: OpenCode `Grep`/`Glob` tools now work via symlink `~/.cargo/bin/rg -> mise-managed ripgrep`.
 
 **New Memories:**
 - `mementum/memories/mise-ripgrep-tooling.md`
