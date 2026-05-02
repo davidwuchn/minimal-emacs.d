@@ -91,6 +91,88 @@ Returns the adjusted max chars value."
       (message "[prompt-efficiency] Skill-guided compression: %d chars" compression)))
   gptel-auto-workflow--topic-knowledge-max-chars)
 
+;;; Section A/B Testing
+
+(defvar gptel-auto-workflow--ab-test-sections
+  '(suggestions self-evolution topic-specific git-history
+    axis-performance cross-target-patterns failure-patterns)
+  "Prompt sections that can be individually included/excluded for A/B testing.")
+
+(defvar gptel-auto-workflow--ab-test-omit-rate 0.2
+  "Probability of randomly omitting a section to gather A/B data.")
+
+(defvar gptel-auto-workflow--ab-test-min-samples 10
+  "Minimum experiments before using A/B data for section selection.")
+
+(defun gptel-auto-workflow--analyze-section-performance ()
+  "Analyze which prompt sections correlate with success.
+Returns hash table: section-name -> (kept-count . total-count)."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (section-stats (make-hash-table :test 'equal)))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (decision (nth 7 fields))
+                 (sections-str (or (nth 16 fields) "all"))
+                 (kept (equal decision "kept")))
+            (when (not (equal sections-str "all"))
+              (dolist (section (split-string sections-str ","))
+                (let* ((key (intern section))
+                       (current (gethash key section-stats '(0 . 0)))
+                       (curr-kept (car current))
+                       (curr-total (cdr current)))
+                  (puthash key
+                           (cons (if kept (1+ curr-kept) curr-kept)
+                                 (1+ curr-total))
+                           section-stats))))
+          (forward-line 1))))
+    section-stats))
+
+(defun gptel-auto-workflow--select-ab-test-sections ()
+  "Select which prompt sections to include based on A/B test data.
+Returns list of section symbols to include.
+With insufficient data, includes all sections.
+With sufficient data, includes only sections with positive correlation."
+  (let* ((section-stats (gptel-auto-workflow--analyze-section-performance))
+         (total-experiments 0)
+         (effective-sections '()))
+    ;; Count total experiments with section tracking
+    (maphash (lambda (_ stats)
+               (setq total-experiments (+ total-experiments (cdr stats))))
+             section-stats)
+    (cond
+     ;; Not enough data: include all, occasionally omit random section for exploration
+     ((< total-experiments gptel-auto-workflow--ab-test-min-samples)
+      (if (< (random 100) (* 100 gptel-auto-workflow--ab-test-omit-rate))
+          ;; Randomly omit one section to gather data
+          (let ((to-omit (nth (random (length gptel-auto-workflow--ab-test-sections))
+                              gptel-auto-workflow--ab-test-sections)))
+            (message "[ab-test] Omitting %s for exploration (data gathering phase)" to-omit)
+            (remove to-omit gptel-auto-workflow--ab-test-sections))
+        gptel-auto-workflow--ab-test-sections))
+     ;; Sufficient data: include only effective sections
+     (t
+      (dolist (section gptel-auto-workflow--ab-test-sections)
+        (let* ((stats (gethash section section-stats '(0 . 0)))
+               (kept (car stats))
+               (total (cdr stats))
+               (rate (if (> total 0) (/ (float kept) total) 0.5)))
+          (when (or (= total 0)  ; no data yet, give benefit of doubt
+                    (>= rate 0.3))  ; at least 30% success rate
+            (push section effective-sections))))
+      (message "[ab-test] Selected sections (%d/%d): %s"
+               (length effective-sections)
+               (length gptel-auto-workflow--ab-test-sections)
+               (mapconcat #'symbol-name effective-sections ","))
+      (nreverse effective-sections))))))
+
 (defun gptel-auto-workflow--load-skill-content (skill-name)
   "Load SKILL-NAME from assistant/skills/ directories.
 Returns skill content string or empty string if not found.
@@ -1292,12 +1374,12 @@ Returns string describing which axes have been most successful."
   (let* ((stats (gptel-auto-experiment--get-axis-stats target))
          (rates (plist-get stats :rates))
          (counts (plist-get stats :counts))
-         (axis-names '("A" . "Error Handling")
-                       '("B" . "Performance")
-                       '("C" . "Refactoring")
-                       '("D" . "Safety")
-                       '("E" . "Test Coverage")
-                       '("F" . "Memory Management"))
+          (axis-names '(("A" . "Error Handling")
+                        ("B" . "Performance")
+                        ("C" . "Refactoring")
+                        ("D" . "Safety")
+                        ("E" . "Test Coverage")
+                        ("F" . "Memory Management")))
          (results '()))
     (dolist (pair axis-names)
       (let* ((axis (car pair))
