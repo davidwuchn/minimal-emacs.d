@@ -1,6 +1,7 @@
 ;;; gptel-tools-agent-experiment-loop.el --- Experiment loop, status management -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(declare-function gptel-auto-experiment--frontier-saturated-p "gptel-tools-agent-prompt-build" (target &optional min-frontier-size min-axes min-quality))
 
 (defun gptel-auto-experiment--extract-last-explicit-hypothesis (output pattern)
   "Return the last non-placeholder hypothesis in OUTPUT matching PATTERN."
@@ -163,20 +164,27 @@ Adapts max-experiments based on API error rate."
                       (message "[auto-workflow] Provider quota exhausted; stopping early for %s"
                                target)
                       (setq max-exp (min max-exp (1- exp-id))))
-                    (when (and (>= gptel-auto-experiment--api-error-count
-                                   gptel-auto-experiment--api-error-threshold)
-                               (< exp-id max-exp))
-                      (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
-                               gptel-auto-experiment--api-error-count target)
-                      (setq max-exp (1- exp-id)))
-                    (if (or (> exp-id max-exp)
-                            (>= no-improvement-count threshold))
-                        (progn
-                          (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
-                                   target (length results)
-                                   best-score)
-                          (funcall callback (nreverse results)))
-                      (gptel-auto-experiment--run-with-retry
+                     (when (and (>= gptel-auto-experiment--api-error-count
+                                    gptel-auto-experiment--api-error-threshold)
+                                (< exp-id max-exp))
+                       (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
+                                gptel-auto-experiment--api-error-count target)
+                       (setq max-exp (1- exp-id)))
+                     ;; Check frontier saturation: stop if target sufficiently explored
+                     (when (and (fboundp 'gptel-auto-experiment--frontier-saturated-p)
+                                (gptel-auto-experiment--frontier-saturated-p target)
+                                (< exp-id max-exp))
+                       (message "[auto-workflow] Target %s frontier saturated; stopping early"
+                                target)
+                       (setq max-exp (1- exp-id)))
+                     (if (or (> exp-id max-exp)
+                             (>= no-improvement-count threshold))
+                         (progn
+                           (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
+                                    target (length results)
+                                    best-score)
+                           (funcall callback (nreverse results)))
+                       (gptel-auto-experiment--run-with-retry
                        target exp-id max-exp
                        best-score
                        baseline-code-quality
