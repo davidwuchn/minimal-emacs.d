@@ -135,7 +135,7 @@ Returns hash table: section-name -> (kept-count . total-count)."
                            (cons (if kept (1+ curr-kept) curr-kept)
                                  (1+ curr-total))
                            section-stats))))
-          (forward-line 1))))
+          (forward-line 1)))))
     section-stats))
 
 (defun gptel-auto-workflow--select-ab-test-sections ()
@@ -174,7 +174,7 @@ With sufficient data, includes only sections with positive correlation."
                (length effective-sections)
                (length gptel-auto-workflow--ab-test-sections)
                (mapconcat #'symbol-name effective-sections ","))
-      (nreverse effective-sections))))))
+      (nreverse effective-sections)))))
 
 (defun gptel-auto-workflow--load-skill-content (skill-name)
   "Load SKILL-NAME from assistant/skills/ directories.
