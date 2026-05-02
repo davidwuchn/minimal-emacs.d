@@ -97,6 +97,9 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
 ## Self-Evolution Knowledge
 %s
 
+## Topic-Specific Knowledge
+%s
+
 ## Git History (recent commits)
 %s
 
@@ -168,10 +171,11 @@ Example HYPOTHESES:
             (or inspection-thrash-contract "")
             (or patterns "No previous experiments")
             (or suggestions "None")
-            (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
-                (gptel-auto-workflow--evolution-get-knowledge)
-              "")
-            git-history
+             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
+                 (gptel-auto-workflow--evolution-get-knowledge)
+               "")
+             (gptel-auto-experiment--get-topic-knowledge target)
+             git-history
             (or baseline 0.5)
             (if weakest-keys
                 (format "## Weakest Keys (Priority Focus)\n%s" weakest-keys)
@@ -188,6 +192,44 @@ Example HYPOTHESES:
             focus-line
             sexp-check-command)))
 
+(defun gptel-auto-experiment--get-topic-knowledge (target)
+  "Get compressed topic-specific knowledge for TARGET.
+Extracts topic from filename, returns only actionable patterns under 500 chars."
+  (let* ((base-name (file-name-sans-extension (file-name-nondirectory target)))
+         (topic (when (string-match "gptel-ext-\\(.+\\)" base-name)
+                  (match-string 1 base-name)))
+         (knowledge-file (when topic
+                           (expand-file-name
+                            (format "mementum/knowledge/%s.md" topic)
+                            (gptel-auto-workflow--project-root)))))
+    (if (and knowledge-file (file-exists-p knowledge-file))
+        (with-temp-buffer
+          (insert-file-contents knowledge-file)
+          (goto-char (point-min))
+          ;; Skip frontmatter
+          (when (looking-at "---")
+            (forward-line 1)
+            (while (not (looking-at "---"))
+              (forward-line 1))
+            (forward-line 1))
+          ;; Extract only actionable bullets (lines starting with - or ###)
+          (let ((actionable '())
+                (chars 0))
+            (while (and (< chars 400)
+                        (not (eobp)))
+              (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
+                (when (or (string-match-p "^- " line)
+                          (string-match-p "^### " line)
+                          (string-match-p "DO \|TRY \|AVOID" line))
+                  (push line actionable)
+                  (cl-incf chars (length line))))
+              (forward-line 1))
+            (if actionable
+                (concat "Patterns for " topic ":\n"
+                        (string-join (nreverse actionable) "\n")
+                        "\n")
+              "")))
+      "")))
 ;;; TSV Logging (Explainable)
 
 (defun gptel-auto-experiment--tsv-escape (str)
