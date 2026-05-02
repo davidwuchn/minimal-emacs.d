@@ -1,11 +1,109 @@
 ;;; gptel-tools-agent-prompt-build.el --- Prompt building - construction & logging -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+;; ─── Knowledge Cache ───
+
+(defvar gptel-auto-workflow--knowledge-cache (make-hash-table :test 'equal)
+  "Hash table mapping knowledge keys to cached content.
+Keys: 'self-evolution or topic names like 'context-cache.
+Values: (content . timestamp) cons cells.
+Cache is invalidated after synthesis runs.")
+
+(defvar gptel-auto-workflow--knowledge-cache-max-age 3600
+  "Maximum age of cached knowledge in seconds (1 hour).")
+
+(defvar gptel-auto-workflow--topic-knowledge-max-chars 400
+  "Maximum chars for topic-specific knowledge compression.
+Self-evolution adjusts this based on token efficiency analysis.
+Default 400, range 100-800.")
+
+(defun gptel-auto-workflow--knowledge-cache-get (key)
+  "Get cached knowledge for KEY if fresh.
+Returns cached content or nil if missing/stale."
+  (let ((entry (gethash key gptel-auto-workflow--knowledge-cache)))
+    (when entry
+      (let ((content (car entry))
+            (timestamp (cdr entry))
+            (age (float-time (time-subtract (current-time) (cdr entry)))))
+        (if (< age gptel-auto-workflow--knowledge-cache-max-age)
+            content
+          ;; Stale - remove from cache
+          (remhash key gptel-auto-workflow--knowledge-cache)
+          nil)))))
+
+(defun gptel-auto-workflow--knowledge-cache-set (key content)
+  "Cache CONTENT for KEY with current timestamp."
+  (puthash key (cons content (current-time)) gptel-auto-workflow--knowledge-cache))
+
+(defun gptel-auto-workflow--knowledge-cache-invalidate (key)
+  "Invalidate cache for KEY, or all keys if KEY is t."
+  (if (eq key t)
+      (clrhash gptel-auto-workflow--knowledge-cache)
+    (remhash key gptel-auto-workflow--knowledge-cache)))
+
+(defun gptel-auto-workflow--knowledge-cache-stats ()
+  "Return cache statistics as string."
+  (let ((count 0)
+        (total-age 0))
+    (maphash (lambda (key entry)
+               (setq count (1+ count))
+               (setq total-age (+ total-age (float-time (time-subtract (current-time) (cdr entry))))))
+             gptel-auto-workflow--knowledge-cache)
+    (format "[knowledge-cache] %d entries, avg age %.0fs"
+            count (if (> count 0) (/ total-age count) 0))))
+
+(defun gptel-auto-workflow--load-token-efficiency-skill ()
+  "Load token efficiency skill and return parsed config.
+Returns plist with :compression :section-stats or nil."
+  (let ((skill-file (expand-file-name
+                     "assistant/skills/auto-workflow/token-efficiency.md"
+                     (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                              (gptel-auto-workflow--worktree-base-root))
+                         (gptel-auto-workflow--project-root)))))
+    (when (file-exists-p skill-file)
+      (with-temp-buffer
+        (insert-file-contents skill-file)
+        (goto-char (point-min))
+        (let ((config (list :file skill-file)))
+          ;; Parse compression config
+          (when (re-search-forward "topic-knowledge-max-chars: \\([0-9]+\\)" nil t)
+            (plist-put config :compression (string-to-number (match-string 1))))
+          ;; Parse section A/B results
+          (goto-char (point-min))
+          (let ((section-stats (make-hash-table :test 'equal)))
+            (while (re-search-forward "^- \\**\\(.+\\)*\\*: \\([0-9.]+\\)% success (\\([0-9]+\\)/\\([0-9]+\\) experiments)" nil t)
+              (let ((section (match-string 1))
+                     (rate (string-to-number (match-string 2)))
+                     (kept (string-to-number (match-string 3)))
+                     (total (string-to-number (match-string 4))))
+                (puthash section (list :rate rate :kept kept :total total) section-stats)))
+            (plist-put config :section-stats section-stats))
+          config)))))
+
+(defun gptel-auto-workflow--adapt-prompt-compression ()
+  "Adapt topic knowledge compression based on token efficiency skill.
+Reads optimization-skills/token-efficiency.md and adjusts max chars.
+Returns the adjusted max chars value."
+  (let* ((skill (gptel-auto-workflow--load-token-efficiency-skill))
+         (compression (when skill (plist-get skill :compression))))
+    (when (and compression (> compression 0))
+      (setq gptel-auto-workflow--topic-knowledge-max-chars compression)
+      (message "[prompt-efficiency] Skill-guided compression: %d chars" compression)))
+  gptel-auto-workflow--topic-knowledge-max-chars)
+
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)
   "Build prompt for experiment EXPERIMENT-ID on TARGET.
-Uses loaded skills and Eight Keys breakdown for focused improvements."
-  (let* ((worktree-path (or (gptel-auto-workflow--get-worktree-dir target)
+Uses loaded skills and Eight Keys breakdown for focused improvements.
+Implements section-level A/B testing to identify effective prompt components."
+  ;; Adapt compression based on token efficiency analysis
+  (gptel-auto-workflow--adapt-prompt-compression)
+  
+  ;; Select sections for A/B testing
+  (let* ((included-sections (gptel-auto-workflow--select-ab-test-sections))
+         (section-included-p (lambda (section) (member section included-sections)))
+         
+         (worktree-path (or (gptel-auto-workflow--get-worktree-dir target)
                             (gptel-auto-workflow--project-root)))
          (worktree-quoted (shell-quote-argument worktree-path))
          (git-history (shell-command-to-string
@@ -97,6 +195,9 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
 ## Self-Evolution Knowledge
 %s
 
+## Topic-Specific Knowledge
+%s
+
 ## Git History (recent commits)
 %s
 
@@ -167,11 +268,24 @@ Example HYPOTHESES:
             (or controller-focus "")
             (or inspection-thrash-contract "")
             (or patterns "No previous experiments")
-            (or suggestions "None")
-            (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
-                (gptel-auto-workflow--evolution-get-knowledge)
+            ;; A/B test: conditionally include suggestions
+            (if (funcall section-included-p 'suggestions)
+                (or suggestions "None")
               "")
-            git-history
+            ;; A/B test: conditionally include self-evolution
+            (if (funcall section-included-p 'self-evolution)
+                (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
+                    (gptel-auto-workflow--evolution-get-knowledge)
+                  "")
+              "")
+            ;; A/B test: conditionally include topic-specific
+            (if (funcall section-included-p 'topic-specific)
+                (gptel-auto-experiment--get-topic-knowledge target)
+              "")
+            ;; A/B test: conditionally include git-history
+            (if (funcall section-included-p 'git-history)
+                git-history
+              "")
             (or baseline 0.5)
             (if weakest-keys
                 (format "## Weakest Keys (Priority Focus)\n%s" weakest-keys)
@@ -186,9 +300,67 @@ Example HYPOTHESES:
             target
             (/ gptel-auto-experiment-time-budget 60)
             focus-line
-            sexp-check-command)))
+            sexp-check-command))
+    ;; Record which sections were included for logging
+    (setq gptel-auto-workflow--last-prompt-sections
+          (mapconcat #'symbol-name included-sections ","))))
 
-;;; TSV Logging (Explainable)
+(defun gptel-auto-experiment--get-topic-knowledge (target)
+  "Get compressed topic-specific knowledge for TARGET.
+Extracts topic from filename, returns only actionable patterns under 500 chars.
+Uses cache to avoid repeated file reads."
+  (let* ((base-name (file-name-sans-extension (file-name-nondirectory target)))
+         (topic (when (string-match "gptel-ext-\\(.+\\)" base-name)
+                  (match-string 1 base-name)))
+         (cache-key (when topic (intern (concat "topic-" topic))))
+         (cached (when cache-key
+                   (gptel-auto-workflow--knowledge-cache-get cache-key))))
+    (cond
+     ;; Cache hit
+     (cached
+      (message "[knowledge-cache] Hit for %s (%d chars)" topic (length cached))
+      cached)
+     ;; No topic extracted
+     ((not topic) "")
+     ;; Cache miss - read and compress file
+     (t
+      (let* ((knowledge-file (expand-file-name
+                              (format "mementum/knowledge/%s.md" topic)
+                              (gptel-auto-workflow--project-root)))
+             (result
+              (if (file-exists-p knowledge-file)
+                  (with-temp-buffer
+                    (insert-file-contents knowledge-file)
+                    (goto-char (point-min))
+                    ;; Skip frontmatter
+                    (when (looking-at "---")
+                      (forward-line 1)
+                      (while (not (looking-at "---"))
+                        (forward-line 1))
+                      (forward-line 1))
+                    ;; Extract only actionable bullets
+                    (let ((actionable '())
+                          (chars 0))
+                      (while (and (< chars gptel-auto-workflow--topic-knowledge-max-chars)
+                                  (not (eobp)))
+                        (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
+                          (when (or (string-match-p "^- " line)
+                                    (string-match-p "^### " line)
+                                    (string-match-p "DO \\|TRY \\|AVOID" line))
+                            (push line actionable)
+                            (cl-incf chars (length line))))
+                        (forward-line 1))
+                      (if actionable
+                          (concat "Patterns for " topic ":\n"
+                                  (string-join (nreverse actionable) "\n")
+                                  "\n")
+                        "")))
+                "")))
+        (when cache-key
+          (gptel-auto-workflow--knowledge-cache-set cache-key result)
+          (message "[knowledge-cache] Miss for %s, cached %d chars"
+                   topic (length result)))
+        result)))));;; TSV Logging (Explainable)
 
 (defun gptel-auto-experiment--tsv-escape (str)
   "Escape STR for TSV format (replace newlines/tabs with spaces)."
@@ -318,22 +490,29 @@ row for the same experiment and target."
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n"
-                        experiment-id
-                        target
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
-                        (gptel-auto-workflow--plist-get experiment :score-before 0)
-                        (gptel-auto-workflow--plist-get experiment :score-after 0)
-                        (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
-                        (- (gptel-auto-workflow--plist-get experiment :score-after 0)
-                           (gptel-auto-workflow--plist-get experiment :score-before 0))
-                        decision
-                        (gptel-auto-workflow--plist-get experiment :duration 0)
-                        (gptel-auto-workflow--plist-get experiment :grader-quality "?")
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
-                        truncated-output)))
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\n"
+                          experiment-id
+                          target
+                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
+                          (gptel-auto-workflow--plist-get experiment :score-before 0)
+                          (gptel-auto-workflow--plist-get experiment :score-after 0)
+                          (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
+                          (- (gptel-auto-workflow--plist-get experiment :score-after 0)
+                             (gptel-auto-workflow--plist-get experiment :score-before 0))
+                          decision
+                          (gptel-auto-workflow--plist-get experiment :duration 0)
+                          (gptel-auto-workflow--plist-get experiment :grader-quality "?")
+                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
+                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
+                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
+                          truncated-output
+                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
+                           (or (gptel-auto-workflow--plist-get experiment :prompt-chars 0)
+                               0)
+                           (or (gptel-auto-experiment--tsv-escape
+                                (gptel-auto-workflow--plist-get experiment :sections-included "all"))
+                               "all")))))
+
       (write-region (point-min) (point-max) file))
     ;; Trigger self-evolution after experiment logging
     (when (and (fboundp 'gptel-auto-workflow--experiment-complete-hook)

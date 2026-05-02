@@ -57,17 +57,19 @@ Uses cached value from load time, or detects from current directory."
                            (score-after (string-to-number (or (nth 4 fields) "0")))
                            (quality (string-to-number (or (nth 5 fields) "0")))
                            (delta-str (or (nth 6 fields) "+0.00"))
-                           (decision (nth 7 fields))
-                           (grader-q (string-to-number (or (nth 9 fields) "0"))))
-                      (push (list :target target
-                                  :hypothesis hypothesis
-                                  :score-before score-before
-                                  :score-after score-after
-                                  :code-quality quality
-                                  :delta delta-str
-                                  :decision decision
-                                  :grader-quality grader-q)
-                            records))))
+                            (decision (nth 7 fields))
+                             (grader-q (string-to-number (or (nth 9 fields) "0")))
+                             (prompt-chars (string-to-number (or (nth 15 fields) "0"))))
+                       (push (list :target target
+                                   :hypothesis hypothesis
+                                   :score-before score-before
+                                   :score-after score-after
+                                   :code-quality quality
+                                   :delta delta-str
+                                   :decision decision
+                                   :grader-quality grader-q
+                                   :prompt-chars prompt-chars)
+                             records))))
                 (forward-line 1)))))))
     (nreverse records)))
 
@@ -225,96 +227,158 @@ Returns alist of target → (category success-rate count)."
                      (> (cl-reduce #'+ (mapcar (lambda (x) (nth 2 x)) (cdr a)))
                         (cl-reduce #'+ (mapcar (lambda (x) (nth 2 x)) (cdr b)))))))))
 
+(defun gptel-auto-workflow--evolution-pending-drafts ()
+  "Scan mementum knowledge drafts and return list of (topic age-days preview)."
+  (let* ((drafts-dir (expand-file-name "mementum/knowledge/drafts"
+                                       (gptel-auto-workflow--worktree-base-root)))
+         (drafts '())
+         (now (current-time)))
+    (when (file-directory-p drafts-dir)
+      (dolist (file (directory-files drafts-dir t "\\.md$"))
+        (let* ((topic (file-name-sans-extension (file-name-nondirectory file)))
+               (mtime (file-attribute-modification-time (file-attributes file)))
+               (age-days (/ (float-time (time-subtract now mtime)) 86400))
+               (preview (with-temp-buffer
+                          (insert-file-contents file)
+                          (goto-char (point-min))
+                          (when (looking-at "---")
+                            (forward-line 1)
+                            (while (not (looking-at "---"))
+                              (forward-line 1))
+                            (forward-line 1))
+                          (buffer-substring (point) (min (+ (point) 300) (point-max))))))
+          (push (list topic age-days preview) drafts))))
+    ;; Sort by age descending (oldest first)
+    (sort drafts (lambda (a b) (> (nth 1 a) (nth 1 b))))))
+
 ;; ─── Phase 3: Synthesize ──→ Mementum as Knowledge ───
 
 (defun gptel-auto-workflow--evolution-synthesize ()
-  "Synthesize git facts and benchmark verification into mementum knowledge.
-This is the CENTRAL function of self-evolution."
+  "Synthesize git facts and benchmark verification into skill files.
+This is the CENTRAL function of self-evolution.
+Writes to optimization-skills/ as skill files that the prompt builder consumes."
   (when gptel-auto-workflow-evolution-enabled
     (let* ((git-facts (gptel-auto-workflow--git-raw-facts))
-           (knowledge-dir (expand-file-name "mementum/knowledge"
-                                            (gptel-auto-workflow--worktree-base-root)))
-           (evolution-file (expand-file-name "self-evolution.md" knowledge-dir)))
+            (skills-dir (expand-file-name "assistant/skills/auto-workflow"
+                                          (gptel-auto-workflow--worktree-base-root)))
+            (token-skill-file (expand-file-name "token-efficiency.md" skills-dir))
+            (mutation-skill-file (expand-file-name "mutations.md" skills-dir)))
 
-      (make-directory knowledge-dir t)
+      (make-directory skills-dir t)
 
-      ;; Write synthesized knowledge
-      (with-temp-file evolution-file
+      ;; ─── Skill 1: Token Efficiency (SKILL.md for gptel-agent) ───
+      (with-temp-file (expand-file-name "SKILL.md" skills-dir)
         (insert "---\n")
-        (insert "title: Self-Evolution Patterns\n")
-        (insert "status: active\n")
-        (insert "category: knowledge\n")
-        (insert "tags: [self-evolution, auto-workflow, patterns, verified]\n")
+        (insert "name: token-efficiency\n")
+        (insert "description: Controls prompt compression and section inclusion based on experiment results\n")
+        (insert "version: 1.0\n")
         (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
         (insert "---\n\n")
 
-        (insert "# Self-Evolution Knowledge Base\n\n")
-        (insert "*This is the SINGLE SOURCE OF TRUTH for auto-workflow self-evolution.*\n")
-        (insert "*It synthesizes git history (facts) and benchmark data (verification).*\n\n")
+        (insert "# Token Efficiency\n\n")
+        (insert "This skill auto-evolves based on experiment results.\n")
+        (insert "It controls prompt compression and section inclusion.\n\n")
 
-        ;; Section 1: Git Facts
-        (insert "## Git History Facts\n\n")
-        (insert (format "- Active experiment branches: %d\n"
-                        (plist-get git-facts :total-active)))
-        (insert (format "- Historical merges: %d\n"
-                        (plist-get git-facts :historical-merges)))
-        (insert (format "- Active branches merged: %d\n"
-                        (plist-get git-facts :active-merged)))
-        (insert (format "- Active branches abandoned: %d\n"
-                        (plist-get git-facts :active-abandoned)))
-        (insert (format "- Active merge rate: %.1f%%\n\n"
-                        (* 100 (plist-get git-facts :active-merge-rate))))
-
-        (insert "### Target Frequency\n\n")
-        (dolist (freq (plist-get git-facts :target-frequency))
-          (insert (format "- `%s`: %d experiments\n" (car freq) (cdr freq))))
+        ;; Section 1: Token Efficiency Analysis
+        (insert "## Token Efficiency Analysis\n\n")
+        (insert "Correlation between prompt size and experiment success:\n\n")
+        (let* ((all-results (gptel-auto-workflow--parse-all-results))
+               (with-prompt-data (cl-remove-if (lambda (r) (= 0 (plist-get r :prompt-chars))) all-results))
+               (kept-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "kept")) with-prompt-data))
+               (discarded-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "discarded")) with-prompt-data)))
+          (if (null with-prompt-data)
+              (insert "*Insufficient data for token efficiency analysis (need prompt_chars in results).*\n")
+            (let* ((avg-kept-prompt (/ (apply #'+ (mapcar (lambda (r) (plist-get r :prompt-chars)) kept-results))
+                                       (max 1 (length kept-results))))
+                   (avg-discarded-prompt (/ (apply #'+ (mapcar (lambda (r) (plist-get r :prompt-chars)) discarded-results))
+                                            (max 1 (length discarded-results))))
+                   (efficiency-kept (if (> avg-kept-prompt 0)
+                                        (/ (* 100.0 (length kept-results)) avg-kept-prompt)
+                                      0))
+                   (efficiency-discarded (if (> avg-discarded-prompt 0)
+                                             (/ (* 100.0 (length discarded-results)) avg-discarded-prompt)
+                                           0)))
+              (insert (format "- **Average prompt size (kept):** %d chars\n" avg-kept-prompt))
+              (insert (format "- **Average prompt size (discarded):** %d chars\n" avg-discarded-prompt))
+              (insert (format "- **Success rate per 1000 chars (kept):** %.2f%%\n" efficiency-kept))
+              (insert (format "- **Discarded rate per 1000 chars:** %.2f%%\n" efficiency-discarded))
+              (insert (format "- **Optimal prompt range:** %s\n"
+                              (if (< avg-kept-prompt avg-discarded-prompt)
+                                  (format "Shorter prompts work better (%d vs %d chars)" avg-kept-prompt avg-discarded-prompt)
+                                (format "Longer prompts work better (%d vs %d chars)" avg-kept-prompt avg-discarded-prompt))))
+              (insert "\n**Prompt Compression Config:**\n")
+              (insert (format "- topic-knowledge-max-chars: %d\n" (max 100 (min 800 (- (floor avg-kept-prompt) 3000)))))
+              (insert "- compress-behavior: auto\n")
+              (insert "- compress-trigger: prompt exceeds optimal size\n"))))
         (insert "\n")
 
-        ;; Section 2: Benchmark Verification
-        (insert "## Benchmark-Verified Patterns\n\n")
-        (let* ((verified
-                (gptel-auto-workflow--benchmark-verify-patterns
-                 `(("bug-fix" . ,(lambda (h)
-                                   (string-match-p "fix\\|bug\\|nil\\|guard\\|error\\|prevent" h)))
-                   ("performance" . ,(lambda (h)
-                                       (string-match-p "perf\\|cache\\|optimize\\|speed" h)))
-                   ("refactoring" . ,(lambda (h)
-                                       (string-match-p "extract\\|duplicate\\|refactor\\|helper" h)))
-                   ("safety" . ,(lambda (h)
-                                  (string-match-p "safety\\|defensive\\|validate\\|check" h))))))
-               (sorted-verified (sort (copy-sequence verified)
-                                      (lambda (a b) (> (nth 3 a) (nth 3 b))))))
-          (dolist (v verified)
-            (let ((name (nth 0 v))
-                  (total (nth 1 v))
-                  (kept (nth 2 v))
-                  (rate (nth 3 v)))
-              (insert (format "- **%s**: %.0f%% verified (%d/%d experiments)\n"
-                              name (* 100 rate) kept total))))
-          (insert "\n")
+        ;; Section 2: Section A/B Test Results
+        (insert "## Section A/B Test Results\n\n")
+        (insert "Which prompt sections improve outcomes:\n\n")
+        (let* ((all-results (gptel-auto-workflow--parse-all-results))
+               (section-stats (make-hash-table :test 'equal)))
+          (dolist (result all-results)
+            (let ((sections (or (plist-get result :sections-included) "all"))
+                  (decision (plist-get result :decision)))
+              (dolist (section (split-string sections "," t))
+                (let* ((key (string-trim section))
+                       (stats (gethash key section-stats (list :with 0 :kept 0))))
+                  (puthash key
+                           (list :with (1+ (plist-get stats :with))
+                                 :kept (if (equal decision "kept")
+                                          (1+ (plist-get stats :kept))
+                                        (plist-get stats :kept)))
+                           section-stats)))))
+          (if (= 0 (hash-table-count section-stats))
+              (insert "*No A/B test data yet. Run experiments with varying sections.*\n")
+            (maphash (lambda (section stats)
+                       (let* ((with (plist-get stats :with))
+                              (kept (plist-get stats :kept))
+                              (rate (if (> with 0) (/ (* 100.0 kept) with) 0)))
+                         (insert (format "- **%s**: %.0f%% success (%d/%d experiments)\n"
+                                         section rate kept with))))
+                     section-stats))
+          (insert "\n**Section Inclusion Config:**\n")
+          (insert "- default: include all\n")
+          (insert "- a-b-test-enabled: t\n")
+          (insert "- omit-rate: 0.2\n")
+          (insert "- min-samples: 10\n"))
+        (insert "\n"))
 
-          ;; Section 3: Actionable Advice (data-driven)
-          (insert "## Actionable Advice for Next Experiments\n\n")
-          (insert "Based on verified benchmark patterns (sorted by success rate):\n\n")
-          (cl-loop for i from 1
-                   for v in sorted-verified
-                   for name = (nth 0 v)
-                   for total = (nth 1 v)
-                   for rate = (nth 3 v)
-                   when (> total 0)
-                   do (insert (format "%d. **%s** - %.0f%% kept (%d experiments)\n"
-                                      i name (* 100 rate) total)))
-          (insert "\n")
-          (insert "## Critical Guidance for Maximum Success\n\n")
-          (insert "To ensure your changes are KEPT (not discarded):\n\n")
-          (insert "1. **Improve BOTH score AND quality** - Changes that improve only one metric often get discarded\n")
-          (insert "2. **Target the weakest keys** - Focus on the specific Eight Keys with lowest scores\n")
-          (insert "3. **Make minimal, focused changes** - Large changes often reduce quality despite good intentions\n")
-          (insert "4. **Verify before submitting** - Run tests and confirm both score and quality improve\n")
-          (insert "5. **Avoid 'safety theater'** - Adding ignore-errors or nil guards that don't fix real bugs reduces quality\n\n")
+        ;; Section 4: Token Efficiency Analysis
+        (insert "## Token Efficiency Analysis\n\n")
+        (insert "Correlation between prompt size and experiment success:\n\n")
+        (let* ((all-results (gptel-auto-workflow--parse-all-results))
+               (with-prompt-data (cl-remove-if (lambda (r) (= 0 (plist-get r :prompt-chars))) all-results))
+               (kept-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "kept")) with-prompt-data))
+               (discarded-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "discarded")) with-prompt-data)))
+          (if (null with-prompt-data)
+              (insert "*Insufficient data for token efficiency analysis (need prompt_chars in results).\n")
+            (let* ((avg-kept-prompt (/ (apply #'+ (mapcar (lambda (r) (plist-get r :prompt-chars)) kept-results))
+                                       (max 1 (length kept-results))))
+                   (avg-discarded-prompt (/ (apply #'+ (mapcar (lambda (r) (plist-get r :prompt-chars)) discarded-results))
+                                            (max 1 (length discarded-results))))
+                   (efficiency-kept (if (> avg-kept-prompt 0)
+                                        (/ (* 100.0 (length kept-results)) avg-kept-prompt)
+                                      0))
+                   (efficiency-discarded (if (> avg-discarded-prompt 0)
+                                             (/ (* 100.0 (length discarded-results)) avg-discarded-prompt)
+                                           0)))
+              (insert (format "- **Average prompt size (kept):** %d chars\n" avg-kept-prompt))
+              (insert (format "- **Average prompt size (discarded):** %d chars\n" avg-discarded-prompt))
+              (insert (format "- **Success rate per 1000 chars (kept):** %.2f%%\n" efficiency-kept))
+              (insert (format "- **Discarded rate per 1000 chars:** %.2f%%\n" efficiency-discarded))
+              (insert (format "- **Optimal prompt range:** %s\n"
+                              (if (< avg-kept-prompt avg-discarded-prompt)
+                                  (format "Shorter prompts work better (%d vs %d chars)" avg-kept-prompt avg-discarded-prompt)
+                                (format "Longer prompts work better (%d vs %d chars)" avg-kept-prompt avg-discarded-prompt))))
+              (insert "\n**Recommendations:**\n")
+              (insert (format "1. Target prompt size: ~%d chars for best success rate\n" avg-kept-prompt))
+              (insert "2. Compress knowledge sections if prompt exceeds optimal size\n")
+              (insert "3. Remove low-value sections that increase size without improving outcomes\n"))))
         (insert "\n")
 
-        ;; Section 4: Per-Target Patterns
+        ;; Section 5: Per-Target Patterns
         (insert "## Per-Target Success Patterns\n\n")
         (insert "Which change types work best for each target file:\n\n")
         (let ((target-analysis (gptel-auto-workflow--target-pattern-analysis)))
@@ -332,6 +396,52 @@ This is the CENTRAL function of self-evolution."
                                     cat (* 100 rate) count))))
                 (insert "\n")))))
 
+        ;; Section 5: Auto-Approved Knowledge (Trust-but-Verify)
+        (insert "## Auto-Approved Knowledge Pages\n\n")
+        (let ((knowledge-dir (expand-file-name "mementum/knowledge"
+                                               (gptel-auto-workflow--worktree-base-root)))
+              (auto-approved '()))
+          (when (file-directory-p knowledge-dir)
+            (dolist (file (directory-files knowledge-dir t "\\.md$"))
+              (unless (member (file-name-nondirectory file) '("self-evolution.md"))
+                (with-temp-buffer
+                  (insert-file-contents file)
+                  (goto-char (point-min))
+                  (when (looking-at "<!--")
+                    (let ((topic (file-name-sans-extension (file-name-nondirectory file)))
+                          (confidence 0)
+                          (sources 0)
+                          (warnings nil)
+                          (valid nil))
+                      (when (re-search-forward "Confidence: \\([0-9]+\\)%" nil t)
+                        (setq confidence (string-to-number (match-string 1))))
+                      (when (re-search-forward "Sources: \\([0-9]+\\)" nil t)
+                        (setq sources (string-to-number (match-string 1))))
+                      (when (re-search-forward "Warnings: \\(.+\\)$" nil t)
+                        (let ((warn-str (match-string 1)))
+                          (unless (string= warn-str "none")
+                            (setq warnings (split-string warn-str ", ")))))
+                      (when (re-search-forward "Auto-approved: yes (\\(passed\\|flagged\\))" nil t)
+                        (setq valid (string= (match-string 1) "passed")))
+                      (push (list topic confidence sources warnings valid) auto-approved)))))))
+          (if (null auto-approved)
+              (insert "*No auto-approved knowledge pages yet.*\n")
+            (insert (format "*%d knowledge page(s) auto-approved (trust-but-verify):*\n\n" (length auto-approved)))
+            (dolist (page (sort auto-approved (lambda (a b) (> (nth 1 a) (nth 1 b)))))
+              (let ((topic (nth 0 page))
+                    (confidence (nth 1 page))
+                    (sources (nth 2 page))
+                    (warnings (nth 3 page))
+                    (valid (nth 4 page)))
+                (insert (format "### `%s`\n\n" topic))
+                (insert (format "- **Confidence:** %d%%\n" confidence))
+                (insert (format "- **Sources:** %d memories\n" sources))
+                (insert (format "- **Status:** %s\n" (if valid "✓ Passed" "⚠ Flagged")))
+                (when warnings
+                  (insert (format "- **Warnings:** %s\n" (mapconcat #'identity warnings ", "))))
+                (insert "\n")))))
+        (insert "\n")
+
         (insert "## Feedback Loop\n\n")
         (insert "```\n")
         (insert "Experiments → Git History → Facts\n")
@@ -342,28 +452,45 @@ This is the CENTRAL function of self-evolution."
         (insert "```\n")))
 
       (message "[auto-workflow] Synthesized self-evolution knowledge to %s"
-               evolution-file))))
+               evolution-file)
+      ;; Invalidate self-evolution cache so next prompt gets fresh knowledge
+      (when (fboundp 'gptel-auto-workflow--knowledge-cache-invalidate)
+        (gptel-auto-workflow--knowledge-cache-invalidate 'self-evolution)
+        (message "[knowledge-cache] Invalidated self-evolution")))))
 
 ;; ─── Phase 4: Inject ──→ Prompts Read from Mementum ───
 
 (defun gptel-auto-workflow--evolution-get-knowledge ()
   "Get self-evolution knowledge for prompt injection.
-This is the ONLY interface between mementum and prompts."
-  (let ((evolution-file (expand-file-name
-                         "mementum/knowledge/self-evolution.md"
-                         (gptel-auto-workflow--worktree-base-root))))
-    (if (file-exists-p evolution-file)
-        (with-temp-buffer
-          (insert-file-contents evolution-file)
-          (goto-char (point-min))
-          ;; Skip frontmatter
-          (when (looking-at "---")
-            (forward-line 1)
-            (while (not (looking-at "---"))
-              (forward-line 1))
-            (forward-line 1))
-          (buffer-string))
-      "")))
+This is the ONLY interface between mementum and prompts.
+Uses cache to avoid repeated file reads."
+  (let ((cached (when (fboundp 'gptel-auto-workflow--knowledge-cache-get)
+                  (gptel-auto-workflow--knowledge-cache-get 'self-evolution))))
+    (if cached
+        (progn
+          (message "[knowledge-cache] Hit for self-evolution (%d chars)" (length cached))
+          cached)
+      (let ((evolution-file (expand-file-name
+                             "mementum/knowledge/self-evolution.md"
+                             (gptel-auto-workflow--worktree-base-root))))
+        (if (file-exists-p evolution-file)
+            (let ((content
+                   (with-temp-buffer
+                     (insert-file-contents evolution-file)
+                     (goto-char (point-min))
+                     ;; Skip frontmatter
+                     (when (looking-at "---")
+                       (forward-line 1)
+                       (while (not (looking-at "---"))
+                         (forward-line 1))
+                       (forward-line 1))
+                     (buffer-string))))
+              (when (fboundp 'gptel-auto-workflow--knowledge-cache-set)
+                (gptel-auto-workflow--knowledge-cache-set 'self-evolution content)
+                (message "[knowledge-cache] Miss for self-evolution, cached %d chars"
+                         (length content)))
+              content)
+          "")))))
 
 ;; ─── Integration ───
 
