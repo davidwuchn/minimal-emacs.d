@@ -58,16 +58,18 @@ Uses cached value from load time, or detects from current directory."
                            (quality (string-to-number (or (nth 5 fields) "0")))
                            (delta-str (or (nth 6 fields) "+0.00"))
                            (decision (nth 7 fields))
-                           (grader-q (string-to-number (or (nth 9 fields) "0"))))
-                      (push (list :target target
-                                  :hypothesis hypothesis
-                                  :score-before score-before
-                                  :score-after score-after
-                                  :code-quality quality
-                                  :delta delta-str
-                                  :decision decision
-                                  :grader-quality grader-q)
-                            records))))
+                            (grader-q (string-to-number (or (nth 9 fields) "0"))
+                            (prompt-chars (string-to-number (or (nth 15 fields) "0"))))
+                       (push (list :target target
+                                   :hypothesis hypothesis
+                                   :score-before score-before
+                                   :score-after score-after
+                                   :code-quality quality
+                                   :delta delta-str
+                                   :decision decision
+                                   :grader-quality grader-q
+                                   :prompt-chars prompt-chars)
+                             records))))
                 (forward-line 1)))))))
     (nreverse records)))
 
@@ -338,7 +340,40 @@ This is the CENTRAL function of self-evolution."
           (insert "5. **Avoid 'safety theater'** - Adding ignore-errors or nil guards that don't fix real bugs reduces quality\n\n")
         (insert "\n")
 
-        ;; Section 4: Per-Target Patterns
+        ;; Section 4: Token Efficiency Analysis
+        (insert "## Token Efficiency Analysis\n\n")
+        (insert "Correlation between prompt size and experiment success:\n\n")
+        (let* ((all-results (gptel-auto-workflow--parse-all-results))
+               (with-prompt-data (cl-remove-if (lambda (r) (= 0 (plist-get r :prompt-chars))) all-results))
+               (kept-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "kept")) with-prompt-data))
+               (discarded-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "discarded")) with-prompt-data)))
+          (if (null with-prompt-data)
+              (insert "*Insufficient data for token efficiency analysis (need prompt_chars in results).\n")
+            (let* ((avg-kept-prompt (/ (apply #'+ (mapcar (lambda (r) (plist-get r :prompt-chars)) kept-results))
+                                       (max 1 (length kept-results))))
+                   (avg-discarded-prompt (/ (apply #'+ (mapcar (lambda (r) (plist-get r :prompt-chars)) discarded-results))
+                                            (max 1 (length discarded-results))))
+                   (efficiency-kept (if (> avg-kept-prompt 0)
+                                        (/ (* 100.0 (length kept-results)) avg-kept-prompt)
+                                      0))
+                   (efficiency-discarded (if (> avg-discarded-prompt 0)
+                                             (/ (* 100.0 (length discarded-results)) avg-discarded-prompt)
+                                           0)))
+              (insert (format "- **Average prompt size (kept):** %d chars\n" avg-kept-prompt))
+              (insert (format "- **Average prompt size (discarded):** %d chars\n" avg-discarded-prompt))
+              (insert (format "- **Success rate per 1000 chars (kept):** %.2f%%\n" efficiency-kept))
+              (insert (format "- **Discarded rate per 1000 chars:** %.2f%%\n" efficiency-discarded))
+              (insert (format "- **Optimal prompt range:** %s\n"
+                              (if (< avg-kept-prompt avg-discarded-prompt)
+                                  (format "Shorter prompts work better (%d vs %d chars)" avg-kept-prompt avg-discarded-prompt)
+                                (format "Longer prompts work better (%d vs %d chars)" avg-kept-prompt avg-discarded-prompt))))
+              (insert "\n**Recommendations:**\n")
+              (insert (format "1. Target prompt size: ~%d chars for best success rate\n" avg-kept-prompt))
+              (insert "2. Compress knowledge sections if prompt exceeds optimal size\n")
+              (insert "3. Remove low-value sections that increase size without improving outcomes\n"))))
+        (insert "\n")
+
+        ;; Section 5: Per-Target Patterns
         (insert "## Per-Target Success Patterns\n\n")
         (insert "Which change types work best for each target file:\n\n")
         (let ((target-analysis (gptel-auto-workflow--target-pattern-analysis)))
