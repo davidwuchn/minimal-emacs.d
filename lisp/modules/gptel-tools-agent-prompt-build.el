@@ -12,6 +12,11 @@ Cache is invalidated after synthesis runs.")
 (defvar gptel-auto-workflow--knowledge-cache-max-age 3600
   "Maximum age of cached knowledge in seconds (1 hour).")
 
+(defvar gptel-auto-workflow--topic-knowledge-max-chars 400
+  "Maximum chars for topic-specific knowledge compression.
+Self-evolution adjusts this based on token efficiency analysis.
+Default 400, range 100-800.")
+
 (defun gptel-auto-workflow--knowledge-cache-get (key)
   "Get cached knowledge for KEY if fresh.
 Returns cached content or nil if missing/stale."
@@ -47,10 +52,40 @@ Returns cached content or nil if missing/stale."
     (format "[knowledge-cache] %d entries, avg age %.0fs"
             count (if (> count 0) (/ total-age count) 0))))
 
+(defun gptel-auto-workflow--adapt-prompt-compression ()
+  "Adapt topic knowledge compression based on token efficiency data.
+Reads self-evolution knowledge and adjusts max chars if needed.
+Returns the adjusted max chars value."
+  (let* ((evolution-file (expand-file-name
+                          "mementum/knowledge/self-evolution.md"
+                          (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                   (gptel-auto-workflow--worktree-base-root))
+                              (gptel-auto-workflow--project-root))))
+         (current-max gptel-auto-workflow--topic-knowledge-max-chars)
+         (optimal-size nil))
+    (when (file-exists-p evolution-file)
+      (with-temp-buffer
+        (insert-file-contents evolution-file)
+        (goto-char (point-min))
+        ;; Look for optimal prompt size recommendation
+        (when (re-search-forward "Target prompt size: ~\\([0-9]+\\)" nil t)
+          (setq optimal-size (string-to-number (match-string 1))))))
+    (when (and optimal-size (> optimal-size 0))
+      ;; Adjust topic knowledge max to help reach optimal total prompt size
+      ;; Assuming other sections are ~3000 chars, topic should be: optimal - 3000
+      (let ((target-topic-size (max 100 (min 800 (- optimal-size 3000)))))
+        (setq gptel-auto-workflow--topic-knowledge-max-chars target-topic-size)
+        (message "[prompt-efficiency] Adapted compression: %d chars (optimal prompt: %d)"
+                 target-topic-size optimal-size))))
+  gptel-auto-workflow--topic-knowledge-max-chars)
+
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)
   "Build prompt for experiment EXPERIMENT-ID on TARGET.
 Uses loaded skills and Eight Keys breakdown for focused improvements."
+  ;; Adapt compression based on token efficiency analysis
+  (gptel-auto-workflow--adapt-prompt-compression)
+  
   (let* ((worktree-path (or (gptel-auto-workflow--get-worktree-dir target)
                             (gptel-auto-workflow--project-root)))
          (worktree-quoted (shell-quote-argument worktree-path))
@@ -274,7 +309,7 @@ Uses cache to avoid repeated file reads."
                     ;; Extract only actionable bullets
                     (let ((actionable '())
                           (chars 0))
-                      (while (and (< chars 400)
+                      (while (and (< chars gptel-auto-workflow--topic-knowledge-max-chars)
                                   (not (eobp)))
                         (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
                           (when (or (string-match-p "^- " line)
@@ -423,23 +458,25 @@ row for the same experiment and target."
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-       (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n"
-                         experiment-id
-                         target
-                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
-                         (gptel-auto-workflow--plist-get experiment :score-before 0)
-                         (gptel-auto-workflow--plist-get experiment :score-after 0)
-                         (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
-                         (- (gptel-auto-workflow--plist-get experiment :score-after 0)
-                            (gptel-auto-workflow--plist-get experiment :score-before 0))
-                         decision
-                         (gptel-auto-workflow--plist-get experiment :duration 0)
-                         (gptel-auto-workflow--plist-get experiment :grader-quality "?")
-                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
-                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
-                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
-                         truncated-output
-                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown")))))
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\n"
+                          experiment-id
+                          target
+                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
+                          (gptel-auto-workflow--plist-get experiment :score-before 0)
+                          (gptel-auto-workflow--plist-get experiment :score-after 0)
+                          (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
+                          (- (gptel-auto-workflow--plist-get experiment :score-after 0)
+                             (gptel-auto-workflow--plist-get experiment :score-before 0))
+                          decision
+                          (gptel-auto-workflow--plist-get experiment :duration 0)
+                          (gptel-auto-workflow--plist-get experiment :grader-quality "?")
+                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
+                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
+                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
+                          truncated-output
+                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
+                          (or (gptel-auto-workflow--plist-get experiment :prompt-chars 0)
+                              0)))))
       (write-region (point-min) (point-max) file))
     ;; Trigger self-evolution after experiment logging
     (when (and (fboundp 'gptel-auto-workflow--experiment-complete-hook)

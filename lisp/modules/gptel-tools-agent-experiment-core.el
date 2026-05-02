@@ -292,17 +292,18 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 	                                                         hypothesis))
 	                                                       (keep (plist-get decision :keep))
 		                                                   (reasoning (plist-get decision :reasoning))
-		                                                   (exp-result
-		                                                    (list :target target :id experiment-id :hypothesis
-		                                                          hypothesis :score-before baseline :score-after
-		                                                          score-after :code-quality code-quality :kept
-		                                                          keep :duration (- (float-time) start-time)
-		                                                          :grader-quality grade-score :grader-reason
-		                                                          (plist-get grade :details) :comparator-reason
-		                                                          reasoning :analyzer-patterns
-		                                                          (format "%s" patterns) :agent-output
-		                                                          effective-agent-output
-                                                          :backend experiment-backend)))
+												   (exp-result
+												    (list :target target :id experiment-id :hypothesis
+												          hypothesis :score-before baseline :score-after
+												          score-after :code-quality code-quality :kept
+												          keep :duration (- (float-time) start-time)
+												          :grader-quality grade-score :grader-reason
+												          (plist-get grade :details) :comparator-reason
+												          reasoning :analyzer-patterns
+												          (format "%s" patterns) :agent-output
+												          effective-agent-output
+													  :backend experiment-backend
+													  :prompt-chars (length executor-prompt))))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format
@@ -430,23 +431,24 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 		                                                                               retry-hypothesis))
 		                                                                             (keep (plist-get decision :keep))
 		                                                                             (reasoning (plist-get decision :reasoning))
-		                                                                             (exp-result
-		                                                                              (list :target target
-                                                                                            :id experiment-id
-                                                                                            :hypothesis retry-hypothesis
-                                                                                            :score-before baseline
-                                                                                            :score-after retry-score
-                                                                                            :code-quality retry-quality
-                                                                                            :validation-retry t
-                                                                                            :kept keep
-                                                                                            :duration (- (float-time) start-time)
-                                                                                            :grader-quality (plist-get retry-grade :score)
-                                                                                            :grader-reason (plist-get retry-grade :details)
-                                                                                            :comparator-reason reasoning
-                                                                                            :analyzer-patterns (format "%s" patterns)
+                                                                                             (exp-result
+                                                                                              (list :target target
+                                                                                             :id experiment-id
+                                                                                             :hypothesis retry-hypothesis
+                                                                                             :score-before baseline
+                                                                                             :score-after retry-score
+                                                                                             :code-quality retry-quality
+                                                                                             :validation-retry t
+                                                                                             :kept keep
+                                                                                             :duration (- (float-time) start-time)
+                                                                                             :grader-quality (plist-get retry-grade :score)
+                                                                                             :grader-reason (plist-get retry-grade :details)
+                                                                                             :comparator-reason reasoning
+                                                                                             :analyzer-patterns (format "%s" patterns)
                                                                                              :agent-output retry-output
                                                                                              :retries 1
-                                                                                             :backend experiment-backend)))
+                                                                                             :backend experiment-backend
+                                                                                             :prompt-chars (length executor-prompt))))
                                                                                 (if keep
                                                                                     (let* ((msg (format "◈ Retry: fix validation in %s"
 								                                                                        target))
@@ -633,20 +635,21 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                 "nucleus-validation-failed")
                                                                ((not tests-passed) "tests-failed")
                                                                (t "verification-failed")))
-                                                        (exp-result
-                                                         (list :target target
-                                                               :id experiment-id
-                                                               :hypothesis hypothesis
-                                                               :score-before baseline
-                                                               :score-after 0
-                                                               :kept nil
-                                                               :duration (- (float-time) start-time)
-                                                               :grader-quality grade-score
-                                                               :grader-reason (plist-get grade :details)
-                                                               :comparator-reason reason
+                                                         (exp-result
+                                                          (list :target target
+                                                                :id experiment-id
+                                                                :hypothesis hypothesis
+                                                                :score-before baseline
+                                                                :score-after 0
+                                                                :kept nil
+                                                                :duration (- (float-time) start-time)
+                                                                :grader-quality grade-score
+                                                                :grader-reason (plist-get grade :details)
+                                                                :comparator-reason reason
                                                                 :analyzer-patterns (format "%s" patterns)
                                                                 :agent-output agent-output
-                                                                :backend experiment-backend)))
+                                                                :backend experiment-backend
+                                                                :prompt-chars (length executor-prompt))))
                                                    (message "[auto-experiment] ✗ %s for %s" reason target)
                                                    (funcall log-fn
                                                             run-id exp-result)
