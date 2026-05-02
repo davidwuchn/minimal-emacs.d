@@ -267,7 +267,7 @@ Returns new strategy name or nil if rejected."
       (with-temp-file strategy-file
         (insert new-code))
       (message "[strategy-evolution] ACCEPTED %s (axis %s)" new-name axis)
-      new-name)))
+      new-name))
 
 ;;; Periodic Strategy Evolution
 
@@ -282,8 +282,8 @@ If current strategy is underperforming, tries to generate a new one."
            (current-success-rate (plist-get current-perf :success-rate))
            (current-total (plist-get current-perf :total)))
       ;; Only evolve if we have enough data and performance is mediocre
-      (when (and (>= current-total 5)  ; At least 5 experiments
-                 (<= current-success-rate 0.4))  ; 40% or less success
+      (when (and (>= current-total 5)
+                 (<= current-success-rate 0.4))
         (message "[strategy] Current strategy '%s' has %.0f%% success rate, triggering evolution"
                  current-strategy (* 100 current-success-rate))
         ;; Pick an exploitation axis that's been least explored
@@ -329,7 +329,7 @@ If current strategy is underperforming, tries to generate a new one."
               (when new-strategy
                 (message "[strategy] Evolved new strategy: %s" new-strategy)
                 ;; Switch to new strategy if it passed validation
-                (setq gptel-auto-workflow--active-strategy new-strategy))))))))
+                (setq gptel-auto-workflow--active-strategy new-strategy))))))))))
 
 (provide 'gptel-tools-agent-strategy-evolver)
 ;;; gptel-tools-agent-strategy-evolver.el ends here

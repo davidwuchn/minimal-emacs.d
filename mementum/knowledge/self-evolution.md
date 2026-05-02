@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-02 19:52
+updated: 2026-05-02 20:00
 ---
 
 # Self-Evolution Knowledge Base
@@ -95,10 +95,6 @@ Which change types work best for each target file:
 ### `gptel-ext-retry.el`
 
 - **bug-fix**: 0% (3 experiments)
-
-## Auto-Approved Knowledge Pages
-
-*No auto-approved knowledge pages yet.*
 
 ## Feedback Loop
 

@@ -160,6 +160,65 @@ Returns strategy name."
       (message "[strategy] No evaluated strategies yet, using default")
       "template-default"))))
 
+;;; Target Discovery for Cross-Target Strategies
+
+(defun gptel-auto-workflow--discover-targets ()
+  "Discover all potential optimization targets.
+Returns list of target file paths."
+  (let ((targets '())
+        (modules-dir (expand-file-name "lisp/modules" (gptel-auto-workflow--project-root))))
+    (when (file-directory-p modules-dir)
+      (dolist (file (directory-files modules-dir t "\\.el$"))
+        (push (file-relative-name file (gptel-auto-workflow--project-root)) targets)))
+    targets))
+
+(defun gptel-auto-workflow--synthesize-global-patterns (targets)
+  "Synthesize patterns across all TARGETS from TSV history.
+Returns formatted string of global insights."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (axis-counts (make-hash-table :test 'equal))
+        (axis-successes (make-hash-table :test 'equal))
+        (total-kept 0)
+        (total-discarded 0))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1)
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (decision (nth 7 fields))
+                 (axis (or (nth 17 fields) "?")))
+            (when (not (equal axis "?"))
+              (puthash axis (1+ (gethash axis axis-counts 0)) axis-counts)
+              (when (equal decision "kept")
+                (puthash axis (1+ (gethash axis axis-successes 0)) axis-successes)
+                (setq total-kept (1+ total-kept)))
+              (when (equal decision "discarded")
+                (setq total-discarded (1+ total-discarded)))))
+          (forward-line 1))))
+    (if (= total-kept 0)
+        "No global patterns yet."
+      (concat "## Global Patterns Across All Targets\n"
+              (format "Total experiments: %d kept, %d discarded (%.0f%% success)\n"
+                      total-kept total-discarded
+                      (* 100 (/ (float total-kept) (+ total-kept total-discarded))))
+              "Success rates by axis:\n"
+              (let ((results '()))
+                (maphash (lambda (axis count)
+                           (let ((successes (gethash axis axis-successes 0)))
+                             (push (format "- %s: %.0f%% (%d/%d)"
+                                           axis
+                                           (* 100 (/ (float successes) count))
+                                           successes count)
+                                   results)))
+                         axis-counts)
+                (mapconcat #'identity (sort results #'string<) "\n"))
+              "\n\nRecommendation: Focus on high-success axes globally.\n\n"))))
+
 ;;; Strategy Execution
 
 (defun gptel-auto-experiment-build-prompt-with-strategy (strategy-name target experiment-id max-experiments analysis baseline previous-results)
