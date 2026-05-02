@@ -390,17 +390,14 @@ Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scan
 (defun my/gptel--normalize-context-window (n)
   "Normalize gptel context-window value N to tokens.
 
-Some gptel model tables encode context windows in *thousands* of tokens, and may
-use floats (e.g. 8.192 for 8192 tokens).  OpenRouter's `context_length' is in
-raw tokens."
+Some gptel model tables encode context windows in *thousands* of tokens as floats
+(e.g. 8.192 for 8192 tokens). OpenRouter's `context_length' is in raw tokens."
   (cond
    ((not (numberp n)) nil)
    ((<= n 0) nil)
-   ;; Float values (e.g., 8.192) represent thousands - convert to tokens
    ((floatp n) (round (* n 1000)))
-   ;; Small integers (< 1000) likely represent thousands (e.g., 128 -> 128k)
    ((< n 1000) (round (* n 1000)))
-   ;; Larger values are already in raw tokens
+   ((> n 2000000) nil)
    (t (round n))))
 
 (defun my/gptel--positive-integer-p (n)
