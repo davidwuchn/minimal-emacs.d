@@ -212,10 +212,13 @@ Checks both TTL configuration and hash table initialization."
   "Return non-nil when AGENT-TYPE is safe to serve from the subagent cache.
 Executor results are side-effectful during auto-workflow: reusing cached prose
 after a worktree is recreated would skip reapplying the file edits that prose
-describes."
-  (not (and (equal agent-type "executor")
-            (or gptel-auto-workflow--current-target
-                gptel-auto-workflow--current-project))))
+describes.
+Returns nil for nil or empty agent-type to prevent invalid cache lookups."
+  (and (stringp agent-type)
+       (not (string-empty-p agent-type))
+       (not (and (equal agent-type "executor")
+                 (or gptel-auto-workflow--current-target
+                     gptel-auto-workflow--current-project)))))
 
 (defun my/gptel--cacheable-subagent-result-p (result &optional agent-type)
   "Return non-nil when RESULT is safe to reuse from the subagent cache.
@@ -243,7 +246,9 @@ immediate cache hits."
 (defun my/gptel--subagent-cache-get (agent-type prompt &optional files include-history include-diff)
   "Get cached result for (AGENT-TYPE, PROMPT, ...) if still valid.
 Returns nil if cache disabled, not found, or expired."
-  (when (and (my/gptel--subagent-cache-enabled-p)
+  (when (and (stringp agent-type)
+             (not (string-empty-p agent-type))
+             (my/gptel--subagent-cache-enabled-p)
              (my/gptel--subagent-cache-allowed-p agent-type))
     (let* ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff))
            (cached (gethash key my/gptel--subagent-cache)))
@@ -260,8 +265,11 @@ Returns nil if cache disabled, not found, or expired."
 
 (defun my/gptel--subagent-cache-put (agent-type prompt result &optional files include-history include-diff)
   "Cache RESULT for (AGENT-TYPE, PROMPT, ...).
-Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
-  (when (and (my/gptel--subagent-cache-enabled-p)
+Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'.
+Returns nil if cache disabled, agent-type invalid, or result not cacheable."
+  (when (and (stringp agent-type)
+             (not (string-empty-p agent-type))
+             (my/gptel--subagent-cache-enabled-p)
              (my/gptel--subagent-cache-allowed-p agent-type)
              (my/gptel--cacheable-subagent-result-p result agent-type))
     (let ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff)))
