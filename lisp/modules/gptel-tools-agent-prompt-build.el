@@ -1082,5 +1082,27 @@ Returns formatted string listing underexplored targets."
                          "\n")
               "\n\n"))))
 
+(defun gptel-auto-experiment--frontier-saturated-p (target &optional min-frontier-size min-axes min-quality)
+  "Return t if TARGET's frontier is saturated (sufficiently explored).
+MIN-FRONTIER-SIZE: minimum number of Pareto-optimal experiments (default: 3).
+MIN-AXES: minimum number of unique axes covered (default: 4).
+MIN-QUALITY: minimum best quality score (default: 0.8)."
+  (let* ((frontier (gptel-auto-experiment--compute-frontier target))
+         (frontier-size (length frontier))
+         (axes (cl-remove-duplicates (mapcar (lambda (e) (plist-get e :axis)) frontier)
+                                     :test #'equal))
+         (qualities (mapcar (lambda (e) (plist-get e :code-quality)) frontier))
+         (best-quality (if qualities (apply #'max qualities) 0)))
+    (and (>= frontier-size (or min-frontier-size 3))
+         (>= (length axes) (or min-axes 4))
+         (>= best-quality (or min-quality 0.8)))))
+
+(defun gptel-auto-experiment--frontier-saturation-guidance (target)
+  "Format saturation status for TARGET.
+Returns string indicating whether target is saturated or needs more work."
+  (if (gptel-auto-experiment--frontier-saturated-p target)
+      (format "## Target Status: SATURATED\n%s has sufficient Pareto-optimal experiments. Consider moving to other targets.\n\n" target)
+    (format "## Target Status: ACTIVE\n%s needs more experiments to saturate frontier.\n\n" target)))
+
 (provide 'gptel-tools-agent-prompt-build)
 ;;; gptel-tools-agent-prompt-build.el ends here
