@@ -275,7 +275,8 @@ Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
                           my/gptel-subagent-cache-max-size)))
           (maphash
            (lambda (k v)
-             (push (cons (car v) k) entries))
+             (when (consp v)
+               (push (cons (car v) k) entries)))
            my/gptel--subagent-cache)
           (setq entries (sort entries (lambda (a b) (< (car a) (car b)))))
           (let ((to-evict (cl-subseq entries 0 (min excess (length entries)))))
@@ -296,7 +297,8 @@ Call periodically to prevent memory growth from unaccessed entries."
         (now (float-time)))
     (maphash
      (lambda (key value)
-       (when (> (- now (car value)) my/gptel-subagent-cache-ttl)
+       (when (and (consp value)
+                  (> (- now (car value)) my/gptel-subagent-cache-ttl))
          (remhash key my/gptel--subagent-cache)
          (cl-incf count)))
      my/gptel--subagent-cache)
