@@ -407,6 +407,12 @@ raw tokens."
   "Return N if it is a positive integer, otherwise nil."
   (and (integerp n) (> n 0) n))
 
+(defun my/gptel--cache-context-window (model-id cw)
+  "Cache CW for MODEL-ID if positive integer. Return CW."
+  (when (my/gptel--positive-integer-p cw)
+    (puthash model-id cw my/gptel--context-window-cache))
+  cw)
+
 (defun my/gptel--openrouter-entry-context-window (entry)
   "Extract valid context_window from an OpenRouter model ENTRY alist.
 Returns (id . context_length) if ENTRY is a plist/alist with a string id
@@ -855,14 +861,10 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        my/gptel--known-model-context-windows
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
-        (when (my/gptel--positive-integer-p cw)
-          (puthash model-id cw my/gptel--context-window-cache))
-        cw))
+        (my/gptel--cache-context-window model-id cw)))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
              (cw (plist-get meta :context-window)))
-        (when (my/gptel--positive-integer-p cw)
-          (puthash model-id cw my/gptel--context-window-cache))
-        cw))
+        (my/gptel--cache-context-window model-id cw)))
      (t my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
