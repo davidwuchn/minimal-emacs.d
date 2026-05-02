@@ -820,6 +820,9 @@ Returns nil if git command fails or returns invalid hash."
          (tracking-file (gptel-auto-workflow--tracking-file))
          (tracking-dir (file-name-directory tracking-file)))
     (cond
+     ((not (stringp commit-hash))
+      (message "[auto-workflow] Failed to track commit: git command returned non-string %S" commit-hash)
+      nil)
      ((string-empty-p commit-hash)
       (message "[auto-workflow] Failed to track commit: git command returned empty hash")
       nil)
