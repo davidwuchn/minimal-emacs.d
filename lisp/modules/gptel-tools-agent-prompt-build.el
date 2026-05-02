@@ -52,41 +52,58 @@ Returns cached content or nil if missing/stale."
     (format "[knowledge-cache] %d entries, avg age %.0fs"
             count (if (> count 0) (/ total-age count) 0))))
 
-(defun gptel-auto-workflow--adapt-prompt-compression ()
-  "Adapt topic knowledge compression based on token efficiency data.
-Reads self-evolution knowledge and adjusts max chars if needed.
-Returns the adjusted max chars value."
-  (let* ((evolution-file (expand-file-name
-                          "mementum/knowledge/self-evolution.md"
-                          (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
-                                   (gptel-auto-workflow--worktree-base-root))
-                              (gptel-auto-workflow--project-root))))
-         (current-max gptel-auto-workflow--topic-knowledge-max-chars)
-         (optimal-size nil))
-    (when (file-exists-p evolution-file)
+(defun gptel-auto-workflow--load-token-efficiency-skill ()
+  "Load token efficiency skill and return parsed config.
+Returns plist with :compression :section-stats or nil."
+  (let ((skill-file (expand-file-name
+                     "assistant/skills/auto-workflow/token-efficiency.md"
+                     (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                              (gptel-auto-workflow--worktree-base-root))
+                         (gptel-auto-workflow--project-root)))))
+    (when (file-exists-p skill-file)
       (with-temp-buffer
-        (insert-file-contents evolution-file)
+        (insert-file-contents skill-file)
         (goto-char (point-min))
-        ;; Look for optimal prompt size recommendation
-        (when (re-search-forward "Target prompt size: ~\\([0-9]+\\)" nil t)
-          (setq optimal-size (string-to-number (match-string 1))))))
-    (when (and optimal-size (> optimal-size 0))
-      ;; Adjust topic knowledge max to help reach optimal total prompt size
-      ;; Assuming other sections are ~3000 chars, topic should be: optimal - 3000
-      (let ((target-topic-size (max 100 (min 800 (- optimal-size 3000)))))
-        (setq gptel-auto-workflow--topic-knowledge-max-chars target-topic-size)
-        (message "[prompt-efficiency] Adapted compression: %d chars (optimal prompt: %d)"
-                 target-topic-size optimal-size))))
+        (let ((config (list :file skill-file)))
+          ;; Parse compression config
+          (when (re-search-forward "topic-knowledge-max-chars: \\([0-9]+\\)" nil t)
+            (plist-put config :compression (string-to-number (match-string 1))))
+          ;; Parse section A/B results
+          (goto-char (point-min))
+          (let ((section-stats (make-hash-table :test 'equal)))
+            (while (re-search-forward "^- \\**\\(.+\\)*\\*: \\([0-9.]+\\)% success (\\([0-9]+\\)/\\([0-9]+\\) experiments)" nil t)
+              (let ((section (match-string 1))
+                     (rate (string-to-number (match-string 2)))
+                     (kept (string-to-number (match-string 3)))
+                     (total (string-to-number (match-string 4))))
+                (puthash section (list :rate rate :kept kept :total total) section-stats)))
+            (plist-put config :section-stats section-stats))
+          config)))))
+
+(defun gptel-auto-workflow--adapt-prompt-compression ()
+  "Adapt topic knowledge compression based on token efficiency skill.
+Reads optimization-skills/token-efficiency.md and adjusts max chars.
+Returns the adjusted max chars value."
+  (let* ((skill (gptel-auto-workflow--load-token-efficiency-skill))
+         (compression (when skill (plist-get skill :compression))))
+    (when (and compression (> compression 0))
+      (setq gptel-auto-workflow--topic-knowledge-max-chars compression)
+      (message "[prompt-efficiency] Skill-guided compression: %d chars" compression)))
   gptel-auto-workflow--topic-knowledge-max-chars)
 
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)
   "Build prompt for experiment EXPERIMENT-ID on TARGET.
-Uses loaded skills and Eight Keys breakdown for focused improvements."
+Uses loaded skills and Eight Keys breakdown for focused improvements.
+Implements section-level A/B testing to identify effective prompt components."
   ;; Adapt compression based on token efficiency analysis
   (gptel-auto-workflow--adapt-prompt-compression)
   
-  (let* ((worktree-path (or (gptel-auto-workflow--get-worktree-dir target)
+  ;; Select sections for A/B testing
+  (let* ((included-sections (gptel-auto-workflow--select-ab-test-sections))
+         (section-included-p (lambda (section) (member section included-sections)))
+         
+         (worktree-path (or (gptel-auto-workflow--get-worktree-dir target)
                             (gptel-auto-workflow--project-root)))
          (worktree-quoted (shell-quote-argument worktree-path))
          (git-history (shell-command-to-string
@@ -251,12 +268,24 @@ Example HYPOTHESES:
             (or controller-focus "")
             (or inspection-thrash-contract "")
             (or patterns "No previous experiments")
-            (or suggestions "None")
-             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
-                 (gptel-auto-workflow--evolution-get-knowledge)
-               "")
-             (gptel-auto-experiment--get-topic-knowledge target)
-             git-history
+            ;; A/B test: conditionally include suggestions
+            (if (funcall section-included-p 'suggestions)
+                (or suggestions "None")
+              "")
+            ;; A/B test: conditionally include self-evolution
+            (if (funcall section-included-p 'self-evolution)
+                (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
+                    (gptel-auto-workflow--evolution-get-knowledge)
+                  "")
+              "")
+            ;; A/B test: conditionally include topic-specific
+            (if (funcall section-included-p 'topic-specific)
+                (gptel-auto-experiment--get-topic-knowledge target)
+              "")
+            ;; A/B test: conditionally include git-history
+            (if (funcall section-included-p 'git-history)
+                git-history
+              "")
             (or baseline 0.5)
             (if weakest-keys
                 (format "## Weakest Keys (Priority Focus)\n%s" weakest-keys)
@@ -271,7 +300,10 @@ Example HYPOTHESES:
             target
             (/ gptel-auto-experiment-time-budget 60)
             focus-line
-            sexp-check-command)))
+            sexp-check-command))
+    ;; Record which sections were included for logging
+    (setq gptel-auto-workflow--last-prompt-sections
+          (mapconcat #'symbol-name included-sections ","))))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.
@@ -458,7 +490,7 @@ row for the same experiment and target."
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\n"
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\n"
                           experiment-id
                           target
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
@@ -476,7 +508,11 @@ row for the same experiment and target."
                           truncated-output
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
                            (or (gptel-auto-workflow--plist-get experiment :prompt-chars 0)
-                               0))))
+                               0)
+                           (or (gptel-auto-experiment--tsv-escape
+                                (gptel-auto-workflow--plist-get experiment :sections-included "all"))
+                               "all")))))
+
       (write-region (point-min) (point-max) file))
     ;; Trigger self-evolution after experiment logging
     (when (and (fboundp 'gptel-auto-workflow--experiment-complete-hook)
