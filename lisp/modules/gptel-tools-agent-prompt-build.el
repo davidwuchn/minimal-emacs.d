@@ -1030,5 +1030,57 @@ Returns empty string if no frontier data."
       (concat "## Frontier Analysis (Pareto-optimal experiments)\n"
               stats "\n\n"))))
 
+(defun gptel-auto-experiment--frontier-select-targets (&optional n)
+  "Select N targets with smallest Pareto frontiers for next experiments.
+Returns list of (target . frontier-size) sorted ascending by frontier size.
+Targets with no frontier experiments are prioritized."
+  (let* ((results-file (gptel-auto-workflow--results-file-path))
+         (target-frontiers (make-hash-table :test 'equal))
+         (all-targets '()))
+    ;; Collect all targets from TSV
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (target (nth 1 fields)))
+            (when (and (stringp target)
+                       (not (string-empty-p target))
+                       (not (member target all-targets)))
+              (push target all-targets)))
+          (forward-line 1))))
+    ;; Compute frontier size for each target
+    (dolist (target all-targets)
+      (let ((frontier (gptel-auto-experiment--compute-frontier target)))
+        (puthash target (length frontier) target-frontiers)))
+    ;; Sort by frontier size (ascending)
+    (let ((sorted '()))
+      (maphash (lambda (target size)
+                 (push (cons target size) sorted))
+               target-frontiers)
+      (setq sorted (sort sorted (lambda (a b) (< (cdr a) (cdr b)))))
+      (if n
+          (seq-take sorted n)
+        sorted))))
+
+(defun gptel-auto-experiment--frontier-selection-guidance ()
+  "Format guidance for target selection based on frontier analysis.
+Returns formatted string listing underexplored targets."
+  (let ((targets (gptel-auto-experiment--frontier-select-targets 5)))
+    (if (null targets)
+        ""
+      (concat "## Target Selection (Frontier-Based)\n"
+              "Priority targets (smallest Pareto frontier):\n"
+              (mapconcat (lambda (pair)
+                           (format "- %s: %d Pareto-optimal experiment(s)"
+                                   (car pair) (cdr pair)))
+                         targets
+                         "\n")
+              "\n\n"))))
+
 (provide 'gptel-tools-agent-prompt-build)
 ;;; gptel-tools-agent-prompt-build.el ends here

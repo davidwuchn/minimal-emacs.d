@@ -76,18 +76,20 @@ F. **Memory Management** — Fix leaks, optimize allocation, cleanup patterns
 
 ## Instructions
 1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
-2. If a Controller-Selected Starting Symbol is present, line 2 must be exactly `{{focus-line}}`
-3. If a Mandatory Focus Contract is present, obey it exactly; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
-4. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
-5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
-6. Implement the CODE change minimally using Edit tool
-7. Run validation pipeline (CHEAP - do these first):
+2. Generate **3 candidate hypotheses** for this target. For each, write a one-line description.
+3. Pick the **strongest candidate** based on: likelihood of improvement, minimal change, alignment with weakest keys and underexplored axes.
+4. If a Controller-Selected Starting Symbol is present, line 2 must be exactly `{{focus-line}}`
+5. If a Mandatory Focus Contract is present, obey it exactly; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
+6. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
+7. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
+8. Implement the CODE change minimally using Edit tool
+9. Run validation pipeline (CHEAP - do these first):
    a. Syntax check: {{sexp-check-command}}
    b. Byte-compile: emacs -Q --batch -f batch-byte-compile {{target-full-path}}
    c. Load test: emacs -Q --batch -l {{target-full-path}}
    - If ANY validation step fails, FIX IT before proceeding
    - Do not run expensive tests on broken code
-8. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
+10. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
 9. DO NOT run git add, git commit, git push, or stage changes yourself.
    Leave edits uncommitted in the worktree; the auto-workflow controller
    handles grading, commit creation, review, and staging.
