@@ -864,7 +864,9 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
         (my/gptel--cache-context-window model-id cw)))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
              (cw (plist-get meta :context-window)))
-        (my/gptel--cache-context-window model-id cw)))
+        (when (my/gptel--positive-integer-p cw)
+          (my/gptel--cache-context-window model-id cw))
+        cw))
      (t my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
