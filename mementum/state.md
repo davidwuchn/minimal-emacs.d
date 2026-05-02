@@ -113,8 +113,10 @@
 - Working tree was clean before this state update; only `mementum/state.md` changed now.
 
 **Tooling Rule:**
-- Do not use OpenCode `Grep`/`Glob` until their `rg` path is fixed; they may spawn removed `/home/davidwu/.cargo/bin/rg`.
-- Use `mise exec cargo:ripgrep -- rg ...` for searches.
+- Always use `which rg` to find the correct ripgrep path dynamically.
+- Current location: `/home/davidwu/.local/share/mise/installs/cargo-ripgrep/latest/bin/rg`
+- Do not hardcode rg paths; use `$(which rg)` or `executable-find` in Elisp.
+- **FIXED**: OpenCode `Grep`/`Glob` tools now work via symlink `~/.cargo/bin/rg -> mise-managed ripgrep`.
 
 **New Memories:**
 - `mementum/memories/mise-ripgrep-tooling.md`

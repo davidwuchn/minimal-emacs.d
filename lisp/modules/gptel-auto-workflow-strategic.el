@@ -31,6 +31,7 @@
 (require 'gptel-tools-agent)
 
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
+(declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
 
 (defcustom gptel-auto-workflow-strategic-selection t
   "When non-nil, use LLM-based target selection.
@@ -555,15 +556,21 @@ LLM decides if available, otherwise uses static list."
              gptel-auto-workflow-targets
              proj-root
              gptel-auto-workflow-max-targets-per-run)))
-      (if gptel-auto-workflow-strategic-selection
-          (gptel-auto-workflow--ask-analyzer-for-targets
-           (lambda (targets)
-             (if (gptel-auto-workflow--handle-analyzer-error-state targets static-targets callback)
-                 nil  ; Error already handled
-               (progn
-                 (message "[auto-workflow] Analyzer selected %d targets" (length targets))
-                 (funcall callback targets)))))
-        (funcall callback static-targets)))))
+       (if gptel-auto-workflow-strategic-selection
+           (gptel-auto-workflow--ask-analyzer-for-targets
+            (lambda (targets)
+              (if (gptel-auto-workflow--handle-analyzer-error-state targets static-targets callback)
+                  nil  ; Error already handled
+                (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
+                       (final-targets (or filtered-targets targets)))
+                  (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
+                           (length targets) (length final-targets))
+                  (funcall callback final-targets)))))
+         (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets static-targets))
+                (final-targets (or filtered-targets static-targets)))
+           (message "[auto-workflow] Static: %d targets, %d after frontier filtering"
+                    (length static-targets) (length final-targets))
+           (funcall callback final-targets))))))
 
 ;;; Periodic Research
 

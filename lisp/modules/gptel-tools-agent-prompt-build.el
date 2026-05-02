@@ -3,15 +3,9 @@
 
 ;; ─── Knowledge Cache ───
 
-(defvar gptel-auto-workflow--skills)
-(defvar gptel-auto-experiment-large-target-byte-threshold)
-(defvar gptel-auto-workflow--last-prompt-sections)
-(defvar gptel-auto-experiment-time-budget)
-(defvar gptel-auto-workflow-use-staging)
-
 (defvar gptel-auto-workflow--knowledge-cache (make-hash-table :test 'equal)
   "Hash table mapping knowledge keys to cached content.
-Keys: \\='self-evolution or topic names like \\='context-cache.
+Keys: 'self-evolution or topic names like 'context-cache.
 Values: (content . timestamp) cons cells.
 Cache is invalidated after synthesis runs.")
 
@@ -29,6 +23,7 @@ Returns cached content or nil if missing/stale."
   (let ((entry (gethash key gptel-auto-workflow--knowledge-cache)))
     (when entry
       (let ((content (car entry))
+            (timestamp (cdr entry))
             (age (float-time (time-subtract (current-time) (cdr entry)))))
         (if (< age gptel-auto-workflow--knowledge-cache-max-age)
             content
@@ -50,7 +45,7 @@ Returns cached content or nil if missing/stale."
   "Return cache statistics as string."
   (let ((count 0)
         (total-age 0))
-    (maphash (lambda (_key entry)
+    (maphash (lambda (key entry)
                (setq count (1+ count))
                (setq total-age (+ total-age (float-time (time-subtract (current-time) (cdr entry))))))
              gptel-auto-workflow--knowledge-cache)
@@ -95,6 +90,148 @@ Returns the adjusted max chars value."
       (setq gptel-auto-workflow--topic-knowledge-max-chars compression)
       (message "[prompt-efficiency] Skill-guided compression: %d chars" compression)))
   gptel-auto-workflow--topic-knowledge-max-chars)
+
+(defun gptel-auto-workflow--load-skill-content (skill-name)
+  "Load SKILL-NAME from assistant/skills/ directories.
+Returns skill content string or empty string if not found.
+Searches: ~/.emacs.d/assistant/skills/ then project assistant/skills/"
+  (let* ((base-dirs (list (expand-file-name "assistant/skills"
+                                             (gptel-auto-workflow--project-root))
+                          (expand-file-name "~/.emacs.d/assistant/skills")))
+         (skill-file nil))
+    ;; Find skill file (supports both flat .md and directory/SKILL.md)
+    (dolist (dir base-dirs)
+      (let ((flat-file (expand-file-name (format "%s.md" skill-name) dir))
+            (nested-file (expand-file-name (format "%s/SKILL.md" skill-name) dir)))
+        (cond
+         ((and (not skill-file) (file-exists-p flat-file))
+          (setq skill-file flat-file))
+         ((and (not skill-file) (file-exists-p nested-file))
+          (setq skill-file nested-file)))))
+    ;; Read and return content
+    (if skill-file
+        (with-temp-buffer
+          (insert-file-contents skill-file)
+          (goto-char (point-min))
+          ;; Skip frontmatter
+          (when (looking-at "---")
+            (forward-line 1)
+            (while (not (looking-at "---"))
+              (forward-line 1))
+            (forward-line 1))
+          (buffer-string))
+      "")))
+
+(defun gptel-auto-workflow--substitute-template (template variables)
+  "Substitute VARIABLES into TEMPLATE.
+VARIABLES is an alist of (NAME . VALUE) where NAME is a symbol.
+Replaces {{name}} in template with value.
+Missing variables are replaced with empty string."
+  (let ((result template))
+    (dolist (var variables)
+      (let ((name (symbol-name (car var)))
+            (value (or (cdr var) "")))
+        (setq result
+              (replace-regexp-in-string
+               (format "{{%s}}" (regexp-quote name))
+               (if (stringp value) value (format "%s" value))
+               result t t))))
+    ;; Remove any remaining unreplaced variables
+    (replace-regexp-in-string "{{[a-z-]+}}" "" result)))
+
+(defun gptel-auto-workflow--load-prompt-template ()
+  "Load prompt template from skill file.
+Returns template string or fallback hardcoded template."
+  (let ((skill-content (gptel-auto-workflow--load-skill-content "auto-workflow/prompt-template")))
+    (if (> (length skill-content) 0)
+        skill-content
+      ;; Fallback: inline template (for bootstrapping)
+      "You are running experiment {{experiment-id}} of {{max-experiments}} to optimize {{target}}.
+
+## Working Directory
+{{worktree-path}}
+
+## Target File (full path)
+{{target-full-path}}
+
+{{large-target-guidance}}
+
+{{controller-focus}}
+
+{{inspection-thrash-contract}}
+
+## Previous Experiment Analysis
+{{previous-experiment-analysis}}
+
+## Suggestions
+{{suggestions}}
+
+## Skills (Context from Learned Patterns)
+{{self-evolution}}
+
+## Previous Experiments
+{{topic-knowledge}}
+
+## Current Baseline
+Overall Eight Keys score: {{baseline}}
+
+{{weakest-keys}}
+
+{{suggested-hypothesis}}
+
+{{mutation-templates}}
+
+## Objective
+Improve the CODE QUALITY for {{target}}.
+Focus on one improvement at a time.
+Make minimal, targeted changes to CODE, not documentation.
+
+## Constraints
+- Time budget: {{time-budget}} minutes
+- Immutable files: early-init.el, pre-early-init.el, lisp/eca-security.el
+- Must pass tests: ./scripts/verify-nucleus.sh
+- FORBIDDEN: Adding comments, docstrings, or documentation-only changes
+- REQUIRED: Actual code changes (bug fixes, performance, refactoring, error handling)
+
+## Code Improvement Types (PICK ONE)
+1. **Bug Fix**: Fix an actual bug or error handling gap
+2. **Performance**: Reduce complexity, add caching, optimize hot path
+3. **Refactoring**: Extract functions, remove duplication, improve naming
+4. **Safety**: Add validation, prevent edge cases, improve error messages
+5. **Test Coverage**: Add missing tests for existing functionality
+
+## Instructions
+1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
+2. If a Controller-Selected Starting Symbol is present, line 2 must be exactly `{{focus-line}}`
+3. If a Mandatory Focus Contract is present, obey it exactly; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
+4. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
+5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
+6. Implement the CODE change minimally using Edit tool
+7. BEFORE finishing, verify your changes have balanced parentheses:
+   - Run: {{sexp-check-command}}
+   - If you see an error, FIX IT before submitting
+8. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
+9. DO NOT run git add, git commit, git push, or stage changes yourself.
+   Leave edits uncommitted in the worktree; the auto-workflow controller
+   handles grading, commit creation, review, and staging.
+10. FINAL RESPONSE must include:
+    - CHANGED: exact file path(s) and function/variable names touched
+    - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
+    - VERIFY: exact command(s) run and whether they passed or failed
+    - COMMIT: always \"not committed\" (workflow controller handles commits)
+11. End the final response with: Task completed
+12. NEVER reply with only \"Done\", only a commit message, or a vague success claim
+
+CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
+DO NOT add comments, docstrings, or documentation.
+DO make actual code changes that improve functionality.
+DO include concrete evidence of what changed so the grader can inspect it.
+
+Example HYPOTHESES:
+- HYPOTHESIS: Adding validation for nil input in process-item will prevent runtime errors
+- HYPOTHESIS: Extracting duplicate retry logic into a helper will reduce code duplication
+- HYPOTHESIS: Adding a cache for expensive computation will improve performance
+- HYPOTHESIS: Fixing the off-by-one error in the loop will correct the boundary case")))
 
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)
@@ -176,140 +313,55 @@ Implements section-level A/B testing to identify effective prompt components."
                      "3. Use at most 2 read-only tool calls (Read, Grep, Code_Inspect), all on that same symbol.\n"
                      "4. Your NEXT tool call MUST be a write (Edit, Write, ApplyPatch) on that same symbol.\n"
                      "5. If you do more than 2 read-only calls without writing, your turn will be aborted.\n"
-                      "6. Do not inspect a second subsystem before the first edit exists.\n\n"))))
-     ;; Record which sections were included for logging
+                     "6. Do not inspect a second subsystem before the first edit exists.\n\n"))))
      (setq gptel-auto-workflow--last-prompt-sections
            (mapconcat #'symbol-name included-sections ","))
-     ;; Return the built prompt
-     (format "You are running experiment %d of %d to optimize %s.
-
-## Working Directory
-%s
-
-## Target File (full path)
-%s
-
-%s
-
-%s
-
-%s
-
-## Previous Experiment Analysis
-%s
-
-## Suggestions
-%s
-
-## Self-Evolution Knowledge
-%s
-
-## Topic-Specific Knowledge
-%s
-
-## Git History (recent commits)
-%s
-
-## Current Baseline
-Overall Eight Keys score: %.2f
-
-%s
-
-%s
-
-%s
-
-## Objective
-Improve the CODE QUALITY for %s.
-Focus on one improvement at a time.
-Make minimal, targeted changes to CODE, not documentation.
-
-## Constraints
-- Time budget: %d minutes
-- Immutable files: early-init.el, pre-early-init.el, lisp/eca-security.el
-- Must pass tests: ./scripts/verify-nucleus.sh
-- FORBIDDEN: Adding comments, docstrings, or documentation-only changes
-- REQUIRED: Actual code changes (bug fixes, performance, refactoring, error handling)
-
-## Code Improvement Types (PICK ONE)
-1. **Bug Fix**: Fix an actual bug or error handling gap
-2. **Performance**: Reduce complexity, add caching, optimize hot path
-3. **Refactoring**: Extract functions, remove duplication, improve naming
-4. **Safety**: Add validation, prevent edge cases, improve error messages
-5. **Test Coverage**: Add missing tests for existing functionality
-
-## Instructions
-1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
-2. If a Controller-Selected Starting Symbol is present, line 2 must be exactly `%s`
-3. If a Mandatory Focus Contract is present, obey it exactly; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
-4. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
-5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
-6. Implement the CODE change minimally using Edit tool
-7. BEFORE finishing, verify your changes have balanced parentheses:
-   - Run: %s
-   - If you see an error, FIX IT before submitting
-8. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
-9. DO NOT run git add, git commit, git push, or stage changes yourself.
-   Leave edits uncommitted in the worktree; the auto-workflow controller
-   handles grading, commit creation, review, and staging.
-10. FINAL RESPONSE must include:
-    - CHANGED: exact file path(s) and function/variable names touched
-    - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
-    - VERIFY: exact command(s) run and whether they passed or failed
-    - COMMIT: always \"not committed\" (workflow controller handles commits)
-11. End the final response with: Task completed
-12. NEVER reply with only \"Done\", only a commit message, or a vague success claim
-
-CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
-DO NOT add comments, docstrings, or documentation.
-DO make actual code changes that improve functionality.
-DO include concrete evidence of what changed so the grader can inspect it.
-
-Example HYPOTHESES:
-- HYPOTHESIS: Adding validation for nil input in process-item will prevent runtime errors
-- HYPOTHESIS: Extracting duplicate retry logic into a helper will reduce code duplication
-- HYPOTHESIS: Adding a cache for expensive computation will improve performance
-- HYPOTHESIS: Fixing the off-by-one error in the loop will correct the boundary case"
-            experiment-id max-experiments target
-            worktree-path
-            target-full-path
-            large-target-guidance
-            (or controller-focus "")
-            (or inspection-thrash-contract "")
-            (or patterns "No previous experiments")
-            ;; A/B test: conditionally include suggestions
-            (if (funcall section-included-p 'suggestions)
-                (or suggestions "None")
-              "")
-            ;; A/B test: conditionally include self-evolution
-            (if (funcall section-included-p 'self-evolution)
-                (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
-                    (gptel-auto-workflow--evolution-get-knowledge)
-                  "")
-              "")
-            ;; A/B test: conditionally include topic-specific
-            (if (funcall section-included-p 'topic-specific)
-                (gptel-auto-experiment--get-topic-knowledge target)
-              "")
-            ;; A/B test: conditionally include git-history
-            (if (funcall section-included-p 'git-history)
-                git-history
-              "")
-            (or baseline 0.5)
-            (if weakest-keys
-                (format "## Weakest Keys (Priority Focus)\n%s" weakest-keys)
-              "")
-            (if suggested-hypothesis
-                (format "## Suggested Hypothesis (from skill)\n%s" suggested-hypothesis)
-              "")
-            (if mutation-templates
-                (format "## Hypothesis Templates\n%s"
-                        (mapconcat (lambda (tmpl) (format "- %s" tmpl)) mutation-templates "\n"))
-              "")
-            target
-            (/ gptel-auto-experiment-time-budget 60)
-            focus-line
-             sexp-check-command)))
+     ;; Build variables alist for template substitution
+     (let* ((template (gptel-auto-workflow--load-prompt-template))
+            (variables
+             `((experiment-id . ,experiment-id)
+               (max-experiments . ,max-experiments)
+               (target . ,target)
+               (worktree-path . ,worktree-path)
+               (target-full-path . ,target-full-path)
+               (large-target-guidance . ,(or large-target-guidance ""))
+               (controller-focus . ,(or controller-focus ""))
+               (inspection-thrash-contract . ,(or inspection-thrash-contract ""))
+               (previous-experiment-analysis . ,(or patterns "No previous experiments"))
+               (suggestions . ,(if (funcall section-included-p 'suggestions)
+                                   (or suggestions "None")
+                                 ""))
+               (self-evolution . ,(if (funcall section-included-p 'self-evolution)
+                                      (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
+                                          (gptel-auto-workflow--evolution-get-knowledge)
+                                        "")
+                                    ""))
+               (topic-knowledge . ,(if (funcall section-included-p 'topic-specific)
+                                       (gptel-auto-experiment--get-topic-knowledge target)
+                                     ""))
+               (git-history . ,(if (funcall section-included-p 'git-history)
+                                   git-history
+                                 ""))
+               (baseline . ,(format "%.2f" (or baseline 0.5)))
+               (weakest-keys . ,(if weakest-keys
+                                    (format "## Weakest Keys (Priority Focus)\n%s" weakest-keys)
+                                  ""))
+               (suggested-hypothesis . ,(if suggested-hypothesis
+                                            (format "## Suggested Hypothesis (from skill)\n%s" suggested-hypothesis)
+                                          ""))
+               (mutation-templates . ,(if mutation-templates
+                                          (format "## Hypothesis Templates\n%s"
+                                                  (mapconcat (lambda (tmpl) (format "- %s" tmpl)) mutation-templates "\n"))
+                                        ""))
+               (axis-guidance . ,(or (gptel-auto-experiment--format-axis-guidance
+                                      (gptel-auto-experiment--get-underexplored-axis target)) ""))
+               (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
+               (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
+               (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
+               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
+               (focus-line . ,focus-line)
+               (sexp-check-command . ,sexp-check-command))))
+       (gptel-auto-workflow--substitute-template template variables))))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.
@@ -496,7 +548,7 @@ row for the same experiment and target."
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\n"
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\n"
                           experiment-id
                           target
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
@@ -517,7 +569,21 @@ row for the same experiment and target."
                                0)
                            (or (gptel-auto-experiment--tsv-escape
                                 (gptel-auto-workflow--plist-get experiment :sections-included "all"))
-                               "all"))))
+                                "all")
+                           (or (gptel-auto-experiment--tsv-escape
+                                (gptel-auto-workflow--plist-get experiment :exploration-axis "?"))
+                                "?")
+                           (or (gptel-auto-experiment--tsv-escape
+                                (let ((candidates (gptel-auto-workflow--plist-get experiment :candidate-validation)))
+                                  (if candidates
+                                      (mapconcat (lambda (c)
+                                                   (format "%s:%.1f:%s"
+                                                           (substring (car c) 0 (min 20 (length (car c))))
+                                                           (plist-get (cdr c) :score)
+                                                           (if (plist-get (cdr c) :valid) "V" "X")))
+                                                 candidates ";")
+                                    "")))
+                                ""))))
 
       (write-region (point-min) (point-max) file))
     ;; Trigger self-evolution after experiment logging
@@ -890,6 +956,272 @@ can use newer models without a restart."
                 ((integerp max-output))
                 ((> max-output 0)))
       max-output)))
+
+;;; Frontier Tracking (Meta-Harness style)
+
+(defun gptel-auto-experiment--compute-frontier (target)
+  "Compute Pareto frontier for TARGET from TSV history.
+Returns list of non-dominated experiments, each a plist with
+:experiment-id :code-quality :delta :axis :decision.
+An experiment dominates another if it is >= on all metrics and > on at least one."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (experiments '()))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (line-target (nth 1 fields))
+                 (decision (nth 7 fields)))
+            (when (and (equal line-target target)
+                       (equal decision "kept"))
+              (push (list :experiment-id (nth 0 fields)
+                          :code-quality (string-to-number (or (nth 5 fields) "0"))
+                          :delta (string-to-number (or (nth 6 fields) "0"))
+                          :axis (or (nth 17 fields) "unknown")
+                          :prompt-chars (string-to-number (or (nth 15 fields) "0"))
+                          :decision decision)
+                    experiments))
+            (forward-line 1))))
+    ;; Compute Pareto frontier: not dominated by any other
+    (let ((frontier '()))
+      (dolist (exp experiments)
+        (let ((dominated nil)
+              (exp-quality (plist-get exp :code-quality))
+              (exp-delta (plist-get exp :delta))
+              (exp-chars (plist-get exp :prompt-chars)))
+          (dolist (other experiments)
+            (unless (eq exp other)
+              (let ((other-quality (plist-get other :code-quality))
+                    (other-delta (plist-get other :delta))
+                    (other-chars (plist-get other :prompt-chars)))
+                ;; Other dominates exp if >= on quality+delta and <= on chars
+                (when (and (>= other-quality exp-quality)
+                           (>= other-delta exp-delta)
+                           (<= other-chars exp-chars)
+                           (or (> other-quality exp-quality)
+                               (> other-delta exp-delta)
+                               (< other-chars exp-chars)))
+                  (setq dominated t)))))
+          (unless dominated
+            (push exp frontier))))
+      frontier))))
+
+(defun gptel-auto-experiment--frontier-stats (target)
+  "Return frontier statistics for TARGET as formatted string.
+Shows count, best quality, best delta, and underexplored axes."
+  (let ((frontier (gptel-auto-experiment--compute-frontier target)))
+    (if (null frontier)
+        "No kept experiments yet."
+      (let* ((qualities (mapcar (lambda (e) (plist-get e :code-quality)) frontier))
+             (deltas (mapcar (lambda (e) (plist-get e :delta)) frontier))
+             (axes (mapcar (lambda (e) (plist-get e :axis)) frontier))
+             (unique-axes (cl-remove-duplicates axes :test #'equal))
+             (all-axes '("A" "B" "C" "D" "E" "F")))
+        (concat
+         (format "Frontier: %d experiments | Best quality: %.2f | Best delta: %+.2f\n"
+                 (length frontier)
+                 (if qualities (apply #'max qualities) 0)
+                 (if deltas (apply #'max deltas) 0))
+         (format "Explored axes: %s\n"
+                 (if unique-axes (string-join unique-axes ", ") "none"))
+         (let ((missing (cl-set-difference all-axes unique-axes :test #'equal)))
+           (if missing
+               (format "Missing axes: %s (try these next)"
+                       (string-join missing ", "))
+             "All axes explored.")))))))
+
+(defun gptel-auto-experiment--format-frontier-guidance (target)
+  "Format frontier guidance for TARGET prompt.
+Returns empty string if no frontier data."
+  (let ((stats (gptel-auto-experiment--frontier-stats target)))
+    (if (string= stats "No kept experiments yet.")
+        ""
+      (concat "## Frontier Analysis (Pareto-optimal experiments)\n"
+              stats "\n\n"))))
+
+(defun gptel-auto-experiment--frontier-select-targets (&optional n)
+  "Select N targets with smallest Pareto frontiers for next experiments.
+Returns list of (target . frontier-size) sorted ascending by frontier size.
+Targets with no frontier experiments are prioritized."
+  (let* ((results-file (gptel-auto-workflow--results-file-path))
+         (target-frontiers (make-hash-table :test 'equal))
+         (all-targets '()))
+    ;; Collect all targets from TSV
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (target (nth 1 fields)))
+            (when (and (stringp target)
+                       (not (string-empty-p target))
+                       (not (member target all-targets)))
+              (push target all-targets)))
+          (forward-line 1))))
+    ;; Compute frontier size for each target
+    (dolist (target all-targets)
+      (let ((frontier (gptel-auto-experiment--compute-frontier target)))
+        (puthash target (length frontier) target-frontiers)))
+    ;; Sort by frontier size (ascending)
+    (let ((sorted '()))
+      (maphash (lambda (target size)
+                 (push (cons target size) sorted))
+               target-frontiers)
+      (setq sorted (sort sorted (lambda (a b) (< (cdr a) (cdr b)))))
+      (if n
+          (seq-take sorted n)
+        sorted))))
+
+(defun gptel-auto-experiment--frontier-selection-guidance ()
+  "Format guidance for target selection based on frontier analysis.
+Returns formatted string listing underexplored targets."
+  (let ((targets (gptel-auto-experiment--frontier-select-targets 5)))
+    (if (null targets)
+        ""
+      (concat "## Target Selection (Frontier-Based)\n"
+              "Priority targets (smallest Pareto frontier):\n"
+              (mapconcat (lambda (pair)
+                           (format "- %s: %d Pareto-optimal experiment(s)"
+                                   (car pair) (cdr pair)))
+                         targets
+                         "\n")
+              "\n\n"))))
+
+(defun gptel-auto-experiment--frontier-saturated-p (target &optional min-frontier-size min-axes min-quality)
+  "Return t if TARGET's frontier is saturated (sufficiently explored).
+MIN-FRONTIER-SIZE: minimum number of Pareto-optimal experiments (default: 3).
+MIN-AXES: minimum number of unique axes covered (default: 4).
+MIN-QUALITY: minimum best quality score (default: 0.8)."
+  (let* ((frontier (gptel-auto-experiment--compute-frontier target))
+         (frontier-size (length frontier))
+         (axes (cl-remove-duplicates (mapcar (lambda (e) (plist-get e :axis)) frontier)
+                                     :test #'equal))
+         (qualities (mapcar (lambda (e) (plist-get e :code-quality)) frontier))
+         (best-quality (if qualities (apply #'max qualities) 0)))
+    (and (>= frontier-size (or min-frontier-size 3))
+         (>= (length axes) (or min-axes 4))
+         (>= best-quality (or min-quality 0.8)))))
+
+(defun gptel-auto-experiment--frontier-saturation-guidance (target)
+  "Format saturation status for TARGET.
+Returns string indicating whether target is saturated or needs more work."
+  (if (gptel-auto-experiment--frontier-saturated-p target)
+      (format "## Target Status: SATURATED\n%s has sufficient Pareto-optimal experiments. Consider moving to other targets.\n\n" target)
+    (format "## Target Status: ACTIVE\n%s needs more experiments to saturate frontier.\n\n" target)))
+
+;; ─── Batch Validation for Multi-Candidate Hypotheses ───
+
+(defun gptel-auto-experiment--extract-candidates (agent-output)
+  "Extract up to 3 candidate hypotheses from AGENT-OUTPUT.
+Returns list of strings, or nil if no candidates found."
+  (when (stringp agent-output)
+    (let (candidates)
+      (with-temp-buffer
+        (insert agent-output)
+        (goto-char (point-min))
+        (while (re-search-forward "^CANDIDATE_\\([123]\\):\\s-*\\(.+\\)$" nil t)
+          (push (match-string 2) candidates)))
+      (nreverse candidates))))
+
+(defun gptel-auto-experiment--validate-candidate-safely (candidate target-full-path)
+  "Run cheap validation checks on CANDIDATE for TARGET-FULL-PATH.
+Returns plist with :valid t/nil, :errors list, :score 0-1.
+Does NOT modify the filesystem - operates on a temp copy."
+  (let ((temp-file (make-temp-file "auto-workflow-candidate-"))
+        (errors '())
+        (score 0.0))
+    (unwind-protect
+        (progn
+          ;; Copy target to temp file
+          (when (file-exists-p target-full-path)
+            (copy-file target-full-path temp-file t))
+          
+          ;; Check 1: Candidate describes actual code change (not docs)
+          (if (or (string-match-p "\\bcomment\\b\\|\\bdocstring\\b\\|\\bdocumentation\\b" candidate)
+                  (string-match-p "\\badd\\s-+comments\\b\\|\\badd\\s-+doc\\b" candidate))
+              (push "Candidate mentions documentation/comments" errors)
+            (setq score (+ score 0.2)))
+          
+          ;; Check 2: Candidate is specific (mentions function/variable)
+          (if (string-match-p "\\b\\(function\\|variable\\|defun\\|defvar\\|method\\|class\\)\\b" candidate)
+              (setq score (+ score 0.2))
+            (push "Candidate lacks specific code reference" errors))
+          
+          ;; Check 3: Candidate targets a real improvement type
+          (if (string-match-p "\\b\\(bug\\|fix\\|error\\|performance\\|cache\\|optimize\\|refactor\\|extract\\|duplicate\\|validation\\|guard\\|test\\|memory\\|leak\\)\\b" candidate)
+              (setq score (+ score 0.2))
+            (push "Candidate lacks improvement keywords" errors))
+          
+          ;; Check 4: Candidate is not too vague
+          (if (> (length candidate) 20)
+              (setq score (+ score 0.2))
+            (push "Candidate description too short" errors))
+          
+          ;; Check 5: Candidate doesn't repeat common anti-patterns
+          (if (string-match-p "\\boptimize\\s-+code\\b\\|\\bimprove\\s-+performance\\b\\|\\bmake\\s-+better\\b" candidate)
+              (push "Candidate uses vague improvement language" errors)
+            (setq score (+ score 0.2)))
+          
+          (list :valid (null errors)
+                :errors (nreverse errors)
+                :score score))
+      (when (file-exists-p temp-file)
+        (delete-file temp-file)))))
+
+(defun gptel-auto-experiment--batch-validate-candidates (agent-output target-full-path)
+  "Validate all candidates from AGENT-OUTPUT for TARGET-FULL-PATH.
+Returns list of (candidate . validation-result) pairs, sorted by score descending."
+  (let* ((candidates (gptel-auto-experiment--extract-candidates agent-output))
+         (validated (mapcar (lambda (cand)
+                              (cons cand (gptel-auto-experiment--validate-candidate-safely
+                                          cand target-full-path)))
+                            candidates)))
+    (sort validated (lambda (a b)
+                      (> (plist-get (cdr a) :score)
+                         (plist-get (cdr b) :score))))))
+
+(defun gptel-auto-experiment--select-best-candidate (validated-candidates)
+  "Select best candidate from VALIDATED-CANDIDATES.
+Returns the candidate string, or nil if none valid."
+  (catch 'found
+    (dolist (pair validated-candidates)
+      (when (plist-get (cdr pair) :valid)
+        (throw 'found (car pair))))
+    ;; If no fully valid candidate, pick highest scoring
+    (car (car validated-candidates))))
+
+;; ─── Frontier-Aware Target Filtering ───
+
+(defun gptel-auto-workflow--filter-frontier-saturated-targets (targets)
+  "Filter out targets with saturated Pareto frontiers from TARGETS list.
+Returns filtered list, or nil if all targets saturated.
+Saturated means: >=3 Pareto experiments, >=4 axes, quality>=0.8."
+  (let ((filtered '())
+        (saturated-count 0))
+    (dolist (target targets)
+      (if (and (fboundp 'gptel-auto-experiment--frontier-saturated-p)
+               (gptel-auto-experiment--frontier-saturated-p target))
+          (progn
+            (setq saturated-count (1+ saturated-count))
+            (message "[frontier-filter] %s is SATURATED, skipping" target))
+        (push target filtered)))
+    (message "[frontier-filter] %d/%d targets saturated, %d remaining"
+             saturated-count (length targets) (length filtered))
+    ;; If all saturated, return nil to signal we need fresh targets
+    (if (null filtered)
+        (progn
+          (message "[frontier-filter] WARNING: All %d targets saturated!" (length targets))
+          nil)
+      (nreverse filtered))))
 
 (provide 'gptel-tools-agent-prompt-build)
 ;;; gptel-tools-agent-prompt-build.el ends here

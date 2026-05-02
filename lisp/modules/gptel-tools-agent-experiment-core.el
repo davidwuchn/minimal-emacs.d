@@ -83,12 +83,26 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                       (let* ((salvaged-agent-output
                               (gptel-auto-experiment--timeout-salvage-output
                                agent-output executor-prompt target experiment-worktree))
-                             (effective-agent-output
-                              (or salvaged-agent-output agent-output))
-                             (repeated-focus
-                              (gptel-auto-experiment--repeated-focus-match
-                               effective-agent-output previous-results)))
-                        (when salvaged-agent-output
+                              (effective-agent-output
+                               (or salvaged-agent-output agent-output))
+                              (candidate-validation
+                               (when (fboundp 'gptel-auto-experiment--batch-validate-candidates)
+                                 (condition-case err
+                                     (gptel-auto-experiment--batch-validate-candidates
+                                      effective-agent-output
+                                      (expand-file-name target experiment-worktree))
+                                   (error
+                                    (message "[auto-exp] Candidate validation error: %s" err)
+                                    nil))))
+                              (repeated-focus
+                               (gptel-auto-experiment--repeated-focus-match
+                                effective-agent-output previous-results)))
+                         (when candidate-validation
+                           (let ((best-cand (car (car candidate-validation)))
+                                 (best-score (plist-get (cdar candidate-validation) :score)))
+                             (message "[auto-exp] Validated %d candidates for %s, best score: %.2f"
+                                      (length candidate-validation) target best-score)))
+                         (when salvaged-agent-output
                           (message "[auto-exp] Executor timed out after partial changes for %s; evaluating actual worktree diff"
                                    target))
                         (message "[auto-exp] Agent output (first 150 chars): %s"
@@ -148,8 +162,27 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                target provisional-commit-hash)
                                               (setq provisional-commit-hash nil)
                                               (setq validation-retry-active t)
-                                               (let ((_gptel-auto-experiment-active-grace
-                                                      gptel-auto-experiment-validation-retry-active-grace))
+                                               (let* ((_gptel-auto-experiment-active-grace
+                                                       gptel-auto-experiment-validation-retry-active-grace)
+                                                      (retry-prompt
+                                                       (if candidate-validation
+                                                           (concat executor-prompt
+                                                                   "\n\n## PREVIOUS ATTEMPT FAILED\n"
+                                                                   "Validation error: " validation-error "\n"
+                                                                   "Candidate validation results:\n"
+                                                                   (mapconcat
+                                                                    (lambda (pair)
+                                                                      (format "- %s: score=%.1f, valid=%s"
+                                                                              (substring (car pair) 0 (min 30 (length (car pair))))
+                                                                              (plist-get (cdr pair) :score)
+                                                                              (if (plist-get (cdr pair) :valid) "yes" "no")))
+                                                                    candidate-validation
+                                                                    "\n")
+                                                                   "\n## INSTRUCTIONS FOR RETRY\n"
+                                                                   "The previous implementation failed validation. "
+                                                                   "If you have remaining valid candidates, implement one of those instead. "
+                                                                   "Otherwise, fix the validation error while keeping the same approach.\n")
+                                                         executor-prompt)))
                                                 (my/gptel--run-agent-tool-with-timeout
                                                  gptel-auto-experiment-validation-retry-time-budget
                                                  (lambda (retry-output)
@@ -157,9 +190,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                    (funcall executor-callback retry-output))
                                                  "executor"
                                                  "Validation retry"
-                                                       executor-prompt
-                                                       nil nil nil
-                                                       gptel-auto-experiment-validation-retry-active-grace)))
+                                                 retry-prompt
+                                                 nil nil nil
+                                                 gptel-auto-experiment-validation-retry-active-grace)))
                                          ;; Non-teachable or already retrying: fail fast
                                          (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
                                                              effective-agent-output))
@@ -311,7 +344,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                           :prompt-chars (length executor-prompt)
                           :sections-included (or (and (boundp 'gptel-auto-workflow--last-prompt-sections)
                                                       gptel-auto-workflow--last-prompt-sections)
-                                                "all"))))
+                                                "all")
+                          :exploration-axis (gptel-auto-experiment--extract-axis effective-agent-output)
+                          :candidate-validation (when candidate-validation
+                                                  (mapcar (lambda (pair)
+                                                            (list (car pair)
+                                                                  :score (plist-get (cdr pair) :score)
+                                                                  :valid (plist-get (cdr pair) :valid)))
+                                                          candidate-validation)))))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format
@@ -456,7 +496,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                              :agent-output retry-output
                                                                                              :retries 1
                                                                                              :backend experiment-backend
-                                                                                             :prompt-chars (length executor-prompt))))
+                                                                                             :prompt-chars (length executor-prompt)
+                                                                                             :exploration-axis (gptel-auto-experiment--extract-axis retry-output)
+                                                                                             :candidate-validation (when candidate-validation
+                                                                                                                     (mapcar (lambda (pair)
+                                                                                                                               (list (car pair)
+                                                                                                                                     :score (plist-get (cdr pair) :score)
+                                                                                                                                     :valid (plist-get (cdr pair) :valid)))
+                                                                                                                             candidate-validation)))))
                                                                                 (if keep
                                                                                     (let* ((msg (format "◈ Retry: fix validation in %s"
 								                                                                        target))
