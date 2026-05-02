@@ -287,7 +287,8 @@ OUTPUT JSON ONLY:
 CALLBACK receives list of target files."
   (let* ((context (gptel-auto-workflow--gather-context))
          (max-targets gptel-auto-workflow-max-targets-per-run)
-         (analyzer-timeout (max (or my/gptel-agent-task-timeout 0)
+         (analyzer-timeout (max (if (boundp 'my/gptel-agent-task-timeout)
+                                    my/gptel-agent-task-timeout 0)
                                 gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
                   context research-findings max-targets)))
