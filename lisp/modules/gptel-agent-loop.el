@@ -503,8 +503,10 @@ Returns 0 if STATE is not a valid task structure."
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP.
 Called only from `handle-continuation' which is called from
-`handle-string-response' when STATE is task-p."
-  (and (gptel-agent-loop--task-p state)
+`handle-string-response' when STATE is task-p.
+ASSUMPTION: RESP is a string (validated by callers)."
+  (and (stringp resp)
+       (gptel-agent-loop--task-p state)
        gptel-agent-loop-force-completion
        (or (null gptel-agent-loop-max-continuations)
            (< (gptel-agent-loop--continuation-count state)
