@@ -1,4 +1,4 @@
-# Insight: 2026-05-02 00:08
+# Insight: 2026-05-01 20:03
 
 **Target:** lisp/modules/gptel-ext-context-cache.el
 **Change type:** bug-fix
