@@ -458,7 +458,7 @@ Accept explicit APPROVED/BLOCKED markers, blocker-free reviewer markdown,
 and analysis-only reviewer summaries that cite current lines without
 surfacing blocking markers or issue details."
   (when (stringp response)
-    (let* ((normalized (replace-regexp-in-string "|" "\n" response))
+    (let* ((normalized (replace-regexp-in-string (regexp-quote "|") "\n" response))
            (case-fold-search t)
            (approved (string-match
                       (rx (or line-start "\n")
