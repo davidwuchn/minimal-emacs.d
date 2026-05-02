@@ -303,7 +303,7 @@ Example HYPOTHESES:
             sexp-check-command))
     ;; Record which sections were included for logging
     (setq gptel-auto-workflow--last-prompt-sections
-          (mapconcat #'symbol-name included-sections ","))))
+          (mapconcat #'symbol-name included-sections ","))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.

@@ -456,7 +456,7 @@ Writes to optimization-skills/ as skill files that the prompt builder consumes."
       ;; Invalidate self-evolution cache so next prompt gets fresh knowledge
       (when (fboundp 'gptel-auto-workflow--knowledge-cache-invalidate)
         (gptel-auto-workflow--knowledge-cache-invalidate 'self-evolution)
-        (message "[knowledge-cache] Invalidated self-evolution")))))
+        (message "[knowledge-cache] Invalidated self-evolution")))
 
 ;; ─── Phase 4: Inject ──→ Prompts Read from Mementum ───
 
