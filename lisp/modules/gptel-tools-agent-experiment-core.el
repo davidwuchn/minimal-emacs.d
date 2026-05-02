@@ -77,6 +77,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                  (gptel-auto-experiment-build-prompt
                                   target experiment-id max-experiments analysis baseline previous-results))))
                   (message "[strategy] Using strategy '%s' for %s experiment %d" strategy-name target experiment-id)
+                  ;; Trace strategy execution
+                  (when (fboundp 'gptel-auto-workflow--trace-strategy-execution)
+                    (gptel-auto-workflow--trace-strategy-execution
+                     strategy-name
+                     target
+                     (length prompt)
+                     (and (boundp 'gptel-auto-workflow--last-prompt-sections)
+                          (split-string gptel-auto-workflow--last-prompt-sections ","))))
                   (setq executor-prompt prompt)
                (setq executor-callback
                      (lambda (agent-output)

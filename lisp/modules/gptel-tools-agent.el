@@ -33,6 +33,8 @@
                    gptel-tools-agent-benchmark
                    gptel-tools-agent-prompt-analyze
                    gptel-tools-agent-prompt-build
+                   gptel-tools-agent-strategy-harness
+                   gptel-tools-agent-strategy-evolver
                    gptel-tools-agent-error
                    gptel-tools-agent-experiment-core
                    gptel-tools-agent-experiment-loop

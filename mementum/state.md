@@ -1,8 +1,41 @@
 # Mementum State
 
-> Last session: 2026-05-02 02:30
+> Last session: 2026-05-02 21:55
 
-## Current Session: 2026-05-02 Workflow Run Complete + 4/4 Targets Improved
+## Current Session: 2026-05-02 Meta-Harness Strategy Evolution
+
+**Status:** Strategy evolution implementation is in progress and locally verified with targeted smoke tests. Do not assume cron has exercised it yet.
+
+**Done (This Session):**
+- Added Meta-Harness strategy modules to `gptel-tools-agent.el` loader: `gptel-tools-agent-strategy-harness` and `gptel-tools-agent-strategy-evolver` now load with the workflow stack.
+- Added strategy frontier injection to `assistant/skills/auto-workflow/prompt-template.md` via `{{strategy-frontier}}` and prompt-build variable substitution.
+- Added strategy evaluation recording from `gptel-auto-experiment-log-tsv`, writing independent metrics via `gptel-auto-workflow--record-strategy-evaluation`.
+- Hardened strategy evolution runtime path:
+  - Unique strategy names now scan existing `strategy-evolved-NNNN.el` files, avoiding overwrite of `evolved-0001`.
+  - Removed invalid non-`cl-block` `return-from` usage.
+  - Added required `cl-lib`, `json`, `subr-x` dependencies.
+  - Fixed strategy template quoting with `%S` so generated metadata is loadable.
+  - Fixed strategy prototype temp files to use `.el` suffix.
+  - Fixed build-function extraction regexp.
+  - Suppressed metadata persistence during prototype validation to avoid candidate side effects.
+  - Strategy loading now registers loadable strategies even if generated code omits self-registration.
+- Verified:
+  - `scan-sexps` passed for modified strategy/prompt/loader modules.
+  - `batch-byte-compile` completed for modified modules with warnings only (mostly existing split-module forward references).
+  - Smoke tests passed for strategy template/prototype validation, candidate parsing/renaming, and strategy evaluation recording.
+  - `git diff --check` passed.
+  - Removed generated `.elc`, smoke metadata, and smoke `evaluations.jsonl` artifacts.
+
+**Important Notes:**
+- Existing unrelated dirty files remain: `assistant/skills/auto-workflow/SKILL.md`, `mementum/knowledge/self-evolution.md`, `packages/gptel`, `packages/gptel-agent`.
+- Strategy proposer still depends on live `gptel-request`; smoke tests covered deterministic local pieces, not provider response quality.
+- `assistant/strategies/evaluations.jsonl` is intentionally absent until real experiments populate it.
+
+**Next Steps:**
+- Let next workflow run populate real strategy evaluations and confirm periodic evolution triggers only after enough low-performing data.
+- Review generated strategy files before trusting them for long-running cron.
+
+## Previous Session: 2026-05-02 Workflow Run Complete + 4/4 Targets Improved
 
 **Status:** Run `2026-05-02T003729Z-8346` completed (4/4 targets improved, 4 kept commits). All merged to `origin/staging`. Ready for promotion review.
 
