@@ -302,8 +302,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 												          reasoning :analyzer-patterns
 												          (format "%s" patterns) :agent-output
 												          effective-agent-output
-													  :backend experiment-backend
-													  :prompt-chars (length executor-prompt))))
+                          :backend experiment-backend
+                          :prompt-chars (length executor-prompt)
+                          :sections-included (or (and (boundp 'gptel-auto-workflow--last-prompt-sections)
+                                                      gptel-auto-workflow--last-prompt-sections)
+                                                "all"))))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format
