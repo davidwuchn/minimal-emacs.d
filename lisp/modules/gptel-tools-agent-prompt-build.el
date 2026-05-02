@@ -358,6 +358,7 @@ Implements section-level A/B testing to identify effective prompt components."
                 (axis-performance . ,(gptel-auto-experiment--format-axis-performance target))
                 (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
                 (saturation-status . ,(gptel-auto-experiment--frontier-saturation-guidance target))
+                (failure-patterns . ,(gptel-auto-experiment--format-failure-patterns target))
                 (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
                (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
                (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
@@ -1354,6 +1355,59 @@ Returns string showing which axes have been most successful."
     (concat "## Axis Performance History\n"
             rates-str
             "\n\nRecommendation: Prioritize axes with higher success rates, but also explore underexplored axes to build frontier coverage.\n\n")))
+
+;;; Failure Pattern Injection
+
+(defun gptel-auto-experiment--get-common-failure-reasons (target &optional n)
+  "Get most common failure reasons for TARGET from TSV.
+Returns list of (reason . count) pairs, sorted by frequency.
+Optional N limits number of reasons (default 3)."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (reasons (make-hash-table :test 'equal))
+        (total-failures 0))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (line-target (nth 1 fields))
+                 (decision (nth 7 fields))
+                 (reason (nth 11 fields))) ; comparator_reason column
+            (when (and (equal line-target target)
+                       (not (equal decision "kept"))
+                       reason
+                       (not (string-empty-p reason))
+                       (not (equal reason "N/A")))
+              (setq total-failures (1+ total-failures))
+              (puthash reason (1+ (gethash reason reasons 0)) reasons)))
+          (forward-line 1))))
+    ;; Convert to sorted list
+    (let ((pairs '()))
+      (maphash (lambda (reason count)
+                 (push (cons reason count) pairs))
+               reasons)
+      (setq pairs (sort pairs (lambda (a b) (> (cdr a) (cdr b)))))
+      (seq-take pairs (or n 3)))))
+
+(defun gptel-auto-experiment--format-failure-patterns (target)
+  "Format common failure patterns for TARGET as prompt guidance.
+Returns string warning about common rejection reasons, or empty string."
+  (let ((reasons (gptel-auto-experiment--get-common-failure-reasons target 3)))
+    (if (null reasons)
+        ""
+      (concat "## Common Failure Patterns (AVOID THESE)\n"
+              "Recent experiments on this target were discarded for these reasons:\n"
+              (mapconcat (lambda (pair)
+                           (format "- %s (%d times)"
+                                   (car pair) (cdr pair)))
+                         reasons
+                         "\n")
+              "\n\nTo succeed, actively avoid the patterns above.\n\n"))))
 
 (provide 'gptel-tools-agent-prompt-build)
 ;;; gptel-tools-agent-prompt-build.el ends here
