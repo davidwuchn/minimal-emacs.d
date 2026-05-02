@@ -13161,11 +13161,11 @@ failure."
            (with-temp-buffer
               (insert-file-contents emacs-log)
               (let ((output (buffer-string)))
-                (should (string-match-p "--bg-daemon=copilot-auto-workflow" output))
-                (should (string-match-p
-                        (regexp-quote (format "ARGV:--init-directory=%s --bg-daemon=copilot-auto-workflow"
-                                              repo-root))
-                        output))
+                 (should (string-match-p "--daemon=copilot-auto-workflow" output))
+                 (should (string-match-p
+                         (regexp-quote (format "ARGV:--init-directory=%s --daemon=copilot-auto-workflow"
+                                               repo-root))
+                         output))
                 (should-not (string-match-p "ARGV:.*-Q" output))
                 (should (string-match-p "^MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1$" output))
                 (should-not (string-match-p "^DISPLAY=" output))
