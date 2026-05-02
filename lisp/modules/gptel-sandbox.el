@@ -147,9 +147,7 @@ gptel preset.")
    ((and (consp binding)
          (symbolp (car binding))
          (null (cddr binding)))
-    (if (listp binding)
-        binding
-      (error "Invalid binding in Programmatic sandbox: malformed list %S" binding)))
+    binding)
    (t
     (error "Invalid binding in Programmatic sandbox: %S" binding))))
 
