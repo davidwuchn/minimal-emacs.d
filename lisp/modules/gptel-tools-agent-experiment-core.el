@@ -306,7 +306,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                           :prompt-chars (length executor-prompt)
                           :sections-included (or (and (boundp 'gptel-auto-workflow--last-prompt-sections)
                                                       gptel-auto-workflow--last-prompt-sections)
-                                                "all"))))
+                                                "all")
+                          :exploration-axis (gptel-auto-experiment--extract-axis effective-agent-output))))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format
@@ -451,7 +452,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                              :agent-output retry-output
                                                                                              :retries 1
                                                                                              :backend experiment-backend
-                                                                                             :prompt-chars (length executor-prompt))))
+                                                                                             :prompt-chars (length executor-prompt)
+                                                                                             :exploration-axis (gptel-auto-experiment--extract-axis retry-output))))
                                                                                 (if keep
                                                                                     (let* ((msg (format "◈ Retry: fix validation in %s"
 								                                                                        target))
