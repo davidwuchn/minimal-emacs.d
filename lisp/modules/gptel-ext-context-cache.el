@@ -605,7 +605,7 @@ Returns nil if curl is unavailable or a fetch is already in flight."
                                      (funcall callback data))
                                  (error
                                   (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
-                            (status
+                            ((and status (not (= status 0)))
                              (message "OpenRouter: request failed (exit %d)" status))
                             (t
                              (message "OpenRouter: request terminated abnormally"))))
