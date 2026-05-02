@@ -1,6 +1,9 @@
 ;;; gptel-tools-agent-prompt-build.el --- Prompt building - construction & logging -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(declare-function gptel-auto-workflow--record-strategy-evaluation "gptel-tools-agent-strategy-harness"
+                  (strategy-name target experiment-id score outcome &optional axis))
+
 ;; ─── Knowledge Cache ───
 
 (defvar gptel-auto-workflow--knowledge-cache (make-hash-table :test 'equal)
@@ -442,6 +445,9 @@ Implements section-level A/B testing to identify effective prompt components."
                 (saturation-status . ,(gptel-auto-experiment--frontier-saturation-guidance target))
                 (failure-patterns . ,(gptel-auto-experiment--format-failure-patterns target))
                 (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
+                (strategy-frontier . ,(if (fboundp 'gptel-auto-workflow--format-strategy-frontier)
+                                          (gptel-auto-workflow--format-strategy-frontier)
+                                        ""))
                 (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
                (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
                (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
@@ -675,6 +681,18 @@ row for the same experiment and target."
                                "template-default"))))
 
       (write-region (point-min) (point-max) file))
+    ;; Keep strategy metrics independent from the per-run TSV.
+    (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)
+      (condition-case err
+          (gptel-auto-workflow--record-strategy-evaluation
+           (gptel-auto-workflow--plist-get experiment :strategy "template-default")
+           target
+           experiment-id
+           (gptel-auto-workflow--plist-get experiment :score-after 0)
+           (if (equal decision "kept") 'kept 'discarded)
+           (gptel-auto-workflow--plist-get experiment :exploration-axis "?"))
+        (error
+         (message "[strategy] Evaluation recording error: %s" err))))
     ;; Trigger self-evolution after experiment logging
     (when (and (fboundp 'gptel-auto-workflow--experiment-complete-hook)
                (fboundp 'gptel-auto-workflow-evolution-run-cycle))

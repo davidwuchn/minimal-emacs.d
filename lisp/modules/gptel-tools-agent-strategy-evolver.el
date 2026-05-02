@@ -6,6 +6,15 @@
 ;;
 ;; Key principle: We evolve the HARNESS (how prompts are built), not just the prompt content.
 
+(require 'cl-lib)
+(require 'subr-x)
+(require 'gptel-tools-agent-strategy-harness)
+
+(declare-function gptel-auto-workflow--project-root "gptel-tools-agent-base" ())
+(declare-function gptel-auto-workflow--results-file-path "gptel-tools-agent-base" (&optional run-id))
+(declare-function gptel-request "gptel" (prompt &rest args))
+(defvar gptel-auto-workflow--suppress-strategy-metadata-persistence)
+
 ;;; Strategy Generation
 
 (defvar gptel-auto-workflow--strategy-evolution-axes
@@ -17,14 +26,21 @@
     (F . "Adaptive compression and filtering"))
   "Exploration axes for strategy evolution, analogous to Meta-Harness exploitation axes.")
 
-(defvar gptel-auto-workflow--strategy-generation-count 0
-  "Counter for generated strategy names.")
+(defun gptel-auto-workflow--strategy-axis-description (axis)
+  "Return a human-readable description for strategy AXIS."
+  (or (cdr (assoc (if (symbolp axis) axis (intern-soft (format "%s" axis)))
+                  gptel-auto-workflow--strategy-evolution-axes))
+      "Unknown strategy axis"))
 
 (defun gptel-auto-workflow--generate-strategy-name ()
   "Generate a unique strategy name."
-  (setq gptel-auto-workflow--strategy-generation-count
-        (1+ gptel-auto-workflow--strategy-generation-count))
-  (format "evolved-%04d" gptel-auto-workflow--strategy-generation-count))
+  (let* ((dir (gptel-auto-workflow--strategies-directory))
+         (max-n 0))
+    (when (file-directory-p dir)
+      (dolist (file (directory-files dir nil "^strategy-evolved-[0-9]+\\.el$"))
+        (when (string-match "^strategy-evolved-\\([0-9]+\\)\\.el$" file)
+          (setq max-n (max max-n (string-to-number (match-string 1 file)))))))
+    (format "evolved-%04d" (1+ max-n))))
 
 ;;; Strategy Template
 
@@ -49,24 +65,23 @@ CODE: the actual implementation code"
 (require 'gptel-tools-agent-prompt-build)
 
 (defun strategy-%s-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
-  "Build prompt using evolved strategy %s.
-HYPOTHESIS: %s"
+  %S
   %s)
 
 (defun strategy-%s-get-metadata ()
-  "Return metadata for this strategy."
-  (list :name "%s"
-        :version "1.0"
-        :hypothesis "%s"
-        :axis "%s"
-        :created "%s"
+  %S
+  (list :name %S
+        :version %S
+        :hypothesis %S
+        :axis %S
+        :created %S
         :parent-strategies '%s
-        :description "%s"))
+        :description %S))
 
 ;; Register self
 (when (fboundp 'gptel-auto-workflow--register-strategy)
   (gptel-auto-workflow--register-strategy
-   "%s"
+   %S
    #'strategy-%s-build-prompt
    (strategy-%s-get-metadata)))
 
@@ -75,17 +90,18 @@ HYPOTHESIS: %s"
           name
           hypothesis
           axis
-          (cdr (assoc axis gptel-auto-workflow--strategy-evolution-axes))
+          (gptel-auto-workflow--strategy-axis-description axis)
           (prin1-to-string parent-strategies)
           (format-time-string "%Y-%m-%d")
           name
-          name
-          hypothesis
+          (format "Build prompt using evolved strategy %s.\nHYPOTHESIS: %s" name hypothesis)
           code
           name
+          "Return metadata for this strategy."
           name
+          "1.0"
           hypothesis
-          axis
+          (format "%s" axis)
           (format-time-string "%Y-%m-%d")
           (prin1-to-string parent-strategies)
           hypothesis
@@ -171,7 +187,7 @@ Returns nil if there's a genuine new mechanism."
 (defun gptel-auto-workflow--prototype-strategy (strategy-code test-target)
   "Prototype STRATEGY-CODE against TEST-TARGET before finalizing.
 Returns plist with :valid t/nil :errors list :test-output string."
-  (let ((temp-file (make-temp-file "strategy-prototype-"))
+  (let ((temp-file (make-temp-file "strategy-prototype-" nil ".el"))
         (errors '())
         (test-output ""))
     (unwind-protect
@@ -182,7 +198,8 @@ Returns plist with :valid t/nil :errors list :test-output string."
           
           ;; Test 1: Load without errors
           (condition-case err
-              (load temp-file nil t t)
+              (let ((gptel-auto-workflow--suppress-strategy-metadata-persistence t))
+                (load temp-file nil t t))
             (error
              (push (format "Load error: %s" err) errors)))
           
@@ -190,7 +207,7 @@ Returns plist with :valid t/nil :errors list :test-output string."
           (unless errors
             (condition-case err
                 (let* ((build-fn-name (gptel-auto-workflow--extract-build-function-name strategy-code))
-                       (build-fn (intern build-fn-name)))
+                        (build-fn (intern build-fn-name)))
                   (if (fboundp build-fn)
                       (setq test-output
                             (funcall build-fn test-target 1 10 nil 0.5 nil))
@@ -213,9 +230,266 @@ Returns plist with :valid t/nil :errors list :test-output string."
   (with-temp-buffer
     (insert code)
     (goto-char (point-min))
-    (if (re-search-forward "(defun\\s-+(strategy-[^ ]+-build-prompt)" nil t)
+    (if (re-search-forward "(defun\\s-+\\(strategy-[^ ]+-build-prompt\\)" nil t)
         (match-string 1)
       "strategy-unknown-build-prompt")))
+
+(defun gptel-auto-workflow--extract-build-function-body (code)
+  "Extract just the function body from strategy CODE.
+Returns the body as a string, or the full code if extraction fails."
+  (with-temp-buffer
+    (insert code)
+    (goto-char (point-min))
+    ;; Find the build-prompt function
+    (if (re-search-forward "(defun\\s-+strategy-[^ ]+-build-prompt\\s-+" nil t)
+        (let ((start (point)))
+          ;; Find matching closing paren
+          (condition-case nil
+              (progn
+                (forward-sexp)
+                ;; Extract body (skip docstring if present)
+                (let ((func-end (point))
+                      (body-start start))
+                  (goto-char start)
+                  ;; Skip docstring
+                  (when (looking-at "\\s-*\"")
+                    (forward-sexp)
+                    (setq body-start (point)))
+                  ;; Skip interactive declaration
+                  (goto-char body-start)
+                  (when (looking-at "\\s-*(interactive")
+                    (forward-sexp)
+                    (setq body-start (point)))
+                  ;; Return body
+                  (string-trim (buffer-substring body-start (1- func-end)))))
+            (error code)))
+      code)))
+
+;;; Warm-Start from Historical Trace Analysis
+
+(defun gptel-auto-workflow--analyze-strategy-failures (strategy-name)
+  "Analyze TSV results to find failure patterns for STRATEGY-NAME.
+Returns formatted string of top 5 failure reasons, or empty string if none found."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (failure-reasons (make-hash-table :test 'equal))
+        (total-failures 0))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1) ; Skip header
+        (while (not (eobp))
+          (let* ((line (buffer-substring (line-beginning-position) (line-end-position)))
+                 (fields (split-string line "\t")))
+            (when (>= (length fields) 20)
+              (let ((entry-strategy (nth 19 fields))
+                    (decision (nth 7 fields))
+                    (reason (nth 11 fields)))
+                (when (and (equal entry-strategy strategy-name)
+                           (equal decision "discarded")
+                           (not (string-empty-p reason)))
+                  (setq total-failures (1+ total-failures))
+                  (puthash reason (1+ (gethash reason failure-reasons 0)) failure-reasons)))))
+          (forward-line 1))))
+
+    (if (= total-failures 0)
+        ""
+      ;; Sort by frequency and take top 5
+      (let ((sorted '()))
+        (maphash (lambda (reason count)
+                   (push (cons count reason) sorted))
+                 failure-reasons)
+        (setq sorted (sort sorted (lambda (a b) (> (car a) (car b)))))
+        (concat "## Historical Failure Patterns for This Strategy\n"
+                (format "Total discarded experiments: %d\n" total-failures)
+                "Top failure reasons:\n"
+                (mapconcat (lambda (pair)
+                            (format "- %s (occurred %d times)" (cdr pair) (car pair)))
+                          (cl-subseq sorted 0 (min 5 (length sorted)))
+                          "\n")
+                "\n\nAVOID these failure modes in your new strategy.\n\n")))))
+
+(defun gptel-auto-workflow--propose-strategies (parent-strategy-name axis hypothesis parent-code parent-perf)
+  "Use gptel to propose 3 new strategy implementations.
+Returns list of 3 strategy code strings, or nil if generation fails."
+  (if (not (fboundp 'gptel-request))
+      (progn
+        (message "[strategy-evolution] gptel not available, cannot propose strategies")
+        nil)
+    (let* ((axis-desc (gptel-auto-workflow--strategy-axis-description axis))
+         (failure-analysis (gptel-auto-workflow--analyze-strategy-failures parent-strategy-name))
+         (proposer-prompt
+          (format "You are a Meta-Harness strategy proposer. Your job is to generate NEW Emacs Lisp prompt-building strategies.
+
+## Context
+
+We are evolving prompt-building STRATEGIES (not prompt content). Strategies are Emacs Lisp functions that build prompts for an AI code improvement system.
+
+## Parent Strategy
+
+Current strategy: %s
+Performance: %d experiments, %.0f%% success rate, avg score %.2f
+
+Parent strategy code:
+```elisp
+%s
+```
+
+%s
+
+## Task
+
+Generate 3 NEW strategy implementations that target axis %s (%s).
+
+Axis %s means: %s
+
+## Requirements
+
+1. Each strategy MUST introduce a genuinely NEW mechanism, not just parameter tuning
+2. Valid mechanism changes:
+   - Different section ordering or inclusion logic
+   - New context retrieval (e.g., load additional files, use different git commands)
+   - Different variable computation (e.g., compute new statistics, filter differently)
+   - New skill loading patterns
+   - Different adaptive compression strategies
+3. INVALID changes (will be rejected):
+   - Same logic, different constants
+   - Just reordering existing code without changing behavior
+   - Changing string literals but keeping same structure
+
+## Output Format
+
+For each candidate, output EXACTLY:
+
+CANDIDATE_1:
+```elisp
+;;; strategy-NAME.el --- DESCRIPTION -*- lexical-binding: t; -*-
+;; Hypothesis: ONE SENTENCE
+;; Axis: %%s
+
+(require 'gptel-tools-agent-prompt-build)
+
+(defun strategy-NAME-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+  ;; NEW MECHANISM HERE
+  ;; Must return a string (the prompt)
+  )
+
+(defun strategy-NAME-get-metadata ()
+  (list :name \"NAME\"
+        :version \"1.0\"
+        :hypothesis \"DESCRIPTION\"
+        :axis \"%%s\"))
+
+(provide 'strategy-NAME)
+```
+
+CANDIDATE_2:
+[same format, different mechanism]
+
+CANDIDATE_3:
+[same format, different mechanism]
+
+## Important
+
+- The build function MUST call functions from `gptel-tools-agent-prompt-build` module
+- Available functions include:
+  - `gptel-auto-experiment-build-prompt` (baseline)
+  - `gptel-auto-workflow--load-prompt-template`
+  - `gptel-auto-workflow--substitute-template`
+  - `gptel-auto-workflow--select-ab-test-sections`
+  - `gptel-auto-workflow--adapt-prompt-compression`
+  - `gptel-auto-experiment--format-failure-patterns`
+  - `gptel-auto-experiment--format-axis-guidance`
+  - `gptel-auto-experiment--frontier-saturation-guidance`
+  - `gptel-auto-experiment--format-cross-target-patterns`
+  - `gptel-auto-workflow--load-skill-content`
+  - `gptel-auto-workflow--get-worktree-dir`
+  - `gptel-auto-experiment--get-topic-knowledge`
+- Each candidate should explore a DIFFERENT mechanism within axis %s
+- Do NOT output any explanation, ONLY the 3 candidates"
+                  parent-strategy-name
+                  (plist-get parent-perf :total)
+                  (* 100 (plist-get parent-perf :success-rate))
+                  (plist-get parent-perf :avg-score)
+                  (or parent-code "(baseline strategy)")
+                  (or failure-analysis "")
+                  axis axis-desc
+                  axis axis-desc
+                  axis)))
+
+    ;; Make synchronous gptel request
+    (message "[strategy-evolution] Requesting strategy proposals from agent...")
+    (let ((responses nil)
+          (done nil))
+      (condition-case err
+          (progn
+            (gptel-request proposer-prompt
+                          :system "You are a strategy proposer for an automated code improvement system. You generate Emacs Lisp code for prompt-building strategies. Output ONLY code, no explanations."
+                          :callback (lambda (response info)
+                                     (setq responses response
+                                           done t)))
+            ;; Wait for response (with timeout)
+            (with-timeout (60 (message "[strategy-evolution] Timeout waiting for proposals")
+                             nil)
+              (while (not done)
+                (sleep-for 0.5)))
+
+            (when responses
+              (message "[strategy-evolution] Received proposals, parsing...")
+              (gptel-auto-workflow--parse-strategy-candidates responses)))
+        (error
+         (message "[strategy-evolution] Error requesting proposals: %s" err)
+         nil))))))
+
+(defun gptel-auto-workflow--parse-strategy-candidates (response)
+  "Parse 3 strategy candidates from gptel RESPONSE.
+Returns list of 3 code strings."
+  (let ((candidates '()))
+    (dotimes (i 3)
+      (let* ((start-label (format "CANDIDATE_%d:" (1+ i)))
+             (end-label (format "CANDIDATE_%d:" (+ i 2)))
+             (case-fold-search nil))
+        (when (string-match (regexp-quote start-label) response)
+          (let* ((start (match-end 0))
+                 (end (if (string-match (regexp-quote end-label) response start)
+                          (match-beginning 0)
+                        (length response)))
+                 (block (string-trim (substring response start end))))
+            (when (string-match "```\\(?:elisp\\|emacs-lisp\\)?[[:space:]]*\\(\\(?:.\\|\n\\)*?\\)[[:space:]]*```" block)
+              (setq block (string-trim (match-string 1 block))))
+            (push (and (> (length block) 100) block) candidates)))))
+    (setq candidates (nreverse candidates))
+    (while (< (length candidates) 3)
+      (setq candidates (append candidates (list nil))))
+    (message "[strategy-evolution] Parsed %d valid candidates"
+             (length (cl-remove-if #'null candidates)))
+    candidates))
+
+(defun gptel-auto-workflow--strategy-code-rewrite-name (code old-name new-name)
+  "Rewrite strategy CODE from OLD-NAME to NEW-NAME."
+  (let ((rewritten code))
+    (setq rewritten (replace-regexp-in-string
+                     (regexp-quote old-name) new-name rewritten t t))
+    (setq rewritten (replace-regexp-in-string
+                     "(provide 'strategy-[^)]+)"
+                     (format "(provide 'strategy-%s)" new-name)
+                     rewritten t t))
+    rewritten))
+
+(defun gptel-auto-workflow--prepare-strategy-candidate (candidate-code candidate-name)
+  "Prepare CANDIDATE-CODE as a standalone strategy named CANDIDATE-NAME."
+  (let ((code (string-trim candidate-code)))
+    (if (string-match "strategy-\\([^[:space:])]+\\)-build-prompt" code)
+        (gptel-auto-workflow--strategy-code-rewrite-name
+         code
+         (match-string 1 code)
+         candidate-name)
+      (gptel-auto-workflow--strategy-template
+       candidate-name
+       "Agent-proposed strategy candidate"
+       'A
+       nil
+       code))))
 
 ;;; Strategy Evolution Loop
 
@@ -231,43 +505,83 @@ Returns new strategy name or nil if rejected."
                         (with-temp-buffer
                           (insert-file-contents parent-file)
                           (buffer-string))))
+         (parent-perf (gptel-auto-workflow--get-strategy-performance parent-strategy-name))
          (new-name (gptel-auto-workflow--generate-strategy-name))
-         ;; Generate new strategy code (in real Meta-Harness, this would be done by proposer agent)
-         (new-code (gptel-auto-workflow--strategy-template
-                    new-name
-                    hypothesis
-                    axis
-                    (list parent-strategy-name)
-                    ";; TODO: Implement evolved mechanism here
-;; This should change a fundamental aspect of prompt building
-;; Example: Different section ordering, new context selection, etc.
-(gptel-auto-experiment-build-prompt target experiment-id max-experiments analysis baseline previous-results)")))
+         ;; Generate 3 candidates using agent-driven proposer
+         (candidates (gptel-auto-workflow--propose-strategies
+                      parent-strategy-name axis hypothesis parent-code parent-perf))
+         (valid-candidates '()))
     
-    ;; Self-critique: Is this a parameter variant?
-    (when (and parent-code
-               (gptel-auto-workflow--is-parameter-variant-p new-code parent-code))
-      (message "[strategy-evolution] REJECTED %s: Parameter variant of %s" new-name parent-strategy-name)
-      (return-from gptel-auto-workflow--evolve-strategy nil))
+    ;; Validate each candidate
+    (dolist (candidate (or candidates '()))
+      (when candidate
+        (let* ((candidate-index (1+ (- (length candidates)
+                                        (length (member candidate candidates)))))
+               (candidate-name (format "%s-candidate-%d" new-name candidate-index))
+               (candidate-code (gptel-auto-workflow--prepare-strategy-candidate candidate candidate-name)))
+
+          ;; Check 1: Not a parameter variant
+          (if (and parent-code
+                   (gptel-auto-workflow--is-parameter-variant-p candidate-code parent-code))
+              (message "[strategy-evolution] REJECTED candidate: Parameter variant")
+
+            ;; Check 2: Prototype validation
+            (let ((prototype (gptel-auto-workflow--prototype-strategy
+                             candidate-code
+                             "lisp/modules/gptel-tools-agent-base.el")))
+              (if (not (plist-get prototype :valid))
+                  (message "[strategy-evolution] REJECTED candidate: Prototype failed: %s"
+                           (mapconcat #'identity (plist-get prototype :errors) ", "))
+
+                ;; Check 3: Actually returns a non-empty string
+                (let ((output (plist-get prototype :output)))
+                  (if (or (not (stringp output))
+                          (< (length output) 100))
+                      (message "[strategy-evolution] REJECTED candidate: Output too short (%d chars)"
+                               (length output))
+
+                    ;; Valid candidate
+                    (push (list :code candidate-code
+                               :name candidate-name
+                               :output output
+                               :output-length (length output))
+                          valid-candidates))))))))
     
-    ;; Prototype validation
-    (let ((prototype (gptel-auto-workflow--prototype-strategy
-                      new-code
-                      "lisp/modules/gptel-tools-agent-base.el")))
-      (unless (plist-get prototype :valid)
-        (message "[strategy-evolution] REJECTED %s: Prototype failed: %s"
-                 new-name
-                 (mapconcat #'identity (plist-get prototype :errors) ", "))
-        (return-from gptel-auto-workflow--evolve-strategy nil)))
-    
-    ;; Write strategy to filesystem
-    (let ((strategy-file (expand-file-name
-                          (format "strategy-%s.el" new-name)
-                          (gptel-auto-workflow--strategies-directory))))
-      (make-directory (file-name-directory strategy-file) t)
-      (with-temp-file strategy-file
-        (insert new-code))
-      (message "[strategy-evolution] ACCEPTED %s (axis %s)" new-name axis)
-      new-name))
+    ;; Pick best candidate (longest output = most content, heuristic for completeness)
+    (when valid-candidates
+      (let* ((sorted (sort valid-candidates
+                          (lambda (a b)
+                            (> (plist-get a :output-length)
+                               (plist-get b :output-length)))))
+             (best (car sorted))
+             (best-code (plist-get best :code))
+             (final-code (gptel-auto-workflow--strategy-code-rewrite-name
+                          best-code
+                          (plist-get best :name)
+                          new-name)))
+
+        ;; Write strategy to filesystem
+          (let ((strategy-file (expand-file-name
+                              (format "strategy-%s.el" new-name)
+                              (gptel-auto-workflow--strategies-directory))))
+          (make-directory (file-name-directory strategy-file) t)
+          (with-temp-file strategy-file
+            (insert final-code))
+          (let ((final-prototype
+                 (gptel-auto-workflow--prototype-strategy
+                  final-code
+                  "lisp/modules/gptel-tools-agent-base.el")))
+            (if (not (plist-get final-prototype :valid))
+                (progn
+                  (delete-file strategy-file)
+                  (message "[strategy-evolution] REJECTED %s: Final prototype failed: %s"
+                           new-name
+                           (mapconcat #'identity (plist-get final-prototype :errors) ", "))
+                  nil)
+              (gptel-auto-workflow--load-strategy new-name)
+              (message "[strategy-evolution] ACCEPTED %s (axis %s) from %d candidates"
+                       new-name axis (length valid-candidates))
+              new-name)))))))
 
 ;;; Periodic Strategy Evolution
 
@@ -322,9 +636,9 @@ If current strategy is underperforming, tries to generate a new one."
             (let ((new-strategy
                    (gptel-auto-workflow--evolve-strategy
                     current-strategy
-                    (format "Improve strategy by targeting axis %s (%s)"
-                            target-axis
-                            (cdr (assoc target-axis gptel-auto-workflow--strategy-evolution-axes)))
+                     (format "Improve strategy by targeting axis %s (%s)"
+                             target-axis
+                             (gptel-auto-workflow--strategy-axis-description target-axis))
                     target-axis)))
               (when new-strategy
                 (message "[strategy] Evolved new strategy: %s" new-strategy)

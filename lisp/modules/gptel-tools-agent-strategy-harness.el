@@ -14,6 +14,13 @@
 ;;   (defun strategy-<name>-get-metadata ())
 ;;   Returns: plist with :name :version :hypothesis :axis :created :parent-strategies
 
+(require 'cl-lib)
+(require 'json)
+(require 'subr-x)
+
+(declare-function gptel-auto-workflow--project-root "gptel-tools-agent-base" ())
+(declare-function gptel-auto-workflow--results-file-path "gptel-tools-agent-base" (&optional run-id))
+
 ;;; Strategy Registry
 
 (defvar gptel-auto-workflow--strategy-registry (make-hash-table :test 'equal)
@@ -28,6 +35,9 @@
 
 (defvar gptel-auto-workflow--strategy-evolution-enabled t
   "When non-nil, allow strategy evolution via harness search.")
+
+(defvar gptel-auto-workflow--suppress-strategy-metadata-persistence nil
+  "When non-nil, strategy registration does not write metadata files.")
 
 (defun gptel-auto-workflow--strategies-directory ()
   "Return the directory where prompt-building strategies are stored."
@@ -50,13 +60,27 @@ Returns list of strategy names."
 
 (defun gptel-auto-workflow--load-strategy (strategy-name)
   "Load strategy STRATEGY-NAME from filesystem.
+Also loads persisted metadata if available.
 Returns t if loaded successfully."
   (let ((file (expand-file-name (format "strategy-%s.el" strategy-name)
-                                (gptel-auto-workflow--strategies-directory))))
+                                 (gptel-auto-workflow--strategies-directory))))
     (if (file-exists-p file)
         (condition-case err
             (progn
               (load file nil t t)
+              ;; Register loadable strategies even if generated code omits the
+              ;; self-registration block.
+              (unless (gethash strategy-name gptel-auto-workflow--strategy-registry)
+                (let* ((build-fn (intern (format "strategy-%s-build-prompt" strategy-name)))
+                       (metadata-fn (intern (format "strategy-%s-get-metadata" strategy-name)))
+                       (metadata (or (and (fboundp metadata-fn)
+                                          (funcall metadata-fn))
+                                     (gptel-auto-workflow--load-strategy-metadata strategy-name))))
+                  (when (and (fboundp build-fn) metadata)
+                    (gptel-auto-workflow--register-strategy
+                     strategy-name
+                     build-fn
+                     metadata))))
               (message "[strategy] Loaded %s" strategy-name)
               t)
           (error
@@ -66,9 +90,37 @@ Returns t if loaded successfully."
       nil)))
 
 (defun gptel-auto-workflow--register-strategy (name build-fn metadata)
-  "Register a strategy with NAME, BUILD-FN, and METADATA plist."
+  "Register a strategy with NAME, BUILD-FN, and METADATA plist.
+Also persists metadata to filesystem for durability across sessions."
   (puthash name (list :build build-fn :metadata metadata)
-           gptel-auto-workflow--strategy-registry))
+           gptel-auto-workflow--strategy-registry)
+  (unless gptel-auto-workflow--suppress-strategy-metadata-persistence
+    (gptel-auto-workflow--persist-strategy-metadata name metadata)))
+
+(defun gptel-auto-workflow--persist-strategy-metadata (name metadata)
+  "Persist METADATA for strategy NAME to filesystem.
+Saves to assistant/strategies/metadata/NAME.json."
+  (let* ((metadata-dir (expand-file-name "assistant/strategies/metadata"
+                                         (gptel-auto-workflow--project-root)))
+         (metadata-file (expand-file-name (format "%s.json" name) metadata-dir)))
+    (make-directory metadata-dir t)
+    (with-temp-file metadata-file
+      (insert (json-encode metadata)))
+    (message "[strategy] Persisted metadata for %s" name)))
+
+(defun gptel-auto-workflow--load-strategy-metadata (name)
+  "Load persisted metadata for strategy NAME from filesystem.
+Returns plist or nil if not found."
+  (let ((metadata-file (expand-file-name
+                        (format "%s.json" name)
+                        (expand-file-name "assistant/strategies/metadata"
+                                          (gptel-auto-workflow--project-root)))))
+    (when (file-exists-p metadata-file)
+      (with-temp-buffer
+        (insert-file-contents metadata-file)
+        (condition-case nil
+            (json-read-from-string (buffer-string))
+          (error nil))))))
 
 (defun gptel-auto-workflow--get-strategy-build-fn (name)
   "Get the build function for strategy NAME."
@@ -76,9 +128,10 @@ Returns t if loaded successfully."
 
 ;;; Strategy Evaluation Tracking
 
-(defun gptel-auto-workflow--record-strategy-evaluation (strategy-name target experiment-id score outcome)
+(defun gptel-auto-workflow--record-strategy-evaluation (strategy-name target experiment-id score outcome &optional axis)
   "Record evaluation result for STRATEGY-NAME on TARGET.
-SCORE is the experiment score, OUTCOME is 'kept or 'discarded."
+SCORE is the experiment score, OUTCOME is 'kept or 'discarded.
+Optional AXIS records the exploration axis used by the experiment."
   (let ((file (expand-file-name gptel-auto-workflow--strategy-evaluations-file
                                 (gptel-auto-workflow--project-root))))
     (make-directory (file-name-directory file) t)
@@ -89,11 +142,12 @@ SCORE is the experiment score, OUTCOME is 'kept or 'discarded."
       (insert (json-encode
                (list :timestamp (format-time-string "%Y-%m-%d %H:%M:%S")
                      :strategy strategy-name
-                     :target target
-                     :experiment-id experiment-id
-                     :score score
-                     :outcome (symbol-name outcome)))
-              "\n")
+                      :target target
+                      :experiment-id experiment-id
+                      :score score
+                      :outcome (symbol-name outcome)
+                      :axis axis))
+               "\n")
       (write-region (point-min) (point-max) file))))
 
 (defun gptel-auto-workflow--get-strategy-performance (strategy-name)
@@ -218,6 +272,97 @@ Returns formatted string of global insights."
                          axis-counts)
                 (mapconcat #'identity (sort results #'string<) "\n"))
               "\n\nRecommendation: Focus on high-success axes globally.\n\n"))))
+
+;;; Strategy Frontier Tracking (Meta-Harness Pareto Frontier)
+
+(defun gptel-auto-workflow--compute-strategy-frontier ()
+  "Compute Pareto frontier of strategies.
+Returns list of strategy names that are not dominated by any other strategy.
+A strategy dominates another if it has >= success rate and >= avg score."
+  (let* ((strategies (gptel-auto-workflow--discover-strategies))
+         (evaluated-strategies
+          (cl-remove-if
+           (lambda (name)
+             (let ((perf (gptel-auto-workflow--get-strategy-performance name)))
+               (= (plist-get perf :total) 0)))
+           strategies))
+         (frontier '()))
+    (dolist (strategy evaluated-strategies)
+      (let* ((perf (gptel-auto-workflow--get-strategy-performance strategy))
+             (success-rate (plist-get perf :success-rate))
+             (avg-score (plist-get perf :avg-score))
+             (dominated nil))
+        (dolist (other evaluated-strategies)
+          (unless (equal strategy other)
+            (let* ((other-perf (gptel-auto-workflow--get-strategy-performance other))
+                   (other-success (plist-get other-perf :success-rate))
+                   (other-score (plist-get other-perf :avg-score)))
+              ;; Other dominates strategy if >= on both metrics
+              (when (and (>= other-success success-rate)
+                         (>= other-score avg-score)
+                         ;; Strictly better on at least one
+                         (or (> other-success success-rate)
+                             (> other-score avg-score)))
+                (setq dominated t)))))
+        (unless dominated
+          (push strategy frontier))))
+    (nreverse frontier)))
+
+(defun gptel-auto-workflow--format-strategy-frontier ()
+  "Format strategy frontier as string for display."
+  (let ((frontier (gptel-auto-workflow--compute-strategy-frontier)))
+    (if (null frontier)
+        "No strategy frontier yet."
+      (concat "## Strategy Pareto Frontier\n"
+              "Non-dominated strategies:\n"
+              (mapconcat
+               (lambda (name)
+                 (let ((perf (gptel-auto-workflow--get-strategy-performance name)))
+                   (format "- %s: %.0f%% success, avg score %.2f"
+                           name
+                           (* 100 (plist-get perf :success-rate))
+                           (plist-get perf :avg-score))))
+               frontier
+               "\n")
+              "\n\n"))))
+
+;;; Strategy Execution Tracing
+
+(defvar gptel-auto-workflow--strategy-execution-log nil
+  "In-memory log of strategy executions for current session.")
+
+(defun gptel-auto-workflow--trace-strategy-execution (strategy-name target prompt-chars sections)
+  "Trace a strategy execution.
+STRATEGY-NAME: which strategy was used
+TARGET: which file was optimized
+PROMPT-CHARS: size of generated prompt
+SECTIONS: list of sections included"
+  (push (list :timestamp (current-time)
+              :strategy strategy-name
+              :target target
+              :prompt-chars prompt-chars
+              :sections sections)
+        gptel-auto-workflow--strategy-execution-log))
+
+(defun gptel-auto-workflow--get-strategy-execution-stats (strategy-name)
+  "Get execution statistics for STRATEGY-NAME.
+Returns plist with :count :avg-prompt-size :avg-sections."
+  (let ((entries (cl-remove-if-not
+                  (lambda (entry)
+                    (equal (plist-get entry :strategy) strategy-name))
+                  gptel-auto-workflow--strategy-execution-log))
+        (total-chars 0)
+        (total-sections 0))
+    (dolist (entry entries)
+      (setq total-chars (+ total-chars (or (plist-get entry :prompt-chars) 0)))
+      (setq total-sections (+ total-sections (length (plist-get entry :sections)))))
+    (list :count (length entries)
+          :avg-prompt-size (if (> (length entries) 0)
+                              (/ total-chars (length entries))
+                            0)
+          :avg-sections (if (> (length entries) 0)
+                           (/ total-sections (length entries))
+                         0))))
 
 ;;; Strategy Execution
 
