@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-02 20:27
+updated: 2026-05-03 07:27
 ---
 
 # Self-Evolution Knowledge Base
@@ -13,17 +13,17 @@ updated: 2026-05-02 20:27
 
 ## Git History Facts
 
-- Active experiment branches: 113
+- Active experiment branches: 115
 - Historical merges: 588
 - Active branches merged: 7
-- Active branches abandoned: 106
-- Active merge rate: 6.2%
+- Active branches abandoned: 108
+- Active merge rate: 6.1%
 
 ### Target Frequency
 
 - `agent`: 31 experiments
-- `cache`: 18 experiments
-- `loop`: 15 experiments
+- `cache`: 19 experiments
+- `loop`: 16 experiments
 - `utils`: 8 experiments
 - `strategic`: 8 experiments
 - `sandbox`: 7 experiments
@@ -41,18 +41,18 @@ updated: 2026-05-02 20:27
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 25% verified (60/243 experiments)
+- **bug-fix**: 25% verified (62/249 experiments)
 - **performance**: 16% verified (4/25 experiments)
-- **refactoring**: 28% verified (22/80 experiments)
-- **safety**: 26% verified (18/68 experiments)
+- **refactoring**: 27% verified (22/81 experiments)
+- **safety**: 27% verified (19/71 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **refactoring** - 28% kept (80 experiments)
-2. **safety** - 26% kept (68 experiments)
-3. **bug-fix** - 25% kept (243 experiments)
+1. **refactoring** - 27% kept (81 experiments)
+2. **safety** - 27% kept (71 experiments)
+3. **bug-fix** - 25% kept (249 experiments)
 4. **performance** - 16% kept (25 experiments)
 
 ## Critical Guidance for Maximum Success
@@ -78,15 +78,20 @@ Which change types work best for each target file:
 
 ### `gptel-agent-loop.el`
 
-- **safety**: 57% (7 experiments)
 - **refactoring**: 50% (6 experiments)
-- **bug-fix**: 41% (22 experiments)
+- **safety**: 44% (9 experiments)
+- **bug-fix**: 43% (23 experiments)
 
 ### `gptel-auto-workflow-strategic.el`
 
 - **safety**: 36% (11 experiments)
 - **bug-fix**: 17% (18 experiments)
 - **performance**: 0% (3 experiments)
+
+### `gptel-ext-context-cache.el`
+
+- **bug-fix**: 44% (18 experiments)
+- **performance**: 29% (7 experiments)
 
 ### `gptel-ext-retry.el`
 
@@ -100,11 +105,6 @@ Which change types work best for each target file:
 ### `staging-merge`
 
 - **other**: 0% (23 experiments)
-
-### `gptel-ext-context-cache.el`
-
-- **bug-fix**: 47% (15 experiments)
-- **performance**: 29% (7 experiments)
 
 ### `gptel-sandbox.el`
 
