@@ -126,6 +126,10 @@ gptel preset.")
 
 (defun gptel-sandbox--bind-result (symbol value env)
   "Bind SYMBOL to VALUE in ENV, also updating `_` and `it`."
+  (unless (symbolp symbol)
+    (error "Binding target must be a symbol, got: %S" symbol))
+  (when (null symbol)
+    (error "Binding target cannot be nil"))
   (puthash symbol value env)
   (puthash '_ value env)
   (puthash 'it value env))
