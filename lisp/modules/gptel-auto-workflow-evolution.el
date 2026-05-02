@@ -58,7 +58,7 @@ Uses cached value from load time, or detects from current directory."
                            (quality (string-to-number (or (nth 5 fields) "0")))
                            (delta-str (or (nth 6 fields) "+0.00"))
                            (decision (nth 7 fields))
-                            (grader-q (string-to-number (or (nth 9 fields) "0"))
+                            (grader-q (string-to-number (or (nth 9 fields) "0")))
                             (prompt-chars (string-to-number (or (nth 15 fields) "0"))))
                        (push (list :target target
                                    :hypothesis hypothesis

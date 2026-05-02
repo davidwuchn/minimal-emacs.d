@@ -475,8 +475,8 @@ row for the same experiment and target."
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
                           truncated-output
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
-                          (or (gptel-auto-workflow--plist-get experiment :prompt-chars 0)
-                              0)))))
+                           (or (gptel-auto-workflow--plist-get experiment :prompt-chars 0)
+                               0))))
       (write-region (point-min) (point-max) file))
     ;; Trigger self-evolution after experiment logging
     (when (and (fboundp 'gptel-auto-workflow--experiment-complete-hook)
