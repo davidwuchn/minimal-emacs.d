@@ -538,8 +538,8 @@ URL is the API endpoint, CONNECT-TIMEOUT and MAX-TIME are in seconds,
 KEY is the API key for authorization."
   (list "curl"
         "--silent" "--show-error" "--fail"
-        "--connect-timeout" (number-to-string connect-timeout)
-        "--max-time" (number-to-string max-time)
+        "--connect-timeout" (number-to-string (if (numberp connect-timeout) connect-timeout 10))
+        "--max-time" (number-to-string (if (numberp max-time) max-time 120))
         "--http1.1"
         "-H" (concat "Authorization: Bearer " key)
         "-H" "Accept: application/json"
