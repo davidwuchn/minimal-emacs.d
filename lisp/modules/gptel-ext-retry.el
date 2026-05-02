@@ -893,26 +893,27 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
               (repaired (my/gptel--repair-thinking-tool-call-messages info)))
           (when (> repaired 0)
             (message "gptel: Repaired reasoning field on %d tool-call message(s) before compaction" repaired))
-          (cl-progv
-              '(bytes trimmed-total pass)
-              (list (my/gptel--estimate-payload-bytes info) 0 0)
-            (when (> bytes limit)
-              (message "gptel: Payload %dKB exceeds %dKB limit, compacting..."
-                       (/ bytes 1024) (/ limit 1024))
-              (let ((my/gptel-retry-keep-recent-tool-results
-                     (if (null my/gptel-retry-keep-recent-tool-results)
-                         2
-                       my/gptel-retry-keep-recent-tool-results)))
-                (cl-loop for (pass-num trim-fn log-fmt) in my/gptel--compaction-passes
-                         while (> bytes limit)
-                         do (my/gptel--run-compaction-pass
-                             info pass-num limit 'bytes 'trimmed-total 'pass
-                             trim-fn log-fmt)))
-              (if (> bytes limit)
-                  (message "gptel: WARNING: Payload still %dKB after %d passes of compaction (limit %dKB)"
-                           (/ bytes 1024) pass (/ limit 1024))
-                (message "gptel: Compaction complete: %d items trimmed across %d pass(es), payload now %dKB"
-                         trimmed-total pass (/ bytes 1024))))))))))
+          (cl-loop
+              with bytes = (my/gptel--estimate-payload-bytes info)
+              with trimmed-total = 0
+              with pass = 0
+              for (pass-num trim-fn log-fmt) in my/gptel--compaction-passes
+              while (> bytes limit)
+              do (progn
+                   (cl-progv
+                       '(trimmed-total pass)
+                       (list trimmed-total pass)
+                     (my/gptel--run-compaction-pass
+                      info pass-num limit 'bytes 'trimmed-total 'pass
+                      trim-fn log-fmt)
+                     (setq trimmed-total (symbol-value 'trimmed-total)
+                           pass (symbol-value 'pass)))
+                   (setq bytes (my/gptel--estimate-payload-bytes info)))
+              finally do (if (> bytes limit)
+                             (message "gptel: WARNING: Payload still %dKB after %d passes of compaction (limit %dKB)"
+                                      (/ bytes 1024) pass (/ limit 1024))
+                           (message "gptel: Compaction complete: %d items trimmed across %d pass(es), payload now %dKB"
+                                    trimmed-total pass (/ bytes 1024)))))))))
 
 (advice-add 'gptel-curl-get-response :before #'my/gptel--compact-payload)
 
