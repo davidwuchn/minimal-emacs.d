@@ -708,9 +708,12 @@ explicitly to avoid capturing the wrong buffer.
 FILES are validated against project root for security.
 
 ;; ASSUMPTION: Files must be within project root to prevent path traversal
+;; ASSUMPTION: Git diff requires a valid repository at default-directory
 ;; BEHAVIOR: Builds XML-escaped context with files, git diff, and conversation history
 ;; EDGE CASE: Handles unreadable files, symlinks, and missing git repo gracefully
+;; EDGE CASE: Skips git diff entirely when no repository is detected
 ;; TEST: Verify files outside project are rejected with error message
+;; TEST: Verify git diff is skipped in non-git directories
 ;; GOAL: Provide secure, complete context for subagent decision-making
 ;; MEASURABLE: Context size limited to prevent token overflow (history capped at 8000 chars)"
   (let ((context ""))
@@ -741,26 +744,27 @@ FILES are validated against project root for security.
     (when include-diff
       (let* ((proj (when (fboundp 'project-current) (project-current)))
              (proj-root (when proj (expand-file-name (project-root proj))))
-             (default-directory
-              (cond
-               ((and proj-root (file-in-directory-p default-directory proj-root))
-                proj-root)
-               ((and proj-root (file-exists-p (expand-file-name ".git" proj-root)))
-                proj-root)
-               (t default-directory)))
-             (diff-out (with-temp-buffer
-                         (condition-case err
-                             (let ((exit-code (call-process "git" nil '(t nil) nil "diff" "HEAD")))
-                               (unless (eq exit-code 0)
-                                 (message "[gptel] git diff exit code %s" exit-code))
-                               (buffer-string))
-                           (error
-                            (message "[gptel] git diff error: %s" (error-message-string err))
-                            "")))))
-        (when (not (string-empty-p diff-out))
-          (setq context (concat context "<git_diff>\n"
-                                (my/gptel--xml-escape diff-out)
-                                "\n</git_diff>\n\n")))))
+             (git-dir (cond
+                       ((and proj-root (file-exists-p (expand-file-name ".git" proj-root)))
+                        proj-root)
+                       ((file-exists-p (expand-file-name ".git" default-directory))
+                        default-directory)
+                       (t nil)))
+             (default-directory (or git-dir default-directory)))
+        (when git-dir
+          (let ((diff-out (with-temp-buffer
+                            (condition-case err
+                                (let ((exit-code (call-process "git" nil '(t nil) nil "diff" "HEAD")))
+                                  (unless (eq exit-code 0)
+                                    (message "[gptel] git diff exit code %s" exit-code))
+                                  (buffer-string))
+                              (error
+                               (message "[gptel] git diff error: %s" (error-message-string err))
+                               "")))))
+            (when (not (string-empty-p diff-out))
+              (setq context (concat context "<git_diff>\n"
+                                    (my/gptel--xml-escape diff-out)
+                                    "\n</git_diff>\n\n")))))))
 
     (when include-history
       (let* ((src-buf (or (and (buffer-live-p origin-buf) origin-buf)
