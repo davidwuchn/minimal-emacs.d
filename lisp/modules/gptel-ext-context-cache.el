@@ -861,10 +861,20 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        my/gptel--known-model-context-windows
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
-        (my/gptel--cache-context-window model-id cw)))
+        (cond
+         ((eq cw my/gptel--gptel-tables-miss-sentinel)
+          (puthash model-id my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache)
+          nil)
+         ((my/gptel--positive-integer-p cw)
+          (puthash model-id cw my/gptel--gptel-tables-cw-cache)
+          (my/gptel--cache-context-window model-id cw))
+         (t nil))))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
              (cw (plist-get meta :context-window)))
-        (my/gptel--cache-context-window model-id cw)))
+        (cond
+         ((my/gptel--positive-integer-p cw)
+          (my/gptel--cache-context-window model-id cw))
+         (t nil))))
      (t my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
