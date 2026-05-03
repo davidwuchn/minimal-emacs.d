@@ -852,11 +852,11 @@ request buffer for an active workflow task."
 
 (defun my/gptel--workflow-routed-worktree-buffer-p (buffer root)
   "Return non-nil when BUFFER is a routed workflow buffer rooted at ROOT."
-  (when (bufferp buffer)
+  (when (and (bufferp buffer) (stringp root))
     (let ((tracked
-           (delete-dups
-            (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
-                  (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root)))))
+           (delq nil
+                 (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
+                       (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root)))))
       (or (memq buffer tracked)
           (string-prefix-p "*gptel-agent:" (buffer-name buffer))))))
 
