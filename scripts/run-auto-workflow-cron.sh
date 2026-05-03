@@ -1089,11 +1089,19 @@ ensure_worker_daemon() {
     hydrate_missing_worktree_submodules
     seed_worker_daemon_shared_var
     # Disable native compilation for workflow daemon to avoid stale cache issues
-    setsid env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
-        EMACSNATIVELOADPATH= \
-        MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-        MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-        "$EMACS" --init-directory="$DIR" --fg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 &
+    if command -v setsid >/dev/null 2>&1; then
+        setsid env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+            EMACSNATIVELOADPATH= \
+            MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+            MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+            "$EMACS" --init-directory="$DIR" --fg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 &
+    else
+        env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+            EMACSNATIVELOADPATH= \
+            MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+            MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+            "$EMACS" --init-directory="$DIR" --fg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 &
+    fi
     for _ in $(seq 1 50); do
         if check_worker_daemon; then
             rc=0
