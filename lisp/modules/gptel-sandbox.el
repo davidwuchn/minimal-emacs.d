@@ -562,10 +562,6 @@ can consume lists, vectors, plists, and alists as readable data."
            (print-circle t))
        (pp-to-string value))))))
 
-(defun gptel-sandbox--format-tool-result (result)
-  "Format RESULT from a tool call into a sandbox result string."
-  (gptel-sandbox--format-result result))
-
 (defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
   (let* ((tool-spec (if (fboundp 'gptel-get-tool)
@@ -587,16 +583,16 @@ can consume lists, vectors, plists, and alists as readable data."
                      (apply (gptel-tool-function tool-spec)
                             (lambda (result)
                               (condition-case cb-err
-                                  (funcall callback (gptel-sandbox--format-tool-result result))
+                                  (funcall callback (gptel-sandbox--format-result result))
                                 (error (funcall callback
-                                                (gptel-sandbox--format-tool-result
+                                                (gptel-sandbox--format-result
                                                  (gptel-sandbox--format-error
                                                   (error-message-string cb-err)))))))
                             arg-values)
                    (let ((result (condition-case inner-err
                                      (apply (gptel-tool-function tool-spec) arg-values)
                                    (error (gptel-sandbox--format-error (error-message-string inner-err))))))
-                     (funcall callback (gptel-sandbox--format-tool-result result)))))))
+                     (funcall callback (gptel-sandbox--format-result result)))))))
           (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
               (gptel-sandbox--maybe-aggregate-confirm
                state
