@@ -39,6 +39,128 @@
 (defvar gptel-auto-workflow--suppress-strategy-metadata-persistence nil
   "When non-nil, strategy registration does not write metadata files.")
 
+(defvar gptel-auto-workflow--strategy-run-name nil
+  "Run name for isolated strategy evolution outputs.
+When non-nil, outputs go to `assistant/strategies/runs/<run-name>/'.
+When nil, outputs go to `assistant/strategies/' directly.")
+
+(defvar gptel-auto-workflow--strategy-evolution-summary-file
+  "evolution_summary.jsonl"
+  "Filename for per-iteration evolution summary, relative to the active run directory.")
+
+(defvar gptel-auto-workflow--strategy-interrupted nil
+  "Non-nil when strategy evolution was interrupted by signal.")
+
+(defvar gptel-auto-workflow--strategy-test-set-ratio 0.2
+  "Fraction of targets held out for final test evaluation.
+During evolution, only the search set is used. The test set is
+only evaluated after evolution completes to prevent overfitting.
+Set to 0 to disable the split and use all targets for both.")
+
+(defun gptel-auto-workflow--strategy-run-directory ()
+  "Return the active strategy run directory, respecting the run name."
+  (let ((base (expand-file-name "assistant/strategies"
+                                (gptel-auto-workflow--project-root))))
+    (if gptel-auto-workflow--strategy-run-name
+        (expand-file-name (format "runs/%s" gptel-auto-workflow--strategy-run-name) base)
+      base)))
+
+(defun gptel-auto-workflow--strategy-results-file ()
+  "Return the full path to evaluations.jsonl for the current run."
+  (expand-file-name "evaluations.jsonl"
+                    (gptel-auto-workflow--strategy-run-directory)))
+
+(defun gptel-auto-workflow--strategy-evolution-summary-path ()
+  "Return the full path to the evolution summary file for the current run."
+  (expand-file-name gptel-auto-workflow--strategy-evolution-summary-file
+                    (gptel-auto-workflow--strategy-run-directory)))
+
+(defun gptel-auto-workflow--fresh-start-strategies ()
+  "Clear generated strategies and reset logs for a fresh run."
+  (interactive)
+  (let ((strategies-dir (gptel-auto-workflow--strategies-directory))
+        (run-dir (gptel-auto-workflow--strategy-run-directory))
+        (cleared-strategies 0)
+        (cleared-logs 0))
+    ;; Clear generated (non-template) strategies
+    (when (file-directory-p strategies-dir)
+      (dolist (file (directory-files strategies-dir t "strategy-evolved-.+\\.el$"))
+        (delete-file file)
+        (cl-incf cleared-strategies))
+      (when (> cleared-strategies 0)
+        (message "[strategy] Cleared %d evolved strategy file(s)" cleared-strategies)))
+    ;; Clear run logs
+    (when (file-directory-p run-dir)
+      (dolist (file (directory-files run-dir t "\\.jsonl?$"))
+        (delete-file file)
+        (cl-incf cleared-logs))
+      (when (> cleared-logs 0)
+        (message "[strategy] Cleared %d log file(s) from %s" cleared-logs run-dir)))
+    ;; Reset evolution summary counter
+    (setq gptel-auto-workflow--generation-count 0)
+    (message "[strategy] Fresh start complete")))
+
+(defun gptel-auto-workflow--strategy-iteration-count ()
+  "Return the highest iteration number in the evolution summary (for resume)."
+  (let ((summary-file (gptel-auto-workflow--strategy-evolution-summary-path))
+        (max-iter 0))
+    (when (file-exists-p summary-file)
+      (with-temp-buffer
+        (insert-file-contents summary-file)
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
+            (when (not (string-empty-p line))
+              (condition-case nil
+                  (let* ((entry (json-read-from-string line))
+                         (iter (cdr (assoc 'iteration entry))))
+                    (when (and iter (integerp iter) (> iter max-iter))
+                      (setq max-iter iter)))
+                (error nil))))
+          (forward-line 1))))
+    max-iter))
+
+(defun gptel-auto-workflow--ensure-strategy-run-directories ()
+  "Create strategy run directories if they don't exist."
+  (let ((run-dir (gptel-auto-workflow--strategy-run-directory))
+        (reports-dir (expand-file-name "reports"
+                                       (gptel-auto-workflow--strategy-run-directory))))
+    (make-directory run-dir t)
+    (make-directory reports-dir t)))
+
+(defun gptel-auto-workflow--write-evolution-summary (iteration candidates val-scores &optional timing)
+  "Append evolution summary rows for ITERATION to the summary file.
+CANDIDATES is a list of candidate plists with :name and :hypothesis.
+VAL-SCORES is a hash table mapping strategy name to avg score.
+Optional TIMING is a plist with :propose :bench :wall timing info."
+  (let* ((summary-file (gptel-auto-workflow--strategy-evolution-summary-path))
+         (frontier (gptel-auto-workflow--compute-strategy-frontier))
+         (best-strategy (car frontier))
+         (best-score (if best-strategy
+                         (let ((perf (gptel-auto-workflow--get-strategy-performance best-strategy)))
+                           (plist-get perf :avg-score))
+                       0)))
+    (make-directory (file-name-directory summary-file) t)
+    (with-temp-buffer
+      (when (file-exists-p summary-file)
+        (insert-file-contents summary-file))
+      (goto-char (point-max))
+      (dolist (candidate candidates)
+        (let* ((name (plist-get candidate :name))
+               (avg-val (or (gethash name val-scores) 0))
+               (row `(:iteration ,iteration
+                       :system ,name
+                       :avg_val ,avg-val
+                       :axis ,(plist-get candidate :axis)
+                       :hypothesis ,(plist-get candidate :hypothesis)
+                       :delta ,(- avg-val best-score)
+                       :outcome ,(format "%.2f (%.2f)" avg-val (- avg-val best-score))
+                       :components ,(plist-get candidate :components))))
+          (insert (json-encode row) "\n")))
+      (write-region (point-min) (point-max) summary-file))
+    (message "[strategy] Evolution summary written: %d candidate(s) for iteration %d"
+             (length candidates) iteration)))
+
 (defun gptel-auto-workflow--strategies-directory ()
   "Return the directory where prompt-building strategies are stored."
   (expand-file-name "assistant/strategies/prompt-builders"
@@ -132,8 +254,7 @@ Returns plist or nil if not found."
   "Record evaluation result for STRATEGY-NAME on TARGET.
 SCORE is the experiment score, OUTCOME is 'kept or 'discarded.
 Optional AXIS records the exploration axis used by the experiment."
-  (let ((file (expand-file-name gptel-auto-workflow--strategy-evaluations-file
-                                (gptel-auto-workflow--project-root))))
+  (let ((file (gptel-auto-workflow--strategy-results-file)))
     (make-directory (file-name-directory file) t)
     (with-temp-buffer
       (when (file-exists-p file)
@@ -153,8 +274,7 @@ Optional AXIS records the exploration axis used by the experiment."
 (defun gptel-auto-workflow--get-strategy-performance (strategy-name)
   "Get performance statistics for STRATEGY-NAME.
 Returns plist with :total :kept :success-rate :avg-score."
-  (let ((file (expand-file-name gptel-auto-workflow--strategy-evaluations-file
-                                (gptel-auto-workflow--project-root)))
+  (let ((file (gptel-auto-workflow--strategy-results-file))
         (total 0)
         (kept 0)
         (total-score 0.0))
@@ -363,6 +483,47 @@ Returns plist with :count :avg-prompt-size :avg-sections."
           :avg-sections (if (> (length entries) 0)
                            (/ total-sections (length entries))
                          0))))
+
+;;; Held-Out Test Set (Meta-Harness Anti-Overfitting)
+
+(defun gptel-auto-workflow--split-targets-search-test (targets &optional test-ratio)
+  "Split TARGETS into search and test sets.
+TEST-RATIO defaults to `gptel-auto-workflow--strategy-test-set-ratio'.
+Returns (search-set . test-set).
+When test-ratio is 0, all targets go to the search set."
+  (let* ((ratio (or test-ratio gptel-auto-workflow--strategy-test-set-ratio))
+         (n (length targets))
+         (test-n (max 1 (round (* n ratio))))
+         ;; Use deterministic shuffle based on target hash for reproducibility
+         (sorted (sort (copy-sequence targets) #'string<))
+         (search-set (if (> ratio 0)
+                         (butlast sorted test-n)
+                       sorted))
+         (test-set (if (> ratio 0)
+                       (last sorted test-n)
+                     '())))
+    (message "[strategy] Split %d targets: %d search, %d test (%.0f%% held out)"
+             n (length search-set) (length test-set) (* 100 ratio))
+    (cons search-set test-set)))
+
+(defun gptel-auto-workflow--is-test-set-target-p (target search-set)
+  "Return non-nil if TARGET is in the test set (not in SEARCH-SET)."
+  (not (member target search-set)))
+
+(defvar gptel-auto-workflow--strategy-active-search-set nil
+  "The current search set of targets used during evolution.
+Test-set targets are excluded from this list.")
+
+(defvar gptel-auto-workflow--strategy-active-test-set nil
+  "The current test set of targets held out from evolution.")
+
+(defun gptel-auto-workflow--filter-search-targets (targets)
+  "Return TARGETS filtered to only include search-set targets.
+Stores both sets in globals for later reference."
+  (let ((split (gptel-auto-workflow--split-targets-search-test targets)))
+    (setq gptel-auto-workflow--strategy-active-search-set (car split))
+    (setq gptel-auto-workflow--strategy-active-test-set (cdr split))
+    (car split)))
 
 ;;; Strategy Execution
 
