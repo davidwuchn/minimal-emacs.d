@@ -65,7 +65,10 @@ All shell commands have timeout protection to prevent deadlocks."
          (remote-source (format "%s/%s" remote source-branch))
          (remote-target (format "%s/%s" remote target-branch))
          (original-branch (gptel-auto-workflow--git-cmd
-                           "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
+                           "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main"))
+         (original-branch (and (stringp original-branch)
+                               (not (string-empty-p original-branch))
+                               original-branch)))
     (condition-case err
         (progn
           (gptel-auto-workflow--git-cmd (format "git fetch %s" remote) 180)
@@ -83,13 +86,15 @@ All shell commands have timeout protection to prevent deadlocks."
                 (gptel-auto-workflow--with-skipped-submodule-sync
                  (lambda ()
                    (gptel-auto-workflow--git-cmd (format "git push %s %s" remote target-branch))))
-                (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+                (when original-branch
+                  (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch)))
                 (message "[auto-workflow] %s %s to %s (%s -> %s)"
                          action-name target-branch source-branch
                          (gptel-auto-workflow--truncate-hash target-commit)
                          (gptel-auto-workflow--truncate-hash source-commit))))))
       (error
-       (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+       (when original-branch
+         (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch)))
        (message "[auto-workflow] Failed to %s %s to %s: %s" (downcase action-name) target-branch source-branch err)
        nil))))
 
