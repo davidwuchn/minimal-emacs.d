@@ -100,7 +100,7 @@ Each entry: (NAME :file FILE :test FUNCTION).")
       (when (not (equal result targets))
         (push "Nil proj-root should return targets unchanged" errors)
         (setq passed nil)))
-    
+
     ;; Test 4: JSON object input should extract and validate
     (let* ((json-obj '((file . "gptel-auto-workflow-strategic.el")))
            (targets '())
@@ -116,7 +116,7 @@ Each entry: (NAME :file FILE :test FUNCTION).")
       (when (or (not (listp result)) (not (member "gptel-auto-workflow-strategic.el" result)))
         (push "JSON object with string file key should extract and validate file" errors)
         (setq passed nil)))
-    
+
     ;; Test 5: Duplicate target should not be added
     (let* ((existing "gptel-auto-workflow-strategic.el")
            (targets (list existing))
@@ -125,7 +125,7 @@ Each entry: (NAME :file FILE :test FUNCTION).")
       (when (or (not (equal result targets)) (/= (length result) 1))
         (push "Duplicate target should not be added twice" errors)
         (setq passed nil)))
-    
+
     ;; Test 6: JSON object with non-string file value should return targets unchanged
     (let* ((targets '())
            (json-obj '((file . 123)))
@@ -133,7 +133,7 @@ Each entry: (NAME :file FILE :test FUNCTION).")
       (when (not (equal result targets))
         (push "JSON object with non-string file value should return targets unchanged" errors)
         (setq passed nil)))
-    
+
     ;; Test 7: JSON object with empty file value should return targets unchanged
     (let* ((targets '())
            (json-obj '((file . "")))
@@ -141,7 +141,7 @@ Each entry: (NAME :file FILE :test FUNCTION).")
       (when (not (equal result targets))
         (push "JSON object with empty file value should return targets unchanged" errors)
         (setq passed nil)))
-    
+
     (cons passed (nreverse errors))))
 
 (defun gptel-auto-workflow--run-behavioral-tests (changed-files)
