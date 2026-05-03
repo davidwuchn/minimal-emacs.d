@@ -86,6 +86,9 @@ gptel preset.")
 (defvar gptel-sandbox--missing-marker (make-symbol "gptel-sandbox-missing")
   "Sentinel value for detecting missing symbol lookups in sandbox env.")
 
+(defconst gptel-sandbox--error-prefix "Error: "
+  "Prefix for sandbox error result strings.")
+
 (defun gptel-sandbox--parse-forms (code)
   "Parse CODE into a list of Lisp forms."
   (let ((forms nil)
@@ -551,11 +554,11 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--format-error (message)
   "Format MESSAGE as a sandbox error string."
-  (format "Error: %s" message))
+  (concat gptel-sandbox--error-prefix message))
 
 (defun gptel-sandbox--error-result-p (value)
   "Return non-nil if VALUE is a sandbox error result string."
-  (and (stringp value) (string-prefix-p "Error: " value)))
+  (and (stringp value) (string-prefix-p gptel-sandbox--error-prefix value)))
 
 (defun gptel-sandbox--wrap-result (result)
   "Wrap RESULT for callback, avoiding double-wrapping of error strings."
