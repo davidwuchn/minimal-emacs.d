@@ -181,7 +181,8 @@ Adapts max-experiments based on API error rate."
       (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
                target best-score max-exp)
       (cl-labels ((run-next (exp-id)
-                    (when gptel-auto-experiment--quota-exhausted
+                     (gptel-auto-workflow--update-progress)
+                     (when gptel-auto-experiment--quota-exhausted
                       (message "[auto-workflow] Provider quota exhausted; stopping early for %s"
                                target)
                       (setq max-exp (min max-exp (1- exp-id))))
@@ -317,7 +318,7 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--messages-start-pos nil
   "Buffer position where the current workflow run's messages begin.")
 
-(defvar gptel-auto-workflow--max-stuck-minutes 30
+(defvar gptel-auto-workflow--max-stuck-minutes 90
   "Maximum minutes workflow can be stuck before auto-stopping.")
 
 (defcustom gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"
