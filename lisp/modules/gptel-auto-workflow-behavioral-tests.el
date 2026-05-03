@@ -18,6 +18,43 @@
 (declare-function gptel-auto-workflow--validate-and-add-target
                   "gptel-auto-workflow-strategic")
 
+(cl-defstruct (gptel-test-context
+               (:constructor gptel-test-context--create (passed errors))
+               (:copier nil))
+  "Test context for accumulating assertion results."
+  (passed t)
+  (errors nil))
+
+(defun gptel-test-context--make ()
+  "Create a fresh test context with empty error list."
+  (gptel-test-context--create t nil))
+
+(defun gptel-test-context--add-error (ctx msg)
+  "Record an error MSG in test context CTX and mark as failed."
+  (cl-check-type ctx gptel-test-context)
+  (cl-callf2 nconc (gptel-test-context--errors ctx) (list msg))
+  (setf (gptel-test-context--passed ctx) nil))
+
+(defun gptel-test-context--assert-equal (ctx expr expected)
+  "Assert in CTX that EXPR equals EXPECTED, record error on mismatch."
+  (cl-check-type ctx gptel-test-context)
+  (when (not (equal expr expected))
+    (gptel-test-context--add-error
+     ctx (format "expected %S, got %S" expected expr))))
+
+(defun gptel-test-context--assert-member (ctx expr item)
+  "Assert in CTX that ITEM is a member of EXPR list."
+  (cl-check-type ctx gptel-test-context)
+  (when (not (and (listp expr) (member item expr)))
+    (gptel-test-context--add-error
+     ctx (format "expected %S in result %S" item expr))))
+
+(defun gptel-test-context--result (ctx)
+  "Return final result alist from CTX: (passed . errors)."
+  (cl-check-type ctx gptel-test-context)
+  (cons (gptel-test-context--passed ctx)
+        (nreverse (gptel-test-context--errors ctx))))
+
 (defvar gptel-auto-workflow--behavioral-test-suite
   '(("json-target-extraction"
      :file "lisp/modules/gptel-auto-workflow-strategic.el"
@@ -30,67 +67,55 @@ Each entry: (NAME :file FILE :test FUNCTION).")
 
 (defun gptel-auto-workflow--test-json-target-extraction ()
   "Test that JSON target extraction handles both symbol and string keys."
-  (let ((passed t)
-        (errors nil))
-    (cl-macrolet ((assert-equal (expr expected &rest args)
-                                `(when (not (equal ,expr ,expected))
-                                   (push (format "expected %S, got %S" ,expected ,expr) errors)
-                                   (setq passed nil))))
-      (assert-equal (gptel-auto-workflow--json-target-file '((file . "lisp/modules/test.el") (priority . 1)))
-                    "lisp/modules/test.el")
-      (assert-equal (gptel-auto-workflow--json-target-file (list '("file" . "lisp/modules/test.el") '("priority" . 1)))
-                    "lisp/modules/test.el")
-      (assert-equal (gptel-auto-workflow--json-target-file '((path . "lisp/modules/test2.el")))
-                    "lisp/modules/test2.el")
-      (when (gptel-auto-workflow--json-target-file nil)
-        (push "nil input should return nil" errors)
-        (setq passed nil))
-      (when (gptel-auto-workflow--json-target-file '((file . 123)))
-        (push "non-string file value should return nil" errors)
-        (setq passed nil))
-      (when (gptel-auto-workflow--json-target-file '((other . "lisp/modules/test.el") (name . "test")))
-        (push "unknown keys should return nil" errors)
-        (setq passed nil)))
-    (cons passed (nreverse errors))))
+  (let ((ctx (gptel-test-context--make)))
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--json-target-file '((file . "lisp/modules/test.el") (priority . 1)))
+     "lisp/modules/test.el")
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--json-target-file (list '("file" . "lisp/modules/test.el") '("priority" . 1)))
+     "lisp/modules/test.el")
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--json-target-file '((path . "lisp/modules/test2.el")))
+     "lisp/modules/test2.el")
+    (when (gptel-auto-workflow--json-target-file nil)
+      (gptel-test-context--add-error ctx "nil input should return nil"))
+    (when (gptel-auto-workflow--json-target-file '((file . 123)))
+      (gptel-test-context--add-error ctx "non-string file value should return nil"))
+    (when (gptel-auto-workflow--json-target-file '((other . "lisp/modules/test.el") (name . "test")))
+      (gptel-test-context--add-error ctx "unknown keys should return nil"))
+    (gptel-test-context--result ctx)))
 
 (defun gptel-auto-workflow--test-validate-and-add-target ()
   "Test that validate-and-add-target handles edge cases correctly."
-  (let ((passed t)
-        (errors nil)
+  (let ((ctx (gptel-test-context--make))
         (test-root (expand-file-name "lisp/modules/" user-emacs-directory)))
-    (cl-macrolet ((assert-equal (expr expected &rest args)
-                                `(when (not (equal ,expr ,expected))
-                                   (push (format "expected %S, got %S" ,expected ,expr) errors)
-                                   (setq passed nil)))
-                 (assert-member (expr item &rest args)
-                                `(when (not (and (listp ,expr) (member ,item ,expr)))
-                                   (push (format "expected %S in result %S" ,item ,expr) errors)
-                                   (setq passed nil))))
-      (assert-equal (gptel-auto-workflow--validate-and-add-target 123 test-root '("existing.el"))
-                    '("existing.el"))
-      (assert-equal (gptel-auto-workflow--validate-and-add-target "test.el" "" '("existing.el"))
-                    '("existing.el"))
-      (assert-equal (gptel-auto-workflow--validate-and-add-target "test.el" nil '("existing.el"))
-                    '("existing.el"))
-      (let ((result (gptel-auto-workflow--validate-and-add-target
-                     '((file . "gptel-auto-workflow-strategic.el")) test-root '())))
-        (when (or (not (listp result)) (not (member "gptel-auto-workflow-strategic.el" result)))
-          (push "JSON object should extract and validate file" errors)
-          (setq passed nil)))
-      (let ((result (gptel-auto-workflow--validate-and-add-target
-                     (list (cons "file" "gptel-auto-workflow-strategic.el")) test-root '())))
-        (when (or (not (listp result)) (not (member "gptel-auto-workflow-strategic.el" result)))
-          (push "JSON object with string key should extract and validate" errors)
-          (setq passed nil)))
-      (assert-equal (gptel-auto-workflow--validate-and-add-target
-                     (expand-file-name "gptel-auto-workflow-strategic.el" test-root)
-                     test-root (list "gptel-auto-workflow-strategic.el"))
-                    (list "gptel-auto-workflow-strategic.el"))
-      (assert-equal (gptel-auto-workflow--validate-and-add-target '((file . 123)) test-root '())
-                    '())
-      (assert-equal (gptel-auto-workflow--validate-and-add-target '((file . "")) test-root '())
-                    '()))
-    (cons passed (nreverse errors))))
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--validate-and-add-target 123 test-root '("existing.el"))
+     '("existing.el"))
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--validate-and-add-target "test.el" "" '("existing.el"))
+     '("existing.el"))
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--validate-and-add-target "test.el" nil '("existing.el"))
+     '("existing.el"))
+    (let ((result (gptel-auto-workflow--validate-and-add-target
+                   '((file . "gptel-auto-workflow-strategic.el")) test-root '())))
+      (gptel-test-context--assert-member ctx result "gptel-auto-workflow-strategic.el"))
+    (let ((result (gptel-auto-workflow--validate-and-add-target
+                   (list (cons "file" "gptel-auto-workflow-strategic.el")) test-root '())))
+      (gptel-test-context--assert-member ctx result "gptel-auto-workflow-strategic.el"))
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--validate-and-add-target
+          (expand-file-name "gptel-auto-workflow-strategic.el" test-root)
+          test-root (list "gptel-auto-workflow-strategic.el"))
+     (list "gptel-auto-workflow-strategic.el"))
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--validate-and-add-target '((file . 123)) test-root '())
+     '())
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--validate-and-add-target '((file . "")) test-root '())
+     '())
+    (gptel-test-context--result ctx)))
 
 (defun gptel-auto-workflow--run-behavioral-tests (changed-files)
   "Run behavioral tests relevant to CHANGED-FILES.
