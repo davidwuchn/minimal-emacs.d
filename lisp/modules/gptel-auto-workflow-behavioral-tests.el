@@ -59,6 +59,20 @@ Each entry: (NAME :file FILE :test FUNCTION).")
         (push "Nil handling failed" errors)
         (setq passed nil)))
     
+    ;; Test 5: Non-string value for file key should return nil (defensive)
+    (let* ((nonstring-data '((file . 123)))
+           (result (gptel-auto-workflow--json-target-file nonstring-data)))
+      (when result
+        (push "Non-string file value should return nil" errors)
+        (setq passed nil)))
+    
+    ;; Test 6: Missing recognized keys should return nil
+    (let* ((unknown-keys '((other . "lisp/modules/test.el") (name . "test")))
+           (result (gptel-auto-workflow--json-target-file unknown-keys)))
+      (when result
+        (push "Unknown keys should return nil" errors)
+        (setq passed nil)))
+    
     (cons passed (nreverse errors))))
 
 (defun gptel-auto-workflow--test-validate-and-add-target ()
@@ -102,6 +116,22 @@ Each entry: (NAME :file FILE :test FUNCTION).")
                     (expand-file-name existing test-root) test-root targets)))
       (when (or (not (equal result targets)) (/= (length result) 1))
         (push "Duplicate target should not be added twice" errors)
+        (setq passed nil)))
+    
+    ;; Test 6: JSON object with non-string file value should return targets unchanged
+    (let* ((targets '())
+           (json-obj '((file . 123)))
+           (result (gptel-auto-workflow--validate-and-add-target json-obj test-root targets)))
+      (when (not (equal result targets))
+        (push "JSON object with non-string file value should return targets unchanged" errors)
+        (setq passed nil)))
+    
+    ;; Test 7: JSON object with empty file value should return targets unchanged
+    (let* ((targets '())
+           (json-obj '((file . "")))
+           (result (gptel-auto-workflow--validate-and-add-target json-obj test-root targets)))
+      (when (not (equal result targets))
+        (push "JSON object with empty file value should return targets unchanged" errors)
         (setq passed nil)))
     
     (cons passed (nreverse errors))))
