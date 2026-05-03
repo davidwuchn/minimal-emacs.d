@@ -349,10 +349,10 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
       (dotimes (i (length messages))
         (let* ((msg (aref messages i))
                (tool-calls (plist-get msg :tool_calls)))
-          (when tool-calls
+          (when (and tool-calls (sequencep tool-calls) (> (length tool-calls) 0))
             (dotimes (j (length tool-calls))
               (let* ((tc (seq-elt tool-calls j))
-                     (func (plist-get tc :function))
+                     (func (and tc (plist-get tc :function)))
                      (name (and func (plist-get func :name))))
                 (when name
                   (puthash name t used-names)))))))
