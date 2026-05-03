@@ -60,8 +60,9 @@ Tries multiple patterns in order:
 
 (defun gptel-auto-experiment--summarize (hypothesis)
   "Create short summary of HYPOTHESIS."
-  (let ((words (split-string hypothesis)))
-    (string-join (cl-subseq words 0 (min 6 (length words))) " ")))
+  (when (stringp hypothesis)
+    (let ((words (split-string hypothesis)))
+      (string-join (cl-subseq words 0 (min 6 (length words))) " "))))
 
 (defvar gptel-auto-experiment-max-validation-retries 1
   "Maximum retries when validation fails due to teachable patterns.
