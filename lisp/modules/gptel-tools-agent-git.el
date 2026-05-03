@@ -30,15 +30,16 @@ jobs)."
             (failed 0))
         (dolist (orphan orphans)
           (let ((hash (car orphan)))
-            (pcase (gptel-auto-workflow--cherry-pick-orphan hash)
-              ('conflict
-               (gptel-auto-workflow--untrack-commit hash)
-               (cl-incf conflicted))
-              ((pred identity)
-               (gptel-auto-workflow--untrack-commit hash)
-               (cl-incf recovered))
-              (_
-               (cl-incf failed)))))
+            (when (and (stringp hash) (not (string-empty-p hash)))
+              (pcase (gptel-auto-workflow--cherry-pick-orphan hash)
+                ('conflict
+                 (gptel-auto-workflow--untrack-commit hash)
+                 (cl-incf conflicted))
+                ((pred identity)
+                 (gptel-auto-workflow--untrack-commit hash)
+                 (cl-incf recovered))
+                (_
+                 (cl-incf failed))))))
         (message "[auto-workflow] Recovered %d/%d orphans to staging"
                  recovered (length orphans))
         (when (> conflicted 0)
