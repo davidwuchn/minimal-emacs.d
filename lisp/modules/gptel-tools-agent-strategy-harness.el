@@ -12,7 +12,22 @@
 ;;   Returns: prompt string
 ;;
 ;;   (defun strategy-<name>-get-metadata ())
-;;   Returns: plist with :name :version :hypothesis :axis :created :parent-strategies
+;;   Returns: plist with :name :version :hypothesis :axis :created :parent-strategies :components
+;;
+;; Extended Interface (optional methods for stateful strategies):
+;;   (defun strategy-<name>-analyze-results (target experiment-result)
+;;   Optional. Analyze experiment results to inform future strategy behavior.
+;;   Called after each experiment completes. EXPERIMENT-RESULT is a plist with
+;;   :target :decision :score-after :exploration-axis :comparator-reason.
+;;   Returns nil (side-effect only: updates strategy state).
+;;
+;;   (defun strategy-<name>-get-state ()
+;;   Optional. Return a JSON-serializable value representing current strategy state.
+;;   Used for persistence across daemon restarts. Returns nil if stateless.
+;;
+;;   (defun strategy-<name>-set-state (state)
+;;   Optional. Restore strategy state from a previous get-state call.
+;;   STATE is the same JSON value returned by get-state.
 
 (require 'cl-lib)
 (require 'json)
@@ -247,6 +262,52 @@ Returns plist or nil if not found."
 (defun gptel-auto-workflow--get-strategy-build-fn (name)
   "Get the build function for strategy NAME."
   (plist-get (gethash name gptel-auto-workflow--strategy-registry) :build))
+
+;;; Extended Strategy Interface (Meta-Harness Stateful Harness)
+
+(defun gptel-auto-workflow--strategy-analyze-results (name target experiment-result)
+  "Call the optional analyze-results method on strategy NAME.
+EXPERIMENT-RESULT is a plist with :decision :score-after :exploration-axis.
+Returns nil (silently no-ops if method not defined by strategy)."
+  (let* ((analyze-fn (intern (format "strategy-%s-analyze-results" name))))
+    (when (fboundp analyze-fn)
+      (condition-case err
+          (funcall analyze-fn target experiment-result)
+        (error (message "[strategy] analyze-results error for %s: %s" name err))))))
+
+(defun gptel-auto-workflow--strategy-get-state (name)
+  "Get serializable state from strategy NAME.
+Returns JSON value or nil if strategy is stateless or method not defined."
+  (let* ((state-fn (intern (format "strategy-%s-get-state" name))))
+    (when (fboundp state-fn)
+      (condition-case err
+          (funcall state-fn)
+        (error (message "[strategy] get-state error for %s: %s" name err)
+               nil)))))
+
+(defun gptel-auto-workflow--strategy-set-state (name state)
+  "Restore STATE into strategy NAME.
+Returns nil (silently no-ops if method not defined)."
+  (let* ((state-fn (intern (format "strategy-%s-set-state" name))))
+    (when (fboundp state-fn)
+      (condition-case err
+          (funcall state-fn state)
+        (error (message "[strategy] set-state error for %s: %s" name err))))))
+
+(defun gptel-auto-workflow--strategy-persist-all-states ()
+  "Persist states for all registered strategies to their metadata files.
+Call after experiments to save accumulated learnings."
+  (maphash
+   (lambda (name _entry)
+     (let ((state (gptel-auto-workflow--strategy-get-state name)))
+       (when state
+         (let ((metadata (gethash name gptel-auto-workflow--strategy-registry)))
+           (when metadata
+             (gptel-auto-workflow--persist-strategy-metadata
+              name
+              (append (plist-get metadata :metadata)
+                      (list :state state))))))))
+   gptel-auto-workflow--strategy-registry))
 
 ;;; Strategy Evaluation Tracking
 
