@@ -872,10 +872,11 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
           (my/gptel--cache-context-window model-id cw)
           cw)))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
-             (cw (plist-get meta :context-window)))
+             (cw (and meta (plist-get meta :context-window))))
         (cond
          ((my/gptel--positive-integer-p cw)
           (my/gptel--cache-context-window model-id cw))
+         (meta my/gptel-default-context-window)
          (t nil))))
      (t my/gptel-default-context-window))))
 
