@@ -152,7 +152,8 @@ gptel preset.")
     (list binding nil))
    ((and (consp binding)
          (symbolp (car binding))
-         (null (cddr binding)))
+         (or (null (cddr binding))
+             (not (consp (cddr binding)))))
     binding)
    (t
     (error "Invalid binding in Programmatic sandbox: %S" binding))))
@@ -589,12 +590,12 @@ can consume lists, vectors, plists, and alists as readable data."
     (unless tool-spec
       (error "Unknown tool %s requested by Programmatic" tool-name))
     (let ((arg-values (gptel-sandbox--resolve-tool-args tool-spec arg-forms env)))
-    (gptel-sandbox--check-tool tool-name tool-spec arg-values)
-    (cl-incf (plist-get state :tool-count))
-    (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
-      (error "Programmatic exceeded max nested tool calls (%d)"
-             my/gptel-programmatic-max-tool-calls))
-    (condition-case err
+      (gptel-sandbox--check-tool tool-name tool-spec arg-values)
+      (cl-incf (plist-get state :tool-count))
+      (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
+        (error "Programmatic exceeded max nested tool calls (%d)"
+               my/gptel-programmatic-max-tool-calls))
+      (condition-case err
         (let ((invoke-tool
                (lambda ()
                  (if (gptel-tool-async tool-spec)
