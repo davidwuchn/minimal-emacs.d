@@ -615,7 +615,9 @@ that function locally."
                              "state corruption"))
                      review-output)))
               (worktree (car (gptel-auto-workflow--branch-worktree-paths optimize-branch)))
-              (changed-files (gptel-auto-workflow--worktree-tip-changed-elisp-files worktree)))
+              (changed-files (and worktree
+                                  (gptel-auto-workflow--worktree-tip-changed-elisp-files
+                                   worktree))))
     (when (cl-some
            (lambda (relative-file)
              (gptel-auto-workflow--file-defines-function-p
