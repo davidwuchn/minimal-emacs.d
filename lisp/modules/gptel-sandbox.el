@@ -398,7 +398,7 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--truncate-summary (value &optional width)
   "Return a compact printable summary of VALUE up to WIDTH chars."
-  (let* ((width (or width 80))
+  (let* ((width (if (and (integerp width) (>= width 1)) width 80))
          (text (prin1-to-string value)))
     (if (> (length text) width)
         (concat (substring text 0 width) "...")
@@ -562,19 +562,14 @@ can consume lists, vectors, plists, and alists as readable data."
            (print-circle t))
        (pp-to-string value))))))
 
-(defun gptel-sandbox--format-tool-result (result)
-  "Format RESULT from a tool call into a sandbox result string."
-  (gptel-sandbox--format-result result))
-
 (defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
   (let* ((tool-spec (if (fboundp 'gptel-get-tool)
                         (gptel-get-tool tool-name)
-                      nil))
-         (arg-values (and tool-spec
-                          (gptel-sandbox--resolve-tool-args tool-spec arg-forms env))))
+                      nil)))
     (unless tool-spec
       (error "Unknown tool %s requested by Programmatic" tool-name))
+    (let ((arg-values (gptel-sandbox--resolve-tool-args tool-spec arg-forms env)))
     (gptel-sandbox--check-tool tool-name tool-spec arg-values)
     (cl-incf (plist-get state :tool-count))
     (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
@@ -587,16 +582,16 @@ can consume lists, vectors, plists, and alists as readable data."
                      (apply (gptel-tool-function tool-spec)
                             (lambda (result)
                               (condition-case cb-err
-                                  (funcall callback (gptel-sandbox--format-tool-result result))
+                                  (funcall callback (gptel-sandbox--format-result result))
                                 (error (funcall callback
-                                                (gptel-sandbox--format-tool-result
+                                                (gptel-sandbox--format-result
                                                  (gptel-sandbox--format-error
                                                   (error-message-string cb-err)))))))
                             arg-values)
                    (let ((result (condition-case inner-err
                                      (apply (gptel-tool-function tool-spec) arg-values)
                                    (error (gptel-sandbox--format-error (error-message-string inner-err))))))
-                     (funcall callback (gptel-sandbox--format-tool-result result)))))))
+                     (funcall callback (gptel-sandbox--format-result result)))))))
           (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
               (gptel-sandbox--maybe-aggregate-confirm
                state
@@ -615,7 +610,7 @@ can consume lists, vectors, plists, and alists as readable data."
                             "Error: Programmatic aggregate preview rejected by user"))))
             (funcall invoke-tool)))
       (error
-       (funcall callback (gptel-sandbox--format-error (error-message-string err)))))))
+       (funcall callback (gptel-sandbox--format-error (error-message-string err))))))))
 
 (defun gptel-sandbox--eval-statement (statement env state callback)
   "Evaluate sandbox STATEMENT with ENV and STATE, then CALLBACK.

@@ -406,7 +406,8 @@ Some gptel model tables encode context windows in *thousands* of tokens as float
 
 (defun my/gptel--cache-context-window (model-id cw)
   "Cache CW for MODEL-ID if positive integer. Return CW."
-  (when (my/gptel--positive-integer-p cw)
+  (when (and (stringp model-id) (not (string-empty-p model-id))
+             (my/gptel--positive-integer-p cw))
     (puthash model-id cw my/gptel--context-window-cache))
   cw)
 
@@ -446,12 +447,15 @@ and a positive integer context_length; otherwise returns nil."
   "Estimate total token count: text (CHARS) + images in context.
 
 Text estimation uses language-aware heuristics.
-Image tokens are counted from `gptel-context' if available."
-  (let ((text-tokens (my/gptel--estimate-text-tokens chars))
-        (image-tokens (if (fboundp 'my/gptel--count-context-image-tokens)
-                          (my/gptel--count-context-image-tokens)
-                        0)))
-    (+ text-tokens image-tokens)))
+Image tokens are counted from `gptel-context' if available.
+Returns 0.0 if CHARS is not a positive number."
+  (if (not (and (numberp chars) (> chars 0)))
+      0.0
+    (let ((text-tokens (my/gptel--estimate-text-tokens chars))
+          (image-tokens (if (fboundp 'my/gptel--count-context-image-tokens)
+                            (my/gptel--count-context-image-tokens)
+                          0)))
+      (+ text-tokens image-tokens))))
 
 ;;; Cache Persistence
 
