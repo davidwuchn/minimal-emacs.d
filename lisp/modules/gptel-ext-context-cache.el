@@ -427,7 +427,7 @@ and a positive integer context_length; otherwise returns nil."
   (when (consp entry)
     (let ((id (alist-get 'id entry))
           (cw (alist-get 'context_length entry)))
-      (and (stringp id) (integerp cw) (> cw 0)
+      (and (stringp id) (not (string-empty-p id)) (integerp cw) (> cw 0)
            (cons id cw)))))
 
 (defun my/gptel--estimate-text-tokens (chars)
