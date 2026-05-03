@@ -468,7 +468,7 @@ least `gptel-auto-experiment-repeat-focus-threshold' previous attempts."
       (let ((counts (make-hash-table :test 'equal))
             matches)
         (dolist (result previous-results)
-          (unless (gptel-auto-workflow--plist-get result :kept nil)
+          (when (and result (not (gptel-auto-workflow--plist-get result :kept nil)))
             (dolist (symbol
                      (gptel-auto-experiment--extract-focus-symbols
                       (gptel-auto-workflow--plist-get result :agent-output "")))

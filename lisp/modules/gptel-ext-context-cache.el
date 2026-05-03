@@ -319,7 +319,7 @@ Returns the cdr (value) of the matching entry, or nil if no match.
 Matches if the alist key is a prefix of SEARCH-STR.
 When multiple entries match, returns the one with the longest key for most specific match.
 Results are cached in `my/gptel--alist-partial-match-cache' for performance."
-  (when (and (consp alist) (stringp search-str) (not (string-empty-p search-str)))
+  (when (and alist (listp alist) (stringp search-str) (not (string-empty-p search-str)))
     (let* ((alist-id (sxhash alist))
            (cache-key (cons alist-id search-str)))
       (or (gethash cache-key my/gptel--alist-partial-match-cache)
