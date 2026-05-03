@@ -276,8 +276,11 @@ Extracts :code/:status from error-data to enable HTTP status checks."
       (my/gptel--transient-error-p error-data http-status))))
 
 (defun gptel-agent-loop--maybe-cache-get (agent-type prompt)
-  "Return cached subagent result for AGENT-TYPE and PROMPT if available."
-  (when (fboundp 'my/gptel--subagent-cache-get)
+  "Return cached subagent result for AGENT-TYPE and PROMPT if available.
+Returns nil if PROMPT is not a valid string to prevent incorrect
+cache entries based on empty strings."
+  (when (and (stringp prompt)
+             (fboundp 'my/gptel--subagent-cache-get))
     (my/gptel--subagent-cache-get agent-type prompt)))
 
 (defun gptel-agent-loop--maybe-cache-put (state result)
