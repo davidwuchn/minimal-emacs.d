@@ -299,13 +299,17 @@ Single constant avoids allocating a new symbol on every search call.")
 (defun my/gptel--cache-or-alist-lookup (hash-table alist key)
   "Look up KEY in HASH-TABLE, falling back to ALIST partial match.
 Returns the value from hash table if found, otherwise searches ALIST
-for a partial match (case-insensitive).  Returns nil if not found."
+for a partial match (case-insensitive).  Returns nil if not found.
+Handles negative cache hits when KEY maps to a miss sentinel."
   (if (and (hash-table-p hash-table) (stringp key) (not (string-empty-p key)))
       (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
-        (if (eq hash-value my/gptel--cache-sentinel)
-            (and (listp alist)
-                 (my/gptel--alist-partial-match alist key))
-          hash-value))
+        (cond
+         ((eq hash-value my/gptel--cache-sentinel)
+          (and (listp alist)
+               (my/gptel--alist-partial-match alist key)))
+         ((eq hash-value my/gptel--context-window-miss-sentinel)
+          nil)
+         (t hash-value)))
     (and (listp alist) (my/gptel--alist-partial-match alist key))))
 
 
@@ -351,11 +355,16 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
   "Sentinel for negative cache hits in gptel table lookups.
 Avoids re-iterating tables for models that are not present.")
 
+(defconst my/gptel--context-window-miss-sentinel (make-symbol "context-window-miss")
+  "Sentinel for negative cache hits in main context-window cache.
+Avoids redundant lookups when model is known to be absent from gptel tables.")
+
 (defun my/gptel--lookup-context-window-in-gptel-tables (model)
   "Look up context window for MODEL in gptel's built-in model tables.
 Returns the context window in tokens, or nil if not found.
 Handles both symbol and string model identifiers with case-insensitive fallback.
-Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scans."
+Caches results in `my/gptel--gptel-tables-cw-cache' and `my/gptel--context-window-cache'
+to avoid repeated table scans and redundant lookups."
   (when (or (stringp model) (symbolp model))
     (let ((model-str (if (stringp model) model (symbol-name model))))
       (when (and (stringp model-str) (not (string-empty-p model-str)))
@@ -374,8 +383,10 @@ Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scan
                                           (when (and (integerp cw) (> cw 0))
                                             (throw 'found cw))))))))
                               nil)))
-                (puthash model-str (or result my/gptel--gptel-tables-miss-sentinel)
-                         my/gptel--gptel-tables-cw-cache)
+                (if result
+                    (puthash model-str result my/gptel--gptel-tables-cw-cache)
+                  (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache)
+                  (puthash model-str my/gptel--context-window-miss-sentinel my/gptel--context-window-cache))
                 result))))))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
@@ -865,20 +876,13 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        my/gptel--known-model-context-windows
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
-        (cond
-         ((null cw)
-          (puthash model-id my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache)
-          nil)
-         ((my/gptel--positive-integer-p cw)
+        (when (my/gptel--positive-integer-p cw)
           (puthash model-id cw my/gptel--gptel-tables-cw-cache)
-          (my/gptel--cache-context-window model-id cw))
-         (t nil))))
+          (my/gptel--cache-context-window model-id cw))))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
              (cw (my/gptel--plist-get meta :context-window)))
-        (cond
-         ((my/gptel--positive-integer-p cw)
-          (my/gptel--cache-context-window model-id cw))
-         (t nil))))
+        (when (my/gptel--positive-integer-p cw)
+          (my/gptel--cache-context-window model-id cw))))
      (t my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
