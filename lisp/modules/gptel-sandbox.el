@@ -378,7 +378,12 @@ supports a small, explicit whitelist of pure operations."
           (push (gptel-sandbox--eval-expr value-form env) values)))))))
 
 (defun gptel-sandbox--normalize-tool-name (tool-name)
-  "Convert TOOL-NAME to string representation."
+  "Convert TOOL-NAME to string representation.
+Signals an error if TOOL-NAME is nil or neither a symbol nor string."
+  (unless tool-name
+    (error "Programmatic tool name cannot be nil"))
+  (unless (or (symbolp tool-name) (stringp tool-name))
+    (error "Programmatic tool name must be a symbol or string, got: %S" tool-name))
   (if (symbolp tool-name)
       (symbol-name tool-name)
     tool-name))
