@@ -118,6 +118,8 @@ gptel preset.")
 
 (defun gptel-sandbox--copy-env (env)
   "Return a shallow copy of ENV."
+  (unless (hash-table-p env)
+    (error "Programmatic sandbox copy-env requires a hash table environment, got: %S" env))
   (let ((copy (make-hash-table :test #'eq)))
     (maphash (lambda (key value)
                (puthash key value copy))
@@ -126,6 +128,8 @@ gptel preset.")
 
 (defun gptel-sandbox--bind-result (symbol value env)
   "Bind SYMBOL to VALUE in ENV, also updating `_` and `it`."
+  (unless (hash-table-p env)
+    (error "Programmatic sandbox bind-result requires a hash table environment, got: %S" env))
   (unless (symbolp symbol)
     (error "Binding target must be a symbol, got: %S" symbol))
   (when (null symbol)
@@ -136,6 +140,8 @@ gptel preset.")
 
 (defun gptel-sandbox--bind-last-value (value env)
   "Bind VALUE to last-result placeholders `_` and `it` in ENV."
+  (unless (hash-table-p env)
+    (error "Programmatic sandbox bind-last-value requires a hash table environment, got: %S" env))
   (puthash '_ value env)
   (puthash 'it value env))
 
@@ -264,6 +270,8 @@ Used by `and' and `or' to share short-circuit evaluation logic."
 (defun gptel-sandbox--apply-builtin (func args env)
   "Apply built-in function FUNC to evaluated ARGS in ENV.
 Errors propagate to the outer condition-case in `execute-tool'."
+  (unless (functionp func)
+    (error "Programmatic builtin requires a function, got: %S" func))
   (apply func (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args)))
 
 (defun gptel-sandbox--eval-expr (expr env)

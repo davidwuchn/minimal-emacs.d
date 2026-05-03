@@ -136,6 +136,29 @@ while effectively disabling the limit for unknown models.
 ASSUMPTION: No model will ever produce a payload exceeding this limit.
 TEST: Can be grepped to find all fallback limit usages.")
 
+(defun my/gptel--compute-trim-keep-count (info retry-count)
+  "Compute how many tool results to keep based on RETRY-COUNT and settings.
+INFO is the FSM info plist.  RETRY-COUNT is the current retry count.
+
+Returns max(0, `my/gptel-retry-keep-recent-tool-results' - RETRY-COUNT).
+When `my/gptel-retry-keep-recent-tool-results' is nil, returns 0.
+
+BEHAVIOR: keep count decreases with each retry:
+  retry 0: keep default value
+  retry 1: keep default-1
+  retry 2+: keep 0 (truncate all)"
+  (let* ((raw-retries (or retry-count (plist-get info :retries) 1))
+         (retries (if (and (numberp raw-retries) (>= raw-retries 0))
+                      raw-retries
+                    0)))
+    (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries))))
+
+(defun my/gptel--should-trim-p (info force-trim-p)
+  "Return non-nil if tool-result trimming should proceed.
+INFO is the FSM info plist.  FORCE-TRIM-P bypasses user preference.
+Returns nil if trimming is disabled (unless FORCE-TRIM-P is set)."
+  (and info (or force-trim-p my/gptel-retry-keep-recent-tool-results)))
+
 (defun my/gptel--trim-tool-results-for-retry (info &optional retry-count force-trim-p)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
@@ -162,16 +185,15 @@ has disabled retry trimming (nil). This allows pre-send compaction to work
 independently of retry settings.
 
 Returns the number of messages truncated, or 0 if nothing was done."
-  (if (or (null info) (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p)))
+  (if (not (my/gptel--should-trim-p info force-trim-p))
       0
     (let* ((data (plist-get info :data))
            (messages (and data (plist-get data :messages)))
-           (retries (or retry-count (plist-get info :retries) 1))
-           (keep (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries)))
+           (keep (my/gptel--compute-trim-keep-count info retry-count))
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
            (bytes-saved 0))
-      (when (and messages (plusp (length messages)))
+      (when (and messages (> (length messages) 0))
         (let ((tool-indices
                (my/gptel--collect-message-indices
                 messages
@@ -208,12 +230,11 @@ tool-output history.
 
 Returns the number of function-response parts truncated, or 0 if nothing was
 done."
-  (if (or (null info) (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p)))
+  (if (not (my/gptel--should-trim-p info force-trim-p))
       0
     (let* ((data (plist-get info :data))
            (contents (and data (plist-get data :contents)))
-           (retries (or retry-count (plist-get info :retries) 1))
-           (keep (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries)))
+           (keep (my/gptel--compute-trim-keep-count info retry-count))
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
            (bytes-saved 0)
@@ -425,8 +446,12 @@ ASSUMPTION: Role values are strings, compared with `equal'."
 (defun my/gptel--collect-message-indices (messages predicate)
   "Collect indices of messages in MESSAGES vector matching PREDICATE.
 PREDICATE is a function that takes a message plist and returns non-nil if it matches.
-Returns a list of indices in ascending order."
-  (when (and (vectorp messages) (> (length messages) 0))
+Returns a list of indices in ascending order, or nil if PREDICATE is not a function.
+ASSUMPTION: PREDICATE is a valid function; nil or non-function returns nil immediately.
+EDGE CASE: Non-function predicate returns nil (no runtime error)."
+  (when (and (functionp predicate)
+             (vectorp messages)
+             (> (length messages) 0))
     (cl-loop for i from 0 below (length messages)
              for msg = (aref messages i)
              when (funcall predicate msg)
@@ -515,6 +540,13 @@ ASSUMPTION: Error messages can be in :message (plist) or 'message (alist) keys."
          (cdr (assq 'message error-data))))
     (t nil)))
 
+(defun my/gptel--pattern-if-bound (pattern-symbol)
+  "Return the value of PATTERN-SYMBOL if bound and a string, else nil.
+Guards against unbound variables and type mismatches during load order issues."
+  (and (boundp pattern-symbol)
+       (stringp (symbol-value pattern-symbol))
+       (symbol-value pattern-symbol)))
+
 (defun my/gptel--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error.
 Matches network failures, overload responses, rate limits, and common
@@ -537,6 +569,7 @@ EDGE CASE: Misleading success codes can still accompany application-level
   transient errors after the FSM has already entered `ERRS', so plist message
   patterns are checked for any status except known auth failures
   (see `my/gptel--auth-failure-statuses').
+EDGE CASE: Pattern variables may be nil during load order issues; guards prevent errors.
 
 TEST: (my/gptel--transient-error-p \"Malformed JSON\" 500) => t
 TEST: (my/gptel--transient-error-p \"Invalid API key\" 401) => nil
@@ -545,24 +578,28 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
                   ((stringp http-status) (string-to-number http-status))
                   ((numberp http-status) http-status)
                   (t nil)))
-         (error-msg (my/gptel--extract-error-message error-data)))
+         (error-msg (my/gptel--extract-error-message error-data))
+         (string-pattern (my/gptel--pattern-if-bound 'my/gptel--transient-error-string-patterns))
+         (http-400-pattern (my/gptel--pattern-if-bound 'my/gptel--transient-http-400-patterns))
+         (msg-pattern (my/gptel--pattern-if-bound 'my/gptel--transient-error-message-patterns)))
     (or (and (stringp error-data)
-             (string-match-p my/gptel--transient-error-string-patterns
-                             (downcase error-data)))
+             string-pattern
+             (string-match-p string-pattern (downcase error-data)))
         (and (symbolp error-data)
-             (string-match-p my/gptel--transient-error-string-patterns
-                             (downcase (symbol-name error-data))))
+             string-pattern
+             (string-match-p string-pattern (downcase (symbol-name error-data))))
         (and (numberp status) (memq status my/gptel--transient-http-statuses))
         (and (numberp status)
              (= status 400)
              (listp error-data)
              (stringp error-msg)
-             (string-match-p my/gptel--transient-http-400-patterns error-msg))
+             http-400-pattern
+             (string-match-p http-400-pattern error-msg))
         (and (listp error-data)
              (stringp error-msg)
              (or (null status) (not (memq status my/gptel--auth-failure-statuses)))
-             (string-match-p my/gptel--transient-error-message-patterns
-                             (downcase error-msg))))))
+             msg-pattern
+             (string-match-p msg-pattern (downcase error-msg))))))
 
 (defun my/gptel--cleanup-partial-insertion (info)
   "Remove partial buffer text inserted before a failed request.

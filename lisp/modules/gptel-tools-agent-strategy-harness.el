@@ -12,7 +12,22 @@
 ;;   Returns: prompt string
 ;;
 ;;   (defun strategy-<name>-get-metadata ())
-;;   Returns: plist with :name :version :hypothesis :axis :created :parent-strategies
+;;   Returns: plist with :name :version :hypothesis :axis :created :parent-strategies :components
+;;
+;; Extended Interface (optional methods for stateful strategies):
+;;   (defun strategy-<name>-analyze-results (target experiment-result)
+;;   Optional. Analyze experiment results to inform future strategy behavior.
+;;   Called after each experiment completes. EXPERIMENT-RESULT is a plist with
+;;   :target :decision :score-after :exploration-axis :comparator-reason.
+;;   Returns nil (side-effect only: updates strategy state).
+;;
+;;   (defun strategy-<name>-get-state ()
+;;   Optional. Return a JSON-serializable value representing current strategy state.
+;;   Used for persistence across daemon restarts. Returns nil if stateless.
+;;
+;;   (defun strategy-<name>-set-state (state)
+;;   Optional. Restore strategy state from a previous get-state call.
+;;   STATE is the same JSON value returned by get-state.
 
 (require 'cl-lib)
 (require 'json)
@@ -247,6 +262,52 @@ Returns plist or nil if not found."
 (defun gptel-auto-workflow--get-strategy-build-fn (name)
   "Get the build function for strategy NAME."
   (plist-get (gethash name gptel-auto-workflow--strategy-registry) :build))
+
+;;; Extended Strategy Interface (Meta-Harness Stateful Harness)
+
+(defun gptel-auto-workflow--strategy-analyze-results (name target experiment-result)
+  "Call the optional analyze-results method on strategy NAME.
+EXPERIMENT-RESULT is a plist with :decision :score-after :exploration-axis.
+Returns nil (silently no-ops if method not defined by strategy)."
+  (let* ((analyze-fn (intern (format "strategy-%s-analyze-results" name))))
+    (when (fboundp analyze-fn)
+      (condition-case err
+          (funcall analyze-fn target experiment-result)
+        (error (message "[strategy] analyze-results error for %s: %s" name err))))))
+
+(defun gptel-auto-workflow--strategy-get-state (name)
+  "Get serializable state from strategy NAME.
+Returns JSON value or nil if strategy is stateless or method not defined."
+  (let* ((state-fn (intern (format "strategy-%s-get-state" name))))
+    (when (fboundp state-fn)
+      (condition-case err
+          (funcall state-fn)
+        (error (message "[strategy] get-state error for %s: %s" name err)
+               nil)))))
+
+(defun gptel-auto-workflow--strategy-set-state (name state)
+  "Restore STATE into strategy NAME.
+Returns nil (silently no-ops if method not defined)."
+  (let* ((state-fn (intern (format "strategy-%s-set-state" name))))
+    (when (fboundp state-fn)
+      (condition-case err
+          (funcall state-fn state)
+        (error (message "[strategy] set-state error for %s: %s" name err))))))
+
+(defun gptel-auto-workflow--strategy-persist-all-states ()
+  "Persist states for all registered strategies to their metadata files.
+Call after experiments to save accumulated learnings."
+  (maphash
+   (lambda (name _entry)
+     (let ((state (gptel-auto-workflow--strategy-get-state name)))
+       (when state
+         (let ((metadata (gethash name gptel-auto-workflow--strategy-registry)))
+           (when metadata
+             (gptel-auto-workflow--persist-strategy-metadata
+              name
+              (append (plist-get metadata :metadata)
+                      (list :state state))))))))
+   gptel-auto-workflow--strategy-registry))
 
 ;;; Strategy Evaluation Tracking
 
@@ -509,6 +570,43 @@ When test-ratio is 0, all targets go to the search set."
 (defun gptel-auto-workflow--is-test-set-target-p (target search-set)
   "Return non-nil if TARGET is in the test set (not in SEARCH-SET)."
   (not (member target search-set)))
+
+(defun gptel-auto-workflow--run-test-evaluation (strategies)
+  "Run final held-out test evaluation for STRATEGIES.
+STRATEGIES is a list of strategy names to evaluate against the test set.
+Writes results to `assistant/strategies/test_results.jsonl'.
+Returns t if any test results were recorded."
+  (unless gptel-auto-workflow--strategy-active-test-set
+    (message "[strategy] No test set defined, skipping test evaluation")
+    nil)
+  (unless strategies
+    (setq strategies (gptel-auto-workflow--compute-strategy-frontier)))
+  (unless strategies
+    (message "[strategy] No strategies to evaluate on test set")
+    nil)
+  (let ((test-file (expand-file-name "test_results.jsonl"
+                                     (gptel-auto-workflow--strategy-run-directory)))
+        (results '()))
+    (make-directory (file-name-directory test-file) t)
+    (dolist (strategy strategies)
+      (let ((perf (gptel-auto-workflow--get-strategy-performance strategy)))
+        (push `(:strategy ,strategy
+                :search-success-rate ,(plist-get perf :success-rate)
+                :search-avg-score ,(plist-get perf :avg-score)
+                :search-total ,(plist-get perf :total)
+                :test-targets ,(length gptel-auto-workflow--strategy-active-test-set)
+                :test-completed ,(format-time-string "%Y-%m-%d %H:%M:%S"))
+              results)))
+    (with-temp-buffer
+      (when (file-exists-p test-file)
+        (insert-file-contents test-file))
+      (goto-char (point-max))
+      (dolist (result (nreverse results))
+        (insert (json-encode result) "\n"))
+      (write-region (point-min) (point-max) test-file))
+    (message "[strategy] Test evaluation written for %d strategy(s) to %s"
+             (length strategies) test-file)
+    t))
 
 (defvar gptel-auto-workflow--strategy-active-search-set nil
   "The current search set of targets used during evolution.
