@@ -754,12 +754,16 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 
 
 
+(defconst gptel-auto-experiment--placeholder-hypothesis-exact-patterns
+  '("[What CODE change and why]"
+    "What CODE change and why")
+  "Exact hypothesis strings that indicate unresolved placeholder prompts.")
+
 (defun gptel-auto-experiment--placeholder-hypothesis-p (hypothesis)
   "Return non-nil when HYPOTHESIS is still an unresolved prompt template."
   (let ((trimmed (and (stringp hypothesis) (string-trim hypothesis))))
     (or (not (gptel-auto-workflow--non-empty-string-p trimmed))
-        (member trimmed '("[What CODE change and why]"
-                          "What CODE change and why"))
+        (member trimmed gptel-auto-experiment--placeholder-hypothesis-exact-patterns)
         (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed))))
 
 (provide 'gptel-tools-agent-experiment-core)
