@@ -755,7 +755,7 @@ BEHAVIOR: Only executes if still over BYTES-LIMIT. Updates byte tracking,
   trimmed total, and pass number variables. Logs progress.
 EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
   (when (> (symbol-value bytes-var) bytes-limit)
-    (let* ((trim-fn
+    (let* ((trim-fn-resolved
             (cond
              ((symbolp trim-fn) (symbol-function trim-fn))
              ((functionp trim-fn) trim-fn)
@@ -763,7 +763,7 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
               (cadr trim-fn))
              (t (error "gptel: compaction pass %d: trim-fn must be a function, got: %S"
                        pass-num trim-fn))))
-           (n (or (funcall trim-fn info) 0)))
+           (n (or (funcall trim-fn-resolved info) 0)))
       (cl-incf (symbol-value trimmed-total-var) n)
       (set bytes-var (my/gptel--estimate-payload-bytes info))
       (set pass-var pass-num)
