@@ -406,7 +406,8 @@ Some gptel model tables encode context windows in *thousands* of tokens as float
 
 (defun my/gptel--cache-context-window (model-id cw)
   "Cache CW for MODEL-ID if positive integer. Return CW."
-  (when (my/gptel--positive-integer-p cw)
+  (when (and (stringp model-id) (not (string-empty-p model-id))
+             (my/gptel--positive-integer-p cw))
     (puthash model-id cw my/gptel--context-window-cache))
   cw)
 
