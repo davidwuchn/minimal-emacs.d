@@ -208,7 +208,7 @@ tool-output history.
 
 Returns the number of function-response parts truncated, or 0 if nothing was
 done."
-  (if (and (null my/gptel-retry-keep-recent-tool-results) (null info) (null force-trim-p))
+  (if (or (null info) (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p)))
       0
     (let* ((data (plist-get info :data))
            (contents (and data (plist-get data :contents)))
