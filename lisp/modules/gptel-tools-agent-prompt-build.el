@@ -693,6 +693,18 @@ row for the same experiment and target."
            (gptel-auto-workflow--plist-get experiment :exploration-axis "?"))
         (error
          (message "[strategy] Evaluation recording error: %s" err))))
+    ;; Call strategy analyze-results for stateful strategies (Meta-Harness interface)
+    (when (fboundp 'gptel-auto-workflow--strategy-analyze-results)
+      (condition-case err
+          (gptel-auto-workflow--strategy-analyze-results
+           (gptel-auto-workflow--plist-get experiment :strategy "template-default")
+           target
+           (list :decision decision
+                 :score-after (gptel-auto-workflow--plist-get experiment :score-after 0)
+                 :exploration-axis (gptel-auto-workflow--plist-get experiment :exploration-axis "?")
+                 :comparator-reason (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A")))
+        (error
+         (message "[strategy] analyze-results error: %s" err))))
     ;; Trigger self-evolution after experiment logging
     (when (and (fboundp 'gptel-auto-workflow--experiment-complete-hook)
                (fboundp 'gptel-auto-workflow-evolution-run-cycle))
