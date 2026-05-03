@@ -51,6 +51,12 @@ When nil, outputs go to `assistant/strategies/' directly.")
 (defvar gptel-auto-workflow--strategy-interrupted nil
   "Non-nil when strategy evolution was interrupted by signal.")
 
+(defvar gptel-auto-workflow--strategy-test-set-ratio 0.2
+  "Fraction of targets held out for final test evaluation.
+During evolution, only the search set is used. The test set is
+only evaluated after evolution completes to prevent overfitting.
+Set to 0 to disable the split and use all targets for both.")
+
 (defun gptel-auto-workflow--strategy-run-directory ()
   "Return the active strategy run directory, respecting the run name."
   (let ((base (expand-file-name "assistant/strategies"
@@ -477,6 +483,47 @@ Returns plist with :count :avg-prompt-size :avg-sections."
           :avg-sections (if (> (length entries) 0)
                            (/ total-sections (length entries))
                          0))))
+
+;;; Held-Out Test Set (Meta-Harness Anti-Overfitting)
+
+(defun gptel-auto-workflow--split-targets-search-test (targets &optional test-ratio)
+  "Split TARGETS into search and test sets.
+TEST-RATIO defaults to `gptel-auto-workflow--strategy-test-set-ratio'.
+Returns (search-set . test-set).
+When test-ratio is 0, all targets go to the search set."
+  (let* ((ratio (or test-ratio gptel-auto-workflow--strategy-test-set-ratio))
+         (n (length targets))
+         (test-n (max 1 (round (* n ratio))))
+         ;; Use deterministic shuffle based on target hash for reproducibility
+         (sorted (sort (copy-sequence targets) #'string<))
+         (search-set (if (> ratio 0)
+                         (butlast sorted test-n)
+                       sorted))
+         (test-set (if (> ratio 0)
+                       (last sorted test-n)
+                     '())))
+    (message "[strategy] Split %d targets: %d search, %d test (%.0f%% held out)"
+             n (length search-set) (length test-set) (* 100 ratio))
+    (cons search-set test-set)))
+
+(defun gptel-auto-workflow--is-test-set-target-p (target search-set)
+  "Return non-nil if TARGET is in the test set (not in SEARCH-SET)."
+  (not (member target search-set)))
+
+(defvar gptel-auto-workflow--strategy-active-search-set nil
+  "The current search set of targets used during evolution.
+Test-set targets are excluded from this list.")
+
+(defvar gptel-auto-workflow--strategy-active-test-set nil
+  "The current test set of targets held out from evolution.")
+
+(defun gptel-auto-workflow--filter-search-targets (targets)
+  "Return TARGETS filtered to only include search-set targets.
+Stores both sets in globals for later reference."
+  (let ((split (gptel-auto-workflow--split-targets-search-test targets)))
+    (setq gptel-auto-workflow--strategy-active-search-set (car split))
+    (setq gptel-auto-workflow--strategy-active-test-set (cdr split))
+    (car split)))
 
 ;;; Strategy Execution
 
