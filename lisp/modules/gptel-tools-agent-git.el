@@ -653,19 +653,23 @@ Returns t for \"true\" or t, nil for \"false\", nil, or any other value."
   "Escape XML special characters in TEXT.
 Prevents XML injection when inserting file contents into context tags.
 Escapes &, <, >, \", and ' per XML spec.
-Optimized: single-pass character-by-character replacement."
+Uses chained replace-regexp-in-string for efficiency.
+Order: & first, then < > \" ', to avoid double-escaping & in other entities."
   (if (not (stringp text))
       ""
-    (mapconcat (lambda (c)
-                 (pcase c
-                   (?& "&amp;")
-                   (?< "&lt;")
-                   (?> "&gt;")
-                   (?\" "&quot;")
-                   (?' "&apos;")
-                   (_ (string c))))
-               (string-to-list text)
-               "")))
+    (replace-regexp-in-string
+     "'" "&apos;"
+     (replace-regexp-in-string
+      "\"" "&quot;"
+      (replace-regexp-in-string
+       ">" "&gt;"
+       (replace-regexp-in-string
+        "<" "&lt;"
+        (replace-regexp-in-string "&" "&amp;" text t t)
+        t t)
+       t t)
+      t t)
+     t t)))
 
 (defun my/gptel--sanitize-for-logging (text &optional max-len)
   "Sanitize TEXT for safe logging to Messages buffer.
