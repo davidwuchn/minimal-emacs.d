@@ -646,11 +646,11 @@ NOTE: Staging branch is never deleted, only the worktree."
   (let* ((default-directory worktree)
          (result (gptel-auto-workflow--git-result
                   (format "git ls-tree HEAD -- %s" (shell-quote-argument path))
-                  60))
-         (output (car result)))
-    (when (and (= 0 (cdr result))
-               (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" output))
-      (match-string 1 output))))
+                  60)))
+    (when (and result
+               (= 0 (cdr result))
+               (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" (car result)))
+      (match-string 1 (car result)))))
 
 (defun gptel-auto-workflow--staging-submodule-gitlink-revision-at-ref (worktree ref path)
   "Return the gitlink revision for PATH at REF in WORKTREE, or nil."
@@ -659,11 +659,11 @@ NOTE: Staging branch is never deleted, only the worktree."
                   (format "git ls-tree %s -- %s"
                           (shell-quote-argument ref)
                           (shell-quote-argument path))
-                  60))
-         (output (car result)))
-    (when (and (= 0 (cdr result))
-               (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" output))
-      (match-string 1 output))))
+                  60)))
+    (when (and result
+               (= 0 (cdr result))
+               (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" (car result)))
+      (match-string 1 (car result)))))
 
 (defun gptel-auto-workflow--worktree-base-repo-root ()
   "Return the canonical superproject root for the stable workflow root."
