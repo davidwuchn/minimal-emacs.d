@@ -153,7 +153,7 @@ falls back to the user's Emacs configuration directory."
 Returns list of (file . line-count) for files under the limit."
   (let (result)
     (dolist (file files (reverse result))
-      (when (file-exists-p file)
+      (when (and (file-exists-p file) (file-readable-p file))
         (let ((count
                (with-temp-buffer
                  (insert-file-contents file)
@@ -279,6 +279,8 @@ RESEARCH-FINDINGS is the research findings string or empty.
 MAX-TARGETS is the maximum number of targets to select."
   (unless (plistp context)
     (setq context '()))
+  (unless (and (integerp max-targets) (> max-targets 0))
+    (setq max-targets 3))
   (format "Select optimization targets for this Emacs Lisp project.
 
 FILES AVAILABLE:
