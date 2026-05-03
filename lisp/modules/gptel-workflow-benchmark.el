@@ -380,6 +380,7 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
 (defun gptel-workflow--score-completion (run _completion-cfg)
   "Score completion of RUN against COMPLETION-CFG."
   (cond
+   ((null run) 0.5)
    ((gptel-workflow-run-aborted-p run) 0.0)
    ((gptel-workflow-run-timeout-p run) 0.0)
    ((gptel-workflow-run-error-message run) 0.0)
@@ -391,7 +392,9 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
 
 (defun gptel-workflow--score-efficiency (run efficiency-cfg)
   "Score efficiency of RUN against EFFICIENCY-CFG."
-  (let* ((steps (or (gptel-workflow-run-step-count run) 0))
+  (if (null run)
+      0.5
+    (let* ((steps (or (gptel-workflow-run-step-count run) 0))
          (continuations (or (gptel-workflow-run-continuation-count run) 0))
          (duration (if (and (gptel-workflow-run-start-time run)
                             (gptel-workflow-run-end-time run))
@@ -415,7 +418,7 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
            ((= duration 0) 0.5)
            ((> duration max-duration) 0.5)
            (t 1.0))))
-    (/ (+ steps-score continuations-score duration-score) 3.0)))
+    (/ (+ steps-score continuations-score duration-score) 3.0))))
 
 (defun gptel-workflow--score-constraints (run phases-cfg)
   "Score constraint satisfaction of RUN against PHASES-CFG."
@@ -840,7 +843,8 @@ Returns plist with :patterns, :issues, and :recommendations."
                   :percentage (/ (float low-efficiency) total))
             issues)
       (push "Consider adjusting max_steps or improving tool selection" recommendations))
-    (let ((most-used (sort (hash-table-keys tool-usage)
+    (let* ((tool-keys (cl-loop for k being the hash-keys of tool-usage collect k))
+           (most-used (sort tool-keys
                            (lambda (a b) (> (gethash a tool-usage 0)
                                             (gethash b tool-usage 0))))))
       (push (list :type 'tool-usage-pattern
