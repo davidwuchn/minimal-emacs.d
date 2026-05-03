@@ -808,6 +808,14 @@ clear_stale_running_status() {
         rc=$?
     fi
 
+    # If daemon socket/process does not exist but status says running,
+    # the daemon crashed.  Clear the stale status immediately so the next
+    # cron run can start a fresh daemon.
+    if [ "$rc" -eq 1 ] && ! [ -n "$(worker_daemon_pids)" ]; then
+        rewrite_status_idle
+        return 0
+    fi
+
     if [ "$rc" -eq 0 ]; then
         if daemon_reports_active_workflow; then
             return 0
