@@ -398,7 +398,7 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--truncate-summary (value &optional width)
   "Return a compact printable summary of VALUE up to WIDTH chars."
-  (let* ((width (or width 80))
+  (let* ((width (if (and (integerp width) (>= width 1)) width 80))
          (text (prin1-to-string value)))
     (if (> (length text) width)
         (concat (substring text 0 width) "...")
