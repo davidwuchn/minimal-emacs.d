@@ -86,6 +86,11 @@ gptel preset.")
 (defvar gptel-sandbox--missing-marker (make-symbol "gptel-sandbox-missing")
   "Sentinel value for detecting missing symbol lookups in sandbox env.")
 
+(defun gptel-sandbox--require-type (value type-p type-name context)
+  "Validate VALUE satisfies TYPE-P predicate, signaling with TYPE-NAME in CONTEXT."
+  (unless (funcall type-p value)
+    (error "%s requires %s, got: %S" context type-name value)))
+
 (defun gptel-sandbox--parse-forms (code)
   "Parse CODE into a list of Lisp forms."
   (let ((forms nil)
@@ -126,10 +131,7 @@ gptel preset.")
 
 (defun gptel-sandbox--bind-result (symbol value env)
   "Bind SYMBOL to VALUE in ENV, also updating `_` and `it`."
-  (unless (symbolp symbol)
-    (error "Binding target must be a symbol, got: %S" symbol))
-  (when (null symbol)
-    (error "Binding target cannot be nil"))
+  (gptel-sandbox--require-type symbol #'symbolp "symbol" "Binding target")
   (puthash symbol value env)
   (puthash '_ value env)
   (puthash 'it value env))
@@ -183,8 +185,7 @@ Raises an error if PAIRS is malformed."
 (defun gptel-sandbox--eval-let (bindings body env sequentialp)
   "Evaluate let-style BINDINGS and BODY in ENV.
 When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
-  (unless (listp bindings)
-    (error "Programmatic let bindings must be a list, got: %S" bindings))
+  (gptel-sandbox--require-type bindings #'listp "list" "Programmatic let bindings")
   (let ((child-env (gptel-sandbox--copy-env env)))
     (if sequentialp
         (dolist (binding bindings)
@@ -211,12 +212,10 @@ Supported shape:
   (let ((op-name (if filterp "filter" "mapcar")))
     (pcase expr
       (`(,_ (lambda (,arg) . ,body) ,list-expr)
-       (unless (symbolp arg)
-         (error "Programmatic %s lambda arg must be a symbol" op-name))
+       (gptel-sandbox--require-type arg #'symbolp "symbol" (format "Programmatic %s lambda arg" op-name))
        (let ((items (gptel-sandbox--eval-expr list-expr env))
              (results nil))
-         (unless (listp items)
-           (error "Programmatic %s expects a list input" op-name))
+         (gptel-sandbox--require-type items #'listp "list" (format "Programmatic %s input" op-name))
          (dolist (item items (nreverse results))
            ;; Each lambda invocation needs an isolated child env so `setq'
            ;; state does not leak between map/filter iterations.
@@ -234,8 +233,7 @@ Supported shape:
 
 (defun gptel-sandbox--lookup (symbol env)
   "Look up SYMBOL in ENV or signal an error."
-  (unless (hash-table-p env)
-    (error "Programmatic sandbox lookup requires a hash table environment, got: %S" env))
+  (gptel-sandbox--require-type env #'hash-table-p "hash table" "Programmatic sandbox lookup")
   (let ((value (gethash symbol env gptel-sandbox--missing-marker)))
     (if (eq value gptel-sandbox--missing-marker)
         (error "Unknown symbol in Programmatic sandbox: %S" symbol)
@@ -252,8 +250,7 @@ Supported shape:
 INITIAL-VALUE is the starting value. STOP-PRED is called on each result;
 when non-nil, evaluation short-circuits and returns that result.
 Used by `and' and `or' to share short-circuit evaluation logic."
-  (unless (functionp stop-pred)
-    (error "Programmatic short-circuit requires a function predicate, got: %S" stop-pred))
+  (gptel-sandbox--require-type stop-pred #'functionp "function" "Programmatic short-circuit")
   (let ((value initial-value))
     (catch 'gptel-sandbox-short-circuit
       (dolist (form forms value)
@@ -333,14 +330,12 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--tool-arg-map (arg-pairs)
   "Convert ARG-PAIRS plist into a keyword->value hash table."
-  (unless (listp arg-pairs)
-    (error "Programmatic tool-call arguments must be a list, got: %S" arg-pairs))
+  (gptel-sandbox--require-type arg-pairs #'listp "list" "Programmatic tool-call arguments")
   (let ((table (make-hash-table :test #'eq)))
     (while arg-pairs
       (let ((key (pop arg-pairs))
             (value (pop arg-pairs)))
-        (unless (keywordp key)
-          (error "Programmatic tool-call keys must be keywords, got: %S" key))
+        (gptel-sandbox--require-type key #'keywordp "keyword" "Programmatic tool-call keys")
         (puthash key value table)))
     table))
 
