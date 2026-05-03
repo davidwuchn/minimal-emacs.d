@@ -662,19 +662,34 @@ Returns t for \"true\" or t, nil for \"false\", nil, or any other value."
   "Escape XML special characters in TEXT.
 Prevents XML injection when inserting file contents into context tags.
 Escapes &, <, >, \", and ' per XML spec.
-Optimized: single-pass character-by-character replacement."
+Correctly preserves existing XML entities (e.g., &amp; stays &amp;).
+Uses optimized character-by-character replacement with entity detection."
   (if (not (stringp text))
       ""
-    (mapconcat (lambda (c)
-                 (pcase c
-                   (?& "&amp;")
-                   (?< "&lt;")
-                   (?> "&gt;")
-                   (?\" "&quot;")
-                   (?' "&apos;")
-                   (_ (string c))))
-               (string-to-list text)
-               "")))
+    (let ((idx 0)
+          (len (length text))
+          result)
+      (setq result "")
+      (while (< idx len)
+        (let ((c (aref text idx)))
+          (cond
+           ((eq c ?&)
+            (let ((rest (substring text (1+ idx))))
+              (cond
+               ((string-match "^#\\([0-9]+\\|x[0-9a-fA-F]+\\);?" rest)
+                (setq result (concat result "&" (match-string 0 rest))
+                      idx (+ 2 (match-end 0))))
+               ((string-match "^[a-zA-Z][a-zA-Z0-9]*;?" rest)
+                (setq result (concat result "&" (match-string 0 rest))
+                      idx (+ 2 (match-end 0))))
+               (t (setq result (concat result "&amp;")
+                        (setq idx (1+ idx)))))))
+           ((eq c ?<) (setq result (concat result "&lt;") (setq idx (1+ idx))))
+           ((eq c ?>) (setq result (concat result "&gt;") (setq idx (1+ idx))))
+           ((eq c ?\") (setq result (concat result "&quot;") (setq idx (1+ idx))))
+           ((eq c ?') (setq result (concat result "&apos;") (setq idx (1+ idx))))
+           (t (setq result (concat result (string c)) (setq idx (1+ idx)))))))
+      result)))
 
 (defun my/gptel--sanitize-for-logging (text &optional max-len)
   "Sanitize TEXT for safe logging to Messages buffer.
