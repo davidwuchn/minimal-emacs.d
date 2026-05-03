@@ -239,6 +239,8 @@ finds patterns first for better selection."
 CONTEXT is the gathered context plist.
 RESEARCH-FINDINGS is the research findings string or empty.
 MAX-TARGETS is the maximum number of targets to select."
+  (unless (plistp context)
+    (setq context '()))
   (format "Select optimization targets for this Emacs Lisp project.
 
 FILES AVAILABLE:
@@ -332,6 +334,7 @@ Returns updated targets list."
                               (alist-get 'target file))))
       (gptel-auto-workflow--validate-and-add-target extracted-file proj-root targets)))
    ((not (stringp file)) targets)
+   ((not (gptel-auto-workflow--nonempty-string-p file)) targets)
    ((not (and (stringp proj-root) (not (string-empty-p proj-root)))) targets)
    (t
     (let ((abs-path (if (file-name-absolute-p file)

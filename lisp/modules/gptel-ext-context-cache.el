@@ -390,17 +390,14 @@ Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scan
 (defun my/gptel--normalize-context-window (n)
   "Normalize gptel context-window value N to tokens.
 
-Some gptel model tables encode context windows in *thousands* of tokens, and may
-use floats (e.g. 8.192 for 8192 tokens).  OpenRouter's `context_length' is in
-raw tokens."
+Some gptel model tables encode context windows in *thousands* of tokens as floats
+(e.g. 8.192 for 8192 tokens). OpenRouter's `context_length' is in raw tokens."
   (cond
    ((not (numberp n)) nil)
    ((<= n 0) nil)
-   ;; Float values (e.g., 8.192) represent thousands - convert to tokens
    ((floatp n) (round (* n 1000)))
-   ;; Small integers (< 1000) likely represent thousands (e.g., 128 -> 128k)
    ((< n 1000) (round (* n 1000)))
-   ;; Larger values are already in raw tokens
+   ((> n 2000000) nil)
    (t (round n))))
 
 (defun my/gptel--positive-integer-p (n)
@@ -484,21 +481,26 @@ Image tokens are counted from `gptel-context' if available."
     (my/gptel--cache-save-context-windows)))
 
 (defun my/gptel--cache-load-context-windows ()
-  "Load cached context windows from `my/gptel-context-window-cache-file'."
+  "Load cached context windows from `my/gptel-context-window-cache-file'.
+
+Uses transactional loading: loads into a temporary hash table first,
+then atomically replaces the main cache. If loading fails, the
+existing cache is preserved."
   (when (file-readable-p my/gptel-context-window-cache-file)
     (condition-case err
-        (progn
-          (clrhash my/gptel--context-window-cache)
+        (let* ((temp-cache (make-hash-table :test 'equal))
+               (temp-data nil)
+               (temp-refresh nil))
           (setq my/gptel--context-window-cache-data nil
                 my/gptel--context-window-cache-last-refresh nil)
           (load my/gptel-context-window-cache-file nil t)
-          (when (and (listp my/gptel--context-window-cache-data)
-                     (hash-table-p my/gptel--context-window-cache))
+          (when (listp my/gptel--context-window-cache-data)
             (dolist (kv my/gptel--context-window-cache-data)
               (let ((key (car kv)) (val (cdr kv)))
-                (cond
-                 ((and (stringp key) (integerp val))
-                  (puthash key val my/gptel--context-window-cache))))))
+                (when (and (stringp key) (integerp val))
+                  (puthash key val temp-cache)))))
+          (clrhash my/gptel--context-window-cache)
+          (maphash (lambda (k v) (puthash k v my/gptel--context-window-cache)) temp-cache)
           (setq my/gptel--context-window-cache-data nil))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
@@ -539,8 +541,8 @@ URL is the API endpoint, CONNECT-TIMEOUT and MAX-TIME are in seconds,
 KEY is the API key for authorization."
   (list "curl"
         "--silent" "--show-error" "--fail"
-        "--connect-timeout" (number-to-string connect-timeout)
-        "--max-time" (number-to-string max-time)
+        "--connect-timeout" (number-to-string (if (numberp connect-timeout) connect-timeout 10))
+        "--max-time" (number-to-string (if (numberp max-time) max-time 120))
         "--http1.1"
         "-H" (concat "Authorization: Bearer " key)
         "-H" "Accept: application/json"
@@ -605,7 +607,7 @@ Returns nil if curl is unavailable or a fetch is already in flight."
                                      (funcall callback data))
                                  (error
                                   (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
-                            (status
+                            ((and status (not (= status 0)))
                              (message "OpenRouter: request failed (exit %d)" status))
                             (t
                              (message "OpenRouter: request terminated abnormally"))))
@@ -861,10 +863,20 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        my/gptel--known-model-context-windows
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
-        (my/gptel--cache-context-window model-id cw)))
+        (cond
+         ((null cw)
+          (puthash model-id my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache)
+          nil)
+         ((my/gptel--positive-integer-p cw)
+          (puthash model-id cw my/gptel--gptel-tables-cw-cache)
+          (my/gptel--cache-context-window model-id cw))
+         (t nil))))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
              (cw (plist-get meta :context-window)))
-        (my/gptel--cache-context-window model-id cw)))
+        (cond
+         ((my/gptel--positive-integer-p cw)
+          (my/gptel--cache-context-window model-id cw))
+         (t nil))))
      (t my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
