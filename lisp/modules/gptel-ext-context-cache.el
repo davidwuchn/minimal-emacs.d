@@ -514,6 +514,7 @@ existing cache is preserved."
                   (puthash key val temp-cache)))))
           (clrhash my/gptel--context-window-cache)
           (maphash (lambda (k v) (puthash k v my/gptel--context-window-cache)) temp-cache)
+          (clrhash my/gptel--alist-partial-match-cache)
           (setq my/gptel--context-window-cache-data nil))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
@@ -546,7 +547,8 @@ Filters to only bound variables. Result is cached for performance."
                    (id (my/gptel--model-id-string model)))
               (when (and (stringp id) (integerp tokens) (> tokens 0))
                 (puthash id tokens my/gptel--context-window-cache)
-                (puthash id plist my/gptel--model-metadata-cache)))))))))
+                (puthash id plist my/gptel--model-metadata-cache))))))))
+  (clrhash my/gptel--alist-partial-match-cache))
 
 (defun my/gptel--openrouter-curl-command (url connect-timeout max-time key)
   "Build curl command list for OpenRouter API request.
