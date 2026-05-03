@@ -273,7 +273,10 @@ Returns a new alist with accumulated values.
 TOTALS is an alist of (score-type . accumulated-value).
 SCORES-ALIST is an alist of (score-type . current-score).
 Handles nil or non-numeric scores by treating them as 0.
-Returns TOTALS unchanged if SCORES-ALIST is nil."
+Returns TOTALS unchanged if SCORES-ALIST is nil.
+SIGNAL: error if TOTALS is not a list (including dotted pairs)."
+  (unless (listp totals)
+    (error "gptel-benchmark--accumulate-scores: TOTALS must be a list, got %S" totals))
   (if (null scores-alist)
       totals
     (cl-loop for (score-type . current) in totals
