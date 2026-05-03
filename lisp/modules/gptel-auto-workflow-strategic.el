@@ -187,21 +187,57 @@ Scans only root-repo targets that can be integrated into staging."
           :todos (shell-command-to-string
                   (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
                           safe-root))
-          :file-list (let ((all-files (split-string
-                                      (shell-command-to-string
-                                       (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                                               safe-root))
-                                      "\n" t)))
-                        (mapconcat (lambda (f) (format "%s" f))
-                                   (mapcar #'car
-                                           (gptel-auto-workflow--filter-large-files
-                                            all-files 1000))
-                                     "\n")))))
+          :file-list (let* ((raw-output (shell-command-to-string
+                                         (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                                                 safe-root)))
+                            (all-files (delq nil
+                                             (mapcar (lambda (s)
+                                                       (unless (string-empty-p s) s))
+                                                     (split-string raw-output "\n" t))))
+                            (nonempty-files (delq nil
+                                                  (mapcar (lambda (f)
+                                                            (let ((abs-path (expand-file-name f proj-root)))
+                                                              (when (file-exists-p abs-path) f)))
+                                                          all-files))))
+                       (mapconcat (lambda (f) (format "%s" f))
+                                  (mapcar #'car
+                                          (gptel-auto-workflow--filter-large-files
+                                           nonempty-files 1000))
+                                  "\n")))))
+
+(defun gptel-auto-workflow--local-research-patterns ()
+  "Perform local grep-based pattern analysis when subagents unavailable.
+Returns a string with findings about common code issues.
+ASSUMPTION: Project root has lisp/modules/ directory with git history.
+BEHAVIOR: Scans for dangerous patterns (cl-return-from, ignore-errors, etc.)
+EDGE CASE: Returns empty string if no patterns found or git unavailable."
+  (let ((proj-root (gptel-auto-workflow--effective-project-root))
+        (patterns '(("cl-return-from" . "Potential missing cl-block wrapper")
+                    ("ignore-errors" . "Swallows errors silently")
+                    ("set-buffer" . "May affect global buffer state")
+                    ("goto-char" . "May move cursor unexpectedly")))
+        (results '()))
+    (dolist (pattern patterns)
+      (let* ((grep-cmd (format "cd %s && git grep -n '%s' -- lisp/modules/ 2>/dev/null | head -5"
+                               (shell-quote-argument proj-root)
+                               (car pattern)))
+             (output (shell-command-to-string grep-cmd)))
+        (when (and output (not (string-empty-p (string-trim output))))
+          (push (format "Pattern: %s (%s)\n%s"
+                        (car pattern) (cdr pattern)
+                        (string-trim-right output))
+                results))))
+    (if results
+        (mapconcat #'identity (nreverse results) "\n\n")
+      "")))
 
 (defun gptel-auto-workflow--research-patterns (callback)
   "Research code patterns.
 CALLBACK receives research findings string.
-Tells LLM how to use git grep for context."
+Tells LLM how to use git grep for context.
+ASSUMPTION: Subagent may or may not be available.
+BEHAVIOR: Uses subagent if available, otherwise falls back to local grep analysis.
+EDGE CASE: Returns empty findings if both subagent and local analysis fail."
   (let ((research-prompt "Analyze root-repo files under lisp/modules/ for code issues.
 
 Use Bash tool to run:
@@ -220,7 +256,9 @@ Max 800 chars."))
            (let ((findings (gptel-auto-workflow--normalize-response result)))
              (message "[auto-workflow] Research complete: %d chars" (length findings))
              (funcall callback findings))))
-      (funcall callback ""))))
+      (let ((findings (gptel-auto-workflow--local-research-patterns)))
+        (message "[auto-workflow] Local research complete: %d chars" (length findings))
+        (funcall callback findings)))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -330,8 +368,11 @@ Returns updated targets list."
   (cond
    ((gptel-auto-workflow--json-object-p file)
     (let ((extracted-file (or (alist-get 'file file)
+                              (cdr (assoc "file" file))
                               (alist-get 'path file)
-                              (alist-get 'target file))))
+                              (cdr (assoc "path" file))
+                              (alist-get 'target file)
+                              (cdr (assoc "target" file)))))
       (gptel-auto-workflow--validate-and-add-target extracted-file proj-root targets)))
    ((not (stringp file)) targets)
    ((not (gptel-auto-workflow--nonempty-string-p file)) targets)
@@ -392,7 +433,7 @@ Returns list of validated relative paths, up to MAX-TARGETS."
     (dolist (file candidates-list (reverse targets))
       (when (< (length targets) max-targets)
         (let ((new-targets (gptel-auto-workflow--validate-and-add-target
-                             file proj-root targets)))
+                            file proj-root targets)))
           (when (consp new-targets)
             (setq targets new-targets)))))))
 
@@ -559,21 +600,21 @@ LLM decides if available, otherwise uses static list."
              gptel-auto-workflow-targets
              proj-root
              gptel-auto-workflow-max-targets-per-run)))
-       (if gptel-auto-workflow-strategic-selection
-           (gptel-auto-workflow--ask-analyzer-for-targets
-            (lambda (targets)
-              (if (gptel-auto-workflow--handle-analyzer-error-state targets static-targets callback)
-                  nil  ; Error already handled
-                (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                       (final-targets (or filtered-targets targets)))
-                  (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
-                           (length targets) (length final-targets))
-                  (funcall callback final-targets)))))
-         (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets static-targets))
-                (final-targets (or filtered-targets static-targets)))
-           (message "[auto-workflow] Static: %d targets, %d after frontier filtering"
-                    (length static-targets) (length final-targets))
-           (funcall callback final-targets))))))
+      (if gptel-auto-workflow-strategic-selection
+          (gptel-auto-workflow--ask-analyzer-for-targets
+           (lambda (targets)
+             (if (gptel-auto-workflow--handle-analyzer-error-state targets static-targets callback)
+                 nil  ; Error already handled
+               (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
+                      (final-targets (or filtered-targets targets)))
+                 (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
+                          (length targets) (length final-targets))
+                 (funcall callback final-targets)))))
+        (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets static-targets))
+               (final-targets (or filtered-targets static-targets)))
+          (message "[auto-workflow] Static: %d targets, %d after frontier filtering"
+                   (length static-targets) (length final-targets))
+          (funcall callback final-targets))))))
 
 ;;; Periodic Research
 

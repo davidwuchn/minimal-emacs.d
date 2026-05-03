@@ -30,15 +30,16 @@ jobs)."
             (failed 0))
         (dolist (orphan orphans)
           (let ((hash (car orphan)))
-            (pcase (gptel-auto-workflow--cherry-pick-orphan hash)
-              ('conflict
-               (gptel-auto-workflow--untrack-commit hash)
-               (cl-incf conflicted))
-              ((pred identity)
-               (gptel-auto-workflow--untrack-commit hash)
-               (cl-incf recovered))
-              (_
-               (cl-incf failed)))))
+            (when (and (stringp hash) (not (string-empty-p hash)))
+              (pcase (gptel-auto-workflow--cherry-pick-orphan hash)
+                ('conflict
+                 (gptel-auto-workflow--untrack-commit hash)
+                 (cl-incf conflicted))
+                ((pred identity)
+                 (gptel-auto-workflow--untrack-commit hash)
+                 (cl-incf recovered))
+                (_
+                 (cl-incf failed))))))
         (message "[auto-workflow] Recovered %d/%d orphans to staging"
                  recovered (length orphans))
         (when (> conflicted 0)
@@ -276,7 +277,8 @@ Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
                           my/gptel-subagent-cache-max-size)))
           (maphash
            (lambda (k v)
-             (push (cons (car v) k) entries))
+             (when (consp v)
+               (push (cons (car v) k) entries)))
            my/gptel--subagent-cache)
           (setq entries (sort entries (lambda (a b) (< (car a) (car b)))))
           (let ((to-evict (cl-subseq entries 0 (min excess (length entries)))))
