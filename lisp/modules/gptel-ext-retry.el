@@ -537,6 +537,13 @@ ASSUMPTION: Error messages can be in :message (plist) or 'message (alist) keys."
          (cdr (assq 'message error-data))))
     (t nil)))
 
+(defun my/gptel--pattern-if-bound (pattern-symbol)
+  "Return the value of PATTERN-SYMBOL if bound and a string, else nil.
+Guards against unbound variables and type mismatches during load order issues."
+  (and (boundp pattern-symbol)
+       (stringp (symbol-value pattern-symbol))
+       (symbol-value pattern-symbol)))
+
 (defun my/gptel--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error.
 Matches network failures, overload responses, rate limits, and common
@@ -569,15 +576,9 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
                   ((numberp http-status) http-status)
                   (t nil)))
          (error-msg (my/gptel--extract-error-message error-data))
-         (string-pattern (and (boundp 'my/gptel--transient-error-string-patterns)
-                              (stringp my/gptel--transient-error-string-patterns)
-                              my/gptel--transient-error-string-patterns))
-         (http-400-pattern (and (boundp 'my/gptel--transient-http-400-patterns)
-                                (stringp my/gptel--transient-http-400-patterns)
-                                my/gptel--transient-http-400-patterns))
-         (msg-pattern (and (boundp 'my/gptel--transient-error-message-patterns)
-                          (stringp my/gptel--transient-error-message-patterns)
-                          my/gptel--transient-error-message-patterns)))
+         (string-pattern (my/gptel--pattern-if-bound 'my/gptel--transient-error-string-patterns))
+         (http-400-pattern (my/gptel--pattern-if-bound 'my/gptel--transient-http-400-patterns))
+         (msg-pattern (my/gptel--pattern-if-bound 'my/gptel--transient-error-message-patterns)))
     (or (and (stringp error-data)
              string-pattern
              (string-match-p string-pattern (downcase error-data)))
