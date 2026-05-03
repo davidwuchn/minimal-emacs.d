@@ -44,6 +44,9 @@ Must be used inside `gptel-auto-workflow--with-test-context'."
   '(("json-target-extraction"
      :file "lisp/modules/gptel-auto-workflow-strategic.el"
      :test gptel-auto-workflow--test-json-target-extraction)
+    ("malformed-data-handling"
+     :file "lisp/modules/gptel-auto-workflow-strategic.el"
+     :test gptel-auto-workflow--test-malformed-data-handling)
     ("validate-and-add-target"
      :file "lisp/modules/gptel-auto-workflow-strategic.el"
      :test gptel-auto-workflow--test-validate-and-add-target))
@@ -79,6 +82,49 @@ Each entry: (NAME :file FILE :test FUNCTION).")
       (gptel-auto-workflow--test-assert
        (not result)
        "Nil handling failed"))))
+
+(defun gptel-auto-workflow--test-malformed-data-handling ()
+  "Test that functions gracefully handle malformed input data."
+  (gptel-auto-workflow--with-test-context
+    ;; Test 1: Improper list (not a proper alist - car is not a cons)
+    (let* ((improper-list '("file" "value"))
+           (result (gptel-auto-workflow--json-object-p improper-list)))
+      (gptel-auto-workflow--test-assert
+       (not result)
+       "Improper list should not be recognized as JSON object"))
+    
+    ;; Test 2: Vector should not be confused with alist
+    (let* ((vector-data ["file" "test.el"])
+           (result (gptel-auto-workflow--json-object-p vector-data)))
+      (gptel-auto-workflow--test-assert
+       (not result)
+       "Vector should not be recognized as JSON object"))
+    
+    ;; Test 3: Empty list should not be a JSON object
+    (let ((result (gptel-auto-workflow--json-object-p '())))
+      (gptel-auto-workflow--test-assert
+       (not result)
+       "Empty list should not be recognized as JSON object"))
+    
+    ;; Test 4: json-target-file should handle improper list gracefully
+    (let ((result (gptel-auto-workflow--json-target-file '("file" "value"))))
+      (gptel-auto-workflow--test-assert
+       (or (null result) (stringp result))
+       "json-target-file should return nil or string for improper list"))
+    
+    ;; Test 5: json-target-file should handle vector gracefully
+    (let ((result (gptel-auto-workflow--json-target-file ["file" "test.el"])))
+      (gptel-auto-workflow--test-assert
+       (or (null result) (stringp result))
+       "json-target-file should return nil or string for vector"))
+    
+    ;; Test 6: validate-and-add-target should handle vector input
+    (let* ((targets '("existing.el"))
+           (result (gptel-auto-workflow--validate-and-add-target
+                    ["file" "test.el"] (expand-file-name "lisp/modules/" user-emacs-directory) targets)))
+      (gptel-auto-workflow--test-assert
+       (equal result targets)
+       "Vector input should return targets unchanged"))))
 
 (defun gptel-auto-workflow--test-validate-and-add-target ()
   "Test that validate-and-add-target handles edge cases correctly."
