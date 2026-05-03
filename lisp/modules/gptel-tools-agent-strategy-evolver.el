@@ -309,6 +309,19 @@ Returns formatted string of top 5 failure reasons, or empty string if none found
                           "\n")
                 "\n\nAVOID these failure modes in your new strategy.\n\n")))))
 
+(defvar gptel-auto-workflow--proposer-skill-path
+  "assistant/skills/meta-harness-proposer/SKILL.md"
+  "Path to the Meta-Harness proposer skill file.")
+
+(defun gptel-auto-workflow--load-proposer-skill ()
+  "Load the proposer skill content if available."
+  (let ((skill-file (expand-file-name gptel-auto-workflow--proposer-skill-path
+                                      (gptel-auto-workflow--project-root))))
+    (when (file-exists-p skill-file)
+      (with-temp-buffer
+        (insert-file-contents skill-file)
+        (buffer-string)))))
+
 (defun gptel-auto-workflow--propose-strategies (parent-strategy-name axis hypothesis parent-code parent-perf)
   "Use gptel to propose 3 new strategy implementations.
 Returns list of 3 strategy code strings, or nil if generation fails."
@@ -318,6 +331,7 @@ Returns list of 3 strategy code strings, or nil if generation fails."
         nil)
     (let* ((axis-desc (gptel-auto-workflow--strategy-axis-description axis))
          (failure-analysis (gptel-auto-workflow--analyze-strategy-failures parent-strategy-name))
+         (skill-content (gptel-auto-workflow--load-proposer-skill))
          (proposer-prompt
           (format "You are a Meta-Harness strategy proposer. Your job is to generate NEW Emacs Lisp prompt-building strategies.
 
@@ -336,6 +350,13 @@ Parent strategy code:
 ```
 
 %s
+
+## Anti-Overfitting Rules
+
+- NO target-specific hints. Do not hardcode knowledge about specific files or modules.
+- NEVER mention target file names in strategy code, prompts, or comments.
+- Strategies must work on ANY Emacs Lisp file. Do not assume specific module structures.
+- General patterns are OK (e.g., 'prioritize failure patterns for large files').
 
 ## Task
 
@@ -378,7 +399,8 @@ CANDIDATE_1:
   (list :name \"NAME\"
         :version \"1.0\"
         :hypothesis \"DESCRIPTION\"
-        :axis \"%%s\"))
+        :axis \"%%s\"
+        :components [\"tag1\" \"tag2\"]))
 
 (provide 'strategy-NAME)
 ```
