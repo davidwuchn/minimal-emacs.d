@@ -32,47 +32,25 @@ Each entry: (NAME :file FILE :test FUNCTION).")
   "Test that JSON target extraction handles both symbol and string keys."
   (let ((passed t)
         (errors nil))
-    ;; Test 1: Symbol keys (normal case)
-    (let* ((symbol-data '((file . "lisp/modules/test.el") (priority . 1)))
-           (result (gptel-auto-workflow--json-target-file symbol-data)))
-      (when (not (equal result "lisp/modules/test.el"))
-        (push "Symbol key extraction failed" errors)
+    (cl-macrolet ((assert-equal (expr expected &rest args)
+                                `(when (not (equal ,expr ,expected))
+                                   (push (format "expected %S, got %S" ,expected ,expr) errors)
+                                   (setq passed nil))))
+      (assert-equal (gptel-auto-workflow--json-target-file '((file . "lisp/modules/test.el") (priority . 1)))
+                    "lisp/modules/test.el")
+      (assert-equal (gptel-auto-workflow--json-target-file (list '("file" . "lisp/modules/test.el") '("priority" . 1)))
+                    "lisp/modules/test.el")
+      (assert-equal (gptel-auto-workflow--json-target-file '((path . "lisp/modules/test2.el")))
+                    "lisp/modules/test2.el")
+      (when (gptel-auto-workflow--json-target-file nil)
+        (push "nil input should return nil" errors)
+        (setq passed nil))
+      (when (gptel-auto-workflow--json-target-file '((file . 123)))
+        (push "non-string file value should return nil" errors)
+        (setq passed nil))
+      (when (gptel-auto-workflow--json-target-file '((other . "lisp/modules/test.el") (name . "test")))
+        (push "unknown keys should return nil" errors)
         (setq passed nil)))
-
-    ;; Test 2: String keys (defensive case - this would have caught the bug)
-    (let* ((string-data (list '("file" . "lisp/modules/test.el") '("priority" . 1)))
-           (result (gptel-auto-workflow--json-target-file string-data)))
-      (when (not (equal result "lisp/modules/test.el"))
-        (push "String key extraction failed (BUG: defensive lookup removed)" errors)
-        (setq passed nil)))
-
-    ;; Test 3: Mixed keys
-    (let* ((mixed-data '((path . "lisp/modules/test2.el")))
-           (result (gptel-auto-workflow--json-target-file mixed-data)))
-      (when (not (equal result "lisp/modules/test2.el"))
-        (push "Mixed key extraction failed" errors)
-        (setq passed nil)))
-
-    ;; Test 4: Nil/empty handling
-    (let ((result (gptel-auto-workflow--json-target-file nil)))
-      (when result
-        (push "Nil handling failed" errors)
-        (setq passed nil)))
-
-    ;; Test 5: Non-string value for file key should return nil (defensive)
-    (let* ((nonstring-data '((file . 123)))
-           (result (gptel-auto-workflow--json-target-file nonstring-data)))
-      (when result
-        (push "Non-string file value should return nil" errors)
-        (setq passed nil)))
-
-    ;; Test 6: Missing recognized keys should return nil
-    (let* ((unknown-keys '((other . "lisp/modules/test.el") (name . "test")))
-           (result (gptel-auto-workflow--json-target-file unknown-keys)))
-      (when result
-        (push "Unknown keys should return nil" errors)
-        (setq passed nil)))
-
     (cons passed (nreverse errors))))
 
 (defun gptel-auto-workflow--test-validate-and-add-target ()
@@ -80,68 +58,38 @@ Each entry: (NAME :file FILE :test FUNCTION).")
   (let ((passed t)
         (errors nil)
         (test-root (expand-file-name "lisp/modules/" user-emacs-directory)))
-    ;; Test 1: Non-string input should return targets unchanged
-    (let* ((targets '("existing.el"))
-           (result (gptel-auto-workflow--validate-and-add-target 123 test-root targets)))
-      (when (not (equal result targets))
-        (push "Non-string input should return targets unchanged" errors)
-        (setq passed nil)))
-
-    ;; Test 2: Empty proj-root should return targets unchanged
-    (let* ((targets '("existing.el"))
-           (result (gptel-auto-workflow--validate-and-add-target "test.el" "" targets)))
-      (when (not (equal result targets))
-        (push "Empty proj-root should return targets unchanged" errors)
-        (setq passed nil)))
-
-    ;; Test 3: Nil proj-root should return targets unchanged
-    (let* ((targets '("existing.el"))
-           (result (gptel-auto-workflow--validate-and-add-target "test.el" nil targets)))
-      (when (not (equal result targets))
-        (push "Nil proj-root should return targets unchanged" errors)
-        (setq passed nil)))
-
-    ;; Test 4: JSON object input should extract and validate
-    (let* ((json-obj '((file . "gptel-auto-workflow-strategic.el")))
-           (targets '())
-           (result (gptel-auto-workflow--validate-and-add-target json-obj test-root targets)))
-      (when (or (not (listp result)) (not (member "gptel-auto-workflow-strategic.el" result)))
-        (push "JSON object input should extract and validate file" errors)
-        (setq passed nil)))
-
-    ;; Test 4b: JSON object with string keys should also extract and validate
-    (let* ((json-obj (list (cons "file" "gptel-auto-workflow-strategic.el")))
-           (targets '())
-           (result (gptel-auto-workflow--validate-and-add-target json-obj test-root targets)))
-      (when (or (not (listp result)) (not (member "gptel-auto-workflow-strategic.el" result)))
-        (push "JSON object with string file key should extract and validate file" errors)
-        (setq passed nil)))
-
-    ;; Test 5: Duplicate target should not be added
-    (let* ((existing "gptel-auto-workflow-strategic.el")
-           (targets (list existing))
-           (result (gptel-auto-workflow--validate-and-add-target
-                    (expand-file-name existing test-root) test-root targets)))
-      (when (or (not (equal result targets)) (/= (length result) 1))
-        (push "Duplicate target should not be added twice" errors)
-        (setq passed nil)))
-
-    ;; Test 6: JSON object with non-string file value should return targets unchanged
-    (let* ((targets '())
-           (json-obj '((file . 123)))
-           (result (gptel-auto-workflow--validate-and-add-target json-obj test-root targets)))
-      (when (not (equal result targets))
-        (push "JSON object with non-string file value should return targets unchanged" errors)
-        (setq passed nil)))
-
-    ;; Test 7: JSON object with empty file value should return targets unchanged
-    (let* ((targets '())
-           (json-obj '((file . "")))
-           (result (gptel-auto-workflow--validate-and-add-target json-obj test-root targets)))
-      (when (not (equal result targets))
-        (push "JSON object with empty file value should return targets unchanged" errors)
-        (setq passed nil)))
-
+    (cl-macrolet ((assert-equal (expr expected &rest args)
+                                `(when (not (equal ,expr ,expected))
+                                   (push (format "expected %S, got %S" ,expected ,expr) errors)
+                                   (setq passed nil)))
+                 (assert-member (expr item &rest args)
+                                `(when (not (member ,item ,expr))
+                                   (push (format "expected %S in result %S" ,item ,expr) errors)
+                                   (setq passed nil))))
+      (assert-equal (gptel-auto-workflow--validate-and-add-target 123 test-root '("existing.el"))
+                    '("existing.el"))
+      (assert-equal (gptel-auto-workflow--validate-and-add-target "test.el" "" '("existing.el"))
+                    '("existing.el"))
+      (assert-equal (gptel-auto-workflow--validate-and-add-target "test.el" nil '("existing.el"))
+                    '("existing.el"))
+      (let ((result (gptel-auto-workflow--validate-and-add-target
+                     '((file . "gptel-auto-workflow-strategic.el")) test-root '())))
+        (when (or (not (listp result)) (not (member "gptel-auto-workflow-strategic.el" result)))
+          (push "JSON object should extract and validate file" errors)
+          (setq passed nil)))
+      (let ((result (gptel-auto-workflow--validate-and-add-target
+                     (list (cons "file" "gptel-auto-workflow-strategic.el")) test-root '())))
+        (when (or (not (listp result)) (not (member "gptel-auto-workflow-strategic.el" result)))
+          (push "JSON object with string key should extract and validate" errors)
+          (setq passed nil)))
+      (assert-equal (gptel-auto-workflow--validate-and-add-target
+                     (expand-file-name "gptel-auto-workflow-strategic.el" test-root)
+                     test-root (list "gptel-auto-workflow-strategic.el"))
+                    (list "gptel-auto-workflow-strategic.el"))
+      (assert-equal (gptel-auto-workflow--validate-and-add-target '((file . 123)) test-root '())
+                    '())
+      (assert-equal (gptel-auto-workflow--validate-and-add-target '((file . "")) test-root '())
+                    '()))
     (cons passed (nreverse errors))))
 
 (defun gptel-auto-workflow--run-behavioral-tests (changed-files)
