@@ -270,6 +270,8 @@ Used by `and' and `or' to share short-circuit evaluation logic."
 (defun gptel-sandbox--apply-builtin (func args env)
   "Apply built-in function FUNC to evaluated ARGS in ENV.
 Errors propagate to the outer condition-case in `execute-tool'."
+  (unless (functionp func)
+    (error "Programmatic builtin requires a function, got: %S" func))
   (apply func (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args)))
 
 (defun gptel-sandbox--eval-expr (expr env)
