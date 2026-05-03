@@ -797,8 +797,9 @@ the workflow base before scanning tracked ledgers."
              (format "git rev-parse %s"
                      (shell-quote-argument ref))
              60))
-           (commit-hash (string-trim (car rev-result))))
-      (and (= 0 (cdr rev-result))
+           (commit-hash (and rev-result (string-trim (car rev-result)))))
+      (and commit-hash
+           (= 0 (cdr rev-result))
            (string-match-p "^[a-f0-9]\\{7,40\\}$" commit-hash)
            commit-hash))))
 

@@ -174,7 +174,7 @@ With sufficient data, includes only sections with positive correlation."
                (length effective-sections)
                (length gptel-auto-workflow--ab-test-sections)
                (mapconcat #'symbol-name effective-sections ","))
-      (nreverse effective-sections)))))
+      (or (nreverse effective-sections) gptel-auto-workflow--ab-test-sections)))))
 
 (defun gptel-auto-workflow--load-skill-content (skill-name)
   "Load SKILL-NAME from assistant/skills/ directories.

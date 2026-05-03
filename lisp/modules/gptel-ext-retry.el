@@ -549,6 +549,9 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
     (or (and (stringp error-data)
              (string-match-p my/gptel--transient-error-string-patterns
                              (downcase error-data)))
+        (and (symbolp error-data)
+             (string-match-p my/gptel--transient-error-string-patterns
+                             (downcase (symbol-name error-data))))
         (and (numberp status) (memq status my/gptel--transient-http-statuses))
         (and (numberp status)
              (= status 400)
@@ -644,12 +647,13 @@ TEST: Verify with network failure simulation — should retry 3 times with
   increasing delays, then fail. Check message buffer for retry logs."
   (unless new-state (setq new-state (gptel--fsm-next machine)))
   (let* ((info (gptel-fsm-info machine))
-         (disable-auto-retry (plist-get info :disable-auto-retry))
+         ;; Guard: ensure info is a proper list before accessing with plist-get
+         (disable-auto-retry (and (listp info) (plist-get info :disable-auto-retry)))
          (headless-agent-buffer-p
-          (my/gptel--headless-auto-workflow-agent-buffer-p info))
-         (error-data (plist-get info :error))
-         (http-status (plist-get info :http-status))
-         (retries (or (plist-get info :retries) 0))
+          (and (listp info) (my/gptel--headless-auto-workflow-agent-buffer-p info)))
+         (error-data (and (listp info) (plist-get info :error)))
+         (http-status (and (listp info) (plist-get info :http-status)))
+         (retries (if (listp info) (or (plist-get info :retries) 0) 0))
          ;; Detect subagent FSMs: they use custom handlers and should not be
          ;; retried (the parent's timeout handles failures).
          ;; A request is retryable if its handlers are one of the "main"

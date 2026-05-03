@@ -126,6 +126,10 @@ gptel preset.")
 
 (defun gptel-sandbox--bind-result (symbol value env)
   "Bind SYMBOL to VALUE in ENV, also updating `_` and `it`."
+  (unless (symbolp symbol)
+    (error "Binding target must be a symbol, got: %S" symbol))
+  (when (null symbol)
+    (error "Binding target cannot be nil"))
   (puthash symbol value env)
   (puthash '_ value env)
   (puthash 'it value env))
@@ -187,24 +191,24 @@ When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
           (pcase-let ((`(,symbol ,value-form)
                        (gptel-sandbox--normalize-binding binding)))
             (let ((value (gptel-sandbox--eval-expr value-form child-env)))
-              (puthash symbol value child-env))))
+              (gptel-sandbox--bind-result symbol value child-env))))
       (dolist (binding bindings)
         (pcase-let ((`(,symbol . ,value)
                      (gptel-sandbox--eval-let-binding binding env)))
-          (puthash symbol value child-env))))
+          (gptel-sandbox--bind-result symbol value child-env))))
     (let ((value nil))
       (dolist (form body value)
         (setq value (gptel-sandbox--eval-expr form child-env))))))
 
-(defun gptel-sandbox--eval-map-like (expr env keep-original)
+(defun gptel-sandbox--eval-map-like (expr env filterp)
   "Evaluate sandbox `mapcar' or `filter' EXPR in ENV.
-When KEEP-ORIGINAL is non-nil, keep original items whose body is truthy;
+When FILTERP is non-nil, keep original items whose body is truthy;
 otherwise collect each mapped result.
 
 Supported shape:
   (mapcar (lambda (item) BODY...) LIST)
   (filter (lambda (item) BODY...) LIST)"
-  (let ((op-name (if keep-original "filter" "mapcar")))
+  (let ((op-name (if filterp "filter" "mapcar")))
     (pcase expr
       (`(,_ (lambda (,arg) . ,body) ,list-expr)
        (unless (symbolp arg)
@@ -221,7 +225,7 @@ Supported shape:
              (let ((value nil))
                (dolist (form body)
                  (setq value (gptel-sandbox--eval-expr form child-env)))
-               (if keep-original
+               (if filterp
                    (when value
                      (push item results))
                  (push value results)))))))
@@ -230,6 +234,8 @@ Supported shape:
 
 (defun gptel-sandbox--lookup (symbol env)
   "Look up SYMBOL in ENV or signal an error."
+  (unless (hash-table-p env)
+    (error "Programmatic sandbox lookup requires a hash table environment, got: %S" env))
   (let ((value (gethash symbol env gptel-sandbox--missing-marker)))
     (if (eq value gptel-sandbox--missing-marker)
         (error "Unknown symbol in Programmatic sandbox: %S" symbol)
@@ -567,6 +573,8 @@ can consume lists, vectors, plists, and alists as readable data."
                       nil))
          (arg-values (and tool-spec
                           (gptel-sandbox--resolve-tool-args tool-spec arg-forms env))))
+    (unless tool-spec
+      (error "Unknown tool %s requested by Programmatic" tool-name))
     (gptel-sandbox--check-tool tool-name tool-spec arg-values)
     (cl-incf (plist-get state :tool-count))
     (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
