@@ -147,7 +147,10 @@ BEHAVIOR: keep count decreases with each retry:
   retry 0: keep default value
   retry 1: keep default-1
   retry 2+: keep 0 (truncate all)"
-  (let ((retries (or retry-count (plist-get info :retries) 1)))
+  (let* ((raw-retries (or retry-count (plist-get info :retries) 1))
+         (retries (if (and (numberp raw-retries) (>= raw-retries 0))
+                      raw-retries
+                    0)))
     (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries))))
 
 (defun my/gptel--should-trim-p (info force-trim-p)

@@ -368,8 +368,11 @@ Returns updated targets list."
   (cond
    ((gptel-auto-workflow--json-object-p file)
     (let ((extracted-file (or (alist-get 'file file)
+                              (cdr (assoc "file" file))
                               (alist-get 'path file)
-                              (alist-get 'target file))))
+                              (cdr (assoc "path" file))
+                              (alist-get 'target file)
+                              (cdr (assoc "target" file)))))
       (gptel-auto-workflow--validate-and-add-target extracted-file proj-root targets)))
    ((not (stringp file)) targets)
    ((not (gptel-auto-workflow--nonempty-string-p file)) targets)
