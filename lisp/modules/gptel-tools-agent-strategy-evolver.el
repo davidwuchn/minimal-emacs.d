@@ -325,6 +325,9 @@ Returns formatted string of top 5 failure reasons, or empty string if none found
 (defun gptel-auto-workflow--propose-strategies (parent-strategy-name axis hypothesis parent-code parent-perf)
   "Use gptel to propose 3 new strategy implementations.
 Returns list of 3 strategy code strings, or nil if generation fails."
+  (when gptel-auto-workflow--strategy-interrupted
+    (message "[strategy-evolution] Interrupted, skipping proposal")
+    (return-from gptel-auto-workflow--propose-strategies nil))
   (if (not (fboundp 'gptel-request))
       (progn
         (message "[strategy-evolution] gptel not available, cannot propose strategies")
@@ -620,8 +623,12 @@ If current strategy is underperforming, tries to generate a new one."
       ;; Only evolve if we have enough data and performance is mediocre
       (when (and (>= current-total 5)
                  (<= current-success-rate 0.4))
-        (message "[strategy] Current strategy '%s' has %.0f%% success rate, triggering evolution"
+         (message "[strategy] Current strategy '%s' has %.0f%% success rate, triggering evolution"
                  current-strategy (* 100 current-success-rate))
+        ;; Check for interruption before starting
+        (when gptel-auto-workflow--strategy-interrupted
+          (message "[strategy] Interrupted, skipping evolution")
+          (return-from gptel-auto-workflow--maybe-evolve-strategy nil))
         ;; Pick an exploitation axis that's been least explored
         (let* ((axis-perf (make-hash-table :test 'equal))
                (all-axes '("A" "B" "C" "D" "E" "F")))
@@ -653,14 +660,20 @@ If current strategy is underperforming, tries to generate a new one."
                 (when (< count min-count)
                   (setq min-count count)
                   (setq target-axis axis))))
-            ;; Evolve strategy
+            ;; Evolve strategy (with interrupt protection)
             (let ((new-strategy
-                   (gptel-auto-workflow--evolve-strategy
-                    current-strategy
-                     (format "Improve strategy by targeting axis %s (%s)"
-                             target-axis
-                             (gptel-auto-workflow--strategy-axis-description target-axis))
-                    target-axis)))
+                   (condition-case quit
+                       (gptel-auto-workflow--evolve-strategy
+                        current-strategy
+                        (format "Improve strategy by targeting axis %s (%s)"
+                                target-axis
+                                (gptel-auto-workflow--strategy-axis-description target-axis))
+                        target-axis)
+                     (quit
+                      (setq gptel-auto-workflow--strategy-interrupted t)
+                      (message "[strategy] Evolution interrupted by signal, got %.0f%% complete"
+                               (* 100 (/ (float (length all-axes)) 6.0)))
+                      nil))))
               (when new-strategy
                 (message "[strategy] Evolved new strategy: %s" new-strategy)
                 ;; Write evolution summary
