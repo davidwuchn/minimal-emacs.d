@@ -679,9 +679,12 @@ Loads .dir-locals.el from project and runs researcher in that context."
   (let* ((root (expand-file-name project-root))
          (project-buf (gptel-auto-workflow--get-project-buffer root)))
     (message "[research] Starting for project: %s" root)
-    ;; Ensure gptel-auto-workflow-strategic is loaded
+    ;; Ensure gptel-auto-workflow-strategic is loaded from emacs.d, not project root
     (unless (featurep 'gptel-auto-workflow-strategic)
-      (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)))
+      (load-file (expand-file-name
+                  "lisp/modules/gptel-auto-workflow-strategic.el"
+                  (or (bound-and-true-p minimal-emacs-user-directory)
+                      user-emacs-directory))))
     ;; Set current project context for subagents
     (setq gptel-auto-workflow--current-project root)
     (with-current-buffer project-buf
