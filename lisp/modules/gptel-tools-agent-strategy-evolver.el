@@ -626,8 +626,7 @@ If current strategy is underperforming, tries to generate a new one."
         (let* ((axis-perf (make-hash-table :test 'equal))
                (all-axes '("A" "B" "C" "D" "E" "F")))
           ;; Count experiments per axis for current strategy
-          (let ((eval-file (expand-file-name gptel-auto-workflow--strategy-evaluations-file
-                                            (gptel-auto-workflow--project-root))))
+          (let ((eval-file (gptel-auto-workflow--strategy-results-file)))
             (when (file-exists-p eval-file)
               (with-temp-buffer
                 (insert-file-contents eval-file)
@@ -664,6 +663,20 @@ If current strategy is underperforming, tries to generate a new one."
                     target-axis)))
               (when new-strategy
                 (message "[strategy] Evolved new strategy: %s" new-strategy)
+                ;; Write evolution summary
+                (let* ((perf (gptel-auto-workflow--get-strategy-performance new-strategy))
+                       (val-scores (make-hash-table :test 'equal))
+                       (candidates (list (list :name new-strategy
+                                              :axis target-axis
+                                              :hypothesis (format "Axis %s improvement" target-axis)
+                                              :components (list (format "axis-%s" target-axis))))))
+                  (puthash new-strategy (plist-get perf :avg-score) val-scores)
+                  (gptel-auto-workflow--ensure-strategy-run-directories)
+                  (gptel-auto-workflow--write-evolution-summary
+                   (1+ (gethash current-strategy val-scores 0))
+                   candidates
+                   val-scores
+                   (list :propose 0.0 :bench 0.0 :wall 0.0)))
                 ;; Switch to new strategy if it passed validation
                  (setq gptel-auto-workflow--active-strategy new-strategy)))))))))
 
