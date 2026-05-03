@@ -32,8 +32,9 @@
 (defun gptel-test-context--add-error (ctx msg)
   "Record an error MSG in test context CTX and mark as failed."
   (cl-check-type ctx gptel-test-context)
-  (cl-callf2 nconc (gptel-test-context--errors ctx) (list msg))
-  (setf (gptel-test-context--passed ctx) nil))
+  (setf (gptel-test-context-errors ctx)
+        (nconc (gptel-test-context-errors ctx) (list msg)))
+  (setf (gptel-test-context-passed ctx) nil))
 
 (defun gptel-test-context--assert-equal (ctx expr expected)
   "Assert in CTX that EXPR equals EXPECTED, record error on mismatch."
@@ -52,8 +53,8 @@
 (defun gptel-test-context--result (ctx)
   "Return final result alist from CTX: (passed . errors)."
   (cl-check-type ctx gptel-test-context)
-  (cons (gptel-test-context--passed ctx)
-        (nreverse (gptel-test-context--errors ctx))))
+  (cons (gptel-test-context-passed ctx)
+        (or (nreverse (gptel-test-context-errors ctx)) '())))
 
 (defvar gptel-auto-workflow--behavioral-test-suite
   '(("json-target-extraction"
