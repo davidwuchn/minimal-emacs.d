@@ -346,6 +346,9 @@ supports a small, explicit whitelist of pure operations."
   "Convert ARG-PAIRS plist into a keyword->value hash table."
   (unless (listp arg-pairs)
     (error "Programmatic tool-call arguments must be a list, got: %S" arg-pairs))
+  (unless (cl-evenp (length arg-pairs))
+    (error "Programmatic tool-call requires keyword/value pairs, got odd length: %d"
+           (length arg-pairs)))
   (let ((table (make-hash-table :test #'eq)))
     (while arg-pairs
       (let ((key (pop arg-pairs))
