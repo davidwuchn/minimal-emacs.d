@@ -1,8 +1,8 @@
-# Insight: 2026-05-02 09:01
+# Insight: 2026-05-03 05:01
 
 **Target:** lisp/modules/gptel-tools-agent-worktree.el
 **Change type:** bug-fix
-**Hypothesis:** Adding validation for `proj-root` in `gptel-auto-workflow-delete-worktree` will prevent git operations from running with nil `default-directory`, which could cause them to fail or execute in the wrong directory.
+**Hypothesis:** Adding validation for `proj-root` in `gptel-auto-workflow-create-worktree` and `gptel-auto-workflow--temporary-worktree-path` will prevent runtime errors when project root can't be determined.
 **Decision:** nil
 
 Unexpected experiment outcome.

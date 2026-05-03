@@ -3,18 +3,19 @@
 
 (defun gptel-auto-workflow--log-conflict (commit-hash conflict-output)
   "Log CONFLICT-OUTPUT for COMMIT-HASH to file for later review."
-  (let ((log-file (expand-file-name "var/log/cherry-pick-conflicts.log"
-                                    (or (gptel-auto-workflow--project-root)
-                                        (expand-file-name "~/.emacs.d/"))))
-        (timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
-        (msg (if (and (stringp conflict-output)
-                      (> (length conflict-output) 0))
-                 (substring conflict-output 0 (min 400 (length conflict-output)))
-               "")))
-    (make-directory (file-name-directory log-file) t)
-    (with-temp-buffer
-      (insert (format "[%s] %s\n%s\n\n" timestamp commit-hash msg))
-      (append-to-file (point-min) (point-max) log-file))))
+  (when (and (stringp commit-hash) (> (length commit-hash) 0))
+    (let ((log-file (expand-file-name "var/log/cherry-pick-conflicts.log"
+                                      (or (gptel-auto-workflow--project-root)
+                                          (expand-file-name "~/.emacs.d/"))))
+          (timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
+          (msg (if (and (stringp conflict-output)
+                        (> (length conflict-output) 0))
+                   (substring conflict-output 0 (min 400 (length conflict-output)))
+                 "")))
+      (make-directory (file-name-directory log-file) t)
+      (with-temp-buffer
+        (insert (format "[%s] %s\n%s\n\n" timestamp commit-hash msg))
+        (append-to-file (point-min) (point-max) log-file)))))
 
 (defun gptel-auto-workflow-recover-all-orphans (&optional no-push)
   "Recover all orphan commits from tracked ledgers to staging branch.

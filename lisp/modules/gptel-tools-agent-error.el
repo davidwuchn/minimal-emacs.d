@@ -128,57 +128,75 @@ REASON is only used for logging."
 
 (defun gptel-auto-experiment--shared-transient-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT matches shared transient retry rules."
-  (and (stringp error-output)
-       (not (gptel-auto-experiment--aborted-agent-output-p error-output))
-       (fboundp 'my/gptel--transient-error-p)
-       (my/gptel--transient-error-p error-output nil)))
+  (let ((msg (cond ((stringp error-output) error-output)
+                   ((plistp error-output) (plist-get error-output :message))
+                   (t nil))))
+    (and msg
+         (not (gptel-auto-experiment--aborted-agent-output-p msg))
+         (fboundp 'my/gptel--transient-error-p)
+         (my/gptel--transient-error-p msg nil))))
 
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
-  (and (stringp error-output)
-       (not (gptel-auto-experiment--aborted-agent-output-p error-output))
-       (or (gptel-auto-experiment--shared-transient-error-p error-output)
-           (gptel-auto-experiment--provider-usage-limit-error-p error-output)
-           (let ((case-fold-search t))
-             (string-match-p
-               "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\"\\|Malformed JSON"
-               error-output)))))
+  (let ((msg (cond ((stringp error-output) error-output)
+                   ((plistp error-output) (plist-get error-output :message))
+                   (t nil))))
+    (and msg
+         (not (gptel-auto-experiment--aborted-agent-output-p msg))
+         (or (gptel-auto-experiment--shared-transient-error-p msg)
+             (gptel-auto-experiment--provider-usage-limit-error-p msg)
+             (let ((case-fold-search t))
+               (string-match-p
+                "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\"\\|Malformed JSON"
+                msg))))))
 
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
-  (and (stringp error-output)
-       (let ((case-fold-search t))
-         (string-match-p
-          "access_terminated_error\\|usage limit exceeded\\|usage limit for this billing cycle\\|reached your usage limit for this billing cycle"
-          error-output))))
+  (let ((msg (cond ((stringp error-output) error-output)
+                   ((plistp error-output) (plist-get error-output :message))
+                   (t nil))))
+    (and msg
+         (let ((case-fold-search t))
+           (string-match-p
+            "access_terminated_error\\|usage limit exceeded\\|usage limit for this billing cycle\\|reached your usage limit for this billing cycle"
+            msg)))))
 
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure."
-  (and (stringp error-output)
-       (or (gptel-auto-experiment--provider-usage-limit-error-p error-output)
-           (let ((case-fold-search t))
-             (string-match-p
-              "rate_limit_error\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
-              error-output)))))
+  (let ((msg (cond ((stringp error-output) error-output)
+                   ((plistp error-output) (plist-get error-output :message))
+                   (t nil))))
+    (and msg
+         (or (gptel-auto-experiment--provider-usage-limit-error-p msg)
+             (let ((case-fold-search t))
+               (string-match-p
+                "rate_limit_error\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
+                msg))))))
 
 (defun gptel-auto-experiment--provider-auth-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects provider auth failure."
-  (and (stringp error-output)
-       (let ((case-fold-search t))
-         (string-match-p
-          "authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
-          error-output))))
+  (let ((msg (cond ((stringp error-output) error-output)
+                   ((plistp error-output) (plist-get error-output :message))
+                   (t nil))))
+    (and msg
+         (let ((case-fold-search t))
+           (string-match-p
+            "authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+            msg)))))
 
 (defun gptel-auto-experiment--provider-pressure-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend."
-  (or (gptel-auto-experiment--rate-limit-error-p error-output)
-      (gptel-auto-experiment--provider-auth-error-p error-output)
-      (gptel-auto-experiment--shared-transient-error-p error-output)
-      (and (stringp error-output)
-           (let ((case-fold-search t))
-             (string-match-p
-               "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|Malformed JSON"
-               error-output)))))
+  (let ((msg (cond ((stringp error-output) error-output)
+                   ((plistp error-output) (plist-get error-output :message))
+                   (t nil))))
+    (or (gptel-auto-experiment--rate-limit-error-p error-output)
+        (gptel-auto-experiment--provider-auth-error-p error-output)
+        (gptel-auto-experiment--shared-transient-error-p error-output)
+        (and msg
+             (let ((case-fold-search t))
+               (string-match-p
+                "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|Malformed JSON"
+                msg))))))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
@@ -372,20 +390,26 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
 
 (defun gptel-auto-experiment--quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows provider quota exhaustion."
-  (and (stringp agent-output)
-       (or (gptel-auto-experiment--provider-usage-limit-error-p agent-output)
-           (let ((case-fold-search t))
-             (string-match-p
-              "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
-              agent-output)))))
+  (let ((msg (cond ((stringp agent-output) agent-output)
+                   ((plistp agent-output) (plist-get agent-output :message))
+                   (t nil))))
+    (and msg
+         (or (gptel-auto-experiment--provider-usage-limit-error-p msg)
+             (let ((case-fold-search t))
+               (string-match-p
+                "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
+                msg))))))
 
 (defun gptel-auto-experiment--hard-quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows a hard quota stop for executor work."
-  (and (stringp agent-output)
-       (let ((case-fold-search t))
-         (string-match-p
-          "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
-          agent-output))))
+  (let ((msg (cond ((stringp agent-output) agent-output)
+                   ((plistp agent-output) (plist-get agent-output :message))
+                   (t nil))))
+    (and msg
+         (let ((case-fold-search t))
+           (string-match-p
+            "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
+            msg)))))
 
 (defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
   "Run experiment with automatic retry on transient errors.
