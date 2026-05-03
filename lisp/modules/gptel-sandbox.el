@@ -566,11 +566,10 @@ can consume lists, vectors, plists, and alists as readable data."
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
   (let* ((tool-spec (if (fboundp 'gptel-get-tool)
                         (gptel-get-tool tool-name)
-                      nil))
-         (arg-values (and tool-spec
-                          (gptel-sandbox--resolve-tool-args tool-spec arg-forms env))))
+                      nil)))
     (unless tool-spec
       (error "Unknown tool %s requested by Programmatic" tool-name))
+    (let ((arg-values (gptel-sandbox--resolve-tool-args tool-spec arg-forms env)))
     (gptel-sandbox--check-tool tool-name tool-spec arg-values)
     (cl-incf (plist-get state :tool-count))
     (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
@@ -611,7 +610,7 @@ can consume lists, vectors, plists, and alists as readable data."
                             "Error: Programmatic aggregate preview rejected by user"))))
             (funcall invoke-tool)))
       (error
-       (funcall callback (gptel-sandbox--format-error (error-message-string err)))))))
+       (funcall callback (gptel-sandbox--format-error (error-message-string err))))))))
 
 (defun gptel-sandbox--eval-statement (statement env state callback)
   "Evaluate sandbox STATEMENT with ENV and STATE, then CALLBACK.
