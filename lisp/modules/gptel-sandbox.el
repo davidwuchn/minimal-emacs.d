@@ -698,6 +698,8 @@ CALLBACK receives final outcome plist."
 
 (defun gptel-sandbox--run-forms (forms env state callback)
   "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
+  (unless (listp forms)
+    (error "Programmatic sandbox run-forms requires a list of forms, got: %S" forms))
   (if (null forms)
       (funcall callback (format "Error: Programmatic execution finished without calling result (used %d tools)"
                                 (plist-get state :tool-count)))
