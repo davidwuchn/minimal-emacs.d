@@ -42,6 +42,8 @@ Must be used inside `gptel-auto-workflow--with-test-context'."
 
 (defun gptel-auto-workflow--make-json-alist (key-type &optional file priority)
   "Build test alist with KEY-TYPE ('symbol or 'string) for FILE and PRIORITY."
+  (unless (memq key-type '(symbol string))
+    (signal 'wrong-type-argument (list '(symbol string) key-type)))
   (let ((file-pair (cons (if (eq key-type 'symbol) 'file "file")
                          (or file "lisp/modules/test.el")))
         (priority-pair (when priority
@@ -53,6 +55,8 @@ Must be used inside `gptel-auto-workflow--with-test-context'."
 
 (defun gptel-auto-workflow--make-malformed-data (type)
   "Build malformed test data of TYPE: 'improper, 'vector, or 'empty."
+  (unless (memq type '(improper vector empty))
+    (signal 'wrong-type-argument (list '(improper vector empty) type)))
   (pcase type
     ('improper '("file" "value"))
     ('vector (vector "file" "test.el"))
