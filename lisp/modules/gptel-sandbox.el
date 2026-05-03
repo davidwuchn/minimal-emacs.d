@@ -200,15 +200,15 @@ When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
       (dolist (form body value)
         (setq value (gptel-sandbox--eval-expr form child-env))))))
 
-(defun gptel-sandbox--eval-map-like (expr env keep-original)
+(defun gptel-sandbox--eval-map-like (expr env filterp)
   "Evaluate sandbox `mapcar' or `filter' EXPR in ENV.
-When KEEP-ORIGINAL is non-nil, keep original items whose body is truthy;
+When FILTERP is non-nil, keep original items whose body is truthy;
 otherwise collect each mapped result.
 
 Supported shape:
   (mapcar (lambda (item) BODY...) LIST)
   (filter (lambda (item) BODY...) LIST)"
-  (let ((op-name (if keep-original "filter" "mapcar")))
+  (let ((op-name (if filterp "filter" "mapcar")))
     (pcase expr
       (`(,_ (lambda (,arg) . ,body) ,list-expr)
        (unless (symbolp arg)
@@ -225,7 +225,7 @@ Supported shape:
              (let ((value nil))
                (dolist (form body)
                  (setq value (gptel-sandbox--eval-expr form child-env)))
-               (if keep-original
+               (if filterp
                    (when value
                      (push item results))
                  (push value results)))))))
