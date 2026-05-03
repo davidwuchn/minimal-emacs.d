@@ -10,7 +10,7 @@ extended with a full AI agent system built on
 |--------|-------|
 | **Code fixes** | 242+ real fixes merged |
 | **New features** | Auto-workflow, benchmark, retry loop, researcher, sandbox, strategic planner |
-| **Agents** | 10+ (MiniMax workhorse, DashScope/DeepSeek/CF-Gateway/Gemini fallbacks) |
+| **Agents** | 10+ (MiniMax workhorse, DashScope/moonshot/DeepSeek/CF-Gateway fallbacks) |
 | **Cron jobs** | 6 scheduled jobs (auto-workflow, research, mementum, instincts) |
 
 ### Latest Features (2026-05-03)
@@ -19,7 +19,7 @@ extended with a full AI agent system built on
 |---------|---------|
 | **Auto-Workflow** | Headless experiments with grading, review, and staging merge |
 | **Strategy Evolution** | Meta-Harness style harness search: agent-driven proposer, Pareto frontier, held-out test sets, stateful lifecycle |
-| **Backend Fallback** | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway → Gemini |
+| **Backend Fallback** | MiniMax → DashScope → moonshot → DeepSeek → CF-Gateway |
 | **Benchmark System** | Score tracking, quality metrics, evolution patterns |
 | **Shell Timeout Sentinel** | Wait for process exit before capturing results |
 | **FSM Registry Validation** | Bidirectional consistency checks |
@@ -106,11 +106,10 @@ Model is configured in YAML frontmatter (single source of truth):
 Auto-workflow uses MiniMax as the primary workhorse with automatic provider failover:
 
 1. **MiniMax** — `minimax-m2.7-highspeed` (primary)
-2. **moonshot** — `kimi-k2.6`
-3. **DashScope** — `qwen3.6-plus`
-4. **DeepSeek** — `deepseek-v4-flash`
+2. **DashScope** — `qwen3.6-plus`
+3. **moonshot** — `kimi-k2.6`
+4. **DeepSeek** — `deepseek-v4-pro`
 5. **CF-Gateway** — `@cf/moonshotai/kimi-k2.6`
-6. **Gemini** — `gemini-3.1-pro-preview`
 
 Requires `api.minimaxi.com` API key in auth-source. All alternate backends require their respective API keys configured in auth-source.
 
