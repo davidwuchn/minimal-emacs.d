@@ -13,11 +13,12 @@ extended with a full AI agent system built on
 | **Agents** | 10+ (MiniMax workhorse, DashScope/DeepSeek/CF-Gateway/Gemini fallbacks) |
 | **Cron jobs** | 6 scheduled jobs (auto-workflow, research, mementum, instincts) |
 
-### Latest Features (2026-04-14)
+### Latest Features (2026-05-03)
 
 | Feature | Purpose |
 |---------|---------|
 | **Auto-Workflow** | Headless experiments with grading, review, and staging merge |
+| **Strategy Evolution** | Meta-Harness style harness search: agent-driven proposer, Pareto frontier, held-out test sets, stateful lifecycle |
 | **Backend Fallback** | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway → Gemini |
 | **Benchmark System** | Score tracking, quality metrics, evolution patterns |
 | **Shell Timeout Sentinel** | Wait for process exit before capturing results |
@@ -277,6 +278,32 @@ Decision logic: **70% grader + 30% code quality**
 | **Pre-Merge Review** | Reviewer checks for blockers before staging merge |
 | **Periodic Researcher** | Every 4h, finds anti-patterns for target selection |
 | **Review Retry Loop** | Executor fixes issues, max 2 retries |
+| **Strategy Evolution** | Meta-Harness harness search: agent-driven proposal, Pareto frontier, anti-overfitting |
+
+### Strategy Evolution (Meta-Harness)
+
+The auto-workflow system searches over **prompt-building strategies** (how prompts are constructed), not just prompt content. Based on the Stanford IRIS Lab [Meta-Harness](https://github.com/stanford-iris-lab/meta-harness) framework:
+
+```
+Proposer (gptel) → 3 candidates → Validate → Prototype → Evolve → Frontier
+     ↑                                                              ↓
+     └───────────── Warm-start from failure analysis ───────────────┘
+```
+
+| Component | Purpose |
+|-----------|---------|
+| **Agent-driven proposer** | Generates 3 novel strategy candidates per evolution iteration |
+| **Pareto frontier** | Tracks non-dominated strategies by success rate and avg score |
+| **Held-out test set** | 20% of targets held out during evolution to prevent overfitting |
+| **Anti-overfitting rules** | Explicit: no target-specific hints, no file names in strategy code |
+| **Anti-parameter-tuning** | Self-critique rejects constant-only changes |
+| **Stateful interface** | `analyze-results`, `get-state`, `set-state` for learning strategies |
+| **Run isolation** | `--run-name`, `--fresh`, per-run evolution summaries |
+| **Evolution summary** | `evolution_summary.jsonl` tracking per-iteration results |
+| **Strategy discovery** | Auto-discovers strategies from `assistant/strategies/prompt-builders/*.el` |
+| **Signal handling** | Graceful `quit` handling preserves state on interrupt |
+
+Exploitation axes: A=Template architecture, B=Context retrieval, C=Section ordering, D=Variable computation, E=Skill loading, F=Adaptive compression.
 
 ### Architecture
 
