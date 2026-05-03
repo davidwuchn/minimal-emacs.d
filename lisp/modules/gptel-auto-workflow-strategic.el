@@ -187,15 +187,22 @@ Scans only root-repo targets that can be integrated into staging."
           :todos (shell-command-to-string
                   (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
                           safe-root))
-          :file-list (let ((all-files (split-string
-                                      (shell-command-to-string
-                                       (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                                               safe-root))
-                                      "\n" t)))
+          :file-list (let* ((raw-output (shell-command-to-string
+                                        (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                                                safe-root)))
+                            (all-files (delq nil
+                                            (mapcar (lambda (s)
+                                                      (unless (string-empty-p s) s))
+                                                    (split-string raw-output "\n" t))))
+                            (nonempty-files (delq nil
+                                                 (mapcar (lambda (f)
+                                                           (let ((abs-path (expand-file-name f proj-root)))
+                                                             (when (file-exists-p abs-path) f)))
+                                                         all-files))))
                         (mapconcat (lambda (f) (format "%s" f))
                                    (mapcar #'car
                                            (gptel-auto-workflow--filter-large-files
-                                            all-files 1000))
+                                            nonempty-files 1000))
                                      "\n")))))
 
 (defun gptel-auto-workflow--research-patterns (callback)
