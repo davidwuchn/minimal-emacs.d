@@ -315,8 +315,8 @@ stale_active_snapshot_recoverable() {
 }
 
 worker_daemon_pids() {
-    ps -eo pid=,args= | awk -v marker="--bg-daemon=$SERVER_NAME" '
-        index($0, marker) { print $1 }
+    ps -eo pid=,args= | awk -v bg="--bg-daemon=$SERVER_NAME" -v d="--daemon=$SERVER_NAME" '
+        index($0, bg) || index($0, d) { print $1 }
     '
 }
 
@@ -327,6 +327,11 @@ worker_daemon_pid() {
 clean_orphaned_sockets() {
     local uid
     uid="$(id -u)"
+    # Never clean sockets if a daemon process is still alive for this server.
+    # The daemon owns its socket; removing it from underneath breaks connectivity.
+    if [ -n "$(worker_daemon_pids)" ]; then
+        return 0
+    fi
     for base in "${TMPDIR:-/tmp}" "/tmp"; do
         local socket_dir="$base/emacs$uid"
         if [ -S "$socket_dir/$SERVER_NAME" ]; then
