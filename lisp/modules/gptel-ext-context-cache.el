@@ -356,11 +356,9 @@ Avoids re-iterating tables for models that are not present.")
 Returns the context window in tokens, or nil if not found.
 Handles both symbol and string model identifiers with case-insensitive fallback.
 Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scans."
-  (let ((model-str (cond
-                    ((stringp model) model)
-                    ((symbolp model) (symbol-name model))
-                    (t nil))))
-    (when model-str
+  (when (or (stringp model) (symbolp model))
+    (let ((model-str (if (stringp model) model (symbol-name model))))
+      (when (and (stringp model-str) (not (string-empty-p model-str)))
       (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache)))
         (if (eq cached my/gptel--gptel-tables-miss-sentinel)
             nil
@@ -378,7 +376,7 @@ Caches results in `my/gptel--gptel-tables-cw-cache' to avoid repeated table scan
                               nil)))
                 (puthash model-str (or result my/gptel--gptel-tables-miss-sentinel)
                          my/gptel--gptel-tables-cw-cache)
-                result)))))))
+                result))))))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
