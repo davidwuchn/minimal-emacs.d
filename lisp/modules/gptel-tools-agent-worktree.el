@@ -258,7 +258,9 @@ Call this before any git operation that might modify branches."
           (and (gptel-auto-workflow--non-empty-string-p
                 gptel-auto-workflow-shared-remote)
                gptel-auto-workflow-shared-remote))
-         (tracked (ignore-errors (magit-get "branch" "main" "remote"))))
+         (tracked
+          (let ((remote (ignore-errors (magit-get "branch" "main" "remote"))))
+            (and (gptel-auto-workflow--non-empty-string-p remote) remote))))
     (cond
      ((gptel-auto-workflow--non-empty-string-p configured) configured)
      ((gptel-auto-workflow--non-empty-string-p tracked) tracked)
