@@ -193,7 +193,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
            (bytes-saved 0))
-      (when (and messages (plusp (length messages)))
+      (when (and messages (> (length messages) 0))
         (let ((tool-indices
                (my/gptel--collect-message-indices
                 messages
