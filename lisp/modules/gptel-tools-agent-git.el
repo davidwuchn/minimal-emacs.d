@@ -249,7 +249,7 @@ Returns nil if cache disabled, not found, or expired."
              (my/gptel--subagent-cache-allowed-p agent-type))
     (let* ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff))
            (cached (gethash key my/gptel--subagent-cache)))
-      (when cached
+      (when (consp cached)
         (let ((timestamp (car cached))
               (result (cdr cached)))
           (if (> (- (float-time) timestamp) my/gptel-subagent-cache-ttl)
