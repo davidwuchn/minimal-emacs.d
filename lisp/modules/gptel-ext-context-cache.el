@@ -491,6 +491,7 @@ Returns 0.0 if CHARS is not a positive number."
   "Persist WINDOW for MODEL-ID in the cache."
   (when (and (stringp model-id) (integerp window) (> window 0))
     (puthash model-id window my/gptel--context-window-cache)
+    (clrhash my/gptel--alist-partial-match-cache)
     (my/gptel--cache-save-context-windows)))
 
 (defun my/gptel--cache-load-context-windows ()
