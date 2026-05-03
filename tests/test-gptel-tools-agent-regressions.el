@@ -4548,9 +4548,13 @@ experiment phases do not trip the real pre-grade target validator."
                      '(gptel-auto-workflow-headless-fallback-agents
                        gptel-auto-workflow-executor-rate-limit-fallbacks))))
           (should (equal gptel-auto-workflow-headless-fallback-agents
-                         gptel-auto-workflow--current-headless-fallback-agents))
-          (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
-                         gptel-auto-workflow--current-executor-rate-limit-fallbacks)))
+                          '("analyzer" "comparator" "executor" "grader" "reviewer")))
+           (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
+                          '(("MiniMax" . "minimax-m2.7-highspeed")
+                            ("DashScope" . "qwen3.6-plus")
+                            ("moonshot" . "kimi-k2.6")
+                            ("DeepSeek" . "deepseek-v4-pro")
+                            ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))))
       (setq gptel-auto-workflow-headless-fallback-agents old-headless
             gptel-auto-workflow-executor-rate-limit-fallbacks old-rate-limit)
       (put 'gptel-auto-workflow-headless-fallback-agents 'saved-value old-headless-saved)
