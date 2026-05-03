@@ -315,8 +315,10 @@ stale_active_snapshot_recoverable() {
 }
 
 worker_daemon_pids() {
-    ps -eo pid=,args= | awk -v bg="--bg-daemon=$SERVER_NAME" -v d="--daemon=$SERVER_NAME" '
-        index($0, bg) || index($0, d) { print $1 }
+    ps -eo pid=,args= | awk -v bg="--bg-daemon=$SERVER_NAME" \
+        -v d="--daemon=$SERVER_NAME" \
+        -v fg="--fg-daemon=$SERVER_NAME" '
+        $2 ~ /(^|\/)emacs/ && (index($0, bg) || index($0, d) || index($0, fg)) { print $1 }
     '
 }
 
@@ -1079,18 +1081,19 @@ ensure_worker_daemon() {
     # Ensure SSH keys are loaded in agent (needed by Homebrew OpenSSH)
     ensure_ssh_keys_loaded
     
-    # Keep the dedicated workflow daemon truly headless. A GUI-attached Emacs
-    # daemon can die when its X/Wayland connection disappears, which is fatal
-    # for long-running cron/worker runs. Load the worktree's normal init so the
-    # worker uses the same package/module graph as interactive Emacs.
+    # Keep the dedicated workflow daemon truly headless and detached.  A forked
+    # `--daemon' process has repeatedly disappeared mid-staging on this host
+    # without leaving an Emacs backtrace.  Run the worker as a foreground daemon
+    # in its own session instead: it still serves the named socket, but the OS
+    # process is observable and not tied to the cron wrapper's shell lifetime.
     hydrate_missing_worktree_submodules
     seed_worker_daemon_shared_var
     # Disable native compilation for workflow daemon to avoid stale cache issues
-    env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+    setsid env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
         EMACSNATIVELOADPATH= \
         MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
         MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-        "$EMACS" --init-directory="$DIR" --daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
+        "$EMACS" --init-directory="$DIR" --fg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 &
     for _ in $(seq 1 50); do
         if check_worker_daemon; then
             rc=0
