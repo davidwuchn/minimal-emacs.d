@@ -264,6 +264,13 @@ Returns nil if TEXT is not a string (defensive guard)."
           (gptel-agent-loop--safe-accumulated-output state)
           tail))
 
+(defun gptel-agent-loop--build-incomplete-result (state resp)
+  "Build incomplete result message for STATE with RESP.
+Used when task stops but work remains to be done."
+  (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
+          (gptel-agent-loop--build-final-result state resp)
+          (gptel-agent-loop--step-count state)))
+
 (defun gptel-agent-loop--transient-error-p (error-data)
   "Check if ERROR-DATA represents a transient/retryable error.
 Delegates to `my/gptel--transient-error-p' for consistent error detection.
@@ -673,9 +680,7 @@ Returns non-nil if result was delivered."
           (gptel-agent-loop--schedule-request state (gptel-agent-loop--summary-prompt-for state) nil))
       (gptel-agent-loop--deliver-result
        state
-       (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-               (gptel-agent-loop--build-final-result state resp)
-               (gptel-agent-loop--step-count state))))
+       (gptel-agent-loop--build-incomplete-result state resp)))
     t))
 
 (defun gptel-agent-loop--handle-summary-turn (state resp use-tools)
@@ -706,9 +711,7 @@ Returns non-nil if result was delivered."
             (gptel-agent-loop--schedule-request state (gptel-agent-loop--continuation-prompt-for state) t))
         (gptel-agent-loop--deliver-result
          state
-         (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-                 (gptel-agent-loop--build-final-result state resp)
-                 (gptel-agent-loop--step-count state)))))
+         (gptel-agent-loop--build-incomplete-result state resp))))
     t))
 
 (defun gptel-agent-loop--handle-final-response (state _resp)

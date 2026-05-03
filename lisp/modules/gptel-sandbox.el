@@ -534,9 +534,13 @@ CALLBACK receives non-nil when approved and nil when rejected."
   "Format MESSAGE as a sandbox error string."
   (format "Error: %s" message))
 
+(defun gptel-sandbox--error-result-p (value)
+  "Return non-nil if VALUE is a sandbox error result string."
+  (and (stringp value) (string-prefix-p "Error: " value)))
+
 (defun gptel-sandbox--wrap-result (result)
   "Wrap RESULT for callback, avoiding double-wrapping of error strings."
-  (if (and (stringp result) (string-prefix-p "Error: " result))
+  (if (gptel-sandbox--error-result-p result)
       result
     (gptel-sandbox--format-result result)))
 
@@ -633,7 +637,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
                     (if (and (consp expr) (eq (car expr) 'tool-call))
                         (gptel-sandbox--execute-tool
                          (lambda (value)
-                           (if (string-prefix-p "Error: " value)
+                           (if (gptel-sandbox--error-result-p value)
                                (funcall callback (list :done t :result value))
                              (gptel-sandbox--bind-result symbol value env)
                              (setq remaining (cdr remaining))
@@ -647,7 +651,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
     (`(tool-call ,tool-name . ,arg-forms)
      (gptel-sandbox--execute-tool
       (lambda (value)
-        (if (string-prefix-p "Error: " value)
+        (if (gptel-sandbox--error-result-p value)
             (funcall callback (list :done t :result value))
           (gptel-sandbox--bind-last-value value env)
           (funcall callback (list :continue t :done nil))))

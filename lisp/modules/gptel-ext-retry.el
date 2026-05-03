@@ -171,7 +171,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
            (bytes-saved 0))
-      (when (and messages (> (length messages) 0))
+      (when (and messages (plusp (length messages)))
         (let ((tool-indices
                (my/gptel--collect-message-indices
                 messages
@@ -603,10 +603,11 @@ Extracts message from plist/alist when error-data is not a string."
 TRIM-FN should take INFO and return the number of items trimmed.
 FMT is a format string that receives the count as its single argument.
 Returns the number of items trimmed."
-  (let ((count (funcall trim-fn info)))
-    (when (> count 0)
-      (message fmt count))
-    count))
+  (when (functionp trim-fn)
+    (let ((count (or (funcall trim-fn info) 0)))
+      (when (> count 0)
+        (message fmt count))
+      count)))
 
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
   "Intercept FSM transitions to ERRS and retry the request if transient.
