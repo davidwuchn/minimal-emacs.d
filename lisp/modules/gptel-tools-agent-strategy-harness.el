@@ -571,6 +571,43 @@ When test-ratio is 0, all targets go to the search set."
   "Return non-nil if TARGET is in the test set (not in SEARCH-SET)."
   (not (member target search-set)))
 
+(defun gptel-auto-workflow--run-test-evaluation (strategies)
+  "Run final held-out test evaluation for STRATEGIES.
+STRATEGIES is a list of strategy names to evaluate against the test set.
+Writes results to `assistant/strategies/test_results.jsonl'.
+Returns t if any test results were recorded."
+  (unless gptel-auto-workflow--strategy-active-test-set
+    (message "[strategy] No test set defined, skipping test evaluation")
+    nil)
+  (unless strategies
+    (setq strategies (gptel-auto-workflow--compute-strategy-frontier)))
+  (unless strategies
+    (message "[strategy] No strategies to evaluate on test set")
+    nil)
+  (let ((test-file (expand-file-name "test_results.jsonl"
+                                     (gptel-auto-workflow--strategy-run-directory)))
+        (results '()))
+    (make-directory (file-name-directory test-file) t)
+    (dolist (strategy strategies)
+      (let ((perf (gptel-auto-workflow--get-strategy-performance strategy)))
+        (push `(:strategy ,strategy
+                :search-success-rate ,(plist-get perf :success-rate)
+                :search-avg-score ,(plist-get perf :avg-score)
+                :search-total ,(plist-get perf :total)
+                :test-targets ,(length gptel-auto-workflow--strategy-active-test-set)
+                :test-completed ,(format-time-string "%Y-%m-%d %H:%M:%S"))
+              results)))
+    (with-temp-buffer
+      (when (file-exists-p test-file)
+        (insert-file-contents test-file))
+      (goto-char (point-max))
+      (dolist (result (nreverse results))
+        (insert (json-encode result) "\n"))
+      (write-region (point-min) (point-max) test-file))
+    (message "[strategy] Test evaluation written for %d strategy(s) to %s"
+             (length strategies) test-file)
+    t))
+
 (defvar gptel-auto-workflow--strategy-active-search-set nil
   "The current search set of targets used during evolution.
 Test-set targets are excluded from this list.")
