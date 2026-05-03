@@ -325,22 +325,27 @@ Returns formatted string of top 5 failure reasons, or empty string if none found
 (defun gptel-auto-workflow--propose-strategies (parent-strategy-name axis hypothesis parent-code parent-perf)
   "Use gptel to propose 3 new strategy implementations.
 Returns list of 3 strategy code strings, or nil if generation fails."
-  (when gptel-auto-workflow--strategy-interrupted
+  (cond
+   (gptel-auto-workflow--strategy-interrupted
     (message "[strategy-evolution] Interrupted, skipping proposal")
-    (return-from gptel-auto-workflow--propose-strategies nil))
-  (if (not (fboundp 'gptel-request))
-      (progn
-        (message "[strategy-evolution] gptel not available, cannot propose strategies")
-        nil)
+    nil)
+   ((not (fboundp 'gptel-request))
+    (message "[strategy-evolution] gptel not available, cannot propose strategies")
+    nil)
+   (t
     (let* ((axis-desc (gptel-auto-workflow--strategy-axis-description axis))
-         (failure-analysis (gptel-auto-workflow--analyze-strategy-failures parent-strategy-name))
-         (skill-content (gptel-auto-workflow--load-proposer-skill))
-         (proposer-prompt
-          (format "You are a Meta-Harness strategy proposer. Your job is to generate NEW Emacs Lisp prompt-building strategies.
+           (failure-analysis (gptel-auto-workflow--analyze-strategy-failures parent-strategy-name))
+           (skill-content (gptel-auto-workflow--load-proposer-skill))
+           (proposer-prompt
+            (format "You are a Meta-Harness strategy proposer. Your job is to generate NEW Emacs Lisp prompt-building strategies.
 
 ## Context
 
 We are evolving prompt-building STRATEGIES (not prompt content). Strategies are Emacs Lisp functions that build prompts for an AI code improvement system.
+
+%s
+
+Evolution hypothesis: %s
 
 ## Parent Strategy
 
@@ -432,6 +437,10 @@ CANDIDATE_3:
   - `gptel-auto-experiment--get-topic-knowledge`
 - Each candidate should explore a DIFFERENT mechanism within axis %s
 - Do NOT output any explanation, ONLY the 3 candidates"
+                  (if (and skill-content (not (string-empty-p skill-content)))
+                      (format "## Proposer Skill\n\n%s" skill-content)
+                    "")
+                  hypothesis
                   parent-strategy-name
                   (plist-get parent-perf :total)
                   (* 100 (plist-get parent-perf :success-rate))
@@ -450,7 +459,7 @@ CANDIDATE_3:
           (progn
             (gptel-request proposer-prompt
                           :system "You are a strategy proposer for an automated code improvement system. You generate Emacs Lisp code for prompt-building strategies. Output ONLY code, no explanations."
-                          :callback (lambda (response info)
+                          :callback (lambda (response _info)
                                      (setq responses response
                                            done t)))
             ;; Wait for response (with timeout)
@@ -464,7 +473,7 @@ CANDIDATE_3:
               (gptel-auto-workflow--parse-strategy-candidates responses)))
         (error
          (message "[strategy-evolution] Error requesting proposals: %s" err)
-         nil))))))
+         nil)))))))
 
 (defun gptel-auto-workflow--parse-strategy-candidates (response)
   "Parse 3 strategy candidates from gptel RESPONSE.
@@ -626,12 +635,11 @@ If current strategy is underperforming, tries to generate a new one."
          (message "[strategy] Current strategy '%s' has %.0f%% success rate, triggering evolution"
                  current-strategy (* 100 current-success-rate))
         ;; Check for interruption before starting
-        (when gptel-auto-workflow--strategy-interrupted
-          (message "[strategy] Interrupted, skipping evolution")
-          (return-from gptel-auto-workflow--maybe-evolve-strategy nil))
-        ;; Pick an exploitation axis that's been least explored
-        (let* ((axis-perf (make-hash-table :test 'equal))
-               (all-axes '("A" "B" "C" "D" "E" "F")))
+        (if gptel-auto-workflow--strategy-interrupted
+            (message "[strategy] Interrupted, skipping evolution")
+          ;; Pick an exploitation axis that's been least explored
+          (let* ((axis-perf (make-hash-table :test 'equal))
+                 (all-axes '("A" "B" "C" "D" "E" "F")))
           ;; Count experiments per axis for current strategy
           (let ((eval-file (gptel-auto-workflow--strategy-results-file)))
             (when (file-exists-p eval-file)
@@ -690,8 +698,8 @@ If current strategy is underperforming, tries to generate a new one."
                    candidates
                    val-scores
                    (list :propose 0.0 :bench 0.0 :wall 0.0)))
-                ;; Switch to new strategy if it passed validation
-                 (setq gptel-auto-workflow--active-strategy new-strategy)))))))))
+                 ;; Switch to new strategy if it passed validation
+                  (setq gptel-auto-workflow--active-strategy new-strategy))))))))))
 
 (provide 'gptel-tools-agent-strategy-evolver)
 ;;; gptel-tools-agent-strategy-evolver.el ends here
