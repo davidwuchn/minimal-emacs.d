@@ -275,8 +275,6 @@ Decision logic: **70% grader + 30% code quality**
 | **Dynamic Stop** | Stop after N consecutive no-improvements |
 | **TSV Logging** | Explainable results with code_quality column |
 | **Pre-Merge Review** | Reviewer checks for blockers before staging merge |
-| **Periodic Researcher** | Every 4h, finds anti-patterns for target selection |
-| **Review Retry Loop** | Executor fixes issues, max 2 retries |
 | **Strategy Evolution** | Meta-Harness harness search: agent-driven proposal, Pareto frontier, anti-overfitting |
 
 ### Strategy Evolution (Meta-Harness)
@@ -340,12 +338,13 @@ Exploitation axes: A=Template architecture, B=Context retrieval, C=Section order
 
 ### Cron Schedule
 
-| Job | Schedule | Machine |
-|-----|----------|---------|
-| Auto-workflow | 10AM, 2PM, 6PM | macOS |
-| Researcher | Every 4 hours | macOS + Pi5 |
-| Weekly mementum | Sunday 4AM | macOS + Pi5 |
-| Weekly instincts | Sunday 5AM | macOS + Pi5 |
+| Job | Pi5 Schedule | macOS Schedule |
+|-----|-------------|----------------|
+| Auto-workflow | 11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6x) | 10AM, 2PM, 6PM (3x) |
+| Researcher | Every 4 hours | Every 4 hours |
+| Evolution | Every 6 hours | Every 6 hours |
+| Weekly mementum | Sunday 4AM | Sunday 4AM |
+| Weekly instincts | Sunday 5AM | Sunday 5AM |
 
 Install: `./scripts/install-cron.sh`
 
