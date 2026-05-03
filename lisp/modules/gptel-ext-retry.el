@@ -136,6 +136,26 @@ while effectively disabling the limit for unknown models.
 ASSUMPTION: No model will ever produce a payload exceeding this limit.
 TEST: Can be grepped to find all fallback limit usages.")
 
+(defun my/gptel--compute-trim-keep-count (info retry-count)
+  "Compute how many tool results to keep based on RETRY-COUNT and settings.
+INFO is the FSM info plist.  RETRY-COUNT is the current retry count.
+
+Returns max(0, `my/gptel-retry-keep-recent-tool-results' - RETRY-COUNT).
+When `my/gptel-retry-keep-recent-tool-results' is nil, returns 0.
+
+BEHAVIOR: keep count decreases with each retry:
+  retry 0: keep default value
+  retry 1: keep default-1
+  retry 2+: keep 0 (truncate all)"
+  (let ((retries (or retry-count (plist-get info :retries) 1)))
+    (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries))))
+
+(defun my/gptel--should-trim-p (info force-trim-p)
+  "Return non-nil if tool-result trimming should proceed.
+INFO is the FSM info plist.  FORCE-TRIM-P bypasses user preference.
+Returns nil if trimming is disabled (unless FORCE-TRIM-P is set)."
+  (and info (or force-trim-p my/gptel-retry-keep-recent-tool-results)))
+
 (defun my/gptel--trim-tool-results-for-retry (info &optional retry-count force-trim-p)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
@@ -162,12 +182,11 @@ has disabled retry trimming (nil). This allows pre-send compaction to work
 independently of retry settings.
 
 Returns the number of messages truncated, or 0 if nothing was done."
-  (if (or (null info) (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p)))
+  (if (not (my/gptel--should-trim-p info force-trim-p))
       0
     (let* ((data (plist-get info :data))
            (messages (and data (plist-get data :messages)))
-           (retries (or retry-count (plist-get info :retries) 1))
-           (keep (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries)))
+           (keep (my/gptel--compute-trim-keep-count info retry-count))
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
            (bytes-saved 0))
@@ -208,12 +227,11 @@ tool-output history.
 
 Returns the number of function-response parts truncated, or 0 if nothing was
 done."
-  (if (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p))
+  (if (not (my/gptel--should-trim-p info force-trim-p))
       0
     (let* ((data (plist-get info :data))
            (contents (and data (plist-get data :contents)))
-           (retries (or retry-count (plist-get info :retries) 1))
-           (keep (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries)))
+           (keep (my/gptel--compute-trim-keep-count info retry-count))
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
            (bytes-saved 0)
