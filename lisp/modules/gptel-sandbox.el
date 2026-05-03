@@ -563,8 +563,9 @@ can consume lists, vectors, plists, and alists as readable data."
        (pp-to-string value))))))
 
 (defun gptel-sandbox--format-tool-result (result)
-  "Format RESULT from a tool call into a sandbox result string."
-  (gptel-sandbox--format-result result))
+  "Format RESULT from a tool call into a sandbox result string.
+Uses render-result for proper pretty-printing of structured data."
+  (gptel-sandbox--render-result result))
 
 (defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
