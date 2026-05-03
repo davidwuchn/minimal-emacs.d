@@ -631,19 +631,25 @@ that function locally."
 REVIEW-OUTPUT contains the blocker/critical issues.
 Calls CALLBACK with (success-p . fix-output).
 If `gptel-auto-workflow-research-before-fix' is nil, executor handles directly."
-  (let* ((proj-root (gptel-auto-workflow--project-root))
-         (worktree (car (gptel-auto-workflow--branch-worktree-paths optimize-branch proj-root)))
-         (default-directory (or worktree proj-root)))
-    (message "[auto-workflow] Fixing review issues (retry %d/%d)..."
-             gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
-    (if (not (and (stringp worktree) (file-directory-p worktree)))
-        (funcall callback
-                 (cons nil
-                       (format "Error: Missing review fix worktree for %s"
-                               optimize-branch)))
-      (if (not gptel-auto-workflow-research-before-fix)
-          (gptel-auto-workflow--fix-directly review-output callback worktree)
-        (gptel-auto-workflow--research-then-fix review-output callback worktree)))))
+  (if (not (stringp review-output))
+      (funcall callback
+               (cons nil
+                     (format "Error: Invalid review output type %s for %s"
+                             (type-of review-output)
+                             optimize-branch)))
+    (let* ((proj-root (gptel-auto-workflow--project-root))
+           (worktree (car (gptel-auto-workflow--branch-worktree-paths optimize-branch proj-root)))
+           (default-directory (or worktree proj-root)))
+      (message "[auto-workflow] Fixing review issues (retry %d/%d)..."
+               gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
+      (if (not (and (stringp worktree) (file-directory-p worktree)))
+          (funcall callback
+                   (cons nil
+                         (format "Error: Missing review fix worktree for %s"
+                                 optimize-branch)))
+        (if (not gptel-auto-workflow-research-before-fix)
+            (gptel-auto-workflow--fix-directly review-output callback worktree)
+          (gptel-auto-workflow--research-then-fix review-output callback worktree))))))
 
 (defun gptel-auto-workflow--review-retryable-error-p (review-output)
   "Return non-nil when REVIEW-OUTPUT reflects a reviewer failure worth retrying.
