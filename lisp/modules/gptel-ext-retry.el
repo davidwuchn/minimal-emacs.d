@@ -425,8 +425,12 @@ ASSUMPTION: Role values are strings, compared with `equal'."
 (defun my/gptel--collect-message-indices (messages predicate)
   "Collect indices of messages in MESSAGES vector matching PREDICATE.
 PREDICATE is a function that takes a message plist and returns non-nil if it matches.
-Returns a list of indices in ascending order."
-  (when (and (vectorp messages) (> (length messages) 0))
+Returns a list of indices in ascending order, or nil if PREDICATE is not a function.
+ASSUMPTION: PREDICATE is a valid function; nil or non-function returns nil immediately.
+EDGE CASE: Non-function predicate returns nil (no runtime error)."
+  (when (and (functionp predicate)
+             (vectorp messages)
+             (> (length messages) 0))
     (cl-loop for i from 0 below (length messages)
              for msg = (aref messages i)
              when (funcall predicate msg)
