@@ -701,7 +701,7 @@ PROFILE is either `agent' or `readonly'."
         ((finish (result)
            (unless done
              (setq done t)
-             (when (timerp timer)
+             (when (and timer (timerp timer))
                (cancel-timer timer))
              (funcall callback result))))
       (condition-case err
