@@ -25,7 +25,11 @@ Returns (PASSED-P . ERROR-LIST)."
   (declare (indent 0))
   `(let ((passed t)
          (errors nil))
-     ,@body
+     (condition-case err
+         (progn ,@body)
+       (error
+        (push (format "Unhandled error: %s" (error-message-string err)) errors)
+        (setq passed nil)))
      (cons passed (nreverse errors))))
 
 (defmacro gptel-auto-workflow--test-assert (condition message)
