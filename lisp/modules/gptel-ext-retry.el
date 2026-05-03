@@ -559,6 +559,7 @@ EDGE CASE: Misleading success codes can still accompany application-level
   transient errors after the FSM has already entered `ERRS', so plist message
   patterns are checked for any status except known auth failures
   (see `my/gptel--auth-failure-statuses').
+EDGE CASE: Pattern variables may be nil during load order issues; guards prevent errors.
 
 TEST: (my/gptel--transient-error-p \"Malformed JSON\" 500) => t
 TEST: (my/gptel--transient-error-p \"Invalid API key\" 401) => nil
@@ -567,24 +568,34 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
                   ((stringp http-status) (string-to-number http-status))
                   ((numberp http-status) http-status)
                   (t nil)))
-         (error-msg (my/gptel--extract-error-message error-data)))
+         (error-msg (my/gptel--extract-error-message error-data))
+         (string-pattern (and (boundp 'my/gptel--transient-error-string-patterns)
+                              (stringp my/gptel--transient-error-string-patterns)
+                              my/gptel--transient-error-string-patterns))
+         (http-400-pattern (and (boundp 'my/gptel--transient-http-400-patterns)
+                                (stringp my/gptel--transient-http-400-patterns)
+                                my/gptel--transient-http-400-patterns))
+         (msg-pattern (and (boundp 'my/gptel--transient-error-message-patterns)
+                          (stringp my/gptel--transient-error-message-patterns)
+                          my/gptel--transient-error-message-patterns)))
     (or (and (stringp error-data)
-             (string-match-p my/gptel--transient-error-string-patterns
-                             (downcase error-data)))
+             string-pattern
+             (string-match-p string-pattern (downcase error-data)))
         (and (symbolp error-data)
-             (string-match-p my/gptel--transient-error-string-patterns
-                             (downcase (symbol-name error-data))))
+             string-pattern
+             (string-match-p string-pattern (downcase (symbol-name error-data))))
         (and (numberp status) (memq status my/gptel--transient-http-statuses))
         (and (numberp status)
              (= status 400)
              (listp error-data)
              (stringp error-msg)
-             (string-match-p my/gptel--transient-http-400-patterns error-msg))
+             http-400-pattern
+             (string-match-p http-400-pattern error-msg))
         (and (listp error-data)
              (stringp error-msg)
              (or (null status) (not (memq status my/gptel--auth-failure-statuses)))
-             (string-match-p my/gptel--transient-error-message-patterns
-                             (downcase error-msg))))))
+             msg-pattern
+             (string-match-p msg-pattern (downcase error-msg))))))
 
 (defun my/gptel--cleanup-partial-insertion (info)
   "Remove partial buffer text inserted before a failed request.
