@@ -782,9 +782,10 @@ FILES are validated against project root for security.
                                 (my/gptel--xml-escape history-text)
                                 "\n</parent_conversation_history>\n\n")))))
 
-    (if (string-empty-p context)
-        prompt
-      (concat context "Task:\n" prompt))))
+    (let ((safe-prompt (if (stringp prompt) prompt "")))
+      (if (string-empty-p context)
+          safe-prompt
+        (concat context "Task:\n" safe-prompt)))))
 
 ;;; Subagent Functions
 
