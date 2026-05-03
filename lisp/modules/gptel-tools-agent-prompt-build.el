@@ -174,7 +174,7 @@ With sufficient data, includes only sections with positive correlation."
                (length effective-sections)
                (length gptel-auto-workflow--ab-test-sections)
                (mapconcat #'symbol-name effective-sections ","))
-      (nreverse effective-sections)))))
+      (or (nreverse effective-sections) gptel-auto-workflow--ab-test-sections)))))
 
 (defun gptel-auto-workflow--load-skill-content (skill-name)
   "Load SKILL-NAME from assistant/skills/ directories.
@@ -848,49 +848,6 @@ run can advance through this list instead of repeatedly hammering the same provi
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
 
-(defconst gptel-auto-workflow--legacy-headless-fallback-agents
-  '("analyzer" "grader" "reviewer")
-  "Previous default for `gptel-auto-workflow-headless-fallback-agents'.")
-
-(defconst gptel-auto-workflow--previous-headless-fallback-agents
-  '("analyzer" "executor" "grader" "reviewer")
-  "Prior runtime default for `gptel-auto-workflow-headless-fallback-agents'.")
-
-(defconst gptel-auto-workflow--legacy-headless-subagent-fallbacks
-  '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-chat")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-    ("Gemini" . "gemini-3.1-pro-preview"))
-  "Previous default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
-
-(defconst gptel-auto-workflow--current-headless-subagent-fallbacks
-  '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("DashScope" . "qwen3.6-plus")
-    ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-pro")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
-  "Current runtime default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
-
-(defconst gptel-auto-workflow--legacy-executor-rate-limit-fallbacks
-  '(("DeepSeek" . "deepseek-chat")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-    ("DashScope" . "qwen3.6-plus")
-    ("Gemini" . "gemini-3.1-pro-preview"))
-  "Previous default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
-
-(defconst gptel-auto-workflow--current-headless-fallback-agents
-  '("analyzer" "comparator" "executor" "grader" "reviewer")
-  "Current runtime default for `gptel-auto-workflow-headless-fallback-agents'.")
-
-(defconst gptel-auto-workflow--current-executor-rate-limit-fallbacks
-  '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("DashScope" . "qwen3.6-plus")
-    ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-pro")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
-  "Current runtime default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
-
 (defvar gptel-auto-workflow--runtime-subagent-provider-overrides nil
   "Per-run provider overrides activated by live workflow failures.
 
@@ -959,26 +916,40 @@ the user has not explicitly customized the variable."
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-headless-fallback-agents)
       (when (or (equal gptel-auto-workflow-headless-fallback-agents
-                       gptel-auto-workflow--legacy-headless-fallback-agents)
+                       '("analyzer" "grader" "reviewer"))
                 (equal gptel-auto-workflow-headless-fallback-agents
-                       gptel-auto-workflow--previous-headless-fallback-agents))
+                       '("analyzer" "executor" "grader" "reviewer")))
         (setq gptel-auto-workflow-headless-fallback-agents
-              (copy-tree gptel-auto-workflow--current-headless-fallback-agents))
+              '("analyzer" "comparator" "executor" "grader" "reviewer"))
         (push 'gptel-auto-workflow-headless-fallback-agents migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-headless-subagent-fallbacks)
       (when (equal gptel-auto-workflow-headless-subagent-fallbacks
-                   gptel-auto-workflow--legacy-headless-subagent-fallbacks)
+                   '(("MiniMax" . "minimax-m2.7-highspeed")
+                     ("DashScope" . "qwen3.6-plus")
+                     ("DeepSeek" . "deepseek-chat")
+                     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+                     ("Gemini" . "gemini-3.1-pro-preview")))
         (setq gptel-auto-workflow-headless-subagent-fallbacks
-              (copy-tree gptel-auto-workflow--current-headless-subagent-fallbacks))
+              '(("MiniMax" . "minimax-m2.7-highspeed")
+                ("DashScope" . "qwen3.6-plus")
+                ("moonshot" . "kimi-k2.6")
+                ("DeepSeek" . "deepseek-v4-pro")
+                ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-executor-rate-limit-fallbacks)
       (when (equal gptel-auto-workflow-executor-rate-limit-fallbacks
-                   gptel-auto-workflow--legacy-executor-rate-limit-fallbacks)
+                   '(("DeepSeek" . "deepseek-chat")
+                     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+                     ("DashScope" . "qwen3.6-plus")
+                     ("Gemini" . "gemini-3.1-pro-preview")))
         (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-              (copy-tree
-               gptel-auto-workflow--current-executor-rate-limit-fallbacks))
+              '(("MiniMax" . "minimax-m2.7-highspeed")
+                ("DashScope" . "qwen3.6-plus")
+                ("moonshot" . "kimi-k2.6")
+                ("DeepSeek" . "deepseek-v4-pro")
+                ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
         (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-experiment-validation-retry-active-grace)

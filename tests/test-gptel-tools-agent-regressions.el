@@ -4469,14 +4469,14 @@ experiment phases do not trip the real pre-grade target validator."
     (unwind-protect
         (progn
           (setq gptel-auto-workflow-headless-fallback-agents
-                (copy-tree gptel-auto-workflow--previous-headless-fallback-agents))
+                '("analyzer" "executor" "grader" "reviewer"))
           (put 'gptel-auto-workflow-headless-fallback-agents 'saved-value nil)
           (put 'gptel-auto-workflow-headless-fallback-agents 'customized-value nil)
           (put 'gptel-auto-workflow-headless-fallback-agents 'theme-value nil)
           (let ((migrated (gptel-auto-workflow--migrate-legacy-provider-defaults)))
             (should (member 'gptel-auto-workflow-headless-fallback-agents migrated))
             (should (equal gptel-auto-workflow-headless-fallback-agents
-                           gptel-auto-workflow--current-headless-fallback-agents))))
+                           '("analyzer" "comparator" "executor" "grader" "reviewer")))))
       (setq gptel-auto-workflow-headless-fallback-agents old-headless)
       (put 'gptel-auto-workflow-headless-fallback-agents 'saved-value old-headless-saved)
       (put 'gptel-auto-workflow-headless-fallback-agents 'customized-value old-headless-customized)
