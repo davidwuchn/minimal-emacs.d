@@ -3,12 +3,12 @@ title: Experiment Insights - gptel-auto-workflow-strategic
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-auto-workflow-strategic]
-updated: 2026-05-04 08:05
+updated: 2026-05-04 17:00
 ---
 
 # Experiment Insights: gptel-auto-workflow-strategic
 
-*Generated from 22 individual experiment memories.*
+*Consolidated from 4 experiments.*
 
-**Total experiments:** 22 (0% kept)
+**Keep rate:** 0% (0 kept / 4 total)
 
