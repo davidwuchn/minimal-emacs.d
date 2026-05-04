@@ -622,18 +622,46 @@ Returns new strategy name or nil if rejected."
 (defun gptel-auto-workflow--maybe-evolve-strategy (target)
   "Maybe evolve a new strategy for TARGET based on recent performance.
 Called periodically from the experiment loop.
-If current strategy is underperforming, tries to generate a new one."
+If current strategy is underperforming, tries to generate a new one.
+When the active strategy is unevaluated, falls back to the worst evaluated
+strategy as the parent for evolution."
   (when (and gptel-auto-workflow--strategy-evolution-enabled
              (fboundp 'gptel-auto-workflow--select-best-strategy))
     (let* ((current-strategy gptel-auto-workflow--active-strategy)
            (current-perf (gptel-auto-workflow--get-strategy-performance current-strategy))
            (current-success-rate (plist-get current-perf :success-rate))
-           (current-total (plist-get current-perf :total)))
+           (current-total (plist-get current-perf :total))
+           ;; If active strategy is unevaluated, check evaluated strategies for evolution candidates
+           (parent-strategy
+            (if (>= current-total 5)
+                current-strategy
+              ;; Find the worst evaluated strategy to evolve from
+              (let* ((all-strategies (gptel-auto-workflow--discover-strategies))
+                     (evaluated
+                      (cl-remove-if
+                       (lambda (name)
+                         (let ((p (gptel-auto-workflow--get-strategy-performance name)))
+                           (or (< (plist-get p :total) 5)
+                               (> (plist-get p :success-rate) 0.4))))
+                       all-strategies))
+                     (worst (car (last (sort evaluated
+                                            (lambda (a b)
+                                              (> (plist-get (gptel-auto-workflow--get-strategy-performance a) :success-rate)
+                                                 (plist-get (gptel-auto-workflow--get-strategy-performance b) :success-rate))))))))
+                (when worst
+                  (message "[strategy] Active strategy %s is unevaluated, falling back to %s for evolution"
+                           current-strategy worst))
+                worst)))
+           (parent-perf (when parent-strategy
+                          (gptel-auto-workflow--get-strategy-performance parent-strategy)))
+           (parent-success-rate (plist-get parent-perf :success-rate))
+           (parent-total (plist-get parent-perf :total)))
       ;; Only evolve if we have enough data and performance is mediocre
-      (when (and (>= current-total 5)
-                 (<= current-success-rate 0.4))
-         (message "[strategy] Current strategy '%s' has %.0f%% success rate, triggering evolution"
-                 current-strategy (* 100 current-success-rate))
+      (when (and parent-strategy
+                 (>= parent-total 5)
+                 (<= parent-success-rate 0.4))
+         (message "[strategy] Evolving from '%s' (%.0f%% success over %d experiments)"
+                  parent-strategy (* 100 parent-success-rate) parent-total)
         ;; Check for interruption before starting
         (if gptel-auto-workflow--strategy-interrupted
             (message "[strategy] Interrupted, skipping evolution")
@@ -653,7 +681,7 @@ If current strategy is underperforming, tries to generate a new one."
                           (let* ((entry (json-read-from-string line))
                                  (entry-strategy (cdr (assoc 'strategy entry)))
                                  (entry-axis (cdr (assoc 'axis entry))))
-                            (when (and (equal entry-strategy current-strategy)
+                             (when (and (equal entry-strategy parent-strategy)
                                        entry-axis)
                               (puthash entry-axis
                                        (1+ (gethash entry-axis axis-perf 0))
@@ -671,8 +699,8 @@ If current strategy is underperforming, tries to generate a new one."
             ;; Evolve strategy (with interrupt protection)
             (let ((new-strategy
                    (condition-case quit
-                       (gptel-auto-workflow--evolve-strategy
-                        current-strategy
+                        (gptel-auto-workflow--evolve-strategy
+                         parent-strategy
                         (format "Improve strategy by targeting axis %s (%s)"
                                 target-axis
                                 (gptel-auto-workflow--strategy-axis-description target-axis))
@@ -694,7 +722,7 @@ If current strategy is underperforming, tries to generate a new one."
                   (puthash new-strategy (plist-get perf :avg-score) val-scores)
                   (gptel-auto-workflow--ensure-strategy-run-directories)
                   (gptel-auto-workflow--write-evolution-summary
-                   (1+ (gethash current-strategy val-scores 0))
+                   (1+ (gethash parent-strategy val-scores 0))
                    candidates
                    val-scores
                    (list :propose 0.0 :bench 0.0 :wall 0.0)))

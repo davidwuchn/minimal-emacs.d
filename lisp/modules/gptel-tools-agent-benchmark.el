@@ -939,18 +939,27 @@ THRESHOLD defaults to 0.005 and matches the comparator prompt rules."
             &optional threshold)
   "Return gated comparator decision metadata for WINNER.
 
-The gate rejects any score regression, and also rejects score ties unless code
-quality improves by at least
-`gptel-auto-experiment-min-quality-gain-on-score-tie' while the combined score
-still improves."
+The gate rejects changes whose combined score (60% eight-keys + 40% code quality)
+regresses.  A small eight-keys score dip is tolerated when code quality improves
+enough to lift the combined score above threshold."
   (let* ((decision-threshold (or threshold 0.005))
          (score-delta (- score-after score-before))
          (quality-delta (- quality-after quality-before))
          (combined-delta (- combined-after combined-before)))
     (cond
-     ((<= score-delta (- decision-threshold))
+     ;; Combined score regression: reject outright regardless of individual deltas
+     ((<= combined-delta (- decision-threshold))
       (list :winner "A"
-            :note "Rejected: score regressed"))
+            :note "Rejected: combined score regressed"))
+     ;; Score regressed but combined score improves: quality gain compensates
+     ((< score-delta (- decision-threshold))
+      (if (> combined-delta decision-threshold)
+          (list :winner "B"
+                :note (format "Kept: quality gain (%.2f) compensates for score regression (%.3f)"
+                              quality-delta score-delta))
+        (list :winner "A"
+              :note "Rejected: score regressed without sufficient combined improvement")))
+     ;; Score tie (within decision threshold)
      ((< (abs score-delta) decision-threshold)
       (if (and (> combined-delta 0)
                (>= quality-delta gptel-auto-experiment-min-quality-gain-on-score-tie))
@@ -962,6 +971,7 @@ still improves."
                         "Rejected: score tie without positive combined improvement"
                       (format "Rejected: score tie without >= %.2f quality gain"
                               gptel-auto-experiment-min-quality-gain-on-score-tie)))))
+     ;; Score improved: accept
      (t
       (list :winner (if (string= winner "tie") "B" winner)
             :note (and (string= winner "tie")
