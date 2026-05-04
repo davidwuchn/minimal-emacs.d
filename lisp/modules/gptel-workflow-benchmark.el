@@ -656,13 +656,14 @@ TEST-ID is the test case ID."
       entry)))
 
 (defun gptel-workflow--summarize-results (results)
-  "Create summary of RESULTS."
+  "Create summary of RESULTS.
+RESULTS is a list of (run . scores) cons cells."
   (let ((total (length results))
         (avg-overall 0.0)
         (avg-efficiency 0.0)
         (avg-completion 0.0))
     (dolist (r results)
-      (when-let ((scores (gptel-workflow--result-scores r)))
+      (let ((scores (cdr r)))
         (cl-incf avg-overall (or (plist-get scores :overall-score) 0))
         (cl-incf avg-efficiency (or (plist-get scores :efficiency-score) 0))
         (cl-incf avg-completion (or (plist-get scores :completion-score) 0))))
