@@ -1016,7 +1016,7 @@ experiment phases do not trip the real pre-grade target validator."
     (should decision)
     (should (plist-get decision :keep))
     (should-not (string-match-p "Comparator override:" (plist-get decision :reasoning)))
-    (should (string-match-p "Kept: score tie with >= 0.03 quality gain"
+    (should (string-match-p "Kept: score tie with >= 0.02 quality gain"
                             (plist-get decision :reasoning)))))
 
 (ert-deftest regression/auto-experiment/decide-rejects-score-tie-without-combined-improvement ()

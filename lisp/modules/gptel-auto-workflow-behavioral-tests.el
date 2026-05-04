@@ -31,6 +31,8 @@
 
 (defun gptel-test-context--add-error (ctx msg)
   "Record an error MSG in test context CTX and mark as failed."
+  (when (null ctx)
+    (signal 'wrong-type-argument (list 'gptel-test-context ctx)))
   (cl-check-type ctx gptel-test-context)
   (setf (gptel-test-context-errors ctx)
         (nconc (gptel-test-context-errors ctx) (list msg)))

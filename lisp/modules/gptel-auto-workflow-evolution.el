@@ -498,6 +498,7 @@ Uses cache to avoid repeated file reads."
 Groups insights by target module, synthesizes patterns, archives old files.
 Prevents the linear growth of one-insight-per-file over hundreds of experiments."
   (interactive)
+  (cl-block gptel-auto-workflow--evolution-consolidate-insights
   (let* ((repo-root (or (gptel-auto-workflow--evolution-repo-root)
                         default-directory))
          (memories-dir (expand-file-name "mementum/memories" repo-root))
@@ -598,7 +599,7 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
     (when (> consolidated 0)
       (message "[evolution] Consolidated %d insight files across %d groups"
                consolidated (hash-table-count target-groups)))
-    consolidated))
+    consolidated)))
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.

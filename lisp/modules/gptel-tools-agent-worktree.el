@@ -8,7 +8,8 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
   (let* ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
          (remote (gptel-auto-workflow--shared-remote))
          (entries nil))
-    (if (not (file-directory-p default-directory))
+    (if (not (and (file-directory-p default-directory)
+                  (gptel-auto-workflow--non-empty-string-p remote)))
         nil
       (let ((result
              (gptel-auto-workflow--git-result
@@ -893,11 +894,12 @@ repair just that gitlink from MAIN-REF, then rehydrate and commit the repair."
                     (gptel-auto-workflow--hydrate-staging-submodules worktree))
               (if (/= 0 (cdr hydrate-result))
                   (progn
-                    (ignore-errors
-                      (gptel-auto-workflow--git-cmd
-                       (format "git reset --hard %s"
-                               (shell-quote-argument starting-head))
-                       60))
+                    (when (gptel-auto-workflow--non-empty-string-p starting-head)
+                      (ignore-errors
+                        (gptel-auto-workflow--git-cmd
+                         (format "git reset --hard %s"
+                                 (shell-quote-argument starting-head))
+                         60)))
                     (message "[auto-workflow] Failed to hydrate repaired staging submodules from %s: %s"
                              main-ref
                              (my/gptel--sanitize-for-logging (car hydrate-result) 200))
