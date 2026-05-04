@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-04 07:52
+updated: 2026-05-04 08:00
 ---
 
 # Self-Evolution Knowledge Base
@@ -42,7 +42,7 @@ updated: 2026-05-04 07:52
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 16% verified (19/122 experiments)
+- **bug-fix**: 15% verified (19/123 experiments)
 - **performance**: 19% verified (5/27 experiments)
 - **refactoring**: 15% verified (4/27 experiments)
 - **safety**: 23% verified (10/44 experiments)
@@ -53,7 +53,7 @@ Based on verified benchmark patterns (sorted by success rate):
 
 1. **safety** - 23% kept (44 experiments)
 2. **performance** - 19% kept (27 experiments)
-3. **bug-fix** - 16% kept (122 experiments)
+3. **bug-fix** - 15% kept (123 experiments)
 4. **refactoring** - 15% kept (27 experiments)
 
 ## Critical Guidance for Maximum Success
@@ -90,7 +90,7 @@ Which change types work best for each target file:
 
 ### `gptel-sandbox.el`
 
-- **bug-fix**: 31% (13 experiments)
+- **bug-fix**: 29% (14 experiments)
 - **safety**: 25% (4 experiments)
 
 ### `gptel-auto-workflow-strategic.el`
@@ -112,18 +112,6 @@ Which change types work best for each target file:
 ### `gptel-benchmark-core.el`
 
 - **bug-fix**: 0% (7 experiments)
-
-## Auto-Approved Knowledge Pages
-
-*1 knowledge page(s) auto-approved (trust-but-verify):*
-
-### `gptel-workflow-benchmark-el`
-
-- **Confidence:** 24%
-- **Sources:** 4 memories
-- **Status:** ⚠ Flagged
-- **Warnings:** No code examples or concrete references, Content does not mention topic 'gptel-workflow-benchmark-el'
-
 
 ## Feedback Loop
 
