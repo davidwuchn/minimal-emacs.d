@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-04 08:00
+updated: 2026-05-04 09:00
 ---
 
 # Self-Evolution Knowledge Base
@@ -13,11 +13,11 @@ updated: 2026-05-04 08:00
 
 ## Git History Facts
 
-- Active experiment branches: 126
+- Active experiment branches: 127
 - Historical merges: 647
 - Active branches merged: 20
-- Active branches abandoned: 106
-- Active merge rate: 15.9%
+- Active branches abandoned: 107
+- Active merge rate: 15.7%
 
 ### Target Frequency
 
@@ -36,24 +36,25 @@ updated: 2026-05-04 08:00
 - `runtime`: 2 experiments
 - `merge`: 2 experiments
 - `confirm`: 2 experiments
+- `worktree`: 1 experiments
 - `sanitize`: 1 experiments
 - `preview`: 1 experiments
 - `context`: 1 experiments
 
 ## Benchmark-Verified Patterns
 
-- **bug-fix**: 15% verified (19/123 experiments)
-- **performance**: 19% verified (5/27 experiments)
+- **bug-fix**: 16% verified (20/128 experiments)
+- **performance**: 17% verified (5/29 experiments)
 - **refactoring**: 15% verified (4/27 experiments)
-- **safety**: 23% verified (10/44 experiments)
+- **safety**: 24% verified (11/46 experiments)
 
 ## Actionable Advice for Next Experiments
 
 Based on verified benchmark patterns (sorted by success rate):
 
-1. **safety** - 23% kept (44 experiments)
-2. **performance** - 19% kept (27 experiments)
-3. **bug-fix** - 15% kept (123 experiments)
+1. **safety** - 24% kept (46 experiments)
+2. **performance** - 17% kept (29 experiments)
+3. **bug-fix** - 16% kept (128 experiments)
 4. **refactoring** - 15% kept (27 experiments)
 
 ## Critical Guidance for Maximum Success
@@ -74,7 +75,7 @@ Which change types work best for each target file:
 ### `gptel-ext-context-cache.el`
 
 - **safety**: 67% (3 experiments)
-- **bug-fix**: 29% (14 experiments)
+- **bug-fix**: 25% (16 experiments)
 - **performance**: 0% (6 experiments)
 
 ### `gptel-tools-agent.el`
@@ -112,6 +113,10 @@ Which change types work best for each target file:
 ### `gptel-benchmark-core.el`
 
 - **bug-fix**: 0% (7 experiments)
+
+### `gptel-tools-agent-worktree.el`
+
+- **bug-fix**: 0% (4 experiments)
 
 ## Feedback Loop
 
