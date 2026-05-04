@@ -377,15 +377,27 @@ Returns plist with :total :kept :success-rate :avg-score."
 
 (defun gptel-auto-workflow--select-best-strategy (target)
   "Select the best strategy for TARGET based on historical performance.
-Returns strategy name."
+Returns strategy name. Gives newly-evolved strategies a chance by
+preferring the active strategy when it has no evaluations yet."
   (let* ((strategies (gptel-auto-workflow--discover-strategies))
          (evaluated-strategies
           (cl-remove-if
            (lambda (name)
              (let ((perf (gptel-auto-workflow--get-strategy-performance name)))
                (= (plist-get perf :total) 0)))
+           strategies))
+         ;; Give new unevaluated strategies a fair share of experiments
+         (unevaluated-strategies
+          (cl-remove-if
+           (lambda (name) (member name evaluated-strategies))
            strategies)))
     (cond
+     ;; If active strategy is unevaluated, use it (exploration)
+     ((and (not (equal gptel-auto-workflow--active-strategy "template-default"))
+           (member gptel-auto-workflow--active-strategy unevaluated-strategies))
+      (message "[strategy] Selected unevaluated active strategy %s for exploration"
+               gptel-auto-workflow--active-strategy)
+      gptel-auto-workflow--active-strategy)
      ;; If we have evaluated strategies, pick the best one
      (evaluated-strategies
       (let* ((sorted (sort (copy-sequence evaluated-strategies)
