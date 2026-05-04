@@ -130,13 +130,14 @@ Returns list of test plists."
         '()))))
 
 (defun gptel-workflow--normalize-test (test)
-  "Normalize TEST alist to plist format."
-  (list :id (cdr (assq 'id test))
-        :name (cdr (assq 'name test))
-        :task (cdr (assq 'task test))
-        :context (cdr (assq 'context test))
-        :success-criteria (cdr (assq 'success_criteria test))
-        :expected-outputs (cdr (assq 'expected_outputs test))))
+  "Normalize TEST alist to plist format.
+Handles missing keys gracefully by defaulting to nil."
+  (list :id (let ((entry (assq 'id test))) (and entry (cdr entry)))
+        :name (let ((entry (assq 'name test))) (and entry (cdr entry)))
+        :task (let ((entry (assq 'task test))) (and entry (cdr entry)))
+        :context (let ((entry (assq 'context test))) (and entry (cdr entry)))
+        :success-criteria (let ((entry (assq 'success_criteria test))) (and entry (cdr entry)))
+        :expected-outputs (let ((entry (assq 'expected_outputs test))) (and entry (cdr entry)))))
 
 (defun gptel-workflow--read-json (file)
   "Read JSON from FILE."
@@ -480,9 +481,11 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
                (overall (alist-get 'overall scores))
                (min-overall (cdr (assq 'min_overall eight-keys-cfg))))
           (setf (gptel-workflow-run-eight-keys-scores run) scores)
-          (if min-overall
-              (if (>= overall min-overall) 1.0 overall)
-            overall))
+          (cond
+           ((not (numberp overall)) 0.5)
+           ((not (numberp min-overall)) overall)
+           ((>= overall min-overall) 1.0)
+           (t overall)))
       0.5)))
 
 ;;; Results
