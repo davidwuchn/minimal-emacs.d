@@ -462,11 +462,14 @@ CANDIDATE_3:
                           :callback (lambda (response _info)
                                      (setq responses response
                                            done t)))
-            ;; Wait for response (with timeout)
-            (with-timeout (60 (message "[strategy-evolution] Timeout waiting for proposals")
+            ;; Wait for response (with timeout). Use accept-process-output
+            ;; instead of sleep-for to allow network I/O callbacks to fire.
+            ;; sleep-for blocks the event loop in daemon mode, preventing
+            ;; gptel's async response handler from running.
+            (with-timeout (120 (message "[strategy-evolution] Timeout waiting for proposals")
                              nil)
               (while (not done)
-                (sleep-for 0.5)))
+                (accept-process-output nil 0.5)))
 
             (when responses
               (message "[strategy-evolution] Received proposals, parsing...")
