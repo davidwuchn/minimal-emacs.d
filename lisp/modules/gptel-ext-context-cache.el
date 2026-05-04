@@ -427,7 +427,7 @@ Some gptel model tables encode context windows in *thousands* of tokens as float
   "Extract valid context_window from an OpenRouter model ENTRY alist.
 Returns (id . context_length) if ENTRY is a plist/alist with a string id
 and a positive integer context_length; otherwise returns nil."
-  (when (consp entry)
+  (when (and (consp entry) (listp entry))
     (let ((id (alist-get 'id entry))
           (cw (alist-get 'context_length entry)))
       (and (stringp id) (not (string-empty-p id)) (integerp cw) (> cw 0)
@@ -656,8 +656,9 @@ Runs asynchronously; returns nil immediately."
          (let* ((valid-data (and (listp data) data))
                 (entry (and valid-data
                             (seq-find (lambda (e)
-                                        (let ((id (alist-get 'id e)))
-                                          (and (stringp id) (string-equal id model-id))))
+                                        (and (listp e)
+                                             (let ((id (alist-get 'id e)))
+                                               (and (stringp id) (string-equal id model-id)))))
                                       valid-data)))
                 (cw (and entry (alist-get 'context_length entry))))
            (if (and (integerp cw) (> cw 0))
