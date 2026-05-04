@@ -362,24 +362,28 @@ supports a small, explicit whitelist of pure operations."
   "Resolve TOOL-SPEC arguments from ARG-FORMS using ENV."
   (unless (cl-evenp (length arg-forms))
     (error "Programmatic tool-call requires keyword/value pairs"))
+  (unless (listp tool-spec)
+    (error "Programmatic tool spec must be a list, got: %S" tool-spec))
   (let* ((arg-map (gptel-sandbox--tool-arg-map arg-forms))
-         (spec-args (gptel-tool-args tool-spec))
-         (values nil))
-    (dolist (arg spec-args (nreverse values))
-      (let* ((name (plist-get arg :name))
-             (key (and (stringp name) (intern (concat ":" name))))
-             (value-form (if key (gethash key arg-map gptel-sandbox--missing-marker)
-                          gptel-sandbox--missing-marker)))
-        (cond
-         ((not key)
-          (error "Invalid tool spec: argument missing :name property"))
-         ((eq value-form gptel-sandbox--missing-marker)
-          (if (plist-get arg :optional)
-              (push nil values)
-            (error "Missing required argument %s for tool %s"
-                   name (gptel-tool-name tool-spec))))
-         (t
-          (push (gptel-sandbox--eval-expr value-form env) values)))))))
+         (spec-args (gptel-tool-args tool-spec)))
+    (unless (listp spec-args)
+      (error "Programmatic tool spec returned invalid :args property, got: %S" spec-args))
+    (let ((values nil))
+      (dolist (arg spec-args (nreverse values))
+        (let* ((name (plist-get arg :name))
+               (key (and (stringp name) (intern (concat ":" name))))
+               (value-form (if key (gethash key arg-map gptel-sandbox--missing-marker)
+                            gptel-sandbox--missing-marker)))
+          (cond
+           ((not key)
+            (error "Invalid tool spec: argument missing :name property"))
+           ((eq value-form gptel-sandbox--missing-marker)
+            (if (plist-get arg :optional)
+                (push nil values)
+              (error "Missing required argument %s for tool %s"
+                     name (gptel-tool-name tool-spec))))
+           (t
+            (push (gptel-sandbox--eval-expr value-form env) values))))))))
 
 (defun gptel-sandbox--normalize-tool-name (tool-name)
   "Convert TOOL-NAME to string representation.
