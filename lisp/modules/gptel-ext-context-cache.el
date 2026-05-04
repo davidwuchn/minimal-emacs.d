@@ -80,6 +80,10 @@ Keys include: :context-window, :pricing-input, :pricing-output,
   "Hash table caching context-window lookups from gptel model tables.
 Reduces repeated iterations through model tables.")
 
+(defconst my/gptel--token-estimate-cache-max-size 1000
+  "Maximum entries in `my/gptel--token-estimate-cache'.
+Prevents unbounded memory growth from repeated token estimates.")
+
 (defvar my/gptel--token-estimate-cache (make-hash-table :test 'equal)
   "Hash table caching token estimates for (chars . extension) pairs.")
 
@@ -451,7 +455,9 @@ and a positive integer context_length; otherwise returns nil."
                           2.5)
                          (t 3.5)))
                  (result (/ (float chars) ratio)))
-            (puthash cache-key result my/gptel--token-estimate-cache)
+            (when (< (hash-table-count my/gptel--token-estimate-cache)
+                     my/gptel--token-estimate-cache-max-size)
+              (puthash cache-key result my/gptel--token-estimate-cache))
             result)))))
 
 (defun my/gptel--estimate-tokens (chars)
