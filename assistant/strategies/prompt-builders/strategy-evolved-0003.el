@@ -2,15 +2,18 @@
 ;; Hypothesis: Dynamically composing skills based on target characteristics and failure history improves focus
 ;; Axis: Prompt template architecture
 
+(require 'cl-lib)
 (require 'gptel-tools-agent-prompt-build)
 
 (defun strategy-evolved-0003-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt using weighted skill composition based on target analysis."
   (let* ((skill-weights (strategy-evolved-0003--compute-weights previous-results))
-         (selected-skills (cl-loop for (skill . weight) in skill-weights
-                                   when (>= weight 0.3)
-                                   collect skill))
-         (composed-skills (when selected-skills
+         (selected-skills (cl-loop for sw in skill-weights
+                                    for skill = (car sw)
+                                    for weight = (cdr sw)
+                                    when (>= weight 0.3)
+                                    collect skill))
+         (_composed-skills (when selected-skills
                             (mapconcat
                              (lambda (skill)
                                (or (gptel-auto-workflow--load-skill-content skill) ""))
@@ -65,7 +68,7 @@ PREVIOUS-RESULTS is a list of plists with :decision and :comparator-reason."
         :version "1.1"
         :hypothesis "Dynamic skill composition weighted by failure pattern frequency"
         :axis "A"
-        :components ("weighted-selection" "failure-driven" "skill-composition")))
+        :components '("weighted-selection" "failure-driven" "skill-composition")))
 
 (provide 'strategy-evolved-0003)
 ;;; strategy-evolved-0003.el ends here

@@ -563,3 +563,5 @@
 {"timestamp":"2026-05-04 12:21:15","strategy":"template-default","target":"two","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-04 12:21:15","strategy":"template-default","target":"two","experiment-id":4,"score":0,"outcome":"kept","axis":"?"}
 {"timestamp":"2026-05-04 12:21:57","strategy":"evolved-0003","target":"lisp/modules/gptel-tools-agent-staging-baseline.el","experiment-id":1,"score":0.39999999999999997,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-04 12:29:17","strategy":"template-default","target":"staging-merge","experiment-id":0,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-04 12:29:39","strategy":"template-default","target":"lisp/modules/gptel-tools-agent-staging-baseline.el","experiment-id":1,"score":0.39999999999999997,"outcome":"discarded","axis":"?"}
