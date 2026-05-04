@@ -421,9 +421,12 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
 (defun gptel-sandbox--truncate-summary (value &optional width)
   "Return a compact printable summary of VALUE up to WIDTH chars."
   (let* ((width (if (and (integerp width) (>= width 1)) width 80))
-         (text (prin1-to-string value)))
+         (text (let ((print-length 100)
+                     (print-level 5)
+                     (print-circle t))
+                 (prin1-to-string value))))
     (if (> (length text) width)
-        (concat (substring text 0 width) "...")
+        (concat (substring text 0 (min width (length text))) "...")
       text)))
 
 (defun gptel-sandbox--statement-tool-call (statement)
