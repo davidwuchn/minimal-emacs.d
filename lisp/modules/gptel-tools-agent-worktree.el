@@ -8,7 +8,8 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
   (let* ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
          (remote (gptel-auto-workflow--shared-remote))
          (entries nil))
-    (if (not (file-directory-p default-directory))
+    (if (not (and (file-directory-p default-directory)
+                  (gptel-auto-workflow--non-empty-string-p remote)))
         nil
       (let ((result
              (gptel-auto-workflow--git-result
