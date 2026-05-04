@@ -395,6 +395,10 @@ CANDIDATE_1:
 ;;; strategy-NAME.el --- DESCRIPTION -*- lexical-binding: t; -*-
 ;; Hypothesis: ONE SENTENCE
 ;; Axis: %%s
+;;
+;; IMPORTANT: Use a MEANINGFUL name replacing NAME (e.g., strategy-weighted-skills,
+;; strategy-outcome-reasoning, not strategy-evolved-0006).
+;; The name should describe the core mechanism in 2-4 hyphenated words.
 
 (require 'gptel-tools-agent-prompt-build)
 
