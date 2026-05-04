@@ -9,8 +9,8 @@
   "Extract patterns from successful experiments."
   (when previous-results
     (cl-loop for result in previous-results
-             when (and (listp result) (getf result :success))
-             collect (getf result :pattern))))
+             when (and (listp result) (plist-get result :success))
+             collect (plist-get result :pattern))))
 
 (defun strategy-evolved-0004--extract-failure-patterns (analysis)
   "Extract patterns from failures."
