@@ -651,10 +651,12 @@ Filters out nil values to prevent arithmetic errors."
 Returns plist with :significant and :confidence."
   (let* ((scores-a (gptel-benchmark--extract-overall-scores results-a))
          (scores-b (gptel-benchmark--extract-overall-scores results-b))
-         (mean-a (if (and scores-a (> (length scores-a) 0))
-                     (/ (apply #'+ scores-a) (length scores-a)) 0))
-         (mean-b (if (and scores-b (> (length scores-b) 0))
-                     (/ (apply #'+ scores-b) (length scores-b)) 0))
+         (valid-a (and (listp scores-a) (cl-remove-if-not #'numberp scores-a)))
+         (valid-b (and (listp scores-b) (cl-remove-if-not #'numberp scores-b)))
+         (mean-a (if (and valid-a (> (length valid-a) 0))
+                     (/ (cl-reduce #'+ valid-a) (float (length valid-a))) 0.0))
+         (mean-b (if (and valid-b (> (length valid-b) 0))
+                     (/ (cl-reduce #'+ valid-b) (float (length valid-b))) 0.0))
          (diff (abs (- mean-a mean-b))))
     (list :difference diff
           :significant (> diff 0.1)
