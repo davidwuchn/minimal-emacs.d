@@ -1,22 +1,22 @@
-;;; strategy-evolved-0004-reasoning.el --- evolved-0004 reasoning injection in prompt architecture -*- lexical-binding: t; -*-
+;;; strategy-outcome-reasoning-reasoning.el --- evolved-0004 reasoning injection in prompt architecture -*- lexical-binding: t; -*-
 ;; Hypothesis: Injecting explicit evolved-0004 reasoning between success/failure patterns improves learning
 ;; Axis: A (Prompt template architecture)
 
 (require 'gptel-tools-agent-prompt-build)
 (require 'cl-lib)
 
-(defun strategy-evolved-0004--extract-success-patterns (previous-results)
+(defun strategy-outcome-reasoning--extract-success-patterns (previous-results)
   "Extract patterns from successful experiments."
   (when previous-results
     (cl-loop for result in previous-results
              when (and (listp result) (plist-get result :success))
              collect (plist-get result :pattern))))
 
-(defun strategy-evolved-0004--extract-failure-patterns (analysis)
+(defun strategy-outcome-reasoning--extract-failure-patterns (analysis)
   "Extract patterns from failures."
   (gptel-auto-experiment--format-failure-patterns analysis))
 
-(defun strategy-evolved-0004--generate-evolved-0004-analysis (successes failures)
+(defun strategy-outcome-reasoning--generate-evolved-0004-analysis (successes failures)
   "Generate explicit evolved-0004 reasoning between successes and failures."
   (let ((success-count (length successes))
         (failure-text (or failures "No explicit failures detected")))
@@ -43,22 +43,22 @@ GUIDANCE: Apply the success patterns while explicitly avoiding the failure patte
             failure-text
             success-count)))
 
-(defun strategy-evolved-0004--extract-axis-guidance (analysis)
+(defun strategy-outcome-reasoning--extract-axis-guidance (analysis)
   "Extract axis-specific guidance for evolved-0004 framing."
   (gptel-auto-experiment--format-axis-guidance analysis))
 
-(defun strategy-evolved-0004-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-outcome-reasoning-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt using evolved-0004 reasoning injection architecture."
   (let* ((base-prompt (gptel-auto-experiment-build-prompt target experiment-id max-experiments analysis baseline previous-results))
-         (success-patterns (strategy-evolved-0004--extract-success-patterns previous-results))
-         (failure-patterns (strategy-evolved-0004--extract-failure-patterns analysis))
-         (evolved-0004-analysis (strategy-evolved-0004--generate-evolved-0004-analysis success-patterns failure-patterns))
-         (axis-guidance (strategy-evolved-0004--extract-axis-guidance analysis)))
+         (success-patterns (strategy-outcome-reasoning--extract-success-patterns previous-results))
+         (failure-patterns (strategy-outcome-reasoning--extract-failure-patterns analysis))
+         (evolved-0004-analysis (strategy-outcome-reasoning--generate-evolved-0004-analysis success-patterns failure-patterns))
+         (axis-guidance (strategy-outcome-reasoning--extract-axis-guidance analysis)))
     (if (or success-patterns failure-patterns)
         (concat base-prompt "\n\n" evolved-0004-analysis "\n\n" axis-guidance)
       (concat base-prompt "\n\n" axis-guidance))))
 
-(defun strategy-evolved-0004-get-metadata ()
+(defun strategy-outcome-reasoning-get-metadata ()
   "Return metadata for this strategy."
   (list :name "evolved-0004-reasoning"
         :version "1.0"
@@ -66,4 +66,4 @@ GUIDANCE: Apply the success patterns while explicitly avoiding the failure patte
         :axis "A"
         :components ["evolved-0004-analysis" "success-extraction" "failure-context" "reasoning-injection"]))
 
-(provide 'strategy-evolved-0004)
+(provide 'strategy-outcome-reasoning)
