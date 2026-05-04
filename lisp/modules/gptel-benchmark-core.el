@@ -146,9 +146,15 @@ Returns nil for empty or malformed input."
       (reverse alist))))
 
 (defun gptel-benchmark--ensure-list (data)
-  "Ensure DATA is a list, converting vectors if necessary.
-JSON parsing returns vectors for arrays; this normalizes to lists."
-  (if (vectorp data) (append data nil) data))
+  "Ensure DATA is a proper list, converting vectors if necessary.
+JSON parsing returns vectors for arrays; this normalizes to lists.
+Returns nil for nil, strings, or improper lists.
+Strings are preserved as-is since they are valid JSON values."
+  (cond
+   ((null data) nil)
+   ((stringp data) data)
+   ((vectorp data) (append data nil))
+   (t data)))
 
 (defun gptel-benchmark--get-field (obj field)
   "Get FIELD from OBJ, handling both plist and alist formats.
