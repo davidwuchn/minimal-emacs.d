@@ -642,8 +642,9 @@ can consume lists, vectors, plists, and alists as readable data."
     (error "Programmatic execute-tool requires a hash table environment, got: %S" env))
   (unless (listp state)
     (error "Programmatic execute-tool requires a list state, got: %S" state))
-  (let* ((tool-spec (if (fboundp 'gptel-get-tool)
-                        (gptel-get-tool tool-name)
+  (let* ((normalized-name (gptel-sandbox--normalize-tool-name tool-name))
+         (tool-spec (if (fboundp 'gptel-get-tool)
+                        (gptel-get-tool normalized-name)
                       nil)))
     (unless tool-spec
       (error "Unknown tool %s requested by Programmatic" tool-name))
