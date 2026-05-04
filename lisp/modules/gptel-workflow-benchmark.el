@@ -39,8 +39,9 @@
 
 (defun gptel-workflow--tool-calls-list (run)
   "Return tool-calls from RUN as a list (handles vector)."
-  (let ((tc (gptel-workflow-run-tool-calls run)))
-    (if (vectorp tc) (append tc nil) tc)))
+  (when run
+    (let ((tc (gptel-workflow-run-tool-calls run)))
+      (if (vectorp tc) (append tc nil) tc))))
 
 (defun gptel-workflow--tool-names (run)
   "Return list of tool names from RUN as strings."
