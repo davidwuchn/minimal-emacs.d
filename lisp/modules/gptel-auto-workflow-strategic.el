@@ -427,7 +427,9 @@ Otherwise, convert using princ representation."
   "Filter CANDIDATES to valid target files.
 Returns list of validated relative paths, up to MAX-TARGETS.
 ASSUMPTION: candidates is nil or a list of file paths/objects.
-EDGE CASE: nil candidates returns empty list."
+ASSUMPTION: proj-root is a non-empty string or nil.
+EDGE CASE: nil candidates returns empty list.
+EDGE CASE: nil proj-root causes all candidates to be skipped."
   (unless (listp candidates)
     (if (null candidates)
         (setq candidates nil)
