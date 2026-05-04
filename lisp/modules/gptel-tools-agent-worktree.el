@@ -894,11 +894,12 @@ repair just that gitlink from MAIN-REF, then rehydrate and commit the repair."
                     (gptel-auto-workflow--hydrate-staging-submodules worktree))
               (if (/= 0 (cdr hydrate-result))
                   (progn
-                    (ignore-errors
-                      (gptel-auto-workflow--git-cmd
-                       (format "git reset --hard %s"
-                               (shell-quote-argument starting-head))
-                       60))
+                    (when (gptel-auto-workflow--non-empty-string-p starting-head)
+                      (ignore-errors
+                        (gptel-auto-workflow--git-cmd
+                         (format "git reset --hard %s"
+                                 (shell-quote-argument starting-head))
+                         60)))
                     (message "[auto-workflow] Failed to hydrate repaired staging submodules from %s: %s"
                              main-ref
                              (my/gptel--sanitize-for-logging (car hydrate-result) 200))
