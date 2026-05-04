@@ -90,27 +90,38 @@ Set to 0 to disable the split and use all targets for both.")
   (expand-file-name gptel-auto-workflow--strategy-evolution-summary-file
                     (gptel-auto-workflow--strategy-run-directory)))
 
+(defun gptel-auto-workflow--file-tracked-by-git-p (file)
+  "Return non-nil if FILE is tracked by git."
+  (let ((default-directory (or (gptel-auto-workflow--project-root) default-directory)))
+    (condition-case nil
+        (eq 0 (call-process "git" nil nil nil "ls-files" "--error-unmatch"
+                            (file-relative-name file default-directory)))
+      (error nil))))
+
 (defun gptel-auto-workflow--fresh-start-strategies ()
-  "Clear generated strategies and reset logs for a fresh run."
+  "Clear generated strategies and reset logs for a fresh run.
+Only removes files NOT tracked by git to preserve committed strategies."
   (interactive)
   (let ((strategies-dir (gptel-auto-workflow--strategies-directory))
         (run-dir (gptel-auto-workflow--strategy-run-directory))
         (cleared-strategies 0)
         (cleared-logs 0))
-    ;; Clear generated (non-template) strategies
+    ;; Clear generated (non-tracked) strategies
     (when (file-directory-p strategies-dir)
       (dolist (file (directory-files strategies-dir t "strategy-evolved-.+\\.el$"))
-        (delete-file file)
-        (cl-incf cleared-strategies))
+        (unless (gptel-auto-workflow--file-tracked-by-git-p file)
+          (delete-file file)
+          (cl-incf cleared-strategies)))
       (when (> cleared-strategies 0)
-        (message "[strategy] Cleared %d evolved strategy file(s)" cleared-strategies)))
-    ;; Clear run logs
+        (message "[strategy] Cleared %d untracked evolved strategy file(s)" cleared-strategies)))
+    ;; Clear run logs (only untracked)
     (when (file-directory-p run-dir)
       (dolist (file (directory-files run-dir t "\\.jsonl?$"))
-        (delete-file file)
-        (cl-incf cleared-logs))
+        (unless (gptel-auto-workflow--file-tracked-by-git-p file)
+          (delete-file file)
+          (cl-incf cleared-logs)))
       (when (> cleared-logs 0)
-        (message "[strategy] Cleared %d log file(s) from %s" cleared-logs run-dir)))
+        (message "[strategy] Cleared %d untracked log file(s) from %s" cleared-logs run-dir)))
     ;; Reset evolution summary counter
     (setq gptel-auto-workflow--generation-count 0)
     (message "[strategy] Fresh start complete")))
@@ -366,15 +377,27 @@ Returns plist with :total :kept :success-rate :avg-score."
 
 (defun gptel-auto-workflow--select-best-strategy (target)
   "Select the best strategy for TARGET based on historical performance.
-Returns strategy name."
+Returns strategy name. Gives newly-evolved strategies a chance by
+preferring the active strategy when it has no evaluations yet."
   (let* ((strategies (gptel-auto-workflow--discover-strategies))
          (evaluated-strategies
           (cl-remove-if
            (lambda (name)
              (let ((perf (gptel-auto-workflow--get-strategy-performance name)))
                (= (plist-get perf :total) 0)))
+           strategies))
+         ;; Give new unevaluated strategies a fair share of experiments
+         (unevaluated-strategies
+          (cl-remove-if
+           (lambda (name) (member name evaluated-strategies))
            strategies)))
     (cond
+     ;; If active strategy is unevaluated, use it (exploration)
+     ((and (not (equal gptel-auto-workflow--active-strategy "template-default"))
+           (member gptel-auto-workflow--active-strategy unevaluated-strategies))
+      (message "[strategy] Selected unevaluated active strategy %s for exploration"
+               gptel-auto-workflow--active-strategy)
+      gptel-auto-workflow--active-strategy)
      ;; If we have evaluated strategies, pick the best one
      (evaluated-strategies
       (let* ((sorted (sort (copy-sequence evaluated-strategies)
