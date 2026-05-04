@@ -125,9 +125,10 @@ Returns (PASS-P . OUTPUT-STRING)."
         (all-passed t))
     (dolist (test-entry gptel-auto-workflow--behavioral-test-suite)
       (let* ((name (car test-entry))
-             (test-file (plist-get (cdr test-entry) :file))
-             (test-fn (plist-get (cdr test-entry) :test)))
-        (when (and test-file test-fn
+             (test-file (or (plist-get (cdr test-entry) :file) ""))
+             (test-fn (or (plist-get (cdr test-entry) :test) #'ignore)))
+        (when (and (not (string-empty-p test-file))
+                   (not (eq test-fn #'ignore))
                    (cl-some (lambda (f) (string-match-p (regexp-quote test-file) f))
                             changed-files))
           (setq output (concat output (format "\n[behavioral] Running %s...\n" name)))

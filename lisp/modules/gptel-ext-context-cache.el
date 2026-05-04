@@ -472,16 +472,17 @@ Returns 0.0 if CHARS is not a positive number."
   "Save the context-window cache to disk."
   (make-directory (file-name-directory my/gptel-context-window-cache-file) t)
   (condition-case err
-      (with-temp-file my/gptel-context-window-cache-file
-        (insert ";; Auto-generated; model context windows cache\n")
-        (insert (format ";; Updated: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
-        (insert "(setq my/gptel--context-window-cache-data\n      '")
-        (let (alist)
-          (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
-          (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
-        (insert ")\n")
-        (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
-                        (float-time (current-time)))))
+      (when (hash-table-p my/gptel--context-window-cache)
+        (with-temp-file my/gptel-context-window-cache-file
+          (insert ";; Auto-generated; model context windows cache\n")
+          (insert (format ";; Updated: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
+          (insert "(setq my/gptel--context-window-cache-data\n      '")
+          (let (alist)
+            (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
+            (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
+          (insert ")\n")
+          (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
+                          (float-time (current-time))))))
     (error
      (message "gptel context-window cache: failed to write %s (%s)"
               my/gptel-context-window-cache-file
