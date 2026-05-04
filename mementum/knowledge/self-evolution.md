@@ -3,7 +3,7 @@ title: Self-Evolution Patterns
 status: active
 category: knowledge
 tags: [self-evolution, auto-workflow, patterns, verified]
-updated: 2026-05-04 15:52
+updated: 2026-05-04 16:00
 ---
 
 # Self-Evolution Knowledge Base
@@ -123,18 +123,6 @@ Which change types work best for each target file:
 ### `gptel-benchmark-core.el`
 
 - **bug-fix**: 0% (7 experiments)
-
-## Auto-Approved Knowledge Pages
-
-*1 knowledge page(s) auto-approved (trust-but-verify):*
-
-### `gptel-workflow-benchmark-el`
-
-- **Confidence:** 24%
-- **Sources:** 4 memories
-- **Status:** ⚠ Flagged
-- **Warnings:** No code examples or concrete references, Content does not mention topic 'gptel-workflow-benchmark-el'
-
 
 ## Feedback Loop
 
