@@ -1,9 +1,9 @@
-# Insight: 2026-05-04 16:35
+# Insight: 2026-05-04 16:40
 
 **Target:** lisp/modules/gptel-auto-workflow-strategic.el
 **Change type:** refactoring
 **Hypothesis:** Adding explicit documentation for proj-root assumption in filter-valid-targets will improve Clarity by making implicit assumptions explicit and testable.
-**Decision:** staging-pending
+**Decision:** nil
 
 Unexpected experiment outcome.
 
