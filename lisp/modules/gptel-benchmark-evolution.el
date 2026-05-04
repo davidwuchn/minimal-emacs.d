@@ -171,7 +171,7 @@ Map to elements, detect imbalances, identify evolution opportunity."
          (deficient-elements '()))
     (when (listp diagnosis)
       (dolist (d diagnosis)
-        (when (and (listp d) (memq (plist-get d :status) '(deficient critical)))
+        (when (and (plistp d) (memq (plist-get d :status) '(deficient critical)))
           (push (plist-get d :element) deficient-elements))))
     (list :imbalances deficient-elements
           :focus-element (car deficient-elements)
