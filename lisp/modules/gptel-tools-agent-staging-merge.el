@@ -348,8 +348,12 @@ Unlike per-experiment optimize branches, staging is a shared integration branch,
 so this push must not rewrite remote history."
   (let ((staging (gptel-auto-workflow--require-staging-branch))
         (remote (gptel-auto-workflow--shared-remote)))
-    (message "[auto-workflow] Pushing staging to %s" remote)
-    (when staging
+    (if (not (and staging remote))
+        (progn
+          (message "[auto-workflow] Push staging skipped: staging=%s remote=%s"
+                   staging remote)
+          nil)
+      (message "[auto-workflow] Pushing staging to %s" remote)
       (gptel-auto-workflow--with-staging-worktree
        (lambda ()
          (setq gptel-auto-workflow--last-staging-push-output nil)
