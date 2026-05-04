@@ -493,12 +493,120 @@ Uses cache to avoid repeated file reads."
 
 ;; ─── Integration ───
 
+(defun gptel-auto-workflow--evolution-consolidate-insights ()
+  "Consolidate individual mementum/memories insight files into knowledge pages.
+Groups insights by target module, synthesizes patterns, archives old files.
+Prevents the linear growth of one-insight-per-file over hundreds of experiments."
+  (interactive)
+  (let* ((repo-root (or (gptel-auto-workflow--evolution-repo-root)
+                        default-directory))
+         (memories-dir (expand-file-name "mementum/memories" repo-root))
+         (knowledge-dir (expand-file-name "mementum/knowledge" repo-root))
+         (archive-dir (expand-file-name "archive" memories-dir))
+         (insight-files (when (file-directory-p memories-dir)
+                          (directory-files memories-dir t "^insight-")))
+         (target-groups (make-hash-table :test 'equal))
+         (consolidated 0))
+    (when (null insight-files)
+      (message "[evolution] No insight files to consolidate")
+      (cl-return-from gptel-auto-workflow--evolution-consolidate-insights 0))
+    ;; First pass: archive low-value staging/verification insights
+    (make-directory archive-dir t)
+    (dolist (file insight-files)
+      (when (string-match-p "staging-" (file-name-nondirectory file))
+        (message "[evolution] Skipping low-value insight: %s" (file-name-nondirectory file))
+        (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir) t)
+        (setq insight-files (delete file insight-files))
+        (setq consolidated (1+ consolidated))))
+    ;; Second pass: group by target
+    (dolist (file insight-files)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (let* ((full-content (buffer-string))
+               (target-key
+                (cond
+                 ((string-match "\\*\\*Target:\\*\\* \\(.+\\)" full-content)
+                  (let ((tgt (match-string 1 full-content)))
+                    (if (string-match "lisp/modules/\\(.+\\)" tgt)
+                        (file-name-sans-extension (match-string 1 tgt))
+                      (replace-regexp-in-string "[ /]" "-" tgt))))
+                 ((string-match "^insight-\\([^-]+\\)-\\([^-]+\\)"
+                                (file-name-nondirectory file))
+                  (format "%s-%s" (match-string 1 (file-name-nondirectory file))
+                          (match-string 2 (file-name-nondirectory file))))
+                 (t "general")))
+               (group (gethash target-key target-groups)))
+          (unless group
+            (puthash target-key (list :target target-key :count 0 :files nil
+                                      :hypotheses nil :decisions nil)
+                     target-groups)
+            (setq group (gethash target-key target-groups)))
+          (plist-put group :count (1+ (plist-get group :count)))
+          (push file (plist-get group :files))
+          (when (string-match "\\*\\*Decision:\\*\\* \\(.+\\)" full-content)
+            (push (match-string 1 full-content) (plist-get group :decisions)))
+          (when (string-match "\\*\\*Hypothesis:\\*\\* \\(.+\\)" full-content)
+            (push (match-string 1 full-content) (plist-get group :hypotheses))))))
+    ;; Synthesize each group into a knowledge page
+    (maphash
+     (lambda (target-key group)
+       (let* ((count (plist-get group :count))
+              (decisions (plist-get group :decisions))
+              (hypotheses (plist-get group :hypotheses))
+              (kept-count (cl-count "kept" (append decisions nil) :test #'string=))
+              (kept-hypotheses
+               (let ((result nil))
+                 (cl-do ((i 0 (1+ i)))
+                     ((>= i (length hypotheses)))
+                   (when (and (< i (length decisions))
+                              (string= (nth i decisions) "kept"))
+                     (push (nth i hypotheses) result)))
+                 (nreverse result)))
+              (knowledge-file (expand-file-name
+                               (format "experiment-insights-%s.md" target-key)
+                               knowledge-dir)))
+         (when (> count 3)
+           (make-directory knowledge-dir t)
+           (with-temp-file knowledge-file
+             (insert "---\n")
+             (insert (format "title: Experiment Insights - %s\n" target-key))
+             (insert "status: active\n")
+             (insert "category: knowledge\n")
+             (insert (format "tags: [auto-workflow, experiments, %s]\n"
+                             (replace-regexp-in-string "[ /]" "-" target-key)))
+             (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
+             (insert "---\n\n")
+             (insert (format "# Experiment Insights: %s\n\n" target-key))
+             (insert (format "*Consolidated from %d experiments.*\n\n" count))
+             (insert (format "**Keep rate:** %.0f%% (%d kept / %d total)\n\n"
+                             (if (> count 0) (* 100 (/ (float kept-count) count)) 0)
+                             kept-count count))
+             (when kept-hypotheses
+               (insert "## Successful Improvements\n\n")
+               (dolist (h (seq-take (delete-dups kept-hypotheses) 10))
+                 (insert (format "- %s\n" h)))
+               (insert "\n"))))
+         ;; Archive individual files
+         (make-directory archive-dir t)
+         (dolist (file (plist-get group :files))
+           (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir) t))
+         (setq consolidated (+ consolidated count))
+         (message "[evolution] Consolidated %d insights for %s → %s"
+                  count target-key knowledge-file)))
+     target-groups)
+    (when (> consolidated 0)
+      (message "[evolution] Consolidated %d insight files across %d groups"
+               consolidated (hash-table-count target-groups)))
+    consolidated))
+
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.
 Extract → Verify → Synthesize → (Inject happens on next prompt)."
   (interactive)
   (message "[auto-workflow] Running self-evolution cycle...")
   (gptel-auto-workflow--evolution-synthesize)
+  (gptel-auto-workflow--evolution-consolidate-insights)
   (message "[auto-workflow] Self-evolution cycle complete."))
 
 ;; ─── Init ───
