@@ -80,10 +80,16 @@ Executor will be instructed to load relevant skill and regenerate.")
 
 (defun gptel-auto-experiment--teachable-validation-error-p (target validation-error)
   "Return non-nil when VALIDATION-ERROR should trigger an immediate retry.
-TARGET is the file currently being optimized."
+TARGET is the file currently being optimized.
+Retries for: Elisp syntax errors, defensive code removal, and other
+fixable validation failures that the executor can correct."
   (and (stringp validation-error)
        (> (length validation-error) 0)
-       (not (null (gptel-auto-experiment--elisp-syntax-error-p target validation-error)))))
+       (or (gptel-auto-experiment--elisp-syntax-error-p target validation-error)
+           (string-match-p "Defensive code removal detected\\|removing.*fallbacks\\|without proof"
+                           validation-error)
+           (string-match-p "security|injection|eval.*without.*guard"
+                           validation-error))))
 
 (defun gptel-auto-experiment--make-retry-prompt (target validation-error original-prompt)
   "Create retry prompt after validation failure.
