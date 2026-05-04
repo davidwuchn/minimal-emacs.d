@@ -10,9 +10,9 @@
   (let (successes failures)
     (dolist (result previous-results)
       (when (listp result)
-        (if (getf result :success)
-            (push (getf result :pattern) successes)
-          (push (getf result :pattern) failures))))
+        (if (plist-get result :success)
+            (push (plist-get result :pattern) successes)
+          (push (plist-get result :pattern) failures))))
     (cons successes failures)))
 
 (defun strategy-evolved-0005--generate-counterfactuals (successes failures)
