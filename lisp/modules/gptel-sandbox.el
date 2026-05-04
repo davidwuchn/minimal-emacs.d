@@ -554,20 +554,40 @@ CALLBACK receives non-nil when approved and nil when rejected."
   (format "Error: %s" message))
 
 (defun gptel-sandbox--error-result-p (value)
-  "Return non-nil if VALUE is a sandbox error result string."
-  (and (stringp value) (string-prefix-p "Error: " value)))
+  "Return non-nil if VALUE is a sandbox error result.
+Handles both string errors (\"Error: ...\") and plist errors
+like (:error \"...\") or (:violated t :reason \"...\")."
+  (cond
+   ((stringp value) (string-prefix-p "Error: " value))
+   ((and (listp value) (or (plist-member value :error)
+                           (plist-member value :violated)
+                           (plist-member value :reason)))
+    t)
+   (t nil)))
+
+(defun gptel-sandbox--extract-error-message (value)
+  "Extract error message from VALUE (string or plist)."
+  (cond
+   ((stringp value) (substring value (length "Error: ")))
+   ((listp value)
+    (or (plist-get value :reason)
+        (plist-get value :error)
+        (format "Error: %S" value)))
+   (t (format "%s" value))))
 
 (defun gptel-sandbox--wrap-result (result)
-  "Wrap RESULT for callback, avoiding double-wrapping of error strings."
-  (if (gptel-sandbox--error-result-p result)
-      result
-    (gptel-sandbox--format-result result)))
+  "Wrap RESULT for callback, converting error plists to error strings."
+  (gptel-sandbox--format-result result))
 
 (defun gptel-sandbox--format-result (result)
-  "Convert RESULT to string, preferring gptel--to-string when available."
-  (if (fboundp 'gptel--to-string)
-      (gptel--to-string result)
-    (format "%s" result)))
+  "Convert RESULT to string, preferring gptel--to-string when available.
+Error plists like (:error \"...\") or (:violated t :reason \"...\")
+are converted to error strings."
+  (if (gptel-sandbox--error-result-p result)
+      (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result))
+    (if (fboundp 'gptel--to-string)
+        (gptel--to-string result)
+      (format "%s" result))))
 
 (defun gptel-sandbox--render-result (value)
   "Render VALUE into the final string returned by Programmatic.
