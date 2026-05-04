@@ -3,12 +3,12 @@ title: Experiment Insights - gptel-tools-agent-git
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-tools-agent-git]
-updated: 2026-05-04 08:05
+updated: 2026-05-04 09:06
 ---
 
 # Experiment Insights: gptel-tools-agent-git
 
-*Generated from 25 individual experiment memories.*
+*Consolidated from 9 experiments.*
 
-**Total experiments:** 25 (0% kept)
+**Keep rate:** 0% (0 kept / 9 total)
 
