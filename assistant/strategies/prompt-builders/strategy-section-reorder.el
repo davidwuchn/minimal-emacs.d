@@ -1,4 +1,4 @@
-;;; strategy-evolved-0001.el --- Evolved prompt-building strategy -*- lexical-binding: t; -*-
+;;; strategy-section-reorder.el --- Evolved prompt-building strategy -*- lexical-binding: t; -*-
 ;; Strategy for gptel-tools-agent-strategy-harness
 ;;
 ;; Hypothesis: Reordering prompt sections to put failure patterns and axis guidance
@@ -12,7 +12,7 @@
 
 (require 'gptel-tools-agent-prompt-build)
 
-(defun strategy-evolved-0001-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-section-reorder-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt using evolved strategy evolved-0001.
 HYPOTHESIS: Reordering prompt sections to put failure patterns and axis guidance
 ;; BEFORE the general instructions will help the agent avoid known pitfalls earlier"
@@ -157,7 +157,7 @@ HYPOTHESIS: Reordering prompt sections to put failure patterns and axis guidance
               (sexp-check-command . ,sexp-check-command))))
       (gptel-auto-workflow--substitute-template template variables))))
 
-(defun strategy-evolved-0001-get-metadata ()
+(defun strategy-section-reorder-get-metadata ()
   "Return metadata for this strategy."
   (list :name "evolved-0001"
         :version "1.0"
@@ -171,8 +171,8 @@ HYPOTHESIS: Reordering prompt sections to put failure patterns and axis guidance
 (when (fboundp 'gptel-auto-workflow--register-strategy)
   (gptel-auto-workflow--register-strategy
    "evolved-0001"
-   #'strategy-evolved-0001-build-prompt
-   (strategy-evolved-0001-get-metadata)))
+   #'strategy-section-reorder-build-prompt
+   (strategy-section-reorder-get-metadata)))
 
-(provide 'strategy-evolved-0001)
-;;; strategy-evolved-0001.el ends here
+(provide 'strategy-section-reorder)
+;;; strategy-section-reorder.el ends here

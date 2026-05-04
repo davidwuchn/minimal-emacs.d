@@ -1,11 +1,11 @@
-;;; strategy-evolved-0005.el --- Counterfactual reasoning for unexplored alternatives -*- lexical-binding: t; -*-
+;;; strategy-counterfactual-reasoning.el --- Counterfactual reasoning for unexplored alternatives -*- lexical-binding: t; -*-
 ;; Hypothesis: Explicit counterfactual reasoning about untried approaches provides better exploration signal
 ;; Axis: A (Prompt template architecture)
 
 (require 'gptel-tools-agent-prompt-build)
 (require 'cl-lib)
 
-(defun strategy-evolved-0005--extract-patterns (previous-results)
+(defun strategy-counterfactual-reasoning--extract-patterns (previous-results)
   "Extract both successful and failed approaches."
   (let (successes failures)
     (dolist (result previous-results)
@@ -15,7 +15,7 @@
           (push (plist-get result :pattern) failures))))
     (cons successes failures)))
 
-(defun strategy-evolved-0005--generate-counterfactuals (successes failures)
+(defun strategy-counterfactual-reasoning--generate-counterfactuals (successes failures)
   "Generate explicit counterfactual reasoning about untried approaches."
   (let ((success-set (or successes '()))
         (failure-set (or failures '()))
@@ -51,17 +51,16 @@ GUIDANCE: Avoid pattern repetition. Use counterfactuals to explore the solution 
             (if failure-set (mapconcat #'identity (cl-subseq failure-set 0 (min 2 (length failure-set))) " + ") "known failures")
             (if success-set (car success-set) "successful pattern"))))
 
-(defun strategy-evolved-0005-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-counterfactual-reasoning-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt with contrastive counterfactual reasoning."
   (let* ((base-prompt (gptel-auto-experiment-build-prompt target experiment-id max-experiments analysis baseline previous-results))
-         (patterns (strategy-evolved-0005--extract-patterns previous-results))
-         (counterfactuals (strategy-evolved-0005--generate-counterfactuals (car patterns) (cdr patterns)))
-         (axis-guidance (gptel-auto-experiment--format-axis-guidance analysis)))
-    (concat base-prompt "\n\n" counterfactuals "\n\n" axis-guidance)))
+         (patterns (strategy-counterfactual-reasoning--extract-patterns previous-results))
+         (counterfactuals (strategy-counterfactual-reasoning--generate-counterfactuals (car patterns) (cdr patterns))))
+    (concat base-prompt "\n\n" counterfactuals)))
 
-(defun strategy-evolved-0005-get-metadata ()
+(defun strategy-counterfactual-reasoning-get-metadata ()
   "Return metadata for this strategy."
-  (list :name "evolved-0005"
+  (list :name "counterfactual-reasoning"
         :version "1.0"
         :hypothesis "Explicit counterfactual reasoning about untried approaches provides better exploration signal"
         :axis "A"
@@ -69,4 +68,4 @@ GUIDANCE: Avoid pattern repetition. Use counterfactuals to explore the solution 
         :parent-strategies '("evolved-0004-reasoning")
         :components ["counterfactual-reasoning" "inverse-analysis" "hybrid-exploration" "analogical-extension"]))
 
-(provide 'strategy-evolved-0005)
+(provide 'strategy-counterfactual-reasoning)

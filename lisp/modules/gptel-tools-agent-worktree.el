@@ -804,22 +804,23 @@ When COMMIT is nil, only check that GIT-DIR exists."
   "Return a local git dir for submodule PATH that can materialize COMMIT.
 Prefer the current checkout when it is a standalone repo, then fall back to the
 superproject-managed `.git/modules/...` store."
-  (let* ((checkout-git-dirs (gptel-auto-workflow--submodule-checkout-git-dirs path))
-         (repo-git-dir (gptel-auto-workflow--worktree-base-git-common-dir))
-         (module-git-dir (and repo-git-dir
-                              (expand-file-name (format "modules/%s" path) repo-git-dir)))
-         (candidates (cl-remove-duplicates
-                      (append checkout-git-dirs (and module-git-dir (list module-git-dir)))
-                      :test #'string=)))
-    (car (cl-mapcan
-          (lambda (git-dir)
-            (when (and (stringp git-dir)
-                       (gptel-auto-workflow--git-dir-has-commit-p
-                        (gptel-auto-workflow--normalize-shared-submodule-core-worktree
-                         path git-dir)
-                        commit))
-              (list git-dir)))
-          candidates))))
+  (when (gptel-auto-workflow--non-empty-string-p path)
+    (let* ((checkout-git-dirs (gptel-auto-workflow--submodule-checkout-git-dirs path))
+           (repo-git-dir (gptel-auto-workflow--worktree-base-git-common-dir))
+           (module-git-dir (and repo-git-dir
+                                (expand-file-name (format "modules/%s" path) repo-git-dir)))
+           (candidates (cl-remove-duplicates
+                        (append checkout-git-dirs (and module-git-dir (list module-git-dir)))
+                        :test #'string=)))
+      (car (cl-mapcan
+            (lambda (git-dir)
+              (when (and (stringp git-dir)
+                         (gptel-auto-workflow--git-dir-has-commit-p
+                          (gptel-auto-workflow--normalize-shared-submodule-core-worktree
+                           path git-dir)
+                          commit))
+                (list git-dir)))
+            candidates)))))
 
 (defun gptel-auto-workflow--finalize-refreshed-staging-submodules (worktree main-ref)
   "Ensure refreshed staging WORKTREE uses materializable top-level submodule gitlinks.

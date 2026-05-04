@@ -1,10 +1,10 @@
-;;; strategy-evolved-0002.el --- Comparative example augmentation architecture -*- lexical-binding: t; -*-
+;;; strategy-success-examples.el --- Comparative example augmentation architecture -*- lexical-binding: t; -*-
 ;; Hypothesis: Including successful prior examples as in-prompt demonstrations improves code improvement
 ;; Axis: A
 
 (require 'gptel-tools-agent-prompt-build)
 
-(defun strategy-evolved-0002-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-success-examples-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt augmented with comparative successful examples from prior experiments."
   (let* ((baseline-prompt (gptel-auto-experiment-build-prompt target experiment-id max-experiments analysis baseline previous-results))
          (successful-examples (extract-successful-examples previous-results target))
@@ -42,10 +42,10 @@
                     (substring (plist-get ex :target) 0 (min 50 (length (plist-get ex :target))))))
           (seq-take examples 3)))
 
-(defun strategy-evolved-0002-get-metadata ()
+(defun strategy-success-examples-get-metadata ()
   (list :name "evolved-0002"
         :version "1.0"
         :hypothesis "Including successful prior examples as in-prompt demonstrations improves code improvement"
         :axis "A"))
 
-(provide 'strategy-evolved-0002)
+(provide 'strategy-success-examples)

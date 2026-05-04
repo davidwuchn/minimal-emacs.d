@@ -108,7 +108,7 @@ Only removes files NOT tracked by git to preserve committed strategies."
         (cleared-logs 0))
     ;; Clear generated (non-tracked) strategies
     (when (file-directory-p strategies-dir)
-      (dolist (file (directory-files strategies-dir t "strategy-evolved-.+\\.el$"))
+      (dolist (file (directory-files strategies-dir t "^strategy-[^.]+\\.el$"))
         (unless (gptel-auto-workflow--file-tracked-by-git-p file)
           (delete-file file)
           (cl-incf cleared-strategies)))
