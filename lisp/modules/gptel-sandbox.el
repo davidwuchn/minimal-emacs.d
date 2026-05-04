@@ -155,7 +155,8 @@ gptel preset.")
     (list binding nil))
    ((and (consp binding)
          (symbolp (car binding))
-         (null (cddr binding)))
+         (or (null (cddr binding))
+             (not (consp (cddr binding)))))
     binding)
    (t
     (error "Invalid binding in Programmatic sandbox: %S" binding))))
@@ -243,8 +244,8 @@ Supported shape:
 
 (defun gptel-sandbox--lookup (symbol env)
   "Look up SYMBOL in ENV or signal an error."
-  (unless (symbolp symbol)
-    (error "Programmatic sandbox lookup requires a symbol, got: %S" symbol))
+  (unless env
+    (error "Programmatic sandbox lookup requires a non-nil environment, got: %S" env))
   (unless (hash-table-p env)
     (error "Programmatic sandbox lookup requires a hash table environment, got: %S" env))
   (let ((value (gethash symbol env gptel-sandbox--missing-marker)))
@@ -348,6 +349,9 @@ supports a small, explicit whitelist of pure operations."
   "Convert ARG-PAIRS plist into a keyword->value hash table."
   (unless (listp arg-pairs)
     (error "Programmatic tool-call arguments must be a list, got: %S" arg-pairs))
+  (unless (cl-evenp (length arg-pairs))
+    (error "Programmatic tool-call requires keyword/value pairs, got odd length: %d"
+           (length arg-pairs)))
   (let ((table (make-hash-table :test #'eq)))
     (while arg-pairs
       (let ((key (pop arg-pairs))
@@ -382,20 +386,14 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--normalize-tool-name (tool-name)
   "Convert TOOL-NAME to string representation.
-Signals an error if TOOL-NAME is nil, t, or a keyword."
-  (cond
-   ((null tool-name)
-    (error "Tool name cannot be nil"))
-   ((eq tool-name t)
-    (error "Tool name cannot be t"))
-   ((keywordp tool-name)
-    (error "Tool name cannot be a keyword: %s" tool-name))
-   ((symbolp tool-name)
-    (symbol-name tool-name))
-   ((stringp tool-name)
-    tool-name)
-   (t
-    (error "Tool name must be a symbol or string, got: %S" tool-name))))
+Signals an error if TOOL-NAME is nil or neither a symbol nor string."
+  (unless tool-name
+    (error "Programmatic tool name cannot be nil"))
+  (unless (or (symbolp tool-name) (stringp tool-name))
+    (error "Programmatic tool name must be a symbol or string, got: %S" tool-name))
+  (if (symbolp tool-name)
+      (symbol-name tool-name)
+    tool-name))
 
 (defun gptel-sandbox--allowed-tool-p (tool-name)
   "Return non-nil when TOOL-NAME may run inside Programmatic."
@@ -559,20 +557,40 @@ CALLBACK receives non-nil when approved and nil when rejected."
   (concat gptel-sandbox--error-prefix message))
 
 (defun gptel-sandbox--error-result-p (value)
-  "Return non-nil if VALUE is a sandbox error result string."
-  (and (stringp value) (string-prefix-p gptel-sandbox--error-prefix value)))
+  "Return non-nil if VALUE is a sandbox error result.
+Handles both string errors (\"Error: ...\") and plist errors
+like (:error \"...\") or (:violated t :reason \"...\")."
+  (cond
+   ((stringp value) (string-prefix-p "Error: " value))
+   ((and (listp value) (or (plist-member value :error)
+                           (plist-member value :violated)
+                           (plist-member value :reason)))
+    t)
+   (t nil)))
+
+(defun gptel-sandbox--extract-error-message (value)
+  "Extract error message from VALUE (string or plist)."
+  (cond
+   ((stringp value) (substring value (length "Error: ")))
+   ((listp value)
+    (or (plist-get value :reason)
+        (plist-get value :error)
+        (format "Error: %S" value)))
+   (t (format "%s" value))))
 
 (defun gptel-sandbox--wrap-result (result)
-  "Wrap RESULT for callback, avoiding double-wrapping of error strings."
-  (if (gptel-sandbox--error-result-p result)
-      result
-    (gptel-sandbox--format-result result)))
+  "Wrap RESULT for callback, converting error plists to error strings."
+  (gptel-sandbox--format-result result))
 
 (defun gptel-sandbox--format-result (result)
-  "Convert RESULT to string, preferring gptel--to-string when available."
-  (if (fboundp 'gptel--to-string)
-      (gptel--to-string result)
-    (format "%s" result)))
+  "Convert RESULT to string, preferring gptel--to-string when available.
+Error plists like (:error \"...\") or (:violated t :reason \"...\")
+are converted to error strings."
+  (if (gptel-sandbox--error-result-p result)
+      (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result))
+    (if (fboundp 'gptel--to-string)
+        (gptel--to-string result)
+      (format "%s" result))))
 
 (defun gptel-sandbox--render-result (value)
   "Render VALUE into the final string returned by Programmatic.
@@ -598,12 +616,12 @@ can consume lists, vectors, plists, and alists as readable data."
     (unless tool-spec
       (error "Unknown tool %s requested by Programmatic" tool-name))
     (let ((arg-values (gptel-sandbox--resolve-tool-args tool-spec arg-forms env)))
-    (gptel-sandbox--check-tool tool-name tool-spec arg-values)
-    (cl-incf (plist-get state :tool-count))
-    (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
-      (error "Programmatic exceeded max nested tool calls (%d)"
-             my/gptel-programmatic-max-tool-calls))
-    (condition-case err
+      (gptel-sandbox--check-tool tool-name tool-spec arg-values)
+      (cl-incf (plist-get state :tool-count))
+      (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
+        (error "Programmatic exceeded max nested tool calls (%d)"
+               my/gptel-programmatic-max-tool-calls))
+      (condition-case err
         (let ((invoke-tool
                (lambda ()
                  (if (gptel-tool-async tool-spec)

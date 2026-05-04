@@ -430,7 +430,7 @@ and a positive integer context_length; otherwise returns nil."
   (when (consp entry)
     (let ((id (alist-get 'id entry))
           (cw (alist-get 'context_length entry)))
-      (and (stringp id) (integerp cw) (> cw 0)
+      (and (stringp id) (not (string-empty-p id)) (integerp cw) (> cw 0)
            (cons id cw)))))
 
 (defun my/gptel--estimate-text-tokens (chars)
@@ -475,16 +475,17 @@ Returns 0.0 if CHARS is not a positive number."
   "Save the context-window cache to disk."
   (make-directory (file-name-directory my/gptel-context-window-cache-file) t)
   (condition-case err
-      (with-temp-file my/gptel-context-window-cache-file
-        (insert ";; Auto-generated; model context windows cache\n")
-        (insert (format ";; Updated: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
-        (insert "(setq my/gptel--context-window-cache-data\n      '")
-        (let (alist)
-          (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
-          (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
-        (insert ")\n")
-        (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
-                        (float-time (current-time)))))
+      (when (hash-table-p my/gptel--context-window-cache)
+        (with-temp-file my/gptel-context-window-cache-file
+          (insert ";; Auto-generated; model context windows cache\n")
+          (insert (format ";; Updated: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
+          (insert "(setq my/gptel--context-window-cache-data\n      '")
+          (let (alist)
+            (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
+            (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
+          (insert ")\n")
+          (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
+                          (float-time (current-time))))))
     (error
      (message "gptel context-window cache: failed to write %s (%s)"
               my/gptel-context-window-cache-file
@@ -494,6 +495,7 @@ Returns 0.0 if CHARS is not a positive number."
   "Persist WINDOW for MODEL-ID in the cache."
   (when (and (stringp model-id) (integerp window) (> window 0))
     (puthash model-id window my/gptel--context-window-cache)
+    (clrhash my/gptel--alist-partial-match-cache)
     (my/gptel--cache-save-context-windows)))
 
 (defun my/gptel--cache-load-context-windows ()
@@ -517,6 +519,7 @@ existing cache is preserved."
                   (puthash key val temp-cache)))))
           (clrhash my/gptel--context-window-cache)
           (maphash (lambda (k v) (puthash k v my/gptel--context-window-cache)) temp-cache)
+          (clrhash my/gptel--alist-partial-match-cache)
           (setq my/gptel--context-window-cache-data nil))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
@@ -549,7 +552,8 @@ Filters to only bound variables. Result is cached for performance."
                    (id (my/gptel--model-id-string model)))
               (when (and (stringp id) (integerp tokens) (> tokens 0))
                 (puthash id tokens my/gptel--context-window-cache)
-                (puthash id plist my/gptel--model-metadata-cache)))))))))
+                (puthash id plist my/gptel--model-metadata-cache))))))))
+  (clrhash my/gptel--alist-partial-match-cache))
 
 (defun my/gptel--openrouter-curl-command (url connect-timeout max-time key)
   "Build curl command list for OpenRouter API request.

@@ -161,26 +161,27 @@ Returns t if all files pass syntax check, nil otherwise."
         nil)
     (let ((errors nil)
           (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
-      (when (listp files)
-        (dolist (file files (null errors))
-          (when (and (stringp file)
-                     (file-readable-p file))
-            (condition-case err
-                (with-temp-buffer
-                  (insert-file-contents file)
-                  (delay-mode-hooks
-                    (emacs-lisp-mode))
-                  (goto-char (point-min))
-                  (while (not (eobp))
-                    (forward-sexp)))
-              (error
-               (let ((msg (format "SYNTAX ERROR: %s: %s"
-                                  (file-relative-name file directory)
-                                  (error-message-string err))))
-                 (push msg errors)
-                 (when (buffer-live-p output-buffer)
-                   (with-current-buffer output-buffer
-                     (insert msg "\n"))))))))))))
+      (dolist (file files (null errors))
+        (when (file-readable-p file)
+          (condition-case err
+              (with-temp-buffer
+                (insert-file-contents file)
+                ;; Parse with `emacs-lisp-mode' so syntax-propertize handles
+                ;; reader forms correctly, but suppress mode hooks so staging
+                ;; verification cannot trip unrelated editor setup.
+                (delay-mode-hooks
+                  (emacs-lisp-mode))
+                (goto-char (point-min))
+                (while (not (eobp))
+                  (forward-sexp)))
+            (error
+             (let ((msg (format "SYNTAX ERROR: %s: %s"
+                                (file-relative-name file directory)
+                                (error-message-string err))))
+               (push msg errors)
+               (when (buffer-live-p output-buffer)
+                 (with-current-buffer output-buffer
+                   (insert msg "\n")))))))))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.

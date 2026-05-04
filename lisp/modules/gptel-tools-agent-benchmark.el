@@ -307,24 +307,24 @@ Scores based on commit message + code diff (not just stat)."
 (defun gptel-auto-experiment--code-quality-score ()
   "Get code quality score from current changes."
   (when (fboundp 'gptel-benchmark--code-quality-score)
-    (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
-           ;; SECURITY: Use shell-quote-argument to prevent shell injection
-           (worktree-quoted (shell-quote-argument worktree))
-           (changed-files (shell-command-to-string
-                           (format "cd %s && git diff --name-only HEAD~1 2>/dev/null | grep '\\.el$'"
-                                   worktree-quoted))))
-      (when (string-match-p "\\.el$" (string-trim-right changed-files))
-        (let ((total-score 0.0)
-              (file-count 0))
-          (dolist (file (split-string changed-files "\n" t))
-            (let* ((filepath (expand-file-name file worktree))
-                   (content (gptel-auto-workflow--read-file-contents filepath)))
-              (when content
-                (cl-incf total-score (gptel-benchmark--code-quality-score content))
-                (cl-incf file-count))))
-          (if (> file-count 0)
-              (/ total-score file-count)
-            0.5))))))
+    (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir)))
+      (when (and worktree (file-directory-p worktree))
+        (let* ((worktree-quoted (shell-quote-argument worktree))
+               (changed-files (shell-command-to-string
+                               (format "cd %s && git diff --name-only HEAD~1 2>/dev/null | grep '\\.el$'"
+                                       worktree-quoted))))
+          (when (string-match-p "\\.el$" (string-trim-right changed-files))
+            (let ((total-score 0.0)
+                  (file-count 0))
+              (dolist (file (split-string changed-files "\n" t))
+                (let* ((filepath (expand-file-name file worktree))
+                       (content (gptel-auto-workflow--read-file-contents filepath)))
+                  (when content
+                    (cl-incf total-score (gptel-benchmark--code-quality-score content))
+                    (cl-incf file-count))))
+              (if (> file-count 0)
+                  (/ total-score file-count)
+                0.5))))))))
 
 ;;; Subagent Integrations
 
