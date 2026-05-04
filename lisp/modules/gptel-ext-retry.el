@@ -188,7 +188,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
   (if (not (my/gptel--should-trim-p info force-trim-p))
       0
     (let* ((data (plist-get info :data))
-           (messages (and data (plist-get data :messages)))
+           (messages (and (listp data) (plist-get data :messages)))
            (keep (my/gptel--compute-trim-keep-count info retry-count))
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
@@ -233,7 +233,7 @@ done."
   (if (not (my/gptel--should-trim-p info force-trim-p))
       0
     (let* ((data (plist-get info :data))
-           (contents (and data (plist-get data :contents)))
+           (contents (and (listp data) (plist-get data :contents)))
            (keep (my/gptel--compute-trim-keep-count info retry-count))
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
@@ -298,7 +298,7 @@ Returns the number of messages whose reasoning_content was stripped."
   (if (null my/gptel-reasoning-keep-turns)
       0
     (let* ((data (plist-get info :data))
-           (messages (and data (plist-get data :messages)))
+           (messages (and (listp data) (plist-get data :messages)))
            (keep my/gptel-reasoning-keep-turns)
            (stripped 0))
       (when (and messages (> (length messages) 0))
@@ -333,7 +333,7 @@ Returns the number of messages repaired."
          (reasoning-key (and (fboundp 'my/gptel--reasoning-key-for-model)
                              (my/gptel--reasoning-key-for-model model)))
          (messages (let ((data (plist-get info :data)))
-                     (and data (plist-get data :messages))))
+                     (and (listp data) (plist-get data :messages))))
          (gptel-buf (plist-get info :buffer))
          (reasoning-alist
           (and gptel-buf (buffer-live-p gptel-buf)
@@ -360,8 +360,8 @@ conversations that only use 3-5 of 18+ registered tools.
 
 Returns the number of tool definitions removed, or 0 if nothing changed."
   (let* ((data (plist-get info :data))
-         (messages (and data (plist-get data :messages)))
-         (data-tools (and data (plist-get data :tools)))  ; vector of plists
+         (messages (and (listp data) (plist-get data :messages)))
+         (data-tools (and (listp data) (plist-get data :tools)))  ; vector of plists
          (struct-tools (plist-get info :tools))            ; list of gptel-tool structs
          (used-names (make-hash-table :test #'equal))
          (removed 0))
@@ -418,7 +418,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
   (if (null my/gptel-truncate-old-messages-keep)
       0
     (let* ((data (plist-get info :data))
-           (messages (and data (plist-get data :messages)))
+           (messages (and (listp data) (plist-get data :messages)))
            (keep my/gptel-truncate-old-messages-keep)
            (truncated 0)
            (truncation-text "[Earlier conversation truncated to reduce payload size]"))
@@ -471,7 +471,7 @@ EDGE CASE: Content that becomes empty after filtering is preserved as empty vect
 
 Returns the number of image parts removed, or 0 if nothing was done."
   (let* ((data (plist-get info :data))
-         (messages (and data (plist-get data :messages)))
+         (messages (and (listp data) (plist-get data :messages)))
          (removed 0)
          (image-p
           (lambda (part)
