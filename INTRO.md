@@ -10,15 +10,16 @@ extended with a full AI agent system built on
 |--------|-------|
 | **Code fixes** | 242+ real fixes merged |
 | **New features** | Auto-workflow, benchmark, retry loop, researcher, sandbox, strategic planner |
-| **Agents** | 10+ (MiniMax workhorse, DashScope/DeepSeek/CF-Gateway/Gemini fallbacks) |
+| **Agents** | 10+ (MiniMax workhorse, DashScope/moonshot/DeepSeek/CF-Gateway fallbacks) |
 | **Cron jobs** | 6 scheduled jobs (auto-workflow, research, mementum, instincts) |
 
-### Latest Features (2026-04-14)
+### Latest Features (2026-05-03)
 
 | Feature | Purpose |
 |---------|---------|
 | **Auto-Workflow** | Headless experiments with grading, review, and staging merge |
-| **Backend Fallback** | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway → Gemini |
+| **Strategy Evolution** | Meta-Harness style harness search: agent-driven proposer, Pareto frontier, held-out test sets, stateful lifecycle |
+| **Backend Fallback** | MiniMax → DashScope → moonshot → DeepSeek → CF-Gateway |
 | **Benchmark System** | Score tracking, quality metrics, evolution patterns |
 | **Shell Timeout Sentinel** | Wait for process exit before capturing results |
 | **FSM Registry Validation** | Bidirectional consistency checks |
@@ -105,11 +106,10 @@ Model is configured in YAML frontmatter (single source of truth):
 Auto-workflow uses MiniMax as the primary workhorse with automatic provider failover:
 
 1. **MiniMax** — `minimax-m2.7-highspeed` (primary)
-2. **moonshot** — `kimi-k2.6`
-3. **DashScope** — `qwen3.6-plus`
-4. **DeepSeek** — `deepseek-v4-flash`
+2. **DashScope** — `qwen3.6-plus`
+3. **moonshot** — `kimi-k2.6`
+4. **DeepSeek** — `deepseek-v4-pro`
 5. **CF-Gateway** — `@cf/moonshotai/kimi-k2.6`
-6. **Gemini** — `gemini-3.1-pro-preview`
 
 Requires `api.minimaxi.com` API key in auth-source. All alternate backends require their respective API keys configured in auth-source.
 
@@ -275,8 +275,32 @@ Decision logic: **70% grader + 30% code quality**
 | **Dynamic Stop** | Stop after N consecutive no-improvements |
 | **TSV Logging** | Explainable results with code_quality column |
 | **Pre-Merge Review** | Reviewer checks for blockers before staging merge |
-| **Periodic Researcher** | Every 4h, finds anti-patterns for target selection |
-| **Review Retry Loop** | Executor fixes issues, max 2 retries |
+| **Strategy Evolution** | Meta-Harness harness search: agent-driven proposal, Pareto frontier, anti-overfitting |
+
+### Strategy Evolution (Meta-Harness)
+
+The auto-workflow system searches over **prompt-building strategies** (how prompts are constructed), not just prompt content. Based on the Stanford IRIS Lab [Meta-Harness](https://github.com/stanford-iris-lab/meta-harness) framework:
+
+```
+Proposer (gptel) → 3 candidates → Validate → Prototype → Evolve → Frontier
+     ↑                                                              ↓
+     └───────────── Warm-start from failure analysis ───────────────┘
+```
+
+| Component | Purpose |
+|-----------|---------|
+| **Agent-driven proposer** | Generates 3 novel strategy candidates per evolution iteration |
+| **Pareto frontier** | Tracks non-dominated strategies by success rate and avg score |
+| **Held-out test set** | 20% of targets held out during evolution to prevent overfitting |
+| **Anti-overfitting rules** | Explicit: no target-specific hints, no file names in strategy code |
+| **Anti-parameter-tuning** | Self-critique rejects constant-only changes |
+| **Stateful interface** | `analyze-results`, `get-state`, `set-state` for learning strategies |
+| **Run isolation** | `--run-name`, `--fresh`, per-run evolution summaries |
+| **Evolution summary** | `evolution_summary.jsonl` tracking per-iteration results |
+| **Strategy discovery** | Auto-discovers strategies from `assistant/strategies/prompt-builders/*.el` |
+| **Signal handling** | Graceful `quit` handling preserves state on interrupt |
+
+Exploitation axes: A=Template architecture, B=Context retrieval, C=Section ordering, D=Variable computation, E=Skill loading, F=Adaptive compression.
 
 ### Architecture
 
@@ -314,12 +338,13 @@ Decision logic: **70% grader + 30% code quality**
 
 ### Cron Schedule
 
-| Job | Schedule | Machine |
-|-----|----------|---------|
-| Auto-workflow | 10AM, 2PM, 6PM | macOS |
-| Researcher | Every 4 hours | macOS + Pi5 |
-| Weekly mementum | Sunday 4AM | macOS + Pi5 |
-| Weekly instincts | Sunday 5AM | macOS + Pi5 |
+| Job | Pi5 Schedule | macOS Schedule |
+|-----|-------------|----------------|
+| Auto-workflow | 11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6x) | 10AM, 2PM, 6PM (3x) |
+| Researcher | Every 4 hours | Every 4 hours |
+| Evolution | Every 6 hours | Every 6 hours |
+| Weekly mementum | Sunday 4AM | Sunday 4AM |
+| Weekly instincts | Sunday 5AM | Sunday 5AM |
 
 Install: `./scripts/install-cron.sh`
 
