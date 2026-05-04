@@ -153,7 +153,8 @@ Returns t if content should be rejected."
   "Audit all memories for noise. Return list of noise files."
   (interactive)
   (let* ((mem-dir (expand-file-name "memories/" (gptel-benchmark-memory--resolve-dir)))
-         (files (directory-files mem-dir t "\\.md$"))
+         (files (when (file-exists-p mem-dir)
+                  (directory-files mem-dir t "\\.md$")))
          (noise-files '()))
     (dolist (file files)
       (let ((content (with-temp-buffer
