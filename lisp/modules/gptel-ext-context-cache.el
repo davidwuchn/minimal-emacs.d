@@ -526,7 +526,7 @@ existing cache is preserved."
           (when (listp my/gptel--context-window-cache-data)
             (dolist (kv my/gptel--context-window-cache-data)
               (let ((key (car kv)) (val (cdr kv)))
-                (when (and (stringp key) (integerp val))
+                (when (and (stringp key) (my/gptel--positive-integer-p val))
                   (puthash key val temp-cache))))
             (let ((old-cache my/gptel--context-window-cache)
                   (new-refresh (or my/gptel--context-window-cache-last-refresh
