@@ -1,9 +1,9 @@
-# Insight: 2026-05-04 23:30
+# Insight: 2026-05-04 23:39
 
 **Target:** lisp/modules/gptel-sandbox.el
 **Change type:** bug-fix
 **Hypothesis:** Adding input validation for list parameters in `gptel-sandbox--eval-sequential` and `gptel-sandbox--short-circuit-eval` will prevent runtime errors and improve robustness by catching malformed inputs early with clear error messages.
-**Decision:** staging-pending
+**Decision:** nil
 
 Unexpected experiment outcome.
 
