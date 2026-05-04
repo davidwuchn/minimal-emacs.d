@@ -613,6 +613,10 @@ can consume lists, vectors, plists, and alists as readable data."
 
 (defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
+  (unless (hash-table-p env)
+    (error "Programmatic execute-tool requires a hash table environment, got: %S" env))
+  (unless (listp state)
+    (error "Programmatic execute-tool requires a list state, got: %S" state))
   (let* ((tool-spec (if (fboundp 'gptel-get-tool)
                         (gptel-get-tool tool-name)
                       nil)))
