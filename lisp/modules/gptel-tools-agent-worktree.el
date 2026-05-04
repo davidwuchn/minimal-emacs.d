@@ -109,6 +109,12 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
                            (or (gptel-auto-workflow--discard-worktree-buffers root) 0))))
       discarded)))
 
+(defun gptel-auto-workflow--resolve-worktree-base-dir ()
+  "Return the configured worktree base directory or the default fallback."
+  (or (and (boundp 'gptel-auto-workflow-worktree-base)
+           gptel-auto-workflow-worktree-base)
+      "var/tmp/experiments"))
+
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
   "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch.
 Stores worktree-dir, current-branch in hash table keyed by TARGET.
@@ -117,8 +123,7 @@ If branch exists locally, deletes it first to avoid conflicts."
   (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
          (branch (gptel-auto-workflow--branch-name target experiment-id))
          (base-ref nil)
-         (worktree-base-dir (or gptel-auto-workflow-worktree-base
-                                "var/tmp/experiments"))
+         (worktree-base-dir (gptel-auto-workflow--resolve-worktree-base-dir))
          (worktree-dir (expand-file-name
                         (format "%s/%s" worktree-base-dir branch)
                         proj-root))
@@ -562,8 +567,7 @@ Never touches project root - all verification happens in the worktree.
 Returns worktree path or nil on failure."
   (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
          (default-directory proj-root)
-         (worktree-base-dir (or gptel-auto-workflow-worktree-base
-                                "var/tmp/experiments"))
+         (worktree-base-dir (gptel-auto-workflow--resolve-worktree-base-dir))
          (worktree-dir (expand-file-name
                         (format "%s/staging-verify" worktree-base-dir)
                         proj-root))
@@ -646,27 +650,29 @@ NOTE: Staging branch is never deleted, only the worktree."
 
 (defun gptel-auto-workflow--staging-submodule-gitlink-revision (worktree path)
   "Return the gitlink revision for PATH in WORKTREE, or nil."
-  (let* ((default-directory worktree)
-         (result (gptel-auto-workflow--git-result
-                  (format "git ls-tree HEAD -- %s" (shell-quote-argument path))
-                  60)))
-    (when (and result
-               (= 0 (cdr result))
-               (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" (car result)))
-      (match-string 1 (car result)))))
+  (when (and worktree (file-directory-p worktree))
+    (let* ((default-directory worktree)
+           (result (gptel-auto-workflow--git-result
+                    (format "git ls-tree HEAD -- %s" (shell-quote-argument path))
+                    60)))
+      (when (and result
+                 (= 0 (cdr result))
+                 (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" (car result)))
+        (match-string 1 (car result))))))
 
 (defun gptel-auto-workflow--staging-submodule-gitlink-revision-at-ref (worktree ref path)
   "Return the gitlink revision for PATH at REF in WORKTREE, or nil."
-  (let* ((default-directory worktree)
-         (result (gptel-auto-workflow--git-result
-                  (format "git ls-tree %s -- %s"
-                          (shell-quote-argument ref)
-                          (shell-quote-argument path))
-                  60)))
-    (when (and result
-               (= 0 (cdr result))
-               (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" (car result)))
-      (match-string 1 (car result)))))
+  (when (and worktree (file-directory-p worktree))
+    (let* ((default-directory worktree)
+           (result (gptel-auto-workflow--git-result
+                    (format "git ls-tree %s -- %s"
+                            (shell-quote-argument ref)
+                            (shell-quote-argument path))
+                    60)))
+      (when (and result
+                 (= 0 (cdr result))
+                 (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" (car result)))
+        (match-string 1 (car result))))))
 
 (defun gptel-auto-workflow--worktree-base-repo-root ()
   "Return the canonical superproject root for the stable workflow root."
@@ -798,16 +804,17 @@ superproject-managed `.git/modules/...` store."
          (module-git-dir (and repo-git-dir
                               (expand-file-name (format "modules/%s" path) repo-git-dir)))
          (candidates (cl-remove-duplicates
-                      (append checkout-git-dirs (delq nil (list module-git-dir)))
-                      :test #'string=))
-         (valid-candidates (delq nil candidates)))
-    (when valid-candidates
-      (cl-find-if (lambda (git-dir)
-                    (gptel-auto-workflow--git-dir-has-commit-p
-                     (gptel-auto-workflow--normalize-shared-submodule-core-worktree
-                      path git-dir)
-                     commit))
-                  valid-candidates))))
+                      (append checkout-git-dirs (and module-git-dir (list module-git-dir)))
+                      :test #'string=)))
+    (car (cl-mapcan
+          (lambda (git-dir)
+            (when (and (stringp git-dir)
+                       (gptel-auto-workflow--git-dir-has-commit-p
+                        (gptel-auto-workflow--normalize-shared-submodule-core-worktree
+                         path git-dir)
+                        commit))
+              (list git-dir)))
+          candidates))))
 
 (defun gptel-auto-workflow--finalize-refreshed-staging-submodules (worktree main-ref)
   "Ensure refreshed staging WORKTREE uses materializable top-level submodule gitlinks.
@@ -980,8 +987,7 @@ Return nil on success, or an error string if the stale path could not be removed
 (defun gptel-auto-workflow--temporary-worktree-path (slug)
   "Return a temporary worktree path for SLUG under the workflow worktree base."
   (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
-         (worktree-base-dir (or gptel-auto-workflow-worktree-base
-                                "var/tmp/experiments")))
+         (worktree-base-dir (gptel-auto-workflow--resolve-worktree-base-dir)))
     (expand-file-name (format "%s/%s-%d" worktree-base-dir slug (emacs-pid))
                       proj-root)))
 

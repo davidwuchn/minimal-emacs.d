@@ -38,6 +38,20 @@
          (when (file-exists-p worktree-dir)
            (ignore-errors (delete-directory worktree-dir t))))))))
 
+(defun gptel-auto-workflow--normalize-test-exit-code (exit-code verify-exit-code)
+  "Return normalized exit code from test and verify processes.
+Returns EXIT-CODE if non-zero, else VERIFY-EXIT-CODE if non-zero, else 1."
+  (or (and (/= exit-code 0) exit-code)
+      (and (/= verify-exit-code 0) verify-exit-code)
+      1))
+
+(defun gptel-auto-workflow--git-result-ok (cmd timeout)
+  "Return git command output if CMD succeeds (exit 0), else nil.
+Explicitly assumes: exit code 0 means success, non-zero means failure."
+  (let ((result (gptel-auto-workflow--git-result cmd timeout)))
+    (when (= 0 (cdr result))
+      (car result))))
+
 (defun gptel-auto-workflow--main-baseline-test-results ()
   "Return plist describing verification failures for the current staging baseline ref."
   (let ((main-ref (gptel-auto-workflow--staging-main-ref)))
@@ -93,16 +107,14 @@
                               :output output))
                        (failed-tests
                         (list :ref main-ref
-                              :exit-code (or (and (/= exit-code 0) exit-code)
-                                             (and (/= verify-exit-code 0) verify-exit-code)
-                                             1)
+                              :exit-code (gptel-auto-workflow--normalize-test-exit-code
+                                          exit-code verify-exit-code)
                               :failed-tests failed-tests
                               :output output))
                        (t
                         (list :ref main-ref
-                              :exit-code (or (and (/= exit-code 0) exit-code)
-                                             (and (/= verify-exit-code 0) verify-exit-code)
-                                             1)
+                              :exit-code (gptel-auto-workflow--normalize-test-exit-code
+                                          exit-code verify-exit-code)
                               :error (format "Failed to parse %s baseline test failures"
                                              main-ref)
                               :output output))))
@@ -222,25 +234,23 @@ stub away linked worktrees lightweight."
 
 (defun gptel-auto-workflow--staging-submodule-conflict-commits (path)
   "Return conflicted gitlink revisions for submodule PATH in the current worktree."
-  (let* ((conflict-result
-          (gptel-auto-workflow--git-result
+  (let* ((output
+          (gptel-auto-workflow--git-result-ok
            (format "git ls-files -u -- %s" (shell-quote-argument path))
            60))
-         (output (car conflict-result))
          commits)
-    (when (= 0 (cdr conflict-result))
-      (dolist (line (split-string (or output "") "\n" t))
-        (when (string-match
-               (format "^160000 \\([0-9a-f]\\{40\\}\\) \\([123]\\)\t%s$"
-                       (regexp-quote path))
-               line)
-          (setq commits
-                (plist-put commits
-                           (pcase (match-string 2 line)
-                             ("1" :base)
-                             ("2" :ours)
-                             ("3" :theirs))
-                           (match-string 1 line))))))
+    (dolist (line (split-string (or output "") "\n" t))
+      (when (string-match
+             (format "^160000 \\([0-9a-f]\\{40\\}\\) \\([123]\\)\t%s$"
+                     (regexp-quote path))
+             line)
+        (setq commits
+              (plist-put commits
+                         (pcase (match-string 2 line)
+                           ("1" :base)
+                           ("2" :ours)
+                           ("3" :theirs))
+                         (match-string 1 line)))))
     commits))
 
 (defun gptel-auto-workflow--submodule-commit-ancestor-p (git-dir ancestor descendant)
@@ -577,11 +587,11 @@ Used to catch reviewer false positives before they enter the fix loop."
   "Return Elisp files changed by the tip commit in WORKTREE."
   (when (and (stringp worktree) (file-directory-p worktree))
     (let* ((default-directory worktree)
-           (result (gptel-auto-workflow--git-result
+           (output (gptel-auto-workflow--git-result-ok
                     "git diff --name-only --diff-filter=ACMR HEAD~1 HEAD -- '*.el'"
                     60)))
-      (when (= 0 (cdr result))
-        (split-string (car result) "\n" t)))))
+      (when output
+        (split-string output "\n" t)))))
 
 (defun gptel-auto-workflow--file-defines-function-p (filepath function-name)
   "Return non-nil when FILEPATH defines FUNCTION-NAME in a defun-like form."
