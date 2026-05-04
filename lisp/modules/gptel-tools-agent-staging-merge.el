@@ -161,7 +161,7 @@ Returns t if all files pass syntax check, nil otherwise."
         nil)
     (let ((errors nil)
           (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
-      (dolist (file (or files nil) (null errors))
+      (dolist (file files (null errors))
         (when (file-readable-p file)
           (condition-case err
               (with-temp-buffer

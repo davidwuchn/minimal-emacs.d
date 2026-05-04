@@ -798,13 +798,15 @@ superproject-managed `.git/modules/...` store."
                               (expand-file-name (format "modules/%s" path) repo-git-dir)))
          (candidates (cl-remove-duplicates
                       (append checkout-git-dirs (delq nil (list module-git-dir)))
-                      :test #'string=)))
-    (cl-find-if (lambda (git-dir)
-                  (gptel-auto-workflow--git-dir-has-commit-p
-                   (gptel-auto-workflow--normalize-shared-submodule-core-worktree
-                    path git-dir)
-                   commit))
-                candidates)))
+                      :test #'string=))
+         (valid-candidates (delq nil candidates)))
+    (when valid-candidates
+      (cl-find-if (lambda (git-dir)
+                    (gptel-auto-workflow--git-dir-has-commit-p
+                     (gptel-auto-workflow--normalize-shared-submodule-core-worktree
+                      path git-dir)
+                     commit))
+                  valid-candidates))))
 
 (defun gptel-auto-workflow--finalize-refreshed-staging-submodules (worktree main-ref)
   "Ensure refreshed staging WORKTREE uses materializable top-level submodule gitlinks.

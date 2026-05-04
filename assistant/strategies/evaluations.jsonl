@@ -479,3 +479,6 @@
 {"timestamp":"2026-05-04 08:03:10","strategy":"template-default","target":"two","experiment-id":4,"score":0,"outcome":"kept","axis":"?"}
 {"timestamp":"2026-05-04 08:03:52","strategy":"template-default","target":"lisp/modules/gptel-tools-agent-worktree.el","experiment-id":1,"score":0.4125,"outcome":"kept","axis":"?"}
 {"timestamp":"2026-05-04 08:15:36","strategy":"template-default","target":"lisp/modules/gptel-tools-agent-worktree.el","experiment-id":2,"score":0.39999999999999997,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-04 08:19:56","strategy":"template-default","target":"lisp/modules/gptel-tools-agent-worktree.el","experiment-id":3,"score":0.39999999999999997,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-04 08:24:23","strategy":"template-default","target":"lisp/modules/gptel-ext-context-cache.el","experiment-id":1,"score":0.39999999999999997,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-04 08:28:18","strategy":"template-default","target":"lisp/modules/gptel-ext-context-cache.el","experiment-id":2,"score":0.39999999999999997,"outcome":"discarded","axis":"?"}
