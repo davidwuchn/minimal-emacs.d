@@ -646,14 +646,15 @@ NOTE: Staging branch is never deleted, only the worktree."
 
 (defun gptel-auto-workflow--staging-submodule-gitlink-revision (worktree path)
   "Return the gitlink revision for PATH in WORKTREE, or nil."
-  (let* ((default-directory worktree)
-         (result (gptel-auto-workflow--git-result
+  (when (and (stringp worktree) (file-directory-p worktree))
+    (let* ((default-directory worktree)
+           (result (gptel-auto-workflow--git-result
                   (format "git ls-tree HEAD -- %s" (shell-quote-argument path))
                   60)))
     (when (and result
                (= 0 (cdr result))
                (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" (car result)))
-      (match-string 1 (car result)))))
+      (match-string 1 (car result))))))
 
 (defun gptel-auto-workflow--staging-submodule-gitlink-revision-at-ref (worktree ref path)
   "Return the gitlink revision for PATH at REF in WORKTREE, or nil."
