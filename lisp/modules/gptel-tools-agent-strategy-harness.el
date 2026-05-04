@@ -90,20 +90,30 @@ Set to 0 to disable the split and use all targets for both.")
   (expand-file-name gptel-auto-workflow--strategy-evolution-summary-file
                     (gptel-auto-workflow--strategy-run-directory)))
 
+(defun gptel-auto-workflow--file-tracked-by-git-p (file)
+  "Return non-nil if FILE is tracked by git."
+  (let ((default-directory (or (gptel-auto-workflow--project-root) default-directory)))
+    (condition-case nil
+        (eq 0 (call-process "git" nil nil nil "ls-files" "--error-unmatch"
+                            (file-relative-name file default-directory)))
+      (error nil))))
+
 (defun gptel-auto-workflow--fresh-start-strategies ()
-  "Clear generated strategies and reset logs for a fresh run."
+  "Clear generated strategies and reset logs for a fresh run.
+Only removes files NOT tracked by git to preserve committed strategies."
   (interactive)
   (let ((strategies-dir (gptel-auto-workflow--strategies-directory))
         (run-dir (gptel-auto-workflow--strategy-run-directory))
         (cleared-strategies 0)
         (cleared-logs 0))
-    ;; Clear generated (non-template) strategies
+    ;; Clear generated (non-tracked) strategies
     (when (file-directory-p strategies-dir)
       (dolist (file (directory-files strategies-dir t "strategy-evolved-.+\\.el$"))
-        (delete-file file)
-        (cl-incf cleared-strategies))
+        (unless (gptel-auto-workflow--file-tracked-by-git-p file)
+          (delete-file file)
+          (cl-incf cleared-strategies)))
       (when (> cleared-strategies 0)
-        (message "[strategy] Cleared %d evolved strategy file(s)" cleared-strategies)))
+        (message "[strategy] Cleared %d untracked evolved strategy file(s)" cleared-strategies)))
     ;; Clear run logs
     (when (file-directory-p run-dir)
       (dolist (file (directory-files run-dir t "\\.jsonl?$"))
