@@ -89,11 +89,17 @@ JSON arrays are normalized to lists for consistent handling."
 (defun gptel-benchmark-write-json (data file)
   "Write DATA as JSON to FILE with pretty printing.
 DATA should be an alist or list of alists for proper JSON encoding.
-Plists are converted to alists automatically."
-  (let ((json-data (gptel-benchmark--to-json-format data)))
-    (with-temp-file file
-      (let ((json-encoding-pretty-print t))
-        (insert (json-encode json-data))))))
+Plists are converted to alists automatically.
+Returns t on success, nil if writing fails."
+  (condition-case nil
+      (progn
+        (let ((json-data (gptel-benchmark--to-json-format data)))
+          (with-temp-file file
+            (let ((json-encoding-pretty-print t))
+              (insert (json-encode json-data)))))
+        t)
+    (file-error nil)
+    (error nil)))
 
 (defun gptel-benchmark--to-json-format (data)
   "Convert DATA to JSON-serializable format.
