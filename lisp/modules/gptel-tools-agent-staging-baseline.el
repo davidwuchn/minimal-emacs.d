@@ -210,15 +210,18 @@ This avoids broken linked-worktree submodule metadata under `.git/worktrees/.../
   "Hydrate staging submodules in WORKTREE before hook-driven git commits run.
 This is a no-op when WORKTREE is nil or missing, which keeps unit tests that
 stub away linked worktrees lightweight."
-  (if (not (and (stringp worktree)
-                (file-directory-p worktree)))
-      t
+  (cond
+   ((null worktree) t)
+   ((not (and (stringp worktree)
+              (file-directory-p worktree)))
+    nil)
+   (t
     (let ((hydrate (gptel-auto-workflow--hydrate-staging-submodules worktree)))
       (if (= 0 (cdr hydrate))
           t
         (message "[auto-workflow] Failed to hydrate staging submodules: %s"
                  (my/gptel--sanitize-for-logging (car hydrate) 200))
-        nil))))
+        nil)))))
 
 (defun gptel-auto-workflow--staging-submodule-conflict-commits (path)
   "Return conflicted gitlink revisions for submodule PATH in the current worktree."
