@@ -1,9 +1,9 @@
-# Insight: 2026-05-04 12:41
+# Insight: 2026-05-04 12:48
 
 **Target:** lisp/modules/gptel-ext-context-cache.el
 **Change type:** safety
 **Hypothesis:** Adding a size limit to `my/gptel--token-estimate-cache` will prevent unbounded memory growth and improve safety
-**Decision:** staging-pending
+**Decision:** nil
 
 Unexpected experiment outcome.
 
