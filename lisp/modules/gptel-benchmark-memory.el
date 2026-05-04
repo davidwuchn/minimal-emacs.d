@@ -277,7 +277,7 @@ Shows distribution of φ scores and identifies quality issues."
         (push phi phi-values)))
     (dolist (phi phi-values)
       (dolist (bucket buckets)
-        (when (and (>= phi (car bucket)) (< phi (cdr bucket)))
+        (when (and (>= phi (car bucket)) (<= phi (cdr bucket)))
           (puthash bucket (1+ (gethash bucket bucket-counts 0)) bucket-counts))))
     (with-output-to-temp-buffer "*Memory Quality Report*"
       (princ "╔══════════════════════════════════════════════════╗\n")
