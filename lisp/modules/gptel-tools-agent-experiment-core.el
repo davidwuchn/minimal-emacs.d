@@ -761,10 +761,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 
 (defun gptel-auto-experiment--placeholder-hypothesis-p (hypothesis)
   "Return non-nil when HYPOTHESIS is still an unresolved prompt template."
-  (let ((trimmed (and (stringp hypothesis) (string-trim hypothesis))))
-    (or (not (gptel-auto-workflow--non-empty-string-p trimmed))
-        (member trimmed gptel-auto-experiment--placeholder-hypothesis-exact-patterns)
-        (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed))))
+  (cond
+   ((not (stringp hypothesis)) t)
+   (t
+    (let ((trimmed (string-trim hypothesis)))
+      (or (string-empty-p trimmed)
+          (member trimmed gptel-auto-experiment--placeholder-hypothesis-exact-patterns)
+          (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed))))))
 
 (provide 'gptel-tools-agent-experiment-core)
 ;;; gptel-tools-agent-experiment-core.el ends here

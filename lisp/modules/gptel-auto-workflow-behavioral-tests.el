@@ -40,6 +40,8 @@
 
 (defun gptel-test-context--assert-equal (ctx expr expected)
   "Assert in CTX that EXPR equals EXPECTED, record error on mismatch."
+  (when (null ctx)
+    (signal 'wrong-type-argument (list 'gptel-test-context ctx)))
   (cl-check-type ctx gptel-test-context)
   (when (not (equal expr expected))
     (gptel-test-context--add-error
@@ -47,6 +49,8 @@
 
 (defun gptel-test-context--assert-member (ctx expr item)
   "Assert in CTX that ITEM is a member of EXPR list."
+  (when (null ctx)
+    (signal 'wrong-type-argument (list 'gptel-test-context ctx)))
   (cl-check-type ctx gptel-test-context)
   (when (not (and (listp expr) (member item expr)))
     (gptel-test-context--add-error
@@ -54,6 +58,8 @@
 
 (defun gptel-test-context--result (ctx)
   "Return final result alist from CTX: (passed . errors)."
+  (when (null ctx)
+    (signal 'wrong-type-argument (list 'gptel-test-context ctx)))
   (cl-check-type ctx gptel-test-context)
   (cons (gptel-test-context-passed ctx)
         (or (nreverse (gptel-test-context-errors ctx)) '())))

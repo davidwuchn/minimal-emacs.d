@@ -270,6 +270,8 @@ Supported shape:
 
 (defun gptel-sandbox--eval-sequential (forms env)
   "Evaluate FORMS sequentially in ENV, returning the last result."
+  (unless (listp forms)
+    (error "Programmatic eval-sequential requires a list, got: %S" forms))
   (let ((value nil))
     (dolist (form forms value)
       (setq value (gptel-sandbox--eval-expr form env)))))
@@ -279,6 +281,8 @@ Supported shape:
 INITIAL-VALUE is the starting value. STOP-PRED is called on each result;
 when non-nil, evaluation short-circuits and returns that result.
 Used by `and' and `or' to share short-circuit evaluation logic."
+  (unless (listp forms)
+    (error "Programmatic short-circuit requires a list of forms, got: %S" forms))
   (unless (functionp stop-pred)
     (error "Programmatic short-circuit requires a function predicate, got: %S" stop-pred))
   (let ((value initial-value))
@@ -388,18 +392,17 @@ supports a small, explicit whitelist of pure operations."
       (dolist (arg spec-args (nreverse values))
         (let* ((name (plist-get arg :name))
                (key (and (stringp name) (intern (concat ":" name))))
-               (value-form (if key (gethash key arg-map gptel-sandbox--missing-marker)
-                            gptel-sandbox--missing-marker)))
+               (key-present (and key (hash-table-contains-p arg-map key))))
           (cond
            ((not key)
             (error "Invalid tool spec: argument missing :name property"))
-           ((eq value-form gptel-sandbox--missing-marker)
+           ((not key-present)
             (if (plist-get arg :optional)
                 (push nil values)
               (error "Missing required argument %s for tool %s"
                      name (gptel-tool-name tool-spec))))
            (t
-            (push (gptel-sandbox--eval-expr value-form env) values))))))))
+            (push (gptel-sandbox--eval-expr (gethash key arg-map) env) values))))))))
 
 (defun gptel-sandbox--normalize-tool-name (tool-name)
   "Convert TOOL-NAME to string representation.
@@ -603,11 +606,13 @@ like (:error \"...\") or (:violated t :reason \"...\")."
   "Convert RESULT to string, preferring gptel--to-string when available.
 Error plists like (:error \"...\") or (:violated t :reason \"...\")
 are converted to error strings."
-  (if (gptel-sandbox--error-result-p result)
-      (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result))
-    (if (fboundp 'gptel--to-string)
-        (gptel--to-string result)
-      (format "%s" result))))
+  (cond
+   ((null result) "nil")
+   ((gptel-sandbox--error-result-p result)
+    (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result)))
+   ((fboundp 'gptel--to-string)
+    (gptel--to-string result))
+   (t (format "%s" result))))
 
 (defun gptel-sandbox--render-result (value)
   "Render VALUE into the final string returned by Programmatic.

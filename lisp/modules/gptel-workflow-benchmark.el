@@ -396,15 +396,15 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
 
 (defun gptel-workflow--score-completion (run _completion-cfg)
   "Score completion of RUN against COMPLETION-CFG."
-  (cond
-   ((gptel-workflow-run-aborted-p run) 0.0)
-   ((gptel-workflow-run-timeout-p run) 0.0)
-   ((gptel-workflow-run-error-message run) 0.0)
-   ((and (gptel-workflow-run-completed-p run)
-         (not (gptel-workflow-run-timeout-p run))
-         (not (gptel-workflow-run-aborted-p run)))
-    1.0)
-   (t 0.5)))
+  (cl-block gptel-workflow--score-completion
+    (unless (and run (gptel-workflow-run-p run))
+      (cl-return-from gptel-workflow--score-completion 0.5))
+    (cond
+     ((gptel-workflow-run-aborted-p run) 0.0)
+     ((gptel-workflow-run-timeout-p run) 0.0)
+     ((gptel-workflow-run-error-message run) 0.0)
+     ((gptel-workflow-run-completed-p run) 1.0)
+     (t 0.5))))
 
 (defun gptel-workflow--score-efficiency (run efficiency-cfg)
   "Score efficiency of RUN against EFFICIENCY-CFG."
@@ -453,6 +453,39 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
         (max 0.0 (/ (float satisfied) total-constraints))
       1.0)))
 
+(defun gptel-workflow--tools-during-phase (run phase)
+  "Return tool names used during PHASE in RUN.
+Uses phase trace timestamps to determine time window."
+  (let* ((phase-trace (gptel-workflow-run-phase-trace run))
+         (phase-entry (cl-find phase phase-trace
+                               :key (lambda (p) (plist-get p :phase))
+                               :test #'eq))
+         (phase-start (when phase-entry (plist-get phase-entry :timestamp)))
+         (all-phases (cl-remove-if (lambda (p) (eq phase (plist-get p :phase)))
+                                   phase-trace))
+         (next-entry (car all-phases))
+         (phase-end (when next-entry (plist-get next-entry :timestamp)))
+         (tool-calls (gptel-workflow--tool-calls-list run))
+         (phase-tools '()))
+    (when (and phase-start (> phase-start 0))
+      (dolist (tc tool-calls)
+        (let* ((tc-time (cond
+                         ((numberp tc) tc)
+                         ((listp tc) (nth 2 tc))
+                         ((plistp tc) (plist-get tc :timestamp))
+                         (t nil)))
+               (tool (cond
+                      ((numberp tc) tc)
+                      ((listp tc) (car tc))
+                      ((plistp tc) (plist-get tc :tool))
+                      (t nil))))
+          (when (and tc-time tool
+                     (>= tc-time phase-start)
+                     (or (null phase-end) (<= tc-time phase-end)))
+            (push (if (symbolp tool) (symbol-name tool) tool)
+                  phase-tools)))))
+    phase-tools))
+
 (defun gptel-workflow--score-tools (run tools-cfg)
   "Score tool usage of RUN against TOOLS-CFG."
   (cond
@@ -471,10 +504,10 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
           (cl-incf total-score score)
           (cl-incf count)))
       (when p1-forbidden
-        (let* ((p1-tools (if (gptel-workflow--phase-active-p run 'P1)
-                             used-tools
-                           nil))
-               (violations (cl-intersection p1-forbidden p1-tools :test #'string=))
+        (let* ((p1-tools (when (gptel-workflow--phase-active-p run 'P1)
+                           (gptel-workflow--tools-during-phase run 'P1)))
+               (violations (when p1-tools
+                             (cl-intersection p1-forbidden p1-tools :test #'string=)))
                (score (if violations 0.0 1.0)))
           (cl-incf total-score score)
           (cl-incf count)))

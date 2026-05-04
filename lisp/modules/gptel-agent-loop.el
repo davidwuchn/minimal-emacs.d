@@ -231,13 +231,14 @@ memory after long sessions or if tasks appear stuck."
 
 (defun gptel-agent-loop--cleanup-state (state)
   "Remove STATE from active task bookkeeping."
-  (gptel-agent-loop--cancel-timer-if-active
-   (gptel-agent-loop--task-timeout-timer state))
-  (gptel-agent-loop--cancel-timer-if-active
-   (gptel-agent-loop--task-continuation-timer state))
-  (remhash (gptel-agent-loop--task-id state) gptel-agent-loop--active-tasks)
-  (when (eq gptel-agent-loop--state state)
-    (setq gptel-agent-loop--state nil)))
+  (when state
+    (gptel-agent-loop--cancel-timer-if-active
+     (gptel-agent-loop--task-timeout-timer state))
+    (gptel-agent-loop--cancel-timer-if-active
+     (gptel-agent-loop--task-continuation-timer state))
+    (remhash (gptel-agent-loop--task-id state) gptel-agent-loop--active-tasks)
+    (when (eq gptel-agent-loop--state state)
+      (setq gptel-agent-loop--state nil))))
 
 (defun gptel-agent-loop--safe-accumulated-output (state)
   "Return STATE's accumulated output or empty string if nil."
