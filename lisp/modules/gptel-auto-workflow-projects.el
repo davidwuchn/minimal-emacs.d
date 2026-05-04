@@ -793,6 +793,12 @@ Without PROJECT-ROOT, clears cache for all projects."
   "Run a weekly job for PROJECT-ROOT with given PREFIX, FEATURE-NAME, FILE-PATH, and JOB-FN.
 Loads the feature if needed, enables headless suppression, runs JOB-FN,
 and restores headless state. Returns t on success, nil on failure."
+  (unless (symbolp feature-name)
+    (error "feature-name must be a symbol, got: %s" feature-name))
+  (unless (stringp file-path)
+    (error "file-path must be a string, got: %s" file-path))
+  (unless (functionp job-fn)
+    (error "job-fn must be a function, got: %s" job-fn))
   (let* ((root (expand-file-name project-root))
          (default-directory root)
          (mementum-root root)
