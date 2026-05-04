@@ -136,12 +136,14 @@ Returns (PASS-P . OUTPUT-STRING)."
           (setq output (concat output (format "\n[behavioral] Running %s...\n" name)))
           (condition-case err
               (let ((result (funcall test-fn)))
-                (if (car result)
+                (if (and (consp result) (car result))
                     (setq output (concat output (format "[behavioral] %s: PASSED\n" name)))
                   (setq all-passed nil)
                   (setq output (concat output (format "[behavioral] %s: FAILED\n  %s\n"
                                                        name
-                                                       (mapconcat #'identity (cdr result) "\n  "))))))
+                                                       (if (consp result)
+                                                           (mapconcat #'identity (cdr result) "\n  ")
+                                                         (format "invalid result: %S" result)))))))
             (error
              (setq all-passed nil)
              (setq output (concat output (format "[behavioral] %s: ERROR - %s\n"

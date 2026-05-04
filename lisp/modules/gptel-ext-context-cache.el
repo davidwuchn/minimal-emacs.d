@@ -80,6 +80,10 @@ Keys include: :context-window, :pricing-input, :pricing-output,
   "Hash table caching context-window lookups from gptel model tables.
 Reduces repeated iterations through model tables.")
 
+(defconst my/gptel--token-estimate-cache-max-size 1000
+  "Maximum entries in `my/gptel--token-estimate-cache'.
+Prevents unbounded memory growth from repeated token estimates.")
+
 (defvar my/gptel--token-estimate-cache (make-hash-table :test 'equal)
   "Hash table caching token estimates for (chars . extension) pairs.")
 
@@ -301,16 +305,18 @@ Single constant avoids allocating a new symbol on every search call.")
 Returns the value from hash table if found, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found.
 Handles negative cache hits when KEY maps to a miss sentinel."
-  (if (and (hash-table-p hash-table) (stringp key) (not (string-empty-p key)))
-      (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
-        (cond
-         ((eq hash-value my/gptel--cache-sentinel)
-          (and (listp alist)
-               (my/gptel--alist-partial-match alist key)))
-         ((eq hash-value my/gptel--context-window-miss-sentinel)
-          nil)
-         (t hash-value)))
-    (and (listp alist) (my/gptel--alist-partial-match alist key))))
+  (when (and (stringp key) (not (string-empty-p key)))
+    (if (hash-table-p hash-table)
+        (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
+          (cond
+           ((eq hash-value my/gptel--cache-sentinel)
+            (and (listp alist)
+                 (my/gptel--alist-partial-match alist key)))
+           ((eq hash-value my/gptel--context-window-miss-sentinel)
+            nil)
+           (t hash-value)))
+      (and (listp alist)
+           (my/gptel--alist-partial-match alist key)))))
 
 
 (defvar my/gptel--alist-partial-match-cache (make-hash-table :test 'equal)
@@ -449,7 +455,9 @@ and a positive integer context_length; otherwise returns nil."
                           2.5)
                          (t 3.5)))
                  (result (/ (float chars) ratio)))
-            (puthash cache-key result my/gptel--token-estimate-cache)
+            (when (< (hash-table-count my/gptel--token-estimate-cache)
+                     my/gptel--token-estimate-cache-max-size)
+              (puthash cache-key result my/gptel--token-estimate-cache))
             result)))))
 
 (defun my/gptel--estimate-tokens (chars)
