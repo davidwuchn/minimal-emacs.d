@@ -49,6 +49,18 @@
               (if (symbolp tool) (symbol-name tool) tool)))
           (gptel-workflow--tool-calls-list run)))
 
+(defun gptel-workflow--extract-tools (tool-calls)
+  "Extract tools from TOOL-CALLS plist entries."
+  (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls))
+
+(defun gptel-workflow--has-tool-p (tools tool-name)
+  "Check if TOOL-NAME is present in TOOLS list.
+Handles both symbol and string representations for case-insensitive matching."
+  (let ((name (symbol-name tool-name)))
+    (or (memq (intern name) tools)
+        (memq (intern (capitalize name)) tools)
+        (cl-member name tools :test #'equal :key #'symbol-name))))
+
 (defun gptel-workflow--phase-active-p (run phase)
   "Return non-nil if PHASE is active in RUN's phase trace."
   (cl-find phase (gptel-workflow-run-phase-trace run)
@@ -219,13 +231,9 @@ Returns list of phase entries."
   "Detect P1 phase from TOOL-CALLS.
 P1 = Understand → Explore → Decide → Present
 Indicators: grep/read tools used, no edit/write yet."
-  (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
-    (when (and (or (memq 'grep tools)
-                   (memq 'Grep tools)
-                   (cl-member "grep" tools :test #'equal :key #'symbol-name))
-               (or (memq 'read tools)
-                   (memq 'Read tools)
-                   (cl-member "read" tools :test #'equal :key #'symbol-name)))
+  (let ((tools (gptel-workflow--extract-tools tool-calls)))
+    (when (and (gptel-workflow--has-tool-p tools "grep")
+               (gptel-workflow--has-tool-p tools "read"))
       (list :phase 'P1
             :entered t
             :timestamp (float-time)
@@ -235,29 +243,25 @@ Indicators: grep/read tools used, no edit/write yet."
   "Detect P2 phase from TOOL-CALLS and OUTPUT.
 P2 = refine (plan created, updates made)
 Indicators: plan file mentioned, Updates in output, or edit tools used."
-  (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
+  (let ((tools (gptel-workflow--extract-tools tool-calls)))
     (when (or (string-match-p "[Pp]lan" output)
               (string-match-p "[Uu]pdates" output)
-              (memq 'edit tools)
-              (memq 'Edit tools)
-              (cl-member "edit" tools :test #'equal :key #'symbol-name))
+              (gptel-workflow--has-tool-p tools "edit"))
       (list :phase 'P2
             :entered t
             :timestamp (float-time)
             :indicators (delq nil
                               (list (when (string-match-p "[Pp]lan" output) "plan-mentioned")
                                     (when (string-match-p "[Uu]pdates" output) "updates-mentioned")
-                                    (when (memq 'edit tools) "edit-used")))))))
+                                    (when (gptel-workflow--has-tool-p tools "edit") "edit-used")))))))
 
 (defun gptel-workflow--detect-p3 (tool-calls)
   "Detect P3 phase from TOOL-CALLS.
 P3 = preview (preview_file_change tool called)
 Indicators: preview tool used."
-  (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
-    (when (or (memq 'preview_file_change tools)
-              (memq 'Preview tools)
-              (cl-member "preview" tools :test #'equal :key #'symbol-name)
-              (cl-member "preview_file_change" tools :test #'equal :key #'symbol-name))
+  (let ((tools (gptel-workflow--extract-tools tool-calls)))
+    (when (or (gptel-workflow--has-tool-p tools "preview_file_change")
+              (gptel-workflow--has-tool-p tools "preview"))
       (list :phase 'P3
             :entered t
             :timestamp (float-time)))))
