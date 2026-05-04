@@ -39,16 +39,23 @@
 
 (defun gptel-workflow--tool-calls-list (run)
   "Return tool-calls from RUN as a list (handles vector)."
-  (when run
+  (when (and run (gptel-workflow-run-p run))
     (let ((tc (gptel-workflow-run-tool-calls run)))
-      (if (vectorp tc) (append tc nil) tc))))
+      (cond
+       ((vectorp tc) (append tc nil))
+       ((listp tc) tc)
+       (t nil)))))
 
 (defun gptel-workflow--tool-names (run)
-  "Return list of tool names from RUN as strings."
-  (mapcar (lambda (tc)
-            (let ((tool (plist-get tc :tool)))
-              (if (symbolp tool) (symbol-name tool) tool)))
-          (gptel-workflow--tool-calls-list run)))
+  "Return list of tool names from RUN as strings.
+Returns empty list if no tool calls available."
+  (let ((tool-calls (gptel-workflow--tool-calls-list run)))
+    (if (null tool-calls)
+        '()
+      (mapcar (lambda (tc)
+                (let ((tool (plist-get tc :tool)))
+                  (if (symbolp tool) (symbol-name tool) tool)))
+              tool-calls))))
 
 (defun gptel-workflow--phase-active-p (run phase)
   "Return non-nil if PHASE is active in RUN's phase trace."
@@ -173,12 +180,13 @@ Extracts tool calls from the FSM's :tool-use plist and records them."
   (when (and gptel-workflow--current-run fsm
              (fboundp 'gptel-fsm-info))
     (when-let* ((info (gptel-fsm-info fsm))
+                ((listp info))
                 (tool-use (plist-get info :tool-use)))
       (dolist (call (if (listp tool-use) tool-use (list tool-use)))
         (when (plistp call)
           (let* ((tool-name (plist-get call :name))
                  (args (plist-get call :args)))
-            (when tool-name
+            (when (and tool-name (or (symbolp tool-name) (stringp tool-name)))
               (gptel-workflow--collect-tool-call tool-name args))))))))
 
 ;;; Memory Integration

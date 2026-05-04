@@ -1,13 +1,13 @@
-;;; strategy-evolved-0003.el --- Weighted skill composition strategy -*- lexical-binding: t; -*-
+;;; strategy-weighted-skills.el --- Weighted skill composition strategy -*- lexical-binding: t; -*-
 ;; Hypothesis: Dynamically composing skills based on target characteristics and failure history improves focus
 ;; Axis: Prompt template architecture
 
 (require 'cl-lib)
 (require 'gptel-tools-agent-prompt-build)
 
-(defun strategy-evolved-0003-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-weighted-skills-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt using weighted skill composition based on target analysis."
-  (let* ((skill-weights (strategy-evolved-0003--compute-weights previous-results))
+  (let* ((skill-weights (strategy-weighted-skills--compute-weights previous-results))
          (selected-skills (cl-loop for sw in skill-weights
                                     for skill = (car sw)
                                     for weight = (cdr sw)
@@ -24,7 +24,7 @@
     (gptel-auto-experiment-build-prompt
      target experiment-id max-experiments analysis baseline previous-results)))
 
-(defun strategy-evolved-0003--compute-weights (previous-results)
+(defun strategy-weighted-skills--compute-weights (previous-results)
   "Compute skill weights based on prior experiment outcomes in PREVIOUS-RESULTS.
 PREVIOUS-RESULTS is a list of plists with :decision and :comparator-reason."
   (let* ((weights (list (cons "error-handling" 0.0)
@@ -62,7 +62,7 @@ PREVIOUS-RESULTS is a list of plists with :decision and :comparator-reason."
       ;; Cap weights at 0.8
       (mapcar (lambda (w) (cons (car w) (min (cdr w) 0.8))) weights))))
 
-(defun strategy-evolved-0003-get-metadata ()
+(defun strategy-weighted-skills-get-metadata ()
   "Return metadata for this strategy."
   (list :name "evolved-0003"
         :version "1.1"
@@ -70,5 +70,5 @@ PREVIOUS-RESULTS is a list of plists with :decision and :comparator-reason."
         :axis "A"
         :components '("weighted-selection" "failure-driven" "skill-composition")))
 
-(provide 'strategy-evolved-0003)
-;;; strategy-evolved-0003.el ends here
+(provide 'strategy-weighted-skills)
+;;; strategy-weighted-skills.el ends here

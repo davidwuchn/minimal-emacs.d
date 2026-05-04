@@ -363,12 +363,13 @@ with an additional `p' option to permit and remember a tool."
 (defun my/gptel--programmatic-confirm-cleanup-overlay (ov)
   "Remove confirmation UI for nested Programmatic overlay OV."
   (when (and (overlayp ov) (overlay-buffer ov))
-    (with-current-buffer (overlay-buffer ov)
-      (when-let* ((prompt-ov (overlay-get ov 'prompt))
-                  (buf (overlay-buffer prompt-ov))
-                  (inhibit-read-only t))
-        (delete-region (overlay-start prompt-ov)
-                       (overlay-end prompt-ov))))
+    (when-let* ((prompt-ov (and (overlayp (overlay-get ov 'prompt))
+                                (overlay-get ov 'prompt)))
+                (buf (overlay-buffer prompt-ov)))
+      (with-current-buffer buf
+        (let ((inhibit-read-only t))
+          (delete-region (overlay-start prompt-ov)
+                         (overlay-end prompt-ov)))))
     (delete-overlay ov)))
 
 (defun my/gptel--extract-programmatic-callback (response ov)
@@ -385,25 +386,26 @@ Returns (callback . is-programmatic) where callback is the function or nil."
           (cons nil nil)))
     (cons nil nil)))
 
-(defun my/gptel--around-accept-tool-calls (orig &optional response ov)
-  "Handle nested Programmatic tool confirmations before normal acceptance."
+(defun my/gptel--handle-programmatic-callback (orig &optional response ov approved)
+  "Helper for Programmatic tool confirm/reject handling.
+If the tool call is Programmatic, invokes the callback with APPROVED (t or nil)
+and cleans up the overlay.  Otherwise calls ORIG with RESPONSE and OV.
+APPROVED should be t for accept, nil for reject."
   (pcase-let ((`(,cb . ,programmaticp) (my/gptel--extract-programmatic-callback response ov)))
     (if programmaticp
         (progn
           (when (functionp cb)
-            (funcall cb t))
+            (funcall cb approved))
           (my/gptel--programmatic-confirm-cleanup-overlay ov))
       (funcall orig response ov))))
 
+(defun my/gptel--around-accept-tool-calls (orig &optional response ov)
+  "Handle nested Programmatic tool confirmations before normal acceptance."
+  (my/gptel--handle-programmatic-callback orig response ov t))
+
 (defun my/gptel--around-reject-tool-calls (orig &optional response ov)
   "Handle nested Programmatic tool rejections before normal cancellation."
-  (pcase-let ((`(,cb . ,programmaticp) (my/gptel--extract-programmatic-callback response ov)))
-    (if programmaticp
-        (progn
-          (when (functionp cb)
-            (funcall cb nil))
-          (my/gptel--programmatic-confirm-cleanup-overlay ov))
-      (funcall orig response ov))))
+  (my/gptel--handle-programmatic-callback orig response ov nil))
 
 (advice-add 'gptel--display-tool-calls :override #'my/gptel--display-tool-calls)
 (advice-add 'gptel--accept-tool-calls :around #'my/gptel--around-accept-tool-calls)
