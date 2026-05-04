@@ -122,6 +122,47 @@ Each entry: (NAME :file FILE :test FUNCTION).")
 
     (cons passed (nreverse errors))))
 
+(defun gptel-auto-workflow--test-malformed-data-handling ()
+  "Test that JSON helpers handle malformed data gracefully."
+  (let ((passed t)
+        (errors nil))
+    ;; Test 1: Improper list (dotted pair) should be handled
+    (let* ((improper-data (gptel-auto-workflow--make-malformed-data 'improper))
+           (result (gptel-auto-workflow--json-object-p improper-data)))
+      (when result
+        (push "Improper list should not be treated as JSON object" errors)
+        (setq passed nil)))
+
+    ;; Test 2: Vector input should not match JSON object pattern
+    (let* ((vector-data (gptel-auto-workflow--make-malformed-data 'vector))
+           (result (gptel-auto-workflow--json-object-p vector-data)))
+      (when result
+        (push "Vector should not be treated as JSON object" errors)
+        (setq passed nil)))
+
+    ;; Test 3: Empty list should not match JSON object pattern
+    (let* ((empty-data (gptel-auto-workflow--make-malformed-data 'empty))
+           (result (gptel-auto-workflow--json-object-p empty-data)))
+      (when result
+        (push "Empty list should not be treated as JSON object" errors)
+        (setq passed nil)))
+
+    ;; Test 4: Integer key should not match JSON object pattern
+    (let* ((int-key-data (list (cons 123 "value")))
+           (result (gptel-auto-workflow--json-object-p int-key-data)))
+      (when result
+        (push "Integer key should not be treated as JSON object" errors)
+        (setq passed nil)))
+
+    ;; Test 5: Symbol value alone should not be treated as object
+    (let* ((symbol-data 'some-symbol)
+           (result (gptel-auto-workflow--json-object-p symbol-data)))
+      (when result
+        (push "Symbol alone should not be treated as JSON object" errors)
+        (setq passed nil)))
+
+    (cons passed (nreverse errors))))
+
 (defun gptel-auto-workflow--test-validate-and-add-target ()
   "Test that validate-and-add-target handles edge cases correctly."
   (let ((passed t)
