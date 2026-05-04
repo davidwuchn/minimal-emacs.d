@@ -115,9 +115,16 @@ Returns list of test plists."
   (let ((test-file (expand-file-name (format "%s.json" workflow-name)
                                      gptel-workflow-tests-dir)))
     (if (file-exists-p test-file)
-        (let* ((data (gptel-workflow--read-json test-file))
-               (test-cases (cdr (assq 'test_cases data))))
-          (mapcar #'gptel-workflow--normalize-test test-cases))
+        (condition-case err
+            (let* ((data (gptel-workflow--read-json test-file))
+                   (test-cases (cdr (assq 'test_cases data))))
+              (if (listp test-cases)
+                  (mapcar #'gptel-workflow--normalize-test test-cases)
+                (message "[workflow-bench] Invalid test_cases format in %s" test-file)
+                '()))
+          (error
+           (message "[workflow-bench] Failed to load tests from %s: %s" test-file err)
+           '()))
       (progn
         (message "[workflow-bench] No test file found: %s" test-file)
         '()))))
