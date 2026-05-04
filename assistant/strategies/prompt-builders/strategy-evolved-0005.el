@@ -55,9 +55,8 @@ GUIDANCE: Avoid pattern repetition. Use counterfactuals to explore the solution 
   "Build prompt with contrastive counterfactual reasoning."
   (let* ((base-prompt (gptel-auto-experiment-build-prompt target experiment-id max-experiments analysis baseline previous-results))
          (patterns (strategy-evolved-0005--extract-patterns previous-results))
-         (counterfactuals (strategy-evolved-0005--generate-counterfactuals (car patterns) (cdr patterns)))
-         (axis-guidance (gptel-auto-experiment--format-axis-guidance analysis)))
-    (concat base-prompt "\n\n" counterfactuals "\n\n" axis-guidance)))
+         (counterfactuals (strategy-evolved-0005--generate-counterfactuals (car patterns) (cdr patterns))))
+    (concat base-prompt "\n\n" counterfactuals)))
 
 (defun strategy-evolved-0005-get-metadata ()
   "Return metadata for this strategy."
