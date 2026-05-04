@@ -425,12 +425,17 @@ Otherwise, convert using princ representation."
 
 (defun gptel-auto-workflow--filter-valid-targets (candidates proj-root max-targets)
   "Filter CANDIDATES to valid target files.
-Returns list of validated relative paths, up to MAX-TARGETS."
+Returns list of validated relative paths, up to MAX-TARGETS.
+ASSUMPTION: candidates is nil or a list of file paths/objects.
+EDGE CASE: nil candidates returns empty list."
+  (unless (listp candidates)
+    (if (null candidates)
+        (setq candidates nil)
+      (setq candidates (list candidates))))
   (unless (and (integerp max-targets) (> max-targets 0))
     (setq max-targets most-positive-fixnum))
-  (let ((candidates-list (if (listp candidates) candidates (list candidates)))
-        (targets '()))
-    (dolist (file candidates-list (reverse targets))
+  (let ((targets '()))
+    (dolist (file candidates (reverse targets))
       (when (< (length targets) max-targets)
         (let ((new-targets (gptel-auto-workflow--validate-and-add-target
                             file proj-root targets)))
