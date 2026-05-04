@@ -72,6 +72,9 @@ Startup speed depends on hardware and disk speed. For consistent comparisons, te
 - [sunng on Reddit](https://www.reddit.com/r/emacs/comments/1p9y8h4/comment/ns1nehi/): "Nice work! I just created a nix flake to using it on my dev servers"
 - [zackattackz287 on Reddit](https://www.reddit.com/r/emacs/comments/1rsmaut/comment/oa8okca/): "Congrats and thank you (and the community around minimal.d) for your work! I've been using it for quite a while now and I've not ever had any breakages when merging changes from main..."
 - [utility on Reddit](https://www.reddit.com/r/emacs/comments/1rsmaut/comment/oa8wrap/): "Excellent. I use this and I'm very happy with it!"
+- [Karrot_Kream](https://news.ycombinator.com/item?id=45784591): "If you don't want to use a distribution like Doom (which I don't fwiw and I've been using emacs for 20-something years), then **I'm a big fan of minimal-emacs a compact init.el and early-init.el that configures vanilla emacs into a good, default state**. From there I would pick and choose which packages..."
+- [uutangohotel](https://news.ycombinator.com/item?id=45783901): "https://github.com/jamescherti/minimal-emacs.d is a great starting point for owning your config."
+- [kleinishere](): "Came here to find this. MANY upvotes. I used Doom for a couple months. Then started considering a vanilla eMacs. I started taking notes on packages I found highly recommended and interesting. Then I found this [minimal-emacs.d]. And the author has done all that work and then made it into a "let me walk through a config" including a lot of the most recommended packages and sensible configs. Gives you the lesson of building a config, knowing what's in your config, and then being fluent in changing it. He also has more notes on his blog about the packages + more : https://www.jamescherti.com/essential-emacs-packages/ And I now feel comfortable making changes myself."
 
 Please share your configuration. It could serve as inspiration for other users.
 
@@ -1049,6 +1052,7 @@ For example, to enable `outline-minor-mode`:
 (add-hook 'emacs-lisp-mode-hook #'outline-minor-mode)
 (add-hook 'conf-mode-hook #'outline-minor-mode)
 (add-hook 'markdown-mode-hook #'outline-minor-mode)
+(add-hook 'diff-mode-hook #'outline-minor-mode)
 ```
 
 To enable `hs-minor-mode`, which is ideal for C-style languages and others that use braces `{}`:
@@ -1477,7 +1481,7 @@ To configure **auto-package-update**, add the following to `~/.emacs.d/post-init
 
   ;; Automatically delete old package versions after updates to reduce disk
   ;; usage and keep the package directory clean. This prevents the accumulation
-  ;; of outdated files in Emacs’s package directory, which consume
+  ;; of outdated files in Emacs's package directory, which consume
   ;; unnecessary disk space over time.
   (auto-package-update-delete-old-versions t)
 
@@ -2480,7 +2484,7 @@ Disabling both `site-run-file` and `default.el` removes system-level interferenc
 
 By default, *minimal-emacs.d* is configured to prioritize packages from [GNU ELPA](https://elpa.gnu.org/) and [NonGNU ELPA](https://elpa.nongnu.org/) repositories over [MELPA](https://melpa.org/), ensuring greater stability.
 
-If you prefer to obtain the latest packages from MELPA to access new features and improvements, you can adjust the priority so that Emacs `use-package` retrieves the newest versions from MELPA before consulting the stable GNU and NonGNU repositories. While MELPA packages are generally regarded as less stable, actual breakages are uncommon; over the past year, only a single package (package-lint) out of 146 packages in the author’s configuration experienced a brief disruption, which was quickly resolved.
+If you prefer to obtain the latest packages from MELPA to access new features and improvements, you can adjust the priority so that Emacs `use-package` retrieves the newest versions from MELPA before consulting the stable GNU and NonGNU repositories. While MELPA packages are generally regarded as less stable, actual breakages are uncommon; over the past year, only a single package (package-lint) out of 146 packages in the author's configuration experienced a brief disruption, which was quickly resolved.
 
 Benefit:
 
@@ -2498,7 +2502,7 @@ To ensure that Emacs always installs or updates to the newest versions of all pa
 ;; Obtain the latest packages from MELPA to access new features and
 ;; improvements. While MELPA packages are generally regarded as less stable,
 ;; actual breakages are uncommon; over the past year, only a single package
-;; (package-lint) out of 146 packages in the minimal-emacs.d author’s
+;; (package-lint) out of 146 packages in the minimal-emacs.d author's
 ;; configuration experienced a brief disruption, which was quickly resolved.
 (setq package-archive-priorities '(("melpa"        . 90)
                                    ("gnu"          . 70)
@@ -2599,7 +2603,7 @@ Here is a comprehensive `package-pinned-packages` configuration to guarantee tha
 By default, *minimal-emacs.d* uses [MELPA](https://melpa.org/) instead of [MELPA Stable](https://stable.melpa.org/) because MELPA Stable offers outdated packages that lack essential features. If you prefer to use MELPA Stable, you may follow the instructions below.
 
 Here are the key differences between **MELPA** (the default repository used in minimal-emacs.d) and **MELPA Stable**:
-- **MELPA** (preferred) is a rolling release repository for Emacs packages, where packages are continuously updated with the latest commits from their respective development branches, delivering the most current features and bug fixes. While MELPA features the latest changes, most Emacs package developers have learned to maintain a relatively stable master branch, which contributes to MELPA’s overall stability. Furthermore, MELPA includes a broader selection of packages.
+- **MELPA** (preferred) is a rolling release repository for Emacs packages, where packages are continuously updated with the latest commits from their respective development branches, delivering the most current features and bug fixes. While MELPA features the latest changes, most Emacs package developers have learned to maintain a relatively stable master branch, which contributes to MELPA's overall stability. Furthermore, MELPA includes a broader selection of packages.
 - In contrast, **MELPA Stable** is a repository that hosts versioned, tagged releases of packages. However, **MELPA Stable does not guarantee more reliability than MELPA, as its tagged versions may still suffer from issues** like uncoordinated dependencies or incomplete testing, and updates are less frequent, often based on developer discretion rather than every new commit.
 
 If you prefer MELPA Stable over MELPA, you can add MELPA Stable and prioritize it. To ensure packages are fetched from MELPA Stable first, add the following configuration to `~/.emacs.d/post-early-init.el`:
@@ -2889,3 +2893,4 @@ Other Emacs packages by the same author:
 - [persist-text-scale.el](https://github.com/jamescherti/persist-text-scale.el): Ensure that all adjustments made with text-scale-increase and text-scale-decrease are persisted and restored across sessions.
 - [pathaction.el](https://github.com/jamescherti/pathaction.el): Execute the pathaction command-line tool from Emacs. The pathaction command-line tool enables the execution of specific commands on targeted files or directories. Its key advantage lies in its flexibility, allowing users to handle various types of files simply by passing the file or directory as an argument to the pathaction tool. The tool uses a .pathaction.yaml rule-set file to determine which command to execute. Additionally, Jinja2 templating can be employed in the rule-set file to further customize the commands.
 - [kirigami.el](https://github.com/jamescherti/kirigami.el): The *kirigami* Emacs package offers a unified interface for opening and closing folds across a diverse set of major and minor modes in Emacs, including `outline-mode`, `outline-minor-mode`, `outline-indent-minor-mode`, `org-mode`, `markdown-mode`, `vdiff-mode`, `vdiff-3way-mode`, `hs-minor-mode`, `hide-ifdef-mode`, `origami-mode`, `yafolding-mode`, `folding-mode`, and `treesit-fold-mode`. With Kirigami, folding key bindings only need to be configured **once**. After that, the same keys work consistently across all supported major and minor modes, providing a unified and predictable folding experience.
+- [buffer-guardian.el](https://github.com/jamescherti/buffer-guardian.el): Automatically saves Emacs buffers without requiring manual intervention. By default, it triggers a save when the user switches to another buffer, switches to another window or frame, Emacs loses focus, or the minibuffer is opened. Beyond standard file buffers, *buffer-guardian* also manages specialized editing buffers such as *org-src* and *edit-indirect*. Additional features, disabled by default, include periodic or idle-time saving of all buffers, automatic exclusion of remote, nonexistent, or large files, and support for custom exclusion rules via regular expressions or predicate functions.
