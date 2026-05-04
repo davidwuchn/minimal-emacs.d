@@ -1,1 +1,1 @@
-{"name":"evolved-0003","version":"1.0","hypothesis":"Dynamic skill composition weighted by failure pattern frequency","axis":"Prompt template architecture","components":["weighted-selection","failure-driven","skill-composition"]}
+{"name":"evolved-0003","version":"1.1","hypothesis":"Dynamic skill composition weighted by failure pattern frequency","axis":"A","components":["weighted-selection","failure-driven","skill-composition"]}
