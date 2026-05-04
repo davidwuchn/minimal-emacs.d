@@ -301,16 +301,18 @@ Single constant avoids allocating a new symbol on every search call.")
 Returns the value from hash table if found, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found.
 Handles negative cache hits when KEY maps to a miss sentinel."
-  (if (and (hash-table-p hash-table) (stringp key) (not (string-empty-p key)))
-      (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
-        (cond
-         ((eq hash-value my/gptel--cache-sentinel)
-          (and (listp alist)
-               (my/gptel--alist-partial-match alist key)))
-         ((eq hash-value my/gptel--context-window-miss-sentinel)
-          nil)
-         (t hash-value)))
-    (and (listp alist) (my/gptel--alist-partial-match alist key))))
+  (when (and (stringp key) (not (string-empty-p key)))
+    (if (hash-table-p hash-table)
+        (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
+          (cond
+           ((eq hash-value my/gptel--cache-sentinel)
+            (and (listp alist)
+                 (my/gptel--alist-partial-match alist key)))
+           ((eq hash-value my/gptel--context-window-miss-sentinel)
+            nil)
+           (t hash-value)))
+      (and (listp alist)
+           (my/gptel--alist-partial-match alist key)))))
 
 
 (defvar my/gptel--alist-partial-match-cache (make-hash-table :test 'equal)
