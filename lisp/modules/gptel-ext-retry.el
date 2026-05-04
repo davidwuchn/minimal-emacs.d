@@ -297,7 +297,7 @@ that accumulates across tool-use rounds.
 Returns the number of messages whose reasoning_content was stripped."
   (if (null my/gptel-reasoning-keep-turns)
       0
-    (let* ((data (plist-get info :data))
+    (let* ((data (and (listp info) (plist-get info :data)))
            (messages (and (listp data) (plist-get data :messages)))
            (keep my/gptel-reasoning-keep-turns)
            (stripped 0))
@@ -359,7 +359,7 @@ This typically removes 60-80% of the tools payload (~5-8KB) on
 conversations that only use 3-5 of 18+ registered tools.
 
 Returns the number of tool definitions removed, or 0 if nothing changed."
-  (let* ((data (plist-get info :data))
+  (let* ((data (and (listp info) (plist-get info :data)))
          (messages (and (listp data) (plist-get data :messages)))
          (data-tools (and (listp data) (plist-get data :tools)))  ; vector of plists
          (struct-tools (plist-get info :tools))            ; list of gptel-tool structs
