@@ -612,12 +612,18 @@ LLM decides if available, otherwise uses static list."
            (lambda (targets)
              (if (gptel-auto-workflow--handle-analyzer-error-state targets static-targets callback)
                  nil  ; Error already handled
-               (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                      (final-targets (or filtered-targets targets)))
-                 (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
-                          (length targets) (length final-targets))
-                 (funcall callback final-targets)))))
-        (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets static-targets))
+               (if (null targets)
+                   (progn
+                     (message "[auto-workflow] Analyzer returned no targets; using static targets")
+                     (funcall callback static-targets))
+                 (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
+                        (final-targets (or filtered-targets targets)))
+                   (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
+                            (length targets) (length final-targets))
+                   (funcall callback final-targets))))))
+        (let* ((filtered-targets (if static-targets
+                                      (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
+                                    nil))
                (final-targets (or filtered-targets static-targets)))
           (message "[auto-workflow] Static: %d targets, %d after frontier filtering"
                    (length static-targets) (length final-targets))
