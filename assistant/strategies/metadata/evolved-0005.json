@@ -1,0 +1,1 @@
+{"name":"evolved-0005","version":"1.0","hypothesis":"Explicit counterfactual reasoning about untried approaches provides better exploration signal","axis":"A","created":"2024","parent-strategies":["evolved-0004-reasoning"],"components":["counterfactual-reasoning","inverse-analysis","hybrid-exploration","analogical-extension"]}

@@ -89,11 +89,17 @@ JSON arrays are normalized to lists for consistent handling."
 (defun gptel-benchmark-write-json (data file)
   "Write DATA as JSON to FILE with pretty printing.
 DATA should be an alist or list of alists for proper JSON encoding.
-Plists are converted to alists automatically."
-  (let ((json-data (gptel-benchmark--to-json-format data)))
-    (with-temp-file file
-      (let ((json-encoding-pretty-print t))
-        (insert (json-encode json-data))))))
+Plists are converted to alists automatically.
+Returns t on success, nil if writing fails."
+  (condition-case nil
+      (progn
+        (let ((json-data (gptel-benchmark--to-json-format data)))
+          (with-temp-file file
+            (let ((json-encoding-pretty-print t))
+              (insert (json-encode json-data)))))
+        t)
+    (file-error nil)
+    (error nil)))
 
 (defun gptel-benchmark--to-json-format (data)
   "Convert DATA to JSON-serializable format.
@@ -146,9 +152,15 @@ Returns nil for empty or malformed input."
       (reverse alist))))
 
 (defun gptel-benchmark--ensure-list (data)
-  "Ensure DATA is a list, converting vectors if necessary.
-JSON parsing returns vectors for arrays; this normalizes to lists."
-  (if (vectorp data) (append data nil) data))
+  "Ensure DATA is a proper list, converting vectors if necessary.
+JSON parsing returns vectors for arrays; this normalizes to lists.
+Returns nil for nil, strings, or improper lists.
+Strings are preserved as-is since they are valid JSON values."
+  (cond
+   ((null data) nil)
+   ((stringp data) data)
+   ((vectorp data) (append data nil))
+   (t data)))
 
 (defun gptel-benchmark--get-field (obj field)
   "Get FIELD from OBJ, handling both plist and alist formats.
@@ -273,16 +285,16 @@ Returns a new alist with accumulated values.
 TOTALS is an alist of (score-type . accumulated-value).
 SCORES-ALIST is an alist of (score-type . current-score).
 Handles nil or non-numeric scores by treating them as 0.
-Returns TOTALS unchanged if SCORES-ALIST is nil.
-SIGNAL: error if TOTALS is not a list (including dotted pairs)."
-  (unless (listp totals)
-    (error "gptel-benchmark--accumulate-scores: TOTALS must be a list, got %S" totals))
-  (if (null scores-alist)
-      totals
+Returns TOTALS unchanged if SCORES-ALIST is nil or not a proper list."
+  (cond
+   ((null scores-alist) totals)
+   ((not (listp scores-alist)) totals)
+   ((not (proper-list-p scores-alist)) totals)
+   (t
     (cl-loop for (score-type . current) in totals
              for raw-score = (alist-get score-type scores-alist)
              for score = (if (numberp raw-score) raw-score 0.0)
-             collect (cons score-type (+ current score)))))
+             collect (cons score-type (+ current score))))))
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.
@@ -290,10 +302,14 @@ Returns alist of (score-type . value) for the standard scores.
 Handles nil values gracefully by returning 0.0 for missing scores.
 Handles both plist format (keyword keys) and alist format (symbol or keyword keys).
 Returns nil if SCORES is not a list."
-  (when (listp scores)
+  (cond
+   ((null scores) nil)
+   ((not (listp scores)) nil)
+   ((proper-list-p scores)
     (mapcar (lambda (score-type)
               (cons score-type (or (gptel-benchmark--get-field scores score-type) 0.0)))
-            gptel-benchmark--score-types)))
+            gptel-benchmark--score-types))
+   (t nil)))
 
 (defun gptel-benchmark--calculate-average (score-totals total score-type)
   "Calculate average for SCORE-TYPE from SCORE-TOTALS over TOTAL items.

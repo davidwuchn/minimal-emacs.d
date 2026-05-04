@@ -404,15 +404,31 @@ preferring the active strategy when it has no evaluations yet."
                           (lambda (a b)
                             (let ((perf-a (gptel-auto-workflow--get-strategy-performance a))
                                   (perf-b (gptel-auto-workflow--get-strategy-performance b)))
-                              (> (plist-get perf-a :avg-score)
-                                 (plist-get perf-b :avg-score))))))
+                              (> (+ (* 0.5 (plist-get perf-a :success-rate))
+                                    (* 0.5 (plist-get perf-a :avg-score)))
+                                 (+ (* 0.5 (plist-get perf-b :success-rate))
+                                    (* 0.5 (plist-get perf-b :avg-score))))))))
              (best (car sorted))
-             (best-perf (gptel-auto-workflow--get-strategy-performance best)))
-        (message "[strategy] Selected %s (success %.0f%%, avg score %.2f)"
-                 best
-                 (* 100 (plist-get best-perf :success-rate))
-                 (plist-get best-perf :avg-score))
-        best))
+             (best-perf (gptel-auto-workflow--get-strategy-performance best))
+             (best-success (plist-get best-perf :success-rate)))
+        (let* ((default-perf (gptel-auto-workflow--get-strategy-performance "template-default"))
+               (default-success (plist-get default-perf :success-rate))
+               (default-avg (plist-get default-perf :avg-score))
+               (chosen (if (and (not (equal best "template-default"))
+                               (< best-success default-success)
+                               (< (- (plist-get best-perf :avg-score) default-avg) 0.15))
+                          (progn
+                            (message "[strategy] %s underperforms template-default (%.0f%% < %.0f%% success, avg diff %.2f); falling back"
+                                     best (* 100 best-success) (* 100 default-success)
+                                     (- (plist-get best-perf :avg-score) default-avg))
+                            "template-default")
+                        best)))
+          (let ((chosen-perf (gptel-auto-workflow--get-strategy-performance chosen)))
+            (message "[strategy] Selected %s (success %.0f%%, avg score %.2f)"
+                     chosen
+                     (* 100 (plist-get chosen-perf :success-rate))
+                     (plist-get chosen-perf :avg-score)))
+          chosen)))
      ;; Otherwise, use the default
      (t
       (message "[strategy] No evaluated strategies yet, using default")

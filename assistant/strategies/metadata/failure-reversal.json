@@ -1,0 +1,1 @@
+{"name":"failure-reversal","version":"1.0","hypothesis":"Leading with failure patterns before context reduces repeated mistakes","axis":"A","created":"2026-05-04","parent-strategies":["template-default"],"components":["failure-first","reversed-section-order","failure-context-priming"],"description":"Reverses template architecture to lead with failures before context"}

@@ -5,16 +5,15 @@
 
 (defun gptel-auto-workflow--staging-changed-files ()
   "Return list of changed files in current staging worktree.
-Returns nil if not in a staging worktree."
+Returns nil if not in a staging worktree or if no changes."
   (when-let ((worktree gptel-auto-workflow--staging-worktree-dir))
     (let ((default-directory worktree))
-      (split-string
-       (or (ignore-errors
-             (gptel-auto-workflow--git-cmd
-              "git diff --name-only HEAD~1 HEAD 2>/dev/null"
-              30))
-           "")
-       "\n" t))))
+      (let ((output (ignore-errors
+                      (gptel-auto-workflow--git-cmd
+                       "git diff --name-only HEAD~1 HEAD 2>/dev/null"
+                       30))))
+        (when (gptel-auto-workflow--non-empty-string-p output)
+          (split-string output "\n" t))))))
 
 (defun gptel-auto-workflow--empty-cherry-pick-state-p (&optional output allow-missing-head)
   "Return non-nil when the current worktree reflects an already-applied cherry-pick.

@@ -80,8 +80,16 @@ Keys include: :context-window, :pricing-input, :pricing-output,
   "Hash table caching context-window lookups from gptel model tables.
 Reduces repeated iterations through model tables.")
 
+(defconst my/gptel--token-estimate-cache-max-size 1000
+  "Maximum entries in `my/gptel--token-estimate-cache'.
+Prevents unbounded memory growth from repeated token estimates.")
+
 (defvar my/gptel--token-estimate-cache (make-hash-table :test 'equal)
   "Hash table caching token estimates for (chars . extension) pairs.")
+
+(defvar my/gptel--token-estimate-cache-size 0
+  "Atomic counter tracking `my/gptel--token-estimate-cache' entry count.
+Used to prevent cache from exceeding max-size by checking count before insertion.")
 
 (defvar my/gptel--context-window-cache-last-refresh nil
   "Time (as a float) when the cache was last refreshed.")
@@ -301,16 +309,18 @@ Single constant avoids allocating a new symbol on every search call.")
 Returns the value from hash table if found, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found.
 Handles negative cache hits when KEY maps to a miss sentinel."
-  (if (and (hash-table-p hash-table) (stringp key) (not (string-empty-p key)))
-      (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
-        (cond
-         ((eq hash-value my/gptel--cache-sentinel)
-          (and (listp alist)
-               (my/gptel--alist-partial-match alist key)))
-         ((eq hash-value my/gptel--context-window-miss-sentinel)
-          nil)
-         (t hash-value)))
-    (and (listp alist) (my/gptel--alist-partial-match alist key))))
+  (when (and (stringp key) (not (string-empty-p key)))
+    (if (hash-table-p hash-table)
+        (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
+          (cond
+           ((eq hash-value my/gptel--cache-sentinel)
+            (and (listp alist)
+                 (my/gptel--alist-partial-match alist key)))
+           ((eq hash-value my/gptel--context-window-miss-sentinel)
+            nil)
+           (t hash-value)))
+      (and (listp alist)
+           (my/gptel--alist-partial-match alist key)))))
 
 
 (defvar my/gptel--alist-partial-match-cache (make-hash-table :test 'equal)
@@ -371,28 +381,25 @@ to avoid repeated table scans and redundant lookups."
   (when (or (stringp model) (symbolp model))
     (let ((model-str (if (stringp model) model (symbol-name model))))
       (when (and (stringp model-str) (not (string-empty-p model-str)))
-        (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache)))
-          (if (eq cached my/gptel--gptel-tables-miss-sentinel)
-              nil
-            (or cached
-                (let ((result (catch 'found
-                                (dolist (var (my/gptel--gptel-model-tables))
-                                  (let ((table (symbol-value var)))
-                                    (when (listp table)
-                                      (let ((entry (assoc-string model-str table t)))
-                                        (when (and (consp entry) (plist-member (cdr entry) :context-window))
-                                          (let ((cw (my/gptel--normalize-context-window
-                                                      (plist-get (cdr entry) :context-window))))
-                                            (when (and (integerp cw) (> cw 0))
-                                              (throw 'found cw))))))))
-                                nil)))
-                  (if result
-                      (progn
-                        (puthash model-str result my/gptel--gptel-tables-cw-cache)
-                        (puthash model-str result my/gptel--context-window-cache))
-                    (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache)
-                    (puthash model-str my/gptel--context-window-miss-sentinel my/gptel--context-window-cache))
-                  result))))))))
+      (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache)))
+        (if (eq cached my/gptel--gptel-tables-miss-sentinel)
+            nil
+          (or cached
+              (let ((result (catch 'found
+                              (dolist (var (my/gptel--gptel-model-tables))
+                                (let ((table (symbol-value var)))
+                                  (when (listp table)
+                                    (let ((entry (assoc-string model-str table t)))
+                                      (when (and (consp entry) (plist-member (cdr entry) :context-window))
+                                        (let ((cw (my/gptel--normalize-context-window
+                                                    (plist-get (cdr entry) :context-window))))
+                                          (when (and (integerp cw) (> cw 0))
+                                            (throw 'found cw))))))))
+                              nil)))
+                (if result
+                    (puthash model-str result my/gptel--gptel-tables-cw-cache)
+                  (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache))
+                result))))))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -454,7 +461,10 @@ and a positive integer context_length; otherwise returns nil."
                           2.5)
                          (t 3.5)))
                  (result (/ (float chars) ratio)))
-            (puthash cache-key result my/gptel--token-estimate-cache)
+            (when (< my/gptel--token-estimate-cache-size
+                     my/gptel--token-estimate-cache-max-size)
+              (puthash cache-key result my/gptel--token-estimate-cache)
+              (cl-incf my/gptel--token-estimate-cache-size))
             result)))))
 
 (defun my/gptel--estimate-tokens (chars)
@@ -509,24 +519,23 @@ existing cache is preserved."
   (when (file-readable-p my/gptel-context-window-cache-file)
     (condition-case err
         (let* ((temp-cache (make-hash-table :test 'equal))
-               (loaded-data nil)
-               (loaded-refresh nil))
-          (setq my/gptel--context-window-cache-data nil
-                my/gptel--context-window-cache-last-refresh nil)
-          (load my/gptel-context-window-cache-file nil t)
-          (setq loaded-data my/gptel--context-window-cache-data
-                loaded-refresh my/gptel--context-window-cache-last-refresh)
-          (when (listp loaded-data)
-            (dolist (kv loaded-data)
+               (temp-data nil)
+               (temp-refresh nil)
+               (load-file my/gptel-context-window-cache-file))
+          (load load-file nil t)
+          (when (listp my/gptel--context-window-cache-data)
+            (dolist (kv my/gptel--context-window-cache-data)
               (let ((key (car kv)) (val (cdr kv)))
                 (when (and (stringp key) (integerp val))
-                  (puthash key val temp-cache)))))
-          (clrhash my/gptel--context-window-cache)
-          (maphash (lambda (k v) (puthash k v my/gptel--context-window-cache)) temp-cache)
-          (clrhash my/gptel--alist-partial-match-cache)
-          (when (numberp loaded-refresh)
-            (setq my/gptel--context-window-cache-last-refresh loaded-refresh))
-          (setq my/gptel--context-window-cache-data nil))
+                  (puthash key val temp-cache))))
+            (let ((old-cache my/gptel--context-window-cache)
+                  (new-refresh (or my/gptel--context-window-cache-last-refresh
+                                   (float-time (current-time)))))
+              (setq my/gptel--context-window-cache temp-cache
+                    my/gptel--context-window-cache-last-refresh new-refresh
+                    my/gptel--context-window-cache-data nil)
+              (clrhash my/gptel--alist-partial-match-cache)
+              (clrhash old-cache))))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
                 my/gptel-context-window-cache-file
@@ -724,11 +733,12 @@ Run asynchronously. Use for bulk cache warming."
 (defun my/gptel-get-model-metadata (model-id)
   "Get metadata for MODEL-ID from cache.
 Returns plist with :context-window, :pricing-input, :pricing-output, etc."
-  (require 'gptel)
-  (let* ((model-id-str (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
-    (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
-                                     my/gptel--known-model-metadata
-                                     model-id-str)))
+  (when model-id
+    (require 'gptel)
+    (let* ((model-id-str (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
+      (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
+                                       my/gptel--known-model-metadata
+                                       model-id-str))))
 
 (defun my/gptel-show-model-info (model-id)
   "Show detailed info for MODEL-ID."
@@ -891,7 +901,6 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
         (when (my/gptel--positive-integer-p cw)
-          (puthash model-id cw my/gptel--gptel-tables-cw-cache)
           (my/gptel--cache-context-window model-id cw))))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
              (cw (my/gptel--normalize-context-window

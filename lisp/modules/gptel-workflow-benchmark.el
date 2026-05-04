@@ -39,15 +39,23 @@
 
 (defun gptel-workflow--tool-calls-list (run)
   "Return tool-calls from RUN as a list (handles vector)."
-  (let ((tc (gptel-workflow-run-tool-calls run)))
-    (if (vectorp tc) (append tc nil) tc)))
+  (when (and run (gptel-workflow-run-p run))
+    (let ((tc (gptel-workflow-run-tool-calls run)))
+      (cond
+       ((vectorp tc) (append tc nil))
+       ((listp tc) tc)
+       (t nil)))))
 
 (defun gptel-workflow--tool-names (run)
-  "Return list of tool names from RUN as strings."
-  (mapcar (lambda (tc)
-            (let ((tool (plist-get tc :tool)))
-              (if (symbolp tool) (symbol-name tool) tool)))
-          (gptel-workflow--tool-calls-list run)))
+  "Return list of tool names from RUN as strings.
+Returns empty list if no tool calls available."
+  (let ((tool-calls (gptel-workflow--tool-calls-list run)))
+    (if (null tool-calls)
+        '()
+      (mapcar (lambda (tc)
+                (let ((tool (plist-get tc :tool)))
+                  (if (symbolp tool) (symbol-name tool) tool)))
+              tool-calls))))
 
 (defun gptel-workflow--extract-tools (tool-calls)
   "Extract tools from TOOL-CALLS plist entries."
@@ -127,21 +135,29 @@ Returns list of test plists."
   (let ((test-file (expand-file-name (format "%s.json" workflow-name)
                                      gptel-workflow-tests-dir)))
     (if (file-exists-p test-file)
-        (let* ((data (gptel-workflow--read-json test-file))
-               (test-cases (cdr (assq 'test_cases data))))
-          (mapcar #'gptel-workflow--normalize-test test-cases))
+        (condition-case err
+            (let* ((data (gptel-workflow--read-json test-file))
+                   (test-cases (cdr (assq 'test_cases data))))
+              (if (listp test-cases)
+                  (mapcar #'gptel-workflow--normalize-test test-cases)
+                (message "[workflow-bench] Invalid test_cases format in %s" test-file)
+                '()))
+          (error
+           (message "[workflow-bench] Failed to load tests from %s: %s" test-file err)
+           '()))
       (progn
         (message "[workflow-bench] No test file found: %s" test-file)
         '()))))
 
 (defun gptel-workflow--normalize-test (test)
-  "Normalize TEST alist to plist format."
-  (list :id (cdr (assq 'id test))
-        :name (cdr (assq 'name test))
-        :task (cdr (assq 'task test))
-        :context (cdr (assq 'context test))
-        :success-criteria (cdr (assq 'success_criteria test))
-        :expected-outputs (cdr (assq 'expected_outputs test))))
+  "Normalize TEST alist to plist format.
+Handles missing keys gracefully by defaulting to nil."
+  (list :id (let ((entry (assq 'id test))) (and entry (cdr entry)))
+        :name (let ((entry (assq 'name test))) (and entry (cdr entry)))
+        :task (let ((entry (assq 'task test))) (and entry (cdr entry)))
+        :context (let ((entry (assq 'context test))) (and entry (cdr entry)))
+        :success-criteria (let ((entry (assq 'success_criteria test))) (and entry (cdr entry)))
+        :expected-outputs (let ((entry (assq 'expected_outputs test))) (and entry (cdr entry)))))
 
 (defun gptel-workflow--read-json (file)
   "Read JSON from FILE."
@@ -176,12 +192,13 @@ Extracts tool calls from the FSM's :tool-use plist and records them."
   (when (and gptel-workflow--current-run fsm
              (fboundp 'gptel-fsm-info))
     (when-let* ((info (gptel-fsm-info fsm))
+                ((listp info))
                 (tool-use (plist-get info :tool-use)))
       (dolist (call (if (listp tool-use) tool-use (list tool-use)))
         (when (plistp call)
           (let* ((tool-name (plist-get call :name))
                  (args (plist-get call :args)))
-            (when tool-name
+            (when (and tool-name (or (symbolp tool-name) (stringp tool-name)))
               (gptel-workflow--collect-tool-call tool-name args))))))))
 
 ;;; Memory Integration
@@ -480,9 +497,11 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
                (overall (alist-get 'overall scores))
                (min-overall (cdr (assq 'min_overall eight-keys-cfg))))
           (setf (gptel-workflow-run-eight-keys-scores run) scores)
-          (if min-overall
-              (if (>= overall min-overall) 1.0 overall)
-            overall))
+          (cond
+           ((not (numberp overall)) 0.5)
+           ((not (numberp min-overall)) overall)
+           ((>= overall min-overall) 1.0)
+           (t overall)))
       0.5)))
 
 ;;; Results
@@ -663,13 +682,14 @@ TEST-ID is the test case ID."
       entry)))
 
 (defun gptel-workflow--summarize-results (results)
-  "Create summary of RESULTS."
+  "Create summary of RESULTS.
+RESULTS is a list of (run . scores) cons cells."
   (let ((total (length results))
         (avg-overall 0.0)
         (avg-efficiency 0.0)
         (avg-completion 0.0))
     (dolist (r results)
-      (when-let ((scores (gptel-workflow--result-scores r)))
+      (let ((scores (cdr r)))
         (cl-incf avg-overall (or (plist-get scores :overall-score) 0))
         (cl-incf avg-efficiency (or (plist-get scores :efficiency-score) 0))
         (cl-incf avg-completion (or (plist-get scores :completion-score) 0))))
