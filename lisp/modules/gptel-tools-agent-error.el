@@ -126,11 +126,17 @@ REASON is only used for logging."
           "\\`\\(?:Aborted:\\|\\(?:gptel:\\s-*\\)?inspection-thrash aborted\\|\\(?:gptel:\\s-*\\)?doom-loop aborted\\|Error: Task .* was aborted by the user\\|Error: Task .* was cancelled or timed out\\)"
           trimmed))))
 
+(defun gptel-auto-experiment--error-message (error-output)
+  "Extract error message string from ERROR-OUTPUT.
+ERROR-OUTPUT may be a string, a plist with :message key, or nil.
+Returns the message string or nil."
+  (cond ((stringp error-output) error-output)
+        ((plistp error-output) (plist-get error-output :message))
+        (t nil)))
+
 (defun gptel-auto-experiment--shared-transient-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT matches shared transient retry rules."
-  (let ((msg (cond ((stringp error-output) error-output)
-                   ((plistp error-output) (plist-get error-output :message))
-                   (t nil))))
+  (let ((msg (gptel-auto-experiment--error-message error-output)))
     (and msg
          (not (gptel-auto-experiment--aborted-agent-output-p msg))
          (fboundp 'my/gptel--transient-error-p)
@@ -138,9 +144,7 @@ REASON is only used for logging."
 
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
-  (let ((msg (cond ((stringp error-output) error-output)
-                   ((plistp error-output) (plist-get error-output :message))
-                   (t nil))))
+  (let ((msg (gptel-auto-experiment--error-message error-output)))
     (and msg
          (not (gptel-auto-experiment--aborted-agent-output-p msg))
          (or (gptel-auto-experiment--shared-transient-error-p msg)
@@ -152,9 +156,7 @@ REASON is only used for logging."
 
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
-  (let ((msg (cond ((stringp error-output) error-output)
-                   ((plistp error-output) (plist-get error-output :message))
-                   (t nil))))
+  (let ((msg (gptel-auto-experiment--error-message error-output)))
     (and msg
          (let ((case-fold-search t))
            (string-match-p
@@ -163,9 +165,7 @@ REASON is only used for logging."
 
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure."
-  (let ((msg (cond ((stringp error-output) error-output)
-                   ((plistp error-output) (plist-get error-output :message))
-                   (t nil))))
+  (let ((msg (gptel-auto-experiment--error-message error-output)))
     (and msg
          (or (gptel-auto-experiment--provider-usage-limit-error-p msg)
              (let ((case-fold-search t))
@@ -175,9 +175,7 @@ REASON is only used for logging."
 
 (defun gptel-auto-experiment--provider-auth-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects provider auth failure."
-  (let ((msg (cond ((stringp error-output) error-output)
-                   ((plistp error-output) (plist-get error-output :message))
-                   (t nil))))
+  (let ((msg (gptel-auto-experiment--error-message error-output)))
     (and msg
          (let ((case-fold-search t))
            (string-match-p
@@ -186,12 +184,10 @@ REASON is only used for logging."
 
 (defun gptel-auto-experiment--provider-pressure-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend."
-  (let ((msg (cond ((stringp error-output) error-output)
-                   ((plistp error-output) (plist-get error-output :message))
-                   (t nil))))
-    (or (gptel-auto-experiment--rate-limit-error-p error-output)
-        (gptel-auto-experiment--provider-auth-error-p error-output)
-        (gptel-auto-experiment--shared-transient-error-p error-output)
+  (or (gptel-auto-experiment--rate-limit-error-p error-output)
+      (gptel-auto-experiment--provider-auth-error-p error-output)
+      (gptel-auto-experiment--shared-transient-error-p error-output)
+      (let ((msg (gptel-auto-experiment--error-message error-output)))
         (and msg
              (let ((case-fold-search t))
                (string-match-p
@@ -390,9 +386,7 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
 
 (defun gptel-auto-experiment--quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows provider quota exhaustion."
-  (let ((msg (cond ((stringp agent-output) agent-output)
-                   ((plistp agent-output) (plist-get agent-output :message))
-                   (t nil))))
+  (let ((msg (gptel-auto-experiment--error-message agent-output)))
     (and msg
          (or (gptel-auto-experiment--provider-usage-limit-error-p msg)
              (let ((case-fold-search t))
@@ -402,9 +396,7 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
 
 (defun gptel-auto-experiment--hard-quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows a hard quota stop for executor work."
-  (let ((msg (cond ((stringp agent-output) agent-output)
-                   ((plistp agent-output) (plist-get agent-output :message))
-                   (t nil))))
+  (let ((msg (gptel-auto-experiment--error-message agent-output)))
     (and msg
          (let ((case-fold-search t))
            (string-match-p

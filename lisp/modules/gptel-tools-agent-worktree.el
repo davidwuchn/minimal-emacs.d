@@ -650,7 +650,8 @@ NOTE: Staging branch is never deleted, only the worktree."
 
 (defun gptel-auto-workflow--staging-submodule-gitlink-revision (worktree path)
   "Return the gitlink revision for PATH in WORKTREE, or nil."
-  (when (and worktree (file-directory-p worktree))
+  (when (and (file-directory-p worktree)
+             (gptel-auto-workflow--non-empty-string-p path))
     (let* ((default-directory worktree)
            (result (gptel-auto-workflow--git-result
                     (format "git ls-tree HEAD -- %s" (shell-quote-argument path))
@@ -662,7 +663,9 @@ NOTE: Staging branch is never deleted, only the worktree."
 
 (defun gptel-auto-workflow--staging-submodule-gitlink-revision-at-ref (worktree ref path)
   "Return the gitlink revision for PATH at REF in WORKTREE, or nil."
-  (when (and worktree (file-directory-p worktree))
+  (when (and (file-directory-p worktree)
+             (gptel-auto-workflow--non-empty-string-p ref)
+             (gptel-auto-workflow--non-empty-string-p path))
     (let* ((default-directory worktree)
            (result (gptel-auto-workflow--git-result
                     (format "git ls-tree %s -- %s"
@@ -717,8 +720,10 @@ NOTE: Staging branch is never deleted, only the worktree."
                    (format "git -C %s rev-parse --git-common-dir"
                            (shell-quote-argument checkout))
                    60))
-                 (git-common (string-trim (car git-common-result))))
-            (when (and (= 0 (cdr git-common-result))
+                 (git-common (and git-common-result
+                                  (string-trim (car git-common-result)))))
+            (when (and git-common-result
+                       (= 0 (cdr git-common-result))
                        (not (string-empty-p git-common)))
               (expand-file-name git-common checkout)))))))
 

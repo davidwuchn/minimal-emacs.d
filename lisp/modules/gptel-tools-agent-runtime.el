@@ -17,6 +17,9 @@
 (defun gptel-auto-workflow--link-shared-runtime-path (source target)
   "Link SOURCE to TARGET when TARGET is absent or a stale symlink."
   (cond
+   ((not (and (stringp source) (stringp target)
+              (not (string-empty-p source)) (not (string-empty-p target))))
+    nil)
    ((not (gptel-auto-workflow--path-exists-or-symlink-p source))
     nil)
    ((file-symlink-p target)
@@ -38,12 +41,17 @@
 Staging verification runs repository scripts with WORKTREE as the init
 directory, so ignored package/cache assets must be visible there even though
 they are not tracked by Git."
-  (let* ((base-root (file-name-as-directory
-                     (expand-file-name (gptel-auto-workflow--worktree-base-root))))
-         (canonical-root (unless (file-directory-p (expand-file-name "var" base-root))
-                           (gptel-auto-workflow--worktree-base-repo-root)))
-         (source-root (file-name-as-directory
-                       (expand-file-name (or canonical-root base-root))))
+  (let* ((base-root-raw (gptel-auto-workflow--worktree-base-root))
+         (base-root (and (stringp base-root-raw)
+                         (not (string-empty-p base-root-raw))
+                         (file-name-as-directory (expand-file-name base-root-raw))))
+         (canonical-root (and base-root
+                              (not (file-directory-p (expand-file-name "var" base-root)))
+                              (gptel-auto-workflow--worktree-base-repo-root)))
+         (source-root (and base-root
+                           (or (and (stringp canonical-root)
+                                    (file-name-as-directory (expand-file-name canonical-root)))
+                               base-root)))
          (source-var (expand-file-name "var" source-root))
          (target-var (and worktree (expand-file-name "var" worktree)))
          (linked 0))

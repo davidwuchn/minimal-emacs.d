@@ -87,6 +87,10 @@ Prevents unbounded memory growth from repeated token estimates.")
 (defvar my/gptel--token-estimate-cache (make-hash-table :test 'equal)
   "Hash table caching token estimates for (chars . extension) pairs.")
 
+(defvar my/gptel--token-estimate-cache-size 0
+  "Atomic counter tracking `my/gptel--token-estimate-cache' entry count.
+Used to prevent cache from exceeding max-size by checking count before insertion.")
+
 (defvar my/gptel--context-window-cache-last-refresh nil
   "Time (as a float) when the cache was last refreshed.")
 
@@ -391,8 +395,7 @@ to avoid repeated table scans and redundant lookups."
                               nil)))
                 (if result
                     (puthash model-str result my/gptel--gptel-tables-cw-cache)
-                  (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache)
-                  (puthash model-str my/gptel--context-window-miss-sentinel my/gptel--context-window-cache))
+                  (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache))
                 result))))))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
@@ -455,9 +458,10 @@ and a positive integer context_length; otherwise returns nil."
                           2.5)
                          (t 3.5)))
                  (result (/ (float chars) ratio)))
-            (when (< (hash-table-count my/gptel--token-estimate-cache)
+            (when (< my/gptel--token-estimate-cache-size
                      my/gptel--token-estimate-cache-max-size)
-              (puthash cache-key result my/gptel--token-estimate-cache))
+              (puthash cache-key result my/gptel--token-estimate-cache)
+              (cl-incf my/gptel--token-estimate-cache-size))
             result)))))
 
 (defun my/gptel--estimate-tokens (chars)
@@ -513,19 +517,22 @@ existing cache is preserved."
     (condition-case err
         (let* ((temp-cache (make-hash-table :test 'equal))
                (temp-data nil)
-               (temp-refresh nil))
-          (setq my/gptel--context-window-cache-data nil
-                my/gptel--context-window-cache-last-refresh nil)
-          (load my/gptel-context-window-cache-file nil t)
+               (temp-refresh nil)
+               (load-file my/gptel-context-window-cache-file))
+          (load load-file nil t)
           (when (listp my/gptel--context-window-cache-data)
             (dolist (kv my/gptel--context-window-cache-data)
               (let ((key (car kv)) (val (cdr kv)))
                 (when (and (stringp key) (integerp val))
-                  (puthash key val temp-cache)))))
-          (clrhash my/gptel--context-window-cache)
-          (maphash (lambda (k v) (puthash k v my/gptel--context-window-cache)) temp-cache)
-          (clrhash my/gptel--alist-partial-match-cache)
-          (setq my/gptel--context-window-cache-data nil))
+                  (puthash key val temp-cache))))
+            (let ((old-cache my/gptel--context-window-cache)
+                  (new-refresh (or my/gptel--context-window-cache-last-refresh
+                                   (float-time (current-time)))))
+              (setq my/gptel--context-window-cache temp-cache
+                    my/gptel--context-window-cache-last-refresh new-refresh
+                    my/gptel--context-window-cache-data nil)
+              (clrhash my/gptel--alist-partial-match-cache)
+              (clrhash old-cache))))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
                 my/gptel-context-window-cache-file
@@ -722,11 +729,12 @@ Run asynchronously. Use for bulk cache warming."
 (defun my/gptel-get-model-metadata (model-id)
   "Get metadata for MODEL-ID from cache.
 Returns plist with :context-window, :pricing-input, :pricing-output, etc."
-  (require 'gptel)
-  (let* ((model-id-str (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
-    (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
-                                     my/gptel--known-model-metadata
-                                     model-id-str)))
+  (when model-id
+    (require 'gptel)
+    (let* ((model-id-str (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
+      (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
+                                       my/gptel--known-model-metadata
+                                       model-id-str))))
 
 (defun my/gptel-show-model-info (model-id)
   "Show detailed info for MODEL-ID."
@@ -889,7 +897,6 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
         (when (my/gptel--positive-integer-p cw)
-          (puthash model-id cw my/gptel--gptel-tables-cw-cache)
           (my/gptel--cache-context-window model-id cw))))
      ((let* ((meta (my/gptel-get-model-metadata model-id))
              (cw (my/gptel--plist-get meta :context-window)))

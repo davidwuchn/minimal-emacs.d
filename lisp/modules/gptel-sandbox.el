@@ -81,6 +81,22 @@ continue or nil to reject.")
 When nil, `gptel-sandbox--current-profile' infers the profile from the active
 gptel preset.")
 
+;;; Sandbox Operation Constants
+
+(defconst gptel-sandbox--comparison-ops
+  '(equal string= = < > <= >=)
+  "Comparison operators allowed in sandbox expressions.")
+
+(defconst gptel-sandbox--data-ops
+  '(concat format list vector append length car cdr nth
+           cons assoc alist-get plist-get split-string string-join
+           string-trim string-empty-p string-match-p substring)
+  "Data manipulation operators allowed in sandbox expressions.")
+
+(defconst gptel-sandbox--builtin-ops
+  (append gptel-sandbox--comparison-ops gptel-sandbox--data-ops)
+  "All built-in operators available in sandbox expressions.")
+
 ;;; Internal Helpers
 
 (defvar gptel-sandbox--missing-marker (make-symbol "gptel-sandbox-missing")
@@ -88,6 +104,8 @@ gptel preset.")
 
 (defun gptel-sandbox--parse-forms (code)
   "Parse CODE into a list of Lisp forms."
+  (unless (stringp code)
+    (error "Programmatic parse-forms requires a string, got: %S" code))
   (let ((forms nil)
         (pos 0)
         (len (length code)))
@@ -241,10 +259,10 @@ Supported shape:
 
 (defun gptel-sandbox--lookup (symbol env)
   "Look up SYMBOL in ENV or signal an error."
-  (unless env
-    (error "Programmatic sandbox lookup requires a non-nil environment, got: %S" env))
   (unless (hash-table-p env)
     (error "Programmatic sandbox lookup requires a hash table environment, got: %S" env))
+  (unless (symbolp symbol)
+    (error "Programmatic sandbox lookup requires a symbol, got: %S" symbol))
   (let ((value (gethash symbol env gptel-sandbox--missing-marker)))
     (if (eq value gptel-sandbox--missing-marker)
         (error "Unknown symbol in Programmatic sandbox: %S" symbol)
@@ -331,11 +349,9 @@ supports a small, explicit whitelist of pure operations."
        (gptel-sandbox--short-circuit-eval (cdr expr) env t #'not))
       ('or
        (gptel-sandbox--short-circuit-eval (cdr expr) env nil #'identity))
-      ((or 'equal 'string= '= '< '> '<= '>=)
+      ((guard (memq (car expr) gptel-sandbox--comparison-ops))
        (gptel-sandbox--apply-builtin (car expr) (cdr expr) env))
-      ((or 'concat 'format 'list 'vector 'append 'length 'car 'cdr 'nth
-           'cons 'assoc 'alist-get 'plist-get 'split-string 'string-join
-           'string-trim 'string-empty-p 'string-match-p 'substring)
+      ((guard (memq (car expr) gptel-sandbox--data-ops))
        (gptel-sandbox--apply-builtin (car expr) (cdr expr) env))
       ('tool-call
        (error "tool-call is only allowed as a top-level statement or setq RHS"))
@@ -623,22 +639,26 @@ can consume lists, vectors, plists, and alists as readable data."
         (error "Programmatic exceeded max nested tool calls (%d)"
                my/gptel-programmatic-max-tool-calls))
       (condition-case err
-        (let ((invoke-tool
-               (lambda ()
-                 (if (gptel-tool-async tool-spec)
-                     (apply (gptel-tool-function tool-spec)
-                            (lambda (result)
-                              (condition-case cb-err
-                                  (funcall callback (gptel-sandbox--format-result result))
-                                (error (funcall callback
-                                                (gptel-sandbox--format-result
-                                                 (gptel-sandbox--format-error
-                                                  (error-message-string cb-err)))))))
-                            arg-values)
-                   (let ((result (condition-case inner-err
-                                     (apply (gptel-tool-function tool-spec) arg-values)
-                                   (error (gptel-sandbox--format-error (error-message-string inner-err))))))
-                     (funcall callback (gptel-sandbox--format-result result)))))))
+        (let* ((tool-fn (gptel-tool-function tool-spec))
+               (_ (unless (functionp tool-fn)
+                    (error "Tool %s has invalid :function property (got: %S)"
+                           tool-name tool-fn)))
+               (invoke-tool
+                (lambda ()
+                  (if (gptel-tool-async tool-spec)
+                      (apply tool-fn
+                             (lambda (result)
+                               (condition-case cb-err
+                                   (funcall callback (gptel-sandbox--format-result result))
+                                 (error (funcall callback
+                                                 (gptel-sandbox--format-result
+                                                  (gptel-sandbox--format-error
+                                                   (error-message-string cb-err)))))))
+                             arg-values)
+                    (let ((result (condition-case inner-err
+                                      (apply tool-fn arg-values)
+                                    (error (gptel-sandbox--format-error (error-message-string inner-err))))))
+                      (funcall callback (gptel-sandbox--format-result result)))))))
           (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
               (gptel-sandbox--maybe-aggregate-confirm
                state
@@ -719,6 +739,8 @@ CALLBACK receives final outcome plist."
 
 (defun gptel-sandbox--run-forms (forms env state callback)
   "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
+  (unless (listp forms)
+    (error "Programmatic run-forms requires a list, got: %S" forms))
   (if (null forms)
       (funcall callback (format "Error: Programmatic execution finished without calling result (used %d tools)"
                                 (plist-get state :tool-count)))

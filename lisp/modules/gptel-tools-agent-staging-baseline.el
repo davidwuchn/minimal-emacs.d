@@ -470,14 +470,14 @@ surfacing blocking markers or issue details."
   (when (stringp response)
     (let* ((normalized (replace-regexp-in-string "|" "\n" response))
            (case-fold-search t)
-           (approved (string-match
+           (approved (string-match-p
                       (rx (or line-start "\n")
                           (* blank)
                           (* (any "#*>`*_"))
                           (* blank)
                           "APPROVED" word-end)
                       normalized))
-           (blocked (string-match
+           (blocked (string-match-p
                      (rx (or line-start "\n")
                          (* blank)
                          (* (any "#*>`*_"))
@@ -553,8 +553,7 @@ surfacing blocking markers or issue details."
                               normalized)))
       (cond
        ((and blocked
-             (or (not approved)
-                 (< blocked approved)))
+             (not approved))
         nil)
        (approved t)
        ((and (or no-blockers non-blocking-section)
