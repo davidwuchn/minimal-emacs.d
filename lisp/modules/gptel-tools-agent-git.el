@@ -65,7 +65,10 @@ All shell commands have timeout protection to prevent deadlocks."
          (remote-source (format "%s/%s" remote source-branch))
          (remote-target (format "%s/%s" remote target-branch))
          (original-branch (gptel-auto-workflow--git-cmd
-                           "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
+                           "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main"))
+         (original-branch (and (stringp original-branch)
+                               (not (string-empty-p original-branch))
+                               original-branch)))
     (condition-case err
         (progn
           (gptel-auto-workflow--git-cmd (format "git fetch %s" remote) 180)
@@ -83,13 +86,15 @@ All shell commands have timeout protection to prevent deadlocks."
                 (gptel-auto-workflow--with-skipped-submodule-sync
                  (lambda ()
                    (gptel-auto-workflow--git-cmd (format "git push %s %s" remote target-branch))))
-                (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+                (when original-branch
+                  (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch)))
                 (message "[auto-workflow] %s %s to %s (%s -> %s)"
                          action-name target-branch source-branch
                          (gptel-auto-workflow--truncate-hash target-commit)
                          (gptel-auto-workflow--truncate-hash source-commit))))))
       (error
-       (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+       (when original-branch
+         (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch)))
        (message "[auto-workflow] Failed to %s %s to %s: %s" (downcase action-name) target-branch source-branch err)
        nil))))
 
@@ -249,7 +254,7 @@ Returns nil if cache disabled, not found, or expired."
              (my/gptel--subagent-cache-allowed-p agent-type))
     (let* ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff))
            (cached (gethash key my/gptel--subagent-cache)))
-      (when cached
+      (when (consp cached)
         (let ((timestamp (car cached))
               (result (cdr cached)))
           (if (> (- (float-time) timestamp) my/gptel-subagent-cache-ttl)
@@ -653,19 +658,23 @@ Returns t for \"true\" or t, nil for \"false\", nil, or any other value."
   "Escape XML special characters in TEXT.
 Prevents XML injection when inserting file contents into context tags.
 Escapes &, <, >, \", and ' per XML spec.
-Optimized: single-pass character-by-character replacement."
+Uses chained replace-regexp-in-string for efficiency.
+Order: & first, then < > \" ', to avoid double-escaping & in other entities."
   (if (not (stringp text))
       ""
-    (mapconcat (lambda (c)
-                 (pcase c
-                   (?& "&amp;")
-                   (?< "&lt;")
-                   (?> "&gt;")
-                   (?\" "&quot;")
-                   (?' "&apos;")
-                   (_ (string c))))
-               (string-to-list text)
-               "")))
+    (replace-regexp-in-string
+     "'" "&apos;"
+     (replace-regexp-in-string
+      "\"" "&quot;"
+      (replace-regexp-in-string
+       ">" "&gt;"
+       (replace-regexp-in-string
+        "<" "&lt;"
+        (replace-regexp-in-string "&" "&amp;" text t t)
+        t t)
+       t t)
+      t t)
+     t t)))
 
 (defun my/gptel--sanitize-for-logging (text &optional max-len)
   "Sanitize TEXT for safe logging to Messages buffer.
@@ -852,11 +861,11 @@ request buffer for an active workflow task."
 
 (defun my/gptel--workflow-routed-worktree-buffer-p (buffer root)
   "Return non-nil when BUFFER is a routed workflow buffer rooted at ROOT."
-  (when (bufferp buffer)
+  (when (and (bufferp buffer) (stringp root))
     (let ((tracked
-           (delete-dups
-            (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
-                  (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root)))))
+           (delq nil
+                 (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
+                       (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root)))))
       (or (memq buffer tracked)
           (string-prefix-p "*gptel-agent:" (buffer-name buffer))))))
 

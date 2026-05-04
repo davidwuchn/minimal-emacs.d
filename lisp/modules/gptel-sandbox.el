@@ -152,7 +152,8 @@ gptel preset.")
     (list binding nil))
    ((and (consp binding)
          (symbolp (car binding))
-         (null (cddr binding)))
+         (or (null (cddr binding))
+             (not (consp (cddr binding)))))
     binding)
    (t
     (error "Invalid binding in Programmatic sandbox: %S" binding))))
@@ -240,6 +241,8 @@ Supported shape:
 
 (defun gptel-sandbox--lookup (symbol env)
   "Look up SYMBOL in ENV or signal an error."
+  (unless env
+    (error "Programmatic sandbox lookup requires a non-nil environment, got: %S" env))
   (unless (hash-table-p env)
     (error "Programmatic sandbox lookup requires a hash table environment, got: %S" env))
   (let ((value (gethash symbol env gptel-sandbox--missing-marker)))
@@ -343,6 +346,9 @@ supports a small, explicit whitelist of pure operations."
   "Convert ARG-PAIRS plist into a keyword->value hash table."
   (unless (listp arg-pairs)
     (error "Programmatic tool-call arguments must be a list, got: %S" arg-pairs))
+  (unless (cl-evenp (length arg-pairs))
+    (error "Programmatic tool-call requires keyword/value pairs, got odd length: %d"
+           (length arg-pairs)))
   (let ((table (make-hash-table :test #'eq)))
     (while arg-pairs
       (let ((key (pop arg-pairs))
@@ -376,7 +382,12 @@ supports a small, explicit whitelist of pure operations."
           (push (gptel-sandbox--eval-expr value-form env) values)))))))
 
 (defun gptel-sandbox--normalize-tool-name (tool-name)
-  "Convert TOOL-NAME to string representation."
+  "Convert TOOL-NAME to string representation.
+Signals an error if TOOL-NAME is nil or neither a symbol nor string."
+  (unless tool-name
+    (error "Programmatic tool name cannot be nil"))
+  (unless (or (symbolp tool-name) (stringp tool-name))
+    (error "Programmatic tool name must be a symbol or string, got: %S" tool-name))
   (if (symbolp tool-name)
       (symbol-name tool-name)
     tool-name))
@@ -582,12 +593,12 @@ can consume lists, vectors, plists, and alists as readable data."
     (unless tool-spec
       (error "Unknown tool %s requested by Programmatic" tool-name))
     (let ((arg-values (gptel-sandbox--resolve-tool-args tool-spec arg-forms env)))
-    (gptel-sandbox--check-tool tool-name tool-spec arg-values)
-    (cl-incf (plist-get state :tool-count))
-    (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
-      (error "Programmatic exceeded max nested tool calls (%d)"
-             my/gptel-programmatic-max-tool-calls))
-    (condition-case err
+      (gptel-sandbox--check-tool tool-name tool-spec arg-values)
+      (cl-incf (plist-get state :tool-count))
+      (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
+        (error "Programmatic exceeded max nested tool calls (%d)"
+               my/gptel-programmatic-max-tool-calls))
+      (condition-case err
         (let ((invoke-tool
                (lambda ()
                  (if (gptel-tool-async tool-spec)

@@ -427,7 +427,7 @@ and a positive integer context_length; otherwise returns nil."
   (when (consp entry)
     (let ((id (alist-get 'id entry))
           (cw (alist-get 'context_length entry)))
-      (and (stringp id) (integerp cw) (> cw 0)
+      (and (stringp id) (not (string-empty-p id)) (integerp cw) (> cw 0)
            (cons id cw)))))
 
 (defun my/gptel--estimate-text-tokens (chars)
@@ -491,6 +491,7 @@ Returns 0.0 if CHARS is not a positive number."
   "Persist WINDOW for MODEL-ID in the cache."
   (when (and (stringp model-id) (integerp window) (> window 0))
     (puthash model-id window my/gptel--context-window-cache)
+    (clrhash my/gptel--alist-partial-match-cache)
     (my/gptel--cache-save-context-windows)))
 
 (defun my/gptel--cache-load-context-windows ()
@@ -514,6 +515,7 @@ existing cache is preserved."
                   (puthash key val temp-cache)))))
           (clrhash my/gptel--context-window-cache)
           (maphash (lambda (k v) (puthash k v my/gptel--context-window-cache)) temp-cache)
+          (clrhash my/gptel--alist-partial-match-cache)
           (setq my/gptel--context-window-cache-data nil))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
@@ -546,7 +548,8 @@ Filters to only bound variables. Result is cached for performance."
                    (id (my/gptel--model-id-string model)))
               (when (and (stringp id) (integerp tokens) (> tokens 0))
                 (puthash id tokens my/gptel--context-window-cache)
-                (puthash id plist my/gptel--model-metadata-cache)))))))))
+                (puthash id plist my/gptel--model-metadata-cache))))))))
+  (clrhash my/gptel--alist-partial-match-cache))
 
 (defun my/gptel--openrouter-curl-command (url connect-timeout max-time key)
   "Build curl command list for OpenRouter API request.
