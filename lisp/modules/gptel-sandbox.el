@@ -644,7 +644,7 @@ can consume lists, vectors, plists, and alists as readable data."
       (error "Unknown tool %s requested by Programmatic" tool-name))
     (let ((arg-values (gptel-sandbox--resolve-tool-args tool-spec arg-forms env)))
       (gptel-sandbox--check-tool tool-name tool-spec arg-values)
-      (cl-incf (plist-get state :tool-count))
+      (setf (plist-get state :tool-count) (1+ (or (plist-get state :tool-count) 0)))
       (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
         (error "Programmatic exceeded max nested tool calls (%d)"
                my/gptel-programmatic-max-tool-calls))
