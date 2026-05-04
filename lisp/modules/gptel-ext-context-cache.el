@@ -507,19 +507,23 @@ existing cache is preserved."
   (when (file-readable-p my/gptel-context-window-cache-file)
     (condition-case err
         (let* ((temp-cache (make-hash-table :test 'equal))
-               (temp-data nil)
-               (temp-refresh nil))
+               (loaded-data nil)
+               (loaded-refresh nil))
           (setq my/gptel--context-window-cache-data nil
                 my/gptel--context-window-cache-last-refresh nil)
           (load my/gptel-context-window-cache-file nil t)
-          (when (listp my/gptel--context-window-cache-data)
-            (dolist (kv my/gptel--context-window-cache-data)
+          (setq loaded-data my/gptel--context-window-cache-data
+                loaded-refresh my/gptel--context-window-cache-last-refresh)
+          (when (listp loaded-data)
+            (dolist (kv loaded-data)
               (let ((key (car kv)) (val (cdr kv)))
                 (when (and (stringp key) (integerp val))
                   (puthash key val temp-cache)))))
           (clrhash my/gptel--context-window-cache)
           (maphash (lambda (k v) (puthash k v my/gptel--context-window-cache)) temp-cache)
           (clrhash my/gptel--alist-partial-match-cache)
+          (when (numberp loaded-refresh)
+            (setq my/gptel--context-window-cache-last-refresh loaded-refresh))
           (setq my/gptel--context-window-cache-data nil))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
