@@ -764,16 +764,14 @@ Monthly subscription: 2 for fail-fast, try more different files."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-min-quality-gain-on-score-tie 0.03
+(defcustom gptel-auto-experiment-min-quality-gain-on-score-tie 0.02
   "Minimum code-quality gain required to keep a tied benchmark score.
 
 Tied Eight Keys scores should only be kept when code quality improves by at
 least this amount and the combined score still improves.
 
-Based on 254 experiments: threshold of 0.03 catches genuine robustness
-improvements (nil guards, error handling, type validation) while filtering
-cosmetic refactoring. Previous threshold of 0.10 rejected 78% of experiments
-that had real quality gains of 0.02-0.08."
+Lowered from 0.03: file-level quality scoring produces small deltas even for
+real defensive improvements, especially on already-high-quality files."
   :type 'number
   :safe #'numberp
   :group 'gptel-tools-agent)
