@@ -838,13 +838,13 @@ Returns plist with :patterns, :issues, and :recommendations."
     (when (> low-completion 0)
       (push (list :type 'low-completion
                   :count low-completion
-                  :percentage (/ (float low-completion) total))
+                  :percentage (if (> total 0) (/ (float low-completion) total) 0.0))
             issues)
       (push "Review timeout settings and task complexity" recommendations))
     (when (> low-efficiency 0)
       (push (list :type 'low-efficiency
                   :count low-efficiency
-                  :percentage (/ (float low-efficiency) total))
+                  :percentage (if (> total 0) (/ (float low-efficiency) total) 0.0))
             issues)
       (push "Consider adjusting max_steps or improving tool selection" recommendations))
     (let* ((tool-keys (cl-loop for k being the hash-keys of tool-usage collect k))
