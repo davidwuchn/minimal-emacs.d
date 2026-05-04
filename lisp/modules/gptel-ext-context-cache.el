@@ -415,6 +415,8 @@ Some gptel model tables encode context windows in *thousands* of tokens as float
 (e.g. 8.192 for 8192 tokens). OpenRouter's `context_length' is in raw tokens."
   (cond
    ((not (numberp n)) nil)
+   ((not (eq n n)) nil)
+   ((> (abs n) 1e10) nil)
    ((<= n 0) nil)
    ((floatp n) (round (* n 1000)))
    ((< n 1000) (round (* n 1000)))
