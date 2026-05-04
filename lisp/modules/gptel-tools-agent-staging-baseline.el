@@ -38,6 +38,13 @@
          (when (file-exists-p worktree-dir)
            (ignore-errors (delete-directory worktree-dir t))))))))
 
+(defun gptel-auto-workflow--normalize-test-exit-code (exit-code verify-exit-code)
+  "Return normalized exit code from test and verify processes.
+Returns EXIT-CODE if non-zero, else VERIFY-EXIT-CODE if non-zero, else 1."
+  (or (and (/= exit-code 0) exit-code)
+      (and (/= verify-exit-code 0) verify-exit-code)
+      1))
+
 (defun gptel-auto-workflow--main-baseline-test-results ()
   "Return plist describing verification failures for the current staging baseline ref."
   (let ((main-ref (gptel-auto-workflow--staging-main-ref)))
@@ -93,16 +100,14 @@
                               :output output))
                        (failed-tests
                         (list :ref main-ref
-                              :exit-code (or (and (/= exit-code 0) exit-code)
-                                             (and (/= verify-exit-code 0) verify-exit-code)
-                                             1)
+                              :exit-code (gptel-auto-workflow--normalize-test-exit-code
+                                          exit-code verify-exit-code)
                               :failed-tests failed-tests
                               :output output))
                        (t
                         (list :ref main-ref
-                              :exit-code (or (and (/= exit-code 0) exit-code)
-                                             (and (/= verify-exit-code 0) verify-exit-code)
-                                             1)
+                              :exit-code (gptel-auto-workflow--normalize-test-exit-code
+                                          exit-code verify-exit-code)
                               :error (format "Failed to parse %s baseline test failures"
                                              main-ref)
                               :output output))))
