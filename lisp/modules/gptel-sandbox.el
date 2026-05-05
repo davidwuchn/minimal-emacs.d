@@ -687,6 +687,8 @@ can consume lists, vectors, plists, and alists as readable data."
 (defun gptel-sandbox--eval-statement (statement env state callback)
   "Evaluate sandbox STATEMENT with ENV and STATE, then CALLBACK.
 CALLBACK receives a plist with one of the keys `:continue' or `:result'."
+  (unless (hash-table-p env)
+    (error "Programmatic eval-statement requires a hash table environment, got: %S" env))
   (pcase statement
     (`(progn . ,body)
      (gptel-sandbox--eval-progn body env state callback))
@@ -733,6 +735,8 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
 (defun gptel-sandbox--eval-progn (body env state callback)
   "Evaluate BODY forms sequentially, handling async tool-calls.
 CALLBACK receives final outcome plist."
+  (unless (hash-table-p env)
+    (error "Programmatic eval-progn requires a hash table environment, got: %S" env))
   (if (null body)
       (funcall callback (list :done t :result nil))
     (gptel-sandbox--eval-statement

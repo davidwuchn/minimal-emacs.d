@@ -148,39 +148,48 @@ Returns nil if there's a genuine new mechanism."
     (buffer-string)))
 
 (defun gptel-auto-workflow--extract-function-names (code)
-  "Extract defined function names from CODE."
-  (let (names)
-    (with-temp-buffer
-      (insert code)
-      (goto-char (point-min))
-      (while (re-search-forward "(defun\\s-+\\([^ ]+\\)" nil t)
-        (push (match-string 1) names)))
-    (sort names #'string<)))
+  "Extract defined function names from CODE.
+Returns empty list if CODE is nil or empty."
+  (if (or (null code) (string-empty-p code))
+      '()
+    (let (names)
+      (with-temp-buffer
+        (insert code)
+        (goto-char (point-min))
+        (while (re-search-forward "(defun\\s-+\\([^ ]+\\)" nil t)
+          (push (match-string 1) names)))
+      (sort names #'string<))))
 
 (defun gptel-auto-workflow--extract-control-flow (code)
-  "Extract control flow structure from CODE (if/cond/while/etc)."
-  (let (structures)
-    (with-temp-buffer
-      (insert code)
-      (goto-char (point-min))
-      (while (re-search-forward "(\\(if\\|cond\\|when\\|unless\\|while\\|dolist\\|dotimes\\|cl-loop\\)" nil t)
-        (push (match-string 1) structures)))
-    (sort structures #'string<)))
+  "Extract control flow structure from CODE (if/cond/while/etc).
+Returns empty list if CODE is nil or empty."
+  (if (or (null code) (string-empty-p code))
+      '()
+    (let (structures)
+      (with-temp-buffer
+        (insert code)
+        (goto-char (point-min))
+        (while (re-search-forward "(\\(if\\|cond\\|when\\|unless\\|while\\|dolist\\|dotimes\\|cl-loop\\)" nil t)
+          (push (match-string 1) structures)))
+      (sort structures #'string<))))
 
 (defun gptel-auto-workflow--extract-constants (code)
-  "Extract string and number constants from CODE."
-  (let (constants)
-    (with-temp-buffer
-      (insert code)
-      (goto-char (point-min))
-      ;; Extract strings
-      (while (re-search-forward "\"[^\"]*\"" nil t)
-        (push (match-string 0) constants))
-      ;; Extract numbers
-      (goto-char (point-min))
-      (while (re-search-forward "\\b[0-9]+\\b" nil t)
-        (push (match-string 0) constants)))
-    (sort constants #'string<)))
+  "Extract string and number constants from CODE.
+Returns empty list if CODE is nil or empty."
+  (if (or (null code) (string-empty-p code))
+      '()
+    (let (constants)
+      (with-temp-buffer
+        (insert code)
+        (goto-char (point-min))
+        ;; Extract strings
+        (while (re-search-forward "\"[^\"]*\"" nil t)
+          (push (match-string 0) constants))
+        ;; Extract numbers
+        (goto-char (point-min))
+        (while (re-search-forward "\\b[0-9]+\\b" nil t)
+          (push (match-string 0) constants)))
+      (sort constants #'string<))))
 
 ;;; Prototyping Phase
 

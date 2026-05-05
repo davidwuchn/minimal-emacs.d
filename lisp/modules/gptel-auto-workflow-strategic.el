@@ -150,14 +150,19 @@ falls back to the user's Emacs configuration directory."
 
 (defun gptel-auto-workflow--filter-large-files (files max-lines)
   "Filter FILES to exclude those with more than MAX-LINES lines.
-Returns list of file paths under the limit."
+Returns list of file paths under the limit.
+BEHAVIOR: Uses wc -l for efficient line counting without loading files into buffer."
   (let (result)
     (dolist (file files (reverse result))
       (when (and (file-exists-p file)
-                 (<= (with-temp-buffer
-                       (insert-file-contents file)
-                       (count-lines (point-min) (point-max)))
-                     max-lines))
+                 (let ((line-count (if (executable-find "wc")
+                                       (with-temp-buffer
+                                         (call-process "wc" nil t nil "-l" file)
+                                         (string-to-number (string-trim (buffer-string))))
+                                     (with-temp-buffer
+                                       (insert-file-contents file)
+                                       (count-lines (point-min) (point-max))))))
+                   (<= line-count max-lines)))
         (push file result)))))
 
 (defun gptel-auto-workflow--target-in-root-repo-p (abs-path proj-root)

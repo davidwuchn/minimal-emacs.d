@@ -594,7 +594,7 @@ Returns nil if curl is unavailable or a fetch is already in flight."
       (require 'gptel)
     (error
      (message "OpenRouter: gptel not available (%s)" (error-message-string err))
-     (return-from my/gptel--openrouter-fetch-with-callback nil)))
+     nil))
   (let ((process-name (or process-name "gptel-openrouter-fetch"))
         (connect-timeout (or connect-timeout 10))
         (max-time (or max-time 120)))

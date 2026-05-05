@@ -416,18 +416,22 @@ Returns (project-root . project-buffer) or nil if can't determine."
           (gptel-auto-workflow--get-project-buffer gptel-auto-workflow--current-project)))
    ;; Case 2: Check gptel-auto-workflow--project-root-override
    ((and (boundp 'gptel-auto-workflow--project-root-override)
-         gptel-auto-workflow--project-root-override)
+         (stringp gptel-auto-workflow--project-root-override)
+         (> (length gptel-auto-workflow--project-root-override) 0))
     (cons gptel-auto-workflow--project-root-override
           (gptel-auto-workflow--get-project-buffer gptel-auto-workflow--project-root-override)))
    ;; Case 3: Check if current directory is a configured project
    ((and (boundp 'gptel-auto-workflow-projects)
+         (listp gptel-auto-workflow-projects)
          gptel-auto-workflow-projects)
     (let ((current-dir (expand-file-name default-directory))
           proj)
       (setq proj (cl-loop for p in gptel-auto-workflow-projects
-                          when (string-prefix-p (expand-file-name p) current-dir)
+                          when (and (stringp p)
+                                    (> (length p) 0)
+                                    (string-prefix-p (expand-file-name p) current-dir))
                           return p))
-      (when proj
+      (when (and proj (stringp proj))
         (cons proj (gptel-auto-workflow--get-project-buffer proj)))))
    ;; Case 4: Try to detect project from default-directory
    (t
@@ -435,8 +439,10 @@ Returns (project-root . project-buffer) or nil if can't determine."
                          (gptel-auto-workflow--project-root)
                        (error default-directory))
                      default-directory))
-           (expanded-proj (expand-file-name proj)))
-      (cons expanded-proj (gptel-auto-workflow--get-project-buffer expanded-proj))))))
+           (expanded-proj (and (stringp proj) (> (length proj) 0)
+                              (expand-file-name proj))))
+      (when expanded-proj
+        (cons expanded-proj (gptel-auto-workflow--get-project-buffer expanded-proj)))))))
 
 (defun gptel-auto-workflow--advice-task-override (orig-fun main-cb agent-type description prompt)
   "Advice around subagent task execution to use per-project buffers.
