@@ -78,12 +78,12 @@ Each worktree gets its own isolated buffer for subagent overlays.")
     (setq gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))))
 
 (defun gptel-auto-workflow--normalized-projects ()
-  "Return configured project roots as unique expanded directory names.
-Filters out nil and non-string entries from the project list."
-  (delete-dups
-   (mapcar (lambda (project-root)
-             (file-name-as-directory (expand-file-name project-root)))
-           (cl-remove-if-not #'stringp gptel-auto-workflow-projects))))
+  "Return configured project roots as unique expanded directory names."
+  (let ((projects (or gptel-auto-workflow-projects nil)))
+    (delete-dups
+     (mapcar (lambda (project-root)
+               (file-name-as-directory (expand-file-name project-root)))
+             projects))))
 
 (defun gptel-auto-workflow--normalize-worktree-dir (worktree-dir &optional project-root)
   "Return WORKTREE-DIR as an absolute directory name.
@@ -651,6 +651,7 @@ Gets target buffer from gptel-fsm-info and creates overlay there."
   "Clear all persistent executor overlays for PROJECT-ROOT or all projects.
 Without PROJECT-ROOT, clears overlays for all projects."
   (interactive)
+  (gptel-auto-workflow--ensure-buffer-tables)
   (if project-root
       (when-let* ((buf (gethash (expand-file-name project-root)
                                 gptel-auto-workflow--project-buffers)))
@@ -659,26 +660,29 @@ Without PROJECT-ROOT, clears overlays for all projects."
             (when (overlay-get ov 'gptel-agent--task-type)
               (delete-overlay ov))))
         (message "[auto-workflow] Cleared executor overlays for %s" project-root))
-    (maphash (lambda (_ buf)
-               (when (buffer-live-p buf)
-                 (with-current-buffer buf
-                   (dolist (ov (overlays-in (point-min) (point-max)))
-                     (when (overlay-get ov 'gptel-agent--task-type)
-                       (delete-overlay ov))))))
-             gptel-auto-workflow--project-buffers)
+    (when (hash-table-p gptel-auto-workflow--project-buffers)
+      (maphash (lambda (_ buf)
+                 (when (buffer-live-p buf)
+                   (with-current-buffer buf
+                     (dolist (ov (overlays-in (point-min) (point-max)))
+                       (when (overlay-get ov 'gptel-agent--task-type)
+                         (delete-overlay ov))))))
+               gptel-auto-workflow--project-buffers))
     (message "[auto-workflow] Cleared all executor overlays")))
 
 (defun gptel-auto-workflow-list-project-buffers ()
   "List all project gptel-agent buffers."
   (interactive)
+  (gptel-auto-workflow--ensure-buffer-tables)
   (let ((buffers nil))
-    (maphash (lambda (root buf)
-               (push (format "%s -> %s (%s)"
-                             root
-                             (buffer-name buf)
-                             (if (buffer-live-p buf) "live" "dead"))
-                     buffers))
-             gptel-auto-workflow--project-buffers)
+    (when (hash-table-p gptel-auto-workflow--project-buffers)
+      (maphash (lambda (root buf)
+                 (push (format "%s -> %s (%s)"
+                               root
+                               (buffer-name buf)
+                               (if (buffer-live-p buf) "live" "dead"))
+                       buffers))
+               gptel-auto-workflow--project-buffers))
     (if buffers
         (message "Project buffers:\n%s" (string-join buffers "\n"))
       (message "No project buffers created yet"))))

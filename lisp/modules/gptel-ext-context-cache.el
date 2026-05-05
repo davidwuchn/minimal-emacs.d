@@ -498,7 +498,7 @@ Returns 0.0 if CHARS is not a positive number."
           (insert "(setq my/gptel--context-window-cache-data\n      '")
           (let (alist)
             (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
-            (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
+            (prin1 alist (current-buffer)))
           (insert ")\n")
           (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
                           (float-time (current-time))))))

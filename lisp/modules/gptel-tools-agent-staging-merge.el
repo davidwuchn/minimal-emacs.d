@@ -84,10 +84,12 @@ Uses the staging worktree instead of switching branches in the root repo."
                            (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
                  nil
                (let* ((commit-hash (string-trim
-                                    (car (gptel-auto-workflow--git-result
+                                    (or (car-safe
+                                         (gptel-auto-workflow--git-result
                                           (format "git rev-parse %s"
                                                   (shell-quote-argument optimize-ref))
-                                          60))))
+                                          60))
+                                        "")))
                       (cherry-result
                        (gptel-auto-workflow--git-result
                         (format "git cherry-pick --no-commit %s"
