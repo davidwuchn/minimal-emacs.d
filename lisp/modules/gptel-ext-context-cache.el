@@ -414,8 +414,12 @@ Some gptel model tables encode context windows in *thousands* of tokens as float
   (cond
    ((not (numberp n)) nil)
    ((<= n 0) nil)
-   ((floatp n) (round (* n 1000)))
-   ((< n 1000) (round (* n 1000)))
+   ((floatp n)
+    (let ((result (round (* n 1000))))
+      (and (> result 0) (<= result 2000000) result)))
+   ((< n 1000)
+    (let ((result (round (* n 1000))))
+      (and (> result 0) (<= result 2000000) result)))
    ((> n 2000000) nil)
    (t (round n))))
 
