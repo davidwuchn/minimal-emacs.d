@@ -287,7 +287,9 @@ Extracts :code/:status from error-data to enable HTTP status checks."
 
 (defun gptel-agent-loop--maybe-cache-get (agent-type prompt)
   "Return cached subagent result for AGENT-TYPE and PROMPT if available."
-  (when (fboundp 'my/gptel--subagent-cache-get)
+  (when (and (fboundp 'my/gptel--subagent-cache-get)
+             agent-type
+             prompt)
     (my/gptel--subagent-cache-get agent-type prompt)))
 
 (defun gptel-agent-loop--maybe-cache-put (state result)
