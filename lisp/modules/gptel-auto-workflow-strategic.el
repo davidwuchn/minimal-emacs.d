@@ -88,6 +88,11 @@ timeout, so keep a dedicated budget to avoid unnecessary static fallbacks."
 (defvar gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)
   "Hash table mapping project roots to cached research findings.")
 
+(defvar gptel-auto-workflow--context-cache nil
+  "Cached context for analyzer prompt, keyed by project root.
+Cached value: plist with :context :timestamp keys.
+Cache is invalidated after 5 minutes to avoid stale data.")
+
 (defvar gptel-auto-workflow--analyzer-transient-failure nil
   "Non-nil when analyzer target selection failed due to a transient provider issue.")
 
@@ -180,34 +185,53 @@ BEHAVIOR: Uses wc -l for efficient line counting without loading files into buff
 
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
-Scans only root-repo targets that can be integrated into staging."
+Scans only root-repo targets that can be integrated into staging.
+Uses caching to avoid redundant shell command execution."
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
-         (safe-root (shell-quote-argument proj-root)))
-    (list :git-history (shell-command-to-string
-                        (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
-                                safe-root))
-          :file-sizes (shell-command-to-string
-                       (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
-                               safe-root))
-          :todos (shell-command-to-string
-                  (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
-                          safe-root))
-          :file-list (let* ((raw-output (shell-command-to-string
-                                         (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                                                 safe-root)))
-                            (all-files (delq nil
-                                             (mapcar (lambda (s)
-                                                       (unless (string-empty-p s) s))
-                                                     (split-string raw-output "\n" t))))
-                            (nonempty-files (delq nil
-                                                  (mapcar (lambda (f)
-                                                            (let ((abs-path (expand-file-name f proj-root)))
-                                                              (when (file-exists-p abs-path) f)))
-                                                          all-files))))
-                       (mapconcat #'identity
-                                  (gptel-auto-workflow--filter-large-files
-                                   nonempty-files 1000)
-                                  "\n")))))
+         (cache-ttl (* 5 60))
+         (now (float-time))
+         (cache-entry (and (listp gptel-auto-workflow--context-cache)
+                           (eq (car gptel-auto-workflow--context-cache) proj-root)
+                           (cdr gptel-auto-workflow--context-cache)))
+         (cached-context (and cache-entry
+                              (plist-get cache-entry :context)))
+         (cache-time (and cache-entry
+                          (plist-get cache-entry :timestamp)))
+         (cache-valid (and cached-context cache-time
+                          (< (- now cache-time) cache-ttl))))
+    (if cache-valid
+        (progn
+          (message "[auto-workflow] Using cached context for %s" proj-root)
+          cached-context)
+      (let* ((safe-root (shell-quote-argument proj-root))
+             (context (list :git-history (shell-command-to-string
+                                          (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
+                                                  safe-root))
+                            :file-sizes (shell-command-to-string
+                                         (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
+                                                 safe-root))
+                            :todos (shell-command-to-string
+                                    (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
+                                            safe-root))
+                            :file-list (let* ((raw-output (shell-command-to-string
+                                                           (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                                                                   safe-root)))
+                                              (all-files (delq nil
+                                                               (mapcar (lambda (s)
+                                                                         (unless (string-empty-p s) s))
+                                                                       (split-string raw-output "\n" t))))
+                                              (nonempty-files (delq nil
+                                                                    (mapcar (lambda (f)
+                                                                              (let ((abs-path (expand-file-name f proj-root)))
+                                                                                (when (file-exists-p abs-path) f)))
+                                                                            all-files))))
+                                         (mapconcat #'identity
+                                                    (gptel-auto-workflow--filter-large-files
+                                                     nonempty-files 1000)
+                                                    "\n")))))
+        (setq gptel-auto-workflow--context-cache (cons proj-root (list :context context :timestamp now)))
+        (message "[auto-workflow] Cached new context for %s" proj-root)
+        context))))
 
 (defun gptel-auto-workflow--local-research-patterns ()
   "Perform local grep-based pattern analysis when subagents unavailable.
