@@ -569,11 +569,12 @@ Also handles caching and result truncation from old advice."
                           (funcall task-runner wrapped-cb agent-type description prompt))))))
               ;; SAFETY: Never execute in *Messages* buffer - find safe fallback
               (let ((safe-buffer (cond
-                                  ((not (string= (buffer-name) "*Messages*"))
-                                   (current-buffer))
+                                  ((and target-buf
+                                        (not (string= (buffer-name target-buf) "*Messages*")))
+                                   target-buf)
                                   ((get-buffer "*gptel*")
                                    (get-buffer "*gptel*"))
-                                  ((get-buffer "*scratch*")  
+                                  ((get-buffer "*scratch*")
                                    (get-buffer "*scratch*"))
                                   (t
                                    (get-buffer-create "*gptel-safe-fallback*")))))
