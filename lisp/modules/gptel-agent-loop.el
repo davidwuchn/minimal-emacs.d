@@ -291,8 +291,10 @@ Extracts :code/:status from error-data to enable HTTP status checks."
     (my/gptel--subagent-cache-get agent-type prompt)))
 
 (defun gptel-agent-loop--maybe-cache-put (state result)
-  "Cache RESULT for STATE if the helper exists."
-  (when (fboundp 'my/gptel--subagent-cache-put)
+  "Cache RESULT for STATE if the helper exists.
+Returns nil if STATE is not a valid task structure."
+  (when (and (gptel-agent-loop--task-p state)
+             (fboundp 'my/gptel--subagent-cache-put))
     (my/gptel--subagent-cache-put
      (gptel-agent-loop--task-agent-type state)
      (gptel-agent-loop--task-prompt state)
@@ -365,11 +367,14 @@ Truncates accumulated output to last
             context)))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
-  "Build max-steps summary prompt for STATE."
-  (format "%s\n\nOriginal task:\n%s\n\nWork completed so far:\n%s"
-          (or gptel-agent-loop-max-steps-prompt "")
-          (or (gptel-agent-loop--task-prompt state) "unknown")
-          (gptel-agent-loop--safe-accumulated-output state)))
+  "Build max-steps summary prompt for STATE.
+Returns empty string if STATE is not a valid task structure."
+  (if (gptel-agent-loop--task-p state)
+      (format "%s\n\nOriginal task:\n%s\n\nWork completed so far:\n%s"
+              (or gptel-agent-loop-max-steps-prompt "")
+              (or (gptel-agent-loop--task-prompt state) "unknown")
+              (gptel-agent-loop--safe-accumulated-output state))
+    ""))
 
 (defconst gptel-agent-loop--completion-patterns
   '("all tasks.*complete"
