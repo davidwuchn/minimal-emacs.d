@@ -364,8 +364,8 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--tool-arg-map (arg-pairs)
   "Convert ARG-PAIRS plist into a keyword->value hash table."
-  (unless (listp arg-pairs)
-    (error "Programmatic tool-call arguments must be a list, got: %S" arg-pairs))
+  (unless (proper-list-p arg-pairs)
+    (error "Programmatic tool-call arguments must be a proper list, got: %S" arg-pairs))
   (unless (cl-evenp (length arg-pairs))
     (error "Programmatic tool-call requires keyword/value pairs, got odd length: %d"
            (length arg-pairs)))
