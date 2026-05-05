@@ -294,8 +294,10 @@ cache entries based on empty strings."
     (my/gptel--subagent-cache-get agent-type prompt)))
 
 (defun gptel-agent-loop--maybe-cache-put (state result)
-  "Cache RESULT for STATE if the helper exists."
-  (when (fboundp 'my/gptel--subagent-cache-put)
+  "Cache RESULT for STATE if the helper exists.
+RESULT must be a string.  Returns nil if RESULT is not a string."
+  (when (and (stringp result)
+             (fboundp 'my/gptel--subagent-cache-put))
     (my/gptel--subagent-cache-put
      (gptel-agent-loop--task-agent-type state)
      (gptel-agent-loop--task-prompt state)
