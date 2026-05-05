@@ -3,7 +3,7 @@ title: Experiment Insights - gptel-workflow-benchmark
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-workflow-benchmark]
-updated: 2026-05-04 12:00
+updated: 2026-05-05 09:00
 ---
 
 # Experiment Insights: gptel-workflow-benchmark

@@ -652,7 +652,19 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
               (gptel-agent-loop--handle-string-response state resp use-tools)))))
 
        ((eq resp 'abort)
-        (gptel-agent-loop--handle-aborted-state state ov t))))))
+        (gptel-agent-loop--handle-aborted-state state ov t))
+
+       (t
+        (gptel-agent-loop--cleanup-overlay ov)
+        (message "[RunAgent] Warning: unexpected response type %S for task '%s', treating as error"
+                 (type-of resp)
+                 (gptel-agent-loop--task-description state))
+        (gptel-agent-loop--deliver-result
+         state
+         (format "Error: %s task '%s' received unexpected response type: %S"
+                 (gptel-agent-loop--task-agent-type state)
+                 (gptel-agent-loop--task-description state)
+                 (type-of resp))))))))
 
 (defun gptel-agent-loop--handle-empty-response (state resp)
   "Handle empty string RESP for STATE.
@@ -704,7 +716,8 @@ Returns non-nil if result was delivered."
   "Handle STATE when continuation is needed after RESP.
 Called only from `handle-string-response' when STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (gptel-agent-loop--continuation-needed-p state resp)
+  (when (and (stringp resp)
+             (gptel-agent-loop--continuation-needed-p state resp))
     (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
       (if gptel-agent-loop-hard-loop
           (progn

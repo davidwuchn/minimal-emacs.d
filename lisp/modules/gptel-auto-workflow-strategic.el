@@ -150,16 +150,20 @@ falls back to the user's Emacs configuration directory."
 
 (defun gptel-auto-workflow--filter-large-files (files max-lines)
   "Filter FILES to exclude those with more than MAX-LINES lines.
-Returns list of (file . line-count) for files under the limit."
+Returns list of file paths under the limit.
+BEHAVIOR: Uses wc -l for efficient line counting without loading files into buffer."
   (let (result)
     (dolist (file files (reverse result))
-      (when (and (file-exists-p file) (file-readable-p file))
-        (let ((count
-               (with-temp-buffer
-                 (insert-file-contents file)
-                 (count-lines (point-min) (point-max)))))
-          (when (<= count max-lines)
-            (push (cons file count) result)))))))
+      (when (and (file-exists-p file)
+                 (let ((line-count (if (executable-find "wc")
+                                       (with-temp-buffer
+                                         (call-process "wc" nil t nil "-l" file)
+                                         (string-to-number (string-trim (buffer-string))))
+                                     (with-temp-buffer
+                                       (insert-file-contents file)
+                                       (count-lines (point-min) (point-max))))))
+                   (<= line-count max-lines)))
+        (push file result)))))
 
 (defun gptel-auto-workflow--target-in-root-repo-p (abs-path proj-root)
   "Return non-nil when ABS-PATH belongs to the same git repo as PROJ-ROOT."
@@ -199,10 +203,9 @@ Scans only root-repo targets that can be integrated into staging."
                                                             (let ((abs-path (expand-file-name f proj-root)))
                                                               (when (file-exists-p abs-path) f)))
                                                           all-files))))
-                       (mapconcat (lambda (f) (format "%s" f))
-                                  (mapcar #'car
-                                          (gptel-auto-workflow--filter-large-files
-                                           nonempty-files 1000))
+                       (mapconcat #'identity
+                                  (gptel-auto-workflow--filter-large-files
+                                   nonempty-files 1000)
                                   "\n")))))
 
 (defun gptel-auto-workflow--local-research-patterns ()

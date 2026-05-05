@@ -498,7 +498,7 @@ Returns 0.0 if CHARS is not a positive number."
           (insert "(setq my/gptel--context-window-cache-data\n      '")
           (let (alist)
             (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
-            (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
+            (prin1 alist (current-buffer)))
           (insert ")\n")
           (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
                           (float-time (current-time))))))
@@ -601,7 +601,7 @@ Returns nil if curl is unavailable or a fetch is already in flight."
       (require 'gptel)
     (error
      (message "OpenRouter: gptel not available (%s)" (error-message-string err))
-     (return-from my/gptel--openrouter-fetch-with-callback nil)))
+     nil))
   (let ((process-name (or process-name "gptel-openrouter-fetch"))
         (connect-timeout (or connect-timeout 10))
         (max-time (or max-time 120)))
@@ -743,10 +743,15 @@ Run asynchronously. Use for bulk cache warming."
 Returns plist with :context-window, :pricing-input, :pricing-output, etc."
   (when model-id
     (require 'gptel)
-    (let* ((model-id-str (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
-      (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
-                                       my/gptel--known-model-metadata
-                                       model-id-str))))
+    (let* ((model-id-str (cond
+                          ((stringp model-id) model-id)
+                          ((symbolp model-id) (symbol-name model-id))
+                          (t (format "%S" model-id))))
+           (model-id-str (string-trim model-id-str)))
+      (when (and (stringp model-id-str) (not (string-empty-p model-id-str)))
+        (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
+                                         my/gptel--known-model-metadata
+                                         model-id-str)))))
 
 (defun my/gptel-show-model-info (model-id)
   "Show detailed info for MODEL-ID."

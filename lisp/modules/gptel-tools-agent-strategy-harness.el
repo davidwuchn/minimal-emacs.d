@@ -414,9 +414,10 @@ preferring the active strategy when it has no evaluations yet."
         (let* ((default-perf (gptel-auto-workflow--get-strategy-performance "template-default"))
                (default-success (plist-get default-perf :success-rate))
                (default-avg (plist-get default-perf :avg-score))
-               (chosen (if (and (not (equal best "template-default"))
-                               (< best-success default-success)
-                               (< (- (plist-get best-perf :avg-score) default-avg) 0.15))
+                (chosen (if (and (not (equal best "template-default"))
+                                (< best-success default-success)
+                                (< (round (* 100 (- (plist-get best-perf :avg-score) default-avg)))
+                                   (round (* 100 0.15))))
                           (progn
                             (message "[strategy] %s underperforms template-default (%.0f%% < %.0f%% success, avg diff %.2f); falling back"
                                      best (* 100 best-success) (* 100 default-success)

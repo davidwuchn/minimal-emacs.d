@@ -42,6 +42,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'gptel-benchmark-core)
 (require 'gptel-benchmark-principles)
 (require 'gptel-benchmark-memory)
 

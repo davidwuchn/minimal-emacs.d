@@ -78,12 +78,12 @@ Each worktree gets its own isolated buffer for subagent overlays.")
     (setq gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))))
 
 (defun gptel-auto-workflow--normalized-projects ()
-  "Return configured project roots as unique expanded directory names.
-Filters out nil and non-string entries from the project list."
-  (delete-dups
-   (mapcar (lambda (project-root)
-             (file-name-as-directory (expand-file-name project-root)))
-           (cl-remove-if-not #'stringp gptel-auto-workflow-projects))))
+  "Return configured project roots as unique expanded directory names."
+  (let ((projects (or gptel-auto-workflow-projects nil)))
+    (delete-dups
+     (mapcar (lambda (project-root)
+               (file-name-as-directory (expand-file-name project-root)))
+             projects))))
 
 (defun gptel-auto-workflow--normalize-worktree-dir (worktree-dir &optional project-root)
   "Return WORKTREE-DIR as an absolute directory name.
@@ -418,23 +418,23 @@ Returns (project-root . project-buffer) or nil if can't determine."
         (cons gptel-auto-workflow--current-project buf))))
    ;; Case 2: Check gptel-auto-workflow--project-root-override
    ((and (boundp 'gptel-auto-workflow--project-root-override)
-         gptel-auto-workflow--project-root-override)
-    (let ((buf (gptel-auto-workflow--get-project-buffer gptel-auto-workflow--project-root-override)))
-      (when buf
-        (cons gptel-auto-workflow--project-root-override buf))))
+         (stringp gptel-auto-workflow--project-root-override)
+         (> (length gptel-auto-workflow--project-root-override) 0))
+    (cons gptel-auto-workflow--project-root-override
+          (gptel-auto-workflow--get-project-buffer gptel-auto-workflow--project-root-override)))
    ;; Case 3: Check if current directory is a configured project
    ((and (boundp 'gptel-auto-workflow-projects)
-         gptel-auto-workflow-projects
-         default-directory)
+         (listp gptel-auto-workflow-projects)
+         gptel-auto-workflow-projects)
     (let ((current-dir (expand-file-name default-directory))
           proj buf)
       (setq proj (cl-loop for p in gptel-auto-workflow-projects
-                          when (string-prefix-p (expand-file-name p) current-dir)
+                          when (and (stringp p)
+                                    (> (length p) 0)
+                                    (string-prefix-p (expand-file-name p) current-dir))
                           return p))
-      (when proj
-        (setq buf (gptel-auto-workflow--get-project-buffer proj))
-        (when buf
-          (cons proj buf)))))
+      (when (and proj (stringp proj))
+        (cons proj (gptel-auto-workflow--get-project-buffer proj)))))
    ;; Case 4: Try to detect project from default-directory
    ((and default-directory
          (file-directory-p default-directory))
@@ -442,12 +442,10 @@ Returns (project-root . project-buffer) or nil if can't determine."
                          (gptel-auto-workflow--project-root)
                        (error default-directory))
                      default-directory))
-           (expanded-proj (expand-file-name proj))
-           (buf (gptel-auto-workflow--get-project-buffer expanded-proj)))
-      (when buf
-        (cons expanded-proj buf))))
-   ;; Case 5: No valid context available
-   (t nil)))
+           (expanded-proj (and (stringp proj) (> (length proj) 0)
+                              (expand-file-name proj))))
+      (when expanded-proj
+        (cons expanded-proj (gptel-auto-workflow--get-project-buffer expanded-proj)))))))
 
 (defun gptel-auto-workflow--advice-task-override (orig-fun main-cb agent-type description prompt)
   "Advice around subagent task execution to use per-project buffers.
@@ -651,6 +649,7 @@ Gets target buffer from gptel-fsm-info and creates overlay there."
   "Clear all persistent executor overlays for PROJECT-ROOT or all projects.
 Without PROJECT-ROOT, clears overlays for all projects."
   (interactive)
+  (gptel-auto-workflow--ensure-buffer-tables)
   (if project-root
       (when-let* ((buf (gethash (expand-file-name project-root)
                                 gptel-auto-workflow--project-buffers)))
@@ -659,26 +658,29 @@ Without PROJECT-ROOT, clears overlays for all projects."
             (when (overlay-get ov 'gptel-agent--task-type)
               (delete-overlay ov))))
         (message "[auto-workflow] Cleared executor overlays for %s" project-root))
-    (maphash (lambda (_ buf)
-               (when (buffer-live-p buf)
-                 (with-current-buffer buf
-                   (dolist (ov (overlays-in (point-min) (point-max)))
-                     (when (overlay-get ov 'gptel-agent--task-type)
-                       (delete-overlay ov))))))
-             gptel-auto-workflow--project-buffers)
+    (when (hash-table-p gptel-auto-workflow--project-buffers)
+      (maphash (lambda (_ buf)
+                 (when (buffer-live-p buf)
+                   (with-current-buffer buf
+                     (dolist (ov (overlays-in (point-min) (point-max)))
+                       (when (overlay-get ov 'gptel-agent--task-type)
+                         (delete-overlay ov))))))
+               gptel-auto-workflow--project-buffers))
     (message "[auto-workflow] Cleared all executor overlays")))
 
 (defun gptel-auto-workflow-list-project-buffers ()
   "List all project gptel-agent buffers."
   (interactive)
+  (gptel-auto-workflow--ensure-buffer-tables)
   (let ((buffers nil))
-    (maphash (lambda (root buf)
-               (push (format "%s -> %s (%s)"
-                             root
-                             (buffer-name buf)
-                             (if (buffer-live-p buf) "live" "dead"))
-                     buffers))
-             gptel-auto-workflow--project-buffers)
+    (when (hash-table-p gptel-auto-workflow--project-buffers)
+      (maphash (lambda (root buf)
+                 (push (format "%s -> %s (%s)"
+                               root
+                               (buffer-name buf)
+                               (if (buffer-live-p buf) "live" "dead"))
+                       buffers))
+               gptel-auto-workflow--project-buffers))
     (if buffers
         (message "Project buffers:\n%s" (string-join buffers "\n"))
       (message "No project buffers created yet"))))
