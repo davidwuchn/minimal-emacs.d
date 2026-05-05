@@ -241,8 +241,11 @@ memory after long sessions or if tasks appear stuck."
       (setq gptel-agent-loop--state nil))))
 
 (defun gptel-agent-loop--safe-accumulated-output (state)
-  "Return STATE's accumulated output or empty string if nil."
-  (or (gptel-agent-loop--task-accumulated-output state) ""))
+  "Return STATE's accumulated output or empty string if nil.
+Returns empty string if STATE is not a valid task structure."
+  (if (gptel-agent-loop--task-p state)
+      (or (gptel-agent-loop--task-accumulated-output state) "")
+    ""))
 
 (defun gptel-agent-loop--append-output (state text)
   "Append TEXT to STATE's accumulated output.
