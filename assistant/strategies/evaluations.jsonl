@@ -1388,3 +1388,4 @@
 {"timestamp":"2026-05-05 11:21:40","strategy":"template-default","target":"two","experiment-id":4,"score":0,"outcome":"kept","axis":"?"}
 {"timestamp":"2026-05-05 11:22:21","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-05 11:26:30","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":4,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-05 12:32:07","strategy":"template-default","target":"lisp/modules/gptel-ext-tool-sanitize.el","experiment-id":1,"score":0.39999999999999997,"outcome":"discarded","axis":"?"}
