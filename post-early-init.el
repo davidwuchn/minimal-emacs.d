@@ -74,6 +74,12 @@
 (put 'gptel-auto-workflow-projects 'safe-local-variable #'listp)
 (put 'gptel-auto-workflow--project-root-override 'safe-local-variable #'stringp)
 
+;; Suppress cl-no-applicable-method cascade during error printing
+;; Emacs 30.2 cl-print-object may not handle all closure/byte-code types,
+;; causing recursive errors when M-x completion triggers backtrace printing.
+(setq debug-on-error nil)
+(add-to-list 'debug-ignored-errors 'cl-no-applicable-method)
+
 (provide 'post-early-init)
 
 ;;; post-early-init.el ends here
