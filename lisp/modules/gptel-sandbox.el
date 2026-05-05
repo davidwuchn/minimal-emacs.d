@@ -639,6 +639,8 @@ can consume lists, vectors, plists, and alists as readable data."
 
 (defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
+  (unless (listp state)
+    (error "Programmatic sandbox execute-tool requires a plist state, got: %S" state))
   (let* ((tool-spec (if (fboundp 'gptel-get-tool)
                         (gptel-get-tool tool-name)
                       nil)))
@@ -696,6 +698,8 @@ can consume lists, vectors, plists, and alists as readable data."
 CALLBACK receives a plist with one of the keys `:continue' or `:result'."
   (unless (hash-table-p env)
     (error "Programmatic eval-statement requires a hash table environment, got: %S" env))
+  (unless (listp state)
+    (error "Programmatic eval-statement requires a plist state, got: %S" state))
   (pcase statement
     (`(progn . ,body)
      (gptel-sandbox--eval-progn body env state callback))
@@ -744,6 +748,8 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
 CALLBACK receives final outcome plist."
   (unless (hash-table-p env)
     (error "Programmatic eval-progn requires a hash table environment, got: %S" env))
+  (unless (listp state)
+    (error "Programmatic eval-progn requires a plist state, got: %S" state))
   (if (null body)
       (funcall callback (list :done t :result nil))
     (gptel-sandbox--eval-statement
@@ -757,6 +763,8 @@ CALLBACK receives final outcome plist."
   "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
   (unless (listp forms)
     (error "Programmatic run-forms requires a list, got: %S" forms))
+  (unless (listp state)
+    (error "Programmatic run-forms requires a plist state, got: %S" state))
   (unless (functionp callback)
     (error "Programmatic run-forms requires a function callback, got: %S" callback))
   (if (null forms)
