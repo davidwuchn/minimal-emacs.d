@@ -361,14 +361,14 @@ Truncates accumulated output to last
                               (substring output (max 0 (- (length output) limit))))
                     output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
-            gptel-agent-loop-continuation-prompt
+            (or gptel-agent-loop-continuation-prompt "")
             context)))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
   "Build max-steps summary prompt for STATE."
   (format "%s\n\nOriginal task:\n%s\n\nWork completed so far:\n%s"
-          gptel-agent-loop-max-steps-prompt
-          (gptel-agent-loop--task-prompt state)
+          (or gptel-agent-loop-max-steps-prompt "")
+          (or (gptel-agent-loop--task-prompt state) "unknown")
           (gptel-agent-loop--safe-accumulated-output state)))
 
 (defconst gptel-agent-loop--completion-patterns
