@@ -416,7 +416,7 @@ preferring the active strategy when it has no evaluations yet."
                (default-avg (plist-get default-perf :avg-score))
                (chosen (if (and (not (equal best "template-default"))
                                (< best-success default-success)
-                               (< (- (plist-get best-perf :avg-score) default-avg) 0.15))
+                               (< (round (* 10000 (- (plist-get best-perf :avg-score) default-avg))) 1490))
                           (progn
                             (message "[strategy] %s underperforms template-default (%.0f%% < %.0f%% success, avg diff %.2f); falling back"
                                      best (* 100 best-success) (* 100 default-success)
