@@ -137,7 +137,7 @@ Returns the message string or nil."
 (defun gptel-auto-experiment--shared-transient-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT matches shared transient retry rules."
   (let ((msg (gptel-auto-experiment--error-message error-output)))
-    (and msg
+    (and (stringp msg)
          (not (gptel-auto-experiment--aborted-agent-output-p msg))
          (fboundp 'my/gptel--transient-error-p)
          (my/gptel--transient-error-p msg nil))))
@@ -145,7 +145,7 @@ Returns the message string or nil."
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
   (let ((msg (gptel-auto-experiment--error-message error-output)))
-    (and msg
+    (and (stringp msg)
          (not (gptel-auto-experiment--aborted-agent-output-p msg))
          (or (gptel-auto-experiment--shared-transient-error-p msg)
              (gptel-auto-experiment--provider-usage-limit-error-p msg)
@@ -157,7 +157,7 @@ Returns the message string or nil."
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
   (let ((msg (gptel-auto-experiment--error-message error-output)))
-    (and msg
+    (and (stringp msg)
          (let ((case-fold-search t))
            (string-match-p
             "access_terminated_error\\|usage limit exceeded\\|usage limit for this billing cycle\\|reached your usage limit for this billing cycle"
@@ -166,7 +166,7 @@ Returns the message string or nil."
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure."
   (let ((msg (gptel-auto-experiment--error-message error-output)))
-    (and msg
+    (and (stringp msg)
          (or (gptel-auto-experiment--provider-usage-limit-error-p msg)
              (let ((case-fold-search t))
                (string-match-p
@@ -176,7 +176,7 @@ Returns the message string or nil."
 (defun gptel-auto-experiment--provider-auth-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects provider auth failure."
   (let ((msg (gptel-auto-experiment--error-message error-output)))
-    (and msg
+    (and (stringp msg)
          (let ((case-fold-search t))
            (string-match-p
             "authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
@@ -188,7 +188,7 @@ Returns the message string or nil."
       (gptel-auto-experiment--provider-auth-error-p error-output)
       (gptel-auto-experiment--shared-transient-error-p error-output)
       (let ((msg (gptel-auto-experiment--error-message error-output)))
-        (and msg
+        (and (stringp msg)
              (let ((case-fold-search t))
                (string-match-p
                 "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|Malformed JSON"
@@ -387,7 +387,7 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
 (defun gptel-auto-experiment--quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows provider quota exhaustion."
   (let ((msg (gptel-auto-experiment--error-message agent-output)))
-    (and msg
+    (and (stringp msg)
          (or (gptel-auto-experiment--provider-usage-limit-error-p msg)
              (let ((case-fold-search t))
                (string-match-p
@@ -397,7 +397,7 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
 (defun gptel-auto-experiment--hard-quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows a hard quota stop for executor work."
   (let ((msg (gptel-auto-experiment--error-message agent-output)))
-    (and msg
+    (and (stringp msg)
          (let ((case-fold-search t))
            (string-match-p
             "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
