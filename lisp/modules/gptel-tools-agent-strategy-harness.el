@@ -418,14 +418,18 @@ preferring the active strategy when it has no evaluations yet."
                 (best-total (plist-get best-perf :total))
                 ;; Require >=50 experiments OR >=25% of template-default's count
                 (sufficient-sample
-                 (or (>= best-total 50)
+                 (or (>= best-total 15)
                      (>= (* 4 best-total) default-total)))
+                ;; Exploration: small-sample strategies get 20% random chance
+                (explore (and (< best-total 15)
+                              (< (random 100) 20)))
                 ;; Pad sigmal score diff by sample size: small samples get a penalty
                 (scaled-default-avg (if sufficient-sample
                                         default-avg
                                       (+ default-avg (* 0.1 (/ (- 50 (min best-total 50)) 50.0)))))
-                 (chosen (if (and (not (equal best "template-default"))
-                                 (or (not sufficient-sample)
+                (chosen (if (and (not (equal best "template-default"))
+                                (not explore)
+                                (or (not sufficient-sample)
                                      (< best-success default-success)
                                      (< (round (* 100 (- (plist-get best-perf :avg-score) scaled-default-avg)))
                                         (round (* 100 0.10)))))
