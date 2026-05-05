@@ -785,7 +785,7 @@ Without PROJECT-ROOT, clears cache for all projects."
         (message "Research cache status:\n%s"
                  cached-result)
       (let ((status-lines '()))
-        (dolist (project-root gptel-auto-workflow-projects)
+        (dolist (project-root (gptel-auto-workflow--normalized-projects))
           (let* ((findings (gethash project-root gptel-auto-workflow--research-findings-cache ""))
                  (cache-file (expand-file-name "var/tmp/research-findings.md" project-root))
                  (attrs (file-attributes cache-file))
