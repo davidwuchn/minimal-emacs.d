@@ -3,7 +3,7 @@ title: Experiment Insights - gptel-sandbox
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-sandbox]
-updated: 2026-05-05 08:28
+updated: 2026-05-05 18:54
 ---
 
 # Experiment Insights: gptel-sandbox
