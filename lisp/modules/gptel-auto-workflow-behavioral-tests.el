@@ -132,6 +132,8 @@ Each entry: (NAME :file FILE :test FUNCTION).")
 (defun gptel-auto-workflow--run-behavioral-tests (changed-files)
   "Run behavioral tests relevant to CHANGED-FILES.
 Returns (PASS-P . OUTPUT-STRING)."
+  (unless (listp changed-files)
+    (signal 'wrong-type-argument (list 'listp changed-files)))
   (let ((output "")
         (all-passed t))
     (dolist (test-entry gptel-auto-workflow--behavioral-test-suite)
