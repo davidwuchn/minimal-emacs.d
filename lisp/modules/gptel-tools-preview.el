@@ -286,30 +286,29 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
      (t
       (let (temp1 temp2)
         (condition-case err
-            (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-                   (diff-output
-                    (progn
-                      (setq temp1 (my/gptel-make-temp-file "gptel-preview-orig-"))
-                      (setq temp2 (my/gptel-make-temp-file "gptel-preview-new-"))
-                      (write-region original nil temp1 nil 'silent)
-                      (write-region replacement nil temp2 nil 'silent)
-                      (my/gptel--run-diff temp1 temp2))))
-              (unwind-protect
-                  (let ((diff-buf (my/gptel--create-diff-buffer
-                                   (my/gptel--unique-preview-buffer-name "*gptel-preview*")
-                                   (format "Preview: %s" path)
-                                   diff-output
-                                   #'diff-mode)))
-                    (my/gptel--insert-preview-instructions diff-buf)
-                    (my/gptel--display-preview-buffer diff-buf)
-                    (my/gptel--prompt-for-preview-action
-                     diff-buf
-                     (lambda () (funcall wrapped-cb "Preview confirmed."))
-                     (lambda () (funcall wrapped-cb "Preview aborted."))))
-                (when (and temp1 (file-exists-p temp1))
-                  (delete-file temp1))
-                (when (and temp2 (file-exists-p temp2))
-                  (delete-file temp2))))
+            (progn
+              (setq temp1 (my/gptel-make-temp-file "gptel-preview-orig-"))
+              (setq temp2 (my/gptel-make-temp-file "gptel-preview-new-"))
+              (write-region original nil temp1 nil 'silent)
+              (write-region replacement nil temp2 nil 'silent)
+              (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+                     (diff-output (my/gptel--run-diff temp1 temp2)))
+                (unwind-protect
+                    (let ((diff-buf (my/gptel--create-diff-buffer
+                                     (my/gptel--unique-preview-buffer-name "*gptel-preview*")
+                                     (format "Preview: %s" path)
+                                     diff-output
+                                     #'diff-mode)))
+                      (my/gptel--insert-preview-instructions diff-buf)
+                      (my/gptel--display-preview-buffer diff-buf)
+                      (my/gptel--prompt-for-preview-action
+                       diff-buf
+                       (lambda () (funcall wrapped-cb "Preview confirmed."))
+                       (lambda () (funcall wrapped-cb "Preview aborted."))))
+                  (when (and temp1 (file-exists-p temp1))
+                    (delete-file temp1))
+                  (when (and temp2 (file-exists-p temp2))
+                    (delete-file temp2)))))
           (error
            (when (and temp1 (file-exists-p temp1))
              (delete-file temp1))
