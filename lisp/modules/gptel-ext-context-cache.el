@@ -667,7 +667,7 @@ Runs asynchronously; returns nil immediately."
   (let* ((model-id (my/gptel--model-id-string model))
          (url "https://openrouter.ai/api/v1/models"))
     (cond
-     ((or (not (stringp model-id)) (string= model-id "nil"))
+     ((or (not (stringp model-id)) (string= model-id "nil") (string-empty-p model-id))
       (message "OpenRouter context-window: model not set (gptel-model is nil)")
       nil)
      (t
