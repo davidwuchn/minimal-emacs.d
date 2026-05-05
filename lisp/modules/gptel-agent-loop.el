@@ -393,12 +393,15 @@ Returns nil if patterns list is empty or contains non-string elements."
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
   "Return non-nil when TEXT matches any string in PATTERNS.
 Returns nil if TEXT is not a string or PATTERNS is not a list of strings.
-Patterns are matched case-insensitively."
+Patterns are matched case-insensitively.
+Invalid regex patterns are caught and return nil instead of signaling error."
   (and (stringp text)
        (cl-every #'stringp patterns)
        (cl-some (lambda (pattern)
                   (let ((case-fold-search t))
-                    (string-match-p pattern text)))
+                    (condition-case nil
+                        (string-match-p pattern text)
+                      (invalid-regexp nil))))
                 patterns)))
 
 (defun gptel-agent-loop--match-precompiled-pattern (resp patterns compiled)
