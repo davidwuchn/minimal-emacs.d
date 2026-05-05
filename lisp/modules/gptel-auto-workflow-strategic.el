@@ -478,11 +478,14 @@ Logs when fallback to regex parsing is used."
              normalized-response proj-root max-targets))))))))
 
 (defun gptel-auto-workflow--json-object-p (value)
-  "Return non-nil when VALUE looks like a JSON object alist."
-  (and (consp value)
-       (consp (car value))
-       (or (symbolp (caar value))
-           (stringp (caar value)))))
+  "Return non-nil when VALUE looks like a JSON object alist.
+ASSUMPTION: value is either nil, a proper alist, or invalid input.
+EDGE CASE: nil returns nil, non-list atoms return nil."
+  (when (listp value)
+    (and (consp value)
+         (consp (car value))
+         (or (symbolp (caar value))
+             (stringp (caar value))))))
 
 (defun gptel-auto-workflow--handle-analyzer-error-state (targets static-targets callback)
   "Handle analyzer error states and invoke CALLBACK with appropriate targets.
@@ -517,7 +520,9 @@ Returns non-nil if error state was handled."
    (t candidate)))
 
 (defun gptel-auto-workflow--json-target-file (item)
-  "Extract a target file path from parsed JSON ITEM."
+  "Extract a target file path from parsed JSON ITEM.
+BEHAVIOR: Handles string paths, alist objects, and invalid input.
+EDGE CASE: nil or non-list returns nil safely."
   (cond
    ((stringp item)
     (gptel-auto-workflow--normalize-target-candidate item))

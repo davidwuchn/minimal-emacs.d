@@ -387,7 +387,8 @@ to avoid repeated table scans and redundant lookups."
                                 (let ((table (symbol-value var)))
                                   (when (listp table)
                                     (let ((entry (assoc-string model-str table t)))
-                                      (when (and (consp entry) (plist-member (cdr entry) :context-window))
+                                      (when (and (consp entry) (listp (cdr entry))
+                                                 (plist-member (cdr entry) :context-window))
                                         (let ((cw (my/gptel--normalize-context-window
                                                     (plist-get (cdr entry) :context-window))))
                                           (when (and (integerp cw) (> cw 0))
@@ -522,9 +523,10 @@ existing cache is preserved."
           (load load-file nil t)
           (when (listp my/gptel--context-window-cache-data)
             (dolist (kv my/gptel--context-window-cache-data)
-              (let ((key (car kv)) (val (cdr kv)))
-                (when (and (stringp key) (my/gptel--positive-integer-p val))
-                  (puthash key val temp-cache))))
+              (when (consp kv)
+                (let ((key (car kv)) (val (cdr kv)))
+                  (when (and (stringp key) (my/gptel--positive-integer-p val))
+                    (puthash key val temp-cache)))))
             (let ((old-cache my/gptel--context-window-cache)
                   (new-refresh (or my/gptel--context-window-cache-last-refresh
                                    (float-time (current-time)))))
