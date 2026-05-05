@@ -429,16 +429,16 @@ preferring the active strategy when it has no evaluations yet."
                                       (+ default-avg (* 0.1 (/ (- 50 (min best-total 50)) 50.0)))))
                 (chosen (if (and (not (equal best "template-default"))
                                 (not explore)
-                                (or (not sufficient-sample)
-                                     (< best-success default-success)
-                                     (< (round (* 100 (- (plist-get best-perf :avg-score) scaled-default-avg)))
-                                        (round (* 100 0.10)))))
+                                (not sufficient-sample)
+                                (< best-success default-success)
+                                (< (round (* 100 (- (plist-get best-perf :avg-score) default-avg)))
+                                   (round (* 100 0.15))))
                            (progn
                              (message "[strategy] %s underperforms template-default (%.0f%% < %.0f%% success, n=%d %s); falling back"
                                       best (* 100 best-success) (* 100 default-success)
                                       best-total
                                       (if sufficient-sample
-                                          (format "avg diff %.2f < 0.10" (- (plist-get best-perf :avg-score) default-avg))
+                                          (format "avg diff %.2f < 0.15" (- (plist-get best-perf :avg-score) default-avg))
                                         "insufficient sample"))
                             "template-default")
                         best)))
