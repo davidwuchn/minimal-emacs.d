@@ -1,6 +1,10 @@
 ;;; gptel-tools-agent-error.el --- Error analysis, retry logic -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(defconst gptel-auto-experiment--hard-quota-error-pattern
+  "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
+  "Regex pattern matching hard quota exhaustion errors.")
+
 (defun gptel-auto-workflow--first-available-provider-candidate (candidates &optional excluded-backends)
   "Return the first available entry from CANDIDATES, skipping EXCLUDED-BACKENDS.
 
@@ -391,7 +395,7 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
          (or (gptel-auto-experiment--provider-usage-limit-error-p msg)
              (let ((case-fold-search t))
                (string-match-p
-                "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
+                gptel-auto-experiment--hard-quota-error-pattern
                 msg))))))
 
 (defun gptel-auto-experiment--hard-quota-exhausted-p (agent-output)
@@ -400,7 +404,7 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
     (and (stringp msg)
          (let ((case-fold-search t))
            (string-match-p
-            "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
+            gptel-auto-experiment--hard-quota-error-pattern
             msg)))))
 
 (defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
