@@ -433,21 +433,25 @@ Returns list of validated relative paths, up to MAX-TARGETS.
 ASSUMPTION: candidates is nil or a list of file paths/objects.
 ASSUMPTION: proj-root is a non-empty string or nil.
 EDGE CASE: nil candidates returns empty list.
-EDGE CASE: nil proj-root causes all candidates to be skipped."
+EDGE CASE: nil proj-root causes all candidates to be skipped.
+BEHAVIOR: Only consumes quota slots when targets are actually added."
   (unless (listp candidates)
     (if (null candidates)
         (setq candidates nil)
       (setq candidates (list candidates))))
   (unless (and (integerp max-targets) (> max-targets 0))
     (setq max-targets most-positive-fixnum))
-  (let ((targets '()))
+  (let ((targets '())
+        (remaining-slots max-targets))
     (dolist (file candidates (reverse targets))
-      (when (< (length targets) max-targets)
+      (when (and (gptel-auto-workflow--nonempty-string-p file)
+                 (> remaining-slots 0))
         (let* ((pre-count (length targets))
                (new-targets (gptel-auto-workflow--validate-and-add-target
                              file proj-root targets)))
           (when (> (length new-targets) pre-count)
-            (setq targets new-targets)))))))
+            (setq targets new-targets)
+            (cl-decf remaining-slots)))))))
 
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list.
