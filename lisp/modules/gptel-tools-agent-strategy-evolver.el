@@ -32,15 +32,35 @@
                   gptel-auto-workflow--strategy-evolution-axes))
       "Unknown strategy axis"))
 
-(defun gptel-auto-workflow--generate-strategy-name ()
-  "Generate a unique strategy name."
-  (let* ((dir (gptel-auto-workflow--strategies-directory))
-         (max-n 0))
-    (when (file-directory-p dir)
-      (dolist (file (directory-files dir nil "^strategy-evolved-[0-9]+\\.el$"))
-        (when (string-match "^strategy-evolved-\\([0-9]+\\)\\.el$" file)
-          (setq max-n (max max-n (string-to-number (match-string 1 file)))))))
-    (format "evolved-%04d" (1+ max-n))))
+(defun gptel-auto-workflow--extract-proposer-name (candidate-code)
+  "Extract the strategy name proposed by the agent from CANDIDATE-CODE.
+Looks for patterns like ';;; strategy-NAME.el ---' in the candidate.
+Returns the extracted name, or nil if not found."
+  (when (stringp candidate-code)
+    (if (string-match ";;;\\s-+strategy-\\([^.]+\\)\\.el\\s-+---" candidate-code)
+        (match-string 1 candidate-code)
+      (if (string-match "strategy-\\([[:alnum:]-]+\\)-build-prompt" candidate-code)
+          (match-string 1 candidate-code)
+        nil))))
+
+(defun gptel-auto-workflow--generate-strategy-name (&optional proposed-name)
+  "Generate a unique strategy name.
+If PROPOSED-NAME is provided and available, use it.
+Otherwise fall back to 'evolved-NNNN' format."
+  (if (and proposed-name
+           (not (string-empty-p proposed-name))
+           (not (file-exists-p
+                 (expand-file-name
+                  (format "strategy-%s.el" proposed-name)
+                  (gptel-auto-workflow--strategies-directory)))))
+      proposed-name
+    (let* ((dir (gptel-auto-workflow--strategies-directory))
+           (max-n 0))
+      (when (file-directory-p dir)
+        (dolist (file (directory-files dir nil "^strategy-evolved-[0-9]+\\.el$"))
+          (when (string-match "^strategy-evolved-\\([0-9]+\\)\\.el$" file)
+            (setq max-n (max max-n (string-to-number (match-string 1 file)))))))
+      (format "evolved-%04d" (1+ max-n)))))
 
 ;;; Strategy Template
 
@@ -146,6 +166,21 @@ Returns nil if there's a genuine new mechanism."
     (while (re-search-forward "[ \t\n]+" nil t)
       (replace-match " "))
     (buffer-string)))
+
+(defun gptel-auto-workflow--extract-matches (code pattern &optional group-index)
+  "Extract all matches of PATTERN from CODE.
+PATTERN is a regex to search for.
+GROUP-INDEX (default 0) is which match group to extract.
+Returns sorted list of unique matches."
+  (if (or (null code) (string-empty-p code))
+      '()
+    (let (matches)
+      (with-temp-buffer
+        (insert code)
+        (goto-char (point-min))
+        (while (re-search-forward pattern nil t)
+          (push (match-string (or group-index 0)) matches)))
+      (sort (delete-dups matches) #'string<))))
 
 (defun gptel-auto-workflow--extract-function-names (code)
   "Extract defined function names from CODE.
@@ -556,7 +591,7 @@ Returns new strategy name or nil if rejected."
                           (insert-file-contents parent-file)
                           (buffer-string))))
          (parent-perf (gptel-auto-workflow--get-strategy-performance parent-strategy-name))
-         (new-name (gptel-auto-workflow--generate-strategy-name))
+         (new-name nil)  ; determined by proposer or generated
          ;; Generate 3 candidates using agent-driven proposer
          (candidates (gptel-auto-workflow--propose-strategies
                       parent-strategy-name axis hypothesis parent-code parent-perf))
@@ -567,7 +602,11 @@ Returns new strategy name or nil if rejected."
       (when candidate
         (let* ((candidate-index (1+ (- (length candidates)
                                         (length (member candidate candidates)))))
-               (candidate-name (format "%s-candidate-%d" new-name candidate-index))
+               (candidate-name (format "candidate-%d-%d" 
+                                       (if parent-strategy-name
+                                           (substring (format "%s" parent-strategy-name) 0 (min 10 (length parent-strategy-name)))
+                                         "evolved")
+                                       candidate-index))
                (candidate-code (gptel-auto-workflow--prepare-strategy-candidate candidate candidate-name)))
 
           ;; Check 1: Not a parameter variant
@@ -605,6 +644,10 @@ Returns new strategy name or nil if rejected."
                                (plist-get b :output-length)))))
              (best (car sorted))
              (best-code (plist-get best :code))
+             ;; Use proposer-suggested meaningful name, fall back to evolved-NNNN
+             (proposer-name (gptel-auto-workflow--extract-proposer-name best-code))
+             (new-name (or (gptel-auto-workflow--generate-strategy-name proposer-name)
+                          "evolved-unknown"))
              (final-code (gptel-auto-workflow--strategy-code-rewrite-name
                           best-code
                           (plist-get best :name)

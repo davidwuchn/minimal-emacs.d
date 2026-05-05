@@ -13,6 +13,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'gptel)
+(require 'md5)
 
 (defcustom my/gptel-tool-repair-enabled t
   "When non-nil, attempt to repair malformed tool names.

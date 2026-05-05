@@ -735,10 +735,15 @@ Run asynchronously. Use for bulk cache warming."
 Returns plist with :context-window, :pricing-input, :pricing-output, etc."
   (when model-id
     (require 'gptel)
-    (let* ((model-id-str (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
-      (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
-                                       my/gptel--known-model-metadata
-                                       model-id-str))))
+    (let* ((model-id-str (cond
+                          ((stringp model-id) model-id)
+                          ((symbolp model-id) (symbol-name model-id))
+                          (t (format "%S" model-id))))
+           (model-id-str (string-trim model-id-str)))
+      (when (and (stringp model-id-str) (not (string-empty-p model-id-str)))
+        (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
+                                         my/gptel--known-model-metadata
+                                         model-id-str)))))
 
 (defun my/gptel-show-model-info (model-id)
   "Show detailed info for MODEL-ID."
