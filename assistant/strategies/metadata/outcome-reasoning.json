@@ -1,0 +1,1 @@
+{"name":"outcome-reasoning","version":"1.0","hypothesis":"Explicit reasoning between success and failure patterns improves learning signal","axis":"A","components":["outcome-analysis","success-extraction","failure-context","reasoning-injection"]}
