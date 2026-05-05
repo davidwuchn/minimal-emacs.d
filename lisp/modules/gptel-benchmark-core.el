@@ -285,8 +285,10 @@ Returns a new alist with accumulated values.
 TOTALS is an alist of (score-type . accumulated-value).
 SCORES-ALIST is an alist of (score-type . current-score).
 Handles nil or non-numeric scores by treating them as 0.
-Returns TOTALS unchanged if SCORES-ALIST is nil or not a proper list."
+Returns TOTALS unchanged if SCORES-ALIST is nil or not a proper list.
+Returns nil if TOTALS is nil to preserve empty result semantics."
   (cond
+   ((null totals) nil)
    ((not (and (listp scores-alist) (proper-list-p scores-alist))) totals)
    (t
     (cl-loop for (score-type . current) in totals

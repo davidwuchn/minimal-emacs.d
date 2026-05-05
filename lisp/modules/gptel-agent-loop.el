@@ -260,16 +260,18 @@ Returns nil if TEXT is not a string (defensive guard)."
           (or (gptel-agent-loop--task-description state) "unknown")))
 
 (defun gptel-agent-loop--build-final-result (state tail)
-  "Build final response text for STATE ending with TAIL."
+  "Build final response text for STATE ending with TAIL.
+TAIL should be a string; non-strings are coerced to empty string."
   (concat (gptel-agent-loop--result-prefix state)
           (gptel-agent-loop--safe-accumulated-output state)
-          tail))
+          (if (stringp tail) tail "")))
 
 (defun gptel-agent-loop--build-incomplete-result (state resp)
   "Build incomplete result message for STATE with RESP.
+RESP should be a string; non-strings are coerced to empty string.
 Used when task stops but work remains to be done."
   (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-          (gptel-agent-loop--build-final-result state resp)
+          (gptel-agent-loop--build-final-result state (if (stringp resp) resp ""))
           (gptel-agent-loop--step-count state)))
 
 (defun gptel-agent-loop--transient-error-p (error-data)
@@ -393,12 +395,15 @@ Returns nil if patterns list is empty or contains non-string elements."
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
   "Return non-nil when TEXT matches any string in PATTERNS.
 Returns nil if TEXT is not a string or PATTERNS is not a list of strings.
-Patterns are matched case-insensitively."
+Patterns are matched case-insensitively.
+Invalid regex patterns are caught and return nil instead of signaling error."
   (and (stringp text)
        (cl-every #'stringp patterns)
        (cl-some (lambda (pattern)
                   (let ((case-fold-search t))
-                    (string-match-p pattern text)))
+                    (condition-case nil
+                        (string-match-p pattern text)
+                      (invalid-regexp nil))))
                 patterns)))
 
 (defun gptel-agent-loop--match-precompiled-pattern (resp patterns compiled)
