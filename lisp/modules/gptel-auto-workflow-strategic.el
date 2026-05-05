@@ -32,6 +32,7 @@
 
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
+(declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
 
 (defcustom gptel-auto-workflow-strategic-selection t
   "When non-nil, use LLM-based target selection.
