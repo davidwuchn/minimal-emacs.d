@@ -372,6 +372,7 @@ FILE can be a string path or a JSON object (alist) with file/path/target keys.
 Caller is responsible for enforcing max-targets limit.
 Returns updated targets list."
   (cond
+   ((not (listp targets)) targets)
    ((gptel-auto-workflow--json-object-p file)
     (let ((extracted-file (or (alist-get 'file file)
                               (cdr (assoc "file" file))
