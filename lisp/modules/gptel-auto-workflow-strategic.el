@@ -180,7 +180,10 @@ BEHAVIOR: Uses wc -l for efficient line counting without loading files into buff
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
 Scans only root-repo targets that can be integrated into staging."
-  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
+  (let* ((raw-root (gptel-auto-workflow--effective-project-root))
+         (proj-root (if (gptel-auto-workflow--nonempty-string-p raw-root)
+                        raw-root
+                      (expand-file-name "~/.emacs.d/")))
          (safe-root (shell-quote-argument proj-root)))
     (list :git-history (shell-command-to-string
                         (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
