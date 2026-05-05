@@ -673,7 +673,8 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 Called only from `handle-string-response' when RESP is
 confirmed string and STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (string-blank-p resp)
+  (when (and (gptel-agent-loop--task-p state)
+             (string-blank-p resp))
     (if (= (gptel-agent-loop--step-count state) 0)
         (gptel-agent-loop--deliver-result
          state
@@ -689,7 +690,8 @@ Returns non-nil if result was delivered."
   "Handle STATE when max steps were reached and RESP is final turn.
 Called only from `handle-string-response' when STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (and (gptel-agent-loop--task-max-steps-reached state)
+  (when (and (gptel-agent-loop--task-p state)
+             (gptel-agent-loop--task-max-steps-reached state)
              (not (gptel-agent-loop--task-summary-requested state)))
     (setf (gptel-agent-loop--task-summary-requested state) t)
     (if gptel-agent-loop-hard-loop
@@ -706,7 +708,8 @@ Returns non-nil if result was delivered."
 USE-TOOLS indicates whether tools were requested.
 Called only from `handle-string-response' when STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (and (gptel-agent-loop--task-summary-requested state)
+  (when (and (gptel-agent-loop--task-p state)
+             (gptel-agent-loop--task-summary-requested state)
              (not use-tools))
     (gptel-agent-loop--deliver-result
      state
