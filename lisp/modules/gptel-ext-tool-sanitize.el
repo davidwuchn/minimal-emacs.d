@@ -108,7 +108,7 @@ Messages the repair and updates the :name property in place."
 Return non-nil when the error was converted into a tool result."
   (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
               (tool-use (plist-get info :tool-use))
-              (tool-call (cl-find-if-not (lambda (tc) (plist-get tc :result))
+              (tool-call (cl-find-if-not (lambda (tc) (and (listp tc) (plist-get tc :result)))
                                          tool-use)))
     (let* ((name (plist-get tool-call :name))
            (tools (my/gptel--normalize-tool-list (plist-get info :tools)))
@@ -160,7 +160,8 @@ RunAgent was registered, leaving it out of the buffer's tool list."
         (setq info (plist-put info :tools tools))
         (setf (gptel-fsm-info fsm) info))
       (dolist (tc tool-use)
-        (let* ((name (plist-get tc :name))
+        (when (listp tc)
+          (let* ((name (plist-get tc :name))
                (matched-tool (and (stringp name)
                                   (my/gptel--find-tool-fuzzy name tools)))
                (direct-tool (and (stringp name)
@@ -190,7 +191,7 @@ RunAgent was registered, leaving it out of the buffer's tool list."
                        (mapcar (lambda (ts) (or (ignore-errors (gptel-tool-name ts)) "<unknown>")) tools))
               (plist-put tc :result
                          (format "Error: unknown or nil tool %S called by model" name))
-              (push tc pruned))))))
+              (push tc pruned)))))))
       (when pruned
         (setq info (plist-put info :tool-use
                               (cl-remove-if (lambda (tc) (memq tc pruned))
