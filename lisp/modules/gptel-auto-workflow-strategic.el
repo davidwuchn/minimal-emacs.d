@@ -678,7 +678,7 @@ Returns empty string if no cache exists.
 Findings are cached per-project."
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root)))
-    (let ((cached (gethash cache-key gptel-auto-workflow--research-findings-cache)))
+    (let ((cached (gethash cache-key gptel-auto-workflow--research-findings-cache 'cache-not-found)))
       (if (and (stringp cached) (not (string-empty-p cached)))
           (progn
             (message "[research] Using in-memory findings for %s (%d chars)"
@@ -700,7 +700,8 @@ Findings are cached per-project."
                          (if content-start
                              (buffer-substring content-start (point-max))
                            "")))))
-                (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
+                (when (and (stringp findings) (not (string-empty-p findings)))
+                  (puthash cache-key findings gptel-auto-workflow--research-findings-cache))
                 (message "[research] Loaded cached findings for %s (%d chars)"
                          proj-root (length findings))
                 findings)
