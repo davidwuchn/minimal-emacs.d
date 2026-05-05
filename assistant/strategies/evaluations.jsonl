@@ -1486,3 +1486,6 @@
 {"timestamp":"2026-05-05 13:26:52","strategy":"template-default","target":"two","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-05 13:26:52","strategy":"template-default","target":"two","experiment-id":4,"score":0,"outcome":"kept","axis":"?"}
 {"timestamp":"2026-05-05 13:27:34","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":4,"score":0.4125,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-05 17:22:21","strategy":"outcome-reasoning","target":"lisp/modules/gptel-ext-tool-confirm.el","experiment-id":1,"score":0.39999999999999997,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-05 17:27:44","strategy":"outcome-reasoning","target":"lisp/modules/gptel-ext-tool-confirm.el","experiment-id":2,"score":0.39999999999999997,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-05 17:32:12","strategy":"outcome-reasoning","target":"lisp/modules/gptel-ext-tool-confirm.el","experiment-id":3,"score":0.39999999999999997,"outcome":"discarded","axis":"?"}
