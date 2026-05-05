@@ -411,17 +411,31 @@ preferring the active strategy when it has no evaluations yet."
              (best (car sorted))
              (best-perf (gptel-auto-workflow--get-strategy-performance best))
              (best-success (plist-get best-perf :success-rate)))
-        (let* ((default-perf (gptel-auto-workflow--get-strategy-performance "template-default"))
-               (default-success (plist-get default-perf :success-rate))
-               (default-avg (plist-get default-perf :avg-score))
-                (chosen (if (and (not (equal best "template-default"))
-                                (< best-success default-success)
-                                (< (round (* 100 (- (plist-get best-perf :avg-score) default-avg)))
-                                   (round (* 100 0.15))))
-                          (progn
-                            (message "[strategy] %s underperforms template-default (%.0f%% < %.0f%% success, avg diff %.2f); falling back"
-                                     best (* 100 best-success) (* 100 default-success)
-                                     (- (plist-get best-perf :avg-score) default-avg))
+         (let* ((default-perf (gptel-auto-workflow--get-strategy-performance "template-default"))
+                (default-success (plist-get default-perf :success-rate))
+                (default-avg (plist-get default-perf :avg-score))
+                (default-total (plist-get default-perf :total))
+                (best-total (plist-get best-perf :total))
+                ;; Require >=50 experiments OR >=25% of template-default's count
+                (sufficient-sample
+                 (or (>= best-total 50)
+                     (>= (* 4 best-total) default-total)))
+                ;; Pad sigmal score diff by sample size: small samples get a penalty
+                (scaled-default-avg (if sufficient-sample
+                                        default-avg
+                                      (+ default-avg (* 0.1 (/ (- 50 (min best-total 50)) 50.0)))))
+                 (chosen (if (and (not (equal best "template-default"))
+                                 (or (not sufficient-sample)
+                                     (< best-success default-success)
+                                     (< (round (* 100 (- (plist-get best-perf :avg-score) scaled-default-avg)))
+                                        (round (* 100 0.10)))))
+                           (progn
+                             (message "[strategy] %s underperforms template-default (%.0f%% < %.0f%% success, n=%d %s); falling back"
+                                      best (* 100 best-success) (* 100 default-success)
+                                      best-total
+                                      (if sufficient-sample
+                                          (format "avg diff %.2f < 0.10" (- (plist-get best-perf :avg-score) default-avg))
+                                        "insufficient sample"))
                             "template-default")
                         best)))
           (let ((chosen-perf (gptel-auto-workflow--get-strategy-performance chosen)))
