@@ -442,9 +442,10 @@ EDGE CASE: nil proj-root causes all candidates to be skipped."
   (let ((targets '()))
     (dolist (file candidates (reverse targets))
       (when (< (length targets) max-targets)
-        (let ((new-targets (gptel-auto-workflow--validate-and-add-target
-                            file proj-root targets)))
-          (when (consp new-targets)
+        (let* ((pre-count (length targets))
+               (new-targets (gptel-auto-workflow--validate-and-add-target
+                             file proj-root targets)))
+          (when (> (length new-targets) pre-count)
             (setq targets new-targets)))))))
 
 (defun gptel-auto-workflow--parse-targets (response)
