@@ -143,7 +143,8 @@ CALLBACK receives non-nil for approval and nil for rejection."
              (not (string-empty-p tool-name))
              (bound-and-true-p my/gptel-permitted-tools)
              (my/gptel-tool-permitted-p tool-name))
-        (funcall callback t)
+        (when (functionp callback)
+          (funcall callback t))
       (if (or buffer-read-only
               (get-char-property (point) 'read-only))
           (my/gptel--confirm-tool-calls-minibuffer (list tool-call) info)

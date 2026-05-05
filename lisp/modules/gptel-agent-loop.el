@@ -260,16 +260,18 @@ Returns nil if TEXT is not a string (defensive guard)."
           (or (gptel-agent-loop--task-description state) "unknown")))
 
 (defun gptel-agent-loop--build-final-result (state tail)
-  "Build final response text for STATE ending with TAIL."
+  "Build final response text for STATE ending with TAIL.
+TAIL should be a string; non-strings are coerced to empty string."
   (concat (gptel-agent-loop--result-prefix state)
           (gptel-agent-loop--safe-accumulated-output state)
-          tail))
+          (if (stringp tail) tail "")))
 
 (defun gptel-agent-loop--build-incomplete-result (state resp)
   "Build incomplete result message for STATE with RESP.
+RESP should be a string; non-strings are coerced to empty string.
 Used when task stops but work remains to be done."
   (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-          (gptel-agent-loop--build-final-result state resp)
+          (gptel-agent-loop--build-final-result state (if (stringp resp) resp ""))
           (gptel-agent-loop--step-count state)))
 
 (defun gptel-agent-loop--transient-error-p (error-data)
@@ -396,12 +398,15 @@ Returns nil if patterns list is empty or contains non-string elements."
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
   "Return non-nil when TEXT matches any string in PATTERNS.
 Returns nil if TEXT is not a string or PATTERNS is not a list of strings.
-Patterns are matched case-insensitively."
+Patterns are matched case-insensitively.
+Invalid regex patterns are caught and return nil instead of signaling error."
   (and (stringp text)
        (cl-every #'stringp patterns)
        (cl-some (lambda (pattern)
                   (let ((case-fold-search t))
-                    (string-match-p pattern text)))
+                    (condition-case nil
+                        (string-match-p pattern text)
+                      (invalid-regexp nil))))
                 patterns)))
 
 (defun gptel-agent-loop--match-precompiled-pattern (resp patterns compiled)
@@ -671,7 +676,8 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 Called only from `handle-string-response' when RESP is
 confirmed string and STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (string-blank-p resp)
+  (when (and (gptel-agent-loop--task-p state)
+             (string-blank-p resp))
     (if (= (gptel-agent-loop--step-count state) 0)
         (gptel-agent-loop--deliver-result
          state
@@ -687,7 +693,8 @@ Returns non-nil if result was delivered."
   "Handle STATE when max steps were reached and RESP is final turn.
 Called only from `handle-string-response' when STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (and (gptel-agent-loop--task-max-steps-reached state)
+  (when (and (gptel-agent-loop--task-p state)
+             (gptel-agent-loop--task-max-steps-reached state)
              (not (gptel-agent-loop--task-summary-requested state)))
     (setf (gptel-agent-loop--task-summary-requested state) t)
     (if gptel-agent-loop-hard-loop
@@ -704,7 +711,8 @@ Returns non-nil if result was delivered."
 USE-TOOLS indicates whether tools were requested.
 Called only from `handle-string-response' when STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (and (gptel-agent-loop--task-summary-requested state)
+  (when (and (gptel-agent-loop--task-p state)
+             (gptel-agent-loop--task-summary-requested state)
              (not use-tools))
     (gptel-agent-loop--deliver-result
      state

@@ -367,8 +367,8 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--tool-arg-map (arg-pairs)
   "Convert ARG-PAIRS plist into a keyword->value hash table."
-  (unless (listp arg-pairs)
-    (error "Programmatic tool-call arguments must be a list, got: %S" arg-pairs))
+  (unless (proper-list-p arg-pairs)
+    (error "Programmatic tool-call arguments must be a proper list, got: %S" arg-pairs))
   (unless (cl-evenp (length arg-pairs))
     (error "Programmatic tool-call requires keyword/value pairs, got odd length: %d"
            (length arg-pairs)))
@@ -580,7 +580,10 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--format-error (message)
   "Format MESSAGE as a sandbox error string."
-  (concat gptel-sandbox--error-prefix message))
+  (condition-case err
+      (format "Error: %s" (if (stringp message) message (format "%S" message)))
+    (error
+     (format "Error: %s" (error-message-string err)))))
 
 (defun gptel-sandbox--error-result-p (value)
   "Return non-nil if VALUE is a sandbox error result.
@@ -612,13 +615,17 @@ like (:error \"...\") or (:violated t :reason \"...\")."
   "Convert RESULT to string, preferring gptel--to-string when available.
 Error plists like (:error \"...\") or (:violated t :reason \"...\")
 are converted to error strings."
-  (cond
-   ((null result) "nil")
-   ((gptel-sandbox--error-result-p result)
-    (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result)))
-   ((fboundp 'gptel--to-string)
-    (gptel--to-string result))
-   (t (format "%s" result))))
+  (condition-case err
+      (cond
+       ((null result) "nil")
+       ((gptel-sandbox--error-result-p result)
+        (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result)))
+       ((fboundp 'gptel--to-string)
+        (let ((str (gptel--to-string result)))
+          (if (stringp str) str (format "%s" result))))
+       (t (format "%s" result)))
+    (error
+     (format "Error: %s" (error-message-string err)))))
 
 (defun gptel-sandbox--render-result (value)
   "Render VALUE into the final string returned by Programmatic.
@@ -638,13 +645,10 @@ can consume lists, vectors, plists, and alists as readable data."
 
 (defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
-  (unless (hash-table-p env)
-    (error "Programmatic execute-tool requires a hash table environment, got: %S" env))
   (unless (listp state)
-    (error "Programmatic execute-tool requires a list state, got: %S" state))
-  (let* ((normalized-name (gptel-sandbox--normalize-tool-name tool-name))
-         (tool-spec (if (fboundp 'gptel-get-tool)
-                        (gptel-get-tool normalized-name)
+    (error "Programmatic sandbox execute-tool requires a plist state, got: %S" state))
+  (let* ((tool-spec (if (fboundp 'gptel-get-tool)
+                        (gptel-get-tool tool-name)
                       nil)))
     (unless tool-spec
       (error "Unknown tool %s requested by Programmatic" tool-name))
@@ -700,6 +704,8 @@ can consume lists, vectors, plists, and alists as readable data."
 CALLBACK receives a plist with one of the keys `:continue' or `:result'."
   (unless (hash-table-p env)
     (error "Programmatic eval-statement requires a hash table environment, got: %S" env))
+  (unless (listp state)
+    (error "Programmatic eval-statement requires a plist state, got: %S" state))
   (pcase statement
     (`(progn . ,body)
      (gptel-sandbox--eval-progn body env state callback))
@@ -748,6 +754,8 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
 CALLBACK receives final outcome plist."
   (unless (hash-table-p env)
     (error "Programmatic eval-progn requires a hash table environment, got: %S" env))
+  (unless (listp state)
+    (error "Programmatic eval-progn requires a plist state, got: %S" state))
   (if (null body)
       (funcall callback (list :done t :result nil))
     (gptel-sandbox--eval-statement
@@ -761,6 +769,10 @@ CALLBACK receives final outcome plist."
   "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
   (unless (listp forms)
     (error "Programmatic run-forms requires a list, got: %S" forms))
+  (unless (listp state)
+    (error "Programmatic run-forms requires a plist state, got: %S" state))
+  (unless (functionp callback)
+    (error "Programmatic run-forms requires a function callback, got: %S" callback))
   (if (null forms)
       (funcall callback (format "Error: Programmatic execution finished without calling result (used %d tools)"
                                 (plist-get state :tool-count)))
