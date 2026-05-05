@@ -3,6 +3,10 @@
 
 (require 'gptel-auto-workflow-behavioral-tests nil t)
 
+(defconst gptel-auto-workflow--empty-cherry-pick-pattern
+  "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
+  "Regex pattern matching git output indicating cherry-pick is already applied.")
+
 (defun gptel-auto-workflow--staging-changed-files ()
   "Return list of changed files in current staging worktree.
 Returns nil if not in a staging worktree or if no changes."
@@ -41,7 +45,7 @@ empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD' is absent."
                   (stringp output)
                   (or (gptel-auto-workflow--empty-commit-output-p output)
                       (string-match-p
-                       "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
+                       gptel-auto-workflow--empty-cherry-pick-pattern
                        output))))
          (string-empty-p unmerged-files)
          (string-empty-p worktree-status))))
@@ -80,10 +84,12 @@ Uses the staging worktree instead of switching branches in the root repo."
                            (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
                  nil
                (let* ((commit-hash (string-trim
-                                    (car (gptel-auto-workflow--git-result
+                                    (or (car-safe
+                                         (gptel-auto-workflow--git-result
                                           (format "git rev-parse %s"
                                                   (shell-quote-argument optimize-ref))
-                                          60))))
+                                          60))
+                                        "")))
                       (cherry-result
                        (gptel-auto-workflow--git-result
                         (format "git cherry-pick --no-commit %s"
@@ -110,7 +116,7 @@ Uses the staging worktree instead of switching branches in the root repo."
                                 (my/gptel--sanitize-for-logging (car commit-result) 160))
                        nil))))
                   ((or (gptel-auto-workflow--empty-cherry-pick-state-p cherry-output t)
-                       (string-match-p "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
+                       (string-match-p gptel-auto-workflow--empty-cherry-pick-pattern
                                        cherry-output))
                    (message "[auto-workflow] Cherry-pick empty (already in staging)")
                    (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))

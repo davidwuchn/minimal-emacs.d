@@ -491,7 +491,7 @@ Returns 0.0 if CHARS is not a positive number."
           (insert "(setq my/gptel--context-window-cache-data\n      '")
           (let (alist)
             (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
-            (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
+            (prin1 alist (current-buffer)))
           (insert ")\n")
           (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
                           (float-time (current-time))))))
@@ -590,7 +590,11 @@ CONNECT-TIMEOUT and MAX-TIME default to 10 and 120 seconds.
 
 Handles API key lookup, process creation, JSON parsing, and error handling.
 Returns nil if curl is unavailable or a fetch is already in flight."
-  (require 'gptel)
+  (condition-case err
+      (require 'gptel)
+    (error
+     (message "OpenRouter: gptel not available (%s)" (error-message-string err))
+     (return-from my/gptel--openrouter-fetch-with-callback nil)))
   (let ((process-name (or process-name "gptel-openrouter-fetch"))
         (connect-timeout (or connect-timeout 10))
         (max-time (or max-time 120)))
