@@ -508,7 +508,11 @@ CANDIDATE_3:
             (gptel-request proposer-prompt
                           :system "You are a strategy proposer for an automated code improvement system. You generate Emacs Lisp code for prompt-building strategies. Output ONLY code, no explanations."
                           :callback (lambda (response _info)
-                                     (setq responses response
+                                     (setq responses
+                                           (cond ((stringp response) response)
+                                                 ((and (listp response) (plist-get response :content))
+                                                  (plist-get response :content))
+                                                 (t (format "%s" response)))
                                            done t)))
             ;; Wait for response (with timeout). Use accept-process-output
             ;; instead of sleep-for to allow network I/O callbacks to fire.

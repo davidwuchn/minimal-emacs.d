@@ -329,7 +329,8 @@ improving testability and reducing cognitive load."
   "Count FSMs in OBJECT using Seen hash table. Returns count.
 ASSUMPTION: SEEN is pre-allocated hash table with eq test.
 EDGE CASE: Nil object returns 0.
-EDGE CASE: Non-FSM atoms return 0."
+EDGE CASE: Non-FSM atoms return 0.
+EDGE CASE: Same FSM appearing multiple times is counted once."
   (cond
    ((consp object)
     (unless (gethash object seen)
@@ -338,8 +339,9 @@ EDGE CASE: Non-FSM atoms return 0."
          (my/gptel--fsm-count-internal (cdr object) seen))))
    ((null object) 0)
    ((my/gptel--fsm-p object)
-    (puthash object t seen)
-    1)
+    (unless (gethash object seen)
+      (puthash object t seen)
+      1))
    (t 0)))
 
 (defun my/gptel--fsm-depth (object)
