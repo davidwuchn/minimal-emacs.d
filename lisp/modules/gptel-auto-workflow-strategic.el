@@ -159,9 +159,11 @@ BEHAVIOR: Uses wc -l for efficient line counting without loading files into buff
                                        (with-temp-buffer
                                          (call-process "wc" nil t nil "-l" file)
                                          (string-to-number (string-trim (buffer-string))))
-                                     (with-temp-buffer
-                                       (insert-file-contents file)
-                                       (count-lines (point-min) (point-max))))))
+                                     (condition-case nil
+                                         (with-temp-buffer
+                                           (insert-file-contents file)
+                                           (count-lines (point-min) (point-max)))
+                                       (error most-positive-fixnum)))))
                    (<= line-count max-lines)))
         (push file result)))))
 
