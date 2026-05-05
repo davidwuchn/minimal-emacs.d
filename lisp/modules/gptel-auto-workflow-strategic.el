@@ -180,33 +180,38 @@ BEHAVIOR: Uses wc -l for efficient line counting without loading files into buff
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
 Scans only root-repo targets that can be integrated into staging."
-  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
-         (safe-root (shell-quote-argument proj-root)))
-    (list :git-history (shell-command-to-string
-                        (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
+  (let* ((proj-root (gptel-auto-workflow--effective-project-root)))
+    (if (gptel-auto-workflow--nonempty-string-p proj-root)
+        (let* ((safe-root (shell-quote-argument proj-root)))
+          (list :git-history (shell-command-to-string
+                              (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
+                                      safe-root))
+                :file-sizes (shell-command-to-string
+                             (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
+                                     safe-root))
+                :todos (shell-command-to-string
+                        (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
                                 safe-root))
-          :file-sizes (shell-command-to-string
-                       (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
-                               safe-root))
-          :todos (shell-command-to-string
-                  (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
-                          safe-root))
-          :file-list (let* ((raw-output (shell-command-to-string
-                                         (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                                                 safe-root)))
-                            (all-files (delq nil
-                                             (mapcar (lambda (s)
-                                                       (unless (string-empty-p s) s))
-                                                     (split-string raw-output "\n" t))))
-                            (nonempty-files (delq nil
-                                                  (mapcar (lambda (f)
-                                                            (let ((abs-path (expand-file-name f proj-root)))
-                                                              (when (file-exists-p abs-path) f)))
-                                                          all-files))))
-                       (mapconcat #'identity
-                                  (gptel-auto-workflow--filter-large-files
-                                   nonempty-files 1000)
-                                  "\n")))))
+                :file-list (let* ((raw-output (shell-command-to-string
+                                               (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                                                       safe-root)))
+                                  (all-files (delq nil
+                                                   (mapcar (lambda (s)
+                                                             (unless (string-empty-p s) s))
+                                                           (split-string raw-output "\n" t))))
+                                  (nonempty-files (delq nil
+                                                        (mapcar (lambda (f)
+                                                                  (let ((abs-path (expand-file-name f proj-root)))
+                                                                    (when (file-exists-p abs-path) f)))
+                                                                all-files))))
+                             (mapconcat #'identity
+                                        (gptel-auto-workflow--filter-large-files
+                                         nonempty-files 1000)
+                                        "\n"))))
+      (progn
+        (message "[auto-workflow] Cannot gather context: invalid project root %S"
+                 proj-root)
+        (list :git-history "" :file-sizes "" :todos "" :file-list "")))))
 
 (defun gptel-auto-workflow--local-research-patterns ()
   "Perform local grep-based pattern analysis when subagents unavailable.
