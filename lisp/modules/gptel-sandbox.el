@@ -580,7 +580,10 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--format-error (message)
   "Format MESSAGE as a sandbox error string."
-  (concat gptel-sandbox--error-prefix message))
+  (condition-case err
+      (format "Error: %s" (if (stringp message) message (format "%S" message)))
+    (error
+     (format "Error: %s" (error-message-string err)))))
 
 (defun gptel-sandbox--error-result-p (value)
   "Return non-nil if VALUE is a sandbox error result.
@@ -612,13 +615,17 @@ like (:error \"...\") or (:violated t :reason \"...\")."
   "Convert RESULT to string, preferring gptel--to-string when available.
 Error plists like (:error \"...\") or (:violated t :reason \"...\")
 are converted to error strings."
-  (cond
-   ((null result) "nil")
-   ((gptel-sandbox--error-result-p result)
-    (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result)))
-   ((fboundp 'gptel--to-string)
-    (gptel--to-string result))
-   (t (format "%s" result))))
+  (condition-case err
+      (cond
+       ((null result) "nil")
+       ((gptel-sandbox--error-result-p result)
+        (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result)))
+       ((fboundp 'gptel--to-string)
+        (let ((str (gptel--to-string result)))
+          (if (stringp str) str (format "%s" result))))
+       (t (format "%s" result)))
+    (error
+     (format "Error: %s" (error-message-string err)))))
 
 (defun gptel-sandbox--render-result (value)
   "Render VALUE into the final string returned by Programmatic.
@@ -761,6 +768,8 @@ CALLBACK receives final outcome plist."
   "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
   (unless (listp forms)
     (error "Programmatic run-forms requires a list, got: %S" forms))
+  (unless (functionp callback)
+    (error "Programmatic run-forms requires a function callback, got: %S" callback))
   (if (null forms)
       (funcall callback (format "Error: Programmatic execution finished without calling result (used %d tools)"
                                 (plist-get state :tool-count)))

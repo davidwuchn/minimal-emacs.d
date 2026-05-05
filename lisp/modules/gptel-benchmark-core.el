@@ -287,9 +287,7 @@ SCORES-ALIST is an alist of (score-type . current-score).
 Handles nil or non-numeric scores by treating them as 0.
 Returns TOTALS unchanged if SCORES-ALIST is nil or not a proper list."
   (cond
-   ((null scores-alist) totals)
-   ((not (listp scores-alist)) totals)
-   ((not (proper-list-p scores-alist)) totals)
+   ((not (and (listp scores-alist) (proper-list-p scores-alist))) totals)
    (t
     (cl-loop for (score-type . current) in totals
              for raw-score = (alist-get score-type scores-alist)
