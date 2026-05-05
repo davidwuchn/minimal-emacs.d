@@ -77,13 +77,16 @@ Each worktree gets its own isolated buffer for subagent overlays.")
   (unless (hash-table-p gptel-auto-workflow--worktree-buffers)
     (setq gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))))
 
+(defun gptel-auto-workflow--valid-project-path-p (path)
+  "Return PATH if it is a non-empty string, else nil."
+  (and (stringp path) (> (length path) 0) path))
+
 (defun gptel-auto-workflow--normalized-projects ()
   "Return configured project roots as unique expanded directory names."
   (delete-dups
    (mapcar (lambda (project-root)
-             (and (stringp project-root)
-                  (> (length project-root) 0)
-                  (file-name-as-directory (expand-file-name project-root))))
+             (when-let ((valid (gptel-auto-workflow--valid-project-path-p project-root)))
+               (file-name-as-directory (expand-file-name valid))))
            gptel-auto-workflow-projects)))
 
 (defun gptel-auto-workflow--normalize-worktree-dir (worktree-dir &optional project-root)
@@ -200,6 +203,8 @@ Each worktree gets its own isolated buffer for subagent overlays."
 (defun gptel-auto-workflow--get-project-buffer (project-root)
   "Get or create a gptel-agent buffer for PROJECT-ROOT.
 Legacy function - routes to worktree buffer for backward compatibility."
+  (unless (gptel-auto-workflow--valid-project-path-p project-root)
+    (error "PROJECT-ROOT cannot be nil or empty"))
   (gptel-auto-workflow--get-worktree-buffer project-root))
 
 (defun gptel-auto-workflow-add-project (project-root)
@@ -418,11 +423,11 @@ Returns (project-root . project-buffer) or nil if can't determine."
       (when buf
         (cons gptel-auto-workflow--current-project buf))))
    ;; Case 2: Check gptel-auto-workflow--project-root-override
-   ((and (boundp 'gptel-auto-workflow--project-root-override)
-         (stringp gptel-auto-workflow--project-root-override)
-         (> (length gptel-auto-workflow--project-root-override) 0))
-    (cons gptel-auto-workflow--project-root-override
-          (gptel-auto-workflow--get-project-buffer gptel-auto-workflow--project-root-override)))
+   ((when-let ((override (and (boundp 'gptel-auto-workflow--project-root-override)
+                              (gptel-auto-workflow--valid-project-path-p
+                               gptel-auto-workflow--project-root-override))))
+    (cons override
+          (gptel-auto-workflow--get-project-buffer override))))
    ;; Case 3: Check if current directory is a configured project
    ((and (boundp 'gptel-auto-workflow-projects)
          (listp gptel-auto-workflow-projects)
@@ -430,8 +435,7 @@ Returns (project-root . project-buffer) or nil if can't determine."
     (let ((current-dir (expand-file-name default-directory))
           proj buf)
       (setq proj (cl-loop for p in gptel-auto-workflow-projects
-                          when (and (stringp p)
-                                    (> (length p) 0)
+                          when (and (gptel-auto-workflow--valid-project-path-p p)
                                     (string-prefix-p (expand-file-name p) current-dir))
                           return p))
       (when (and proj (stringp proj))
@@ -443,7 +447,7 @@ Returns (project-root . project-buffer) or nil if can't determine."
                          (gptel-auto-workflow--project-root)
                        (error default-directory))
                      default-directory))
-           (expanded-proj (and (stringp proj) (> (length proj) 0)
+           (expanded-proj (and (gptel-auto-workflow--valid-project-path-p proj)
                               (expand-file-name proj))))
       (when expanded-proj
         (cons expanded-proj (gptel-auto-workflow--get-project-buffer expanded-proj)))))))
