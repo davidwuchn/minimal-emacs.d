@@ -766,8 +766,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
    (t
     (let ((trimmed (string-trim hypothesis)))
       (or (string-empty-p trimmed)
-          (member trimmed gptel-auto-experiment--placeholder-hypothesis-exact-patterns)
-          (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed))))))
+          (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed)
+          (member trimmed gptel-auto-experiment--placeholder-hypothesis-exact-patterns))))))
 
 (provide 'gptel-tools-agent-experiment-core)
 ;;; gptel-tools-agent-experiment-core.el ends here

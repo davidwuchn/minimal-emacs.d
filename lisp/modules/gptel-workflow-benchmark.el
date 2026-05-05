@@ -408,6 +408,9 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
 
 (defun gptel-workflow--score-efficiency (run efficiency-cfg)
   "Score efficiency of RUN against EFFICIENCY-CFG."
+  (cl-block gptel-workflow--score-efficiency
+    (when (or (null run) (not (gptel-workflow-run-p run)))
+      (cl-return-from gptel-workflow--score-efficiency 0.5)))
   (let* ((steps (or (gptel-workflow-run-step-count run) 0))
          (continuations (or (gptel-workflow-run-continuation-count run) 0))
          (duration (if (and (gptel-workflow-run-start-time run)
@@ -436,6 +439,9 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
 
 (defun gptel-workflow--score-constraints (run phases-cfg)
   "Score constraint satisfaction of RUN against PHASES-CFG."
+  (cl-block gptel-workflow--score-constraints
+    (when (or (null run) (not (gptel-workflow-run-p run)))
+      (cl-return-from gptel-workflow--score-constraints 1.0)))
   (let* ((expected-phases (cdr (assq 'expected phases-cfg)))
          (violations '())
          (total-constraints 0)

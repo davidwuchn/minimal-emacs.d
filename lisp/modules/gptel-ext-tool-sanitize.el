@@ -161,16 +161,17 @@ RunAgent was registered, leaving it out of the buffer's tool list."
       (dolist (tc tool-use)
         (let* ((name (plist-get tc :name))
                (matched-tool (and (stringp name)
-                                  (my/gptel--find-tool-fuzzy name tools))))
+                                  (my/gptel--find-tool-fuzzy name tools)))
+               (direct-tool (and (stringp name)
+                                 (fboundp 'gptel-get-tool)
+                                 (ignore-errors (gptel-get-tool name)))))
           (cond
            (matched-tool
             (my/gptel--repair-tool-call tc (gptel-tool-name matched-tool)))
-           ((and (stringp name)
-                 (fboundp 'gptel-get-tool)
-                 (or (ignore-errors (gptel-get-tool name))
-                     (when my/gptel-tool-repair-enabled
-                       (my/gptel--find-tool-fuzzy name all-tools))))
-            (let* ((global-tool (or (ignore-errors (gptel-get-tool name))
+           ((or direct-tool
+                 (when (and (stringp name) my/gptel-tool-repair-enabled)
+                   (my/gptel--find-tool-fuzzy name all-tools)))
+            (let* ((global-tool (or direct-tool
                                     (my/gptel--find-tool-fuzzy name all-tools)))
                    (correct-name (gptel-tool-name global-tool))
                    (new-tools (append tools (list global-tool))))
