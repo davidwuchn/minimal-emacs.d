@@ -750,16 +750,16 @@ reviewer must inspect them via tools when needed."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-max-per-target 5
+(defcustom gptel-auto-experiment-max-per-target 7
   "Maximum experiments per target.
-Monthly subscription: 5 is optimal (diminishing returns after 3-4)."
+Increased to 7 to allow broader exploration across 9 axes."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-no-improvement-threshold 2
+(defcustom gptel-auto-experiment-no-improvement-threshold 3
   "Stop after N consecutive no-improvements.
-Monthly subscription: 2 for fail-fast, try more different files."
+Increased to 3 to give high-quality targets more exploration chances."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
