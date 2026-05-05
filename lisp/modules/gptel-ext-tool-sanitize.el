@@ -249,7 +249,16 @@ The fingerprint is \"NAME:MD5(ARGS)\" so two calls are considered identical
 only when both the tool name and the serialized argument plist match."
   (when (listp tc)
     (let* ((raw-name (plist-get tc :name))
-           (name (if (and raw-name (not (equal raw-name ""))) raw-name "nil"))
+           (name (cond
+                  ((stringp raw-name)
+                   (if (equal raw-name "") "nil" raw-name))
+                  ((keywordp raw-name)
+                   (substring (symbol-name raw-name) 1))
+                  ((numberp raw-name)
+                   (number-to-string raw-name))
+                  ((symbolp raw-name)
+                   (symbol-name raw-name))
+                  (t "nil")))
            (args (plist-get tc :args))
            (args-str (if args (format "%S" args) "nil")))
        (concat name ":" (md5 args-str)))))
