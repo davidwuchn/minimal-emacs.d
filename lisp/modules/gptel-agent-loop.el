@@ -769,7 +769,8 @@ Cache behavior:
 - Continuation and summary prompts pass ALLOW-CACHE nil intentionally
   because each continuation prompt is unique and should not reuse
   cached results from previous runs."
-  (unless (gptel-agent-loop--task-finished state)
+  (when (and (gptel-agent-loop--task-p state)
+             (not (gptel-agent-loop--task-finished state)))
     (let* ((agent-type (gptel-agent-loop--task-agent-type state))
            (description (gptel-agent-loop--task-description state))
            (cached (and allow-cache
