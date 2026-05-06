@@ -84,6 +84,14 @@ Reduces repeated iterations through model tables.")
   "Maximum entries in `my/gptel--token-estimate-cache'.
 Prevents unbounded memory growth from repeated token estimates.")
 
+(defconst my/gptel--alist-match-cache-max-size 500
+  "Maximum entries in `my/gptel--alist-partial-match-cache'.
+Prevents unbounded memory growth from repeated partial-match lookups.")
+
+(defvar my/gptel--alist-match-cache-size 0
+  "Counter tracking `my/gptel--alist-partial-match-cache' entry count.
+Used to prevent cache from exceeding max-size by checking count before insertion.")
+
 (defvar my/gptel--token-estimate-cache (make-hash-table :test 'equal)
   "Hash table caching token estimates for (chars . extension) pairs.")
 
@@ -263,7 +271,7 @@ Sources:
      :pricing-input 0.27 :pricing-output 0.95
      :max-output 16384
      :description "MiniMax M2.5 - 196k context, SWE-bench 80.2%, agent workflows")
-     ;; GPT
+    ;; GPT
     ("gpt-4o"
      :context-window 128000
      :pricing-input 2.5 :pricing-output 10.0
@@ -306,9 +314,10 @@ Single constant avoids allocating a new symbol on every search call.")
 
 (defun my/gptel--cache-or-alist-lookup (hash-table alist key)
   "Look up KEY in HASH-TABLE, falling back to ALIST partial match.
-Returns the value from hash table if found, otherwise searches ALIST
+Returns the value from hash table if found and valid, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found.
-Handles negative cache hits when KEY maps to a miss sentinel."
+Handles negative cache hits when KEY maps to a miss sentinel.
+Validates that cached values are positive integers before returning them."
   (when (and (stringp key) (not (string-empty-p key)))
     (if (hash-table-p hash-table)
         (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
@@ -318,7 +327,11 @@ Handles negative cache hits when KEY maps to a miss sentinel."
                  (my/gptel--alist-partial-match alist key)))
            ((eq hash-value my/gptel--context-window-miss-sentinel)
             nil)
-           (t hash-value)))
+           ((my/gptel--positive-integer-p hash-value)
+            hash-value)
+           (t
+            (and (listp alist)
+                 (my/gptel--alist-partial-match alist key)))))
       (and (listp alist)
            (my/gptel--alist-partial-match alist key)))))
 
@@ -353,7 +366,13 @@ Handles circular lists by tracking visited cons cells."
                           (setq best-match (cdr entry)))))))))
             (let ((result (unless (eq best-match my/gptel--alist-match-sentinel)
                             best-match)))
-              (puthash cache-key result my/gptel--alist-partial-match-cache)
+              (when result
+                (if (>= my/gptel--alist-match-cache-size my/gptel--alist-match-cache-max-size)
+                    (progn
+                      (clrhash my/gptel--alist-partial-match-cache)
+                      (setq my/gptel--alist-match-cache-size 0)))
+                (puthash cache-key result my/gptel--alist-partial-match-cache)
+                (cl-incf my/gptel--alist-match-cache-size))
               result))))))
 
 (defun my/gptel--plist-get (plist key &optional default)
@@ -390,9 +409,10 @@ to avoid repeated table scans and redundant lookups."
                                   (let ((table (symbol-value var)))
                                     (when (listp table)
                                       (let ((entry (assoc-string model-str table t)))
-                                        (when (and (consp entry) (plist-member (cdr entry) :context-window))
+                                        (when (and (consp entry) (listp (cdr entry))
+                                                   (plist-member (cdr entry) :context-window))
                                           (let ((cw (my/gptel--normalize-context-window
-                                                      (plist-get (cdr entry) :context-window))))
+                                                     (plist-get (cdr entry) :context-window))))
                                             (when (and (integerp cw) (> cw 0))
                                               (throw 'found cw))))))))
                                 nil)))
@@ -418,8 +438,12 @@ Some gptel model tables encode context windows in *thousands* of tokens as float
    ((not (eq n n)) nil)
    ((> (abs n) 1e10) nil)
    ((<= n 0) nil)
-   ((floatp n) (round (* n 1000)))
-   ((< n 1000) (round (* n 1000)))
+   ((floatp n)
+    (let ((result (round (* n 1000))))
+      (and (> result 0) (<= result 2000000) result)))
+   ((< n 1000)
+    (let ((result (round (* n 1000))))
+      (and (> result 0) (<= result 2000000) result)))
    ((> n 2000000) nil)
    (t (round n))))
 
@@ -518,22 +542,25 @@ Returns 0.0 if CHARS is not a positive number."
   "Load cached context windows from `my/gptel-context-window-cache-file'.
 
 Uses transactional loading: loads into a temporary hash table first,
-then atomically replaces the main cache. If loading fails, the
-existing cache is preserved."
+then atomically replaces the main cache. If loading fails or data is
+malformed, the existing cache is preserved."
   (when (file-readable-p my/gptel-context-window-cache-file)
     (condition-case err
         (let* ((temp-cache (make-hash-table :test 'equal))
-               (temp-data nil)
-               (temp-refresh nil)
-               (load-file my/gptel-context-window-cache-file))
+               (load-file my/gptel-context-window-cache-file)
+               (loaded-data nil)
+               (loaded-refresh nil))
           (load load-file nil t)
-          (when (listp my/gptel--context-window-cache-data)
-            (dolist (kv my/gptel--context-window-cache-data)
-              (let ((key (car kv)) (val (cdr kv)))
-                (when (and (stringp key) (my/gptel--positive-integer-p val))
-                  (puthash key val temp-cache))))
+          (setq loaded-data my/gptel--context-window-cache-data
+                loaded-refresh my/gptel--context-window-cache-last-refresh)
+          (when (listp loaded-data)
+            (dolist (kv loaded-data)
+              (when (consp kv)
+                (let ((key (car kv)) (val (cdr kv)))
+                  (when (and (stringp key) (my/gptel--positive-integer-p val))
+                    (puthash key val temp-cache)))))
             (let ((old-cache my/gptel--context-window-cache)
-                  (new-refresh (or my/gptel--context-window-cache-last-refresh
+                  (new-refresh (or loaded-refresh
                                    (float-time (current-time)))))
               (setq my/gptel--context-window-cache temp-cache
                     my/gptel--context-window-cache-last-refresh new-refresh
