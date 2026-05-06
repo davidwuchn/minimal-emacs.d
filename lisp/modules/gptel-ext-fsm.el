@@ -70,12 +70,12 @@ PROACTIVE MITIGATION: Prevents recovery attempts on invalid FSMs."
     (let* ((fsm-buffer (plist-get info :buffer))
            (error-msg (plist-get info :error))
            (stop-reason (plist-get info :stop-reason))
-           (fsm-state (gptel-fsm-state fsm)))
-      (and fsm-buffer
+           (fsm-state (ignore-errors (gptel-fsm-state fsm))))
+      (and fsm-state
+           fsm-buffer
            (buffer-live-p fsm-buffer)
            error-msg
            (eq stop-reason 'STOP)
-           fsm-state
            (not (eq fsm-state 'DONE))))))
 
 (defun my/gptel--recover-fsm-on-error (_start _end)
