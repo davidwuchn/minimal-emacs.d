@@ -496,7 +496,9 @@ and a positive integer context_length; otherwise returns nil."
             (when (< my/gptel--token-estimate-cache-size
                      my/gptel--token-estimate-cache-max-size)
               (puthash cache-key result my/gptel--token-estimate-cache)
-              (cl-incf my/gptel--token-estimate-cache-size))
+              (when (< my/gptel--token-estimate-cache-size
+                       my/gptel--token-estimate-cache-max-size)
+                (cl-incf my/gptel--token-estimate-cache-size)))
             result)))))
 
 (defun my/gptel--estimate-tokens (chars)
