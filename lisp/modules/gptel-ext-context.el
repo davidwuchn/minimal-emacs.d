@@ -507,7 +507,7 @@ BUFFER is the gptel buffer (default current)."
        "explorer"
        (format "Auto-delegated task (%d tokens)" (round tokens))
        (format "%s\n\n<context_from_parent>\n%s\n</context_from_parent>"
-               (or prompt last-task)
+               (or prompt last-task "Continue the task")
                context)
        nil
        nil
