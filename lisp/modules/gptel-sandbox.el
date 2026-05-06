@@ -467,6 +467,8 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
 
 (defun gptel-sandbox--summarize-tool-call-plan (tool-name arg-forms)
   "Build a human-readable summary for TOOL-NAME with ARG-FORMS."
+  (unless (listp arg-forms)
+    (error "Programmatic tool-call requires a list of arguments, got: %S" arg-forms))
   (let (parts)
     (while arg-forms
       (let ((key (pop arg-forms))
