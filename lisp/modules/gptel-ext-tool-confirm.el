@@ -120,6 +120,12 @@ aggregate Programmatic previews."
        (and (stringp name) (not (string-empty-p name)) name)))
     (t (format "%s" tool-spec))))
 
+(defun my/gptel--tool-call-spec-p (spec)
+  "Return t if SPEC is a valid tool-call-spec with at least 3 elements.
+A tool-call-spec must be a list containing (tool-spec arg-values callback)."
+  (and (listp spec)
+       (>= (length spec) 3)))
+
 ;; --- Enhanced Tool Call Confirmation Context ---
 
 (defun my/gptel--permit-and-accept-tool-calls ()
@@ -215,11 +221,12 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
                      (concat " " (propertize formatted-args 'face 'font-lock-constant-face)))
                    ": "))))
      (lambda (tcs)
-       (let ((cb (nth 2 tcs)))
-         (if programmaticp
-             (when (functionp cb)
-               (funcall cb t))
-           (gptel--accept-tool-calls (list tcs) nil))))
+       (if (my/gptel--tool-call-spec-p tcs)
+           (let ((cb (nth 2 tcs)))
+             (if programmaticp
+                 (when (functionp cb)
+                   (funcall cb t))
+               (gptel--accept-tool-calls (list tcs) nil)))))
      tool-calls '("tool call" "tool calls" "run")
      `((?i ,(lambda (_) (save-window-excursion
                           (with-selected-window
@@ -236,16 +243,17 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
                             (recursive-edit) nil)))
            "inspect call(s)")
        (?p ,(lambda (tool-call-spec)
-              (let ((name (my/gptel--tool-spec-name (car tool-call-spec))))
-                (my/gptel-permit-tool name)
-                (message "Permitted %s for this session" name))
-              ;; Accept this tool call and continue
-              (let ((cb (nth 2 tool-call-spec)))
-                (if programmaticp
-                    (when (functionp cb)
-                      (funcall cb t))
-                  (gptel--accept-tool-calls (list tool-call-spec) nil)))
-              nil)
+              (if (not (my/gptel--tool-call-spec-p tool-call-spec))
+                  (message "Invalid tool-call-spec structure")
+                (let ((name (my/gptel--tool-spec-name (car tool-call-spec))))
+                  (my/gptel-permit-tool name)
+                  (message "Permitted %s for this session" name))
+                ;; Accept this tool call and continue
+                (let ((cb (nth 2 tool-call-spec)))
+                  (if programmaticp
+                      (when (functionp cb)
+                        (funcall cb t))
+                    (gptel--accept-tool-calls (list tool-call-spec) nil)))))
            "permit & run (remember)")))))
 
 (defun my/gptel--confirm-tool-calls-overlay (tool-calls info start-marker tracking-marker)

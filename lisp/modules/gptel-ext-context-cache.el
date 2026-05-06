@@ -909,7 +909,12 @@ Use `my/gptel-show-provider-contract' to query.")
       (when ctx-windows
         (princ "\nKnown Context Windows:\n")
         (dolist (cw ctx-windows)
-          (princ (format "  %s: %d tokens\n" (car cw) (cdr cw))))))))
+          (when (consp cw)
+            (let ((key (car cw))
+                  (val (cdr cw)))
+              (princ (format "  %s: %d tokens\n"
+                             (if (symbolp key) (symbol-name key) key)
+                             (if (integerp val) val 0))))))))))
 
 ;;; Public Query API
 
