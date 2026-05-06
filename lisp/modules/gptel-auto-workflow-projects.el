@@ -75,7 +75,9 @@ Each worktree gets its own isolated buffer for subagent overlays.")
   (unless (hash-table-p gptel-auto-workflow--project-buffers)
     (setq gptel-auto-workflow--project-buffers (make-hash-table :test 'equal)))
   (unless (hash-table-p gptel-auto-workflow--worktree-buffers)
-    (setq gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))))
+    (setq gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal)))
+  (unless (hash-table-p gptel-auto-workflow--research-findings-cache)
+    (setq gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal))))
 
 (defun gptel-auto-workflow--normalized-projects ()
   "Return configured project roots as unique expanded directory names."
