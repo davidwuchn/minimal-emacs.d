@@ -260,16 +260,18 @@ Returns nil if TEXT is not a string (defensive guard)."
           (or (gptel-agent-loop--task-description state) "unknown")))
 
 (defun gptel-agent-loop--build-final-result (state tail)
-  "Build final response text for STATE ending with TAIL."
+  "Build final response text for STATE ending with TAIL.
+TAIL should be a string; non-strings are coerced to empty string."
   (concat (gptel-agent-loop--result-prefix state)
           (gptel-agent-loop--safe-accumulated-output state)
-          tail))
+          (if (stringp tail) tail "")))
 
 (defun gptel-agent-loop--build-incomplete-result (state resp)
   "Build incomplete result message for STATE with RESP.
+RESP should be a string; non-strings are coerced to empty string.
 Used when task stops but work remains to be done."
   (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-          (gptel-agent-loop--build-final-result state resp)
+          (gptel-agent-loop--build-final-result state (if (stringp resp) resp ""))
           (gptel-agent-loop--step-count state)))
 
 (defun gptel-agent-loop--transient-error-p (error-data)
@@ -284,16 +286,17 @@ Extracts :code/:status from error-data to enable HTTP status checks."
       (my/gptel--transient-error-p error-data http-status))))
 
 (defun gptel-agent-loop--maybe-cache-get (agent-type prompt)
-  "Return cached subagent result for AGENT-TYPE and PROMPT if available.
-Returns nil if PROMPT is not a valid string to prevent incorrect
-cache entries based on empty strings."
-  (when (and (stringp prompt)
-             (fboundp 'my/gptel--subagent-cache-get))
+  "Return cached subagent result for AGENT-TYPE and PROMPT if available."
+  (when (and (fboundp 'my/gptel--subagent-cache-get)
+             agent-type
+             prompt)
     (my/gptel--subagent-cache-get agent-type prompt)))
 
 (defun gptel-agent-loop--maybe-cache-put (state result)
-  "Cache RESULT for STATE if the helper exists."
-  (when (fboundp 'my/gptel--subagent-cache-put)
+  "Cache RESULT for STATE if the helper exists.
+Returns nil if STATE is not a valid task structure."
+  (when (and (gptel-agent-loop--task-p state)
+             (fboundp 'my/gptel--subagent-cache-put))
     (my/gptel--subagent-cache-put
      (gptel-agent-loop--task-agent-type state)
      (gptel-agent-loop--task-prompt state)
@@ -362,15 +365,18 @@ Truncates accumulated output to last
                               (substring output (max 0 (- (length output) limit))))
                     output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
-            gptel-agent-loop-continuation-prompt
+            (or gptel-agent-loop-continuation-prompt "")
             context)))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
-  "Build max-steps summary prompt for STATE."
-  (format "%s\n\nOriginal task:\n%s\n\nWork completed so far:\n%s"
-          gptel-agent-loop-max-steps-prompt
-          (gptel-agent-loop--task-prompt state)
-          (gptel-agent-loop--safe-accumulated-output state)))
+  "Build max-steps summary prompt for STATE.
+Returns empty string if STATE is not a valid task structure."
+  (if (gptel-agent-loop--task-p state)
+      (format "%s\n\nOriginal task:\n%s\n\nWork completed so far:\n%s"
+              (or gptel-agent-loop-max-steps-prompt "")
+              (or (gptel-agent-loop--task-prompt state) "unknown")
+              (gptel-agent-loop--safe-accumulated-output state))
+    ""))
 
 (defconst gptel-agent-loop--completion-patterns
   '("all tasks.*complete"
@@ -396,12 +402,15 @@ Returns nil if patterns list is empty or contains non-string elements."
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
   "Return non-nil when TEXT matches any string in PATTERNS.
 Returns nil if TEXT is not a string or PATTERNS is not a list of strings.
-Patterns are matched case-insensitively."
+Patterns are matched case-insensitively.
+Invalid regex patterns are caught and return nil instead of signaling error."
   (and (stringp text)
        (cl-every #'stringp patterns)
        (cl-some (lambda (pattern)
                   (let ((case-fold-search t))
-                    (string-match-p pattern text)))
+                    (condition-case nil
+                        (string-match-p pattern text)
+                      (invalid-regexp nil))))
                 patterns)))
 
 (defun gptel-agent-loop--match-precompiled-pattern (resp patterns compiled)
@@ -671,7 +680,8 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 Called only from `handle-string-response' when RESP is
 confirmed string and STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (string-blank-p resp)
+  (when (and (gptel-agent-loop--task-p state)
+             (string-blank-p resp))
     (if (= (gptel-agent-loop--step-count state) 0)
         (gptel-agent-loop--deliver-result
          state
@@ -687,7 +697,8 @@ Returns non-nil if result was delivered."
   "Handle STATE when max steps were reached and RESP is final turn.
 Called only from `handle-string-response' when STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (and (gptel-agent-loop--task-max-steps-reached state)
+  (when (and (gptel-agent-loop--task-p state)
+             (gptel-agent-loop--task-max-steps-reached state)
              (not (gptel-agent-loop--task-summary-requested state)))
     (setf (gptel-agent-loop--task-summary-requested state) t)
     (if gptel-agent-loop-hard-loop
@@ -704,7 +715,8 @@ Returns non-nil if result was delivered."
 USE-TOOLS indicates whether tools were requested.
 Called only from `handle-string-response' when STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (and (gptel-agent-loop--task-summary-requested state)
+  (when (and (gptel-agent-loop--task-p state)
+             (gptel-agent-loop--task-summary-requested state)
              (not use-tools))
     (gptel-agent-loop--deliver-result
      state
