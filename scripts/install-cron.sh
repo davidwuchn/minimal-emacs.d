@@ -238,8 +238,50 @@ case "$MODE" in
         echo "Done."
         exit 0
         ;;
+     uninstall)
+        echo "=== Uninstalling Auto-Workflow Cron Jobs ==="
+        echo
+        echo "Detected: $HOSTNAME ($MACHINE)"
+        echo
+        if ! crontab -l >/dev/null 2>&1; then
+            echo "No crontab found. Nothing to uninstall."
+            exit 0
+        fi
+        cleaned=$(mktemp)
+        trap 'rm -f "$cleaned"' EXIT
+        crontab -l | python3 - "$cleaned" "$MANAGED_BLOCK_BEGIN" "$MANAGED_BLOCK_END" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+output_path, begin_marker, end_marker = sys.argv[1:]
+text = sys.stdin.read()
+
+managed_pattern = re.compile(
+    rf"(?m)^[ \t]*{re.escape(begin_marker)}\n.*?^[ \t]*{re.escape(end_marker)}\n?"
+)
+
+cleaned = managed_pattern.sub("", text, count=1)
+# Collapse multiple blank lines left by removal
+cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+cleaned = cleaned.strip() + "\n" if cleaned.strip() else ""
+
+Path(output_path).write_text(cleaned, encoding="utf-8")
+PY
+        if [ -s "$cleaned" ]; then
+            crontab "$cleaned"
+            echo "Auto-workflow cron block removed."
+        else
+            crontab -r
+            echo "Auto-workflow cron block removed (crontab now empty)."
+        fi
+        echo
+        echo "Note: Log files in var/tmp/cron/ were not removed."
+        echo "  To clean up: rm -rf var/tmp/cron/"
+        exit 0
+        ;;
     *)
-        echo "Usage: $0 [install|--dry-run|--render]" >&2
+        echo "Usage: $0 [install|--dry-run|--render|uninstall]" >&2
         exit 2
         ;;
 esac
