@@ -1524,3 +1524,15 @@
 {"timestamp":"2026-05-06 08:24:24","strategy":"weighted-skills","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":1,"score":0.4125,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-06 08:33:17","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":2,"score":0.39999999999999997,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-06 08:39:20","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":3,"score":0.4125,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"one","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"two","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"three","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"four","experiment-id":4,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"one","experiment-id":1,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"one","experiment-id":2,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"two","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-06 09:27:25","strategy":"template-default","target":"two","experiment-id":4,"score":0,"outcome":"kept","axis":"?"}
