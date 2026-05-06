@@ -158,6 +158,8 @@ falls back to the user's Emacs configuration directory."
   "Filter FILES to exclude those with more than MAX-LINES lines.
 Returns list of file paths under the limit.
 BEHAVIOR: Uses wc -l for efficient line counting without loading files into buffer."
+  (unless (and (integerp max-lines) (> max-lines 0))
+    (setq max-lines most-positive-fixnum))
   (let (result)
     (dolist (file files (reverse result))
       (when (and (file-exists-p file)
