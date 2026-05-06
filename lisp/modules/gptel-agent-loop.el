@@ -647,20 +647,21 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 
        ((and (consp resp) (eq (car resp) 'tool-call))
         (let ((calls (cdr resp)))
-          (setf (gptel-agent-loop--task-step-count state)
-                (+ (gptel-agent-loop--step-count state)
-                   (length calls)))
-          (let ((max-steps (gptel-agent-loop--task-max-steps state)))
-            (when (and max-steps
-                       (>= (gptel-agent-loop--step-count state) max-steps))
-              (setf (gptel-agent-loop--task-max-steps-reached state) t)
-              (message "[RunAgent] Max steps (%d) reached for task '%s'"
-                       max-steps
-                       (gptel-agent-loop--task-description state))))
-          (unless (plist-member info :tracking-marker)
-            (setq info (plist-put info :tracking-marker
-                                  (gptel-agent-loop--task-tracking-marker state))))
-          (gptel--display-tool-calls calls info)))
+          (when (listp calls)
+            (setf (gptel-agent-loop--task-step-count state)
+                  (+ (gptel-agent-loop--step-count state)
+                     (length calls)))
+            (let ((max-steps (gptel-agent-loop--task-max-steps state)))
+              (when (and max-steps
+                         (>= (gptel-agent-loop--step-count state) max-steps))
+                (setf (gptel-agent-loop--task-max-steps-reached state) t)
+                (message "[RunAgent] Max steps (%d) reached for task '%s'"
+                         max-steps
+                         (gptel-agent-loop--task-description state))))
+            (unless (plist-member info :tracking-marker)
+              (setq info (plist-put info :tracking-marker
+                                    (gptel-agent-loop--task-tracking-marker state))))
+            (gptel--display-tool-calls calls info))))
 
        ((and (consp resp) (eq (car resp) 'tool-result))
         (gptel-agent-loop--cleanup-overlay ov)
