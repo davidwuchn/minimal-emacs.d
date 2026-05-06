@@ -512,27 +512,31 @@ not planning more work. Uses pre-compiled pattern for performance on hot path."
         resp gptel-agent-loop--finishing-patterns
         gptel-agent-loop--finishing-patterns-compiled)))
 
-(defun gptel-agent-loop--continuation-count (state)
-  "Return continuation count for STATE, defaulting to 0 if nil."
-  (if (gptel-agent-loop--task-p state)
-      (or (gptel-agent-loop--task-continuation-count state) 0)
-    0))
+(defmacro gptel-agent-loop--define-slot-reader (name slot)
+  "Define a reader for TASK slot ACCESSOR.
+Reduces boilerplate for slot accessors defaulting to 0."
+  `(defun ,name (state)
+     "Return STATE's slot value, defaulting to 0 if nil."
+     (if (gptel-agent-loop--task-p state)
+         (or (,slot state) 0)
+       0)))
 
-(defun gptel-agent-loop--step-count (state)
-  "Return step count for STATE, defaulting to 0 if nil."
-  (if (gptel-agent-loop--task-p state)
-      (or (gptel-agent-loop--task-step-count state) 0)
-    0))
+(gptel-agent-loop--define-slot-reader
+ gptel-agent-loop--continuation-count
+ gptel-agent-loop--task-continuation-count)
 
-(defun gptel-agent-loop--retries (state)
-  "Return retry count for STATE, defaulting to 0 if nil."
-  (if (gptel-agent-loop--task-p state)
-      (or (gptel-agent-loop--task-retries state) 0)
-    0))
+(gptel-agent-loop--define-slot-reader
+ gptel-agent-loop--step-count
+ gptel-agent-loop--task-step-count)
+
+(gptel-agent-loop--define-slot-reader
+ gptel-agent-loop--retries
+ gptel-agent-loop--task-retries)
 
 (defun gptel-agent-loop--increment-continuation-count (state)
   "Increment and return the new continuation count for STATE.
-Returns 0 if STATE is not a valid task structure."
+Returns 0 if STATE is not a valid task structure.
+BEHAVIOR: Uses the continuation-count reader to avoid redundant task-p checks."
   (if (gptel-agent-loop--task-p state)
       (setf (gptel-agent-loop--task-continuation-count state)
             (1+ (gptel-agent-loop--continuation-count state)))
