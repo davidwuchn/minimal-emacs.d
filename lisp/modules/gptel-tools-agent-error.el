@@ -509,7 +509,7 @@ RETRY-COUNT tracks current retry attempt."
 Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown
 Also logs agent-output snippet for debugging when category is :unknown."
   (cond
-   ((or (null agent-output) (string= agent-output ""))
+   ((or (null agent-output) (not (stringp agent-output)) (string= agent-output ""))
     (cons :grader-failed "Grader returned no output"))
    ((gptel-auto-experiment--aborted-agent-output-p agent-output)
     (cons :tool-error "Subagent aborted"))
