@@ -387,6 +387,8 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--resolve-tool-args (tool-spec arg-forms env)
   "Resolve TOOL-SPEC arguments from ARG-FORMS using ENV."
+  (unless (proper-list-p arg-forms)
+    (error "Programmatic tool-call arguments must be a proper list, got: %S" arg-forms))
   (unless (cl-evenp (length arg-forms))
     (error "Programmatic tool-call requires keyword/value pairs"))
   (unless (listp tool-spec)
