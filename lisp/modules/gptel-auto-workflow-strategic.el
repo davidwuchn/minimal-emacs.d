@@ -391,6 +391,10 @@ CALLBACK receives list of target files."
           (request-analyzer 0))
       (funcall callback nil))))
 
+(defun gptel-auto-workflow--nonempty-string-p (s)
+  "Return non-nil if S is a non-empty string."
+  (and (stringp s) (not (string-empty-p s))))
+
 (defun gptel-auto-workflow--validate-and-add-target (file proj-root targets)
   "Validate FILE and add to TARGETS if it exists.
 FILE can be a string path or a JSON object (alist) with file/path/target keys.
@@ -568,10 +572,6 @@ EDGE CASE: nil or non-list returns nil safely."
          (alist-get 'target item)
          (cdr (assoc "target" item)))))
    (t nil)))
-
-(defun gptel-auto-workflow--nonempty-string-p (s)
-  "Return non-nil if S is a non-empty string."
-  (and (stringp s) (not (string-empty-p s))))
 
 (defun gptel-auto-workflow--parse-json-targets (response proj-root max-targets)
   "Parse JSON from RESPONSE to extract targets.
