@@ -624,21 +624,25 @@ Never asks user - retries up to MAX-RETRIES times.
 Auto-workflow principle: try harder, again and again, never stop to ask."
   (let ((attempts 0)
         (max (or max-retries gptel-auto-experiment-max-retries))
-        result)
+        result
+        last-error)
     (while (and (< attempts max) (not result))
       (cl-incf attempts)
       (condition-case err
           (progn
-            (setq result (funcall fn))
+            (setq result (funcall fn)
+                  last-error nil)
             (when result
               (message "[auto-experiment] Success on attempt %d/%d" attempts max)))
         (error
+         (setq last-error err
+               result nil)
          (message "[auto-experiment] Attempt %d/%d failed: %s"
                   attempts max
                   (my/gptel--sanitize-for-logging (error-message-string err) 160))
          (when (< attempts max)
-           (sit-for 1)))))  ; Brief pause before retry
-    result))
+           (sit-for 1)))))
+    (or result (and last-error (error-message-string last-error)))))
 
 ;;; Single Experiment
 
