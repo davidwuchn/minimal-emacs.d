@@ -447,31 +447,31 @@ RETRY-COUNT tracks current retry attempt."
                    (and (not hard-timeout)
                         timeout-category)))
               (retryable-failure
-                (and (not grader-only-failure)
-                     (or retryable-category
-                         inspection-thrash-failure
-                         (and raw-error
-                              (not hard-timeout)
-                              (gptel-auto-experiment--is-retryable-error-p raw-error)))))
+               (and (not grader-only-failure)
+                    (or retryable-category
+                        inspection-thrash-failure
+                        (and raw-error
+                             (not hard-timeout)
+                             (gptel-auto-experiment--is-retryable-error-p raw-error)))))
               (retry-history
                (gptel-auto-experiment--retry-history previous-results result)))
          (gptel-auto-workflow--restore-live-target-file target workflow-root)
          (when quota-exhausted
            (setq gptel-auto-experiment--quota-exhausted t))
-          (if (and (not quota-exhausted)
-                   (< retries gptel-auto-experiment-max-retries)
-                   retryable-failure)
-              (progn
-                (when (and raw-error
-                           (or (gptel-auto-experiment--provider-pressure-error-p raw-error)
-                               (gptel-auto-experiment--is-retryable-error-p raw-error)))
-                  (condition-case nil
-                      (gptel-auto-workflow--activate-provider-failover
-                       "executor"
-                       (gptel-auto-workflow--get-active-agent-preset "executor")
-                       raw-error)
-                    (error nil)))
-                (setq attempt-logs nil)
+         (if (and (not quota-exhausted)
+                  (< retries gptel-auto-experiment-max-retries)
+                  retryable-failure)
+             (progn
+               (when (and raw-error
+                          (or (gptel-auto-experiment--provider-pressure-error-p raw-error)
+                              (gptel-auto-experiment--is-retryable-error-p raw-error)))
+                 (condition-case nil
+                     (gptel-auto-workflow--activate-provider-failover
+                      "executor"
+                      (gptel-auto-workflow--get-active-agent-preset "executor")
+                      raw-error)
+                   (error nil)))
+               (setq attempt-logs nil)
                (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
                         experiment-id (1+ retries) gptel-auto-experiment-max-retries
                         retry-delay)
@@ -514,13 +514,16 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :grader-failed "Grader returned no output"))
    ((gptel-auto-experiment--aborted-agent-output-p agent-output)
     (cons :tool-error "Subagent aborted"))
-   ((string-match-p "hour allocated quota exceeded" agent-output)
+   ((let ((case-fold-search t))
+      (string-match-p "hour allocated quota exceeded" agent-output))
     (cons :api-rate-limit "Hourly quota exhausted"))
-   ((string-match-p "week allocated quota exceeded" agent-output)
+   ((let ((case-fold-search t))
+      (string-match-p "week allocated quota exceeded" agent-output))
     (cons :api-rate-limit "Weekly quota exhausted"))
    ((gptel-auto-experiment--provider-usage-limit-error-p agent-output)
     (cons :api-rate-limit "Provider usage limit reached"))
-   ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
+   ((let ((case-fold-search t))
+      (string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output))
     (cons :api-rate-limit "API rate limit exceeded"))
    ((let ((case-fold-search t))
       (string-match-p "overloaded_error\\|cluster overloaded\\|529\\|负载较高"
@@ -528,8 +531,9 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :api-rate-limit "Provider overloaded"))
    ((gptel-auto-experiment--provider-auth-error-p agent-output)
     (cons :api-error "Provider authorization failed"))
-    ((string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format\\|Malformed JSON" agent-output)
-     (cons :api-error "API parameter error (invalid JSON format)"))
+   ((let ((case-fold-search t))
+      (string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format\\|Malformed JSON" agent-output))
+    (cons :api-error "API parameter error (invalid JSON format)"))
    ((let ((case-fold-search t))
       (string-match-p "timeout\\|timed out\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
                       agent-output))
@@ -539,22 +543,28 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :api-error "Provider server error"))
    ((gptel-auto-experiment--shared-transient-error-p agent-output)
     (cons :api-error "Transient provider response error"))
-   ((string-match-p "error.*executor\\|failed to finish" agent-output)
+   ((let ((case-fold-search t))
+      (string-match-p "error.*executor\\|failed to finish" agent-output))
     (cons :tool-error "Tool execution failed"))
-   ((string-match-p "could not finish" agent-output)
+   ((let ((case-fold-search t))
+      (string-match-p "could not finish" agent-output))
     (cons :api-error "API request failed"))
-   ((string-match-p "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output)
+   ((let ((case-fold-search t))
+      (string-match-p "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output))
     (cons :tool-error (format "Tool unavailable: %s" (gptel-auto-experiment--error-snippet agent-output))))
-   ((string-match-p "^Error:" agent-output)
+   ((let ((case-fold-search t))
+      (string-match-p "^Error:" agent-output))
     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
       (message "[auto-experiment] Executor error: %s" snippet)
       (cons :tool-error snippet)))
-   ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
+   ((let ((case-fold-search t))
+      (string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output))
     (cons :grader-failed "Executor succeeded, grader returned score 0"))
    ((let ((case-fold-search t))
       (string-match-p "\\bBLOCKED:" agent-output))
     (cons :tool-error (gptel-auto-experiment--error-snippet agent-output)))
-   ((string-match-p "error\\|failed\\|exception" agent-output)
+   ((let ((case-fold-search t))
+      (string-match-p "error\\|failed\\|exception" agent-output))
     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
       (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
       (cons :unknown (format "Error pattern: %s" snippet))))
