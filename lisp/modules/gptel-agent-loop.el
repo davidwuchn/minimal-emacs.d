@@ -419,12 +419,17 @@ Invalid regex patterns are caught and return nil instead of signaling error."
 
 (defun gptel-agent-loop--match-precompiled-pattern (resp patterns compiled)
   "Match RESP against PATTERNS using COMPILED regex if available.
-Assumes RESP is a string and patterns are strings.
-Extracted from duplicate pattern-matching boilerplate."
+Returns nil if RESP is not a string or PATTERNS is not valid.
+Invalid regex patterns are caught and return nil instead of signaling error."
   (let ((case-fold-search t))
-    (if compiled
-        (string-match-p compiled resp)
-      (gptel-agent-loop--matches-any-pattern resp patterns))))
+    (cond
+     ((not (stringp resp)) nil)
+     (compiled
+      (condition-case nil
+          (string-match-p compiled resp)
+        (invalid-regexp nil)))
+     (t
+      (gptel-agent-loop--matches-any-pattern resp patterns)))))
 
 (defun gptel-agent-loop--seems-complete-p (resp)
   "Return non-nil when RESP looks like a completion message.
