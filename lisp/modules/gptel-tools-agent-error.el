@@ -266,6 +266,23 @@ retrying on that provider instead."
        (not (gptel-auto-experiment--remaining-provider-failover-candidate
              agent-type))))
 
+
+(defun gptel-auto-experiment--handle-hard-quota (agent-type &optional set-quota-exhausted)
+  "Handle hard quota exhaustion for AGENT-TYPE.
+When SET-QUOTA-EXHAUSTED is non-nil, set the global quota-exhausted flag."
+  (if-let ((remaining
+            (gptel-auto-experiment--remaining-provider-failover-candidate
+             agent-type)))
+      (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
+               agent-type
+               (car remaining)
+               (cdr remaining))
+    (when set-quota-exhausted
+      (setq gptel-auto-experiment--quota-exhausted t))
+    (if set-quota-exhausted
+        (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")
+      (message "[auto-workflow] Provider quota exhausted for %s; continuing other workflow work"
+               agent-type))))
 (cl-defun gptel-auto-experiment--note-api-pressure (target error-category error-source
                                                            &optional agent-type
                                                            (escalate-run-pressure t))
@@ -283,15 +300,7 @@ the shared run-wide API counter or stopping the rest of the workflow."
             (message "[auto-workflow] API error #%d: %s"
                      gptel-auto-experiment--api-error-count error-category)
             (when hard-quota
-              (if-let ((remaining
-                        (gptel-auto-experiment--remaining-provider-failover-candidate
-                         resolved-agent-type)))
-                  (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
-                           resolved-agent-type
-                           (car remaining)
-                           (cdr remaining))
-                (setq gptel-auto-experiment--quota-exhausted t)
-                (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")))
+              (gptel-auto-experiment--handle-hard-quota resolved-agent-type t))
             (when (>= gptel-auto-experiment--api-error-count
                       gptel-auto-experiment--api-error-threshold)
               (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
@@ -300,15 +309,7 @@ the shared run-wide API counter or stopping the rest of the workflow."
           (message "[auto-workflow] Local API pressure on %s for %s; keeping run-wide pressure unchanged"
                    resolved-agent-type target)
           (when hard-quota
-            (if-let ((remaining
-                      (gptel-auto-experiment--remaining-provider-failover-candidate
-                       resolved-agent-type)))
-                (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
-                         resolved-agent-type
-                         (car remaining)
-                         (cdr remaining))
-              (message "[auto-workflow] Provider quota exhausted for %s; continuing other workflow work"
-                       resolved-agent-type))))))))
+            (gptel-auto-experiment--handle-hard-quota resolved-agent-type nil)))))))
 
 (defun gptel-auto-experiment--grade-with-retry (output callback &optional retry-count)
   "Grade OUTPUT and locally retry transient grader failures.
