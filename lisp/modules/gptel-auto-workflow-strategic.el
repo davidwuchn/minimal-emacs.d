@@ -32,6 +32,7 @@
 
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
+(declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
 
 (defcustom gptel-auto-workflow-strategic-selection t
   "When non-nil, use LLM-based target selection.
@@ -86,6 +87,11 @@ timeout, so keep a dedicated budget to avoid unnecessary static fallbacks."
 
 (defvar gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)
   "Hash table mapping project roots to cached research findings.")
+
+(defvar gptel-auto-workflow--context-cache nil
+  "Cached context for analyzer prompt, keyed by project root.
+Cached value: plist with :context :timestamp keys.
+Cache is invalidated after 5 minutes to avoid stale data.")
 
 (defvar gptel-auto-workflow--analyzer-transient-failure nil
   "Non-nil when analyzer target selection failed due to a transient provider issue.")
@@ -179,34 +185,53 @@ BEHAVIOR: Uses wc -l for efficient line counting without loading files into buff
 
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
-Scans only root-repo targets that can be integrated into staging."
+Scans only root-repo targets that can be integrated into staging.
+Uses caching to avoid redundant shell command execution."
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
-         (safe-root (shell-quote-argument proj-root)))
-    (list :git-history (shell-command-to-string
-                        (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
-                                safe-root))
-          :file-sizes (shell-command-to-string
-                       (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
-                               safe-root))
-          :todos (shell-command-to-string
-                  (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
-                          safe-root))
-          :file-list (let* ((raw-output (shell-command-to-string
-                                         (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                                                 safe-root)))
-                            (all-files (delq nil
-                                             (mapcar (lambda (s)
-                                                       (unless (string-empty-p s) s))
-                                                     (split-string raw-output "\n" t))))
-                            (nonempty-files (delq nil
-                                                  (mapcar (lambda (f)
-                                                            (let ((abs-path (expand-file-name f proj-root)))
-                                                              (when (file-exists-p abs-path) f)))
-                                                          all-files))))
-                       (mapconcat #'identity
-                                  (gptel-auto-workflow--filter-large-files
-                                   nonempty-files 1000)
-                                  "\n")))))
+         (cache-ttl (* 5 60))
+         (now (float-time))
+         (cache-entry (and (listp gptel-auto-workflow--context-cache)
+                           (eq (car gptel-auto-workflow--context-cache) proj-root)
+                           (cdr gptel-auto-workflow--context-cache)))
+         (cached-context (and cache-entry
+                              (plist-get cache-entry :context)))
+         (cache-time (and cache-entry
+                          (plist-get cache-entry :timestamp)))
+         (cache-valid (and cached-context cache-time
+                          (< (- now cache-time) cache-ttl))))
+    (if cache-valid
+        (progn
+          (message "[auto-workflow] Using cached context for %s" proj-root)
+          cached-context)
+      (let* ((safe-root (shell-quote-argument proj-root))
+             (context (list :git-history (shell-command-to-string
+                                          (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
+                                                  safe-root))
+                            :file-sizes (shell-command-to-string
+                                         (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
+                                                 safe-root))
+                            :todos (shell-command-to-string
+                                    (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
+                                            safe-root))
+                            :file-list (let* ((raw-output (shell-command-to-string
+                                                           (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                                                                   safe-root)))
+                                              (all-files (delq nil
+                                                               (mapcar (lambda (s)
+                                                                         (unless (string-empty-p s) s))
+                                                                       (split-string raw-output "\n" t))))
+                                              (nonempty-files (delq nil
+                                                                    (mapcar (lambda (f)
+                                                                              (let ((abs-path (expand-file-name f proj-root)))
+                                                                                (when (file-exists-p abs-path) f)))
+                                                                            all-files))))
+                                         (mapconcat #'identity
+                                                    (gptel-auto-workflow--filter-large-files
+                                                     nonempty-files 1000)
+                                                    "\n")))))
+        (setq gptel-auto-workflow--context-cache (cons proj-root (list :context context :timestamp now)))
+        (message "[auto-workflow] Cached new context for %s" proj-root)
+        context))))
 
 (defun gptel-auto-workflow--local-research-patterns ()
   "Perform local grep-based pattern analysis when subagents unavailable.
@@ -435,20 +460,25 @@ Returns list of validated relative paths, up to MAX-TARGETS.
 ASSUMPTION: candidates is nil or a list of file paths/objects.
 ASSUMPTION: proj-root is a non-empty string or nil.
 EDGE CASE: nil candidates returns empty list.
-EDGE CASE: nil proj-root causes all candidates to be skipped."
+EDGE CASE: nil proj-root causes all candidates to be skipped.
+BEHAVIOR: Only consumes quota slots when targets are actually added."
   (unless (listp candidates)
     (if (null candidates)
         (setq candidates nil)
       (setq candidates (list candidates))))
   (unless (and (integerp max-targets) (> max-targets 0))
     (setq max-targets most-positive-fixnum))
-  (let ((targets '()))
+  (let ((targets '())
+        (remaining-slots max-targets))
     (dolist (file candidates (reverse targets))
-      (when (< (length targets) max-targets)
-        (let ((new-targets (gptel-auto-workflow--validate-and-add-target
-                            file proj-root targets)))
-          (when (consp new-targets)
-            (setq targets new-targets)))))))
+      (when (and (gptel-auto-workflow--nonempty-string-p file)
+                 (> remaining-slots 0))
+        (let* ((pre-count (length targets))
+               (new-targets (gptel-auto-workflow--validate-and-add-target
+                             file proj-root targets)))
+          (when (> (length new-targets) pre-count)
+            (setq targets new-targets)
+            (cl-decf remaining-slots)))))))
 
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list.
@@ -481,11 +511,14 @@ Logs when fallback to regex parsing is used."
              normalized-response proj-root max-targets))))))))
 
 (defun gptel-auto-workflow--json-object-p (value)
-  "Return non-nil when VALUE looks like a JSON object alist."
-  (and (consp value)
-       (consp (car value))
-       (or (symbolp (caar value))
-           (stringp (caar value)))))
+  "Return non-nil when VALUE looks like a JSON object alist.
+ASSUMPTION: value is either nil, a proper alist, or invalid input.
+EDGE CASE: nil returns nil, non-list atoms return nil."
+  (when (listp value)
+    (and (consp value)
+         (consp (car value))
+         (or (symbolp (caar value))
+             (stringp (caar value))))))
 
 (defun gptel-auto-workflow--handle-analyzer-error-state (targets static-targets callback)
   "Handle analyzer error states and invoke CALLBACK with appropriate targets.
@@ -520,7 +553,9 @@ Returns non-nil if error state was handled."
    (t candidate)))
 
 (defun gptel-auto-workflow--json-target-file (item)
-  "Extract a target file path from parsed JSON ITEM."
+  "Extract a target file path from parsed JSON ITEM.
+BEHAVIOR: Handles string paths, alist objects, and invalid input.
+EDGE CASE: nil or non-list returns nil safely."
   (cond
    ((stringp item)
     (gptel-auto-workflow--normalize-target-candidate item))

@@ -285,11 +285,11 @@ Returns a new alist with accumulated values.
 TOTALS is an alist of (score-type . accumulated-value).
 SCORES-ALIST is an alist of (score-type . current-score).
 Handles nil or non-numeric scores by treating them as 0.
-Returns TOTALS unchanged if SCORES-ALIST is nil or not a proper list."
+Returns TOTALS unchanged if SCORES-ALIST is nil or not a proper list.
+Returns empty alist if TOTALS is nil to prevent nil propagation errors."
   (cond
-   ((null scores-alist) totals)
-   ((not (listp scores-alist)) totals)
-   ((not (proper-list-p scores-alist)) totals)
+   ((null totals) (mapcar (lambda (st) (cons st 0.0)) gptel-benchmark--score-types))
+   ((not (and (listp scores-alist) (proper-list-p scores-alist))) totals)
    (t
     (cl-loop for (score-type . current) in totals
              for raw-score = (alist-get score-type scores-alist)

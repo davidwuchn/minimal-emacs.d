@@ -1189,7 +1189,7 @@ Returns formatted string listing underexplored targets."
 (defun gptel-auto-experiment--frontier-saturated-p (target &optional min-frontier-size min-axes min-quality)
   "Return t if TARGET's frontier is saturated (sufficiently explored).
 MIN-FRONTIER-SIZE: minimum number of Pareto-optimal experiments (default: 3).
-MIN-AXES: minimum number of unique axes covered (default: 4).
+MIN-AXES: minimum number of unique axes covered (default: 6).
 MIN-QUALITY: minimum best quality score (default: 0.8)."
   (let* ((frontier (gptel-auto-experiment--compute-frontier target))
          (frontier-size (length frontier))
@@ -1359,7 +1359,7 @@ Returns plist with :counts (axis->count), :successes (axis->kept-count),
 Returns axis letter (A-F) or nil if insufficient data."
   (let* ((stats (gptel-auto-experiment--get-axis-stats target))
          (counts (plist-get stats :counts))
-         (axes '("A" "B" "C" "D" "E" "F"))
+         (axes '("A" "B" "C" "D" "E" "F" "G" "H" "I"))
          (min-count most-positive-fixnum)
          (underexplored nil))
     (dolist (axis axes)
@@ -1378,12 +1378,15 @@ Returns string describing which axes have been most successful."
   (let* ((stats (gptel-auto-experiment--get-axis-stats target))
          (rates (plist-get stats :rates))
          (counts (plist-get stats :counts))
-          (axis-names '(("A" . "Error Handling")
-                        ("B" . "Performance")
-                        ("C" . "Refactoring")
-                        ("D" . "Safety")
-                        ("E" . "Test Coverage")
-                        ("F" . "Memory Management")))
+         (axis-names '(("A" . "Error Handling")
+                       ("B" . "Performance")
+                       ("C" . "Refactoring")
+                       ("D" . "Safety")
+                       ("E" . "Test Coverage")
+                       ("F" . "Memory Management")
+                       ("G" . "Documentation")
+                       ("H" . "Type Safety")
+                       ("I" . "Edge Cases")))
          (results '()))
     (dolist (pair axis-names)
       (let* ((axis (car pair))
