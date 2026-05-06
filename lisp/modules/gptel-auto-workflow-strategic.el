@@ -205,17 +205,13 @@ Uses caching to avoid redundant shell command execution."
           cached-context)
       (let* ((safe-root (shell-quote-argument proj-root))
              (context (list :git-history (shell-command-to-string
-                                          (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
-                                                  safe-root))
+                                          (concat "cd " safe-root " && git log --oneline -30 -- lisp/modules/ 2>/dev/null"))
                             :file-sizes (shell-command-to-string
-                                         (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
-                                                 safe-root))
+                                         (concat "cd " safe-root " && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"))
                             :todos (shell-command-to-string
-                                    (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
-                                            safe-root))
+                                    (concat "cd " safe-root " && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"))
                             :file-list (let* ((raw-output (shell-command-to-string
-                                                           (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                                                                   safe-root)))
+                                                           (concat "cd " safe-root " && find lisp/modules -name '*.el' -type f 2>/dev/null")))
                                               (all-files (delq nil
                                                                (mapcar (lambda (s)
                                                                          (unless (string-empty-p s) s))
