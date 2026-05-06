@@ -331,15 +331,15 @@ Returns plist with :total-tests, :passed-tests, and average scores."
           (score-totals (mapcar (lambda (st) (cons st 0.0)) gptel-benchmark--score-types)))
       (dolist (r results)
         (let* ((scores (gptel-benchmark--extract-scores r))
-               (overall-score (gptel-benchmark--get-score r :overall-score scores)))
-          (cl-incf total)
+               (overall-score (and scores (gptel-benchmark--get-score r :overall-score scores))))
           (when scores
+            (cl-incf total)
             (setq score-totals
                   (gptel-benchmark--accumulate-scores
                    score-totals
-                   (gptel-benchmark--extract-score-types scores))))
-          (when (>= (or overall-score 0) 0.7)
-            (cl-incf passed))))
+                   (gptel-benchmark--extract-score-types scores)))
+            (when (>= (or overall-score 0) 0.7)
+              (cl-incf passed)))))
       (append (list :total-tests total :passed-tests passed)
               (mapcan (lambda (m)
                         (list (cdr m)
