@@ -315,7 +315,10 @@ supports a small, explicit whitelist of pure operations."
    (t
     (pcase (car expr)
       ('quote
-       (cadr expr))
+       (let ((args (cdr expr)))
+         (unless (= (length args) 1)
+           (error "Programmatic quote requires exactly one argument, got: %d" (length args)))
+         (cadr expr)))
       ('if
           (let ((args (cdr expr)))
             (unless (>= (length args) 2)
