@@ -312,6 +312,10 @@ Single constant avoids allocating a new symbol on every lookup call.")
   "Sentinel value for alist partial-match searches.
 Single constant avoids allocating a new symbol on every search call.")
 
+(defconst my/gptel--alist-match-nil-marker (cons nil 'cached-nil)
+  "Marker for cached nil results in alist partial-match cache.
+Distinguishes 'not cached' from 'cached nil' without using plain nil.")
+
 (defun my/gptel--cache-or-alist-lookup (hash-table alist key)
   "Look up KEY in HASH-TABLE, falling back to ALIST partial match.
 Returns the value from hash table if found and valid, otherwise searches ALIST
@@ -326,6 +330,8 @@ Validates that cached values are positive integers before returning them."
             (and (listp alist)
                  (my/gptel--alist-partial-match alist key)))
            ((eq hash-value my/gptel--context-window-miss-sentinel)
+            nil)
+           ((eq hash-value my/gptel--alist-match-nil-marker)
             nil)
            ((my/gptel--positive-integer-p hash-value)
             hash-value)
@@ -349,7 +355,11 @@ Results are cached in `my/gptel--alist-partial-match-cache' for performance."
   (when (and alist (listp alist) (stringp search-str) (not (string-empty-p search-str)))
     (let* ((alist-id (sxhash alist))
            (cache-key (cons alist-id search-str)))
-      (or (gethash cache-key my/gptel--alist-partial-match-cache)
+      (let ((cached (gethash cache-key my/gptel--alist-partial-match-cache)))
+        (if cached
+            (if (eq cached my/gptel--alist-match-nil-marker)
+                nil
+              cached)
           (let ((best-match my/gptel--alist-match-sentinel)
                 (best-key-len 0))
             (dolist (entry alist)
@@ -363,14 +373,13 @@ Results are cached in `my/gptel--alist-partial-match-cache' for performance."
                           (setq best-match (cdr entry)))))))))
             (let ((result (unless (eq best-match my/gptel--alist-match-sentinel)
                             best-match)))
-              (when result
-                (if (>= my/gptel--alist-match-cache-size my/gptel--alist-match-cache-max-size)
-                    (progn
-                      (clrhash my/gptel--alist-partial-match-cache)
-                      (setq my/gptel--alist-match-cache-size 0)))
-                (puthash cache-key result my/gptel--alist-partial-match-cache)
+              (let ((to-cache (if result result my/gptel--alist-match-nil-marker)))
+                (when (>= my/gptel--alist-match-cache-size my/gptel--alist-match-cache-max-size)
+                  (clrhash my/gptel--alist-partial-match-cache)
+                  (setq my/gptel--alist-match-cache-size 0))
+                (puthash cache-key to-cache my/gptel--alist-partial-match-cache)
                 (cl-incf my/gptel--alist-match-cache-size))
-              result))))))
+              result)))))))
 
 (defun my/gptel--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
@@ -434,7 +443,9 @@ Some gptel model tables encode context windows in *thousands* of tokens as float
    ((not (numberp n)) nil)
    ((<= n 0) nil)
    ((floatp n)
-    (let ((result (round (* n 1000))))
+    (let ((result (if (< n 1000.0)
+                      (round (* n 1000.0))
+                    (round n))))
       (and (> result 0) (<= result 2000000) result)))
    ((< n 1000)
     (let ((result (round (* n 1000))))
@@ -529,6 +540,7 @@ Returns 0.0 if CHARS is not a positive number."
   (when (and (stringp model-id) (integerp window) (> window 0))
     (puthash model-id window my/gptel--context-window-cache)
     (clrhash my/gptel--alist-partial-match-cache)
+    (setq my/gptel--alist-match-cache-size 0)
     (my/gptel--cache-save-context-windows)))
 
 (defun my/gptel--cache-load-context-windows ()
@@ -559,6 +571,7 @@ malformed, the existing cache is preserved."
                     my/gptel--context-window-cache-last-refresh new-refresh
                     my/gptel--context-window-cache-data nil)
               (clrhash my/gptel--alist-partial-match-cache)
+              (setq my/gptel--alist-match-cache-size 0)
               (clrhash old-cache))))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
@@ -592,7 +605,8 @@ Filters to only bound variables. Result is cached for performance."
               (when (and (stringp id) (integerp tokens) (> tokens 0))
                 (puthash id tokens my/gptel--context-window-cache)
                 (puthash id plist my/gptel--model-metadata-cache))))))))
-  (clrhash my/gptel--alist-partial-match-cache))
+  (clrhash my/gptel--alist-partial-match-cache)
+  (setq my/gptel--alist-match-cache-size 0))
 
 (defun my/gptel--openrouter-curl-command (url connect-timeout max-time key)
   "Build curl command list for OpenRouter API request.

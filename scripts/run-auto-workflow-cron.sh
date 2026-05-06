@@ -352,9 +352,10 @@ discard_stale_worker_daemon() {
     pids="$(worker_daemon_pids || true)"
     if [ -n "$pids" ]; then
         for pid in $pids; do
-            kill "$pid" 2>/dev/null || true
+            # Emacs daemons ignore SIGTERM; use SIGKILL directly
+            kill -9 "$pid" 2>/dev/null || true
         done
-        for _ in $(seq 1 30); do
+        for _ in $(seq 1 10); do
             local any_alive=0
             for pid in $pids; do
                 if kill -0 "$pid" 2>/dev/null; then
@@ -365,7 +366,7 @@ discard_stale_worker_daemon() {
             if [ "$any_alive" -eq 0 ]; then
                 break
             fi
-            sleep 0.2
+            sleep 0.3
         done
         for pid in $pids; do
             if kill -0 "$pid" 2>/dev/null; then
