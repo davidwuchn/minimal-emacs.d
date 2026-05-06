@@ -493,12 +493,13 @@ and a positive integer context_length; otherwise returns nil."
                           2.5)
                          (t 3.5)))
                  (result (/ (float chars) ratio)))
-            (when (< my/gptel--token-estimate-cache-size
-                     my/gptel--token-estimate-cache-max-size)
-              (puthash cache-key result my/gptel--token-estimate-cache)
-              (when (< my/gptel--token-estimate-cache-size
-                       my/gptel--token-estimate-cache-max-size)
-                (cl-incf my/gptel--token-estimate-cache-size)))
+            (if (>= my/gptel--token-estimate-cache-size
+                    my/gptel--token-estimate-cache-max-size)
+                (progn
+                  (clrhash my/gptel--token-estimate-cache)
+                  (setq my/gptel--token-estimate-cache-size 0)))
+            (puthash cache-key result my/gptel--token-estimate-cache)
+            (cl-incf my/gptel--token-estimate-cache-size)
             result)))))
 
 (defun my/gptel--estimate-tokens (chars)
