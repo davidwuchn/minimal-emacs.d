@@ -202,3 +202,6 @@ package.  Otherwise, only recreate missing `*-autoloads.el' files.  Refresh
       (expand-file-name "tramp" user-emacs-directory))
 
 ;;; init-files.el ends here
+
+;; Auto-workflow: push experiment branches to origin only (not upstream/public)
+(setq gptel-auto-workflow-shared-remote "origin")
