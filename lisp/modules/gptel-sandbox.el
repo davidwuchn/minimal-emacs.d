@@ -703,13 +703,17 @@ can consume lists, vectors, plists, and alists as readable data."
       (error
        (funcall callback (gptel-sandbox--format-error (error-message-string err))))))))
 
+(defun gptel-sandbox--validate-context-args (env state context-name)
+  "Validate ENV is a hash table and STATE is a plist for CONTEXT-NAME."
+  (unless (hash-table-p env)
+    (error "Programmatic %s requires a hash table environment, got: %S" context-name env))
+  (unless (listp state)
+    (error "Programmatic %s requires a plist state, got: %S" context-name state)))
+
 (defun gptel-sandbox--eval-statement (statement env state callback)
   "Evaluate sandbox STATEMENT with ENV and STATE, then CALLBACK.
 CALLBACK receives a plist with one of the keys `:continue' or `:result'."
-  (unless (hash-table-p env)
-    (error "Programmatic eval-statement requires a hash table environment, got: %S" env))
-  (unless (listp state)
-    (error "Programmatic eval-statement requires a plist state, got: %S" state))
+  (gptel-sandbox--validate-context-args env state "eval-statement")
   (pcase statement
     (`(progn . ,body)
      (gptel-sandbox--eval-progn body env state callback))
@@ -756,10 +760,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
 (defun gptel-sandbox--eval-progn (body env state callback)
   "Evaluate BODY forms sequentially, handling async tool-calls.
 CALLBACK receives final outcome plist."
-  (unless (hash-table-p env)
-    (error "Programmatic eval-progn requires a hash table environment, got: %S" env))
-  (unless (listp state)
-    (error "Programmatic eval-progn requires a plist state, got: %S" state))
+  (gptel-sandbox--validate-context-args env state "eval-progn")
   (if (null body)
       (funcall callback (list :done t :result nil))
     (gptel-sandbox--eval-statement
@@ -773,8 +774,7 @@ CALLBACK receives final outcome plist."
   "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
   (unless (listp forms)
     (error "Programmatic run-forms requires a list, got: %S" forms))
-  (unless (listp state)
-    (error "Programmatic run-forms requires a plist state, got: %S" state))
+  (gptel-sandbox--validate-context-args env state "run-forms")
   (unless (functionp callback)
     (error "Programmatic run-forms requires a function callback, got: %S" callback))
   (if (null forms)
