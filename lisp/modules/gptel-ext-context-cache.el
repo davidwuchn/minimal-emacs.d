@@ -263,7 +263,7 @@ Sources:
      :pricing-input 0.27 :pricing-output 0.95
      :max-output 16384
      :description "MiniMax M2.5 - 196k context, SWE-bench 80.2%, agent workflows")
-     ;; GPT
+    ;; GPT
     ("gpt-4o"
      :context-window 128000
      :pricing-input 2.5 :pricing-output 10.0
@@ -358,8 +358,10 @@ Handles circular lists by tracking visited cons cells."
 
 (defun my/gptel--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
-Reduces duplication of `(or (plist-get ...) default-value)` patterns."
-  (if (plist-member plist key)
+Reduces duplication of `(or (plist-get ...) default-value)` patterns.
+Validates PLIST is a proper list or nil before accessing."
+  (if (and (or (null plist) (listp plist))
+           (plist-member plist key))
       (plist-get plist key)
     default))
 
@@ -381,26 +383,26 @@ to avoid repeated table scans and redundant lookups."
   (when (or (stringp model) (symbolp model))
     (let ((model-str (if (stringp model) model (symbol-name model))))
       (when (and (stringp model-str) (not (string-empty-p model-str)))
-      (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache)))
-        (if (eq cached my/gptel--gptel-tables-miss-sentinel)
-            nil
-          (or cached
-              (let ((result (catch 'found
-                              (dolist (var (my/gptel--gptel-model-tables))
-                                (let ((table (symbol-value var)))
-                                  (when (listp table)
-                                    (let ((entry (assoc-string model-str table t)))
-                                      (when (and (consp entry) (listp (cdr entry))
-                                                 (plist-member (cdr entry) :context-window))
-                                        (let ((cw (my/gptel--normalize-context-window
-                                                    (plist-get (cdr entry) :context-window))))
-                                          (when (and (integerp cw) (> cw 0))
-                                            (throw 'found cw))))))))
-                              nil)))
-                (if result
-                    (puthash model-str result my/gptel--gptel-tables-cw-cache)
-                  (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache))
-                result))))))))
+        (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache)))
+          (if (eq cached my/gptel--gptel-tables-miss-sentinel)
+              nil
+            (or cached
+                (let ((result (catch 'found
+                                (dolist (var (my/gptel--gptel-model-tables))
+                                  (let ((table (symbol-value var)))
+                                    (when (listp table)
+                                      (let ((entry (assoc-string model-str table t)))
+                                        (when (and (consp entry) (listp (cdr entry))
+                                                   (plist-member (cdr entry) :context-window))
+                                          (let ((cw (my/gptel--normalize-context-window
+                                                     (plist-get (cdr entry) :context-window))))
+                                            (when (and (integerp cw) (> cw 0))
+                                              (throw 'found cw))))))))
+                                nil)))
+                  (if result
+                      (puthash model-str result my/gptel--gptel-tables-cw-cache)
+                    (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache))
+                  result))))))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
