@@ -438,7 +438,7 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
           (cond
            ((= duration 0) 0.5)
            ((> duration max-duration) 0.5)
-           (t 1.0))))
+           (t 1.0)))
     (/ (+ steps-score continuations-score duration-score) 3.0))))
 
 (defun gptel-workflow--score-constraints (run phases-cfg)
