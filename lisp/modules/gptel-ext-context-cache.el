@@ -84,6 +84,14 @@ Reduces repeated iterations through model tables.")
   "Maximum entries in `my/gptel--token-estimate-cache'.
 Prevents unbounded memory growth from repeated token estimates.")
 
+(defconst my/gptel--alist-match-cache-max-size 500
+  "Maximum entries in `my/gptel--alist-partial-match-cache'.
+Prevents unbounded memory growth from repeated partial-match lookups.")
+
+(defvar my/gptel--alist-match-cache-size 0
+  "Counter tracking `my/gptel--alist-partial-match-cache' entry count.
+Used to prevent cache from exceeding max-size by checking count before insertion.")
+
 (defvar my/gptel--token-estimate-cache (make-hash-table :test 'equal)
   "Hash table caching token estimates for (chars . extension) pairs.")
 
@@ -350,7 +358,13 @@ Results are cached in `my/gptel--alist-partial-match-cache' for performance."
                           (setq best-match (cdr entry)))))))))
             (let ((result (unless (eq best-match my/gptel--alist-match-sentinel)
                             best-match)))
-              (puthash cache-key result my/gptel--alist-partial-match-cache)
+              (when result
+                (if (>= my/gptel--alist-match-cache-size my/gptel--alist-match-cache-max-size)
+                    (progn
+                      (clrhash my/gptel--alist-partial-match-cache)
+                      (setq my/gptel--alist-match-cache-size 0)))
+                (puthash cache-key result my/gptel--alist-partial-match-cache)
+                (cl-incf my/gptel--alist-match-cache-size))
               result))))))
 
 (defun my/gptel--plist-get (plist key &optional default)
