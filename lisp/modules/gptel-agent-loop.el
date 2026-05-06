@@ -365,7 +365,9 @@ Truncates accumulated output to last
                               (substring output (max 0 (- (length output) limit))))
                     output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
-            (or gptel-agent-loop-continuation-prompt "")
+            (if (stringp gptel-agent-loop-continuation-prompt)
+                gptel-agent-loop-continuation-prompt
+              "")
             context)))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
@@ -373,7 +375,9 @@ Truncates accumulated output to last
 Returns empty string if STATE is not a valid task structure."
   (if (gptel-agent-loop--task-p state)
       (format "%s\n\nOriginal task:\n%s\n\nWork completed so far:\n%s"
-              (or gptel-agent-loop-max-steps-prompt "")
+              (if (stringp gptel-agent-loop-max-steps-prompt)
+                  gptel-agent-loop-max-steps-prompt
+                "")
               (or (gptel-agent-loop--task-prompt state) "unknown")
               (gptel-agent-loop--safe-accumulated-output state))
     ""))
