@@ -220,16 +220,20 @@ Interactively prompts for directory."
 (defun gptel-auto-workflow-remove-project (project-root)
   "Remove PROJECT-ROOT from auto-workflow projects list."
   (interactive
-   (list (completing-read "Remove project: " 
-                          gptel-auto-workflow-projects)))
-  (let ((root (file-name-as-directory (expand-file-name project-root))))
+   (let ((projects (gptel-auto-workflow--normalized-projects)))
+     (unless projects
+       (user-error "No projects configured to remove"))
+     (list (completing-read "Remove project: " projects))))
+  (let ((root (file-name-as-directory (expand-file-name project-root)))
+        (was-present (member root gptel-auto-workflow-projects)))
     (setq gptel-auto-workflow-projects 
           (delete root gptel-auto-workflow-projects))
-    (customize-save-variable 'gptel-auto-workflow-projects 
-                             gptel-auto-workflow-projects)
-    (remhash root gptel-auto-workflow--project-buffers)
-    (remhash root gptel-auto-workflow--worktree-buffers)
-    (remhash root gptel-auto-workflow--research-findings-cache)
+    (when was-present
+      (customize-save-variable 'gptel-auto-workflow-projects 
+                               gptel-auto-workflow-projects)
+      (remhash root gptel-auto-workflow--project-buffers)
+      (remhash root gptel-auto-workflow--worktree-buffers)
+      (remhash root gptel-auto-workflow--research-findings-cache))
     (message "Removed project: %s" root)))
 
 (defun gptel-auto-workflow-list-projects ()

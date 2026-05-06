@@ -552,9 +552,10 @@ CALLBACK receives non-nil when approved and nil when rejected."
   (unless (gptel-sandbox--allowed-tool-p tool-name)
     (error "Tool %s is not allowed inside Programmatic %s mode"
            tool-name (gptel-sandbox--current-profile)))
-  (when (string= tool-name "Programmatic")
-    (error "Tool %s requires confirmation or recursion and is not supported inside Programmatic v1"
-           tool-name))
+  (let ((tool-name-str (gptel-sandbox--normalize-tool-name tool-name)))
+    (when (string= tool-name-str "Programmatic")
+      (error "Tool %s requires confirmation or recursion and is not supported inside Programmatic v1"
+             tool-name)))
   (when (and (gptel-sandbox--confirm-required-p tool-spec arg-values)
              (not (gptel-sandbox--confirm-supported-p tool-name)))
     (error "Tool %s requires confirmation and is not supported inside Programmatic %s mode"
@@ -562,16 +563,18 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--truncate-result (text)
   "Return TEXT, truncating and persisting to a temp file if needed."
-  (let ((text (gptel-sandbox--render-result text)))
-    (if (<= (length text) my/gptel-programmatic-result-limit)
+  (let ((text (gptel-sandbox--render-result text))
+        (limit my/gptel-programmatic-result-limit))
+    (if (<= (length text) limit)
         text
+      (when (<= limit 0)
+        (error "Programmatic result-limit must be positive, got: %S" limit))
       (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
                             (my/gptel-make-temp-file "programmatic-" nil ".txt")
                           (make-temp-file "programmatic-" nil ".txt")))
              (suffix (format "\n...[Programmatic result truncated. Full result saved to: %s]..."
                              temp-file))
-             (suffix-len (length suffix))
-             (limit my/gptel-programmatic-result-limit))
+             (suffix-len (length suffix)))
         (with-temp-file temp-file
           (insert text))
         (if (>= suffix-len limit)
@@ -646,6 +649,8 @@ can consume lists, vectors, plists, and alists as readable data."
 
 (defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
+  (unless (functionp callback)
+    (error "Programmatic sandbox execute-tool requires a function callback, got: %S" callback))
   (unless (listp state)
     (error "Programmatic sandbox execute-tool requires a plist state, got: %S" state))
   (let* ((tool-spec (if (fboundp 'gptel-get-tool)
