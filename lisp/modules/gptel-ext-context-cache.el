@@ -512,7 +512,7 @@ Returns 0.0 if CHARS is not a positive number."
       0.0
     (let ((text-tokens (my/gptel--estimate-text-tokens chars))
           (image-tokens (if (fboundp 'my/gptel--count-context-image-tokens)
-                            (my/gptel--count-context-image-tokens)
+                            (or (my/gptel--count-context-image-tokens) 0)
                           0)))
       (+ text-tokens image-tokens))))
 
