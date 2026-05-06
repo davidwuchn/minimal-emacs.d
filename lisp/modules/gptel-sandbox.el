@@ -245,10 +245,14 @@ Supported shape:
       (`(,_ (lambda (,arg) . ,body) ,list-expr)
        (unless (symbolp arg)
          (error "Programmatic %s lambda arg must be a symbol" op-name))
-       (let ((items (gptel-sandbox--eval-expr list-expr env))
-             (results nil))
-         (unless (listp items)
-           (error "Programmatic %s expects a list input" op-name))
+       (let* ((items (gptel-sandbox--eval-expr list-expr env))
+              (results nil))
+         (cond
+          ((not (listp items))
+           (error "Programmatic %s expects a list input, got: %S" op-name items))
+          ((stringp items)
+           (error "Programmatic %s does not support string input (got: %S)"
+                  op-name items)))
          (dolist (item items (nreverse results))
            ;; Each lambda invocation needs an isolated child env so `setq'
            ;; state does not leak between map/filter iterations.
