@@ -332,12 +332,12 @@ EDGE CASE: Nil object returns 0.
 EDGE CASE: Non-FSM atoms return 0.
 EDGE CASE: Same FSM appearing multiple times is counted once."
   (cond
+   ((null object) 0)
    ((consp object)
     (unless (gethash object seen)
       (puthash object t seen)
       (+ (my/gptel--fsm-count-internal (car object) seen)
          (my/gptel--fsm-count-internal (cdr object) seen))))
-   ((null object) 0)
    ((my/gptel--fsm-p object)
     (unless (gethash object seen)
       (puthash object t seen)
