@@ -416,7 +416,12 @@ Uses last-wins so the most recently registered struct takes precedence."
              (let ((seen (make-hash-table :test #'equal)))
                ;; Iterate reversed to capture last occurrence of each name.
                (dolist (tool (nreverse tools))
-                 (let ((name (ignore-errors (gptel-tool-name tool))))
+                 (let ((name (condition-case err
+                                 (gptel-tool-name tool)
+                               (error
+                                (message "gptel: tool-name extraction failed for %S: %s"
+                                         tool (error-message-string err))
+                                nil))))
                    (when name (puthash name tool seen))))
                ;; Return values in original order (first occurrence wins).
                (nreverse (hash-table-values seen))))))
