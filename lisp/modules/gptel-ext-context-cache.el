@@ -84,6 +84,14 @@ Reduces repeated iterations through model tables.")
   "Maximum entries in `my/gptel--token-estimate-cache'.
 Prevents unbounded memory growth from repeated token estimates.")
 
+(defconst my/gptel--alist-match-cache-max-size 500
+  "Maximum entries in `my/gptel--alist-partial-match-cache'.
+Prevents unbounded memory growth from repeated partial-match lookups.")
+
+(defvar my/gptel--alist-match-cache-size 0
+  "Counter tracking `my/gptel--alist-partial-match-cache' entry count.
+Used to prevent cache from exceeding max-size by checking count before insertion.")
+
 (defvar my/gptel--token-estimate-cache (make-hash-table :test 'equal)
   "Hash table caching token estimates for (chars . extension) pairs.")
 
@@ -263,7 +271,7 @@ Sources:
      :pricing-input 0.27 :pricing-output 0.95
      :max-output 16384
      :description "MiniMax M2.5 - 196k context, SWE-bench 80.2%, agent workflows")
-     ;; GPT
+    ;; GPT
     ("gpt-4o"
      :context-window 128000
      :pricing-input 2.5 :pricing-output 10.0
@@ -306,9 +314,10 @@ Single constant avoids allocating a new symbol on every search call.")
 
 (defun my/gptel--cache-or-alist-lookup (hash-table alist key)
   "Look up KEY in HASH-TABLE, falling back to ALIST partial match.
-Returns the value from hash table if found, otherwise searches ALIST
+Returns the value from hash table if found and valid, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found.
-Handles negative cache hits when KEY maps to a miss sentinel."
+Handles negative cache hits when KEY maps to a miss sentinel.
+Validates that cached values are positive integers before returning them."
   (when (and (stringp key) (not (string-empty-p key)))
     (if (hash-table-p hash-table)
         (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
@@ -318,7 +327,11 @@ Handles negative cache hits when KEY maps to a miss sentinel."
                  (my/gptel--alist-partial-match alist key)))
            ((eq hash-value my/gptel--context-window-miss-sentinel)
             nil)
-           (t hash-value)))
+           ((my/gptel--positive-integer-p hash-value)
+            hash-value)
+           (t
+            (and (listp alist)
+                 (my/gptel--alist-partial-match alist key)))))
       (and (listp alist)
            (my/gptel--alist-partial-match alist key)))))
 
@@ -350,7 +363,13 @@ Results are cached in `my/gptel--alist-partial-match-cache' for performance."
                           (setq best-match (cdr entry)))))))))
             (let ((result (unless (eq best-match my/gptel--alist-match-sentinel)
                             best-match)))
-              (puthash cache-key result my/gptel--alist-partial-match-cache)
+              (when result
+                (if (>= my/gptel--alist-match-cache-size my/gptel--alist-match-cache-max-size)
+                    (progn
+                      (clrhash my/gptel--alist-partial-match-cache)
+                      (setq my/gptel--alist-match-cache-size 0)))
+                (puthash cache-key result my/gptel--alist-partial-match-cache)
+                (cl-incf my/gptel--alist-match-cache-size))
               result))))))
 
 (defun my/gptel--plist-get (plist key &optional default)
@@ -378,26 +397,26 @@ to avoid repeated table scans and redundant lookups."
   (when (or (stringp model) (symbolp model))
     (let ((model-str (if (stringp model) model (symbol-name model))))
       (when (and (stringp model-str) (not (string-empty-p model-str)))
-      (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache)))
-        (if (eq cached my/gptel--gptel-tables-miss-sentinel)
-            nil
-          (or cached
-              (let ((result (catch 'found
-                              (dolist (var (my/gptel--gptel-model-tables))
-                                (let ((table (symbol-value var)))
-                                  (when (listp table)
-                                    (let ((entry (assoc-string model-str table t)))
-                                      (when (and (consp entry) (listp (cdr entry))
-                                                 (plist-member (cdr entry) :context-window))
-                                        (let ((cw (my/gptel--normalize-context-window
-                                                    (plist-get (cdr entry) :context-window))))
-                                          (when (and (integerp cw) (> cw 0))
-                                            (throw 'found cw))))))))
-                              nil)))
-                (if result
-                    (puthash model-str result my/gptel--gptel-tables-cw-cache)
-                  (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache))
-                result))))))))
+        (let ((cached (gethash model-str my/gptel--gptel-tables-cw-cache)))
+          (if (eq cached my/gptel--gptel-tables-miss-sentinel)
+              nil
+            (or cached
+                (let ((result (catch 'found
+                                (dolist (var (my/gptel--gptel-model-tables))
+                                  (let ((table (symbol-value var)))
+                                    (when (listp table)
+                                      (let ((entry (assoc-string model-str table t)))
+                                        (when (and (consp entry) (listp (cdr entry))
+                                                   (plist-member (cdr entry) :context-window))
+                                          (let ((cw (my/gptel--normalize-context-window
+                                                     (plist-get (cdr entry) :context-window))))
+                                            (when (and (integerp cw) (> cw 0))
+                                              (throw 'found cw))))))))
+                                nil)))
+                  (if result
+                      (puthash model-str result my/gptel--gptel-tables-cw-cache)
+                    (puthash model-str my/gptel--gptel-tables-miss-sentinel my/gptel--gptel-tables-cw-cache))
+                  result))))))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))

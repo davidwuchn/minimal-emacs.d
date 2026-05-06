@@ -772,8 +772,9 @@ CALLBACK receives final outcome plist."
   (unless (functionp callback)
     (error "Programmatic run-forms requires a function callback, got: %S" callback))
   (if (null forms)
-      (funcall callback (format "Error: Programmatic execution finished without calling result (used %d tools)"
-                                (plist-get state :tool-count)))
+      (funcall callback (gptel-sandbox--truncate-result
+                         (format "Error: Programmatic execution finished without calling result (used %d tools)"
+                                 (plist-get state :tool-count))))
     (gptel-sandbox--eval-statement
      (car forms) env state
      (lambda (outcome)
