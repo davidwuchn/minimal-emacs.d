@@ -307,6 +307,8 @@ Errors propagate to the outer condition-case in `execute-tool'."
   "Evaluate pure sandbox expression EXPR in ENV.
 This evaluator intentionally excludes general function application and only
 supports a small, explicit whitelist of pure operations."
+  (unless (hash-table-p env)
+    (error "Programmatic eval-expr requires a hash table environment, got: %S" env))
   (cond
    ((or (stringp expr) (numberp expr) (keywordp expr) (vectorp expr)) expr)
    ((memq expr '(t nil)) expr)
