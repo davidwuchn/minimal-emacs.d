@@ -1,29 +1,29 @@
 {
-  "iteration": 7,
+  "iteration": 2,
   "candidates": [
     {
-      "name": "contrastive-guidance",
-      "file": "assistant/strategies/prompt-builders/strategy-contrastive-guidance.el",
-      "hypothesis": "Explicit anti-patterns derived from prior failures will reduce regressions and improve decision quality",
+      "name": "hypothesis-typed",
+      "file": "assistant/strategies/prompt-builders/strategy-hypothesis-typed.el",
+      "hypothesis": "Categorizing hypotheses by type (bug-fix, performance, refactoring, safety, testing) and guiding toward underrepresented types improves solution space diversity",
       "axis": "A",
       "base_strategy": "template-default",
-      "components": ["contrastive-failure", "anti-pattern-extraction", "guidance-insertion"]
+      "components": ["hypothesis-categorization", "type-distribution", "diversity-guidance", "underrep-analysis"]
     },
     {
-      "name": "complexity-routing",
-      "file": "assistant/strategies/prompt-builders/strategy-complexity-routing.el",
-      "hypothesis": "Routing to different prompt complexity based on target file size reduces thrashing for large files and overhead for small files",
+      "name": "confidence-weighted",
+      "file": "assistant/strategies/prompt-builders/strategy-confidence-weighted.el",
+      "hypothesis": "Weighting guidance sections by confidence based on sample counts focuses the agent's attention on more reliable patterns",
       "axis": "A",
       "base_strategy": "template-default",
-      "components": ["complexity-tiering", "template-routing", "byte-threshold"]
+      "components": ["confidence-scoring", "pattern-classification", "weighted-guidance", "high-low-tiering"]
     },
     {
-      "name": "tiered-context",
-      "file": "assistant/strategies/prompt-builders/strategy-tiered-context.el",
-      "hypothesis": "Hierarchical tiered context structure with conditional inclusion improves relevance by only showing applicable guidance",
+      "name": "adaptive-framing",
+      "file": "assistant/strategies/prompt-builders/strategy-adaptive-framing.el",
+      "hypothesis": "Dynamically changing agent persona and task framing based on experiment progression (exploration vs exploitation) improves outcomes at all stages",
       "axis": "A",
       "base_strategy": "template-default",
-      "components": ["tiered-structure", "conditional-sections", "hierarchical-context"]
+      "components": ["stage-detection", "persona-switching", "task-directive", "progression-guidance"]
     }
   ]
 }
