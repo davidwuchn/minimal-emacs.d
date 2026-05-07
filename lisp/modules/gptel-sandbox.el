@@ -166,6 +166,8 @@ gptel preset.")
 (defun gptel-sandbox--normalize-binding (binding)
   "Normalize a let-style BINDING into `(SYMBOL VALUE-FORM)'."
   (cond
+   ((null binding)
+    (error "Programmatic let binding cannot be nil"))
    ((symbolp binding)
     (list binding nil))
    ((and (consp binding)
