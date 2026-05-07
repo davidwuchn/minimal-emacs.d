@@ -331,8 +331,6 @@ Validates that cached values are positive integers before returning them."
                  (my/gptel--alist-partial-match alist key)))
            ((eq hash-value my/gptel--context-window-miss-sentinel)
             nil)
-           ((eq hash-value my/gptel--alist-match-nil-marker)
-            nil)
            ((my/gptel--positive-integer-p hash-value)
             hash-value)
            (t
@@ -960,7 +958,9 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
              (cw (my/gptel--plist-get meta :context-window)))
         (when (my/gptel--positive-integer-p cw)
           (my/gptel--cache-context-window model-id cw))))
-     (t my/gptel-default-context-window))))
+     (t
+      (puthash model-id my/gptel--context-window-miss-sentinel my/gptel--context-window-cache)
+      my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
 
