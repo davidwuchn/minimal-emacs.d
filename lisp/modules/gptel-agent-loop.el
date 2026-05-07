@@ -310,7 +310,9 @@ Guards against delivering to a killed parent buffer by checking
 `gptel-agent-loop--task-parent-buffer' and
 `gptel-agent-loop--task-tracking-marker'."
   (cl-block gptel-agent-loop--deliver-result
-    (unless (and state (stringp result) (gptel-agent-loop--task-main-cb state))
+    (unless (and (gptel-agent-loop--task-p state)
+                 (stringp result)
+                 (functionp (gptel-agent-loop--task-main-cb state)))
       (message "[RunAgent] Error: Invalid args to deliver-result, dropping: %s"
                (if (stringp result)
                    (substring result 0 (min 50 (length result)))
@@ -647,20 +649,21 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 
        ((and (consp resp) (eq (car resp) 'tool-call))
         (let ((calls (cdr resp)))
-          (setf (gptel-agent-loop--task-step-count state)
-                (+ (gptel-agent-loop--step-count state)
-                   (length calls)))
-          (let ((max-steps (gptel-agent-loop--task-max-steps state)))
-            (when (and max-steps
-                       (>= (gptel-agent-loop--step-count state) max-steps))
-              (setf (gptel-agent-loop--task-max-steps-reached state) t)
-              (message "[RunAgent] Max steps (%d) reached for task '%s'"
-                       max-steps
-                       (gptel-agent-loop--task-description state))))
-          (unless (plist-member info :tracking-marker)
-            (setq info (plist-put info :tracking-marker
-                                  (gptel-agent-loop--task-tracking-marker state))))
-          (gptel--display-tool-calls calls info)))
+          (when (listp calls)
+            (setf (gptel-agent-loop--task-step-count state)
+                  (+ (gptel-agent-loop--step-count state)
+                     (length calls)))
+            (let ((max-steps (gptel-agent-loop--task-max-steps state)))
+              (when (and max-steps
+                         (>= (gptel-agent-loop--step-count state) max-steps))
+                (setf (gptel-agent-loop--task-max-steps-reached state) t)
+                (message "[RunAgent] Max steps (%d) reached for task '%s'"
+                         max-steps
+                         (gptel-agent-loop--task-description state))))
+            (unless (plist-member info :tracking-marker)
+              (setq info (plist-put info :tracking-marker
+                                    (gptel-agent-loop--task-tracking-marker state))))
+            (gptel--display-tool-calls calls info))))
 
        ((and (consp resp) (eq (car resp) 'tool-result))
         (gptel-agent-loop--cleanup-overlay ov)
@@ -789,7 +792,8 @@ Cache behavior:
 - Continuation and summary prompts pass ALLOW-CACHE nil intentionally
   because each continuation prompt is unique and should not reuse
   cached results from previous runs."
-  (unless (gptel-agent-loop--task-finished state)
+  (when (and (gptel-agent-loop--task-p state)
+             (not (gptel-agent-loop--task-finished state)))
     (let* ((agent-type (gptel-agent-loop--task-agent-type state))
            (description (gptel-agent-loop--task-description state))
            (cached (and allow-cache
