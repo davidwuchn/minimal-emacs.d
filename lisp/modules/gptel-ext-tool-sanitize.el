@@ -327,7 +327,7 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
       (let ((tool-use (plist-get info :tool-use)))
         (when tool-use
           (let* ((fps (or (plist-get info :doom-loop-fingerprints) '()))
-                 (run-counts (or (plist-get info :doom-loop-run-counts) nil))
+                 (run-counts (or (plist-get info :doom-loop-run-counts) '()))
                  (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
                  (n my/gptel-doom-loop-threshold)
                  (fps-end (last fps))
