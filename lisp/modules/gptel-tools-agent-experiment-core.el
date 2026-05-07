@@ -116,11 +116,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                               (repeated-focus
                                (gptel-auto-experiment--repeated-focus-match
                                 effective-agent-output previous-results)))
-                         (when candidate-validation
-                           (let ((best-cand (car (car candidate-validation)))
-                                 (best-score (plist-get (cdar candidate-validation) :score)))
-                             (message "[auto-exp] Validated %d candidates for %s, best score: %.2f"
-                                      (length candidate-validation) target best-score)))
+                          (when candidate-validation
+                            (let ((best-cand (car (car candidate-validation)))
+                                  (best-score (plist-get (cdar candidate-validation) :score)))
+                              (message "[auto-exp] Validated %d candidates for %s, best score: %.2f"
+                                       (length candidate-validation) target (or best-score 0.0))))
                          (when salvaged-agent-output
                           (message "[auto-exp] Executor timed out after partial changes for %s; evaluating actual worktree diff"
                                    target))
@@ -193,7 +193,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                     (lambda (pair)
                                                                       (format "- %s: score=%.1f, valid=%s"
                                                                               (substring (car pair) 0 (min 30 (length (car pair))))
-                                                                              (plist-get (cdr pair) :score)
+                                                                              (or (plist-get (cdr pair) :score) 0.0)
                                                                               (if (plist-get (cdr pair) :valid) "yes" "no")))
                                                                     candidate-validation
                                                                     "\n")
