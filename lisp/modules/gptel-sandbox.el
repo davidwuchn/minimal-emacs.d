@@ -775,6 +775,8 @@ CALLBACK receives final outcome plist."
     (error "Programmatic eval-progn requires a hash table environment, got: %S" env))
   (unless (listp state)
     (error "Programmatic eval-progn requires a plist state, got: %S" state))
+  (unless (listp body)
+    (error "Programmatic eval-progn requires a list of forms, got: %S" body))
   (if (null body)
       (funcall callback (list :done t :result nil))
     (gptel-sandbox--eval-statement
