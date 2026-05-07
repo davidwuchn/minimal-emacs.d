@@ -449,10 +449,11 @@ Returns a short description of what the user was asking for."
                                (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
                              lines-list)))
            (user-list (and (listp user-lines) user-lines))
-           (last-user (and user-list (car (last user-list)))))
-      (if last-user
-          (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
-        "Continue the task"))))
+           (last-user (and user-list (car (last user-list))))
+           (task (if (and last-user (not (string-empty-p last-user)))
+                     (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
+                   "Continue the task")))
+      (if (string-empty-p task) "Continue the task" task))))
 
 (defun my/gptel--extract-last-task (buffer-string)
   "Extract the most recent task/request from BUFFER-STRING.
