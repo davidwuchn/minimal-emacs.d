@@ -186,9 +186,12 @@ Returns :dashscope, :gemini, :openai, :copilot, or :unknown."
 (defun my/gptel--effective-threshold ()
   "Return effective threshold based on backend type.
 DashScope uses lower threshold due to server-side timeout limits."
-  (if (eq (my/gptel--backend-type) :dashscope)
-      my/gptel-auto-compact-threshold-dashscope
-    my/gptel-auto-compact-threshold))
+  (let ((threshold (if (eq (my/gptel--backend-type) :dashscope)
+                       my/gptel-auto-compact-threshold-dashscope
+                     my/gptel-auto-compact-threshold)))
+    (if (and (numberp threshold) (> threshold 0))
+        threshold
+      0.8)))
 
 (defun my/gptel--threshold-values ()
   "Return threshold values for current context.
@@ -209,7 +212,7 @@ Returns (tokens window threshold-fraction percentage-threshold)."
          (image-tokens (or (and (fboundp 'my/gptel--count-context-image-tokens)
                                 (my/gptel--count-context-image-tokens))
                            0)))
-    (+ text-tokens image-tokens)))
+    (max 0 (+ text-tokens image-tokens))))
 
 (defun my/gptel--compact-safe-p ()
   "Return non-nil if auto-compact is safe for the current buffer."
@@ -283,7 +286,7 @@ Auto-delegate: %s"
              model model-id
              (if cached (format "yes (%d)" cached) "no")
              chars (round tokens) (round text-tokens) (round image-tokens) image-count
-             (if (and (integerp window) (> window 0))
+             (if (and (numberp window) (integerp window) (> window 0) (numberp tokens) (>= tokens 0))
                  (* 100 (/ (float tokens) window))
                0)
              delegate-status)))
@@ -537,7 +540,7 @@ ORIG-FN is `gptel-request'. PROMPT and ARGS are passed through."
                  (callback (plist-get args :callback)))
             (message "[auto-delegate] Threshold exceeded: %d/%d tokens (%.0f%%)"
                      (round tokens) (round window)
-                     (if (and (integerp window) (> window 0))
+                     (if (and (numberp window) (integerp window) (> window 0) (numberp tokens) (>= tokens 0))
                          (* 100 (/ (float tokens) window))
                        0))
             (my/gptel--do-auto-delegate prompt callback))
