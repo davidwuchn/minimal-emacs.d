@@ -33,6 +33,8 @@
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
 (declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
+(declare-function gptel-auto-experiment--is-retryable-error-p "gptel-tools-agent-error" (response))
+(declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark" ())
 
 (defcustom gptel-auto-workflow-strategic-selection t
   "When non-nil, use LLM-based target selection.
@@ -201,7 +203,7 @@ EDGE CASE: Only caches context when shell commands produce non-empty output."
          (cache-time (and cache-entry
                           (plist-get cache-entry :timestamp)))
          (cache-valid (and cached-context cache-time
-                          (< (- now cache-time) cache-ttl))))
+                           (< (- now cache-time) cache-ttl))))
     (if cache-valid
         (progn
           (message "[auto-workflow] Using cached context for %s" proj-root)
@@ -224,9 +226,9 @@ EDGE CASE: Only caches context when shell commands produce non-empty output."
                                           (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
                                                   safe-root))
                                   :file-list (let* ((all-files (delq nil
-                                                                      (mapcar (lambda (s)
-                                                                                (unless (string-empty-p s) s))
-                                                                              (split-string file-list-shell "\n" t))))
+                                                                     (mapcar (lambda (s)
+                                                                               (unless (string-empty-p s) s))
+                                                                             (split-string file-list-shell "\n" t))))
                                                     (nonempty-files (delq nil
                                                                           (mapcar (lambda (f)
                                                                                     (let ((abs-path (expand-file-name f proj-root)))
@@ -362,10 +364,14 @@ OUTPUT JSON ONLY:
 
 (defun gptel-auto-workflow--ask-analyzer-with-findings (research-findings callback)
   "Ask analyzer with optional RESEARCH-FINDINGS for target selection.
-CALLBACK receives list of target files."
+CALLBACK receives list of target files.
+ASSUMPTION: my/gptel-agent-task-timeout may be unbound in some configurations.
+EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget govern."
   (let* ((context (gptel-auto-workflow--gather-context))
          (max-targets gptel-auto-workflow-max-targets-per-run)
-         (analyzer-timeout (max (or my/gptel-agent-task-timeout 0)
+         (analyzer-timeout (max (or (and (boundp 'my/gptel-agent-task-timeout)
+                                         my/gptel-agent-task-timeout)
+                                    0)
                                 gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
                   context research-findings max-targets)))
@@ -645,7 +651,10 @@ Returns list of validated file paths."
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
 CALLBACK receives list of target files.
-LLM decides if available, otherwise uses static list."
+LLM decides if available, otherwise uses static list.
+ASSUMPTION: gptel-auto-workflow--filter-frontier-saturated-targets returns a list or nil.
+EDGE CASE: External filter returns non-list value; listp guard prevents type errors.
+BEHAVIOR: Validates filtered result is a list before using it, falls back to unfiltered targets."
   (when (functionp callback)
     (gptel-auto-workflow--clear-analyzer-error-state)
     (let* ((proj-root (gptel-auto-workflow--effective-project-root))
@@ -664,14 +673,24 @@ LLM decides if available, otherwise uses static list."
                      (message "[auto-workflow] Analyzer returned no targets; using static targets")
                      (funcall callback static-targets))
                  (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                        (final-targets (or filtered-targets targets)))
+                        (final-targets (if (and filtered-targets (listp filtered-targets))
+                                           filtered-targets
+                                         targets)))
+                   (unless (or (null filtered-targets) (listp filtered-targets))
+                     (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
+                              filtered-targets))
                    (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
                             (length targets) (length final-targets))
                    (funcall callback final-targets))))))
         (let* ((filtered-targets (if static-targets
-                                      (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
-                                    nil))
-               (final-targets (or filtered-targets static-targets)))
+                                     (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
+                                   nil))
+               (final-targets (if (and filtered-targets (listp filtered-targets))
+                                  filtered-targets
+                                static-targets)))
+          (unless (or (null filtered-targets) (listp filtered-targets))
+            (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
+                     filtered-targets))
           (message "[auto-workflow] Static: %d targets, %d after frontier filtering"
                    (length static-targets) (length final-targets))
           (funcall callback final-targets))))))
@@ -770,10 +789,9 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
   (interactive)
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
-         (findings (or (gethash cache-key
-                                gptel-auto-workflow--research-findings-cache
-                                "")
-                       "")))
+         (findings (gethash cache-key
+                           gptel-auto-workflow--research-findings-cache
+                           "")))
     (list :running (timerp gptel-auto-workflow--research-timer)
           :interval gptel-auto-workflow-research-interval
           :project proj-root

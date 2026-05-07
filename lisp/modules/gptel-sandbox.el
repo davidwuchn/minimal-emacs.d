@@ -97,6 +97,14 @@ gptel preset.")
   (append gptel-sandbox--comparison-ops gptel-sandbox--data-ops)
   "All built-in operators available in sandbox expressions.")
 
+(defconst gptel-sandbox--builtin-arity
+  '((length 1 1) (car 1 1) (cdr 1 1) (nth 2 2) (cons 2 2)
+    (assoc 2 3) (plist-get 2 3) (string-empty-p 1 1)
+    (string-match-p 2 3) (format 1 nil) (split-string 1 4)
+    (string-join 1 2) (string-trim 1 3) (substring 2 3)
+    (alist-get 2 5))
+  "Alist of (FUNC MIN-ARGS MAX-ARGS) for arity validation.
+MAX-ARGS of nil means no upper bound. Comparison ops need >= 2 args.")
 ;;; Internal Helpers
 
 (defvar gptel-sandbox--missing-marker (make-symbol "gptel-sandbox-missing")
@@ -166,6 +174,8 @@ gptel preset.")
 (defun gptel-sandbox--normalize-binding (binding)
   "Normalize a let-style BINDING into `(SYMBOL VALUE-FORM)'."
   (cond
+   ((null binding)
+    (error "Programmatic let binding cannot be nil"))
    ((symbolp binding)
     (list binding nil))
    ((and (consp binding)
@@ -301,7 +311,23 @@ Used by `and' and `or' to share short-circuit evaluation logic."
 Errors propagate to the outer condition-case in `execute-tool'."
   (unless (functionp func)
     (error "Programmatic builtin requires a function, got: %S" func))
-  (apply func (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args)))
+  (let ((evaluated (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args))
+        (arity (assq func gptel-sandbox--builtin-arity)))
+    (when arity
+      (let* ((min-args (nth 1 arity))
+             (max-args (nth 2 arity))
+             (n (length evaluated)))
+        (when (< n min-args)
+          (error "Programmatic `%s` requires at least %d argument%s, got %d"
+                 func min-args (if (= min-args 1) "" "s") n))
+        (when (and max-args (> n max-args))
+          (error "Programmatic `%s` requires at most %d argument%s, got %d"
+                 func max-args (if (= max-args 1) "" "s") n))))
+    (when (memq func gptel-sandbox--comparison-ops)
+      (when (< (length evaluated) 2)
+        (error "Programmatic `%s` requires at least 2 arguments, got %d"
+               func (length evaluated))))
+    (apply func evaluated)))
 
 (defun gptel-sandbox--eval-expr (expr env)
   "Evaluate pure sandbox expression EXPR in ENV.
@@ -328,21 +354,21 @@ supports a small, explicit whitelist of pure operations."
             (let ((cond-result (gptel-sandbox--eval-expr (car args) env)))
               (if cond-result
                   (gptel-sandbox--eval-expr (cadr args) env)
-                (gptel-sandbox--eval-expr (nth 2 args) env)))))
+                (gptel-sandbox--eval-sequential (cddr args) env)))))
       ('setq
        (gptel-sandbox--eval-setq-pairs (cdr expr) env))
       ('when
-       (let ((args (cdr expr)))
-         (unless (>= (length args) 1)
-           (error "Programmatic when requires at least 1 argument (condition), got: %d" (length args)))
-         (when (gptel-sandbox--eval-expr (car args) env)
-           (gptel-sandbox--eval-sequential (cdr args) env))))
+          (let ((args (cdr expr)))
+            (unless (>= (length args) 1)
+              (error "Programmatic when requires at least 1 argument (condition), got: %d" (length args)))
+            (when (gptel-sandbox--eval-expr (car args) env)
+              (gptel-sandbox--eval-sequential (cdr args) env))))
       ('unless
-       (let ((args (cdr expr)))
-         (unless (>= (length args) 1)
-           (error "Programmatic unless requires at least 1 argument (condition), got: %d" (length args)))
-         (unless (gptel-sandbox--eval-expr (car args) env)
-           (gptel-sandbox--eval-sequential (cdr args) env))))
+          (let ((args (cdr expr)))
+            (unless (>= (length args) 1)
+              (error "Programmatic unless requires at least 1 argument (condition), got: %d" (length args)))
+            (unless (gptel-sandbox--eval-expr (car args) env)
+              (gptel-sandbox--eval-sequential (cdr args) env))))
       ('progn
         (gptel-sandbox--eval-sequential (cdr expr) env))
       ('let
@@ -393,8 +419,8 @@ supports a small, explicit whitelist of pure operations."
     (error "Programmatic tool-call arguments must be a proper list, got: %S" arg-forms))
   (unless (cl-evenp (length arg-forms))
     (error "Programmatic tool-call requires keyword/value pairs"))
-  (unless (listp tool-spec)
-    (error "Programmatic tool spec must be a list, got: %S" tool-spec))
+  (unless (and tool-spec (fboundp 'gptel-tool-args))
+    (error "Programmatic tool spec is missing gptel-tool accessors, got: %S" tool-spec))
   (let* ((arg-map (gptel-sandbox--tool-arg-map arg-forms))
          (spec-args (gptel-tool-args tool-spec)))
     (unless (listp spec-args)
@@ -403,7 +429,8 @@ supports a small, explicit whitelist of pure operations."
       (dolist (arg spec-args (nreverse values))
         (let* ((name (plist-get arg :name))
                (key (and (stringp name) (intern (concat ":" name))))
-               (key-present (and key (hash-table-contains-p arg-map key))))
+               (key-present (and key (not (eq (gethash key arg-map gptel-sandbox--missing-marker)
+                                              gptel-sandbox--missing-marker)))))
           (cond
            ((not key)
             (error "Invalid tool spec: argument missing :name property"))
@@ -613,7 +640,10 @@ like (:error \"...\") or (:violated t :reason \"...\")."
 (defun gptel-sandbox--extract-error-message (value)
   "Extract error message from VALUE (string or plist)."
   (cond
-   ((stringp value) (substring value (length "Error: ")))
+   ((stringp value)
+    (if (string-prefix-p "Error: " value)
+        (substring value (length "Error: "))
+      value))
    ((listp value)
     (or (plist-get value :reason)
         (plist-get value :error)
@@ -629,14 +659,12 @@ like (:error \"...\") or (:violated t :reason \"...\")."
 Error plists like (:error \"...\") or (:violated t :reason \"...\")
 are converted to error strings."
   (condition-case err
-      (cond
-       ((null result) "nil")
-       ((gptel-sandbox--error-result-p result)
-        (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result)))
-       ((fboundp 'gptel--to-string)
-        (let ((str (gptel--to-string result)))
+      (if (gptel-sandbox--error-result-p result)
+          (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result))
+        (let ((str (if (fboundp 'gptel--to-string)
+                       (gptel--to-string result)
+                     nil)))
           (if (stringp str) str (format "%s" result))))
-       (t (format "%s" result)))
     (error
      (format "Error: %s" (error-message-string err)))))
 
@@ -674,49 +702,50 @@ can consume lists, vectors, plists, and alists as readable data."
         (error "Programmatic exceeded max nested tool calls (%d)"
                my/gptel-programmatic-max-tool-calls))
       (condition-case err
-        (let* ((tool-fn (gptel-tool-function tool-spec))
-               (_ (unless (functionp tool-fn)
-                    (error "Tool %s has invalid :function property (got: %S)"
-                           tool-name tool-fn)))
-               (invoke-tool
-                (lambda ()
-                  (if (gptel-tool-async tool-spec)
-                      (condition-case async-err
-                          (apply tool-fn
-                                 (lambda (result)
-                                   (condition-case cb-err
-                                       (funcall callback (gptel-sandbox--format-result result))
-                                     (error (funcall callback
-                                                     (gptel-sandbox--format-result
-                                                      (gptel-sandbox--format-error
-                                                       (error-message-string cb-err)))))))
-                                 arg-values)
-                        (error (funcall callback
-                                        (gptel-sandbox--format-error
-                                         (error-message-string async-err)))))
-                    (let ((result (condition-case inner-err
-                                      (apply tool-fn arg-values)
-                                    (error (gptel-sandbox--format-error (error-message-string inner-err))))))
-                      (funcall callback (gptel-sandbox--format-result result)))))))
-          (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
-              (gptel-sandbox--maybe-aggregate-confirm
-               state
-               (lambda (aggregate-approved)
-                 (if aggregate-approved
-                     (funcall gptel-sandbox-confirm-function
-                              tool-spec arg-values
-                              (lambda (approved)
-                                (if approved
-                                    (funcall invoke-tool)
-                                  (funcall callback
+          (let* ((tool-fn (gptel-tool-function tool-spec))
+                 (_ (unless (functionp tool-fn)
+                      (error "Tool %s has invalid :function property (got: %S)"
+                             tool-name tool-fn)))
+                 (invoke-tool
+                  (lambda ()
+                    (if (gptel-tool-async tool-spec)
+                        (condition-case async-err
+                            (apply tool-fn
+                                   (lambda (result)
+                                     (condition-case cb-err
+                                         (funcall callback (gptel-sandbox--format-result result))
+                                       (error (funcall callback
+                                                       (gptel-sandbox--format-result
+                                                        (gptel-sandbox--format-error
+                                                         (error-message-string cb-err)))))))
+                                   arg-values)
+                          (error (funcall callback
+                                          (gptel-sandbox--format-result
                                            (gptel-sandbox--format-error
-                                            (format "Programmatic tool call rejected by user: %s"
-                                                    (gptel-tool-name tool-spec)))))))
-                   (funcall callback
-                            "Error: Programmatic aggregate preview rejected by user"))))
-            (funcall invoke-tool)))
-      (error
-       (funcall callback (gptel-sandbox--format-error (error-message-string err))))))))
+                                            (error-message-string async-err))))))
+                      (let ((result (condition-case inner-err
+                                        (apply tool-fn arg-values)
+                                      (error (gptel-sandbox--format-error (error-message-string inner-err))))))
+                        (funcall callback (gptel-sandbox--format-result result)))))))
+            (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
+                (gptel-sandbox--maybe-aggregate-confirm
+                 state
+                 (lambda (aggregate-approved)
+                   (if aggregate-approved
+                       (funcall gptel-sandbox-confirm-function
+                                tool-spec arg-values
+                                (lambda (approved)
+                                  (if approved
+                                      (funcall invoke-tool)
+                                    (funcall callback
+                                             (gptel-sandbox--format-error
+                                              (format "Programmatic tool call rejected by user: %s"
+                                                      (gptel-tool-name tool-spec)))))))
+                     (funcall callback
+                              "Error: Programmatic aggregate preview rejected by user"))))
+              (funcall invoke-tool)))
+        (error
+         (funcall callback (gptel-sandbox--format-error (error-message-string err))))))))
 
 (defun gptel-sandbox--eval-statement (statement env state callback)
   "Evaluate sandbox STATEMENT with ENV and STATE, then CALLBACK.

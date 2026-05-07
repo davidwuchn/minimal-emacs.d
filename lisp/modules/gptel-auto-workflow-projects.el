@@ -133,17 +133,20 @@ Each worktree gets its own isolated buffer for subagent overlays."
   (unless worktree-dir (error "WORKTREE-DIR cannot be nil"))
   (gptel-auto-workflow--ensure-buffer-tables)
   (let* ((root (gptel-auto-workflow--normalize-worktree-dir worktree-dir))
-         (worktree-name (file-name-nondirectory (directory-file-name root)))
-         (buf-name (format "*gptel-agent:%s@%s*"
-                           worktree-name
-                           (substring (md5 root) 0 8)))
-         (existing (gethash root gptel-auto-workflow--worktree-buffers)))
+         (worktree-name (and root (file-name-nondirectory (directory-file-name root))))
+         (buf-name (and root worktree-name
+                        (format "*gptel-agent:%s@%s*"
+                                worktree-name
+                                (substring (md5 root) 0 8))))
+         (existing (and root (gethash root gptel-auto-workflow--worktree-buffers))))
+    ;; Guard against nil root from failed normalization
+    (unless root (error "WORKTREE-DIR could not be normalized to a valid directory path: %s" worktree-dir))
     ;; Check if existing buffer is still live
     (if (and existing (buffer-live-p existing))
         (progn
           (with-current-buffer existing
             (setq-local default-directory root))
-          (puthash root existing gptel-auto-workflow--project-buffers)
+          (puthash root existing gptel-auto-workflow--worktree-buffers)
           existing)
       ;; Create new buffer (or recreate if previous was killed)
       (let ((buf (get-buffer-create buf-name)))

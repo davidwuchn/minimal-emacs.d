@@ -133,31 +133,25 @@
   "Substitute TEMPLATE with VARIABLES, respecting boolean FLAGS.
 For each {{#flag}}...{{/flag}} block, only include if flag is non-nil."
   (let ((result template))
-    ;; Process conditional blocks
     (dolist (flag flags)
       (let* ((flag-name (car flag))
              (flag-value (cdr flag))
              (pattern-start (format "{{#%s}}" flag-name))
              (pattern-end (format "{{/%s}}" flag-name))
              (start-idx 0))
-        (while (and result
-                    (string-match (regexp-quote pattern-start) result start-idx))
-          (let ((block-start (match-beginning 0))
-                (after-start (+ (match-end 0)
-                                (string-match (regexp-quote pattern-end)
-                                              (substring result (match-end 0))))))
-            (if after-start
-                (let ((block-end (match-beginning 0))
-                      (block-content (substring result (match-end 0) (1- after-start))))
-                  (if flag-value
-                      (setq result (concat (substring result 0 block-start)
-                                           block-content
-                                           (substring result (1+ after-start))))
-                    (setq result (concat (substring result 0 block-start)
-                                         (substring result (1+ after-start)))))
-                  (setq start-idx block-start))
-              (setq start-idx (match-end 0))))))
-    ;; Now do standard variable substitution
+        (while (string-match (regexp-quote pattern-start) result start-idx)
+          (let* ((block-start (match-beginning 0))
+                 (content-start (match-end 0))
+                 (end-match (string-match (regexp-quote pattern-end) result content-start)))
+            (if (not end-match)
+                (setq start-idx content-start)
+              (let ((block-content (substring result content-start end-match))
+                    (block-end (+ end-match (length pattern-end))))
+                (setq result
+                      (concat (substring result 0 block-start)
+                              (if flag-value block-content "")
+                              (substring result block-end)))
+                (setq start-idx block-start)))))))
     (gptel-auto-workflow--substitute-template result variables)))
 
 (defun strategy-tiered-context-build-prompt (target experiment-id max-experiments analysis baseline previous-results)

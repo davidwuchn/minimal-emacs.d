@@ -112,6 +112,7 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
 (defun gptel-auto-workflow--resolve-worktree-base-dir ()
   "Return the configured worktree base directory or the default fallback."
   (or (and (boundp 'gptel-auto-workflow-worktree-base)
+           (gptel-auto-workflow--non-empty-string-p gptel-auto-workflow-worktree-base)
            gptel-auto-workflow-worktree-base)
       "var/tmp/experiments"))
 
