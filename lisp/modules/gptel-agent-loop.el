@@ -660,7 +660,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 
          ((and (consp resp) (eq (car resp) 'tool-call))
           (let ((calls (cdr resp)))
-            (when (listp calls)
+            (when (and (listp calls) (not (null calls)))
               (setf (gptel-agent-loop--task-step-count state)
                     (+ (gptel-agent-loop--step-count state)
                        (length calls)))
