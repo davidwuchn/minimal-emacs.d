@@ -248,6 +248,19 @@ streak should be treated as a stuck turn."
   '("ApplyPatch" "Edit" "Insert" "Mkdir" "Move" "Write")
   "Tools that reset inspection-thrash tracking because they can change files.")
 
+(defun my/gptel--safe-serialize-args (args)
+  "Return a safe string representation of ARGS for fingerprinting.
+Handles edge cases: circular references, objects without printers,
+and other conditions that cause `format' to signal errors."
+  (if args
+      (condition-case err
+          (format "%S" args)
+        (error
+         (message "gptel: args serialization error: %s, using placeholder"
+                  (error-message-string err))
+         "unserializable"))
+    "nil"))
+
 (defun my/gptel--tool-call-fingerprint (tc)
   "Return a fingerprint string for tool call TC.
 The fingerprint is \"NAME:MD5(ARGS)\" so two calls are considered identical
@@ -256,8 +269,8 @@ only when both the tool name and the serialized argument plist match."
     (let* ((raw-name (plist-get tc :name))
            (name (if (and raw-name (not (equal raw-name ""))) raw-name "nil"))
            (args (plist-get tc :args))
-           (args-str (if args (format "%S" args) "nil")))
-       (concat name ":" (md5 args-str)))))
+           (args-str (my/gptel--safe-serialize-args args)))
+      (concat name ":" (md5 args-str)))))
 
 (defun my/gptel--inspection-tool-target (tc)
   "Return the inspected file path for tool call TC, or nil when unavailable."
