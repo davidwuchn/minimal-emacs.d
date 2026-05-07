@@ -161,8 +161,8 @@ Adapts max-experiments based on API error rate."
     (gptel-auto-workflow--call-in-run-context
      workflow-root
      (lambda ()
-       (setq baseline (gptel-auto-experiment-benchmark t)
-             baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+        (setq baseline (gptel-auto-experiment-benchmark t nil)
+              baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
      loop-buffer
      workflow-root)
     (let* ((original-max gptel-auto-experiment-max-per-target)

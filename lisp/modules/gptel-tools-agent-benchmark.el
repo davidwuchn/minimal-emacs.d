@@ -220,9 +220,10 @@ Checks that the number of changed files is within limits."
           (cons nil files))
       (cons t files))))
 
-(defun gptel-auto-experiment-benchmark (&optional skip-tests)
+(defun gptel-auto-experiment-benchmark (&optional skip-tests hypothesis)
   "Run syntax validation + Eight Keys scoring.
   If SKIP-TESTS is non-nil, skip test execution (tests run in staging flow).
+  HYPOTHESIS is the experiment hypothesis string, used for task-type-aware scoring.
   Returns plist with :passed, :tests-passed, :eight-keys, etc.
 
 NOTE: Nucleus script validation is skipped for experiments because:
@@ -266,7 +267,7 @@ tests are deferred to the staging gate to keep the worker daemon alive."
                                (and baseline-check (car baseline-check))))
              (final-tests-output (or (and baseline-check (cdr baseline-check))
                                      tests-output))
-             (scores (gptel-auto-experiment--eight-keys-scores)))
+              (scores (gptel-auto-experiment--eight-keys-scores hypothesis)))
         (when defer-tests-to-staging
           (message "[auto-exp] Deferring tests to staging flow for %s"
                    (or gptel-auto-workflow--current-target default-directory)))
@@ -283,9 +284,10 @@ tests are deferred to the staging gate to keep the worker daemon alive."
               :eight-keys (when scores (alist-get 'overall scores))
               :eight-keys-scores scores)))))
 
-(defun gptel-auto-experiment--eight-keys-scores ()
+(defun gptel-auto-experiment--eight-keys-scores (&optional hypothesis)
   "Get full Eight Keys scores alist from current codebase.
-Scores based on commit message + code diff (not just stat)."
+Scores based on commit message + code diff (not just stat).
+If HYPOTHESIS is provided, use task-type-aware scoring."
   (when (fboundp 'gptel-benchmark-eight-keys-score)
     (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
@@ -297,7 +299,7 @@ Scores based on commit message + code diff (not just stat)."
                        (format "cd %s && git diff HEAD~1 --unified=2 2>/dev/null | head -200"
                                worktree-quoted)))
            (output (concat commit-msg "\n\n" code-diff)))
-      (gptel-benchmark-eight-keys-score output))))
+      (gptel-benchmark-eight-keys-score output hypothesis))))
 
 (defun gptel-auto-experiment--eight-keys-score ()
   "Get Eight Keys overall score from current codebase."

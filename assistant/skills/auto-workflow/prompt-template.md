@@ -53,6 +53,8 @@ Overall Eight Keys score: {{baseline}}
 
 {{failure-patterns}}
 
+{{task-type-diversity}}
+
 {{agent-behavior}}
 
 ## Objective

@@ -137,24 +137,78 @@ Helper to reduce duplication in accessor functions."
   "Return Wu Xing element for KEY."
   (gptel-benchmark--get-key-property key :element))
 
-(defun gptel-benchmark-eight-keys-score (output)
-  "Score OUTPUT against all Eight Keys using local pattern matching.
+(defconst gptel-benchmark--task-type-key-mapping
+  '((refactoring
+     (fractal-clarity epsilon-purpose mu-directness exists-truth)
+     "Code refactoring: clarity, purpose, directness, truth")
+    (bug-fix
+     (forall-vigilance exists-truth fractal-clarity epsilon-purpose)
+     "Bug fix: vigilance, truth, clarity, purpose")
+    (performance
+     (phi-vitality exists-truth fractal-clarity epsilon-purpose)
+     "Performance optimization: vitality, truth, clarity, purpose")
+    (feature
+     (tau-wisdom phi-vitality pi-synthesis fractal-clarity epsilon-purpose exists-truth forall-vigilance mu-directness)
+     "Feature development: all keys")
+    (validation
+     (forall-vigilance exists-truth fractal-clarity)
+     "Validation/safety: vigilance, truth, clarity")
+    (default
+     (phi-vitality fractal-clarity epsilon-purpose tau-wisdom pi-synthesis mu-directness exists-truth forall-vigilance)
+     "Default: all keys"))
+  "Mapping from task types to relevant Eight Keys.
+Each entry: (task-type (keys...) description).")
+
+(defun gptel-benchmark--detect-task-type (hypothesis)
+  "Detect task type from HYPOTHESIS string using keyword matching.
+Returns a symbol: refactoring, bug-fix, performance, feature, validation, or default."
+  (when (stringp hypothesis)
+    (let ((h (downcase hypothesis)))
+      (cond
+       ;; Validation/safety tasks
+       ((or (string-match-p "\\bvalidation\\|\\bguard\\|\\bdefensive\\|\\bnil-check\\|\\bsafety\\|\\bempty string\\|\\bnull check\\|\\bnil-coalesc" h))
+        'validation)
+       ;; Bug fix tasks
+       ((or (string-match-p "\\bfix\\|\\bbug\\|\\berror\\|\\bprevent\\|\\bcrash\\|\\bruntime error\\|\\bhandle\\|\\bcorrect" h))
+        'bug-fix)
+       ;; Performance tasks
+       ((or (string-match-p "\\bperformance\\|\\boptimize\\|\\bcache\\|\\bspeed\\|\\bfast\\|\\bmemory\\|\\bleak\\|\\befficiency\\|\\btoken usage" h))
+        'performance)
+       ;; Refactoring tasks
+       ((or (string-match-p "\\brefactor\\|\\bextract\\|\\bsimplify\\|\\bduplicate\\|\\bclarity\\|\\brename\\|\\bhelper\\|\\bDRY\\|\\bredundant\\|\\bremove duplication" h))
+        'refactoring)
+       ;; Feature tasks (new functionality)
+       ((or (string-match-p "\\badd\\|\\bnew\\|\\bfeature\\|\\bsupport\\|\\bimplement\\|\\bcreate\\|\\bintroduce" h))
+        'feature)
+       ;; Default
+       (t 'default)))))
+
+(defun gptel-benchmark-eight-keys-score (output &optional hypothesis)
+  "Score OUTPUT against relevant Eight Keys using local pattern matching.
+If HYPOTHESIS is provided, detect task type and only score relevant keys.
 Returns alist: ((key . score) ...) plus overall score."
-  (let ((scores '())
-        (total 0.0)
-        (count 0))
+  (let* ((task-type (gptel-benchmark--detect-task-type hypothesis))
+         (relevant-keys (or (cadr (assoc task-type gptel-benchmark--task-type-key-mapping))
+                           (cadr (assoc 'default gptel-benchmark--task-type-key-mapping))))
+         (scores '())
+         (total 0.0)
+         (count 0))
     (dolist (key-def gptel-benchmark-eight-keys-definitions)
       (let* ((key (car key-def))
              (def-plist (cdr key-def))
              (weight (or (alist-get key gptel-benchmark-eight-keys-weights) 1.0))
              (signals (plist-get def-plist :signals))
-             (anti-patterns (plist-get def-plist :anti-patterns))
-             (signal-score (gptel-benchmark--score-signals output signals))
-             (anti-score (gptel-benchmark--score-anti-patterns output anti-patterns))
-             (score (+ (* 0.6 signal-score) (* 0.4 anti-score))))
-        (push (cons key score) scores)
-        (cl-incf total (* score weight))
-        (cl-incf count weight)))
+             (anti-patterns (plist-get def-plist :anti-patterns)))
+        (if (memq key relevant-keys)
+            ;; Score relevant keys normally
+            (let* ((signal-score (gptel-benchmark--score-signals output signals))
+                   (anti-score (gptel-benchmark--score-anti-patterns output anti-patterns))
+                   (score (+ (* 0.6 signal-score) (* 0.4 anti-score))))
+              (push (cons key score) scores)
+              (cl-incf total (* score weight))
+              (cl-incf count weight))
+          ;; Mark non-relevant keys as N/A
+          (push (cons key 'not-applicable) scores))))
     (push (cons 'overall (if (> count 0) (/ total count) 0.0)) scores)
     (nreverse scores)))
 
