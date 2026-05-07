@@ -785,10 +785,9 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
   (interactive)
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
-         (findings (or (gethash cache-key
-                                gptel-auto-workflow--research-findings-cache
-                                "")
-                       "")))
+         (findings (gethash cache-key
+                           gptel-auto-workflow--research-findings-cache
+                           "")))
     (list :running (timerp gptel-auto-workflow--research-timer)
           :interval gptel-auto-workflow-research-interval
           :project proj-root
