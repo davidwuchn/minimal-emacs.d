@@ -729,7 +729,7 @@ time to apply and verify a focused fix."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-workflow-review-time-budget 600
+(defcustom gptel-auto-workflow-review-time-budget 900
   "Timeout budget in seconds for staging review subagent calls."
   :type 'integer
   :safe #'integerp
