@@ -284,7 +284,19 @@ Returns error message string on failure, nil on success."
      (lambda (result)
        (setq actual result)))
     (should (equal "Error: Programmatic execution finished without calling result (used 0 tools)"
-                   actual))))
+                    actual))))
+
+(ert-deftest sandbox/resolve-tool-args/supports-struct-tool-and-nil-value ()
+  "Tool argument resolution should support gptel-tool-like structs.
+An explicit nil argument must count as present, not as a missing required arg."
+  (require 'gptel-sandbox)
+  (let* ((tool (test-gptel-tool-create
+                :name "Read"
+                :args (list (list :name "path")
+                            (list :name "optional" :optional t))))
+         (resolved (gptel-sandbox--resolve-tool-args
+                    tool (list :path nil) (gptel-sandbox--make-env))))
+    (should (equal '(nil nil) resolved))))
 
 (defun test-sandbox--eval-real-expr (expr &optional bindings)
   "Evaluate sandbox EXPR with optional BINDINGS in a fresh real env."
