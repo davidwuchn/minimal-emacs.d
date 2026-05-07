@@ -794,7 +794,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
           (funcall callback (list :continue t :done nil))))
       tool-name arg-forms env state))
     (`(result ,expr)
-     (funcall callback (list :done t :result (gptel-sandbox--eval-expr expr env))))
+     (funcall callback (list :done t :result (gptel-sandbox--format-result (gptel-sandbox--eval-expr expr env)))))
     (_
      (error "Unsupported statement in Programmatic sandbox: %S"
             (if (consp statement) (car statement) statement)))))
