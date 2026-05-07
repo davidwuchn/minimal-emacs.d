@@ -764,14 +764,14 @@ Increased to 3 to give high-quality targets more exploration chances."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-min-quality-gain-on-score-tie 0.02
+(defcustom gptel-auto-experiment-min-quality-gain-on-score-tie 0.005
   "Minimum code-quality gain required to keep a tied benchmark score.
 
 Tied Eight Keys scores should only be kept when code quality improves by at
 least this amount and the combined score still improves.
 
-Lowered from 0.03: file-level quality scoring produces small deltas even for
-real defensive improvements, especially on already-high-quality files."
+Lowered to 0.005: refactoring and validation tasks produce small quality deltas
+(0.01-0.02) even for real improvements on already-high-quality files."
   :type 'number
   :safe #'numberp
   :group 'gptel-tools-agent)
