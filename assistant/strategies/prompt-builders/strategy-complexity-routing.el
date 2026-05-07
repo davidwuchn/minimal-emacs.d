@@ -137,7 +137,7 @@ Returns symbol: 'minimal, 'standard, or 'extended."
    ;; Very small files (<2KB) get minimal - overhead not worth it
    (t 'minimal)))
 
-(defun strategy-complexity-routing--build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-complexity-routing-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt with complexity routing.
 Selects template variant based on target file size."
   ;; Adapt compression
@@ -289,7 +289,7 @@ Selects template variant based on target file size."
 (when (fboundp 'gptel-auto-workflow--register-strategy)
   (gptel-auto-workflow--register-strategy
    "complexity-routing"
-   #'strategy-complexity-routing--build-prompt
+   #'strategy-complexity-routing-build-prompt
    (strategy-complexity-routing-get-metadata)))
 
 (provide 'strategy-complexity-routing)

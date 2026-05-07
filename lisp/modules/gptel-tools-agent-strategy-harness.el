@@ -392,14 +392,23 @@ preferring the active strategy when it has no evaluations yet."
            (lambda (name) (member name evaluated-strategies))
            strategies)))
     (cond
-     ;; If active strategy is unevaluated, use it (exploration)
-     ((and (not (equal gptel-auto-workflow--active-strategy "template-default"))
-           (member gptel-auto-workflow--active-strategy unevaluated-strategies))
-      (message "[strategy] Selected unevaluated active strategy %s for exploration"
-               gptel-auto-workflow--active-strategy)
-      gptel-auto-workflow--active-strategy)
-     ;; If we have evaluated strategies, pick the best one
-     (evaluated-strategies
+      ;; EXPLORATION: If we have unevaluated strategies, randomly try one
+      ;; This ensures evolved strategies get their first evaluations
+      ((and unevaluated-strategies
+            (< (random 100) 40))  ; 40% chance to try an unevaluated strategy
+       (let* ((random-idx (random (length unevaluated-strategies)))
+              (chosen (nth random-idx unevaluated-strategies)))
+         (message "[strategy] Exploring unevaluated strategy %s (%d/%d unevaluated)"
+                  chosen random-idx (length unevaluated-strategies))
+         chosen))
+      ;; If active strategy is unevaluated, use it (exploration)
+      ((and (not (equal gptel-auto-workflow--active-strategy "template-default"))
+            (member gptel-auto-workflow--active-strategy unevaluated-strategies))
+       (message "[strategy] Selected unevaluated active strategy %s for exploration"
+                gptel-auto-workflow--active-strategy)
+       gptel-auto-workflow--active-strategy)
+      ;; If we have evaluated strategies, pick the best one
+      (evaluated-strategies
       (let* ((sorted (sort (copy-sequence evaluated-strategies)
                           (lambda (a b)
                             (let ((perf-a (gptel-auto-workflow--get-strategy-performance a))
