@@ -88,6 +88,8 @@ fixable validation failures that the executor can correct."
        (or (gptel-auto-experiment--elisp-syntax-error-p target validation-error)
            (string-match-p "Defensive code removal detected\\|removing.*fallbacks\\|without proof"
                            validation-error)
+           (string-match-p "Undefined function introduced\\|undefined.*runtime.*call"
+                           validation-error)
            (string-match-p "security|injection|eval.*without.*guard"
                            validation-error))))
 
@@ -110,6 +112,15 @@ Instructs executor to load relevant skill instead of hardcoding patterns."
           ((gptel-auto-experiment--elisp-syntax-error-p target validation-error)
            "CALL THIS FIRST: Skill(\"elisp-expert\")
 This skill teaches syntax-safe Elisp edits and dangerous patterns including cl-return-from requirements.")
+          ;; Undefined function calls - guide the agent to check Emacs Lisp availability
+          ((string-match-p "Undefined function introduced\\|undefined.*runtime.*call"
+                           validation-error)
+           "The undefined function was rejected because it does not exist in this Emacs Lisp runtime.
+Common Lisp functions NOT available in Emacs: getf (use plist-get), plusp (use (> n 0)),
+remf (use cl-remf or manual plist surgery), psetq (use setq), incf/decf (use setq with +),
+key (use plist-get), cons? (use consp), atom? (use atom).
+Also check: function symbols use #' not ' single-quote (which marks a symbol, not a function).
+Replace undefined calls with valid Emacs Lisp equivalents or remove them entirely.")
           ;; Add more skill mappings here as needed
           (t "")))
         (original-contract
