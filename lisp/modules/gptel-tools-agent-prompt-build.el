@@ -444,8 +444,9 @@ Implements section-level A/B testing to identify effective prompt components."
                 (axis-performance . ,(gptel-auto-experiment--format-axis-performance target))
                 (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
                 (saturation-status . ,(gptel-auto-experiment--frontier-saturation-guidance target))
-                (failure-patterns . ,(gptel-auto-experiment--format-failure-patterns target))
-                (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
+                 (failure-patterns . ,(gptel-auto-experiment--format-failure-patterns target))
+                 (task-type-diversity . ,(gptel-auto-experiment--format-task-type-diversity target))
+                 (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
                 (strategy-frontier . ,(if (fboundp 'gptel-auto-workflow--format-strategy-frontier)
                                           (gptel-auto-workflow--format-strategy-frontier)
                                         ""))
@@ -1550,6 +1551,76 @@ Returns string with transferable insights, or empty string if none."
                          patterns
                          "\n")
               "\n\nConsider adapting these patterns to this target if applicable.\n\n"))))
+
+;;; Task-Type Diversity Tracking
+
+(defun gptel-auto-experiment--get-task-type-stats (target)
+  "Get statistics on task types tried for TARGET.
+Returns plist with :counts (type->count) and :total."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (counts (make-hash-table :test 'equal))
+        (total 0))
+    (when (file-exists-p results-file)
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                           (line-end-position))
+                          "\t"))
+                 (line-target (nth 1 fields))
+                 (hypothesis (nth 2 fields)))
+            (when (and (equal line-target target)
+                       hypothesis
+                       (not (string-empty-p hypothesis)))
+              (let ((task-type (gptel-benchmark--detect-task-type hypothesis)))
+                (puthash task-type (1+ (gethash task-type counts 0)) counts)
+                (setq total (1+ total))))
+            (forward-line 1)))))
+    (list :counts counts :total total)))
+
+(defun gptel-auto-experiment--format-task-type-diversity (target)
+  "Format task-type diversity guidance for TARGET.
+Shows which task types have been tried and suggests underexplored ones."
+  (let* ((stats (gptel-auto-experiment--get-task-type-stats target))
+         (counts (plist-get stats :counts))
+         (total (plist-get stats :total))
+         (all-types '(refactoring bug-fix performance feature validation))
+         (type-names '((refactoring . "Refactoring")
+                       (bug-fix . "Bug Fix")
+                       (performance . "Performance")
+                       (feature . "Feature Addition")
+                       (validation . "Validation/Safety")))
+         (lines '()))
+    ;; Show current distribution
+    (dolist (type all-types)
+      (let ((count (gethash type counts 0))
+            (name (cdr (assoc type type-names))))
+        (push (format "  %s: %d experiment%s" name count (if (= count 1) "" "s")) lines)))
+    ;; Find underexplored types
+    (let ((underexplored
+           (cl-remove-if (lambda (type) (>= (gethash type counts 0) 2))
+                         all-types)))
+      (if underexplored
+          (concat "## Task-Type Diversity\n"
+                  "Current distribution for this target:\n"
+                  (mapconcat #'identity (nreverse lines) "\n")
+                  "\n\nConsider trying these underexplored task types:\n"
+                  (mapconcat (lambda (type)
+                               (format "- %s: %s"
+                                       (cdr (assoc type type-names))
+                                       (pcase type
+                                         ('bug-fix "Find and fix actual bugs, edge cases, or error handling gaps")
+                                         ('performance "Optimize hot paths, add caching, reduce complexity")
+                                         ('feature "Add new functionality or capabilities")
+                                         ('validation "Add safety guards, type checking, boundary validation")
+                                         ('refactoring "Extract functions, remove duplication, improve naming"))))
+                             underexplored
+                             "\n")
+                  "\n\n")
+        ""))))
 
 (provide 'gptel-tools-agent-prompt-build)
 ;;; gptel-tools-agent-prompt-build.el ends here
