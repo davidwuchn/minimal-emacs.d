@@ -99,6 +99,16 @@ Used to prevent cache from exceeding max-size by checking count before insertion
   "Atomic counter tracking `my/gptel--token-estimate-cache' entry count.
 Used to prevent cache from exceeding max-size by checking count before insertion.")
 
+(defun my/gptel--cache-maybe-evict (cache-sym size-sym max-size)
+  "Evict CACHE-SYM if SIZE-SYM >= MAX-SIZE.
+Returns t if evicted, nil otherwise.
+BEHAVIOR: Clears the entire cache when capacity is reached.
+EDGE CASE: Handles both cache-full and cache-empty scenarios correctly."
+  (when (>= (symbol-value size-sym) max-size)
+    (clrhash (symbol-value cache-sym))
+    (set size-sym 0)
+    t))
+
 (defvar my/gptel--context-window-cache-last-refresh nil
   "Time (as a float) when the cache was last refreshed.")
 
@@ -377,9 +387,9 @@ Results are cached in `my/gptel--alist-partial-match-cache' for performance."
             (let ((result (unless (eq best-match my/gptel--alist-match-sentinel)
                             best-match)))
               (let ((to-cache (if result result my/gptel--alist-match-nil-marker)))
-                (when (>= my/gptel--alist-match-cache-size my/gptel--alist-match-cache-max-size)
-                  (clrhash my/gptel--alist-partial-match-cache)
-                  (setq my/gptel--alist-match-cache-size 0))
+                (my/gptel--cache-maybe-evict 'my/gptel--alist-partial-match-cache
+                                              'my/gptel--alist-match-cache-size
+                                              my/gptel--alist-match-cache-max-size)
                 (puthash cache-key to-cache my/gptel--alist-partial-match-cache)
                 (cl-incf my/gptel--alist-match-cache-size))
               result)))))))
@@ -496,11 +506,9 @@ and a positive integer context_length; otherwise returns nil."
                           2.5)
                          (t 3.5)))
                  (result (/ (float chars) ratio)))
-            (if (>= my/gptel--token-estimate-cache-size
-                    my/gptel--token-estimate-cache-max-size)
-                (progn
-                  (clrhash my/gptel--token-estimate-cache)
-                  (setq my/gptel--token-estimate-cache-size 0)))
+            (my/gptel--cache-maybe-evict 'my/gptel--token-estimate-cache
+                                          'my/gptel--token-estimate-cache-size
+                                          my/gptel--token-estimate-cache-max-size)
             (puthash cache-key result my/gptel--token-estimate-cache)
             (cl-incf my/gptel--token-estimate-cache-size)
             result)))))
