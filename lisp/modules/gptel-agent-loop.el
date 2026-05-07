@@ -295,16 +295,19 @@ Extracts :code/:status from error-data to enable HTTP status checks."
       (my/gptel--transient-error-p error-data http-status))))
 
 (defun gptel-agent-loop--maybe-cache-get (agent-type prompt)
-  "Return cached subagent result for AGENT-TYPE and PROMPT if available."
+  "Return cached subagent result for AGENT-TYPE and PROMPT if available.
+Returns nil if PROMPT is not a non-empty string (defensive guard)."
   (when (and (fboundp 'my/gptel--subagent-cache-get)
-             agent-type
-             prompt)
+             (stringp prompt)
+             (not (string-empty-p prompt))
+             agent-type)
     (my/gptel--subagent-cache-get agent-type prompt)))
 
 (defun gptel-agent-loop--maybe-cache-put (state result)
   "Cache RESULT for STATE if the helper exists.
-Returns nil if STATE is not a valid task structure."
+Returns nil if STATE is not a valid task structure or RESULT is not a string."
   (when (and (gptel-agent-loop--task-p state)
+             (stringp result)
              (fboundp 'my/gptel--subagent-cache-put))
     (my/gptel--subagent-cache-put
      (gptel-agent-loop--task-agent-type state)
