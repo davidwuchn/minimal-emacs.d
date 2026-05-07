@@ -690,6 +690,8 @@ can consume lists, vectors, plists, and alists as readable data."
     (error "Programmatic sandbox execute-tool requires a function callback, got: %S" callback))
   (unless (listp state)
     (error "Programmatic sandbox execute-tool requires a plist state, got: %S" state))
+  (unless (or (symbolp tool-name) (stringp tool-name))
+    (error "Programmatic tool name must be a symbol or string, got: %S" tool-name))
   (let* ((tool-spec (if (fboundp 'gptel-get-tool)
                         (gptel-get-tool tool-name)
                       nil)))
@@ -792,7 +794,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
           (funcall callback (list :continue t :done nil))))
       tool-name arg-forms env state))
     (`(result ,expr)
-     (funcall callback (list :done t :result (gptel-sandbox--eval-expr expr env))))
+     (funcall callback (list :done t :result (gptel-sandbox--format-result (gptel-sandbox--eval-expr expr env)))))
     (_
      (error "Unsupported statement in Programmatic sandbox: %S"
             (if (consp statement) (car statement) statement)))))
@@ -819,8 +821,8 @@ CALLBACK receives final outcome plist."
   "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
   (unless (listp forms)
     (error "Programmatic run-forms requires a list, got: %S" forms))
-  (unless (listp state)
-    (error "Programmatic run-forms requires a plist state, got: %S" state))
+  (unless (proper-list-p state)
+    (error "Programmatic run-forms requires a proper plist state, got: %S" state))
   (unless (functionp callback)
     (error "Programmatic run-forms requires a function callback, got: %S" callback))
   (if (null forms)
