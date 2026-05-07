@@ -115,17 +115,18 @@
   (let* ((failure-reasons (gptel-auto-experiment--get-common-failure-reasons target 5)))
     (when failure-reasons
       (concat "### Anti-Patterns (AVOID these patterns)\n"
-              (mapconcat (lambda (reason)
-                           (cond
-                            ((string-match-p "regressed" reason)
-                             "- AVOID: Improving one metric while degrading another")
-                            ((string-match-p "tie without" reason)
-                             "- AVOID: Submitting changes that result in score ties")
-                            ((string-match-p "quality.*→.*quality" reason)
-                             "- AVOID: Maintaining quality without improvement")
-                            (t (format "- AVOID: %s"
-                                       (substring reason 0 (min 60 (length reason)))))))
-                         failure-reasons "\n")
+               (mapconcat (lambda (pair)
+                            (let ((reason (car pair)))
+                              (cond
+                               ((string-match-p "regressed" reason)
+                                "- AVOID: Improving one metric while degrading another")
+                               ((string-match-p "tie without" reason)
+                                "- AVOID: Submitting changes that result in score ties")
+                               ((string-match-p "quality.*→.*quality" reason)
+                                "- AVOID: Maintaining quality without improvement")
+                               (t (format "- AVOID: %s"
+                                          (substring reason 0 (min 60 (length reason))))))))
+                          failure-reasons "\n")
               "\n"))))
 
 (defun strategy-tiered-context--substitute-with-conditions (template variables flags)
@@ -294,4 +295,3 @@ Sections are organized into tiers and conditionally included based on available 
    (strategy-tiered-context-get-metadata)))
 
 (provide 'strategy-tiered-context)
-)
