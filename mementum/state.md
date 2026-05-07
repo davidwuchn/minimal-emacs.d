@@ -2,9 +2,37 @@
 
 > Last session: 2026-05-07 20:10
 
-## Current Session: 2026-05-07 Auto-Workflow E2E Hardening
+## Current Session: 2026-05-08 E2E Auto-Workflow Run - SUCCESS
 
-**Status:** Local hardening fixes are implemented and targeted verification passes. The live daemon is still running old uncommitted code in run `2026-05-07T191002Z-7427`; do not expect staging to reflect these fixes until they are committed/pushed and the daemon is restarted via `./scripts/run-auto-workflow-cron.sh`.
+**Status:** Real end-to-end auto-workflow run completed successfully. Format specifier fix verified working. Self-evolution producing insights.
+
+**Done (This Session):**
+- Fixed "Format specifier doesn't match argument type" error caused by nil `:score` values in `candidate-validation` entries.
+- Applied `(or score 0.0)` guards in 3 locations:
+  - `gptel-tools-agent-prompt-build.el:674` - TSV logging of candidate scores
+  - `gptel-tools-agent-experiment-core.el:196` - Retry prompt formatting  
+  - `gptel-tools-agent-experiment-core.el:123` - Best score message
+- Committed: `ccff7368` "⊘ fix: nil candidate-validation scores causing Format specifier errors"
+- Pushed to `origin/main` and `origin/staging`
+- Killed stale daemon (PID 2412871)
+- Cleared `.elc` cache
+- Restarted daemon via `./scripts/run-auto-workflow-cron.sh auto-workflow` (new PID 2638870)
+- **Real E2E run results (2026-05-08T061620Z-14ac):**
+  - Target: `lisp/modules/gptel-agent-loop.el`
+  - Experiment 1/9: **KEPT** (score 9/9, quality 0.94, strategy: template-default) - nil-guard validation for empty tool-call lists
+  - Experiment 2/9: **DISCARDED** (score 9/9, no improvement, strategy: adaptive-framing) - nil guard to safe-accumulated-output
+  - Experiment 3/9: **KEPT** (score 9/9, strategy: template-default) - missing error handler fix
+  - Experiment 4/9: **RUNNING** (strategy: hypothesis-typed)
+  - Staging flow: WORKING (verified and pushed to origin after each kept experiment)
+  - Self-evolution: Consolidated 3 insights for gptel-agent-loop → knowledge page
+- **ZERO format specifier errors** in current run (all 12 errors are from pre-fix old daemon)
+
+**Verification:**
+- `./scripts/verify-nucleus.sh` passes
+- Daemon PID 2638870 running, 4h+ uptime
+- No errors in current run
+- Staging verification PASS for all kept experiments
+- Review PASSED for all kept experiments
 
 **Done (This Session):**
 - Diagnosed real run `2026-05-07T180002Z-eec7` header-only results as stale daemon scorer arity: `[nucleus] Callback error ignored after cleanup: (wrong-number-of-arguments (1 . 1) 2)`.
