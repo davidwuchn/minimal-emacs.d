@@ -87,8 +87,11 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
 (defun my/gptel--nil-tool-call-p (tc)
   "Return non-nil when TC is a nil/null/empty-named tool call spec."
   (when (listp tc)
-    (let ((name (plist-get tc :name)))
-      (or (null name) (eq name :null) (equal name "null") (equal name "")))))
+    (let ((name (plist-get tc :name))
+          (args (plist-get tc :args)))
+      (or (null name) (eq name :null) (equal name "null") (equal name "")
+          ;; Validate args is a proper plist structure to prevent downstream errors
+          (and (not (listp args)) t)))))
 
 (defun my/gptel--repair-tool-call (tc correct-name)
   "Repair tool call TC to use CORRECT-NAME.
