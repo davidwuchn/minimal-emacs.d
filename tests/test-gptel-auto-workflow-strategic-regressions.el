@@ -296,6 +296,24 @@
           (should (equal selected '("lisp/modules/foo.el"))))
       (delete-directory proj-root t))))
 
+(ert-deftest regression/auto-workflow-strategic/select-targets-keeps-unfiltered-targets-when-frontier-filter-returns-nil ()
+  "A nil frontier-filter result should not leave the workflow with no targets."
+  (let ((gptel-auto-workflow-strategic-selection nil)
+        (gptel-auto-workflow-targets '("lisp/modules/foo.el"))
+        (selected nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--filter-valid-targets)
+               (lambda (&rest _args) '("lisp/modules/foo.el")))
+              ((symbol-function 'gptel-auto-workflow--filter-frontier-saturated-targets)
+               (lambda (_targets) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-workflow-select-targets
+       (lambda (targets)
+         (setq selected targets))))
+    (should (equal selected '("lisp/modules/foo.el")))))
+
 (provide 'test-gptel-auto-workflow-strategic-regressions)
 
 ;;; test-gptel-auto-workflow-strategic-regressions.el ends here

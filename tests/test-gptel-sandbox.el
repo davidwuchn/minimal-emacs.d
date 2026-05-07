@@ -306,6 +306,21 @@ An explicit nil argument must count as present, not as a missing required arg."
       (gptel-sandbox--bind-result (car binding) (cdr binding) env))
     (gptel-sandbox--eval-expr expr env)))
 
+(ert-deftest sandbox/eval-builtin/allows-documented-optional-arguments ()
+  "Builtin arity validation should preserve supported optional arguments."
+  (should (= 3 (test-sandbox--eval-real-expr
+                '(string-match-p "a" "bbbabc" 2))))
+  (should (equal '("a" "b")
+                 (test-sandbox--eval-real-expr
+                  '(split-string " a , b " "," t " "))))
+  (should (equal '("x" . 1)
+                 (test-sandbox--eval-real-expr
+                  '(assoc "x" '(("x" . 1)) 'string=))))
+  (should (= 1 (test-sandbox--eval-real-expr
+                '(plist-get '(:x 1) :x 'eq))))
+  (should (= 1 (test-sandbox--eval-real-expr
+                '(alist-get 'x '((x . 1)) nil nil 'eq)))))
+
 (ert-deftest sandbox/eval-mapcar/isolates-setq-state-per-item ()
   "Mapcar should not leak setq state between lambda invocations."
   (should

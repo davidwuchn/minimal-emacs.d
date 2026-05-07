@@ -99,10 +99,10 @@ gptel preset.")
 
 (defconst gptel-sandbox--builtin-arity
   '((length 1 1) (car 1 1) (cdr 1 1) (nth 2 2) (cons 2 2)
-    (assoc 2 2) (plist-get 2 2) (string-empty-p 1 1)
-    (string-match-p 2 2) (format 1 nil) (split-string 1 3)
-    (string-join 1 2) (string-trim 0 3) (substring 2 3)
-    (alist-get 2 4))
+    (assoc 2 3) (plist-get 2 3) (string-empty-p 1 1)
+    (string-match-p 2 3) (format 1 nil) (split-string 1 4)
+    (string-join 1 2) (string-trim 1 3) (substring 2 3)
+    (alist-get 2 5))
   "Alist of (FUNC MIN-ARGS MAX-ARGS) for arity validation.
 MAX-ARGS of nil means no upper bound. Comparison ops need >= 2 args.")
 ;;; Internal Helpers
