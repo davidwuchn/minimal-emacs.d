@@ -439,17 +439,20 @@ Returns empty list for nil or non-string input to prevent errors."
 (defun my/gptel--extract-last-task-from-lines (lines)
   "Extract the most recent task/request from LINES.
 Returns a short description of what the user was asking for."
-  (let* ((lines-list (and (listp lines) lines))
-         (user-lines (and lines-list
-                          (cl-remove-if-not
-                           (lambda (line)
-                             (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
-                           lines-list)))
-         (user-list (and (listp user-lines) user-lines))
-         (last-user (and user-list (car (last user-list)))))
-    (if last-user
-        (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
-      "Continue the task")))
+  (cl-block my/gptel--extract-last-task-from-lines
+    (when (null lines)
+      (cl-return-from my/gptel--extract-last-task-from-lines "Continue the task"))
+    (let* ((lines-list (and (listp lines) lines))
+           (user-lines (and lines-list
+                            (cl-remove-if-not
+                             (lambda (line)
+                               (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
+                             lines-list)))
+           (user-list (and (listp user-lines) user-lines))
+           (last-user (and user-list (car (last user-list)))))
+      (if last-user
+          (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
+        "Continue the task"))))
 
 (defun my/gptel--extract-last-task (buffer-string)
   "Extract the most recent task/request from BUFFER-STRING.

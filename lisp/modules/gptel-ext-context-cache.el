@@ -327,17 +327,21 @@ Validates that cached values are positive integers before returning them."
         (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
           (cond
            ((eq hash-value my/gptel--cache-sentinel)
-            (and (listp alist)
-                 (my/gptel--alist-partial-match alist key)))
+            (let ((result (and (listp alist)
+                               (my/gptel--alist-partial-match alist key))))
+              (unless result
+                (puthash key my/gptel--context-window-miss-sentinel hash-table))
+              result))
            ((eq hash-value my/gptel--context-window-miss-sentinel)
-            nil)
-           ((eq hash-value my/gptel--alist-match-nil-marker)
             nil)
            ((my/gptel--positive-integer-p hash-value)
             hash-value)
            (t
-            (and (listp alist)
-                 (my/gptel--alist-partial-match alist key)))))
+            (let ((result (and (listp alist)
+                               (my/gptel--alist-partial-match alist key))))
+              (unless result
+                (puthash key my/gptel--context-window-miss-sentinel hash-table))
+              result))))
       (and (listp alist)
            (my/gptel--alist-partial-match alist key)))))
 
@@ -960,7 +964,9 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
              (cw (my/gptel--plist-get meta :context-window)))
         (when (my/gptel--positive-integer-p cw)
           (my/gptel--cache-context-window model-id cw))))
-     (t my/gptel-default-context-window))))
+     (t
+      (puthash model-id my/gptel--context-window-miss-sentinel my/gptel--context-window-cache)
+      my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
 

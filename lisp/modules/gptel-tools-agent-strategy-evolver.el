@@ -532,8 +532,10 @@ CANDIDATE_3:
 
 (defun gptel-auto-workflow--parse-strategy-candidates (response)
   "Parse 3 strategy candidates from gptel RESPONSE.
-Returns list of 3 code strings."
+Returns list of 3 code strings.
+Handles multiple formats: CANDIDATE_N markers, numbered lists, or bare code blocks."
   (let ((candidates '()))
+    ;; Try CANDIDATE_N format first
     (dotimes (i 3)
       (let* ((start-label (format "CANDIDATE_%d:" (1+ i)))
              (end-label (format "CANDIDATE_%d:" (+ i 2)))
@@ -546,7 +548,32 @@ Returns list of 3 code strings."
                  (block (string-trim (substring response start end))))
             (when (string-match "```\\(?:elisp\\|emacs-lisp\\)?[[:space:]]*\\(\\(?:.\\|\n\\)*?\\)[[:space:]]*```" block)
               (setq block (string-trim (match-string 1 block))))
-            (push (and (> (length block) 100) block) candidates)))))
+            (when (and block (> (length block) 50))
+              (push block candidates))))))
+    ;; Fallback: look for any elisp code blocks
+    (when (< (length candidates) 3)
+      (let ((pos 0))
+        (while (and (< (length candidates) 3)
+                    (string-match "```\\(?:elisp\\|emacs-lisp\\)?[[:space:]]*\\(\\(?:.\\|\n\\)*?\\)[[:space:]]*```" response pos))
+          (let ((block (string-trim (match-string 1 response))))
+            (when (and (> (length block) 50)
+                       (string-match-p "(defun strategy-" block)
+                       (not (member block candidates)))
+              (push block candidates)))
+          (setq pos (match-end 0)))))
+    ;; Fallback 2: look for (defun strategy-... patterns directly
+    (when (< (length candidates) 3)
+      (let ((pos 0))
+        (while (and (< (length candidates) 3)
+                    (string-match "(defun strategy-[^[:space:]]+-build-prompt" response pos))
+          (let ((start (match-beginning 0))
+                (end (or (string-match "(provide " response (match-end 0))
+                         (length response))))
+            (let ((block (string-trim (substring response start end))))
+              (when (and (> (length block) 50)
+                         (not (member block candidates)))
+                (push block candidates))))
+          (setq pos (match-end 0)))))
     (setq candidates (nreverse candidates))
     (while (< (length candidates) 3)
       (setq candidates (append candidates (list nil))))
@@ -677,7 +704,9 @@ Returns new strategy name or nil if rejected."
                   nil)
               (gptel-auto-workflow--load-strategy new-name)
               (message "[strategy-evolution] ACCEPTED %s (axis %s) from %d candidates"
-                       new-name axis (length valid-candidates))
+                       (format "%s" new-name)
+                       (format "%s" axis)
+                       (length valid-candidates))
               new-name)))))))
 
 ;;; Periodic Strategy Evolution

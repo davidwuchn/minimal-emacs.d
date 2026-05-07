@@ -307,6 +307,8 @@ Errors propagate to the outer condition-case in `execute-tool'."
   "Evaluate pure sandbox expression EXPR in ENV.
 This evaluator intentionally excludes general function application and only
 supports a small, explicit whitelist of pure operations."
+  (unless (hash-table-p env)
+    (error "Programmatic eval-expr requires a hash table environment, got: %S" env))
   (cond
    ((or (stringp expr) (numberp expr) (keywordp expr) (vectorp expr)) expr)
    ((memq expr '(t nil)) expr)
@@ -679,15 +681,19 @@ can consume lists, vectors, plists, and alists as readable data."
                (invoke-tool
                 (lambda ()
                   (if (gptel-tool-async tool-spec)
-                      (apply tool-fn
-                             (lambda (result)
-                               (condition-case cb-err
-                                   (funcall callback (gptel-sandbox--format-result result))
-                                 (error (funcall callback
-                                                 (gptel-sandbox--format-result
-                                                  (gptel-sandbox--format-error
-                                                   (error-message-string cb-err)))))))
-                             arg-values)
+                      (condition-case async-err
+                          (apply tool-fn
+                                 (lambda (result)
+                                   (condition-case cb-err
+                                       (funcall callback (gptel-sandbox--format-result result))
+                                     (error (funcall callback
+                                                     (gptel-sandbox--format-result
+                                                      (gptel-sandbox--format-error
+                                                       (error-message-string cb-err)))))))
+                                 arg-values)
+                        (error (funcall callback
+                                        (gptel-sandbox--format-error
+                                         (error-message-string async-err)))))
                     (let ((result (condition-case inner-err
                                       (apply tool-fn arg-values)
                                     (error (gptel-sandbox--format-error (error-message-string inner-err))))))
