@@ -681,15 +681,19 @@ can consume lists, vectors, plists, and alists as readable data."
                (invoke-tool
                 (lambda ()
                   (if (gptel-tool-async tool-spec)
-                      (apply tool-fn
-                             (lambda (result)
-                               (condition-case cb-err
-                                   (funcall callback (gptel-sandbox--format-result result))
-                                 (error (funcall callback
-                                                 (gptel-sandbox--format-result
-                                                  (gptel-sandbox--format-error
-                                                   (error-message-string cb-err)))))))
-                             arg-values)
+                      (condition-case async-err
+                          (apply tool-fn
+                                 (lambda (result)
+                                   (condition-case cb-err
+                                       (funcall callback (gptel-sandbox--format-result result))
+                                     (error (funcall callback
+                                                     (gptel-sandbox--format-result
+                                                      (gptel-sandbox--format-error
+                                                       (error-message-string cb-err)))))))
+                                 arg-values)
+                        (error (funcall callback
+                                        (gptel-sandbox--format-error
+                                         (error-message-string async-err)))))
                     (let ((result (condition-case inner-err
                                       (apply tool-fn arg-values)
                                     (error (gptel-sandbox--format-error (error-message-string inner-err))))))
