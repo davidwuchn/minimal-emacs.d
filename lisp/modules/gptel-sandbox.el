@@ -658,14 +658,12 @@ like (:error \"...\") or (:violated t :reason \"...\")."
 Error plists like (:error \"...\") or (:violated t :reason \"...\")
 are converted to error strings."
   (condition-case err
-      (cond
-       ((null result) "nil")
-       ((gptel-sandbox--error-result-p result)
-        (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result)))
-       ((fboundp 'gptel--to-string)
-        (let ((str (gptel--to-string result)))
+      (if (gptel-sandbox--error-result-p result)
+          (gptel-sandbox--format-error (gptel-sandbox--extract-error-message result))
+        (let ((str (if (fboundp 'gptel--to-string)
+                       (gptel--to-string result)
+                     nil)))
           (if (stringp str) str (format "%s" result))))
-       (t (format "%s" result)))
     (error
      (format "Error: %s" (error-message-string err)))))
 
