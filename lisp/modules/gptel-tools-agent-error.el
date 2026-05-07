@@ -153,10 +153,11 @@ Returns the message string or nil."
     (and (stringp msg)
          (not (gptel-auto-experiment--aborted-agent-output-p msg))
          (or (gptel-auto-experiment--shared-transient-error-p msg)
+             (gptel-auto-experiment--rate-limit-error-p msg)
              (gptel-auto-experiment--provider-usage-limit-error-p msg)
              (let ((case-fold-search t))
                (string-match-p
-                "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\"\\|Malformed JSON"
+                "timeout\\|timed out\\|temporary\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\"\\|Malformed JSON"
                 msg))))))
 
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
