@@ -1016,8 +1016,10 @@ experiment phases do not trip the real pre-grade target validator."
     (should decision)
     (should (plist-get decision :keep))
     (should-not (string-match-p "Comparator override:" (plist-get decision :reasoning)))
-    (should (string-match-p "Kept: score tie with >= 0.02 quality gain"
-                            (plist-get decision :reasoning)))))
+    (should (string-match-p
+             (format "Kept: score tie with >= %.2f quality gain"
+                     gptel-auto-experiment-min-quality-gain-on-score-tie)
+             (plist-get decision :reasoning)))))
 
 (ert-deftest regression/auto-experiment/decide-rejects-score-tie-without-combined-improvement ()
   "Comparator should reject tied scores when the combined score does not improve."
@@ -2633,6 +2635,41 @@ experiment phases do not trip the real pre-grade target validator."
        (should (string-match-p "COMMIT: always \"not committed\"" prompt))
        (should-not (string-match-p "COMMIT your changes: git add -A && git commit" prompt))
        (should (string-match-p "NEVER reply with only \"Done\"" prompt)))))
+
+(ert-deftest regression/auto-experiment/eight-keys-scores-falls-back-for-stale-scorer ()
+  "A stale one-argument Eight Keys scorer should not abort a live workflow run."
+  (let ((calls nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-or-project-dir)
+               (lambda (&rest _) "/tmp/worktree"))
+              ((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff"))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-benchmark-eight-keys-score)
+               (lambda (output)
+                 (push output calls)
+                 '((overall . 0.42)))))
+      (should (equal (gptel-auto-experiment--eight-keys-scores "validation guard")
+                     '((overall . 0.42))))
+      (should (= (length calls) 1)))))
+
+(ert-deftest regression/auto-workflow/reload-live-support-reloads-principles ()
+  "Cron hot-reload should refresh the task-type-aware scorer before workflow runs."
+  (let ((loaded nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--seed-live-root-load-path)
+               (lambda (&rest _) nil))
+              ((symbol-function 'load-file)
+               (lambda (path)
+                 (push path loaded)))
+              ((symbol-function 'nucleus-presets-setup-agents)
+               (lambda () nil))
+              ((symbol-function 'nucleus--after-agent-update)
+               (lambda () nil)))
+      (gptel-auto-workflow--reload-live-support "/tmp/project")
+      (should (member "/tmp/project/lisp/modules/gptel-benchmark-principles.el"
+                      loaded)))))
 
 (ert-deftest regression/auto-experiment/build-prompt-adds-inspection-thrash-recovery-guidance ()
   "Prompt should harden executor behavior after an inspection-thrash failure."
@@ -10372,6 +10409,73 @@ failure."
           (should (string-match-p
                    "Defensive code removal detected"
                    (gptel-auto-experiment--validate-code target))))
+      (delete-directory repo t))))
+
+(ert-deftest regression/auto-workflow/validate-code-flags-introduced-undefined-runtime-call ()
+  "New calls to functions absent from this Emacs runtime should be rejected."
+  (let* ((repo (file-name-as-directory (make-temp-file "validate-code-undefined-repo" t)))
+         (target (expand-file-name "lisp/modules/target.el" repo))
+         (default-directory repo))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory target) t)
+          (with-temp-file target
+            (insert ";;; target.el -*- lexical-binding: t; -*-\n")
+            (insert "(defvar validate-code--missing-marker (make-symbol \"missing\"))\n")
+            (insert "(defun validate-code-target (key table)\n")
+            (insert "  (let ((value (gethash key table validate-code--missing-marker)))\n")
+            (insert "    (unless (eq value validate-code--missing-marker) value)))\n"))
+          (should (= 0 (call-process "git" nil nil nil "init")))
+          (should (= 0 (call-process "git" nil nil nil "add" ".")))
+          (let ((process-environment
+                 (append '("GIT_AUTHOR_NAME=Test"
+                           "GIT_AUTHOR_EMAIL=test@example.com"
+                           "GIT_COMMITTER_NAME=Test"
+                           "GIT_COMMITTER_EMAIL=test@example.com")
+                         process-environment)))
+            (should (= 0 (call-process "git" nil nil nil
+                                       "-c" "user.name=Test"
+                                       "-c" "user.email=test@example.com"
+                                       "commit" "-m" "initial"))))
+          (with-temp-file target
+            (insert ";;; target.el -*- lexical-binding: t; -*-\n")
+            (insert "(defun validate-code-target (key table)\n")
+            (insert "  (when (hash-table-contains-p table key)\n")
+            (insert "    (gethash key table)))\n"))
+          (should (string-match-p
+                   "Undefined function introduced.*hash-table-contains-p"
+                   (gptel-auto-experiment--validate-code target))))
+      (delete-directory repo t))))
+
+(ert-deftest regression/auto-workflow/validate-code-allows-introduced-local-call ()
+  "New calls to functions defined in the edited file should be allowed."
+  (let* ((repo (file-name-as-directory (make-temp-file "validate-code-local-repo" t)))
+         (target (expand-file-name "lisp/modules/target.el" repo))
+         (default-directory repo))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory target) t)
+          (with-temp-file target
+            (insert ";;; target.el -*- lexical-binding: t; -*-\n")
+            (insert "(defun validate-code-target (x) x)\n"))
+          (should (= 0 (call-process "git" nil nil nil "init")))
+          (should (= 0 (call-process "git" nil nil nil "add" ".")))
+          (let ((process-environment
+                 (append '("GIT_AUTHOR_NAME=Test"
+                           "GIT_AUTHOR_EMAIL=test@example.com"
+                           "GIT_COMMITTER_NAME=Test"
+                           "GIT_COMMITTER_EMAIL=test@example.com")
+                         process-environment)))
+            (should (= 0 (call-process "git" nil nil nil
+                                       "-c" "user.name=Test"
+                                       "-c" "user.email=test@example.com"
+                                       "commit" "-m" "initial"))))
+          (with-temp-file target
+            (insert ";;; target.el -*- lexical-binding: t; -*-\n")
+            (insert "(defun validate-code-helper (x) x)\n")
+            (insert "(defun validate-code-target (x)\n")
+            (insert "  (validate-code-helper x))\n"))
+          (should-not (gptel-auto-experiment--validate-code target)))
       (delete-directory repo t))))
 
 (ert-deftest regression/auto-workflow/json-target-file-handles-string-key-alists ()

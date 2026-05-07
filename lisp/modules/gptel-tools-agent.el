@@ -30,6 +30,7 @@
                    gptel-tools-agent-worktree
                    gptel-tools-agent-staging-baseline
                    gptel-tools-agent-staging-merge
+                   gptel-tools-agent-validation
                    gptel-tools-agent-benchmark
                    gptel-tools-agent-prompt-analyze
                    gptel-tools-agent-prompt-build

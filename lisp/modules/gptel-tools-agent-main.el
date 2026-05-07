@@ -283,6 +283,7 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
                     (gptel-auto-workflow--default-dir)
                     default-directory)))))
     (gptel-auto-workflow--seed-live-root-load-path root)
+    (load-file (expand-file-name "lisp/modules/gptel-benchmark-principles.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-ext-context.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-ext-fsm-utils.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-ext-retry.el" root))

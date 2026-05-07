@@ -1,6 +1,41 @@
 # Mementum State
 
-> Last session: 2026-05-02 21:55
+> Last session: 2026-05-07 20:10
+
+## Current Session: 2026-05-07 Auto-Workflow E2E Hardening
+
+**Status:** Local hardening fixes are implemented and targeted verification passes. The live daemon is still running old uncommitted code in run `2026-05-07T191002Z-7427`; do not expect staging to reflect these fixes until they are committed/pushed and the daemon is restarted via `./scripts/run-auto-workflow-cron.sh`.
+
+**Done (This Session):**
+- Diagnosed real run `2026-05-07T180002Z-eec7` header-only results as stale daemon scorer arity: `[nucleus] Callback error ignored after cleanup: (wrong-number-of-arguments (1 . 1) 2)`.
+- Added fallback in `gptel-auto-experiment--eight-keys-scores` for stale one-argument `gptel-benchmark-eight-keys-score`.
+- Added live reload of `lisp/modules/gptel-benchmark-principles.el` in `gptel-auto-workflow--reload-live-support` so long-lived daemons refresh the task-type-aware scorer.
+- Improved callback error logging in `my/gptel--invoke-callback-safely` to include the callback object and re-signal under `debug-on-error`.
+- Observed real run `2026-05-07T191002Z-7427` pass the old wedge, reach `Baseline for lisp/modules/gptel-sandbox.el`, produce results, and then fail staging on an unavailable generated call to `hash-table-contains-p`.
+- Extracted pre-grade validation helpers to new `lisp/modules/gptel-tools-agent-validation.el` and loaded it before benchmark, keeping touched workflow modules under 1000 lines.
+- Added undefined-runtime-call detection for newly added call sites, including `hash-table-contains-p`, while allowing local definitions and avoiding false positives from defun/lambda arglists.
+- Fixed validator walker to skip improper lists so dotted `cl-loop` binding specs do not crash validation.
+- Updated comparator threshold regression to assert `gptel-auto-experiment-min-quality-gain-on-score-tie` dynamically.
+
+**Verification:**
+- Focused validator/scorer/reload ERT selector: 6/6 pass.
+- Full targeted validator + safe-callback ERT selector: 16/16 pass.
+- Comparator score-tie ERT selector: 3/3 pass.
+- `check-parens` passed for touched Elisp/test files.
+- `git diff --check` passed.
+- Touched workflow modules byte-compile with warnings only; generated `.elc` artifacts removed.
+- Line counts: validation 265, benchmark 857, main 943, subagent 999, loader 47.
+
+**Important Notes:**
+- Current branch: `main`.
+- Relevant local source/test changes are uncommitted: `lisp/modules/gptel-tools-agent-validation.el`, `gptel-tools-agent-benchmark.el`, `gptel-tools-agent-main.el`, `gptel-tools-agent-subagent.el`, `gptel-tools-agent.el`, and `tests/test-gptel-tools-agent-regressions.el`.
+- Unrelated dirty workflow artifacts/submodules remain; do not revert or include them accidentally unless explicitly requested.
+- `hash-table-contains-p` is not available in the current Emacs runtime and should be rejected pre-grade.
+
+**Next Steps:**
+- Ask for explicit approval before committing/pushing the hardening changes.
+- After commit/push, restart with wrapper lifecycle only: `./scripts/run-auto-workflow-cron.sh stop` then `./scripts/run-auto-workflow-cron.sh auto-workflow`.
+- Monitor `./scripts/run-auto-workflow-cron.sh messages`, status, and the new `results.tsv` for baseline rows, no callback arity wedge, and undefined-call pre-grade rejection.
 
 ## Current Session: 2026-05-02 Meta-Harness Strategy Evolution
 
