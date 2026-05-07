@@ -651,9 +651,9 @@ row for the same experiment and target."
                           (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
                           (- (gptel-auto-workflow--plist-get experiment :score-after 0)
                              (gptel-auto-workflow--plist-get experiment :score-before 0))
-                          decision
-                          (gptel-auto-workflow--plist-get experiment :duration 0)
-                          (gptel-auto-workflow--plist-get experiment :grader-quality "?")
+                           decision
+                           (round (gptel-auto-workflow--plist-get experiment :duration 0))
+                           (gptel-auto-workflow--plist-get experiment :grader-quality "?")
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
