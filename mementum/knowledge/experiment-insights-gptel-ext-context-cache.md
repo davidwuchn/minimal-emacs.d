@@ -3,7 +3,7 @@ title: Experiment Insights - gptel-ext-context-cache
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-ext-context-cache]
-updated: 2026-05-07 16:00
+updated: 2026-05-07 20:00
 ---
 
 # Experiment Insights: gptel-ext-context-cache
