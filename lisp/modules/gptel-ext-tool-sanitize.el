@@ -135,7 +135,11 @@ This protects async tool dispatch, where gptel does not wrap the initial
       (funcall orig fsm)
     (error
      (unless (my/gptel--complete-tool-dispatch-error fsm err)
-       (signal (car err) (cdr err))))))
+       (let ((err-sym (and (consp err) (car err)))
+             (err-data (and (consp err) (cdr err))))
+         (if (and err-sym (symbolp err-sym))
+             (signal err-sym (or err-data nil))
+           (signal 'error (list "unhandled dispatch error"))))))))
 
 (defun my/gptel--sanitize-tool-calls (fsm)
   "Remove nil/unknown-named tool calls from FSM before execution.
