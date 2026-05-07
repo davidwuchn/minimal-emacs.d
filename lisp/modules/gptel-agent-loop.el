@@ -244,6 +244,14 @@ memory after long sessions or if tasks appear stuck."
   "Return STATE's accumulated output or empty string if nil."
   (or (gptel-agent-loop--task-accumulated-output state) ""))
 
+(defun gptel-agent-loop--task-identity (state)
+  "Return (agent-type . description) for STATE with safe defaults.
+Returns (cons agent-type description) where agent-type defaults to \"agent\"
+and description defaults to \"unknown\" if not set or STATE is invalid."
+  (let ((task-p (and (gptel-agent-loop--task-p state) state)))
+    (cons (or (and task-p (gptel-agent-loop--task-agent-type task-p)) "agent")
+          (or (and task-p (gptel-agent-loop--task-description task-p)) "unknown"))))
+
 (defun gptel-agent-loop--append-output (state text)
   "Append TEXT to STATE's accumulated output.
 Returns nil if TEXT is not a string (defensive guard)."
@@ -255,9 +263,10 @@ Returns nil if TEXT is not a string (defensive guard)."
 
 (defun gptel-agent-loop--result-prefix (state)
   "Return the standard result prefix for STATE."
-  (format "%s result for task: %s\n\n"
-          (capitalize (or (gptel-agent-loop--task-agent-type state) "agent"))
-          (or (gptel-agent-loop--task-description state) "unknown")))
+  (let ((id (gptel-agent-loop--task-identity state)))
+    (format "%s result for task: %s\n\n"
+            (capitalize (car id))
+            (cdr id))))
 
 (defun gptel-agent-loop--build-final-result (state tail)
   "Build final response text for STATE ending with TAIL.
@@ -349,11 +358,11 @@ Guards against delivering to a killed parent buffer by checking
 
 (defun gptel-agent-loop--deliver-aborted (state)
   "Deliver timeout/abort result for STATE once."
-  (gptel-agent-loop--deliver-result
-   state
-   (format "Aborted: %s task '%s' was cancelled or timed out."
-           (gptel-agent-loop--task-agent-type state)
-           (gptel-agent-loop--task-description state))))
+  (let ((id (gptel-agent-loop--task-identity state)))
+    (gptel-agent-loop--deliver-result
+     state
+     (format "Aborted: %s task '%s' was cancelled or timed out."
+             (car id) (cdr id)))))
 
 (defun gptel-agent-loop--continuation-prompt-for (state)
   "Build continuation prompt for STATE.
@@ -614,82 +623,80 @@ Retries when error is transient and retry budget remains."
 (defun gptel-agent-loop--make-callback (state request-prompt use-tools)
   "Build request callback for STATE.
 REQUEST-PROMPT and USE-TOOLS are reused on retries."
-  (lambda (resp info)
-    (let ((info (or info (list)))
-          (ov (plist-get info :context))
-          (error-data (plist-get info :error)))
-      (cond
-       ((gptel-agent-loop--task-finished state)
-        (gptel-agent-loop--cleanup-overlay ov))
+  (let ((task-id (gptel-agent-loop--task-identity state)))
+    (lambda (resp info)
+      (let ((info (or info (list)))
+            (ov (plist-get info :context))
+            (error-data (plist-get info :error)))
+        (cond
+         ((gptel-agent-loop--task-finished state)
+          (gptel-agent-loop--cleanup-overlay ov))
 
-       ((eq resp nil)
-        (if (gptel-agent-loop--task-aborted state)
-            (gptel-agent-loop--handle-aborted-state state ov)
-          (cond
-           ((gptel-agent-loop--should-retry-p state error-data)
-            (setf (gptel-agent-loop--task-retries state)
-                  (1+ (gptel-agent-loop--retries state)))
-            (message "[RunAgent] Retrying %s task '%s' (attempt %d/%s)"
-                     (gptel-agent-loop--task-agent-type state)
-                     (gptel-agent-loop--task-description state)
-                     (gptel-agent-loop--retries state)
-                     (or gptel-agent-loop-max-retries "unlimited"))
-            (setf (gptel-agent-loop--task-timeout-timer state)
-                  (gptel-agent-loop--make-timeout-timer state))
-            (gptel-agent-loop--schedule-request state request-prompt use-tools 2.0))
-           (t
-            (gptel-agent-loop--cleanup-overlay ov)
-            (gptel-agent-loop--deliver-result
-             state
-             (format "Error: %s task '%s' failed after %d retries.\nDetails: %S"
-                     (gptel-agent-loop--task-agent-type state)
-                     (gptel-agent-loop--task-description state)
-                     (gptel-agent-loop--retries state)
-                     error-data))))))
-
-       ((and (consp resp) (eq (car resp) 'tool-call))
-        (let ((calls (cdr resp)))
-          (when (listp calls)
-            (setf (gptel-agent-loop--task-step-count state)
-                  (+ (gptel-agent-loop--step-count state)
-                     (length calls)))
-            (let ((max-steps (gptel-agent-loop--task-max-steps state)))
-              (when (and max-steps
-                         (>= (gptel-agent-loop--step-count state) max-steps))
-                (setf (gptel-agent-loop--task-max-steps-reached state) t)
-                (message "[RunAgent] Max steps (%d) reached for task '%s'"
-                         max-steps
-                         (gptel-agent-loop--task-description state))))
-            (unless (plist-member info :tracking-marker)
-              (setq info (plist-put info :tracking-marker
-                                    (gptel-agent-loop--task-tracking-marker state))))
-            (gptel--display-tool-calls calls info))))
-
-       ((and (consp resp) (eq (car resp) 'tool-result))
-        (gptel-agent-loop--cleanup-overlay ov)
-        nil)
-
-       ((stringp resp)
-        (unless (gptel-agent-loop--check-aborted state ov)
-          (let ((final-turn (not (plist-get info :tool-use))))
-            (when final-turn
+         ((eq resp nil)
+          (if (gptel-agent-loop--task-aborted state)
+              (gptel-agent-loop--handle-aborted-state state ov)
+            (cond
+             ((gptel-agent-loop--should-retry-p state error-data)
+              (setf (gptel-agent-loop--task-retries state)
+                    (1+ (gptel-agent-loop--retries state)))
+              (message "[RunAgent] Retrying %s task '%s' (attempt %d/%s)"
+                       (car task-id) (cdr task-id)
+                       (gptel-agent-loop--retries state)
+                       (or gptel-agent-loop-max-retries "unlimited"))
+              (setf (gptel-agent-loop--task-timeout-timer state)
+                    (gptel-agent-loop--make-timeout-timer state))
+              (gptel-agent-loop--schedule-request state request-prompt use-tools 2.0))
+             (t
               (gptel-agent-loop--cleanup-overlay ov)
-              (gptel-agent-loop--handle-string-response state resp use-tools)))))
+              (gptel-agent-loop--deliver-result
+               state
+               (format "Error: %s task '%s' failed after %d retries.\nDetails: %S"
+                       (car task-id) (cdr task-id)
+                       (gptel-agent-loop--retries state)
+                       error-data))))))
 
-       ((eq resp 'abort)
-        (gptel-agent-loop--handle-aborted-state state ov t))
+         ((and (consp resp) (eq (car resp) 'tool-call))
+          (let ((calls (cdr resp)))
+            (when (listp calls)
+              (setf (gptel-agent-loop--task-step-count state)
+                    (+ (gptel-agent-loop--step-count state)
+                       (length calls)))
+              (let ((max-steps (gptel-agent-loop--task-max-steps state)))
+                (when (and max-steps
+                           (>= (gptel-agent-loop--step-count state) max-steps))
+                  (setf (gptel-agent-loop--task-max-steps-reached state) t)
+                  (message "[RunAgent] Max steps (%d) reached for task '%s'"
+                           max-steps
+                           (cdr task-id))))
+              (unless (plist-member info :tracking-marker)
+                (setq info (plist-put info :tracking-marker
+                                      (gptel-agent-loop--task-tracking-marker state))))
+              (gptel--display-tool-calls calls info))))
 
-       (t
-        (gptel-agent-loop--cleanup-overlay ov)
-        (message "[RunAgent] Warning: unexpected response type %S for task '%s', treating as error"
-                 (type-of resp)
-                 (gptel-agent-loop--task-description state))
-        (gptel-agent-loop--deliver-result
-         state
-         (format "Error: %s task '%s' received unexpected response type: %S"
-                 (gptel-agent-loop--task-agent-type state)
-                 (gptel-agent-loop--task-description state)
-                 (type-of resp))))))))
+         ((and (consp resp) (eq (car resp) 'tool-result))
+          (gptel-agent-loop--cleanup-overlay ov)
+          nil)
+
+         ((stringp resp)
+          (unless (gptel-agent-loop--check-aborted state ov)
+            (let ((final-turn (not (plist-get info :tool-use))))
+              (when final-turn
+                (gptel-agent-loop--cleanup-overlay ov)
+                (gptel-agent-loop--handle-string-response state resp use-tools)))))
+
+         ((eq resp 'abort)
+          (gptel-agent-loop--handle-aborted-state state ov t))
+
+         (t
+          (gptel-agent-loop--cleanup-overlay ov)
+          (message "[RunAgent] Warning: unexpected response type %S for task '%s', treating as error"
+                   (type-of resp)
+                   (cdr task-id))
+          (gptel-agent-loop--deliver-result
+           state
+           (format "Error: %s task '%s' received unexpected response type: %S"
+                   (car task-id) (cdr task-id)
+                   (type-of resp)))))))))
 
 (defun gptel-agent-loop--handle-empty-response (state resp)
   "Handle empty string RESP for STATE.
@@ -698,16 +705,16 @@ confirmed string and STATE is task-p.
 Returns non-nil if result was delivered."
   (when (and (gptel-agent-loop--task-p state)
              (string-blank-p resp))
-    (if (= (gptel-agent-loop--step-count state) 0)
+    (let ((id (gptel-agent-loop--task-identity state)))
+      (if (= (gptel-agent-loop--step-count state) 0)
+          (gptel-agent-loop--deliver-result
+           state
+           (format "Error: %s task '%s' returned empty response with no tool calls."
+                   (car id) (cdr id)))
         (gptel-agent-loop--deliver-result
          state
-         (format "Error: %s task '%s' returned empty response with no tool calls."
-                 (gptel-agent-loop--task-agent-type state)
-                 (gptel-agent-loop--task-description state)))
-      (gptel-agent-loop--deliver-result
-       state
-       (gptel-agent-loop--build-final-result state "[empty response]")))
-    t))
+         (gptel-agent-loop--build-final-result state "[empty response]")))
+      t)))
 
 (defun gptel-agent-loop--handle-max-steps-reached (state resp)
   "Handle STATE when max steps were reached and RESP is final turn.
