@@ -718,8 +718,9 @@ can consume lists, vectors, plists, and alists as readable data."
                                                          (error-message-string cb-err)))))))
                                    arg-values)
                           (error (funcall callback
-                                          (gptel-sandbox--format-error
-                                           (error-message-string async-err)))))
+                                          (gptel-sandbox--format-result
+                                           (gptel-sandbox--format-error
+                                            (error-message-string async-err))))))
                       (let ((result (condition-case inner-err
                                         (apply tool-fn arg-values)
                                       (error (gptel-sandbox--format-error (error-message-string inner-err))))))
