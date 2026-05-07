@@ -435,9 +435,10 @@ Hook for `gptel-post-response-functions'."
   "Return lines from BUFFER-STRING as a list.
 Helper function to avoid duplicate split-string calls.
 Returns empty list for nil or non-string input to prevent errors."
-  (if (and (stringp buffer-string) (not (string-empty-p buffer-string)))
-      (split-string buffer-string "\n")
-    nil))
+  (cond
+   ((not (stringp buffer-string)) nil)
+   ((string-empty-p buffer-string) nil)
+   (t (split-string buffer-string "\n"))))
 
 (defun my/gptel--extract-last-task-from-lines (lines)
   "Extract the most recent task/request from LINES.
