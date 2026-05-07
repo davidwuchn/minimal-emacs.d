@@ -698,9 +698,9 @@ Returns new strategy name or nil if rejected."
             (if (not (plist-get final-prototype :valid))
                 (progn
                   (delete-file strategy-file)
-                  (message "[strategy-evolution] REJECTED %s: Final prototype failed: %s"
-                           new-name
-                           (mapconcat #'identity (plist-get final-prototype :errors) ", "))
+                   (message "[strategy-evolution] REJECTED %s: Final prototype failed: %s"
+                            (format "%s" new-name)
+                            (mapconcat #'identity (plist-get final-prototype :errors) ", "))
                   nil)
               (gptel-auto-workflow--load-strategy new-name)
               (message "[strategy-evolution] ACCEPTED %s (axis %s) from %d candidates"
@@ -741,8 +741,9 @@ strategy as the parent for evolution."
                                               (> (plist-get (gptel-auto-workflow--get-strategy-performance a) :success-rate)
                                                  (plist-get (gptel-auto-workflow--get-strategy-performance b) :success-rate))))))))
                 (when worst
-                  (message "[strategy] Active strategy %s is unevaluated, falling back to %s for evolution"
-                           current-strategy worst))
+                   (message "[strategy] Active strategy %s is unevaluated, falling back to %s for evolution"
+                            (format "%s" current-strategy)
+                            (format "%s" worst)))
                 worst)))
            (parent-perf (when parent-strategy
                           (gptel-auto-workflow--get-strategy-performance parent-strategy)))
@@ -753,7 +754,7 @@ strategy as the parent for evolution."
                  (>= parent-total 5)
                  (<= parent-success-rate 0.4))
          (message "[strategy] Evolving from '%s' (%.0f%% success over %d experiments)"
-                  parent-strategy (* 100 parent-success-rate) parent-total)
+                  (format "%s" parent-strategy) (* 100 parent-success-rate) parent-total)
         ;; Check for interruption before starting
         (if gptel-auto-workflow--strategy-interrupted
             (message "[strategy] Interrupted, skipping evolution")
@@ -803,7 +804,7 @@ strategy as the parent for evolution."
                                (* 100 (/ (float (length all-axes)) 6.0)))
                       nil))))
               (when new-strategy
-                (message "[strategy] Evolved new strategy: %s" new-strategy)
+                 (message "[strategy] Evolved new strategy: %s" (format "%s" new-strategy))
                 ;; Write evolution summary
                 (let* ((perf (gptel-auto-workflow--get-strategy-performance new-strategy))
                        (val-scores (make-hash-table :test 'equal))
