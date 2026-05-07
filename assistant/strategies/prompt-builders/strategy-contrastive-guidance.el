@@ -53,7 +53,7 @@ Returns a string describing what to AVOID."
               "\n\n"
               "CRITICAL: If your proposed change matches any of these patterns, reconsider your approach.\n\n"))))
 
-(defun strategy-contrastive-guidance--build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-contrastive-guidance-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt with contrastive failure guidance.
 This strategy adds explicit anti-patterns derived from prior failures."
   ;; First build the base prompt
@@ -86,7 +86,7 @@ This strategy adds explicit anti-patterns derived from prior failures."
 (when (fboundp 'gptel-auto-workflow--register-strategy)
   (gptel-auto-workflow--register-strategy
    "contrastive-guidance"
-   #'strategy-contrastive-guidance--build-prompt
+   #'strategy-contrastive-guidance-build-prompt
    (strategy-contrastive-guidance-get-metadata)))
 
 (provide 'strategy-contrastive-guidance)

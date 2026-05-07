@@ -159,7 +159,7 @@ For each {{#flag}}...{{/flag}} block, only include if flag is non-nil."
     ;; Now do standard variable substitution
     (gptel-auto-workflow--substitute-template result variables)))
 
-(defun strategy-tiered-context--build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-tiered-context-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt using hierarchical tiered context structure.
 Sections are organized into tiers and conditionally included based on available data."
   ;; Adapt compression
@@ -290,7 +290,7 @@ Sections are organized into tiers and conditionally included based on available 
 (when (fboundp 'gptel-auto-workflow--register-strategy)
   (gptel-auto-workflow--register-strategy
    "tiered-context"
-   #'strategy-tiered-context--build-prompt
+   #'strategy-tiered-context-build-prompt
    (strategy-tiered-context-get-metadata)))
 
 (provide 'strategy-tiered-context)
