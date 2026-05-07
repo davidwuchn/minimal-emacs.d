@@ -322,7 +322,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                  (gptel-auto-workflow--create-provisional-experiment-commit
                                                   target hypothesis
                                                   (max 300 gptel-auto-workflow-git-timeout))))
-                                         (let* ((bench (gptel-auto-experiment-benchmark t))
+                                          (let* ((bench (gptel-auto-experiment-benchmark t hypothesis))
                                                 (passed (plist-get bench :passed))
                                                 (validation-error (plist-get bench :validation-error))
                                                 (tests-passed (plist-get bench :tests-passed))
@@ -472,7 +472,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                            retry-output
                                                            (lambda (retry-grade)
                                                              (if (plist-get retry-grade :passed)
-                                                                 (let ((retry-bench (gptel-auto-experiment-benchmark t)))
+                                                                  (let ((retry-bench (gptel-auto-experiment-benchmark t retry-hypothesis)))
                                                                    (if (plist-get retry-bench :passed)
                                                                        (let* ((retry-score (plist-get retry-bench :eight-keys))
                                                                               (retry-quality
