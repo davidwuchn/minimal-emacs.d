@@ -639,7 +639,10 @@ like (:error \"...\") or (:violated t :reason \"...\")."
 (defun gptel-sandbox--extract-error-message (value)
   "Extract error message from VALUE (string or plist)."
   (cond
-   ((stringp value) (substring value (length "Error: ")))
+   ((stringp value)
+    (if (string-prefix-p "Error: " value)
+        (substring value (length "Error: "))
+      value))
    ((listp value)
     (or (plist-get value :reason)
         (plist-get value :error)
