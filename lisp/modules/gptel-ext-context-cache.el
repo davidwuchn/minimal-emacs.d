@@ -327,8 +327,7 @@ Validates that cached values are positive integers before returning them."
         (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
           (cond
            ((eq hash-value my/gptel--cache-sentinel)
-            (let ((result (and (listp alist)
-                               (my/gptel--alist-partial-match alist key))))
+            (let ((result (my/gptel--alist-partial-match alist key)))
               (unless result
                 (puthash key my/gptel--context-window-miss-sentinel hash-table))
               result))
@@ -337,13 +336,11 @@ Validates that cached values are positive integers before returning them."
            ((my/gptel--positive-integer-p hash-value)
             hash-value)
            (t
-            (let ((result (and (listp alist)
-                               (my/gptel--alist-partial-match alist key))))
+            (let ((result (my/gptel--alist-partial-match alist key)))
               (unless result
                 (puthash key my/gptel--context-window-miss-sentinel hash-table))
               result))))
-      (and (listp alist)
-           (my/gptel--alist-partial-match alist key)))))
+      (my/gptel--alist-partial-match alist key))))
 
 
 (defvar my/gptel--alist-partial-match-cache (make-hash-table :test 'equal)
