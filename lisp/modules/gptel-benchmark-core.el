@@ -154,13 +154,16 @@ Returns nil for empty or malformed input."
 (defun gptel-benchmark--ensure-list (data)
   "Ensure DATA is a proper list, converting vectors if necessary.
 JSON parsing returns vectors for arrays; this normalizes to lists.
-Returns nil for nil, strings, or improper lists.
-Strings are preserved as-is since they are valid JSON values."
+Returns nil for nil, strings, improper lists, or non-list types.
+Strings are preserved as-is since they are valid JSON values.
+Numbers, symbols, and other non-list types return nil to prevent
+corrupted data from propagating to functions that expect lists."
   (cond
    ((null data) nil)
    ((stringp data) data)
    ((vectorp data) (append data nil))
-   (t data)))
+   ((proper-list-p data) data)
+   (t nil)))
 
 (defun gptel-benchmark--get-field (obj field)
   "Get FIELD from OBJ, handling both plist and alist formats.
