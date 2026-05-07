@@ -97,6 +97,14 @@ gptel preset.")
   (append gptel-sandbox--comparison-ops gptel-sandbox--data-ops)
   "All built-in operators available in sandbox expressions.")
 
+(defconst gptel-sandbox--builtin-arity
+  '((length 1 1) (car 1 1) (cdr 1 1) (nth 2 2) (cons 2 2)
+    (assoc 2 2) (plist-get 2 2) (string-empty-p 1 1)
+    (string-match-p 2 2) (format 1 nil) (split-string 1 3)
+    (string-join 1 2) (string-trim 0 3) (substring 2 3)
+    (alist-get 2 4))
+  "Alist of (FUNC MIN-ARGS MAX-ARGS) for arity validation.
+MAX-ARGS of nil means no upper bound. Comparison ops need >= 2 args.")
 ;;; Internal Helpers
 
 (defvar gptel-sandbox--missing-marker (make-symbol "gptel-sandbox-missing")
@@ -303,7 +311,23 @@ Used by `and' and `or' to share short-circuit evaluation logic."
 Errors propagate to the outer condition-case in `execute-tool'."
   (unless (functionp func)
     (error "Programmatic builtin requires a function, got: %S" func))
-  (apply func (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args)))
+  (let ((evaluated (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args))
+        (arity (assq func gptel-sandbox--builtin-arity)))
+    (when arity
+      (let* ((min-args (nth 1 arity))
+             (max-args (nth 2 arity))
+             (n (length evaluated)))
+        (when (< n min-args)
+          (error "Programmatic `%s` requires at least %d argument%s, got %d"
+                 func min-args (if (= min-args 1) "" "s") n))
+        (when (and max-args (> n max-args))
+          (error "Programmatic `%s` requires at most %d argument%s, got %d"
+                 func max-args (if (= max-args 1) "" "s") n))))
+    (when (memq func gptel-sandbox--comparison-ops)
+      (when (< (length evaluated) 2)
+        (error "Programmatic `%s` requires at least 2 arguments, got %d"
+               func (length evaluated))))
+    (apply func evaluated)))
 
 (defun gptel-sandbox--eval-expr (expr env)
   "Evaluate pure sandbox expression EXPR in ENV.
