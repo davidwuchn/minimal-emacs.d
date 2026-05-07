@@ -132,10 +132,11 @@ REASON is only used for logging."
 
 (defun gptel-auto-experiment--error-message (error-output)
   "Extract error message string from ERROR-OUTPUT.
-ERROR-OUTPUT may be a string, a plist with :message key, or nil.
+ERROR-OUTPUT may be a string, a plist with :error or :message key, or nil.
 Returns the message string or nil."
   (cond ((stringp error-output) error-output)
-        ((plistp error-output) (plist-get error-output :message))
+        ((plistp error-output) (or (plist-get error-output :error)
+                                   (plist-get error-output :message)))
         (t nil)))
 
 (defun gptel-auto-experiment--shared-transient-error-p (error-output)
