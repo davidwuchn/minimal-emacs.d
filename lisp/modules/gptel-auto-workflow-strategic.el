@@ -188,7 +188,8 @@ BEHAVIOR: Uses wc -l for efficient line counting without loading files into buff
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
 Scans only root-repo targets that can be integrated into staging.
-Uses caching to avoid redundant shell command execution."
+Uses caching to avoid redundant shell command execution.
+EDGE CASE: Only caches context when shell commands produce non-empty output."
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-ttl (* 5 60))
          (now (float-time))
@@ -206,34 +207,41 @@ Uses caching to avoid redundant shell command execution."
           (message "[auto-workflow] Using cached context for %s" proj-root)
           cached-context)
       (let* ((safe-root (shell-quote-argument proj-root))
-             (context (list :git-history (shell-command-to-string
-                                          (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
+             (git-history (shell-command-to-string
+                           (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
+                                   safe-root)))
+             (file-list-shell (shell-command-to-string
+                               (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                                       safe-root))))
+        (if (and (stringp git-history) (stringp file-list-shell)
+                 (not (string-empty-p git-history))
+                 (not (string-empty-p file-list-shell)))
+            (let* ((context (list :git-history git-history
+                                  :file-sizes (shell-command-to-string
+                                               (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
+                                                       safe-root))
+                                  :todos (shell-command-to-string
+                                          (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
                                                   safe-root))
-                            :file-sizes (shell-command-to-string
-                                         (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
-                                                 safe-root))
-                            :todos (shell-command-to-string
-                                    (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
-                                            safe-root))
-                            :file-list (let* ((raw-output (shell-command-to-string
-                                                           (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                                                                   safe-root)))
-                                              (all-files (delq nil
-                                                               (mapcar (lambda (s)
-                                                                         (unless (string-empty-p s) s))
-                                                                       (split-string raw-output "\n" t))))
-                                              (nonempty-files (delq nil
-                                                                    (mapcar (lambda (f)
-                                                                              (let ((abs-path (expand-file-name f proj-root)))
-                                                                                (when (file-exists-p abs-path) f)))
-                                                                            all-files))))
-                                         (mapconcat #'identity
-                                                    (gptel-auto-workflow--filter-large-files
-                                                     nonempty-files 1000)
-                                                    "\n")))))
-        (setq gptel-auto-workflow--context-cache (cons proj-root (list :context context :timestamp now)))
-        (message "[auto-workflow] Cached new context for %s" proj-root)
-        context))))
+                                  :file-list (let* ((all-files (delq nil
+                                                                      (mapcar (lambda (s)
+                                                                                (unless (string-empty-p s) s))
+                                                                              (split-string file-list-shell "\n" t))))
+                                                    (nonempty-files (delq nil
+                                                                          (mapcar (lambda (f)
+                                                                                    (let ((abs-path (expand-file-name f proj-root)))
+                                                                                      (when (file-exists-p abs-path) f)))
+                                                                                  all-files))))
+                                               (mapconcat #'identity
+                                                          (gptel-auto-workflow--filter-large-files
+                                                           nonempty-files 1000)
+                                                          "\n")))))
+              (setq gptel-auto-workflow--context-cache (cons proj-root (list :context context :timestamp now)))
+              (message "[auto-workflow] Cached new context for %s" proj-root)
+              context)
+          (progn
+            (message "[auto-workflow] Context gathering failed: shell commands returned empty; using empty context")
+            (list :git-history "" :file-sizes "" :todos "" :file-list "")))))))
 
 (defun gptel-auto-workflow--local-research-patterns ()
   "Perform local grep-based pattern analysis when subagents unavailable.
