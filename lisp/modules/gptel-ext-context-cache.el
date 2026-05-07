@@ -323,7 +323,7 @@ for a partial match (case-insensitive).  Returns nil if not found.
 Handles negative cache hits when KEY maps to a miss sentinel.
 Validates that cached values are positive integers before returning them."
   (when (and (stringp key) (not (string-empty-p key)))
-    (if (hash-table-p hash-table)
+    (if (and (hash-table-p hash-table) (listp alist))
         (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
           (cond
            ((eq hash-value my/gptel--cache-sentinel)
