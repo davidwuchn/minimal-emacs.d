@@ -332,28 +332,34 @@ Distinguishes 'not cached' from 'cached nil' without using plain nil.")
 Returns the value from hash table if found and valid, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found.
 Handles negative cache hits when KEY maps to a miss sentinel.
-Validates that cached values are positive integers before returning them."
+Validates that cached values are positive integers or normalizable numbers before returning."
   (when (and (stringp key) (not (string-empty-p key)))
     (if (and (hash-table-p hash-table) (listp alist))
         (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
           (cond
            ((eq hash-value my/gptel--cache-sentinel)
-            (let ((result (my/gptel--alist-partial-match alist key)))
-              (if result
-                  (puthash key result hash-table)
-                (puthash key my/gptel--context-window-miss-sentinel hash-table))
-              result))
+            (my/gptel--cache-or-alist-fallback hash-table alist key))
            ((eq hash-value my/gptel--context-window-miss-sentinel)
             nil)
            ((my/gptel--positive-integer-p hash-value)
             hash-value)
+           ((numberp hash-value)
+            (let ((normalized (my/gptel--normalize-context-window hash-value)))
+              (when normalized
+                (puthash key normalized hash-table))
+              normalized))
            (t
-            (let ((result (my/gptel--alist-partial-match alist key)))
-              (if result
-                  (puthash key result hash-table)
-                (puthash key my/gptel--context-window-miss-sentinel hash-table))
-              result))))
+            (my/gptel--cache-or-alist-fallback hash-table alist key))))
       (my/gptel--alist-partial-match alist key))))
+
+(defun my/gptel--cache-or-alist-fallback (hash-table alist key)
+  "Look up KEY in ALIST and cache the result in HASH-TABLE.
+Returns the alist match result or nil if not found."
+  (let ((result (my/gptel--alist-partial-match alist key)))
+    (if result
+        (puthash key result hash-table)
+      (puthash key my/gptel--context-window-miss-sentinel hash-table))
+    result))
 
 
 (defvar my/gptel--alist-partial-match-cache (make-hash-table :test 'equal)
