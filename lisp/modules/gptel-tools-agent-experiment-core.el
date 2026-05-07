@@ -205,8 +205,35 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                 (my/gptel--run-agent-tool-with-timeout
                                                  gptel-auto-experiment-validation-retry-time-budget
                                                  (lambda (retry-output)
-                                                   ;; Treat retry output as new executor output
-                                                   (funcall executor-callback retry-output))
+                                                   (if (and (stringp retry-output)
+                                                            (string-match-p "\\`Error:" retry-output))
+                                                       ;; Retry failed: fail experiment immediately, skip grading/staging
+                                                       (let* ((hypothesis
+                                                               (gptel-auto-experiment--extract-hypothesis
+                                                                effective-agent-output))
+                                                              (retry-exp-result
+                                                               (list :target target
+                                                                     :id experiment-id
+                                                                     :hypothesis hypothesis
+                                                                     :score-before baseline
+                                                                     :score-after 0
+                                                                     :code-quality baseline-code-quality
+                                                                     :kept nil
+                                                                     :duration (- (float-time) start-time)
+                                                                     :grader-quality 0
+                                                                     :grader-reason (format "validation-retry-failed: %s"
+                                                                                           retry-output)
+                                                                     :comparator-reason "validation-retry-failed"
+                                                                     :analyzer-patterns (format "%s" patterns)
+                                                                     :agent-output effective-agent-output
+                                                                     :validation-error validation-error
+                                                                     :backend experiment-backend)))
+                                                         (setq finished t)
+                                                         (cl-incf gptel-auto-experiment--no-improvement-count)
+                                                         (funcall log-fn run-id retry-exp-result)
+                                                         (funcall callback retry-exp-result))
+                                                     ;; Retry succeeded: treat output as new executor output
+                                                     (funcall executor-callback retry-output)))
                                                  "executor"
                                                  "Validation retry"
                                                  retry-prompt
