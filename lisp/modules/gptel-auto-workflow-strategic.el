@@ -651,7 +651,10 @@ Returns list of validated file paths."
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
 CALLBACK receives list of target files.
-LLM decides if available, otherwise uses static list."
+LLM decides if available, otherwise uses static list.
+ASSUMPTION: gptel-auto-workflow--filter-frontier-saturated-targets returns a list or nil.
+EDGE CASE: External filter returns non-list value; listp guard prevents type errors.
+BEHAVIOR: Validates filtered result is a list before using it, falls back to unfiltered targets."
   (when (functionp callback)
     (gptel-auto-workflow--clear-analyzer-error-state)
     (let* ((proj-root (gptel-auto-workflow--effective-project-root))
@@ -670,14 +673,20 @@ LLM decides if available, otherwise uses static list."
                      (message "[auto-workflow] Analyzer returned no targets; using static targets")
                      (funcall callback static-targets))
                  (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                        (final-targets (or filtered-targets targets)))
+                        (final-targets (if (listp filtered-targets) filtered-targets targets)))
+                   (unless (listp filtered-targets)
+                     (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
+                              filtered-targets))
                    (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
                             (length targets) (length final-targets))
                    (funcall callback final-targets))))))
         (let* ((filtered-targets (if static-targets
                                      (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
                                    nil))
-               (final-targets (or filtered-targets static-targets)))
+               (final-targets (if (listp filtered-targets) filtered-targets static-targets)))
+          (unless (listp filtered-targets)
+            (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
+                     filtered-targets))
           (message "[auto-workflow] Static: %d targets, %d after frontier filtering"
                    (length static-targets) (length final-targets))
           (funcall callback final-targets))))))
