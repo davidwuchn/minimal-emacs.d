@@ -525,7 +525,7 @@ CANDIDATE_3:
                                            (cond ((stringp response) response)
                                                  ((and (listp response) (plist-get response :content))
                                                   (plist-get response :content))
-                                                 (t (format "%s" response)))
+                                                  (t (prin1-to-string response)))
                                            done t)))
             ;; Wait for response (with timeout). Use accept-process-output
             ;; instead of sleep-for to allow network I/O callbacks to fire.
