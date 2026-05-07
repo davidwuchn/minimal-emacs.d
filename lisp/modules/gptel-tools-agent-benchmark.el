@@ -456,7 +456,7 @@ resume from buffers outside the original project context."
             :issues issues
             :recommendations recommendations))))
 
-(defcustom gptel-auto-experiment-repeat-focus-threshold 2
+(defcustom gptel-auto-experiment-repeat-focus-threshold 3
   "Prior non-kept attempts on the same changed symbol before short-circuiting repeats."
   :type 'integer
   :group 'gptel-tools-agent)

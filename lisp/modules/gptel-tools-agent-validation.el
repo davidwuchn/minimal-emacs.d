@@ -149,13 +149,16 @@ regular file content."
     (nreverse lines)))
 
 (defun gptel-auto-experiment--call-symbols-in-line (line)
-  "Return apparent function call symbols in added source LINE."
+  "Return apparent function call symbols in added source LINE.
+Skips t and nil which can appear as pcase/cl-case clause heads
+and are Emacs Lisp constants, not callable functions."
   (let ((start 0)
         symbols)
     (when (stringp line)
       (while (string-match "(\\s-*\\([^[:space:]()\"';]+\\)" line start)
         (let* ((name (match-string 1 line))
                (sym (and (not (string-match-p "\\`[0-9:]" name))
+                         (not (member name '("t" "nil")))
                          (intern name))))
           (when sym
             (push sym symbols)))
