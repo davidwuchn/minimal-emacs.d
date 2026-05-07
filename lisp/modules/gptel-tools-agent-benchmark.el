@@ -1,6 +1,8 @@
 ;;; gptel-tools-agent-benchmark.el --- Benchmark, evaluation, scoring -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(require 'gptel-tools-agent-validation)
+
 (defun gptel-auto-workflow--project-root ()
   "Return the MAIN project root directory.
 When in a worktree, returns the main repo root (parent of .git/worktrees).
@@ -295,11 +297,20 @@ If HYPOTHESIS is provided, use task-type-aware scoring."
            (commit-msg (shell-command-to-string
                         (format "cd %s && git log -1 --format='%%B' 2>/dev/null || echo ''"
                                 worktree-quoted)))
-           (code-diff (shell-command-to-string
-                       (format "cd %s && git diff HEAD~1 --unified=2 2>/dev/null | head -200"
-                               worktree-quoted)))
-           (output (concat commit-msg "\n\n" code-diff)))
-      (gptel-benchmark-eight-keys-score output hypothesis))))
+            (code-diff (shell-command-to-string
+                        (format "cd %s && git diff HEAD~1 --unified=2 2>/dev/null | head -200"
+                                worktree-quoted)))
+            (output (concat commit-msg "\n\n" code-diff)))
+      (if hypothesis
+          (condition-case err
+              (gptel-benchmark-eight-keys-score output hypothesis)
+            (wrong-number-of-arguments
+             ;; Long-lived workflow daemons may have a stale one-argument scorer
+             ;; loaded while the auto-workflow module has already hot-reloaded.
+             (message "[auto-exp] Eight Keys scorer lacks hypothesis arity; falling back to legacy scoring: %S"
+                      err)
+             (gptel-benchmark-eight-keys-score output)))
+        (gptel-benchmark-eight-keys-score output)))))
 
 (defun gptel-auto-experiment--eight-keys-score ()
   "Get Eight Keys overall score from current codebase."
@@ -605,147 +616,6 @@ Default 120s (2 min) allows grader to process complex outputs.")
        (cancel-timer (plist-get state :timer))))
    gptel-auto-experiment--grade-state)
   (clrhash gptel-auto-experiment--grade-state))
-
-(defun gptel-auto-experiment--invalid-cl-return-target-in-forms (forms &optional blocks)
-  "Return the first invalid `cl-return-from' target in FORMS.
-BLOCKS is the list of block names currently in scope."
-  (cond
-   ((null forms) nil)
-   ((listp forms)
-    (cl-some (lambda (form)
-               (gptel-auto-experiment--invalid-cl-return-target form blocks))
-             forms))
-   (t
-    (gptel-auto-experiment--invalid-cl-return-target forms blocks))))
-
-(defun gptel-auto-experiment--invalid-cl-return-target (form &optional blocks)
-  "Return the first invalid `cl-return-from' target in FORM.
-BLOCKS is the list of block names currently in scope."
-  (cond
-   ((atom form) nil)
-   ((not (listp form)) nil)
-   (t
-    (pcase (car form)
-      ((or 'quote 'quasiquote 'backquote) nil)
-      ('cl-return-from
-          (let ((target (nth 1 form)))
-            (or (and (symbolp target)
-                     (not (memq target blocks))
-                     target)
-                (gptel-auto-experiment--invalid-cl-return-target-in-forms
-                 (nthcdr 2 form) blocks))))
-      ('cl-block
-          (let ((name (nth 1 form)))
-            (gptel-auto-experiment--invalid-cl-return-target-in-forms
-             (nthcdr 2 form)
-             (if (symbolp name) (cons name blocks) blocks))))
-      ((or 'cl-defun 'cl-defmacro 'cl-defsubst)
-       (let ((name (nth 1 form))
-             (body (nthcdr 3 form)))
-         (gptel-auto-experiment--invalid-cl-return-target-in-forms
-          body
-          (if (symbolp name) (cons name blocks) blocks))))
-      ((or 'cl-labels 'cl-flet)
-       (let ((bindings (nth 1 form))
-             (body (nthcdr 2 form)))
-         (or (cl-some
-              (lambda (binding)
-                (when (and (consp binding) (symbolp (car binding)))
-                  (let ((name (car binding))
-                        (fbody (cddr binding)))
-                    (gptel-auto-experiment--invalid-cl-return-target-in-forms
-                     fbody
-                     (cons name blocks)))))
-              bindings)
-             (gptel-auto-experiment--invalid-cl-return-target-in-forms
-              body blocks))))
-      (_
-       (or (gptel-auto-experiment--invalid-cl-return-target (car form) blocks)
-           (gptel-auto-experiment--invalid-cl-return-target-in-forms
-            (cdr form) blocks)))))))
-
-(defun gptel-auto-experiment--defensive-code-removal-p (content)
-  "Detect if CONTENT removes defensive code patterns.
-Returns non-nil if defensive code removal is detected.
-
-Checks for:
-- Removing string-key fallbacks in JSON parsing
-- Removing or guards without evidence they're unreachable
-- Removing nil checks or error handlers
-
-Works with both git diff content (lines starting with '-') and
-regular file content."
-  (when (stringp content)
-    (let ((removed-lines nil)
-          (is-diff nil))
-      ;; Check if content looks like a diff
-      (with-temp-buffer
-        (insert content)
-        (goto-char (point-min))
-        (setq is-diff (re-search-forward "^@@\\|^diff\\|^---" nil t))
-        (goto-char (point-min))
-        ;; Extract removed lines from diff
-        (when is-diff
-          (while (re-search-forward "^-\\([^-].*\\)$" nil t)
-            (push (match-string 1) removed-lines))))
-      (if is-diff
-          ;; Check removed lines in diff
-          (cl-some
-           (lambda (line)
-             (or
-              ;; Pattern 1: Removed cdr/assoc fallback
-              (string-match-p "cdr\\s-*(assoc\\s-+\"" line)
-              ;; Pattern 2: Removed string-key lookup
-              (string-match-p "assoc\\s-+\"\\(file\\|path\\|target\\)\"" line)
-              ;; Pattern 3: Removed or branch with fallback
-              (and (string-match-p "or\\s-*" line)
-                   (string-match-p "alist-get\\|assoc" line))))
-           removed-lines)
-        ;; Check current content for missing defensive patterns
-        ;; Look for alist-get without corresponding string-key fallback
-        (and (string-match-p "alist-get\\s-+'\\(file\\|path\\|target\\)" content)
-             (not (string-match-p "assoc\\s-+\"\\(file\\|path\\|target\\)\"" content))
-             (string-match-p "json\\|alist" content))))))
-
-(defun gptel-auto-experiment--diff-against-head (file)
-  "Return git diff content for FILE against HEAD, or nil outside a Git worktree."
-  (when-let* ((absolute-file (expand-file-name file))
-              (root (locate-dominating-file absolute-file ".git")))
-    (let ((default-directory root)
-          (relative-file (file-relative-name absolute-file root)))
-      (shell-command-to-string
-       (format "git --no-pager diff --no-ext-diff --unified=0 HEAD -- %s 2>/dev/null"
-               (shell-quote-argument relative-file))))))
-
-(defun gptel-auto-experiment--validate-code (file)
-  "Validate code in FILE for syntax and dangerous patterns.
-Returns nil if valid, or error message string if invalid."
-  (when (and (stringp file) (string-suffix-p ".el" file))
-    (if (not (file-exists-p file))
-        (format "Missing target file: %s" file)
-      (let ((content (gptel-auto-workflow--read-file-contents file))
-            forms)
-        (or (cond
-             ((null content)
-              (format "Empty or unreadable file: %s" file))
-             ((condition-case err
-                  (with-temp-buffer
-                    (insert content)
-                    (set-syntax-table emacs-lisp-mode-syntax-table)
-                    (goto-char (point-min))
-                    (while (progn
-                             (forward-comment (point-max))
-                             (< (point) (point-max)))
-                      (push (read (current-buffer)) forms))
-                    nil)
-                (error (format "Syntax error in %s: %s" file err)))))
-            (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
-                   (nreverse forms))
-              (format "Dangerous pattern in %s: cl-return-from without cl-block" file))
-            ;; Check actual removed diff lines, not final file content.
-            (when (gptel-auto-experiment--defensive-code-removal-p
-                   (gptel-auto-experiment--diff-against-head file))
-              (format "Defensive code removal detected in %s: removing or/assoc fallbacks without proof" file)))))))
 
 (defun gptel-auto-experiment--finish-grade (grade-id callback result
                                                      &optional cancel-timer)
