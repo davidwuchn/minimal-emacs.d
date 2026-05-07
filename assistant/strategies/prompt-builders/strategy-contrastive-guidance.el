@@ -45,7 +45,9 @@ Returns a string describing what to AVOID."
   (let* ((failure-reasons (gptel-auto-experiment--get-common-failure-reasons target 5))
          (anti-patterns
           (when failure-reasons
-            (mapcar #'strategy-contrastive-guidance--extract-anti-pattern failure-reasons))))
+            (mapcar (lambda (pair)
+                      (strategy-contrastive-guidance--extract-anti-pattern (car pair)))
+                    failure-reasons))))
     (when anti-patterns
       (concat "## Anti-Patterns (What NOT to Do)\n"
               "Based on prior experiment failures:\n\n"

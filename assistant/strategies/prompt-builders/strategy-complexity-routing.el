@@ -10,7 +10,7 @@
 (require 'gptel-tools-agent-prompt-build)
 
 (defvar strategy-complexity-routing--template-variants
-  '((minimal
+  `((minimal
      .
      ,(concat
        "You are running experiment {{experiment-id}} of {{max-experiments}} to optimize {{target}}.\n"
