@@ -56,9 +56,11 @@ EDGE CASE: Dead buffer returns nil.
 EDGE CASE: Missing error message returns nil.
 EDGE CASE: STOP reason not 'STOP returns nil.
 EDGE CASE: FSM already in DONE state returns nil.
+EDGE CASE: Non-FSM object passed returns nil (safety check).
 TEST: (my/gptel--fsm-needs-recovery-p nil nil) => nil
 TEST: (my/gptel--fsm-needs-recovery-p fsm info-with-error+stop+not-done) => t
 TEST: (my/gptel--fsm-needs-recovery-p fsm info-without-error) => nil
+TEST: (my/gptel--fsm-needs-recovery-p \"not-a-fsm\" info) => nil
 
 BUILDS ON DISCOVERY: Extracting validation logic enables reuse
 and makes the recovery condition explicit and testable.
@@ -66,7 +68,8 @@ and makes the recovery condition explicit and testable.
 ADAPTS TO: Centralizes recovery decision logic for consistency.
 
 PROACTIVE MITIGATION: Prevents recovery attempts on invalid FSMs."
-  (when (and fsm info (listp info) (plist-member info :buffer))
+  (when (and (my/gptel--fsm-p fsm)
+             info (listp info) (plist-member info :buffer))
     (let* ((fsm-buffer (plist-get info :buffer))
            (error-msg (plist-get info :error))
            (stop-reason (plist-get info :stop-reason))
