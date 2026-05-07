@@ -430,6 +430,19 @@ Axis %s means: %s
    - Just reordering existing code without changing behavior
    - Changing string literals but keeping same structure
 
+## Common Lisp Functions NOT Available in Emacs Lisp
+
+These Common Lisp functions DO NOT EXIST in Emacs Lisp and will cause errors:
+- `getf` → use `plist-get`
+- `plusp` → use `(> n 0)`
+- `remf` → use `cl-remf` (requires cl-lib)
+- `psetq` → use `setq`
+- `incf` → use `(setq x (1+ x))`
+- `decf` → use `(setq x (1- x))`
+- `return-from` → requires `cl-block` wrapper
+
+ALWAYS use `plist-get` for plist access, never `getf`.
+
 ## Output Format
 
 For each candidate, output EXACTLY:
