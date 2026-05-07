@@ -821,8 +821,8 @@ CALLBACK receives final outcome plist."
   "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
   (unless (listp forms)
     (error "Programmatic run-forms requires a list, got: %S" forms))
-  (unless (listp state)
-    (error "Programmatic run-forms requires a plist state, got: %S" state))
+  (unless (proper-list-p state)
+    (error "Programmatic run-forms requires a proper plist state, got: %S" state))
   (unless (functionp callback)
     (error "Programmatic run-forms requires a function callback, got: %S" callback))
   (if (null forms)
