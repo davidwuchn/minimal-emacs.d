@@ -912,8 +912,8 @@ PER-PROJECT-FN should accept a project root and return t/nil for success."
   (gptel-auto-workflow--queue-cron-job
    "mementum"
    #'gptel-auto-workflow-run-all-mementum
-   nil))
-...
+    nil))
+
 (defun gptel-auto-workflow-queue-all-instincts ()
   "Queue `gptel-auto-workflow-run-all-instincts' and return immediately."
   (interactive)
