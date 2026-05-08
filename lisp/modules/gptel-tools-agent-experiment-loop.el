@@ -116,11 +116,16 @@ This skill teaches syntax-safe Elisp edits and dangerous patterns including cl-r
           ((string-match-p "Undefined function introduced\\|undefined.*runtime.*call"
                            validation-error)
            "The undefined function was rejected because it does not exist in this Emacs Lisp runtime.
-Common Lisp functions NOT available in Emacs: getf (use plist-get), plusp (use (> n 0)),
-remf (use cl-remf or manual plist surgery), psetq (use setq), incf/decf (use setq with +),
-key (use plist-get), cons? (use consp), atom? (use atom).
-Also check: function symbols use #' not ' single-quote (which marks a symbol, not a function).
-Replace undefined calls with valid Emacs Lisp equivalents or remove them entirely.")
+Before writing a function call, verify it exists in Emacs Lisp. When uncertain, use
+well-known Emacs builtins only. Common Lisp functions NOT available in Emacs:
+getf (use plist-get), plusp (use (> n 0)), remf (use cl-remf),
+psetq (use setq), incf/decf (use setq with +), key (use plist-get),
+cons? (use consp), atom? (use atom).
+CRITICAL: Do NOT call single-letter or short variable names as functions.
+If you see a function like 'tool' or 'key' in the error, it means you wrote
+(tool ...) or (key ...) — these are NOT valid Emacs Lisp functions.
+Replace undefined calls with valid Emacs Lisp equivalents or remove them.
+Use function-quote #' for symbols meant as functions, not bare-quote '.")
           ;; Add more skill mappings here as needed
           (t "")))
         (original-contract
