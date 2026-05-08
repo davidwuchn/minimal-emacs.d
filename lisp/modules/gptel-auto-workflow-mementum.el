@@ -113,11 +113,22 @@ EXPERIMENT is a plist with :target :hypothesis :score-before :score-after
           '❌ slug
           (format "**Target:** %s\n**Hypothesis:** %s\n**Result:** GRADER REJECTED\n**Grader:** %d/9\n\nChange failed grader review. Hypothesis did not match actual changes, or change was too large/unsafe."
                   target hypothesis grader-q)))
+        ("validation-failed"
+          (gptel-auto-workflow--mementum-write-memory
+           '❌ slug
+           (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Result:** VALIDATION FAILED\n\nPre-grade validation caught an error (undefined function, syntax error, or unavailable symbol). Common causes: using Common Lisp functions not available in Emacs Lisp (plusp, getf, cw, file), or introducing symbols that don't exist.\n\n**Lesson:** Always verify new functions exist in Emacs Lisp before using them."
+                   target change-type hypothesis)))
+        ("repeated-focus-symbol"
+          (gptel-auto-workflow--mementum-write-memory
+           '❌ slug
+           (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Result:** REPEATED FOCUS BLOCKED\n\nThis function was already focused on in 2+ prior non-kept experiments. The system correctly prevents stagnation by blocking repeated attempts on the same function.\n\n**Lesson:** After 2 non-kept attempts on a function, switch to a different function or subsystem."
+                   target change-type hypothesis)))
         (_
-         (gptel-auto-workflow--mementum-write-memory
-          '💡 slug
-          (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Decision:** %s\n\nUnexpected experiment outcome."
-                  target change-type hypothesis decision)))))))
+          (gptel-auto-workflow--mementum-write-memory
+           '💡 slug
+           (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Decision:** %s\n**Score:** %.2f → %.2f\n**Quality:** %.2f\n\nUnexpected outcome. Review grader feedback and comparator reasoning to determine why this experiment did not produce a clear keep/discard decision."
+                   target change-type hypothesis decision
+                   (or score-before 0.0) (or score-after 0.0) (or quality 0.0))))))))
 
 ;; ─── Knowledge Synthesis ───
 
