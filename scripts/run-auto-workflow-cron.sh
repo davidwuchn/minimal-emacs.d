@@ -318,7 +318,7 @@ worker_daemon_pids() {
     ps -eo pid=,args= | awk -v bg="--bg-daemon=$SERVER_NAME" \
         -v d="--daemon=$SERVER_NAME" \
         -v fg="--fg-daemon=$SERVER_NAME" '
-        $2 ~ /(^|\/)emacs/ && (index($0, bg) || index($0, d) || index($0, fg)) { print $1 }
+        tolower($2) ~ /(^|\/)emacs/ && (index($0, bg) || index($0, d) || index($0, fg)) { print $1 }
     '
 }
 
@@ -377,6 +377,23 @@ discard_stale_worker_daemon() {
     clean_orphaned_sockets
     STALE_DAEMON_RECOVERED=1
     rewrite_status_idle
+}
+
+ensure_single_researcher_daemon() {
+    local pids
+    local pid_count
+
+    [ "$ACTION" = "research" ] || return 0
+
+    pids="$(worker_daemon_pids || true)"
+    [ -n "$pids" ] || return 0
+
+    pid_count="$(printf '%s\n' "$pids" | awk 'NF { count++ } END { print count + 0 }')"
+    [ "$pid_count" -le 1 ] && return 0
+
+    echo "WARNING: Found $pid_count $SERVER_NAME daemons running. Restarting a singleton researcher daemon..." >&2
+    discard_stale_worker_daemon
+    sleep 1
 }
 
 daemon_socket_has_owner() {
@@ -932,7 +949,7 @@ workflow_action_elisp() {
 
     case "$action" in
         auto-workflow) dispatch="(gptel-auto-workflow-queue-all-projects)" ;;
-        research) dispatch="(gptel-auto-workflow-queue-all-research)" ;;
+        research) dispatch="(gptel-auto-workflow-queue-all-research t)" ;;
         mementum) dispatch="(progn (setq gptel-mementum-headless-auto-approve t) (gptel-auto-workflow-queue-all-mementum))" ;;
         instincts) dispatch="(gptel-auto-workflow-queue-all-instincts)" ;;
         evolution) dispatch="(when (fboundp 'gptel-auto-workflow-evolution-run-cycle) (gptel-auto-workflow-evolution-run-cycle))" ;;
@@ -1249,6 +1266,8 @@ if [ "$ACTION" = "stop" ]; then
 fi
 
 clear_stale_running_status
+
+ensure_single_researcher_daemon
 
 if status_indicates_running; then
     echo "already-running"
