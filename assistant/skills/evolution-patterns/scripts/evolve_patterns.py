@@ -75,15 +75,28 @@ def update_skill(skill_path, patterns):
 
 def main():
     parser = argparse.ArgumentParser(description='Evolve experiment patterns')
-    parser.add_argument('analysis_json', help='Path to analysis results JSON')
+    parser.add_argument('--analysis', help='Path to analysis results JSON')
+    parser.add_argument('--output-dir', help='Output directory')
+    parser.add_argument('--root', help='Project root')
+    parser.add_argument('analysis_json', nargs='?', help='Path to analysis results JSON (legacy)')
     parser.add_argument('--skill', default='SKILL.md', help='Path to skill file')
     args = parser.parse_args()
     
-    with open(args.analysis_json) as f:
+    # Determine analysis path
+    analysis_path = args.analysis or args.analysis_json
+    if not analysis_path:
+        parser.error("--analysis or analysis_json required")
+    
+    # Determine skill path
+    skill_path = args.skill
+    if args.output_dir:
+        skill_path = Path(args.output_dir) / 'SKILL.md'
+    
+    with open(analysis_path) as f:
         analysis = json.load(f)
     
     patterns = analyze_hypothesis_patterns(analysis)
-    update_skill(args.skill, patterns)
+    update_skill(skill_path, patterns)
     print(f"[evolve] Updated evolution-patterns skill with {len(patterns)} patterns")
 
 

@@ -317,13 +317,25 @@ This skill auto-evolves every {topic_data.get('lookback_days', 30)} days based o
 
 def main():
     parser = argparse.ArgumentParser(description='Evolve researcher prompt based on outcomes')
-    parser.add_argument('--data-dir', required=True, help='Directory containing analysis JSON files')
-    parser.add_argument('--skill', required=True, help='Path to SKILL.md file to update')
+    parser.add_argument('--analysis', help='Path to analysis JSON (from analyze_results.py)')
+    parser.add_argument('--output-dir', help='Directory for output')
+    parser.add_argument('--root', help='Project root directory')
+    # Legacy arguments for direct invocation
+    parser.add_argument('--data-dir', help='Directory containing analysis JSON files')
+    parser.add_argument('--skill', help='Path to SKILL.md file to update')
     parser.add_argument('--dry-run', action='store_true', help='Print to stdout instead of writing')
     args = parser.parse_args()
     
-    data_dir = Path(args.data_dir)
-    skill_path = Path(args.skill)
+    # Determine paths from standard evolve_skills.py arguments or legacy args
+    if args.data_dir and args.skill:
+        data_dir = Path(args.data_dir)
+        skill_path = Path(args.skill)
+    elif args.root:
+        root = Path(args.root)
+        data_dir = root / "assistant" / "skills" / "researcher-prompt" / "data"
+        skill_path = root / "assistant" / "skills" / "researcher-prompt" / "SKILL.md"
+    else:
+        parser.error("Either --data-dir + --skill or --root is required")
     
     print(f"Loading analysis data from {data_dir}")
     print(f"Updating skill at {skill_path}")

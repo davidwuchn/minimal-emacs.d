@@ -52,14 +52,28 @@
 - Custom skill loaders (`gptel-auto-workflow--load-skill-content`) are simpler for batch mode
 - However, we use same skill format (SKILL.md + frontmatter) for compatibility
 
-**Current Blockers:**
-1. **API quota exhausted** (45,000/45,000 weekly tokens)
-   - Quota resets: 2026-05-11T00:00:00+08:00
-   - Cannot test evolved directive with live experiments until quota resets
+**Attempted Experiment Run — FAILED (not provider issue):**
+- Triggered auto-workflow: ./scripts/run-auto-workflow-cron.sh auto-workflow
+- Evolution cycle: ✅ SUCCESS (skills evolved, patterns analyzed)
+- Experiment phase: ❌ FAILED before starting
+- Error: `Symbol's value as variable is void: monitoring`
+- Root cause: Daemon state corruption (not provider-related)
+
+**Why Fallback Provider Won't Help Right Now:**
+1. ✅ Provider failover bug IS fixed (batch-mode backend-available-p)
+2. ❌ Daemon has state corruption (`void: monitoring` variable)
+3. ❌ Workflow errors out BEFORE reaching experiment phase
+4. ❌ evolve_researcher.py script has argument errors
+5. Even with DashScope/DeepSeek available, workflow can't reach experiments
+
+**Fix Required:**
+- Restart daemon with fresh state (kill PID 3838467, start new)
+- Fix evolve_researcher.py argument handling
+- Test end-to-end workflow before running experiments
 
 **Next Steps:**
-1. Wait for API quota reset (2026-05-11)
-2. Run experiments with meta-learned directive
+1. Test provider failover end-to-end with single experiment
+2. If successful: run batch with meta-learned directive
 3. Measure if directive-improved targets have better keep rate
 4. Target: Directive-informed keep rate ↑ from 14% to 18%+
 5. Add temporal analysis (are patterns seasonal? do they decay?)
