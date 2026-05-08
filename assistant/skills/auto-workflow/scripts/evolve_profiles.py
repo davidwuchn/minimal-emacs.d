@@ -16,7 +16,7 @@ def analyze_tool_usage(analysis):
     """Analyze which tool usage patterns correlate with success."""
     tool_stats = {}
     
-    for target, stats in analysis.get('target_stats', {}).items():
+    for stats in analysis.get('target_stats', []):
         for exp in stats.get('experiments', []):
             tools = exp.get('tools_used', [])
             passed = exp.get('passed', False)

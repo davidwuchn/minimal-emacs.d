@@ -16,7 +16,7 @@ def analyze_error_patterns(analysis):
     """Extract common error patterns from experiments."""
     patterns = Counter()
     
-    for target, stats in analysis.get('target_stats', {}).items():
+    for stats in analysis.get('target_stats', []):
         for exp in stats.get('experiments', []):
             error = exp.get('error', '') or ''
             grader_reason = exp.get('grader_reason', '') or ''

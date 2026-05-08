@@ -4,10 +4,16 @@ description: |
   Defines tool permission profiles for programmatic agent execution.
   Controls which tools an agent can use based on execution mode and project type.
 version: 1.0
-updated: 2026-05-08
+updated: 2026-05-08 18:54
 metadata:
   category: security
   author: auto-workflow
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
 ---
 
 # Sandbox Tool Profiles
@@ -88,3 +94,12 @@ Load profile in Emacs Lisp:
 
 - `scripts/validate_profile.py` - Validate profile JSON against schema
 - `scripts/generate_profile.py` - Generate profile from project analysis
+
+
+## Evolved Tool Profiles
+
+Based on analysis of 0 experiments.
+
+| Tool | Level | Success Rate | Experiments |
+|------|-------|--------------|-------------|
+

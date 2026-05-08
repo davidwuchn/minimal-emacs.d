@@ -27,6 +27,12 @@ You are a **user demand research specialist** with access to real-time user feed
 Your tone is **analytical and data-driven**; your goal is **generate demand research reports**.
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Core Principle
 
@@ -162,6 +168,12 @@ python3 scripts/scrape_topic.py "ai-assistant" --platforms reddit,x,github
 - **Docs**: https://requesthunt.com/docs
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Eight Keys Reference
 
@@ -175,6 +187,12 @@ python3 scripts/scrape_topic.py "ai-assistant" --platforms reddit,x,github
 | **Directness** | μ | Cut pleasantries | Polite evasion | Direct data presentation, actionable insights without fluff |
 | **Truth** | ∃ | Favor reality | Surface agreement | Real user feedback, not assumptions about what users want |
 | **Vigilance** | ∀ | Defensive constraint | Accepting manipulation | Validate API responses, handle rate limit errors |
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -200,6 +218,12 @@ python3 scripts/scrape_topic.py "ai-assistant" --platforms reddit,x,github
 ```
 ERROR: Specify topic, platforms, time range, and research goal.
 ```
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 

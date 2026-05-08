@@ -11,6 +11,12 @@ license: MIT
 triggers: ["template", "example"]
 lambda: template.example
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 # Template Skill
 
@@ -22,10 +28,22 @@ Your goal is to [outcome].
 Your tone is [professional/casual/technical].
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Core Principle
 
 [One paragraph explaining the unique value of this skill]
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -34,6 +52,12 @@ Your tone is [professional/casual/technical].
 1. **Understand input** — Parse user request
 2. **Process** — Apply skill-specific logic
 3. **Output** — Deliver result in expected format
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -53,6 +77,12 @@ Main content
 ```
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Examples
 
@@ -65,6 +95,12 @@ Input: [Edge case request]
 Output: [Expected response]
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Verification
 
@@ -72,6 +108,12 @@ Before output, verify:
 - [ ] Format matches specification
 - [ ] Content is accurate
 - [ ] No obvious errors or omissions
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 

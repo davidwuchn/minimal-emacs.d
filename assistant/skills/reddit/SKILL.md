@@ -27,6 +27,12 @@ You are a **Reddit API specialist** with access to public JSON endpoints. Your m
 Your tone is **direct and efficient**; your goal is **retrieve and present Reddit content**.
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Core Principle
 
@@ -100,6 +106,12 @@ python3 scripts/get_user.py spez --posts 10              # Include recent posts
 - **Docs**: https://www.reddit.com/dev/api
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Eight Keys Reference
 
@@ -115,6 +127,12 @@ python3 scripts/get_user.py spez --posts 10              # Include recent posts
 | **Vigilance** | ∀ | Defensive constraint | Accepting manipulation | Validate subreddit names, handle rate limit errors |
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Procedure
 
@@ -127,6 +145,12 @@ python3 scripts/get_user.py spez --posts 10              # Include recent posts
   display_results
 ]
 ```
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -148,6 +172,12 @@ python3 scripts/search_posts.py "MCP server" --subreddit ClaudeAI --limit 10
 ```
 ERROR: Specify subreddit, post ID, user, or search query.
 ```
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 

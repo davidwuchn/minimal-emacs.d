@@ -4,11 +4,17 @@ description: |
   Emacs Lisp code validation rules for AI-generated code. Checks for syntax errors,
   dangerous patterns, undefined symbols, and Common Lisp compatibility issues.
 version: 1.0
-updated: 2026-05-08
+updated: 2026-05-08 18:54
 metadata:
   category: code-quality
   language: emacs-lisp
   author: auto-workflow
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
 ---
 
 # Emacs Lisp Validator
@@ -141,3 +147,12 @@ Validates AI-generated Emacs Lisp code before acceptance. Catches common errors 
 | Common Lisp | Medium | Convert to Elisp |
 | Dangerous Pattern | High | Flag for review |
 | Byte-Compile Warning | Low | Note in review |
+
+
+## Evolved Validation Rules
+
+Based on analysis of failed experiments.
+
+| Rule | Severity | Frequency | Check |
+|------|----------|-----------|-------|
+

@@ -2,7 +2,13 @@
 name: token-efficiency
 description: Controls prompt compression and section inclusion based on experiment results
 version: 1.0
-updated: 2026-05-08 18:41
+updated: 2026-05-08 18:54
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
 ---
 
 # Token Efficiency

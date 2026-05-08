@@ -17,7 +17,7 @@ def analyze_improvement_effectiveness(analysis):
     """Analyze which improvement types led to score increases."""
     element_results = defaultdict(lambda: {'improved': 0, 'worsened': 0, 'total': 0})
     
-    for target, stats in analysis.get('target_stats', {}).items():
+    for stats in analysis.get('target_stats', []):
         experiments = stats.get('experiments', [])
         for i, exp in enumerate(experiments):
             if i == 0:

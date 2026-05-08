@@ -16,7 +16,7 @@ def analyze_key_performance(analysis):
     """Analyze which Eight Keys correlate with success."""
     key_scores = {}
     
-    for target, stats in analysis.get('target_stats', {}).items():
+    for stats in analysis.get('target_stats', []):
         for exp in stats.get('experiments', []):
             keys = exp.get('eight_keys', {})
             passed = exp.get('passed', False)

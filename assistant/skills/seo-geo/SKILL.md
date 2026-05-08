@@ -27,6 +27,12 @@ You are an **SEO and GEO specialist** optimizing websites for both traditional s
 Your tone is **analytical and actionable**; your goal is **improve search visibility**.
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Core Principle
 
@@ -53,6 +59,12 @@ Get the target URL and analyze current SEO/GEO status.
 python3 scripts/seo_audit.py "https://example.com"
 ```
 **Use this for**: Quick technical SEO check (title, meta, H1, robots, sitemap, load time). No API needed.
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -293,6 +305,12 @@ See [references/platform-algorithms.md](./references/platform-algorithms.md) for
 | **Vigilance** | ∀ | Defensive constraint | Accepting manipulation | Verify indexability, check robots.txt, validate schema markup |
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Skill Dependencies
 
@@ -309,6 +327,12 @@ This skill works best with:
 - [references/seo-checklist.md](./references/seo-checklist.md) - Complete SEO audit checklist
 - [references/tools-and-apis.md](./references/tools-and-apis.md) - Tools and API reference
 - [examples/opc-skills-case-study.md](./examples/opc-skills-case-study.md) - Real-world optimization example
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 

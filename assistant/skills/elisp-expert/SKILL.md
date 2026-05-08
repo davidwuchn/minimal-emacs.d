@@ -27,6 +27,12 @@ Your tone is **precise and cautionary**; your goal is **write correct Elisp that
 **When to use**: Editing .el files, implementing features, fixing bugs.
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Core Principle
 
@@ -41,6 +47,12 @@ Your tone is **precise and cautionary**; your goal is **write correct Elisp that
   commit()
 ]
 ```
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -86,6 +98,12 @@ ALTERNATIVE (prefer when possible):
 - **Validation catches it** - But only if validation runs the code
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Other Dangerous Patterns
 
@@ -96,6 +114,12 @@ ALTERNATIVE (prefer when possible):
 | `goto-char` without save | Cursor moves unexpectedly | Use `save-excursion` |
 | `insert` without narrowing | Inserts in wrong place | Use `save-restriction` + `narrow-to-region` |
 | `kill-buffer` without check | Kills wrong buffer | Check buffer name first |
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -129,6 +153,12 @@ ALTERNATIVE (prefer when possible):
 ```
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Procedure
 
@@ -137,6 +167,12 @@ ALTERNATIVE (prefer when possible):
 3. **Byte-compile** - `emacs --batch -f batch-byte-compile file.el`
 4. **Check warnings** - No errors or unexpected warnings
 5. **Commit** - Only after clean compile
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -149,6 +185,12 @@ ALTERNATIVE (prefer when possible):
 - [ ] Tests pass (if available)
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Validation Command
 
@@ -157,6 +199,12 @@ emacs --batch -f batch-byte-compile file.el 2>&1 | grep -E "(Error|Warning)"
 ```
 
 Clean output = no errors/warnings.
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -207,6 +255,12 @@ Clean output = no errors/warnings.
 ```
 
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 ## Anti-Patterns (Avoid)
 
@@ -216,6 +270,12 @@ Clean output = no errors/warnings.
 | `set-buffer` | `with-current-buffer` |
 | `goto-char` alone | `save-excursion` |
 | Unprotected `insert` | `save-restriction` + `narrow-to-region` |
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -231,6 +291,12 @@ Clean output = no errors/warnings.
 | **Directness** | μ | Show wrong/correct, no vague advice |
 | **Truth** | ∃ | Byte-compile output is evidence |
 | **Vigilance** | ∀ | Check ALL dangerous patterns before commit |
+
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
 
 ---
 

@@ -3,6 +3,12 @@ name: benchmark-improver
 description: Wu Xing-based auto-improvement system for benchmarks. Detects anti-patterns via 相克 and generates improvements via 相生 pathways.
 version: 1.0
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
+---
 
 # Benchmark Auto-Improver
 
@@ -177,3 +183,26 @@ Anti-patterns are detected by analyzing benchmark results against Eight Keys sco
 - **Vigilance (∀) low:** Repeating mistakes, no error handling
 
 Map low scores to their element and apply the corresponding improvement rules above.
+
+
+## Evolved Improvement Effectiveness
+
+Based on analysis of which improvement types led to score increases.
+
+| Element | Effectiveness | Improvement Rate | Total | Improved | Worsened |
+|---------|---------------|------------------|-------|----------|----------|
+| Control (Earth) | ineffective | 12% | 25 | 3 | 1 |
+| Intelligence (Fire) | ineffective | 0% | 4 | 0 | 1 |
+| Coordination (Metal) | marginally-effective | 21% | 63 | 13 | 6 |
+| Identity (Water) | ineffective | 15% | 239 | 35 | 45 |
+| Operations (Wood) | ineffective | 16% | 125 | 20 | 19 |
+
+### Recommendations
+
+**Reconsider these improvement types:**
+- Control (Earth) (12% success rate, 1 worsened)
+- Intelligence (Fire) (0% success rate, 1 worsened)
+- Coordination (Metal) (21% success rate, 6 worsened)
+- Identity (Water) (15% success rate, 45 worsened)
+- Operations (Wood) (16% success rate, 19 worsened)
+

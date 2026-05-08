@@ -79,6 +79,7 @@ def compute_target_stats(records):
             'avg_score_before': sum(r['score_before'] for r in target_records) / total,
             'avg_score_after': sum(r['score_after'] for r in target_records) / total,
             'avg_quality': sum(r['code_quality'] for r in target_records) / total,
+            'experiments': target_records,
         })
     
     # Sort by keep rate descending

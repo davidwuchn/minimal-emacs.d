@@ -3,11 +3,17 @@ name: eight-keys-grader
 description: |
   Grading rubric based on Eight Keys (φ vitality, fractal clarity, ε purpose, τ wisdom, π synthesis, μ directness, ∃ truth, ∀ vigilance) and Wu Xing (Five Elements) framework. Use when evaluating AI-generated code quality, experiment results, or improvement proposals.
 version: 2.0
-updated: 2026-05-08
+updated: 2026-05-08 18:54
 metadata:
   category: quality-assurance
   author: auto-workflow
   license: MIT
+---
+metadata:
+  evolution-stats:
+    total-experiments: 870
+    last-evolution: 2026-05-08 18:52
+
 ---
 
 # Eight Keys Grader
@@ -208,3 +214,12 @@ When code quality is low, trace through Five Elements:
 (gptel-request prompt
   :system (gptel-auto-workflow--load-skill-content "eight-keys-grader"))
 ```
+
+
+## Evolved Weights
+
+Based on analysis of experiment results.
+
+| Key | Weight | Discrimination | Avg (Success) | Avg (Failure) |
+|-----|--------|----------------|---------------|---------------|
+
