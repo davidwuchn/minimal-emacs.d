@@ -2,9 +2,9 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.08
-updated: 2026-05-08 18:41
-total-experiments: 512
-total-kept: 105
+updated: 2026-05-08 19:40
+total-experiments: 870
+total-kept: 117
 ---
 
 # Auto-Workflow Program
@@ -18,20 +18,22 @@ total-kept: 105
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-tools-agent-runtime.el` | 50% | 4 | 2 | ✅ High yield |
-| `lisp/modules/gptel-workflow-benchmark.el` | 36% | 22 | 8 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-git.el` | 33% | 12 | 4 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-staging-merge.el` | 33% | 12 | 4 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-benchmark.el` | 33% | 3 | 1 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-evolution.el` | 33% | 3 | 1 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-staging-baseline.el` | 33% | 3 | 1 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-worktree.el` | 31% | 16 | 5 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-experiment-core.el` | 30% | 10 | 3 | ✅ High yield |
-| `lisp/modules/gptel-agent-loop.el` | 25% | 12 | 3 | 🟡 Active |
-| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 24% | 29 | 7 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-git.el` | 29% | 17 | 5 | 🟡 Active |
+| `lisp/modules/gptel-ext-tool-sanitize.el` | 25% | 16 | 4 | 🟡 Active |
+| `lisp/modules/gptel-agent-loop.el` | 22% | 85 | 19 | 🟡 Active |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 19% | 16 | 3 | 🟡 Active |
+| `lisp/modules/gptel-ext-retry.el` | 19% | 43 | 8 | 🟡 Active |
+| `lisp/modules/gptel-sandbox.el` | 18% | 106 | 19 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-benchmark.el` | 17% | 6 | 1 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-core.el` | 16% | 37 | 6 | 🟡 Active |
 
 ## Success Patterns
 
 <!-- AUTO-UPDATED: From mementum knowledge -->
+- Extract constants into named variables
+- Add nil guards on plist/assoc lookups
 - Extract helper functions for repeated logic
 
 ## Failed Patterns
@@ -44,11 +46,11 @@ total-kept: 105
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-tool-confirm.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-tool-sanitize.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-tools-agent-error.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-workflow-benchmark.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-ext-context-cache.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-agent.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-agent-loop.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-ext-context.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -74,4 +76,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 512 experiments (105 kept). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (117 kept). It evolves every self-evolution cycle.

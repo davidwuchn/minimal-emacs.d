@@ -36,6 +36,21 @@
 
 **New Memory:**
 - `mementum/memories/skill-extraction-pattern.md` — domain knowledge extraction pattern
+- `mementum/memories/insight-skill-evolution-closed-loop.md` — closed loop architecture
+- `mementum/memories/plan-closed-loop-test.md` — test plan for measuring impact
+
+**Current Blocker:**
+- API quota exhausted (45,000/45,000 weekly tokens)
+- Quota resets: 2026-05-11T00:00:00+08:00
+- Daemon running but idle; will auto-resume when quota available
+- Last experiment: 2026-05-08T122426Z-53f9 (api-rate-limit on gptel-ext-context.el)
+
+**Test Plan Ready:**
+- Phase 1: Baseline measurement (current: 14% keep rate)
+- Phase 2: Trigger batch with evolved recommendations injected
+- Phase 3: Compare results after 50-100 experiments
+- Phase 4: Iterate based on data
+- Success criteria: Earth/Control keep rate ↑ 16%→18%+
 
 ---
 
