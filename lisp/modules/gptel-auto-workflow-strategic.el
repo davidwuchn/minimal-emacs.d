@@ -70,6 +70,12 @@ Default nil for speed (analyzer has enough context from git/history)."
   :type 'boolean
   :group 'gptel-tools-agent)
 
+(defvar gptel-auto-workflow--current-research-context nil
+  "Plist tracking current research run context.
+Set when research runs before target selection.
+Contains :strategy :hash :findings for mementum tracking.
+Reset after each run.")
+
 (defcustom gptel-auto-workflow-research-interval (* 4 3600)
   "Interval in seconds between periodic researcher runs.
 Default 4 hours. Set to 0 to disable periodic research.
@@ -274,34 +280,263 @@ EDGE CASE: Returns empty string if no patterns found or git unavailable."
         (mapconcat #'identity (nreverse results) "\n\n")
       "")))
 
+(defun gptel-auto-workflow--load-research-skill ()
+  "Load evolved research skill from RESEARCH.md.
+Returns skill content or empty string if not found.
+Uses standard skill loader for consistency."
+  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/RESEARCH")))
+    (if (string-empty-p content)
+        ""
+      (progn
+        (message "[research] Loaded evolved skill (%d chars)" (length content))
+        content))))
+
+(defun gptel-auto-workflow--load-directive-skill ()
+  "Load evolved directive skill from DIRECTIVE.md.
+Returns skill content or empty string if not found.
+Uses standard skill loader for consistency."
+  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/DIRECTIVE")))
+    (if (string-empty-p content)
+        ""
+      (progn
+        (message "[directive] Loaded evolved skill (%d chars)" (length content))
+        content))))
+
+(defun gptel-auto-workflow--research-topics-string ()
+  "Return current research topics based on project focus and recent experiments.
+
+Topics evolve based on:
+- Recent experiment failures (what we need help with)
+- Directive hypotheses (what we're investigating)
+- Current active targets (what modules need improvement)
+
+Returns formatted string for research prompt."
+  (let* ((topics '("AI agent workflow architectures (multi-step, state machines, planning)"
+                   "Emacs Lisp AI integration patterns (gptel, comint, async processes)"
+                   "LLM self-evolution and meta-learning (auto-prompting, strategy search)"
+                   "Code analysis automation (static analysis, AST parsing, linting)"
+                   "Prompt engineering for code generation (chain-of-thought, few-shot)"
+                   "Error recovery and retry patterns in agent systems"
+                   "Benchmarking and evaluation frameworks for AI-generated code"
+                   "Git-based memory and knowledge systems for AI agents"
+                   "hermes-agent project: agent orchestration and delegation patterns"
+                   "zeroclaw project: lightweight agent framework design"
+                   "ml-intern project: ML-powered coding assistant techniques"))
+         (proj-root (gptel-auto-workflow--effective-project-root))
+         ;; Check recent experiment failures for hints
+         (failure-patterns
+          (condition-case nil
+              (with-temp-buffer
+                (call-process "git" nil t nil "log" "--grep=validation-failed\\|timeout\\|error" "--oneline" "-10" "--" "assistant/strategies/" "lisp/modules/")
+                (let ((lines (split-string (buffer-string) "\n" t)))
+                  (when (> (length lines) 3)
+                    (format "\nRecent failure patterns: %d validation/timeout errors in last 10 commits"
+                            (length lines)))))
+            (error nil))))
+    (concat (mapconcat (lambda (t) (concat "- " t)) topics "\n")
+            (or failure-patterns ""))))
+
+(defun gptel-auto-workflow--load-researcher-skill ()
+  "Load researcher skill from auto-workflow/researcher.
+Returns skill content or empty string if not found.
+Uses standard skill loader so humans can edit RESEARCHER.md."
+  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/researcher")))
+    (if (string-empty-p content)
+        (progn
+          (message "[research] RESEARCHER.md skill not found, using default")
+          "")
+      (progn
+        (message "[research] Loaded researcher skill (%d chars)" (length content))
+        content))))
+
+(defun gptel-auto-workflow--build-research-prompt ()
+  "Build external research prompt by loading RESEARCHER.md skill.
+
+The researcher prompt is defined in assistant/skills/auto-workflow/RESEARCHER.md
+so humans can easily review and edit it without touching code.
+
+Results feed into directive's 'Next Hypotheses' for target selection."
+  (let* ((base-prompt (gptel-auto-workflow--load-researcher-skill))
+         (skill-content (gptel-auto-workflow--load-research-skill))
+         (directive-content (gptel-auto-workflow--load-directive-skill))
+         (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content)))
+    (concat base-prompt
+            "\n\n"
+            "## Dynamic Context\n\n"
+            (if (string-empty-p skill-content)
+                ""
+              (concat "### Previously Discovered Insights\n"
+                      "*Avoid re-reporting these. Build upon or contradict them.*\n\n"
+                      skill-content
+                      "\n\n"))
+            (if priority-targets
+                (concat "### Current Project Targets (from directive)\n"
+                        "*Research ideas that could improve these specific modules:*\n"
+                        priority-targets
+                        "\n\n")
+              "")
+            "### Recent Failure Patterns\n"
+            (gptel-auto-workflow--research-topics-string)
+            "\n\n"
+            "---\n"
+            "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
+
+(defun gptel-auto-workflow--directive-extract-priority-targets (directive-content)
+  "Extract high-priority targets from DIRECTIVE-CONTENT.
+Returns formatted string or nil."
+  (when (and directive-content (not (string-empty-p directive-content)))
+    (with-temp-buffer
+      (insert directive-content)
+      (goto-char (point-min))
+      (let ((targets nil))
+        ;; Look for Active Targets table
+        (when (re-search-forward "## Active Targets" nil t)
+          (forward-line 2) ; Skip header
+          (forward-line 1) ; Skip separator
+          (while (looking-at "| `\\([^`]+\\)` | [^|]+ | [^|]+ | [^|]+ | \\(✅\\|🟡\\)")
+            (push (match-string 1) targets)
+            (forward-line 1)))
+        (if targets
+            (mapconcat (lambda (targ) (format "- %s" targ)) (nreverse targets) "\n")
+          nil)))))
+
+(defun gptel-auto-workflow--research-git-patterns-from-history ()
+  "Extract effective code patterns from git history and mementum.
+Returns string of grep patterns or nil."
+  (condition-case err
+      (let* ((root (gptel-auto-workflow--effective-project-root))
+             (knowledge-dir (expand-file-name "mementum/knowledge" root))
+             (patterns nil))
+        ;; Look for successful patterns in research knowledge
+        (when (file-directory-p knowledge-dir)
+          (dolist (kf (directory-files knowledge-dir t "research-insights-.+\\.md$"))
+            (with-temp-buffer
+              (insert-file-contents kf)
+              (goto-char (point-min))
+              ;; Extract successful targets to infer patterns
+              (when (re-search-forward "## Successful Targets" nil t)
+                (forward-line 2)
+                (while (looking-at "^- `\\(.+\\)`")
+                  (let ((target (match-string 1)))
+                    ;; Infer pattern from target filename
+                    (when (string-match "\\(cache\\|sanitize\\|error\\|validate\\|guard\\)" target)
+                      (push (format "git grep -n '%s' -- lisp/modules/ | head -10"
+                                    (match-string 1 target))
+                            patterns)))
+                  (forward-line 1))))))
+        (if patterns
+            (concat "Suggested grep commands based on successful targets:\n"
+                    (mapconcat #'identity (delete-dups patterns) "\n"))
+          nil))
+    (error
+     (message "[research] Error extracting git patterns: %s" err)
+     nil)))
+
+(defun gptel-auto-workflow--digest-research-findings (raw-findings callback)
+  "Digest RAW-FINDINGS using LLM backend to extract actionable insights.
+CALLBACK receives digested findings string.
+
+Digestion process:
+1. Remove noise and duplicate ideas
+2. Extract specific techniques with implementation paths
+3. Rank by relevance to our project (Emacs AI agents)
+4. Format as actionable hypotheses for directive"
+  (if (or (null raw-findings) (string-empty-p raw-findings))
+      (funcall callback "")
+    (let ((digest-prompt
+           (format "You are a research digest specialist. Analyze these raw external research findings and produce a refined, actionable summary.
+
+RAW FINDINGS:
+%s
+
+DIGESTION TASK:
+1. Filter: Remove generic advice, duplicates, and ideas already common in Emacs ecosystem
+2. Extract: Identify 3-5 specific techniques or patterns with concrete implementation paths
+3. Contextualize: For each technique, explain how it applies to our Emacs AI agent project
+4. Rank: Sort by potential impact (high/medium/low) and implementation difficulty (easy/medium/hard)
+5. Format: Use structured output suitable for feeding into an experiment planning system
+
+OUTPUT FORMAT (strict):
+## Digest: External Research Insights
+
+### Technique 1: [Name]
+- **Source type**: [YouTube|GitHub|arXiv|X|HuggingFace|Reddit]
+- **Impact**: [high|medium|low]
+- **Difficulty**: [easy|medium|hard]
+- **Description**: [2-3 sentences on what it is]
+- **Application**: [Specific module or pattern in our project it could improve]
+- **Implementation sketch**: [Concrete first step, 1-2 sentences]
+
+[Repeat for each technique]
+
+### Summary for Directive
+- **Top hypothesis**: [Best technique to try next]
+- **Target modules**: [Which files to experiment on]
+- **Expected improvement**: [What metric or capability would improve]
+
+RULES:
+- Be specific. 'Use AI better' is banned.
+- Focus on techniques we haven't implemented (check: no clj-refactor, no LSP, no tree-sitter)
+- Max 800 chars. Quality over quantity."
+                   (truncate-string-to-width raw-findings 2000 nil nil "..."))))
+      (message "[auto-workflow] Digesting research findings with LLM...")
+      (if (fboundp 'gptel-request)
+          (gptel-request
+           digest-prompt
+           (lambda (response _info)
+             (let ((digested (if (stringp response)
+                                 response
+                               (format "%s" response))))
+               (message "[auto-workflow] Digestion complete: %d chars → %d chars"
+                        (length raw-findings) (length digested))
+               ;; Update context with digested version
+               (when (boundp 'gptel-auto-workflow--current-research-context)
+                 (plist-put gptel-auto-workflow--current-research-context
+                            :digested digested))
+               (funcall callback digested)))
+           :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
+        (progn
+          (message "[auto-workflow] gptel-request unavailable, using raw findings")
+          (funcall callback raw-findings))))))
+
 (defun gptel-auto-workflow--research-patterns (callback)
-  "Research code patterns.
-CALLBACK receives research findings string.
-Tells LLM how to use git grep for context.
+  "Hunt for external ideas from internet sources.
+CALLBACK receives DIGESTED research findings string.
+
+Pipeline: External hunt → Raw findings → LLM digestion → Actionable insights
 ASSUMPTION: Subagent may or may not be available.
-BEHAVIOR: Uses subagent if available, otherwise falls back to local grep analysis.
-EDGE CASE: Returns empty findings if both subagent and local analysis fail."
-  (let ((research-prompt "Analyze root-repo files under lisp/modules/ for code issues.
-
-Use Bash tool to run:
-  git grep -n 'cl-return-from' -- lisp/modules/ | head -20
-  git grep -n 'ignore-errors' -- lisp/modules/ | head -20
-
-Report actionable issues only. Skip cleanup code, benchmarks, tests.
-Format: file:line | issue | fix
-Max 800 chars."))
-    (message "[auto-workflow] Researching patterns...")
+BEHAVIOR: Uses subagent with web tools if available, otherwise returns empty.
+EDGE CASE: Returns empty findings if subagent unavailable.
+META-LEARNING: Stores digested insights in RESEARCH.md for future reference."
+  (let ((research-prompt (gptel-auto-workflow--build-research-prompt)))
+    (message "[auto-workflow] Hunting external ideas...")
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (gptel-benchmark-call-subagent
-         'researcher "Research patterns" research-prompt
+         'researcher "External research" research-prompt
          (lambda (result)
-           (let ((findings (gptel-auto-workflow--normalize-response result)))
-             (message "[auto-workflow] Research complete: %d chars" (length findings))
-             (funcall callback findings))))
-      (let ((findings (gptel-auto-workflow--local-research-patterns)))
-        (message "[auto-workflow] Local research complete: %d chars" (length findings))
-        (funcall callback findings)))))
+           (let* ((raw-findings (gptel-auto-workflow--normalize-response result))
+                  (findings-hash (sha1 raw-findings))
+                  (strategy (or (and (boundp 'gptel-auto-workflow--active-strategy)
+                                     gptel-auto-workflow--active-strategy)
+                                "default")))
+             ;; Store raw research context
+             (setq gptel-auto-workflow--current-research-context
+                   (list :strategy strategy
+                         :hash findings-hash
+                         :findings raw-findings
+                         :source "external"
+                         :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
+             (message "[auto-workflow] External research raw: %d chars (hash: %s)"
+                      (length raw-findings) (substring findings-hash 0 8))
+             ;; Digest findings before passing to callback
+             (gptel-auto-workflow--digest-research-findings
+              raw-findings
+              (lambda (digested)
+                (funcall callback digested))))))
+      (progn
+        (message "[auto-workflow] Subagent unavailable - skipping external research")
+        (funcall callback "")))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -319,12 +554,28 @@ finds patterns first for better selection."
   "Build prompt for analyzer LLM target selection.
 CONTEXT is the gathered context plist.
 RESEARCH-FINDINGS is the research findings string or empty.
-MAX-TARGETS is the maximum number of targets to select."
+MAX-TARGETS is the maximum number of targets to select.
+META-LEARNING: Loads evolved directive and research skills from mementum."
   (unless (plistp context)
     (setq context '()))
-  (format "Select optimization targets for this Emacs Lisp project.
+  (let* ((directive (gptel-auto-workflow--load-directive-skill))
+         (research-skill (gptel-auto-workflow--load-research-skill))
+         (directive-section (if directive
+                                (format "EVOLVED PROGRAM DIRECTIVE (from %d experiments):\n%s\n\n"
+                                        (or (when (string-match "total-experiments: \\([0-9]+\\)" directive)
+                                              (string-to-number (match-string 1 directive)))
+                                            0)
+                                        (truncate-string-to-width
+                                         (replace-regexp-in-string "^---$\\|^---\\n.*\\n---\\n" "" directive)
+                                         1500 nil nil "..."))
+                              ""))
+         (research-section (if (and research-skill (not (string-empty-p research-skill)))
+                               (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
+                                       (truncate-string-to-width research-skill 800 nil nil "..."))
+                             "")))
+    (format "Select optimization targets for this Emacs Lisp project.
 
-FILES AVAILABLE:
+%s%sFILES AVAILABLE:
 %s
 
 RECENT GIT HISTORY:
@@ -336,7 +587,7 @@ FILES BY SIZE:
 KNOWN ISSUES (TODOs/FIXMEs):
 %s
 
-RESEARCH FINDINGS:
+EXTERNAL RESEARCH FINDINGS (new ideas from internet):
 %s
 
 TASK: Select exactly %d files from lisp/modules/ to optimize.
@@ -347,23 +598,28 @@ Example: gptel-tools-agent.el (11,481 lines) is EXCLUDED. Focus on smaller files
 
 %s
 
-PRIORITIZE: Files with actual bugs, missing validation, or error handling gaps.
+PRIORITIZE: Files where external research insights can be applied.
+  Example: Research found "async process monitoring" → target files with process handling
+  Example: Research found "state machine pattern" → target files with complex control flow
 AVOID: Recently-refactored files with no remaining issues.
 AVOID: Files over 1000 lines (too large for focused changes).
+HINT: External research insights suggest novel approaches. Consider targets that could benefit from these techniques even if they don't have obvious bugs.
 
 OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
-          (or (plist-get context :file-list) "")
-          (or (plist-get context :git-history) "")
-          (or (plist-get context :file-sizes) "")
-          (or (plist-get context :todos) "")
-          (if (or (null research-findings) (string-empty-p research-findings))
-              "Not available (research disabled)"
-            (truncate-string-to-width research-findings 1000 nil nil "..."))
-          max-targets
-          (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
-              (gptel-auto-workflow--evolution-get-knowledge)
-            "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results")))
+            directive-section
+            research-section
+            (or (plist-get context :file-list) "")
+            (or (plist-get context :git-history) "")
+            (or (plist-get context :file-sizes) "")
+            (or (plist-get context :todos) "")
+            (if (or (null research-findings) (string-empty-p research-findings))
+                "Not available (research disabled)"
+              (truncate-string-to-width research-findings 1000 nil nil "..."))
+            max-targets
+            (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
+                (gptel-auto-workflow--evolution-get-knowledge)
+              "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results"))))
 
 (defun gptel-auto-workflow--ask-analyzer-with-findings (research-findings callback)
   "Ask analyzer with optional RESEARCH-FINDINGS for target selection.

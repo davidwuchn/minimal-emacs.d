@@ -51,6 +51,11 @@
 
 ;; ─── Experiment Hook ───
 
+(defvar gptel-auto-workflow--research-batch-results nil
+  "Accumulator for research batch tracking.
+List of experiment results sharing the same research context.
+Reset when research context changes.")
+
 (defun gptel-auto-workflow--experiment-complete-hook (experiment)
   "Hook called when EXPERIMENT completes.
 Records to mementum and triggers evolution if needed."
@@ -61,12 +66,57 @@ Records to mementum and triggers evolution if needed."
       (error
        (message "[auto-workflow] Mementum recording error: %s" err))))
   
+  ;; Track research batch for meta-learning
+  (let ((research-hash (plist-get experiment :research-hash)))
+    (when (and research-hash (not (equal research-hash "none")))
+      ;; Check if this is a new research context
+      (when (and gptel-auto-workflow--research-batch-results
+                 (not (equal research-hash
+                            (plist-get (car gptel-auto-workflow--research-batch-results) :research-hash))))
+        ;; Research context changed - record previous batch
+        (gptel-auto-workflow--record-research-batch))
+      ;; Add to current batch
+      (push experiment gptel-auto-workflow--research-batch-results)))
+  
   ;; Run evolution every N experiments
   (let ((exp-id (or (plist-get experiment :id) 0)))
     (when (and (> exp-id 0)
                (zerop (% exp-id 5))
                (fboundp 'gptel-auto-workflow-evolution-run-cycle))
       (run-with-idle-timer 30 nil #'gptel-auto-workflow--maybe-run-evolution))))
+
+(defun gptel-auto-workflow--record-research-batch ()
+  "Record accumulated research batch to mementum.
+Called when research context changes or run completes."
+  (when (and gptel-auto-workflow--research-batch-results
+             (fboundp 'gptel-auto-workflow--mementum-record-research))
+    (let* ((first-result (car gptel-auto-workflow--research-batch-results))
+           (strategy (plist-get first-result :research-strategy))
+           (hash (plist-get first-result :research-hash))
+           (targets (delete-dups
+                     (mapcar (lambda (r) (plist-get r :target))
+                             gptel-auto-workflow--research-batch-results)))
+           (kept-count (cl-count-if
+                        (lambda (r) (plist-get r :kept))
+                        gptel-auto-workflow--research-batch-results))
+           (total-count (length gptel-auto-workflow--research-batch-results)))
+       (condition-case err
+           (gptel-auto-workflow--mementum-record-research
+            (list :strategy strategy
+                  :hash hash
+                  :targets targets
+                  :kept-count kept-count
+                  :total-count total-count
+                  :findings (or (and (boundp 'gptel-auto-workflow--current-research-context)
+                                     (plist-get gptel-auto-workflow--current-research-context :findings))
+                                "")
+                  :digested (or (and (boundp 'gptel-auto-workflow--current-research-context)
+                                     (plist-get gptel-auto-workflow--current-research-context :digested))
+                                "")))
+         (error
+          (message "[auto-workflow] Research recording error: %s" err))))
+  ;; Reset batch
+  (setq gptel-auto-workflow--research-batch-results nil))
 
 ;; ─── Status Dashboard ───
 
@@ -131,7 +181,7 @@ Records to mementum and triggers evolution if needed."
       (insert "\nPress q to quit\n")
       (goto-char (point-min))
       (local-set-key (kbd "q") #'kill-buffer-and-window))
-    (pop-to-buffer buf)))
+     (pop-to-buffer buf))))
 
 ;; ─── Auto-start ───
 

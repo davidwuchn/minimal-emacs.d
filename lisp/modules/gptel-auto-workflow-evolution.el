@@ -58,18 +58,22 @@ Uses cached value from load time, or detects from current directory."
                            (quality (string-to-number (or (nth 5 fields) "0")))
                            (delta-str (or (nth 6 fields) "+0.00"))
                            (decision (nth 7 fields))
-                             (grader-q (string-to-number (or (nth 9 fields) "0")))
-                             (prompt-chars (string-to-number (or (nth 15 fields) "0"))))
-                       (push (list :target target
-                                   :hypothesis hypothesis
-                                   :score-before score-before
-                                   :score-after score-after
-                                   :code-quality quality
-                                   :delta delta-str
-                                   :decision decision
-                                   :grader-quality grader-q
-                                   :prompt-chars prompt-chars)
-                             records))))
+                            (grader-q (string-to-number (or (nth 9 fields) "0")))
+                              (prompt-chars (string-to-number (or (nth 15 fields) "0")))
+                              (research-strategy (or (nth 20 fields) "none"))
+                              (research-hash (or (nth 21 fields) "none")))
+                        (push (list :target target
+                                    :hypothesis hypothesis
+                                    :score-before score-before
+                                    :score-after score-after
+                                    :code-quality quality
+                                    :delta delta-str
+                                    :decision decision
+                                    :grader-quality grader-q
+                                    :prompt-chars prompt-chars
+                                    :research-strategy research-strategy
+                                    :research-hash research-hash)
+                              records))))
                 (forward-line 1)))))))
     (nreverse records)))
 
@@ -705,13 +709,435 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
                 consolidated (hash-table-count target-groups)))
      consolidated)))
 
+;;; ─── Research Evolution ───
+
+(defun gptel-auto-workflow--research-results-by-strategy ()
+  "Group experiment results by research strategy.
+Returns hash table mapping strategy name to list of results."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (by-strategy (make-hash-table :test 'equal)))
+    (dolist (r results)
+      (let ((strategy (or (plist-get r :research-strategy) "none")))
+        (unless (equal strategy "none")
+          (puthash strategy (cons r (gethash strategy by-strategy)) by-strategy))))
+    by-strategy))
+
+(defun gptel-auto-workflow--synthesize-research-knowledge (strategy results)
+  "Synthesize knowledge page for research STRATEGY from RESULTS.
+Returns t if page created."
+  (let* ((total (length results))
+         (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
+         (discarded (cl-count-if (lambda (r) (equal (plist-get r :decision) "discarded")) results))
+         (failed (cl-count-if (lambda (r) (equal (plist-get r :decision) "validation-failed")) results))
+         (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
+         (knowledge-dir (expand-file-name "mementum/knowledge"
+                                          (gptel-auto-workflow--worktree-base-root)))
+         (knowledge-file (expand-file-name
+                          (format "research-insights-%s.md" strategy)
+                          knowledge-dir)))
+    (when (> total 2)
+      (make-directory knowledge-dir t)
+      (with-temp-file knowledge-file
+        (insert "---\n")
+        (insert (format "title: Research Insights - %s\n" strategy))
+        (insert "status: active\n")
+        (insert "category: knowledge\n")
+        (insert (format "tags: [research, auto-workflow, %s]\n" strategy))
+        (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
+        (insert (format "insight-quality: %.1f/10\n" (* 10 keep-rate)))
+        (insert "---\n\n")
+        (insert (format "# Research Strategy: %s\n\n" strategy))
+        (insert (format "*Consolidated from %d experiments (%.0f%% keep rate).*%s\n\n"
+                        total
+                        (* 100 keep-rate)
+                        (if (> total 0) "" " No data yet.")))
+        (insert (format "**Performance:** %d kept / %d discarded / %d failed\n\n"
+                        kept discarded failed))
+        ;; Extract successful targets
+        (let ((kept-targets (delete-dups
+                             (mapcar (lambda (r) (plist-get r :target))
+                                     (cl-remove-if-not
+                                      (lambda (r) (equal (plist-get r :decision) "kept"))
+                                      results)))))
+          (when kept-targets
+            (insert "## Successful Targets\n\n")
+            (dolist (targ (seq-take kept-targets 10))
+              (insert (format "- `%s`\n" targ)))
+            (insert "\n")))
+        ;; Extract failed targets with patterns
+        (let ((failed-targets (delete-dups
+                               (mapcar (lambda (r) (plist-get r :target))
+                                       (cl-remove-if-not
+                                        (lambda (r) (equal (plist-get r :decision) "validation-failed"))
+                                        results)))))
+          (when failed-targets
+            (insert "## Targets with Validation Failures\n\n")
+            (insert "These targets may need different research patterns or the research findings were misleading.\n\n")
+            (dolist (targ (seq-take failed-targets 5))
+              (insert (format "- `%s`\n" targ)))
+            (insert "\n")))
+        ;; Meta-learning recommendations
+        (insert "## Meta-Learning Recommendations\n\n")
+        (cond
+         ((>= keep-rate 0.5)
+          (insert "- **This strategy is effective.** Continue using it.\n")
+          (insert "- Consider expanding the grep patterns to find similar issues.\n"))
+         ((>= keep-rate 0.3)
+          (insert "- **This strategy shows promise.** Refine the research prompt.\n")
+          (insert "- Focus on more specific code patterns (e.g., specific functions rather than broad categories).\n"))
+         ((> total 5)
+          (insert "- **This strategy underperforms.** Consider evolving a new approach.\n")
+          (insert "- The findings may be too generic or targeting the wrong files.\n")
+          (insert "- Try combining with git history for recency bias.\n"))
+         (t
+          (insert "- **Insufficient data.** Run more experiments with this strategy.\n")))
+        (insert "\n"))
+      (message "[evolution] Synthesized research knowledge for %s → %s"
+               strategy knowledge-file)
+      t)))
+
+(defun gptel-auto-workflow--evolution-research-synthesize ()
+  "Synthesize research insights from all historical results.
+Creates/updates knowledge pages per research strategy."
+  (message "[evolution] Synthesizing research insights...")
+  (let ((by-strategy (gptel-auto-workflow--research-results-by-strategy))
+        (synthesized 0))
+    (maphash
+     (lambda (strategy results)
+       (when (gptel-auto-workflow--synthesize-research-knowledge strategy results)
+         (setq synthesized (1+ synthesized))))
+     by-strategy)
+    (message "[evolution] Synthesized %d research knowledge pages" synthesized)
+    synthesized))
+
+(defun gptel-auto-workflow--generate-research-skill ()
+  "Generate RESEARCH.md skill file from research knowledge.
+This skill is consumed by the researcher prompt builder."
+  (let* ((skills-dir (expand-file-name "assistant/skills/auto-workflow"
+                                       (gptel-auto-workflow--worktree-base-root)))
+         (knowledge-dir (expand-file-name "mementum/knowledge"
+                                          (gptel-auto-workflow--worktree-base-root)))
+         (skill-file (expand-file-name "RESEARCH.md" skills-dir))
+         (knowledge-files (when (file-directory-p knowledge-dir)
+                            (directory-files knowledge-dir t "research-insights-.+\\.md$")))
+         (best-strategy nil)
+         (best-rate 0.0)
+         (recent-insights nil)
+         (memories-dir (expand-file-name "mementum/memories"
+                                         (gptel-auto-workflow--worktree-base-root))))
+    ;; Find best performing strategy
+    (dolist (kf knowledge-files)
+      (with-temp-buffer
+        (insert-file-contents kf)
+        (goto-char (point-min))
+        (when (re-search-forward "Consolidated from \\([0-9]+\\) experiments (\\([0-9.]+\\)% keep rate)" nil t)
+          (let ((count (string-to-number (match-string 1)))
+                (rate (string-to-number (match-string 2))))
+            (when (and (>= count 3) (> rate best-rate))
+              (setq best-rate rate
+                    best-strategy kf))))))
+      ;; Collect recent external research insights from mementum
+     (when (file-directory-p memories-dir)
+       ;; Read recent 🔬 research memories
+       (dolist (mf (directory-files memories-dir t "research-.+\.md$"))
+         (let ((mtime (file-attribute-modification-time (file-attributes mf))))
+           ;; Only include memories from last 14 days
+           (when (time-less-p (time-subtract (current-time) (days-to-time 14)) mtime)
+             (with-temp-buffer
+               (insert-file-contents mf)
+               (goto-char (point-min))
+               ;; Extract digested insights section
+               (when (re-search-forward "## Digested Insights" nil t)
+                 (let ((start (point)))
+                   (when (re-search-forward "^## " nil t)
+                     (backward-char 3))
+                   (push (buffer-substring start (point)) recent-insights))))))))
+     ;; Generate skill file
+    (make-directory skills-dir t)
+    (with-temp-file skill-file
+      (insert "---\n")
+      (insert "name: research-strategies\n")
+      (insert "description: External research insights digested by LLM. Feeds into directive hypotheses.\n")
+      (insert "version: 2.0\n")
+      (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
+      (insert "---\n\n")
+      (insert "# External Research Insights\n\n")
+      (insert "*Digested by LLM from internet sources. Avoid re-researching these topics.*\n\n")
+      
+      ;; Include recent external insights
+      (if recent-insights
+          (progn
+            (insert "## Recent Discoveries (last 14 days)\n\n")
+            (dolist (insight (seq-take recent-insights 5))
+              (insert insight)
+              (insert "\n---\n\n"))
+            (insert "\n"))
+        (insert "*No recent external research. Run researcher to discover new ideas.*\n\n"))
+      
+      ;; Include internal strategy performance
+      (insert "## Internal Research Strategy Performance\n\n")
+      (insert "*These are our own code-analysis strategies, ranked by experiment success.*\n\n")
+      (if best-strategy
+          (progn
+            (insert (format "**Best strategy:** %.1f%% keep rate\n\n" best-rate))
+            (insert "### Effective Internal Patterns\n\n")
+            (with-temp-buffer
+              (insert-file-contents best-strategy)
+              (goto-char (point-min))
+              ;; Extract recommendations section
+              (when (re-search-forward "## Meta-Learning Recommendations" nil t)
+                (forward-line 2)
+                (let ((start (point)))
+                  (when (re-search-forward "^## " nil t)
+                    (backward-char 3))
+                  (insert (buffer-substring start (point)))))
+              (buffer-string))
+            (insert "\n"))
+        (insert "*Insufficient internal data. Run more experiments with research-enabled target selection.*\n\n"))
+      ;; Include all strategy summaries
+      (when knowledge-files
+        (insert "## All Strategies\n\n")
+        (insert "| Strategy | Experiments | Keep Rate | Status |\n")
+        (insert "|----------|-------------|-----------|--------|\n")
+        (dolist (kf knowledge-files)
+          (with-temp-buffer
+            (insert-file-contents kf)
+            (goto-char (point-min))
+            (let ((strategy (when (re-search-forward "title: Research Insights - \\(.+\\)" nil t)
+                             (match-string 1)))
+                  (count 0)
+                  (rate 0.0))
+              (when (re-search-forward "Consolidated from \\([0-9]+\\) experiments (\\([0-9.]+\\)%" nil t)
+                (setq count (string-to-number (match-string 1))
+                      rate (string-to-number (match-string 2))))
+              (when strategy
+                (insert (format "| %s | %d | %.0f%% | %s |\n"
+                               strategy count rate
+                               (cond ((>= rate 50) "✅ Effective")
+                                     ((>= rate 30) "🟡 Promising")
+                                     ((> count 5) "❌ Underperforms")
+                                     (t "⏳ Insufficient data"))))))))))
+    (message "[evolution] Generated research skill: %s" skill-file)))
+
+;;; ─── Script-Based Skill Evolution ───
+;;
+;; Skills now use agentskills.io standard with scripts/ directory.
+;; Python scripts handle analysis and generation; Emacs Lisp is thin wrapper.
+
+(defun gptel-auto-workflow--skill-evolution-script-dir ()
+  "Return path to skill evolution scripts directory."
+  (expand-file-name "assistant/skills/auto-workflow/scripts"
+                    (gptel-auto-workflow--worktree-base-root)))
+
+(defun gptel-auto-workflow--run-evolution-script (script-name &rest args)
+  "Run SCRIPT-NAME from skill evolution scripts with ARGS.
+Returns output string or nil on failure."
+  (let* ((script-dir (gptel-auto-workflow--skill-evolution-script-dir))
+         (script (expand-file-name script-name script-dir))
+         (root (gptel-auto-workflow--worktree-base-root))
+         (cmd (format "cd %s && python3 %s %s"
+                      (shell-quote-argument root)
+                      (shell-quote-argument script)
+                      (mapconcat #'shell-quote-argument args " "))))
+    (message "[evolution] Running: %s" script-name)
+    (let ((output (shell-command-to-string cmd)))
+      (if (string-match-p "Error" output)
+          (progn
+            (message "[evolution] Script %s failed: %s" script-name output)
+            nil)
+        (message "[evolution] %s completed" script-name)
+        output))))
+
+(defun gptel-auto-workflow--update-directive-skill ()
+  "Update DIRECTIVE.md by calling Python generation script.
+Uses analyze_results.py + generate_directive.py pipeline."
+  (message "[evolution] Updating directive skill via script...")
+  (let ((output (gptel-auto-workflow--run-evolution-script
+                 "evolve_skills.py" "--root" ".")))
+    (when output
+      (message "[evolution] Directive updated: %s"
+               (expand-file-name "assistant/skills/auto-workflow/DIRECTIVE.md"
+                                (gptel-auto-workflow--worktree-base-root))))
+    output))
+
+(defun gptel-auto-workflow--evolve-researcher-skill ()
+  "Update RESEARCHER.md by calling Python generation script.
+Researcher skill is now generated as part of evolve_skills.py."
+  (message "[evolution] Researcher skill updated via unified evolution script")
+  t)
+
+(defun gptel-auto-workflow--evolve-token-efficiency-skill ()
+  "Update token-efficiency skill by calling Python generation script.
+Token efficiency is now part of the unified evolution pipeline."
+  (message "[evolution] Token-efficiency skill updated via unified evolution script")
+  t)
+
+(defun gptel-auto-workflow--load-directive-skill ()
+  "Load evolved directive skill content.
+Returns string or empty string if not found.
+Uses standard skill loader for consistency."
+  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/DIRECTIVE")))
+    (if (string-empty-p content)
+        ""
+      content)))
+
+;;; ─── Unified Skill Evolution ───
+
+(defun gptel-auto-workflow--evolve-researcher-skill ()
+  "Update RESEARCHER.md skill based on research effectiveness.
+Analyzes which research topics and sources produce the best downstream results."
+  (message "[evolution] Evolving researcher skill...")
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (research-results (cl-remove-if-not
+                           (lambda (r)
+                             (and (plist-get r :research-hash)
+                                  (not (equal (plist-get r :research-hash) "none"))))
+                           results))
+         (skill-file (expand-file-name "assistant/skills/auto-workflow/RESEARCHER.md"
+                                       (gptel-auto-workflow--worktree-base-root)))
+         (total-research (length research-results))
+         (kept-research (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept"))
+                                    research-results))
+         (research-keep-rate (if (> total-research 0)
+                                (/ (float kept-research) total-research)
+                              0.0))
+         ;; Analyze which topics are most effective
+         (topic-performance (make-hash-table :test 'equal)))
+    
+    ;; Calculate performance per research topic
+    (dolist (r research-results)
+      (let ((target (plist-get r :target)))
+        (when target
+          (let* ((current (gethash target topic-performance))
+                 (total (if current (1+ (car current)) 1))
+                 (kept (if current
+                          (if (equal (plist-get r :decision) "kept")
+                              (1+ (cadr current))
+                            (cadr current))
+                        (if (equal (plist-get r :decision) "kept") 1 0))))
+            (puthash target (list total kept) topic-performance)))))
+    
+    ;; Generate updated researcher skill
+    (make-directory (file-name-directory skill-file) t)
+    (with-temp-file skill-file
+      (insert "---\n")
+      (insert "name: auto-workflow-researcher\n")
+      (insert "description: External idea hunter for auto-workflow. Searches internet for novel AI agent techniques and digests them for directive skill evolution.\n")
+      (insert (format "version: %s\n" (format-time-string "%Y.%m.%d")))
+      (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
+      (insert (format "research-effectiveness: %.1f%%\n" (* 100 research-keep-rate)))
+      (insert (format "total-research-experiments: %d\n" total-research))
+      (insert "---\n\n")
+      (insert "# Auto-Workflow Researcher\n\n")
+      (insert "You are an **external research specialist** for an Emacs-based AI agent system.\n")
+      (insert "Your job: hunt the internet for novel ideas that could improve our project.\n\n")
+      
+      ;; Dynamic topics based on performance
+      (insert "## Current Research Performance\n\n")
+      (insert (format "- Overall research effectiveness: %.1f%% (%d/%d experiments)\n"
+                      (* 100 research-keep-rate) kept-research total-research))
+      (insert "- Topics ranked by downstream success:\n\n")
+      
+      ;; Sort topics by keep rate
+      (let ((sorted-topics nil))
+        (maphash (lambda (target counts)
+                   (let ((total (car counts))
+                         (kept (cadr counts)))
+                     (when (>= total 3)
+                       (push (list :target target :rate (/ (float kept) total) :total total :kept kept)
+                             sorted-topics))))
+                 topic-performance)
+        (setq sorted-topics (sort sorted-topics (lambda (a b) (> (plist-get a :rate) (plist-get b :rate)))))
+        
+        (if sorted-topics
+            (dolist (topic (seq-take sorted-topics 10))
+              (insert (format "  - `%s`: %.0f%% keep rate (%d/%d)\n"
+                              (plist-get topic :target)
+                              (* 100 (plist-get topic :rate))
+                              (plist-get topic :kept)
+                              (plist-get topic :total))))
+          (insert "  - No statistically significant data yet (need ≥3 experiments per topic)\n")))
+      
+      (insert "\n## Mission\n\n")
+      (insert "Search external sources for actionable techniques related to:\n")
+      (insert "- AI agent architectures and workflows\n")
+      (insert "- Emacs Lisp AI integration patterns\n")
+      (insert "- LLM self-evolution and meta-learning\n")
+      (insert "- Prompt engineering for code generation\n")
+      (insert "- Error recovery and retry patterns in agent systems\n")
+      (insert "- Benchmarking and evaluation frameworks\n\n")
+      
+      ;; Priority projects
+      (insert "## Priority Projects to Monitor\n\n")
+      (insert "Watch these specific GitHub projects for novel patterns:\n")
+      (insert "- **hermes-agent** — Agent orchestration and delegation patterns\n")
+      (insert "- **zeroclaw** — Lightweight agent framework design\n")
+      (insert "- **ml-intern** — ML-powered coding assistant techniques\n\n")
+      (insert "Check their: recent commits, open issues, closed PRs, architecture decisions\n\n")
+      
+      ;; Sources
+      (insert "## Sources\n\n")
+      (insert "- **YouTube**: Recent tutorials on AI agent workflows, Emacs AI integration\n")
+      (insert "- **X/Twitter**: Developer discussions on LLM tooling, agent patterns\n")
+      (insert "- **GitHub**: Trending repos for ai-agent, emacs-ai, llm-workflow\n")
+      (insert "- **arXiv**: Papers on agent architectures, meta-learning, code LLMs\n")
+      (insert "- **HuggingFace**: New models, datasets, or spaces for code agents\n")
+      (insert "- **Reddit**: r/emacs, r/LocalLLaMA, r/MachineLearning discussions\n\n")
+      
+      ;; Instructions
+      (insert "## Instructions\n\n")
+      (insert "1. Use WebSearch tool to find 3-5 recent/relevant items per topic\n")
+      (insert "2. Use WebFetch tool to read promising pages/videos (max 3 fetches)\n")
+      (insert "3. Focus on NOVEL ideas we haven't implemented (check git history first)\n")
+      (insert "4. Extract specific, actionable techniques - not vague trends\n")
+      (insert "5. For each insight, provide: source URL, key technique, how it applies to us\n")
+      (insert "6. Max 1200 chars. Prioritize depth over breadth.\n")
+      (insert "7. **MONITOR SPECIFIC PROJECTS**: Check hermes-agent, zeroclaw, ml-intern on GitHub\n")
+      (insert "   Look at: recent commits, open issues, closed PRs, architecture decisions\n")
+      (insert "   Focus on: patterns we can adapt to our Emacs AI agent system\n\n")
+      
+      ;; Anti-patterns
+      (insert "## Anti-patterns (avoid)\n\n")
+      (insert "- Generic advice ('use AI', 'improve code')\n")
+      (insert "- Ideas already in our codebase (check git log first)\n")
+      (insert "- Purely theoretical without implementation path\n")
+      (insert "- Tools requiring heavy external dependencies\n\n")
+      
+      ;; Auto-evolution note
+      (insert "---\n\n")
+      (insert "*This researcher skill auto-evolves. Performance data updates every cycle.*\n")
+      (insert (format "*Current effectiveness: %.1f%% based on %d research-enabled experiments.*\n"
+                      (* 100 research-keep-rate) total-research)))
+    
+    (message "[evolution] Evolved researcher skill: %s" skill-file)))
+
+(defun gptel-auto-workflow--evolve-all-skills ()
+  "Run self-evolution on ALL skills via Python scripts.
+This is the main entry point for unified skill evolution.
+Uses agentskills.io standard scripts/ directory."
+  (message "[evolution] Running unified skill evolution via scripts...")
+  
+  ;; Single script handles all skill generation
+  (let ((output (gptel-auto-workflow--run-evolution-script
+                 "evolve_skills.py" "--root" ".")))
+    (if output
+        (progn
+          (message "[evolution] Unified skill evolution complete")
+          (message "[evolution] Output:\n%s" output))
+      (message "[evolution] Skill evolution failed - check scripts")))
+  
+  ;; Also run research synthesis (still in Elisp for now)
+  (gptel-auto-workflow--evolution-research-synthesize)
+  (gptel-auto-workflow--generate-research-skill))
+
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.
-Extract → Verify → Synthesize → (Inject happens on next prompt)."
+Extract → Verify → Synthesize → Evolve All Skills → (Inject happens on next prompt)."
   (interactive)
   (message "[auto-workflow] Running self-evolution cycle...")
   (gptel-auto-workflow--evolution-synthesize)
   (gptel-auto-workflow--evolution-consolidate-insights)
+  (gptel-auto-workflow--evolve-all-skills)
   (message "[auto-workflow] Self-evolution cycle complete."))
 
 ;; ─── Init ───

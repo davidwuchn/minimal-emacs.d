@@ -195,7 +195,6 @@
 {"timestamp": "2026-05-03 15:57:25", "strategy": "template-default", "target": "lisp/modules/gptel-tools-agent-benchmark.el", "experiment-id": 2, "score": 0.39999999999999997, "outcome": "discarded", "axis": "?"}
 {"timestamp": "2026-05-03 16:04:27", "strategy": "template-default", "target": "lisp/modules/gptel-tools-agent-benchmark.el", "experiment-id": 3, "score": 0.39999999999999997, "outcome": "discarded", "axis": "?"}
 <<<<<<< Updated upstream
-=======
 {"timestamp": "2026-05-03 23:09:15", "strategy": "template-default", "target": "lisp/modules/gptel-ext-context-cache.el", "experiment-id": 1, "score": 0.39999999999999997, "outcome": "discarded", "axis": "?"}
 {"timestamp": "2026-05-03 23:11:10", "strategy": "template-default", "target": "one", "experiment-id": 1, "score": 0.7, "outcome": "kept", "axis": "?"}
 {"timestamp": "2026-05-03 23:11:10", "strategy": "template-default", "target": "one", "experiment-id": 1, "score": 0.7, "outcome": "discarded", "axis": "?"}
@@ -2540,6 +2539,7 @@
 {"timestamp":"2026-05-08 13:18:36","strategy":"template-default","target":"staging-verification","experiment-id":0,"score":0,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-08 13:18:37","strategy":"weighted-skills","target":"lisp/modules/gptel-ext-tool-sanitize.el","experiment-id":2,"score":0.43333333333333335,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-08 13:23:37","strategy":"template-default","target":"lisp/modules/gptel-ext-tool-sanitize.el","experiment-id":3,"score":0.4000000000000001,"outcome":"discarded","axis":"?"}
+<<<<<<< HEAD
 {"timestamp":"2026-05-08 13:29:10","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"kept","axis":"?"}
 {"timestamp":"2026-05-08 13:29:10","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-08 13:29:10","strategy":"template-default","target":"one","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
@@ -2673,3 +2673,47 @@
 {"timestamp":"2026-05-08 15:34:41","strategy":"template-default","target":"two","experiment-id":4,"score":0,"outcome":"kept","axis":"?"}
 {"timestamp":"2026-05-08 15:35:25","strategy":"template-default","target":"lisp/modules/gptel-tools-agent-staging-merge.el","experiment-id":2,"score":0.4000000000000001,"outcome":"kept","axis":"?"}
 {"timestamp":"2026-05-08 15:51:00","strategy":"template-default","target":"lisp/modules/gptel-tools-agent-staging-merge.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 14:59:51","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":2,"score":0.4000000000000001,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"one","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"two","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"three","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"four","experiment-id":4,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"one","experiment-id":1,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"one","experiment-id":2,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"two","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:05:46","strategy":"template-default","target":"two","experiment-id":4,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"one","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"two","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"three","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"four","experiment-id":4,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"one","experiment-id":1,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"one","experiment-id":2,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"two","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:11:25","strategy":"template-default","target":"two","experiment-id":4,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:12:11","strategy":"template-default","target":"staging-verification","experiment-id":0,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:12:12","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":2,"score":0.4000000000000001,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:16:49","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":3,"score":0.37777777777777777,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:23:42","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":4,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"one","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"two","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"three","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"four","experiment-id":4,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"one","experiment-id":1,"score":0.7,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"one","experiment-id":1,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"one","experiment-id":2,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"two","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"two","experiment-id":4,"score":0,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-08 15:29:04","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":5,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 15:34:44","strategy":"template-default","target":"lisp/modules/gptel-ext-context.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+>>>>>>> 4839d6e6 (⚒ Script-based skill evolution + external researcher redesign)

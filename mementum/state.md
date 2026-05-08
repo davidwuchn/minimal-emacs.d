@@ -4,7 +4,7 @@
 
 ## Current Session: 2026-05-08 E2E Auto-Workflow Run - STABLE
 
-**Status:** Auto-workflow running stable with both format specifier fixes. Self-evolution active, staging working.
+**Status:** Script-based skill evolution complete. All skills now use agentskills.io standard with Python scripts in scripts/ directory. Skills self-evolve via unified Python pipeline.
 
 **Done (This Session):**
 - Fixed "Format specifier doesn't match argument type" error (two root causes):
@@ -15,6 +15,46 @@
 - Remote improvements merged:
   - `58c468c2` Merge staging: evolver nil-validation improvements
   - `02ad3fe6` 💡 Improve insight quality and self-evolution knowledge
+- **Fixed paren imbalance in `gptel-auto-workflow-strategic.el`:**
+  - Root cause: `gptel-auto-workflow--build-research-prompt` missing one close paren
+  - Added `)` at end of line 346
+  - File now loads cleanly (`check-parens` OK)
+- **Fixed paren imbalance in `gptel-auto-workflow-production.el`:**
+  - Root cause: `gptel-auto-workflow-evolution-status` missing one close paren + extra `)` at EOF
+  - Removed stray `)` at line 196
+  - Added `)` at line 178 to close defun properly
+  - File now loads cleanly (`check-parens` OK)
+- **Redesigned researcher as external idea hunter:**
+  - `gptel-auto-workflow--build-research-prompt`: Now instructs subagent to search YouTube, X, GitHub, arXiv, HuggingFace, Reddit for AI agent/Emacs AI/LLM self-evolution ideas
+  - `gptel-auto-workflow--research-topics-string`: Dynamically generates research topics based on recent failures and project focus
+  - `gptel-auto-workflow--digest-research-findings`: New LLM digestion layer. Raw findings → gptel-request with digestion prompt → structured actionable insights
+  - Pipeline: External hunt → Raw findings → LLM digestion → Actionable insights → Directive hypotheses
+- **Updated skill generation for external insights:**
+  - `RESEARCH.md` (v2.0): Now has "Recent Discoveries" section from mementum 🔬 memories (last 14 days)
+  - `gptel-auto-workflow--generate-research-skill`: Pulls digested insights from recent research memories
+  - `mementum-record-research`: Stores both raw and digested findings
+  - `production.el` batch recording: Captures digested findings from current research context
+- **Updated analyzer prompt:**
+  - Now says "EXTERNAL RESEARCH FINDINGS (new ideas from internet)"
+  - Instructs analyzer to consider external insights when selecting targets
+  - Example: "Research found 'async process monitoring' → target files with process handling"
+- `./scripts/verify-nucleus.sh` passes all 5 validations
+- **Standardized all skill loaders** to use `gptel-auto-workflow--load-skill-content`:
+  - `gptel-auto-workflow--load-research-skill` (strategic.el)
+  - `gptel-auto-workflow--load-directive-skill` (strategic.el + evolution.el)
+  - `gptel-auto-workflow--load-token-efficiency-skill` (prompt-build.el)
+  - `gptel-auto-workflow--load-proposer-skill` (strategy-evolver.el)
+  - `gptel-auto-workflow--load-researcher-skill` (strategic.el)
+  - All now use standard skill loader instead of custom file-loading code
+- **Script-based skill evolution (agentskills.io compliant):**
+  - Created `assistant/skills/auto-workflow/scripts/` directory with 4 Python scripts:
+    - `analyze_results.py` — Parses results.tsv, computes target/research/prompt stats
+    - `generate_directive.py` — Builds DIRECTIVE.md from analysis JSON
+    - `generate_researcher.py` — Builds RESEARCHER.md with performance data
+    - `evolve_skills.py` — Master orchestrator that runs full pipeline
+  - Refactored `evolution.el` skill generators to thin wrappers calling Python scripts
+  - Skills now follow agentskills.io standard: SKILL.md + scripts/ + references/
+  - Verified: Python scripts generate correct skills from 870 experiments
 - Daemon PID 3008726 running, 5h+ uptime
 
 **Current Run (2026-05-08T074039Z-ef87):**

@@ -616,8 +616,13 @@ into staging or main."
     (gptel-auto-workflow--persist-status)
     (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
     (cl-labels
-        ((finish-run ()
-           (funcall finish))
+         ((finish-run ()
+            ;; Record any pending research batch before finishing
+            (when (and (fboundp 'gptel-auto-workflow--record-research-batch)
+                       (boundp 'gptel-auto-workflow--research-batch-results)
+                       gptel-auto-workflow--research-batch-results)
+              (gptel-auto-workflow--record-research-batch))
+            (funcall finish))
          (run-next (remaining-targets)
            (if (null remaining-targets)
                (finish-run)

@@ -592,7 +592,7 @@ allowed for compatibility with isolated tests."
           (or run-id (gptel-auto-workflow--current-run-id))))
 
 (defconst gptel-auto-workflow--results-tsv-header
-  "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\n"
+  "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\tresearch_strategy\tresearch_hash\n"
   "Header row written to auto-workflow results.tsv artifacts.")
 
 (defun gptel-auto-experiment--extract-axis (agent-output)

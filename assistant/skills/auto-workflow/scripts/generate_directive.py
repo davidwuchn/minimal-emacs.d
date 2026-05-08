@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""Generate DIRECTIVE.md skill from experiment analysis.
+
+Usage:
+    python3 generate_directive.py --analysis ANALYSIS_JSON --output DIRECTIVE.md
+
+Reads analysis JSON from analyze_results.py and generates an updated
+DIRECTIVE.md with current target rankings, patterns, and hypotheses.
+"""
+
+import argparse
+import json
+import os
+from datetime import datetime
+from pathlib import Path
+
+
+def generate_directive(analysis, skill_dir):
+    """Generate DIRECTIVE.md content from analysis data."""
+    total = analysis['total_experiments']
+    kept = analysis['prompt_stats']['total_kept']
+    target_stats = analysis['target_stats']
+    
+    lines = []
+    
+    # Frontmatter
+    lines.append("---")
+    lines.append("name: auto-workflow-directive")
+    lines.append("description: Evolving program definition for auto-workflow")
+    lines.append(f"version: {datetime.now().strftime('%Y.%m.%d')}")
+    lines.append(f"updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    lines.append(f"total-experiments: {total}")
+    lines.append(f"total-kept: {kept}")
+    lines.append("---")
+    lines.append("")
+    
+    # Header
+    lines.append("# Auto-Workflow Program")
+    lines.append("")
+    lines.append("> LLM decides targets and strategies. We gather context and execute.")
+    lines.append("> This directive is AUTO-EVOLVED from experiment results.")
+    lines.append("> Philosophy: Learn from every experiment. Adapt the program.")
+    lines.append("")
+    
+    # Active Targets
+    lines.append("## Active Targets")
+    lines.append("")
+    lines.append("<!-- AUTO-UPDATED: Targets ranked by recent keep rate -->")
+    lines.append("| Target | Keep Rate | Total | Kept | Status |")
+    lines.append("|--------|-----------|-------|------|--------|")
+    
+    for stat in target_stats[:10]:
+        rate = stat['keep_rate']
+        status = "✅ High yield" if rate >= 0.3 else "🟡 Active" if rate >= 0.1 else "❌ Plateaued" if stat['total'] > 5 else "⏳ Insufficient data"
+        lines.append(f"| `{stat['target']}` | {rate*100:.0f}% | {stat['total']} | {stat['kept']} | {status} |")
+    
+    lines.append("")
+    
+    # Success Patterns
+    lines.append("## Success Patterns")
+    lines.append("")
+    lines.append("<!-- AUTO-UPDATED: From mementum knowledge -->")
+    
+    # Extract patterns from successful targets
+    success_patterns = set()
+    for stat in target_stats[:5]:
+        target = stat['target']
+        if 'sanitize' in target:
+            success_patterns.add("Add input validation and sanitization guards")
+        elif 'error' in target or 'retry' in target:
+            success_patterns.add("Improve error handling and recovery mechanisms")
+        elif 'cache' in target:
+            success_patterns.add("Add caching with proper invalidation")
+        elif 'guard' in target or 'validate' in target:
+            success_patterns.add("Add nil guards and boundary checks")
+        else:
+            success_patterns.add("Extract helper functions for repeated logic")
+    
+    if not success_patterns:
+        success_patterns = {
+            "Extract constants into named variables",
+            "Add nil guards on plist/assoc lookups",
+            "Extract helper functions for repeated logic",
+        }
+    
+    for pattern in sorted(success_patterns):
+        lines.append(f"- {pattern}")
+    lines.append("")
+    
+    # Failed Patterns
+    lines.append("## Failed Patterns")
+    lines.append("")
+    lines.append("<!-- AUTO-UPDATED: From mementum knowledge -->")
+    lines.append("- TODO-only targets (no actionable bugs)")
+    lines.append("- Pure refactoring without bug fix")
+    lines.append("- Common Lisp symbols not in Emacs Lisp")
+    lines.append("")
+    
+    # Next Hypotheses
+    lines.append("## Next Hypotheses")
+    lines.append("")
+    lines.append("<!-- AUTO-UPDATED: From experiment insights -->")
+    
+    # Generate hypotheses for low-performing targets
+    hypothesis_count = 0
+    for stat in target_stats:
+        if stat['keep_rate'] < 0.2 and stat['total'] >= 3 and hypothesis_count < 5:
+            lines.append(f"- **{stat['target']}**: Try validation guards or error handling improvements (previous experiments discarded)")
+            hypothesis_count += 1
+    
+    if hypothesis_count == 0:
+        lines.append("- Continue with current targets based on research findings")
+    
+    lines.append("")
+    
+    # Immutable Files
+    lines.append("## Immutable Files")
+    lines.append("")
+    lines.append("```")
+    lines.append("early-init.el")
+    lines.append("pre-early-init.el")
+    lines.append("lisp/eca-security.el")
+    lines.append("lisp/modules/gptel-ext-security.el")
+    lines.append("lisp/modules/gptel-ext-tool-confirm.el")
+    lines.append("lisp/modules/gptel-ext-tool-permits.el")
+    lines.append("eca/**")
+    lines.append("mementum/**")
+    lines.append("var/elpa/**")
+    lines.append("```")
+    lines.append("")
+    
+    # Constraints
+    lines.append("## Constraints")
+    lines.append("")
+    lines.append("| Setting | Value |")
+    lines.append("|---------|-------|")
+    lines.append("| Per experiment | 15 minutes |")
+    lines.append("| Max per target | 10 experiments |")
+    lines.append("| Stop if no improvement | 3 consecutive |")
+    lines.append("")
+    
+    # Footer
+    lines.append("---")
+    lines.append("")
+    lines.append(f"*This directive was auto-generated from {total} experiments ({kept} kept). It evolves every self-evolution cycle.*")
+    
+    return '\n'.join(lines)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Generate DIRECTIVE.md')
+    parser.add_argument('--analysis', '-a', required=True,
+                       help='Path to analysis JSON from analyze_results.py')
+    parser.add_argument('--output', '-o', required=True,
+                       help='Path to output DIRECTIVE.md')
+    args = parser.parse_args()
+    
+    # Load analysis
+    with open(args.analysis, 'r') as f:
+        analysis = json.load(f)
+    
+    # Generate directive
+    skill_dir = Path(args.output).parent
+    content = generate_directive(analysis, skill_dir)
+    
+    # Write output
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, 'w') as f:
+        f.write(content)
+    
+    print(f"DIRECTIVE.md generated: {output_path}")
+    print(f"  Total experiments: {analysis['total_experiments']}")
+    print(f"  Targets tracked: {len(analysis['target_stats'])}")
+
+
+if __name__ == '__main__':
+    main()

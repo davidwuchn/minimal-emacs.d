@@ -57,24 +57,21 @@ Returns cached content or nil if missing/stale."
 
 (defun gptel-auto-workflow--load-token-efficiency-skill ()
   "Load token efficiency skill and return parsed config.
-Returns plist with :compression :section-stats or nil."
-  (let ((skill-file (expand-file-name
-                     "assistant/skills/auto-workflow/token-efficiency.md"
-                     (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
-                              (gptel-auto-workflow--worktree-base-root))
-                         (gptel-auto-workflow--project-root)))))
-    (when (file-exists-p skill-file)
+Returns plist with :compression :section-stats or nil.
+Uses standard skill loader for file loading."
+  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/token-efficiency")))
+    (when (and content (not (string-empty-p content)))
       (with-temp-buffer
-        (insert-file-contents skill-file)
+        (insert content)
         (goto-char (point-min))
-        (let ((config (list :file skill-file)))
+        (let ((config (list :source "skill")))
           ;; Parse compression config
           (when (re-search-forward "topic-knowledge-max-chars: \\([0-9]+\\)" nil t)
             (plist-put config :compression (string-to-number (match-string 1))))
           ;; Parse section A/B results
           (goto-char (point-min))
           (let ((section-stats (make-hash-table :test 'equal)))
-            (while (re-search-forward "^- \\**\\(.+\\)*\\*: \\([0-9.]+\\)% success (\\([0-9]+\\)/\\([0-9]+\\) experiments)" nil t)
+            (while (re-search-forward "^- \\*\\*\\(.+\\)\\*\\*: \\([0-9.]+\\)% success (\\([0-9]+\\)/\\([0-9]+\\) experiments)" nil t)
               (let ((section (match-string 1))
                      (rate (string-to-number (match-string 2)))
                      (kept (string-to-number (match-string 3)))
@@ -177,35 +174,71 @@ With sufficient data, includes only sections with positive correlation."
       (let ((result (nreverse effective-sections)))
         (if result result gptel-auto-workflow--ab-test-sections))))))
 
-(defun gptel-auto-workflow--load-skill-content (skill-name)
-  "Load SKILL-NAME from assistant/skills/ directories.
-Returns skill content string or empty string if not found.
-Searches: ~/.emacs.d/assistant/skills/ then project assistant/skills/"
+;;; ─── Agent Skills (agentskills.io) Compliant Loader ───
+;;
+;; Reuses gptel-agent's skill loading infrastructure.
+;; gptel-agent already handles markdown frontmatter parsing,
+;; path resolution, and progressive disclosure.
+
+(defun gptel-auto-workflow--find-skill-file (skill-name)
+  "Find SKILL.md file for SKILL-NAME.
+Returns full path or nil.
+Searches: assistant/skills/{skill-name}/SKILL.md then assistant/skills/{skill-name}.md"
   (let* ((base-dirs (list (expand-file-name "assistant/skills"
                                              (gptel-auto-workflow--project-root))
                           (expand-file-name "~/.emacs.d/assistant/skills")))
-         (skill-file nil))
-    ;; Find skill file (supports both flat .md and directory/SKILL.md)
+         (found nil))
     (dolist (dir base-dirs)
-      (let ((flat-file (expand-file-name (format "%s.md" skill-name) dir))
-            (nested-file (expand-file-name (format "%s/SKILL.md" skill-name) dir)))
-        (cond
-         ((and (not skill-file) (file-exists-p flat-file))
-          (setq skill-file flat-file))
-         ((and (not skill-file) (file-exists-p nested-file))
-          (setq skill-file nested-file)))))
-    ;; Read and return content
-    (if skill-file
-        (with-temp-buffer
-          (insert-file-contents skill-file)
-          (goto-char (point-min))
-          ;; Skip frontmatter
-          (when (looking-at "---")
-            (forward-line 1)
-            (while (not (looking-at "---"))
-              (forward-line 1))
-            (forward-line 1))
-          (buffer-string))
+      (unless found
+        (let ((nested (expand-file-name (format "%s/SKILL.md" skill-name) dir))
+              (flat (expand-file-name (format "%s.md" skill-name) dir)))
+          (cond ((file-exists-p nested) (setq found nested))
+                ((file-exists-p flat) (setq found flat))))))
+    found))
+
+(defun gptel-auto-workflow--load-skill (skill-name)
+  "Load SKILL-NAME following agentskills.io standard.
+Returns plist with :name :metadata :body :skill-dir.
+Reuses gptel-agent's `gptel-agent-read-file' for frontmatter parsing."
+  (let ((skill-file (gptel-auto-workflow--find-skill-file skill-name)))
+    (if (not skill-file)
+        (list :name skill-name :metadata nil :body "" :skill-dir nil)
+      (let* ((parsed (gptel-agent-read-file skill-file))
+             (name (car parsed))
+             (plist (cdr parsed))
+             (skill-dir (file-name-directory skill-file)))
+        (list :name name
+              :metadata (cl-remove-if (lambda (k) (eq k :system)) plist)
+              :body (or (plist-get plist :system) "")
+              :skill-dir skill-dir)))))
+
+(defun gptel-auto-workflow--load-skill-metadata (skill-name)
+  "Load only metadata for SKILL-NAME (progressive disclosure stage 1).
+Returns plist with :name :description etc, or nil if not found.
+Uses gptel-agent's metadata-only parsing."
+  (let ((skill-file (gptel-auto-workflow--find-skill-file skill-name)))
+    (when skill-file
+      (let* ((parsed (gptel-agent-read-file skill-file nil t))
+             (plist (cdr parsed)))
+        plist))))
+
+(defun gptel-auto-workflow--load-skill-content (skill-name)
+  "Load body content for SKILL-NAME (progressive disclosure stage 2).
+Returns skill body string or empty string if not found.
+Backward compatible with existing code."
+  (plist-get (gptel-auto-workflow--load-skill skill-name) :body))
+
+(defun gptel-auto-workflow--load-skill-file (skill-name file-path)
+  "Load FILE-PATH relative to SKILL-NAME's directory.
+Useful for loading references/ or scripts/ files on demand (stage 3)."
+  (let ((skill-dir (plist-get (gptel-auto-workflow--load-skill skill-name) :skill-dir)))
+    (if (and skill-dir file-path)
+        (let ((full-path (expand-file-name file-path skill-dir)))
+          (if (file-exists-p full-path)
+              (with-temp-buffer
+                (insert-file-contents full-path)
+                (buffer-string))
+            ""))
       "")))
 
 (defun gptel-auto-workflow--substitute-template (template variables)
@@ -693,9 +726,15 @@ row for the same experiment and target."
                                                    candidates ";")
                                     "")))
                                  "")
-                           (or (gptel-auto-experiment--tsv-escape
-                                (gptel-auto-workflow--plist-get experiment :strategy "template-default"))
-                               "template-default"))))
+                            (or (gptel-auto-experiment--tsv-escape
+                                 (gptel-auto-workflow--plist-get experiment :strategy "template-default"))
+                                "template-default")
+                            (or (gptel-auto-experiment--tsv-escape
+                                 (gptel-auto-workflow--plist-get experiment :research-strategy "none"))
+                                "none")
+                            (or (gptel-auto-experiment--tsv-escape
+                                 (gptel-auto-workflow--plist-get experiment :research-hash "none"))
+                                "none"))))
 
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.

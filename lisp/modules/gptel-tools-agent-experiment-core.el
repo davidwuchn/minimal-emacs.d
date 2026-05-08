@@ -392,13 +392,19 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                       gptel-auto-workflow--last-prompt-sections)
                                                 "all")
                           :exploration-axis (gptel-auto-experiment--extract-axis effective-agent-output)
-                          :candidate-validation (when candidate-validation
-                                                  (mapcar (lambda (pair)
-                                                            (list (car pair)
-                                                                  :score (plist-get (cdr pair) :score)
-                                                                  :valid (plist-get (cdr pair) :valid)))
-                                                          candidate-validation))
-                          :strategy strategy-name)))
+                           :candidate-validation (when candidate-validation
+                                                   (mapcar (lambda (pair)
+                                                             (list (car pair)
+                                                                   :score (plist-get (cdr pair) :score)
+                                                                   :valid (plist-get (cdr pair) :valid)))
+                                                           candidate-validation))
+                           :strategy strategy-name
+                           :research-strategy (or (and (boundp 'gptel-auto-workflow--current-research-context)
+                                                       (plist-get gptel-auto-workflow--current-research-context :strategy))
+                                                  "none")
+                           :research-hash (or (and (boundp 'gptel-auto-workflow--current-research-context)
+                                                   (plist-get gptel-auto-workflow--current-research-context :hash))
+                                              "none"))))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format

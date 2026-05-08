@@ -368,13 +368,12 @@ Returns formatted string of top 5 failure reasons, or empty string if none found
   "Path to the Meta-Harness proposer skill file.")
 
 (defun gptel-auto-workflow--load-proposer-skill ()
-  "Load the proposer skill content if available."
-  (let ((skill-file (expand-file-name gptel-auto-workflow--proposer-skill-path
-                                      (gptel-auto-workflow--project-root))))
-    (when (file-exists-p skill-file)
-      (with-temp-buffer
-        (insert-file-contents skill-file)
-        (buffer-string)))))
+  "Load the proposer skill content if available.
+Uses standard skill loader for consistency."
+  (let ((content (gptel-auto-workflow--load-skill-content "meta-harness-proposer")))
+    (if (string-empty-p content)
+        nil
+      content)))
 
 (defun gptel-auto-workflow--propose-strategies (parent-strategy-name axis hypothesis parent-code parent-perf)
   "Use gptel to propose 3 new strategy implementations.
