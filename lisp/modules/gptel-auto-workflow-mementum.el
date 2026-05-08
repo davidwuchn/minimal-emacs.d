@@ -82,7 +82,7 @@ CONTENT is the body text."
 EXPERIMENT is a plist with :target :hypothesis :score-before :score-after
 :code-quality :decision :grader-quality :grader-reason."
   (when gptel-auto-workflow-mementum-enabled
-    (let* ((target (plist-get experiment :target))
+     (let* ((target (plist-get experiment :target))
             (hypothesis (plist-get experiment :hypothesis))
             (decision (plist-get experiment :decision))
             (score-before (or (plist-get experiment :score-before) 0.0))
@@ -113,7 +113,7 @@ EXPERIMENT is a plist with :target :hypothesis :score-before :score-after
            '❌ slug
            (format "**Target:** %s\n**Hypothesis:** %s\n**Result:** GRADER REJECTED\n**Grader:** %d/9\n\nChange failed grader review. Hypothesis did not match actual changes, or change was too large/unsafe."
                    target hypothesis grader-q)))
-         ("validation-failed"
+          ("validation-failed"
            (gptel-auto-workflow--mementum-write-memory
             '❌ slug
             (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Result:** VALIDATION FAILED\n\nPre-grade validation caught an error (undefined function, syntax error, or unavailable symbol). Common causes: using Common Lisp functions not available in Emacs Lisp (plusp, getf, cw, file), or introducing symbols that don't exist.\n\n**Lesson:** Always verify new functions exist in Emacs Lisp before using them."

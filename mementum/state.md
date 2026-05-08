@@ -1,81 +1,38 @@
 # Mementum State
 
-> Last session: 2026-05-07 20:10
+> Last session: 2026-05-08 14:00
 
-## Current Session: 2026-05-08 E2E Auto-Workflow Run - SUCCESS
+## Current Session: 2026-05-08 E2E Auto-Workflow Run - STABLE
 
-**Status:** Real end-to-end auto-workflow run completed successfully. Format specifier fix verified working. Self-evolution producing insights.
+**Status:** Auto-workflow running stable with both format specifier fixes. Self-evolution active, staging working.
 
 **Done (This Session):**
-- Fixed "Format specifier doesn't match argument type" error caused by nil `:score` values in `candidate-validation` entries.
-- Applied `(or score 0.0)` guards in 3 locations:
-  - `gptel-tools-agent-prompt-build.el:674` - TSV logging of candidate scores
-  - `gptel-tools-agent-experiment-core.el:196` - Retry prompt formatting  
-  - `gptel-tools-agent-experiment-core.el:123` - Best score message
-- Committed: `ccff7368` "⊘ fix: nil candidate-validation scores causing Format specifier errors"
-- Pushed to `origin/main` and `origin/staging`
-- Killed stale daemon (PID 2412871)
-- Cleared `.elc` cache
-- Restarted daemon via `./scripts/run-auto-workflow-cron.sh auto-workflow` (new PID 2638870)
-- **Real E2E run results (2026-05-08T061620Z-14ac):**
-  - Target: `lisp/modules/gptel-agent-loop.el`
-  - Experiment 1/9: **KEPT** (score 9/9, quality 0.94, strategy: template-default) - nil-guard validation for empty tool-call lists
-  - Experiment 2/9: **DISCARDED** (score 9/9, no improvement, strategy: adaptive-framing) - nil guard to safe-accumulated-output
-  - Experiment 3/9: **KEPT** (score 9/9, strategy: template-default) - missing error handler fix
-  - Experiment 4/9: **RUNNING** (strategy: hypothesis-typed)
-  - Staging flow: WORKING (verified and pushed to origin after each kept experiment)
-  - Self-evolution: Consolidated 3 insights for gptel-agent-loop → knowledge page
-- **ZERO format specifier errors** in current run (all 12 errors are from pre-fix old daemon)
+- Fixed "Format specifier doesn't match argument type" error (two root causes):
+  1. Nil `:score` in `candidate-validation` → `(or score 0.0)` guards
+  2. Float `:duration` in TSV logging → `(round duration)` before `%d`
+- Committed both fixes, merged with remote
+- Synced with `origin/main` (now at `02ad3fe6`)
+- Remote improvements merged:
+  - `58c468c2` Merge staging: evolver nil-validation improvements
+  - `02ad3fe6` 💡 Improve insight quality and self-evolution knowledge
+- Daemon PID 3008726 running, 5h+ uptime
+
+**Current Run (2026-05-08T074039Z-ef87):**
+- Target 1: `lisp/modules/gptel-ext-context-cache.el` (6 experiments, 0 kept)
+- Target 2: `lisp/modules/gptel-auto-workflow-strategic.el` (3 experiments, 1 kept)
+  - Exp 1: **KEPT** (score 9/9, after validation retry)
+  - Exp 2: validation-failed
+  - Exp 3: validation-failed (retry also failed)
+  - Exp 4: **RUNNING**
+- Staging: Working, pushed to origin after kept experiment
+- Self-evolution: Consolidated insights for strategic and cache targets
 
 **Verification:**
 - `./scripts/verify-nucleus.sh` passes
-- Daemon PID 2638870 running, 4h+ uptime
-- No errors in current run
-- Staging verification PASS for all kept experiments
-- Review PASSED for all kept experiments
-
-**Done (This Session):**
-- Diagnosed real run `2026-05-07T180002Z-eec7` header-only results as stale daemon scorer arity: `[nucleus] Callback error ignored after cleanup: (wrong-number-of-arguments (1 . 1) 2)`.
-- Added fallback in `gptel-auto-experiment--eight-keys-scores` for stale one-argument `gptel-benchmark-eight-keys-score`.
-- Added live reload of `lisp/modules/gptel-benchmark-principles.el` in `gptel-auto-workflow--reload-live-support` so long-lived daemons refresh the task-type-aware scorer.
-- Improved callback error logging in `my/gptel--invoke-callback-safely` to include the callback object and re-signal under `debug-on-error`.
-- Observed real run `2026-05-07T191002Z-7427` pass the old wedge, reach `Baseline for lisp/modules/gptel-sandbox.el`, produce results, and then fail staging on an unavailable generated call to `hash-table-contains-p`.
-- Extracted pre-grade validation helpers to new `lisp/modules/gptel-tools-agent-validation.el` and loaded it before benchmark, keeping touched workflow modules under 1000 lines.
-- Added undefined-runtime-call detection for newly added call sites, including `hash-table-contains-p`, while allowing local definitions and avoiding false positives from defun/lambda arglists.
-- Fixed validator walker to skip improper lists so dotted `cl-loop` binding specs do not crash validation.
-- Updated comparator threshold regression to assert `gptel-auto-experiment-min-quality-gain-on-score-tie` dynamically.
-
-**Verification:**
-- Focused validator/scorer/reload ERT selector: 6/6 pass.
-- Full targeted validator + safe-callback ERT selector: 16/16 pass.
-- Comparator score-tie ERT selector: 3/3 pass.
-- `check-parens` passed for touched Elisp/test files.
-- `git diff --check` passed.
-- Touched workflow modules byte-compile with warnings only; generated `.elc` artifacts removed.
-- Line counts: validation 265, benchmark 857, main 943, subagent 999, loader 47.
-
-**Important Notes:**
-- Current branch: `main`.
-- Relevant local source/test changes are uncommitted: `lisp/modules/gptel-tools-agent-validation.el`, `gptel-tools-agent-benchmark.el`, `gptel-tools-agent-main.el`, `gptel-tools-agent-subagent.el`, `gptel-tools-agent.el`, and `tests/test-gptel-tools-agent-regressions.el`.
-- Unrelated dirty workflow artifacts/submodules remain; do not revert or include them accidentally unless explicitly requested.
-- `hash-table-contains-p` is not available in the current Emacs runtime and should be rejected pre-grade.
-
-**Next Steps:**
-- Ask for explicit approval before committing/pushing the hardening changes.
-- After commit/push, restart with wrapper lifecycle only: `./scripts/run-auto-workflow-cron.sh stop` then `./scripts/run-auto-workflow-cron.sh auto-workflow`.
-- Monitor `./scripts/run-auto-workflow-cron.sh messages`, status, and the new `results.tsv` for baseline rows, no callback arity wedge, and undefined-call pre-grade rejection.
-
-## Current Session: 2026-05-02 Meta-Harness Strategy Evolution
-
-**Status:** Strategy evolution implementation is in progress and locally verified with targeted smoke tests. Do not assume cron has exercised it yet.
-
-**Done (This Session):**
-- Added Meta-Harness strategy modules to `gptel-tools-agent.el` loader: `gptel-tools-agent-strategy-harness` and `gptel-tools-agent-strategy-evolver` now load with the workflow stack.
-- Added strategy frontier injection to `assistant/skills/auto-workflow/prompt-template.md` via `{{strategy-frontier}}` and prompt-build variable substitution.
-- Added strategy evaluation recording from `gptel-auto-experiment-log-tsv`, writing independent metrics via `gptel-auto-workflow--record-strategy-evaluation`.
-- Hardened strategy evolution runtime path:
-  - Unique strategy names now scan existing `strategy-evolved-NNNN.el` files, avoiding overwrite of `evolved-0001`.
-  - Removed invalid non-`cl-block` `return-from` usage.
+- **ZERO format specifier errors** in current run (all 13 errors are pre-fix)
+- No daemon crashes
+- Staging verification PASS
+- Review PASSED for kept experiment
   - Added required `cl-lib`, `json`, `subr-x` dependencies.
   - Fixed strategy template quoting with `%S` so generated metadata is loadable.
   - Fixed strategy prototype temp files to use `.el` suffix.

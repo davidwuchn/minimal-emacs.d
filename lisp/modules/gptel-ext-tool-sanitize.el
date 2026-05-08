@@ -44,6 +44,15 @@ Accepts already-normalized tool structs and registry entries of the form
   "Return TOOLS as a list of bare `gptel-tool' structs."
   (delq nil (mapcar #'my/gptel--tool-spec tools)))
 
+(defun my/gptel--find-tool-by-name (tools name &optional comparison-fn)
+  "Find tool in TOOLS whose name matches NAME using COMPARISON-FN.
+COMPARISON-FN should accept two strings and return non-nil if they match.
+Defaults to `string='."
+  (cl-find-if (lambda (ts)
+                (funcall (or comparison-fn #'string=)
+                         (gptel-tool-name ts) name))
+              tools))
+
 (defun my/gptel--tool-name-candidates (name)
   "Return fuzzy-match candidates extracted from tool NAME.
 This keeps the original NAME first, then any token-like substrings so
@@ -67,10 +76,9 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
        thereis
        (or
         ;; 1. Exact match
-        (cl-find-if (lambda (ts) (string= (gptel-tool-name ts) candidate)) tool-specs)
+        (my/gptel--find-tool-by-name tool-specs candidate)
         ;; 2. Case-insensitive match
-        (cl-find-if (lambda (ts) (string-equal-ignore-case (gptel-tool-name ts) candidate))
-                    tool-specs)
+        (my/gptel--find-tool-by-name tool-specs candidate #'string-equal-ignore-case)
         ;; 3. Normalized match (ignore underscores/hyphens)
         (when (and my/gptel-tool-repair-enabled normalized)
           (cl-find-if
@@ -116,9 +124,7 @@ Return non-nil when the error was converted into a tool result."
     (let* ((name (plist-get tool-call :name))
            (tools (my/gptel--normalize-tool-list (plist-get info :tools)))
            (tool-spec (and (stringp name)
-                           (cl-find-if (lambda (ts)
-                                         (equal (gptel-tool-name ts) name))
-                                       tools)))
+                           (my/gptel--find-tool-by-name tools name #'equal)))
            (message-text (my/gptel--tool-dispatch-error-message err)))
       (message "gptel: tool dispatch error for %s: %s"
                (or name "<unknown>") message-text)

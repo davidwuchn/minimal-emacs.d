@@ -2508,3 +2508,4 @@
 {"timestamp":"2026-05-08 08:32:38","strategy":"template-default","target":"lisp/modules/gptel-ext-tool-sanitize.el","experiment-id":4,"score":0,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-08 08:38:59","strategy":"template-default","target":"lisp/modules/gptel-ext-tool-sanitize.el","experiment-id":5,"score":0.4000000000000001,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-08 08:43:34","strategy":"template-default","target":"lisp/modules/gptel-ext-tool-sanitize.el","experiment-id":6,"score":0.4,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-08 10:33:21","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":4,"score":0.4000000000000001,"outcome":"discarded","axis":"?"}
