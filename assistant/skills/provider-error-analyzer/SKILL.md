@@ -4,7 +4,7 @@ description: |
   Analyzes LLM provider error messages to determine retry strategy, failover candidates,
   and root cause. Supports multiple providers (OpenAI, Anthropic, Google, local models).
 version: 1.0
-updated: 2026-05-08 20:19
+updated: 2026-05-08 20:44
 metadata:
   category: reliability
   author: auto-workflow
