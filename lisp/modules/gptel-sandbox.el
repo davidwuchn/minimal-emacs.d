@@ -804,8 +804,8 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
 CALLBACK receives final outcome plist."
   (unless (hash-table-p env)
     (error "Programmatic eval-progn requires a hash table environment, got: %S" env))
-  (unless (listp state)
-    (error "Programmatic eval-progn requires a plist state, got: %S" state))
+  (unless (proper-list-p state)
+    (error "Programmatic eval-progn requires a proper plist state, got: %S" state))
   (unless (listp body)
     (error "Programmatic eval-progn requires a list of forms, got: %S" body))
   (if (null body)
