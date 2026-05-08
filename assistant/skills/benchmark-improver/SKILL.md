@@ -2,6 +2,7 @@
 name: benchmark-improver
 description: Wu Xing-based auto-improvement system for benchmarks. Detects anti-patterns via 相克 and generates improvements via 相生 pathways.
 version: 1.0
+evolve-script: evolve_benchmark.py
 ---
 metadata:
   evolution-stats:
@@ -185,6 +186,7 @@ Anti-patterns are detected by analyzing benchmark results against Eight Keys sco
 Map low scores to their element and apply the corresponding improvement rules above.
 
 
+
 ## Evolved Improvement Effectiveness
 
 Based on analysis of which improvement types led to score increases.
@@ -205,4 +207,3 @@ Based on analysis of which improvement types led to score increases.
 - Coordination (Metal) (21% success rate, 6 worsened)
 - Identity (Water) (15% success rate, 45 worsened)
 - Operations (Wood) (16% success rate, 19 worsened)
-
