@@ -1,9 +1,40 @@
 ;;; gptel-tools-agent-error.el --- Error analysis, retry logic -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(require 'cl-lib)
+
+;; Variables defined in companion modules to silence byte-compiler.
+(defvar gptel-auto-workflow--rate-limited-backends)
+(defvar gptel-auto-experiment-retry-delay)
+(defvar gptel-auto-experiment-rate-limit-max-retry-delay)
+(defvar gptel-auto-experiment--api-error-threshold)
+(defvar gptel-auto-experiment--no-improvement-count)
+(defvar gptel-auto-experiment--api-error-count)
+(defvar gptel-auto-experiment-max-grader-retries)
+(defvar gptel-auto-experiment-max-retries)
+(defvar gptel-auto-experiment--quota-exhausted)
+(defvar gptel-auto-workflow--run-id)
+
+(defun gptel-error--load-patterns-from-skill ()
+  "Load error patterns from provider-error-analyzer skill.
+Returns alist of (category . pattern) or nil."
+  (when (fboundp 'gptel-auto-workflow--load-skill-content)
+    (let ((skill (gptel-auto-workflow--load-skill-content "provider-error-analyzer")))
+      (when skill
+        ;; Parse patterns from skill markdown
+        ;; Look for **Pattern**: `regex` format
+        (let ((patterns nil)
+              (pos 0))
+          (while (string-match "^\\*\\*Pattern\\*\\*: `\\([^`]+\\)`" skill pos)
+            (push (match-string 1 skill) patterns)
+            (setq pos (match-end 0)))
+          patterns)))))
+
 (defconst gptel-auto-experiment--hard-quota-error-pattern
-  "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
-  "Regex pattern matching hard quota exhaustion errors.")
+  (or (car (gptel-error--load-patterns-from-skill))
+      "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached")
+  "Regex pattern matching hard quota exhaustion errors.
+Loaded from provider-error-analyzer skill if available.")
 
 (defun gptel-auto-workflow--first-available-provider-candidate (candidates &optional excluded-backends)
   "Return the first available entry from CANDIDATES, skipping EXCLUDED-BACKENDS.

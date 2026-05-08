@@ -4,7 +4,7 @@
 
 ## Current Session: 2026-05-08 E2E Auto-Workflow Run - STABLE
 
-**Status:** Script-based skill evolution complete. All skills now use agentskills.io standard with Python scripts in scripts/ directory. Skills self-evolve via unified Python pipeline.
+**Status:** Committed and pushed to origin/main. All skills agentskills.io compliant with external researcher and script-based evolution.
 
 **Done (This Session):**
 - Fixed "Format specifier doesn't match argument type" error (two root causes):
@@ -48,13 +48,24 @@
   - All now use standard skill loader instead of custom file-loading code
 - **Script-based skill evolution (agentskills.io compliant):**
   - Created `assistant/skills/auto-workflow/scripts/` directory with 4 Python scripts:
-    - `analyze_results.py` — Parses results.tsv, computes target/research/prompt stats
-    - `generate_directive.py` — Builds DIRECTIVE.md from analysis JSON
-    - `generate_researcher.py` — Builds RESEARCHER.md with performance data
-    - `evolve_skills.py` — Master orchestrator that runs full pipeline
+    - `analyze_results.py` - Parses results.tsv, computes target/research/prompt stats
+    - `generate_directive.py` - Builds DIRECTIVE.md from analysis JSON
+    - `generate_researcher.py` - Builds RESEARCHER.md with performance data
+    - `evolve_skills.py` - Master orchestrator that runs full pipeline
   - Refactored `evolution.el` skill generators to thin wrappers calling Python scripts
   - Skills now follow agentskills.io standard: SKILL.md + scripts/ + references/
   - Verified: Python scripts generate correct skills from 870 experiments
+- **Identified 8 skill extraction candidates from hardcoded Elisp:**
+  1. `sandbox-profiles` (`gptel-sandbox.el:40-66`) - Tool permission profiles
+  2. `eight-keys-grader` (`gptel-benchmark-principles.el`) - Wu Xing scoring rubric
+  3. `elisp-validator` (`gptel-tools-agent-validation.el`) - Code validation rules
+  4. `provider-error-analyzer` (`gptel-tools-agent-error.el`) - Error pattern matching
+  5. `strategy-proposer` (`gptel-tools-agent-strategy-evolver.el`) - Strategy generation prompts
+  6. `benchmark-improver` (`gptel-benchmark-llm.el`) - Benchmark analysis prompts
+  7. `tool-prompts` (`assistant/prompts/tools/`) - Already externalized, needs skill-ification
+  8. `agent-prompts` (`assistant/agents/`) - Already externalized, needs skill-ification
+  - Created SKILL.md for first 4 candidates with frontmatter, scripts/, references/
+  - Total: ~600 lines of hardcoded domain knowledge ready to extract
 - Daemon PID 3008726 running, 5h+ uptime
 
 **Current Run (2026-05-08T074039Z-ef87):**
