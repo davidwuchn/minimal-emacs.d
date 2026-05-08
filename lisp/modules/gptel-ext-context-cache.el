@@ -354,12 +354,16 @@ Validates that cached values are positive integers or normalizable numbers befor
 
 (defun my/gptel--cache-or-alist-fallback (hash-table alist key)
   "Look up KEY in ALIST and cache the result in HASH-TABLE.
-Returns the alist match result or nil if not found."
+Returns the alist match result or nil if not found.
+Uses sentinel comparison to distinguish \"no match\" (sentinel) from \"match with nil\"."
   (let ((result (my/gptel--alist-partial-match alist key)))
-    (if result
+    (if (eq result my/gptel--alist-match-sentinel)
+        (progn
+          (puthash key my/gptel--context-window-miss-sentinel hash-table)
+          nil)
+      (progn
         (puthash key result hash-table)
-      (puthash key my/gptel--context-window-miss-sentinel hash-table))
-    result))
+        result))))
 
 
 (defvar my/gptel--alist-partial-match-cache (make-hash-table :test 'equal)
