@@ -672,17 +672,27 @@ RULES:
       (if (fboundp 'gptel-request)
           (gptel-request
            digest-prompt
-           (lambda (response _info)
-             (let ((digested (if (stringp response)
-                                 response
-                               (format "%s" response))))
-               (message "[auto-workflow] Digestion complete: %d chars → %d chars"
-                        (length raw-findings) (length digested))
-               ;; Update context with digested version
-               (when (boundp 'gptel-auto-workflow--current-research-context)
-                 (plist-put gptel-auto-workflow--current-research-context
-                            :digested digested))
-               (funcall callback digested)))
+            :callback
+            (lambda (response _info)
+              (let* ((candidate (if (stringp response)
+                                    response
+                                  (format "%s" response)))
+                     (trimmed (string-trim candidate))
+                     (digested (if (or (string-empty-p trimmed)
+                                       (string= trimmed "nil")
+                                       (< (length trimmed) 80)
+                                       (gptel-auto-workflow--research-error-p trimmed))
+                                   raw-findings
+                                 candidate)))
+                (when (eq digested raw-findings)
+                  (message "[auto-workflow] Digestion returned unusable output; preserving raw findings"))
+                (message "[auto-workflow] Digestion complete: %d chars → %d chars"
+                         (length raw-findings) (length digested))
+                ;; Update context with digested version
+                (when (boundp 'gptel-auto-workflow--current-research-context)
+                  (plist-put gptel-auto-workflow--current-research-context
+                             :digested digested))
+                (funcall callback digested)))
            :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
         (progn
           (message "[auto-workflow] gptel-request unavailable, using raw findings")
@@ -705,22 +715,30 @@ META-LEARNING: Stores digested insights in RESEARCH.md for future reference."
          'researcher "External research" research-prompt
          (lambda (result)
            (let* ((raw-findings (gptel-auto-workflow--normalize-response result))
+                  (research-error-p (gptel-auto-workflow--research-error-p raw-findings))
+                  (effective-findings (if research-error-p
+                                          (gptel-auto-workflow--local-research-patterns)
+                                        raw-findings))
+                  (source (if research-error-p "local-fallback" "external"))
                   (findings-hash (sha1 raw-findings))
                   (strategy (or (and (boundp 'gptel-auto-workflow--active-strategy)
-                                     gptel-auto-workflow--active-strategy)
-                                "default")))
+                                      gptel-auto-workflow--active-strategy)
+                                 "default")))
+             (when research-error-p
+               (message "[auto-workflow] External research failed; using local research fallback (%d chars)"
+                        (length effective-findings)))
              ;; Store raw research context
              (setq gptel-auto-workflow--current-research-context
                    (list :strategy strategy
                          :hash findings-hash
                          :findings raw-findings
-                         :source "external"
+                         :source source
                          :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
              (message "[auto-workflow] External research raw: %d chars (hash: %s)"
                       (length raw-findings) (substring findings-hash 0 8))
              ;; Digest findings before passing to callback
              (gptel-auto-workflow--digest-research-findings
-              raw-findings
+              effective-findings
               (lambda (digested)
                 (funcall callback digested))))))
       (progn
@@ -788,8 +806,8 @@ Example: gptel-tools-agent.el (11,481 lines) is EXCLUDED. Focus on smaller files
 %s
 
 PRIORITIZE: Files where external research insights can be applied.
-  Example: Research found "async process monitoring" → target files with process handling
-  Example: Research found "state machine pattern" → target files with complex control flow
+  Example: Research found \"async process monitoring\" → target files with process handling
+  Example: Research found \"state machine pattern\" → target files with complex control flow
 AVOID: Recently-refactored files with no remaining issues.
 AVOID: Files over 1000 lines (too large for focused changes).
 HINT: External research insights suggest novel approaches. Consider targets that could benefit from these techniques even if they don't have obvious bugs.
@@ -908,6 +926,13 @@ Otherwise, convert using princ representation."
   "Return non-nil when RESPONSE is an analyzer task failure wrapper."
   (and (stringp response)
        (string-match-p "\\`Error:" response)))
+
+(defun gptel-auto-workflow--research-error-p (response)
+  "Return non-nil when RESPONSE is a researcher task failure wrapper."
+  (and (stringp response)
+       (or (string-match-p "\\`Error:" response)
+           (and (fboundp 'gptel-auto-experiment--is-retryable-error-p)
+                (gptel-auto-experiment--is-retryable-error-p response)))))
 
 (defun gptel-auto-workflow--analyzer-transient-error-p (response)
   "Return non-nil when RESPONSE reflects a transient analyzer/provider failure."
@@ -1180,36 +1205,43 @@ When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
 Returns empty string if no cache exists.
 Findings are cached per-project."
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
-         (cache-key (gptel-auto-workflow--normalized-cache-key proj-root)))
-    (let ((cached (gethash cache-key gptel-auto-workflow--research-findings-cache)))
-      (if (and (stringp cached) (not (string-empty-p cached)))
-          (progn
-            (message "[research] Using in-memory findings for %s (%d chars)"
-                     proj-root (length cached))
-            cached)
-        (let ((file (gptel-auto-workflow--research-file)))
-          (if (file-exists-p file)
-              (let ((findings
-                     (with-temp-buffer
-                       (insert-file-contents file)
-                       (goto-char (point-min))
-                       (let ((content-start nil))
-                         (while (and (not (eobp)) (not content-start))
-                           (if (looking-at "^$")
-                               (progn
-                                 (forward-line 1)
-                                 (setq content-start (point)))
-                             (forward-line 1)))
-                         (if content-start
-                             (buffer-substring content-start (point-max))
-                           "")))))
-                (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
-                (message "[research] Loaded cached findings for %s (%d chars)"
-                         proj-root (length findings))
-                findings)
-            (progn
-              (message "[research] No cached findings found for %s" proj-root)
-              "")))))))
+         (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
+         (cached (gethash cache-key gptel-auto-workflow--research-findings-cache))
+         (file (gptel-auto-workflow--research-file))
+         (file-findings nil))
+    (when (file-exists-p file)
+      (setq file-findings
+            (with-temp-buffer
+              (insert-file-contents file)
+              (goto-char (point-min))
+              (let ((content-start nil))
+                (while (and (not (eobp)) (not content-start))
+                  (if (looking-at "^$")
+                      (progn
+                        (forward-line 1)
+                        (setq content-start (point)))
+                    (forward-line 1)))
+                (string-trim
+                 (if content-start
+                     (buffer-substring content-start (point-max))
+                   ""))))))
+    (cond
+     ((and (stringp file-findings)
+           (not (string-empty-p file-findings))
+           (or (not (stringp cached))
+               (string-empty-p cached)
+               (> (length file-findings) (length cached))))
+      (puthash cache-key file-findings gptel-auto-workflow--research-findings-cache)
+      (message "[research] Loaded cached findings from disk for %s (%d chars)"
+               proj-root (length file-findings))
+      file-findings)
+     ((and (stringp cached) (not (string-empty-p cached)))
+      (message "[research] Using in-memory findings for %s (%d chars)"
+               proj-root (length cached))
+      cached)
+     (t
+      (message "[research] No cached findings found for %s" proj-root)
+      ""))))
 
 (defun gptel-auto-workflow-start-periodic-research ()
   "Start periodic researcher runs.

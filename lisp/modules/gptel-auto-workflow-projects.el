@@ -771,7 +771,7 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   "Shut down the dedicated researcher daemon after its queued job completes."
   (when (equal (or (daemonp) "") "copilot-researcher")
     (message "[research] Shutting down researcher daemon after completion")
-    (run-at-time 1 nil #'kill-emacs)))
+    (run-at-time 1 nil #'save-buffers-kill-emacs)))
 
 (defun gptel-auto-workflow-queue-all-research (&optional shutdown-after-completion)
   "Queue `gptel-auto-workflow-run-all-research' and return immediately."

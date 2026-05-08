@@ -388,6 +388,13 @@ ensure_single_researcher_daemon() {
     pids="$(worker_daemon_pids || true)"
     [ -n "$pids" ] || return 0
 
+    if ! daemon_socket_has_owner; then
+        echo "WARNING: Found socketless $SERVER_NAME daemon(s). Cleaning before researcher run..." >&2
+        discard_stale_worker_daemon
+        sleep 1
+        return 0
+    fi
+
     pid_count="$(printf '%s\n' "$pids" | awk 'NF { count++ } END { print count + 0 }')"
     [ "$pid_count" -le 1 ] && return 0
 
