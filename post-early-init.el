@@ -80,6 +80,20 @@
 (setq debug-on-error nil)
 (add-to-list 'debug-ignored-errors 'cl-no-applicable-method)
 
+;; HARDEN: Defvar common closure-capture variables to prevent void-variable
+;; errors from Emacs 30.1 arm64 native-comp bug in lexical closures.
+;; These variables are used as parameters in functions that create closures.
+;; If native-comp fails to capture them lexically, the dynamic fallback prevents crashes.
+(defvar async nil)
+(defvar process nil)
+(defvar monitoring nil)
+(defvar state nil)
+(defvar machine nil)
+(defvar pattern nil)
+(defvar label nil)
+(defvar fn-name nil)
+(defvar callback nil)
+
 (provide 'post-early-init)
 
 ;;; post-early-init.el ends here
