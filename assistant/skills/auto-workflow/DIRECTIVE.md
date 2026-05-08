@@ -2,7 +2,7 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.08
-updated: 2026-05-08 18:16
+updated: 2026-05-08 18:41
 total-experiments: 512
 total-kept: 105
 ---
