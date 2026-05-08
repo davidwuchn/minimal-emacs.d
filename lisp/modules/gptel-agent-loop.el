@@ -241,8 +241,12 @@ memory after long sessions or if tasks appear stuck."
       (setq gptel-agent-loop--state nil))))
 
 (defun gptel-agent-loop--safe-accumulated-output (state)
-  "Return STATE's accumulated output or empty string if nil."
-  (or (gptel-agent-loop--task-accumulated-output state) ""))
+  "Return STATE's accumulated output or empty string if nil.
+Returns empty string if STATE is nil (defensive guard).
+BEHAVIOR: Guards against nil state to prevent slot access errors."
+  (if state
+      (or (gptel-agent-loop--task-accumulated-output state) "")
+    ""))
 
 (defun gptel-agent-loop--task-identity (state)
   "Return (agent-type . description) for STATE with safe defaults.
@@ -660,7 +664,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 
          ((and (consp resp) (eq (car resp) 'tool-call))
           (let ((calls (cdr resp)))
-            (when (listp calls)
+            (when (and (listp calls) (not (null calls)))
               (setf (gptel-agent-loop--task-step-count state)
                     (+ (gptel-agent-loop--step-count state)
                        (length calls)))

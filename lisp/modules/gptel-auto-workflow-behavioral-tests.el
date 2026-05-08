@@ -29,6 +29,15 @@
   "Create a fresh test context with empty error list."
   (gptel-test-context--create t nil))
 
+(defun gptel-test-context--clear-errors (ctx)
+  "Clear all errors in test context CTX and reset passed flag."
+  (when (null ctx)
+    (signal 'wrong-type-argument (list 'gptel-test-context ctx)))
+  (cl-check-type ctx gptel-test-context)
+  (setf (gptel-test-context-errors ctx) nil)
+  (setf (gptel-test-context-passed ctx) t)
+  ctx)
+
 (defun gptel-test-context--add-error (ctx msg)
   "Record an error MSG in test context CTX and mark as failed."
   (when (null ctx)
@@ -92,6 +101,12 @@ Each entry: (NAME :file FILE :test FUNCTION).")
       (gptel-test-context--add-error ctx "non-string file value should return nil"))
     (when (gptel-auto-workflow--json-target-file '((other . "lisp/modules/test.el") (name . "test")))
       (gptel-test-context--add-error ctx "unknown keys should return nil"))
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--json-target-file '()) nil)
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--json-target-file '((file . ""))) nil)
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--json-target-file '((file . nil))) nil)
     (gptel-test-context--result ctx)))
 
 (defun gptel-auto-workflow--test-validate-and-add-target ()
@@ -123,6 +138,14 @@ Each entry: (NAME :file FILE :test FUNCTION).")
      '())
     (gptel-test-context--assert-equal
      ctx (gptel-auto-workflow--validate-and-add-target '((file . "")) test-root '())
+     '())
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--validate-and-add-target '()) '())
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--validate-and-add-target '((other . "test.el")) test-root '())
+     '())
+    (gptel-test-context--assert-equal
+     ctx (gptel-auto-workflow--validate-and-add-target "nonexistent.el" test-root '())
      '())
     (gptel-test-context--result ctx)))
 
