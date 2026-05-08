@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Evolve benchmark-improver skill based on experiment results.
 
-Updates Wu Xing improvement rules based on which improvements
-actually led to better benchmark scores.
+Adds data-driven suggestions to the benchmark-improver SKILL.md file.
 """
 
 import argparse
@@ -13,123 +12,101 @@ from datetime import datetime
 from collections import defaultdict, Counter
 
 
-def analyze_improvement_effectiveness(analysis):
-    """Analyze which improvement patterns correlate with success."""
-    element_results = defaultdict(lambda: {'improved': 0, 'worsened': 0, 'total': 0, 'kept': 0})
-    
-    # Map hypothesis keywords to Wu Xing elements
+def analyze_patterns(analysis):
+    """Analyze which hypothesis patterns correlate with success."""
     element_keywords = {
-        'wood': ['efficient', 'step', 'cache', 'operation', 'speed', 'fast', 'performance', 'optimize', 'reduce', 'simplify', 'remove', 'clean'],
-        'fire': ['plan', 'principle', 'analysis', 'foresight', 'research', 'investigate', 'explore', 'understand', 'design', 'architect'],
-        'earth': ['constraint', 'timeout', 'limit', 'rigid', 'control', 'check', 'validate', 'verify', 'test', 'guard', 'safe'],
-        'metal': ['flexible', 'tool', 'sequence', 'alternative', 'compose', 'combine', 'merge', 'integrate', 'coordination', 'pattern'],
-        'water': ['purpose', 'goal', 'identity', 'clarity', 'meaning', 'intent', 'direction', 'focus', 'aim', 'objective'],
+        'wood': ['efficient', 'step', 'cache', 'operation', 'speed', 'fast', 'performance', 'optimize', 'reduce', 'simplify'],
+        'fire': ['plan', 'principle', 'analysis', 'foresight', 'research', 'investigate', 'explore', 'understand', 'design'],
+        'earth': ['constraint', 'timeout', 'limit', 'rigid', 'control', 'check', 'validate', 'verify', 'test', 'guard'],
+        'metal': ['flexible', 'tool', 'sequence', 'alternative', 'compose', 'combine', 'merge', 'integrate', 'coordination'],
+        'water': ['purpose', 'goal', 'identity', 'clarity', 'meaning', 'intent', 'direction', 'focus', 'aim'],
     }
+    
+    element_results = defaultdict(lambda: {'total': 0, 'kept': 0, 'improved': 0})
     
     for stats in analysis.get('target_stats', []):
         for exp in stats.get('experiments', []):
-            hypothesis = exp.get('hypothesis', '').lower()
+            hyp = exp.get('hypothesis', '').lower()
+            decision = exp.get('decision', '')
             score_before = exp.get('score_before', 0)
             score_after = exp.get('score_after', 0)
-            decision = exp.get('decision', '')
             
-            # Determine which element this hypothesis targets
-            element_scores = {}
-            for element, keywords in element_keywords.items():
-                score = sum(1 for kw in keywords if kw in hypothesis)
-                if score > 0:
-                    element_scores[element] = score
+            scores = {e: sum(1 for kw in kws if kw in hyp) for e, kws in element_keywords.items()}
+            valid = {e: s for e, s in scores.items() if s > 0}
             
-            if not element_scores:
-                continue
-            
-            # Pick the dominant element
-            dominant = max(element_scores, key=element_scores.get)
-            
-            element_results[dominant]['total'] += 1
-            if decision == 'kept':
-                element_results[dominant]['kept'] += 1
-            if score_after > score_before:
-                element_results[dominant]['improved'] += 1
-            elif score_after < score_before:
-                element_results[dominant]['worsened'] += 1
+            if valid:
+                dominant = max(valid, key=valid.get)
+                element_results[dominant]['total'] += 1
+                if decision == 'kept':
+                    element_results[dominant]['kept'] += 1
+                if score_after > score_before:
+                    element_results[dominant]['improved'] += 1
     
     return element_results
 
 
-def analyze_hypothesis_patterns(analysis):
-    """Extract common words/phrases from successful hypotheses."""
-    kept_hypotheses = []
-    discarded_hypotheses = []
-    
+def extract_phrases(analysis):
+    """Extract common action phrases from kept experiments."""
+    kept = []
     for stats in analysis.get('target_stats', []):
         for exp in stats.get('experiments', []):
-            hyp = exp.get('hypothesis', '')
             if exp.get('decision') == 'kept':
-                kept_hypotheses.append(hyp)
-            else:
-                discarded_hypotheses.append(hyp)
+                kept.append(exp.get('hypothesis', ''))
     
-    # Extract action words (verbs) from kept hypotheses
-    kept_words = Counter()
-    for hyp in kept_hypotheses:
-        words = re.findall(r'\b[A-Za-z]{4,}\b', hyp.lower())
-        for w in words:
-            if w not in ('function', 'defun', 'variable', 'module', 'lisp', 'emacs', 'gptel', 'workflow', 'target', 'experiment'):
-                kept_words[w] += 1
+    phrases = Counter()
+    for hyp in kept:
+        matches = re.findall(r'\b(Add|Fix|Remove|Prevent|Handle|Check|Validate|Ensure|Improve|Optimize|Refactor|Extract|Move|Rename|Update|Implement|Create)\s+([A-Za-z_\-]+)', hyp)
+        for verb, noun in matches:
+            phrases[f"{verb} {noun}"] += 1
     
-    return {
-        'kept_count': len(kept_hypotheses),
-        'discarded_count': len(discarded_hypotheses),
-        'top_words': kept_words.most_common(15),
-    }
+    return phrases.most_common(8)
 
 
-def generate_improvement_rules(element_results):
-    """Generate updated improvement rules based on effectiveness."""
-    rules = []
+def generate_evolved_md(element_results, phrases):
+    """Generate markdown for evolved recommendations."""
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    
+    md = f"\n## Evolved Recommendations (Updated {now})\n\n"
+    md += f"Based on analysis of {sum(s['total'] for s in element_results.values())} experiments.\n\n"
     
     element_names = {
-        'wood': 'Operations (Wood)',
-        'fire': 'Intelligence (Fire)',
-        'earth': 'Control (Earth)',
-        'metal': 'Coordination (Metal)',
-        'water': 'Identity (Water)',
+        'wood': 'Wood (Operations)',
+        'fire': 'Fire (Intelligence)', 
+        'earth': 'Earth (Control)',
+        'metal': 'Metal (Coordination)',
+        'water': 'Water (Identity)',
     }
     
-    for element, stats in sorted(element_results.items()):
+    for element, name in element_names.items():
+        stats = element_results.get(element, {'total': 0, 'kept': 0})
         if stats['total'] < 2:
             continue
         
         keep_rate = stats['kept'] / stats['total']
-        improvement_rate = stats['improved'] / stats['total']
+        md += f"### {name}\n\n"
+        md += f"- **Success rate:** {keep_rate:.0%} ({stats['kept']}/{stats['total']} experiments)\n"
         
-        if keep_rate > 0.2:
-            effectiveness = 'highly-effective'
+        if keep_rate > 0.15:
+            md += "- **Priority:** HIGH - prioritize improvements targeting this element\n"
         elif keep_rate > 0.1:
-            effectiveness = 'moderately-effective'
-        elif keep_rate > 0.05:
-            effectiveness = 'marginally-effective'
+            md += "- **Priority:** MEDIUM - moderate success with this element\n"
         else:
-            effectiveness = 'ineffective'
+            md += "- **Priority:** LOW - limited success, reconsider approach\n"
         
-        rules.append({
-            'element': element,
-            'name': element_names.get(element, element),
-            'keep_rate': keep_rate,
-            'improvement_rate': improvement_rate,
-            'effectiveness': effectiveness,
-            'total': stats['total'],
-            'kept': stats['kept'],
-            'improved': stats['improved'],
-            'worsened': stats['worsened'],
-        })
+        md += "\n"
     
-    return rules
+    if phrases:
+        md += "### Top Successful Patterns\n\n"
+        md += "These action patterns appear most frequently in kept experiments:\n\n"
+        for phrase, count in phrases:
+            md += f"- {phrase} ({count} times)\n"
+        md += "\n"
+    
+    return md
 
 
-def update_skill_file(output_dir, rules, patterns):
-    """Update the SKILL.md file with evolved rules."""
+def update_skill_file(output_dir, evolved_md):
+    """Append evolved recommendations to SKILL.md."""
     skill_file = Path(output_dir) / "SKILL.md"
     
     if not skill_file.exists():
@@ -139,58 +116,11 @@ def update_skill_file(output_dir, rules, patterns):
     with open(skill_file, 'r') as f:
         content = f.read()
     
-    # Generate effectiveness section
-    rules_md = "\n## Evolved Improvement Effectiveness\n\n"
-    rules_md += f"Based on analysis of {patterns['kept_count']} kept and {patterns['discarded_count']} discarded experiments.\n\n"
-    rules_md += "| Element | Effectiveness | Keep Rate | Improvement Rate | Total | Kept |\n"
-    rules_md += "|---------|---------------|-----------|------------------|-------|------|\n"
+    # Remove old evolved section if present
+    content = re.sub(r'\n## Evolved Recommendations.*', '', content, flags=re.DOTALL)
     
-    for rule in rules:
-        rules_md += "| {} | {} | {:.0%} | {:.0%} | {} | {} |\n".format(
-            rule['name'], rule['effectiveness'], rule['keep_rate'],
-            rule['improvement_rate'], rule['total'], rule['kept']
-        )
-    
-    rules_md += "\n"
-    
-    # Add top words from successful hypotheses
-    if patterns['top_words']:
-        rules_md += "### Top Words in Successful Hypotheses\n\n"
-        rules_md += "These words appear most frequently in hypotheses that were kept:\n\n"
-        for word, count in patterns['top_words'][:10]:
-            rules_md += f"- **{word}**: {count} times\n"
-        rules_md += "\n"
-    
-    # Add recommendations
-    effective = [r for r in rules if r['effectiveness'] in ('highly-effective', 'moderately-effective')]
-    ineffective = [r for r in rules if r['effectiveness'] in ('marginally-effective', 'ineffective')]
-    
-    if effective:
-        rules_md += "### Prioritize These Improvement Types\n\n"
-        for r in effective:
-            rules_md += "- {} ({:.0%} keep rate, {} kept out of {})\n".format(
-                r['name'], r['keep_rate'], r['kept'], r['total']
-            )
-        rules_md += "\n"
-    
-    if ineffective:
-        rules_md += "### Reconsider These Improvement Types\n\n"
-        for r in ineffective:
-            rules_md += "- {} ({:.0%} keep rate, {} total attempts)\n".format(
-                r['name'], r['keep_rate'], r['total']
-            )
-        rules_md += "\n"
-    
-    # Replace or append
-    if "## Evolved Improvement Effectiveness" in content:
-        content = re.sub(
-            r"## Evolved Improvement Effectiveness.*?(?=\n## |\Z)",
-            rules_md.rstrip(),
-            content,
-            flags=re.DOTALL
-        )
-    else:
-        content = content.rstrip() + "\n\n" + rules_md
+    # Append new evolved section
+    content = content.rstrip() + evolved_md
     
     # Update timestamp
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -203,7 +133,7 @@ def update_skill_file(output_dir, rules, patterns):
     with open(skill_file, 'w') as f:
         f.write(content)
     
-    print(f"Updated {skill_file} with effectiveness data for {len(rules)} elements")
+    print(f"Updated {skill_file} with evolved recommendations")
 
 
 def main():
@@ -216,10 +146,10 @@ def main():
     with open(args.analysis, 'r') as f:
         analysis = json.load(f)
     
-    element_results = analyze_improvement_effectiveness(analysis)
-    patterns = analyze_hypothesis_patterns(analysis)
-    rules = generate_improvement_rules(element_results)
-    update_skill_file(args.output_dir, rules, patterns)
+    element_results = analyze_patterns(analysis)
+    phrases = extract_phrases(analysis)
+    evolved_md = generate_evolved_md(element_results, phrases)
+    update_skill_file(args.output_dir, evolved_md)
 
 
 if __name__ == '__main__':
