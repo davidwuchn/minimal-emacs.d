@@ -185,7 +185,7 @@ Optional TIMING is a plist with :propose :bench :wall timing info."
           (insert (json-encode row) "\n")))
       (write-region (point-min) (point-max) summary-file))
     (message "[strategy] Evolution summary written: %d candidate(s) for iteration %d"
-             (length candidates) iteration)))
+             (length candidates) (round iteration))))
 
 (defun gptel-auto-workflow--strategies-directory ()
   "Return the directory where prompt-building strategies are stored."

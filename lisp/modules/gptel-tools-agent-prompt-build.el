@@ -674,8 +674,8 @@ row for the same experiment and target."
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
                           truncated-output
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
-                           (or (gptel-auto-workflow--plist-get experiment :prompt-chars 0)
-                               0)
+                            (round (or (gptel-auto-workflow--plist-get experiment :prompt-chars 0)
+                                0))
                            (or (gptel-auto-experiment--tsv-escape
                                 (gptel-auto-workflow--plist-get experiment :sections-included "all"))
                                 "all")
@@ -728,9 +728,9 @@ row for the same experiment and target."
       (condition-case err
           (progn
             (gptel-auto-workflow--experiment-complete-hook experiment)
-            (let ((exp-id (or (gptel-auto-workflow--plist-get experiment :id) 0)))
-              (when (and (> exp-id 0) (zerop (% exp-id 5)))
-                (run-with-idle-timer 30 nil #'gptel-auto-workflow-evolution-run-cycle))))
+             (let ((exp-id (round (or (gptel-auto-workflow--plist-get experiment :id) 0))))
+               (when (and (> exp-id 0) (zerop (% exp-id 5)))
+                 (run-with-idle-timer 30 nil #'gptel-auto-workflow-evolution-run-cycle))))
         (error
          (message "[auto-workflow] Evolution hook error: %s" err))))
     (gptel-auto-workflow--sync-live-kept-count run-id file)))

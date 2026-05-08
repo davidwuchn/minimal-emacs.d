@@ -660,11 +660,11 @@ Returns new strategy name or nil if rejected."
       (when candidate
         (let* ((candidate-index (1+ (- (length candidates)
                                         (length (member candidate candidates)))))
-               (candidate-name (format "candidate-%d-%d" 
-                                       (if parent-strategy-name
-                                           (substring (format "%s" parent-strategy-name) 0 (min 10 (length parent-strategy-name)))
-                                         "evolved")
-                                       candidate-index))
+                (candidate-name (format "candidate-%s-%d" 
+                                        (if parent-strategy-name
+                                            (substring (format "%s" parent-strategy-name) 0 (min 10 (length parent-strategy-name)))
+                                          "evolved")
+                                        candidate-index))
                (candidate-code (gptel-auto-workflow--prepare-strategy-candidate candidate candidate-name)))
 
           ;; Check 1: Not a parameter variant
@@ -772,10 +772,10 @@ strategy as the parent for evolution."
                             (format "%s" current-strategy)
                             (format "%s" worst)))
                 worst)))
-           (parent-perf (when parent-strategy
-                          (gptel-auto-workflow--get-strategy-performance parent-strategy)))
-           (parent-success-rate (plist-get parent-perf :success-rate))
-           (parent-total (plist-get parent-perf :total)))
+            (parent-perf (when parent-strategy
+                           (gptel-auto-workflow--get-strategy-performance parent-strategy)))
+            (parent-success-rate (plist-get parent-perf :success-rate))
+            (parent-total (round (or (plist-get parent-perf :total) 0))))
       ;; Only evolve if we have enough data and performance is mediocre
       (when (and parent-strategy
                  (>= parent-total 5)

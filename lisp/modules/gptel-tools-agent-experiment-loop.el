@@ -269,11 +269,15 @@ Adapts max-experiments based on API error rate."
                            (when hard-timeout
                              (message "[auto-experiment] Hard timeout for %s in experiment %d; skipping retries for this attempt and continuing if budget remains"
                                       target exp-id))
-                           ;; Trigger strategy evolution periodically
-                           (when (and (fboundp 'gptel-auto-workflow--maybe-evolve-strategy)
-                                      (zerop (% next-exp-id 5)))
-                             (message "[strategy] Triggering strategy evolution after %d experiments" next-exp-id)
-                             (gptel-auto-workflow--maybe-evolve-strategy target))
+                            ;; Trigger strategy evolution periodically
+                            (when (and (fboundp 'gptel-auto-workflow--maybe-evolve-strategy)
+                                       (zerop (% next-exp-id 5)))
+                              (message "[strategy] Triggering strategy evolution after %d experiments" next-exp-id)
+                              (condition-case err
+                                  (gptel-auto-workflow--maybe-evolve-strategy target)
+                                (error
+                                 (message "[strategy] Evolution error during experiment callback: %s" err)
+                                 (message "[strategy] Evolution error debug: next-exp-id=%S type=%S" next-exp-id (type-of next-exp-id)))))
                            (let ((continue
                                   (lambda ()
                                     (if (gptel-auto-workflow--run-callback-live-p run-id)
