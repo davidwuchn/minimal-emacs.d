@@ -705,11 +705,12 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
   (expand-file-name "var/tmp/research-findings.md"
                     (gptel-auto-workflow--effective-project-root)))
 
-(defun gptel-auto-workflow-run-research ()
+(defun gptel-auto-workflow-run-research (&optional completion-callback)
   "Run researcher and store findings to cache.
 Call periodically to keep findings fresh.
 Findings available to analyzer during target selection.
-Findings are cached per-project."
+Findings are cached per-project.
+When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
   (interactive)
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root)))
@@ -719,13 +720,15 @@ Findings are cached per-project."
        (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
        (let ((file (gptel-auto-workflow--research-file)))
          (make-directory (file-name-directory file) t)
-         (with-temp-file file
-           (insert (format "# Research Findings\n\n> Project: %s\n> Updated: %s\n\n%s"
-                           proj-root
-                           (format-time-string "%Y-%m-%d %H:%M")
-                           findings)))
-         (message "[research] Findings cached for %s (%d chars)"
-                  proj-root (length findings)))))))
+          (with-temp-file file
+            (insert (format "# Research Findings\n\n> Project: %s\n> Updated: %s\n\n%s"
+                            proj-root
+                            (format-time-string "%Y-%m-%d %H:%M")
+                            findings)))
+          (message "[research] Findings cached for %s (%d chars)"
+                   proj-root (length findings))
+          (when completion-callback
+            (funcall completion-callback findings)))))))
 
 (defun gptel-auto-workflow-load-research-findings ()
   "Load cached research findings for current project.

@@ -693,9 +693,10 @@ Without PROJECT-ROOT, clears overlays for all projects."
 
 ;;; Researcher Multi-Project Support
 
-(defun gptel-auto-workflow-run-research-for-project (project-root)
+(defun gptel-auto-workflow-run-research-for-project (project-root &optional completion-callback)
   "Run researcher for specific PROJECT-ROOT.
-Loads .dir-locals.el from project and runs researcher in that context."
+Loads .dir-locals.el from project and runs researcher in that context.
+When COMPLETION-CALLBACK is non-nil, call it after research completes."
   (interactive "DProject root: ")
   (let* ((root (expand-file-name project-root))
          (project-buf (gptel-auto-workflow--get-project-buffer root)))
@@ -708,46 +709,77 @@ Loads .dir-locals.el from project and runs researcher in that context."
     (with-current-buffer project-buf
       ;; Ensure .dir-locals.el is loaded for this project
       (hack-dir-local-variables-non-file-buffer)
-      (gptel-auto-workflow-run-research))
-    (setq gptel-auto-workflow--current-project nil)))
+      (gptel-auto-workflow-run-research
+       (lambda (&rest args)
+         (setq gptel-auto-workflow--current-project nil)
+         (when completion-callback
+           (apply completion-callback args)))))))
 
-(defun gptel-auto-workflow-run-all-research ()
+(defun gptel-auto-workflow-run-all-research (&optional completion-callback)
   "Run researcher for all configured projects.
 To be called from cron - visits each project directory (loading .dir-locals.el),
-then runs researcher for that project."
+then runs researcher for that project.
+When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   (interactive)
-  (message "[research] Running for %d projects..." 
-           (length gptel-auto-workflow-projects))
-  (let ((results nil))
-    (dolist (project-root gptel-auto-workflow-projects)
-      (message "[research] Processing project: %s" project-root)
-      (let* ((default-directory project-root)
-             (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
-        (condition-case err
-            (progn
-              ;; Set current project context for subagents
-              (setq gptel-auto-workflow--current-project project-root)
-              (with-current-buffer project-buf
-                ;; Ensure .dir-locals.el is loaded for this project
-                (hack-dir-local-variables-non-file-buffer)
-                (gptel-auto-workflow-run-research))
-              (push (cons project-root 'success) results)
-              (message "[research] ✓ Completed: %s" project-root))
-          (error
-           (push (cons project-root (format "error: %s" err)) results)
-           (message "[research] ✗ Failed: %s - %s" project-root err))))
-      (setq gptel-auto-workflow--current-project nil))
-    (message "[research] All projects processed: %s" 
-             (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
-                        results ", "))
-    results))
+  (let ((projects (gptel-auto-workflow--normalized-projects)))
+    (message "[research] Running for %d projects..." (length projects))
+    (let ((results nil)
+          (remaining projects))
+      (cl-labels
+          ((finish ()
+             (let ((final-results (nreverse results)))
+               (setq gptel-auto-workflow--current-project nil)
+               (message "[research] All projects processed: %s"
+                        (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
+                                   final-results ", "))
+               (when completion-callback
+                 (funcall completion-callback final-results))
+               final-results))
+           (run-next ()
+             (if (null remaining)
+                 (finish)
+               (let* ((project-root (car remaining))
+                      (default-directory project-root)
+                      (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
+                 (setq remaining (cdr remaining))
+                 (message "[research] Processing project: %s" project-root)
+                 (condition-case err
+                     (progn
+                       ;; Set current project context for subagents.
+                       (setq gptel-auto-workflow--current-project project-root)
+                       (with-current-buffer project-buf
+                         (hack-dir-local-variables-non-file-buffer)
+                         (gptel-auto-workflow-run-research
+                          (lambda (&rest _args)
+                            (push (cons project-root 'success) results)
+                            (message "[research] ✓ Completed: %s" project-root)
+                            (setq gptel-auto-workflow--current-project nil)
+                            (run-next)))))
+                   (error
+                    (push (cons project-root (format "error: %s" err)) results)
+                    (message "[research] ✗ Failed: %s - %s" project-root err)
+                    (setq gptel-auto-workflow--current-project nil)
+                    (run-next)))))))
+        (run-next)))))
 
-(defun gptel-auto-workflow-queue-all-research ()
+(defun gptel-auto-workflow--shutdown-researcher-daemon-after-job (&rest _args)
+  "Shut down the dedicated researcher daemon after its queued job completes."
+  (when (equal (or (daemonp) "") "copilot-researcher")
+    (message "[research] Shutting down researcher daemon after completion")
+    (run-at-time 1 nil #'kill-emacs)))
+
+(defun gptel-auto-workflow-queue-all-research (&optional shutdown-after-completion)
   "Queue `gptel-auto-workflow-run-all-research' and return immediately."
   (interactive)
   (gptel-auto-workflow--queue-cron-job
-   "research"
-   #'gptel-auto-workflow-run-all-research))
+    "research"
+    (lambda (completion-callback)
+      (gptel-auto-workflow-run-all-research
+       (lambda (&rest args)
+         (funcall completion-callback)
+         (when shutdown-after-completion
+           (apply #'gptel-auto-workflow--shutdown-researcher-daemon-after-job args)))))
+    :async t))
 
 ;;; Research Cache Management
 
