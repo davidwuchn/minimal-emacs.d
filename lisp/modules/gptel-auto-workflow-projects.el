@@ -11,6 +11,11 @@
 
 ;;; Code:
 
+;; HARDEN: Prevent void-variable errors when native-comp closure captures
+;; fail to resolve lexically-bound parameters on arm64 Emacs 30.1.
+(defvar async nil)
+(defvar process nil)
+
 (require 'cl-lib)
 (require 'gptel-tools-agent)
 
