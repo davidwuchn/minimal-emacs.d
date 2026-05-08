@@ -106,3 +106,29 @@ Based on analysis of experiment errors.
 | Pattern | Category | Action | Frequency | Regex |
 |---------|----------|--------|-----------|-------|
 
+## Evolved Patterns
+
+Updated: 2026-05-08 22:20
+
+### High-Signal Keywords
+
+- `defensive`: 70% (14/20)
+- `bindings`: 60% (3/5)
+- `benchmark`: 60% (3/5)
+- `files`: 60% (3/5)
+- `other`: 60% (3/5)
+- `results`: 60% (3/5)
+- `reusable`: 60% (3/5)
+- `symbol`: 60% (3/5)
+- `nil,`: 56% (5/9)
+- `robustness`: 50% (5/10)
+- `non-string`: 50% (4/8)
+- `nil.`: 50% (3/6)
+- `passed`: 50% (6/12)
+- `checks`: 50% (4/8)
+- `already`: 45% (5/11)
+- `buffer`: 44% (4/9)
+- `run`: 43% (3/7)
+- ``(or`: 43% (3/7)
+- `inputs`: 43% (3/7)
+- `progressive`: 43% (3/7)
