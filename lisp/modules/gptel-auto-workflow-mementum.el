@@ -93,26 +93,26 @@ EXPERIMENT is a plist with :target :hypothesis :score-before :score-after
            (slug (gptel-auto-workflow--mementum-slug
                   (format "%s-%s" target hypothesis))))
       (pcase decision
-        ("kept"
-         (gptel-auto-workflow--mementum-write-memory
-          '✅ slug
-          (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Score:** %.2f → %.2f\n**Quality:** %.2f\n**Grader:** %d/9\n\nThis change was kept because it improved the combined score or had significant quality gains."
-                  target change-type hypothesis score-before score-after quality grader-q)))
-        ("discarded"
-         (gptel-auto-workflow--mementum-write-memory
-          '❌ slug
-          (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Score:** %.2f → %.2f\n**Quality:** %.2f\n**Grader:** %d/9\n\nThis change was discarded. Score tie without sufficient quality gain, or regression."
-                  target change-type hypothesis score-before score-after quality grader-q)))
+         ("kept"
+          (gptel-auto-workflow--mementum-write-memory
+           '✅ slug
+           (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Score:** %.2f → %.2f\n**Quality:** %.2f\n**Grader:** %d/9\n\nThis change was kept because it improved the combined score or had significant quality gains."
+                   target change-type hypothesis score-before score-after quality (or grader-q 0))))
+         ("discarded"
+          (gptel-auto-workflow--mementum-write-memory
+           '❌ slug
+           (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Score:** %.2f → %.2f\n**Quality:** %.2f\n**Grader:** %d/9\n\nThis change was discarded. Score tie without sufficient quality gain, or regression."
+                   target change-type hypothesis score-before score-after quality (or grader-q 0))))
         ("timeout"
          (gptel-auto-workflow--mementum-write-memory
           '❌ slug
           (format "**Target:** %s\n**Hypothesis:** %s\n**Result:** TIMEOUT\n\nExperiment timed out. Consider reducing scope or increasing time budget for this target."
                   target hypothesis)))
-        ("grader-rejected"
-         (gptel-auto-workflow--mementum-write-memory
-          '❌ slug
-          (format "**Target:** %s\n**Hypothesis:** %s\n**Result:** GRADER REJECTED\n**Grader:** %d/9\n\nChange failed grader review. Hypothesis did not match actual changes, or change was too large/unsafe."
-                  target hypothesis grader-q)))
+         ("grader-rejected"
+          (gptel-auto-workflow--mementum-write-memory
+           '❌ slug
+           (format "**Target:** %s\n**Hypothesis:** %s\n**Result:** GRADER REJECTED\n**Grader:** %d/9\n\nChange failed grader review. Hypothesis did not match actual changes, or change was too large/unsafe."
+                   target hypothesis (or grader-q 0))))
         ("validation-failed"
           (gptel-auto-workflow--mementum-write-memory
            '❌ slug
