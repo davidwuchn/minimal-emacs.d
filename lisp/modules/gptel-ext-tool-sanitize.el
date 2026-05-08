@@ -288,7 +288,8 @@ only when both the tool name and the serialized argument plist match."
   (when (listp tc)
     (let ((name (plist-get tc :name))
           (args (plist-get tc :args)))
-      (when (member name my/gptel--inspection-tools)
+      (when (and (member name my/gptel--inspection-tools)
+                 (proper-list-p args))
         (or (plist-get args :file_path)
             (plist-get args :path))))))
 
