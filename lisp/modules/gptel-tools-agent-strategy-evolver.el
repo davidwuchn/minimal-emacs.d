@@ -375,6 +375,14 @@ Uses standard skill loader for consistency."
         nil
       content)))
 
+(defun gptel-auto-workflow--load-strategy-proposer-template ()
+  "Load strategy proposer prompt template from skill.
+Returns template string or nil if skill not available."
+  (when (fboundp 'gptel-auto-workflow--load-skill-content)
+    (let ((content (gptel-auto-workflow--load-skill-content "strategy-proposer")))
+      (unless (string-empty-p content)
+        content))))
+
 (defun gptel-auto-workflow--propose-strategies (parent-strategy-name axis hypothesis parent-code parent-perf)
   "Use gptel to propose 3 new strategy implementations.
 Returns list of 3 strategy code strings, or nil if generation fails."
@@ -389,28 +397,28 @@ Returns list of 3 strategy code strings, or nil if generation fails."
     (let* ((axis-desc (gptel-auto-workflow--strategy-axis-description axis))
            (failure-analysis (gptel-auto-workflow--analyze-strategy-failures parent-strategy-name))
            (skill-content (gptel-auto-workflow--load-proposer-skill))
-           (proposer-prompt
-            (format "You are a Meta-Harness strategy proposer. Your job is to generate NEW Emacs Lisp prompt-building strategies.
+            (proposer-template (or (gptel-auto-workflow--load-strategy-proposer-template)
+                                   "You are a Meta-Harness strategy proposer. Your job is to generate NEW Emacs Lisp prompt-building strategies.
 
 ## Context
 
 We are evolving prompt-building STRATEGIES (not prompt content). Strategies are Emacs Lisp functions that build prompts for an AI code improvement system.
 
-%s
+{{skill-content}}
 
-Evolution hypothesis: %s
+Evolution hypothesis: {{hypothesis}}
 
 ## Parent Strategy
 
-Current strategy: %s
-Performance: %d experiments, %.0f%% success rate, avg score %.2f
+Current strategy: {{parent-strategy}}
+Performance: {{total-experiments}} experiments, {{success-rate}}% success rate, avg score {{avg-score}}
 
 Parent strategy code:
 ```elisp
-%s
+{{parent-code}}
 ```
 
-%s
+{{failure-analysis}}
 
 ## Anti-Overfitting Rules
 
@@ -421,9 +429,9 @@ Parent strategy code:
 
 ## Task
 
-Generate 3 NEW strategy implementations that target axis %s (%s).
+Generate 3 NEW strategy implementations that target axis {{axis}} ({{axis-desc}}).
 
-Axis %s means: %s
+Axis {{axis}} means: {{axis-desc}}
 
 ## Requirements
 
@@ -460,7 +468,7 @@ CANDIDATE_1:
 ```elisp
 ;;; strategy-NAME.el --- DESCRIPTION -*- lexical-binding: t; -*-
 ;; Hypothesis: ONE SENTENCE
-;; Axis: %%s
+;; Axis: {{axis}}
 ;;
 ;; IMPORTANT: Use a MEANINGFUL name replacing NAME (e.g., strategy-weighted-skills,
 ;; strategy-outcome-reasoning, not strategy-evolved-0006).
@@ -477,7 +485,7 @@ CANDIDATE_1:
   (list :name \"NAME\"
         :version \"1.0\"
         :hypothesis \"DESCRIPTION\"
-        :axis \"%%s\"
+        :axis \"{{axis}}\"
         :components [\"tag1\" \"tag2\"]))
 
 (provide 'strategy-NAME)
@@ -505,21 +513,23 @@ CANDIDATE_3:
   - `gptel-auto-workflow--load-skill-content`
   - `gptel-auto-workflow--get-worktree-dir`
   - `gptel-auto-experiment--get-topic-knowledge`
-- Each candidate should explore a DIFFERENT mechanism within axis %s
-- Do NOT output any explanation, ONLY the 3 candidates"
-                  (if (and skill-content (not (string-empty-p skill-content)))
-                      (format "## Proposer Skill\n\n%s" skill-content)
-                    "")
-                  hypothesis
-                  parent-strategy-name
-                  (plist-get parent-perf :total)
-                  (* 100 (plist-get parent-perf :success-rate))
-                  (plist-get parent-perf :avg-score)
-                  (or parent-code "(baseline strategy)")
-                  (or failure-analysis "")
-                  axis axis-desc
-                  axis axis-desc
-                  axis)))
+- Each candidate should explore a DIFFERENT mechanism within axis {{axis}}
+- Do NOT output any explanation, ONLY the 3 candidates"))
+            (proposer-prompt
+             (gptel-auto-workflow--substitute-template
+              proposer-template
+              `((skill-content . ,(if (and skill-content (not (string-empty-p skill-content)))
+                                      (format "## Proposer Skill\n\n%s" skill-content)
+                                    ""))
+                (hypothesis . ,hypothesis)
+                (parent-strategy . ,parent-strategy-name)
+                (total-experiments . ,(format "%d" (plist-get parent-perf :total)))
+                (success-rate . ,(format "%.0f" (* 100 (plist-get parent-perf :success-rate))))
+                (avg-score . ,(format "%.2f" (plist-get parent-perf :avg-score)))
+                (parent-code . ,(or parent-code "(baseline strategy)"))
+                (failure-analysis . ,(or failure-analysis ""))
+                (axis . ,(format "%s" axis))
+                (axis-desc . ,axis-desc)))))
 
     ;; Make synchronous gptel request
     (message "[strategy-evolution] Requesting strategy proposals from agent...")
