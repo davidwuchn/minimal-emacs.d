@@ -47,6 +47,11 @@ SKILL_REGISTRY = {
         'output_dir': 'assistant/skills/provider-error-analyzer',
         'description': 'Provider error patterns',
     },
+    'benchmark-improver': {
+        'scripts': ['evolve_benchmark.py'],
+        'output_dir': 'assistant/skills/benchmark-improver',
+        'description': 'Wu Xing benchmark improvement rules',
+    },
 }
 
 

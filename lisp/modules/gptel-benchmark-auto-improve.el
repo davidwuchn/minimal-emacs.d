@@ -32,7 +32,7 @@
 (require 'gptel-benchmark-core)
 (require 'gptel-benchmark-evolution)
 (require 'gptel-benchmark-memory)
-(require 'gptel-benchmark-subagent)
+(require 'gptel-benchmark-subagent nil t)
 (require 'gptel-benchmark-editor)
 (require 'gptel-benchmark-rollback)
 (require 'gptel-benchmark-llm)
@@ -65,6 +65,48 @@ A value of 0.05 means improvement must be at least 5 percentage points
 better than before to be kept."
   :type 'number
   :group 'gptel-benchmark-auto-improve)
+
+;;; Skill Loading
+
+(defun gptel-benchmark--load-improver-skill ()
+  "Load benchmark-improver skill content if available.
+Returns skill markdown string or nil."
+  (when (fboundp 'gptel-auto-workflow--load-skill-content)
+    (let ((content (gptel-auto-workflow--load-skill-content "benchmark-improver")))
+      (unless (string-empty-p content)
+        content))))
+
+(defun gptel-benchmark--parse-improvement-section (skill-content element section)
+  "Parse improvement suggestions for ELEMENT and SECTION from SKILL-CONTENT.
+SECTION should be 'threshold, 'test, or 'prompt.
+Returns list of suggestion strings."
+  (when skill-content
+    (let* ((element-name (symbol-name element))
+           (section-name (pcase section
+                           ('threshold "Threshold suggestions")
+                           ('test "Test suggestions")
+                           ('prompt "Prompt suggestions")
+                           (_ nil)))
+           (pattern (when section-name
+                      (format "### %s.*\n\n\\([^#]+\\)" element-name)))
+           (element-block (when pattern
+                            (and (string-match pattern skill-content)
+                                 (match-string 1 skill-content)))))
+      (when element-block
+        (let ((suggestions nil)
+              (pos 0))
+          (while (string-match (format "- %s:\n\\(  - [^\n]+\\n\\)+"
+                                      section-name)
+                              element-block pos)
+            (setq pos (match-end 0))
+            (let ((block (match-string 0 element-block))
+                  (lines nil)
+                  (lpos 0))
+              (while (string-match "^  - \\(.+\\)$" block lpos)
+                (push (match-string 1 block) lines)
+                (setq lpos (match-end 0)))
+              (setq suggestions (append (nreverse lines) suggestions))))
+          suggestions)))))
 
 ;;; Improvement Registry
 
@@ -142,91 +184,121 @@ Uses 相生 to determine improvement sequence."
   "Wood improvements for NAME of TYPE.
 Wood = Operations. Problem: too many operations.
 Remedy: Metal (coordination)."
-  (list
-   :threshold-suggestions
-   (list "Reduce max_steps in success_criteria"
-         "Add tool_sequence requirements"
-         "Implement caching for repeated operations")
-   :test-suggestions
-   (list "Split large tasks into subtasks"
-         "Add early termination conditions"
-         "Implement step budget tracking")
-   :prompt-suggestions
-   (list "Add 'be efficient' instruction"
-         "Add 'prefer fewer tool calls' guideline"
-         "Add 'check cache before operation' reminder")))
+  (let ((skill (gptel-benchmark--load-improver-skill)))
+    (if skill
+        (list
+         :threshold-suggestions (gptel-benchmark--parse-improvement-section skill 'wood 'threshold)
+         :test-suggestions (gptel-benchmark--parse-improvement-section skill 'wood 'test)
+         :prompt-suggestions (gptel-benchmark--parse-improvement-section skill 'wood 'prompt))
+      (list
+       :threshold-suggestions
+       (list "Reduce max_steps in success_criteria"
+             "Add tool_sequence requirements"
+             "Implement caching for repeated operations")
+       :test-suggestions
+       (list "Split large tasks into subtasks"
+             "Add early termination conditions"
+             "Implement step budget tracking")
+       :prompt-suggestions
+       (list "Add 'be efficient' instruction"
+             "Add 'prefer fewer tool calls' guideline"
+             "Add 'check cache before operation' reminder")))))
 
 (defun gptel-benchmark--fire-improvements (_name _type)
   "Fire improvements for NAME of TYPE.
 Fire = Intelligence. Problem: scattered, reactive.
 Remedy: Water (identity/principles)."
-  (list
-   :threshold-suggestions
-   (list "Increase min_overall in eight_keys"
-         "Add phase_compliance requirements"
-         "Require explicit planning phase")
-   :test-suggestions
-   (list "Add 'must create plan before execution' test"
-         "Add 'check if analysis needed' gate"
-         "Add 'verify before act' checkpoint")
-   :prompt-suggestions
-   (list "Add core principles to system prompt"
-         "Add 'plan first, execute second' instruction"
-         "Add 'ground decisions in evidence' guideline")))
+  (let ((skill (gptel-benchmark--load-improver-skill)))
+    (if skill
+        (list
+         :threshold-suggestions (gptel-benchmark--parse-improvement-section skill 'fire 'threshold)
+         :test-suggestions (gptel-benchmark--parse-improvement-section skill 'fire 'test)
+         :prompt-suggestions (gptel-benchmark--parse-improvement-section skill 'fire 'prompt))
+      (list
+       :threshold-suggestions
+       (list "Increase min_overall in eight_keys"
+             "Add phase_compliance requirements"
+             "Require explicit planning phase")
+       :test-suggestions
+       (list "Add 'must create plan before execution' test"
+             "Add 'check if analysis needed' gate"
+             "Add 'verify before act' checkpoint")
+       :prompt-suggestions
+       (list "Add core principles to system prompt"
+             "Add 'plan first, execute second' instruction"
+             "Add 'ground decisions in evidence' guideline")))))
 
 (defun gptel-benchmark--earth-improvements (_name _type)
   "Earth improvements for NAME of TYPE.
 Earth = Control. Problem: over-constrained.
 Remedy: Wood (operations/execution)."
-  (list
-   :threshold-suggestions
-   (list "Relax max_steps constraint"
-         "Increase timeout_seconds"
-         "Reduce forbidden_tools list")
-   :test-suggestions
-   (list "Remove redundant constraint checks"
-         "Allow continuation after constraint warning"
-         "Add 'grace period' for constraint violations")
-   :prompt-suggestions
-   (list "Add 'be pragmatic about constraints' instruction"
-         "Add 'explain constraint violation' option"
-         "Add 'request constraint relaxation' capability")))
+  (let ((skill (gptel-benchmark--load-improver-skill)))
+    (if skill
+        (list
+         :threshold-suggestions (gptel-benchmark--parse-improvement-section skill 'earth 'threshold)
+         :test-suggestions (gptel-benchmark--parse-improvement-section skill 'earth 'test)
+         :prompt-suggestions (gptel-benchmark--parse-improvement-section skill 'earth 'prompt))
+      (list
+       :threshold-suggestions
+       (list "Relax max_steps constraint"
+             "Increase timeout_seconds"
+             "Reduce forbidden_tools list")
+       :test-suggestions
+       (list "Remove redundant constraint checks"
+             "Allow continuation after constraint warning"
+             "Add 'grace period' for constraint violations")
+       :prompt-suggestions
+       (list "Add 'be pragmatic about constraints' instruction"
+             "Add 'explain constraint violation' option"
+             "Add 'request constraint relaxation' capability")))))
 
 (defun gptel-benchmark--metal-improvements (_name _type)
   "Metal improvements for NAME of TYPE.
 Metal = Coordination. Problem: too rigid.
 Remedy: Fire (intelligence/adaptation)."
-  (list
-   :threshold-suggestions
-   (list "Allow tool_sequence flexibility"
-         "Add 'alternative_tools' option"
-         "Reduce required_tools strictness")
-   :test-suggestions
-   (list "Add 'equivalent tool' acceptance"
-         "Allow 'custom tool' with approval"
-         "Implement 'tool suggestion' mechanism")
-   :prompt-suggestions
-   (list "Add 'adapt tool usage to context' instruction"
-         "Add 'explain tool choice' option"
-         "Add 'suggest better tools' capability")))
+  (let ((skill (gptel-benchmark--load-improver-skill)))
+    (if skill
+        (list
+         :threshold-suggestions (gptel-benchmark--parse-improvement-section skill 'metal 'threshold)
+         :test-suggestions (gptel-benchmark--parse-improvement-section skill 'metal 'test)
+         :prompt-suggestions (gptel-benchmark--parse-improvement-section skill 'metal 'prompt))
+      (list
+       :threshold-suggestions
+       (list "Allow tool_sequence flexibility"
+             "Add 'alternative_tools' option"
+             "Reduce required_tools strictness")
+       :test-suggestions
+       (list "Add 'equivalent tool' acceptance"
+             "Allow 'custom tool' with approval"
+             "Implement 'tool suggestion' mechanism")
+       :prompt-suggestions
+       (list "Add 'adapt tool usage to context' instruction"
+             "Add 'explain tool choice' option"
+             "Add 'suggest better tools' capability")))))
 
 (defun gptel-benchmark--water-improvements (_name _type)
   "Water improvements for NAME of TYPE.
 Water = Identity. Problem: unclear purpose.
 Remedy: Earth (control/processes)."
-  (list
-   :threshold-suggestions
-   (list "Add explicit purpose statement requirement"
-         "Increase min_per_key for purpose-related keys"
-         "Add 'goal_clarity' metric")
-   :test-suggestions
-   (list "Add 'state goal explicitly' test"
-         "Add 'verify goal alignment' checkpoint"
-         "Add 'measure outcome vs goal' evaluation")
-   :prompt-suggestions
-   (list "Add 'state your purpose' at start"
-         "Add 'connect action to goal' instruction"
-         "Add 'verify goal before proceed' checkpoint")))
+  (let ((skill (gptel-benchmark--load-improver-skill)))
+    (if skill
+        (list
+         :threshold-suggestions (gptel-benchmark--parse-improvement-section skill 'water 'threshold)
+         :test-suggestions (gptel-benchmark--parse-improvement-section skill 'water 'test)
+         :prompt-suggestions (gptel-benchmark--parse-improvement-section skill 'water 'prompt))
+      (list
+       :threshold-suggestions
+       (list "Add explicit purpose statement requirement"
+             "Increase min_per_key for purpose-related keys"
+             "Add 'goal_clarity' metric")
+       :test-suggestions
+       (list "Add 'state goal explicitly' test"
+             "Add 'verify goal alignment' checkpoint"
+             "Add 'measure outcome vs goal' evaluation")
+       :prompt-suggestions
+       (list "Add 'state your purpose' at start"
+             "Add 'connect action to goal' instruction"
+             "Add 'verify goal before proceed' checkpoint")))))
 
 ;;; Apply Improvements
 
