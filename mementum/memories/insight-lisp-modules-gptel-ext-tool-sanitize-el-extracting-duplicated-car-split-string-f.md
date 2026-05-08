@@ -1,8 +1,8 @@
-# Insight: 2026-05-08 08:32
+# Insight: 2026-05-08 08:43
 
 **Target:** lisp/modules/gptel-ext-tool-sanitize.el
 **Change type:** refactoring
-**Hypothesis:** Extracting duplicated `(car (split-string fp ":" t))` into a named helper function `my/gptel--fingerprint-tool-name` will improve Clarity by making the fingerprint parsing explicit and testable, while reducing code duplication.
+**Hypothesis:** Extracting duplicated `(car (split-string fp ":" t))` into a named `tool-name` binding in `my/gptel--detect-doom-loop` will improve Clarity by making the fingerprint parsing explicit and eliminating redundant computation.
 **Decision:** nil
 
 Unexpected experiment outcome.
