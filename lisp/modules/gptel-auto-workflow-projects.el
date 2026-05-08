@@ -345,7 +345,7 @@ When ERRORED is non-nil, preserve the existing error phase."
   (when (fboundp 'gptel-auto-workflow--persist-status)
     (gptel-auto-workflow--persist-status)))
 
-(cl-defun gptel-auto-workflow--queue-cron-job (label fn &key async)
+(defun gptel-auto-workflow--queue-cron-job (label fn async)
   "Queue FN for LABEL and return immediately.
 This keeps `emacsclient --eval' callers from monopolizing the daemon.
 When ASYNC is non-nil, FN must accept a completion callback and invoke it when
@@ -407,9 +407,9 @@ the queued job actually finishes."
   (interactive)
   (gptel-auto-workflow--queue-cron-job
    "auto-workflow"
-   (lambda (completion-callback)
-     (gptel-auto-workflow-run-all-projects completion-callback))
-   :async t))
+    (lambda (completion-callback)
+      (gptel-auto-workflow-run-all-projects completion-callback))
+    t))
 
 ;;; Per-Project Subagent Buffer Support
 
@@ -779,7 +779,7 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
          (funcall completion-callback)
          (when shutdown-after-completion
            (apply #'gptel-auto-workflow--shutdown-researcher-daemon-after-job args)))))
-    :async t))
+    t))
 
 ;;; Research Cache Management
 
