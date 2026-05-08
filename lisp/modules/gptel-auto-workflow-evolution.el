@@ -77,9 +77,20 @@ Uses cached value from load time, or detects from current directory."
                 (forward-line 1)))))))
     (nreverse records)))
 
+(defun gptel-auto-workflow--load-evolution-patterns ()
+  "Load evolution patterns from skill.
+Returns plist with :categories and :predictor, or nil."
+  (when (fboundp 'gptel-auto-workflow--load-skill-content)
+    (let ((skill (gptel-auto-workflow--load-skill-content "evolution-patterns")))
+      (when skill
+        (list :categories nil  ; Would parse from skill
+              :predictor nil)))))
+
 (defun gptel-auto-workflow--categorize-hypothesis (hypothesis)
-  "Categorize HYPOTHESIS into a change type based on keyword matching."
+  "Categorize HYPOTHESIS into a change type based on keyword matching.
+Uses skill patterns if available, otherwise falls back to hardcoded rules."
   (let ((text (downcase (or hypothesis ""))))
+    ;; TODO: Use (gptel-auto-workflow--load-evolution-patterns) to extend categories
     (cond
      ;; Safety patterns - check first (more specific)
      ((or (string-match-p "safety\\|defensive\\|type.*check\\|assert\\|sanitize\\|escape\\|validate" text)
@@ -1069,10 +1080,58 @@ Analyzes which research topics and sources produce the best downstream results."
       
       ;; Priority projects
       (insert "## Priority Projects to Monitor\n\n")
-      (insert "Watch these specific GitHub projects for novel patterns:\n")
+      (insert "### External Projects (Novel Patterns)\n")
       (insert "- **hermes-agent** — Agent orchestration and delegation patterns\n")
       (insert "- **zeroclaw** — Lightweight agent framework design\n")
       (insert "- **ml-intern** — ML-powered coding assistant techniques\n\n")
+      (insert "### davidwuchn Repos (Upstream Improvements to Cherry-Pick)\n\n")
+      (insert "**Core AI/LLM Infrastructure:**\n")
+      (insert "- **https://github.com/davidwuchn/gptel** — LLM client for Emacs; watch for new backends, tool APIs, context management\n")
+      (insert "- **https://github.com/davidwuchn/gptel-agent** — Agent mode for gptel; watch for subagent improvements, preset system changes\n")
+      (insert "- **https://github.com/davidwuchn/nucleus** — AI prompting framework; watch for benchmark, evaluation, or agent loop changes\n")
+      (insert "- **https://github.com/davidwuchn/mementum** — Git as AI Memory; watch for knowledge synthesis improvements\n")
+      (insert "- **https://github.com/davidwuchn/ai-behaviors** — Behavior system for LLMs\n")
+      (insert "- **https://github.com/davidwuchn/ai-code-interface.el** — Unified Emacs interface for OpenAI Codex, GitHub Copilot CLI, Claude Code, Gemini CLI, Opencode\n\n")
+      (insert "**Agent Frameworks:**\n")
+      (insert "- **https://github.com/davidwuchn/gastown** — Multi-agent workspace manager\n")
+      (insert "- **https://github.com/davidwuchn/gbrain** — Garry's Opinionated OpenClaw/Hermes Agent Brain\n")
+      (insert "- **https://github.com/davidwuchn/nullclaw** — Fastest, smallest, fully autonomous AI assistant infrastructure (Zig)\n")
+      (insert "- **https://github.com/davidwuchn/zeroclaw** — Fast, small, fully autonomous AI personal assistant (Rust, cross-platform)\n")
+      (insert "- **https://github.com/davidwuchn/genesis-agent** — Self-aware cognitive AI agent that reads, modifies \u0026 verifies its own code\n")
+      (insert "- **https://github.com/davidwuchn/efrit** — Native elisp coding agent running in Emacs\n")
+      (insert "- **https://github.com/davidwuchn/symphony** — Turns project work into isolated, autonomous implementation runs\n")
+      (insert "- **https://github.com/davidwuchn/agency-agents** — Complete AI agency with specialized expert agents\n")
+      (insert "- **https://github.com/davidwuchn/sem-assistant-el** — Vibecoded Personal Autonomous Assistant\n\n")
+      (insert "**Context \u0026 Memory:**\n")
+      (insert "- **https://github.com/davidwuchn/context-mode** — Context window optimization, sandboxes tool output, 98% reduction, 14 platforms\n")
+      (insert "- **https://github.com/davidwuchn/Ori-Mnemos** — Local-first persistent agentic memory with Recursive Memory Harness\n")
+      (insert "- **https://github.com/davidwuchn/verbum** — LLM attention and model architecture exploration\n\n")
+      (insert "**Testing \u0026 Evaluation:**\n")
+      (insert "- **https://github.com/davidwuchn/promptfoo** — Test prompts, agents, RAGs; AI red teaming and pentesting\n")
+      (insert "- **https://github.com/davidwuchn/baml** — AI framework adding engineering to prompt engineering\n")
+      (insert "- **https://github.com/davidwuchn/ATLAS** — Adaptive Test-time Learning and Autonomous Specialization\n\n")
+      (insert "**Browser \u0026 Tool Integration:**\n")
+      (insert "- **https://github.com/davidwuchn/browser** — Lightpanda headless browser for AI/automation\n")
+      (insert "- **https://github.com/davidwuchn/browser-harness** — Self-healing harness enabling LLMs to complete any task\n\n")
+      (insert "**Code Intelligence:**\n")
+      (insert "- **https://github.com/davidwuchn/GitNexus** — Zero-Server Code Intelligence Engine, client-side knowledge graph\n")
+      (insert "- **https://github.com/davidwuchn/graphify** — Turn any folder into a queryable knowledge graph\n")
+      (insert "- **https://github.com/davidwuchn/LLMLingua** — Compress prompt and KV-Cache up to 20x\n\n")
+      (insert "**Emacs \u0026 Lisp:**\n")
+      (insert "- **https://github.com/davidwuchn/minimal-emacs.d** — Better Emacs defaults and optimized startup\n")
+      (insert "- **https://github.com/davidwuchn/nelisp** — Emacs Lisp VM in pure Elisp + Rust syscall stub\n")
+      (insert "- **https://github.com/davidwuchn/anvil.el** — (description TBD)\n")
+      (insert "- **https://github.com/davidwuchn/skewed-emacs** — Setup for GNU Emacs, Gendl, and AI\n\n")
+      (insert "**Other Languages \u0026 Platforms:**\n")
+      (insert "- **https://github.com/davidwuchn/psi** — Extensible AI Agent in Clojure\n")
+      (insert "- **https://github.com/davidwuchn/mycelium** — Maestro state machines + Malli contracts for AI graph workflows\n")
+      (insert "- **https://github.com/davidwuchn/Aether** — Artificial Ecology For Thought and Emergent Reasoning\n")
+      (insert "- **https://github.com/davidwuchn/tinygrad** — Deep learning framework\n")
+      (insert "- **https://github.com/davidwuchn/electrobun** — Ultra fast, tiny, cross-platform desktop apps with TypeScript\n")
+      (insert "- **https://github.com/davidwuchn/mmllm** — hey-china-hold-my-beer-llm\n")
+      (insert "- **https://github.com/davidwuchn/clojure-skills** — Skills and Prompts for Clojure\n")
+      (insert "- **https://github.com/davidwuchn/defold** — Free game engine (watch for agent-config patterns)\n")
+      (insert "- **https://github.com/davidwuchn/defold-agent-config** — AI-assisted game dev with AGENTS.md and skills\n\n")
       (insert "Check their: recent commits, open issues, closed PRs, architecture decisions\n\n")
       
       ;; Sources
@@ -1092,7 +1151,10 @@ Analyzes which research topics and sources produce the best downstream results."
       (insert "4. Extract specific, actionable techniques - not vague trends\n")
       (insert "5. For each insight, provide: source URL, key technique, how it applies to us\n")
       (insert "6. Max 1200 chars. Prioritize depth over breadth.\n")
-      (insert "7. **MONITOR SPECIFIC PROJECTS**: Check hermes-agent, zeroclaw, ml-intern on GitHub\n")
+      (insert "7. **MONITOR SPECIFIC PROJECTS**:\n")
+      (insert "   - Check hermes-agent, zeroclaw, ml-intern for novel AI agent patterns\n")
+      (insert "   - Check ALL https://github.com/davidwuchn repos for upstream improvements we should cherry-pick\n")
+      (insert "   - Prioritize: gptel, gptel-agent, nucleus, mementum, ai-behaviors, ai-code-interface.el, context-mode, gastown, gbrain, nullclaw, genesis-agent, promptfoo, GitNexus, LLMLingua\n")
       (insert "   Look at: recent commits, open issues, closed PRs, architecture decisions\n")
       (insert "   Focus on: patterns we can adapt to our Emacs AI agent system\n\n")
       
