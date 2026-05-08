@@ -688,8 +688,8 @@ can consume lists, vectors, plists, and alists as readable data."
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
   (unless (functionp callback)
     (error "Programmatic sandbox execute-tool requires a function callback, got: %S" callback))
-  (unless (listp state)
-    (error "Programmatic sandbox execute-tool requires a plist state, got: %S" state))
+  (unless (proper-list-p state)
+    (error "Programmatic sandbox execute-tool requires a proper plist state, got: %S" state))
   (unless (or (symbolp tool-name) (stringp tool-name))
     (error "Programmatic tool name must be a symbol or string, got: %S" tool-name))
   (let* ((tool-spec (if (fboundp 'gptel-get-tool)
@@ -754,8 +754,8 @@ can consume lists, vectors, plists, and alists as readable data."
 CALLBACK receives a plist with one of the keys `:continue' or `:result'."
   (unless (hash-table-p env)
     (error "Programmatic eval-statement requires a hash table environment, got: %S" env))
-  (unless (listp state)
-    (error "Programmatic eval-statement requires a plist state, got: %S" state))
+  (unless (proper-list-p state)
+    (error "Programmatic eval-statement requires a proper plist state, got: %S" state))
   (pcase statement
     (`(progn . ,body)
      (gptel-sandbox--eval-progn body env state callback))
