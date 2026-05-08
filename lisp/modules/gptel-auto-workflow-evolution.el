@@ -952,7 +952,7 @@ Returns output string or nil on failure."
                       (mapconcat #'shell-quote-argument args " "))))
     (message "[evolution] Running: %s" script-name)
     (let ((output (shell-command-to-string cmd)))
-      (if (string-match-p "Error" output)
+      (if (string-match-p "^\\(?:Error\\|Traceback\\|FAILED\\):\\|failed with\\|failed:" output)
           (progn
             (message "[evolution] Script %s failed: %s" script-name output)
             nil)
