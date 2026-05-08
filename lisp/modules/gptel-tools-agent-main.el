@@ -329,6 +329,11 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                 (message "[auto-workflow] Job already running; skipping new request")
                 (funcall finish nil)
                 nil)
+            ;; HARDEN: Disable native-comp deferred compilation during workflow startup
+            ;; to prevent void-variable bugs in closures on arm64 Emacs 30.1.
+            (when (and (featurep 'native-compile)
+                       (boundp 'native-comp-deferred-compilation))
+              (setq native-comp-deferred-compilation nil))
             ;; Enable headless suppression before requiring/loading workflow
             ;; dependencies so worker startup does not byte-compile unrelated ELPA
             ;; packages on load.
