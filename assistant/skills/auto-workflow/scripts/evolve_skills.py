@@ -5,9 +5,10 @@ Usage:
     python3 evolve_skills.py [--root ROOT] [--skills SKILL1,SKILL2,...]
 
 This is the main entry point for skill self-evolution. It:
-1. Analyzes experiment results
-2. Evolves all registered skills based on their domain
-3. Supports multiple skill types: auto-workflow, sandbox, grader, validator, etc.
+1. Auto-discovers skills from assistant/skills/*/SKILL.md
+2. Analyzes experiment results
+3. Evolves all registered skills based on their domain
+4. Supports multiple skill types: auto-workflow, sandbox, grader, validator, etc.
 
 Called by gptel-auto-workflow--evolve-all-skills in Emacs Lisp.
 """
@@ -15,44 +16,72 @@ Called by gptel-auto-workflow--evolve-all-skills in Emacs Lisp.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 
-# Registry of all skills that can self-evolve
-SKILL_REGISTRY = {
-    'auto-workflow': {
-        'scripts': ['analyze_results.py', 'generate_directive.py', 'generate_researcher.py'],
-        'output_dir': 'assistant/skills/auto-workflow',
-        'description': 'Main auto-workflow skills (directive, researcher)',
-    },
-    'sandbox-profiles': {
-        'scripts': ['evolve_profiles.py'],
-        'output_dir': 'assistant/skills/sandbox-profiles',
-        'description': 'Sandbox tool permission profiles',
-    },
-    'eight-keys-grader': {
-        'scripts': ['evolve_rubric.py'],
-        'output_dir': 'assistant/skills/eight-keys-grader',
-        'description': 'Eight Keys scoring rubric',
-    },
-    'elisp-validator': {
-        'scripts': ['evolve_rules.py'],
-        'output_dir': 'assistant/skills/elisp-validator',
-        'description': 'Elisp validation rules',
-    },
-    'provider-error-analyzer': {
-        'scripts': ['evolve_patterns.py'],
-        'output_dir': 'assistant/skills/provider-error-analyzer',
-        'description': 'Provider error patterns',
-    },
-    'benchmark-improver': {
-        'scripts': ['evolve_benchmark.py'],
-        'output_dir': 'assistant/skills/benchmark-improver',
-        'description': 'Wu Xing benchmark improvement rules',
-    },
-}
+def discover_skills(root_dir):
+    """Auto-discover skills from assistant/skills/*/SKILL.md files.
+    
+    Each skill directory should contain:
+    - SKILL.md with frontmatter (name, description, version)
+    - Optional scripts/ directory with evolve_*.py scripts
+    
+    Returns dict mapping skill_name -> skill_info
+    """
+    skills_root = Path(root_dir) / "assistant" / "skills"
+    registry = {}
+    
+    if not skills_root.exists():
+        return registry
+    
+    for skill_dir in sorted(skills_root.iterdir()):
+        if not skill_dir.is_dir() or skill_dir.name.startswith('_'):
+            continue
+            
+        skill_file = skill_dir / "SKILL.md"
+        if not skill_file.exists():
+            continue
+        
+        # Parse frontmatter
+        with open(skill_file, 'r') as f:
+            content = f.read()
+        
+        name_match = re.search(r'^name:\s*(.+)$', content, re.MULTILINE)
+        desc_match = re.search(r'^description:\s*(.+)$', content, re.MULTILINE)
+        evolve_match = re.search(r'^evolve-script:\s*(.+)$', content, re.MULTILINE)
+        
+        skill_name = name_match.group(1).strip() if name_match else skill_dir.name
+        description = desc_match.group(1).strip() if desc_match else skill_dir.name
+        
+        # Find evolve scripts
+        scripts = []
+        
+        # 1. Check if skill declares its own evolve script
+        if evolve_match:
+            script_name = evolve_match.group(1).strip()
+            shared_scripts_dir = Path(root_dir) / "assistant" / "skills" / "auto-workflow" / "scripts"
+            script_path = shared_scripts_dir / script_name
+            if script_path.exists():
+                scripts.append(script_name)
+        
+        # 2. Check skill-specific scripts directory
+        scripts_dir = skill_dir / "scripts"
+        if scripts_dir.exists():
+            for script in scripts_dir.glob("evolve_*.py"):
+                if script.name not in scripts:
+                    scripts.append(script.name)
+        
+        registry[skill_name] = {
+            'scripts': scripts,
+            'output_dir': f"assistant/skills/{skill_dir.name}",
+            'description': description,
+            'dir': skill_dir.name,
+        }
+    
+    return registry
 
 
 def run_analysis(root_dir, output_dir):
@@ -74,22 +103,26 @@ def run_analysis(root_dir, output_dir):
     return analysis_path
 
 
-def generate_skill(skill_name, analysis_path, root_dir):
+def generate_skill(skill_name, skill_info, analysis_path, root_dir):
     """Generate a specific skill from analysis."""
-    skill_info = SKILL_REGISTRY.get(skill_name)
-    if not skill_info:
-        print(f"Unknown skill: {skill_name}", file=sys.stderr)
-        return False
-    
     skills_dir = Path(root_dir) / skill_info['output_dir']
-    scripts_dir = Path(__file__).parent
+    scripts_dir = Path(root_dir) / "assistant" / "skills" / "auto-workflow" / "scripts"
     
     print(f"\n  Evolving {skill_name}...")
     print(f"    {skill_info['description']}")
     
+    if not skill_info['scripts']:
+        print(f"    No evolve scripts found, skipping")
+        return True
+    
     # Run each script for this skill
     for script_name in skill_info['scripts']:
-        script_path = scripts_dir / script_name
+        # Try skill-specific scripts first
+        script_path = skills_dir / "scripts" / script_name
+        if not script_path.exists():
+            # Fall back to shared scripts
+            script_path = scripts_dir / script_name
+        
         if not script_path.exists():
             print(f"    Script not found: {script_name}")
             continue
@@ -111,28 +144,28 @@ def generate_skill(skill_name, analysis_path, root_dir):
 
 def update_skill_metadata(skills_dir, analysis):
     """Update all SKILL.md files with latest metadata."""
+    from datetime import datetime
+    
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    
     for skill_file in skills_dir.rglob("SKILL.md"):
         with open(skill_file, 'r') as f:
             content = f.read()
         
-        # Update version and timestamp in frontmatter
-        import re
-        from datetime import datetime
-        
-        now = datetime.now().strftime('%Y-%m-%d %H:%M')
-        
         # Update updated field
         content = re.sub(
-            r'updated: \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?',
+            r'^updated:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?',
             f'updated: {now}',
-            content
+            content,
+            flags=re.MULTILINE
         )
         
         # Add evolution metadata if not present
         if 'evolution-stats:' not in content:
             content = content.replace(
                 '---\n\n#',
-                f'---\nmetadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n    last-evolution: {now}\n\n---\n\n#'
+                f'---\nmetadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n    last-evolution: {now}\n\n---\n\n#',
+                1
             )
         
         with open(skill_file, 'w') as f:
@@ -150,17 +183,29 @@ def main():
     root_dir = os.path.expanduser(args.root)
     root_path = Path(root_dir)
     
+    # Auto-discover skills
+    print("[0/3] Discovering skills...")
+    SKILL_REGISTRY = discover_skills(root_dir)
+    print(f"  Found {len(SKILL_REGISTRY)} skills:")
+    for name, info in SKILL_REGISTRY.items():
+        print(f"    - {name}: {info['description']}")
+    
     # Determine which skills to evolve
     if args.skills == 'all':
         skills_to_evolve = list(SKILL_REGISTRY.keys())
     else:
         skills_to_evolve = [s.strip() for s in args.skills.split(',')]
+        # Validate
+        for skill in skills_to_evolve:
+            if skill not in SKILL_REGISTRY:
+                print(f"Warning: Unknown skill '{skill}', skipping")
+        skills_to_evolve = [s for s in skills_to_evolve if s in SKILL_REGISTRY]
     
     # Ensure directories exist
     output_dir = root_path / "var" / "tmp" / "skill-evolution"
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    print("=" * 60)
+    print("\n" + "=" * 60)
     print("Unified Skill Evolution")
     print("=" * 60)
     print(f"\nSkills to evolve: {', '.join(skills_to_evolve)}")
@@ -179,7 +224,8 @@ def main():
     print("\n[2/3] Evolving skills...")
     evolved = []
     for skill_name in skills_to_evolve:
-        if generate_skill(skill_name, analysis_path, root_dir):
+        skill_info = SKILL_REGISTRY[skill_name]
+        if generate_skill(skill_name, skill_info, analysis_path, root_dir):
             evolved.append(skill_name)
     
     # Step 3: Update metadata across all skills

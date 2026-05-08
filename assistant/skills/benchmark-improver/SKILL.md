@@ -2,6 +2,7 @@
 name: benchmark-improver
 description: Wu Xing-based auto-improvement system for benchmarks. Detects anti-patterns via 相克 and generates improvements via 相生 pathways.
 version: 1.0
+evolve-script: evolve_benchmark.py
 ---
 metadata:
   evolution-stats:
@@ -185,24 +186,42 @@ Anti-patterns are detected by analyzing benchmark results against Eight Keys sco
 Map low scores to their element and apply the corresponding improvement rules above.
 
 
+
+
 ## Evolved Improvement Effectiveness
 
-Based on analysis of which improvement types led to score increases.
+Based on analysis of 117 kept and 753 discarded experiments.
 
-| Element | Effectiveness | Improvement Rate | Total | Improved | Worsened |
-|---------|---------------|------------------|-------|----------|----------|
-| Control (Earth) | ineffective | 12% | 25 | 3 | 1 |
-| Intelligence (Fire) | ineffective | 0% | 4 | 0 | 1 |
-| Coordination (Metal) | marginally-effective | 21% | 63 | 13 | 6 |
-| Identity (Water) | ineffective | 15% | 239 | 35 | 45 |
-| Operations (Wood) | ineffective | 16% | 125 | 20 | 19 |
+| Element | Effectiveness | Keep Rate | Improvement Rate | Total | Kept |
+|---------|---------------|-----------|------------------|-------|------|
+| Control (Earth) | moderately-effective | 16% | 7% | 304 | 49 |
+| Intelligence (Fire) | ineffective | 0% | 0% | 3 | 0 |
+| Coordination (Metal) | moderately-effective | 12% | 2% | 58 | 7 |
+| Identity (Water) | moderately-effective | 14% | 4% | 76 | 11 |
+| Operations (Wood) | moderately-effective | 14% | 6% | 197 | 27 |
 
-### Recommendations
+### Top Words in Successful Hypotheses
 
-**Reconsider these improvement types:**
-- Control (Earth) (12% success rate, 1 worsened)
-- Intelligence (Fire) (0% success rate, 1 worsened)
-- Coordination (Metal) (21% success rate, 6 worsened)
-- Identity (Water) (15% success rate, 45 worsened)
-- Operations (Wood) (16% success rate, 19 worsened)
+These words appear most frequently in hypotheses that were kept:
 
+- **will**: 76 times
+- **adding**: 69 times
+- **prevent**: 51 times
+- **errors**: 50 times
+- **validation**: 50 times
+- **explicit**: 48 times
+- **runtime**: 45 times
+- **clarity**: 44 times
+- **when**: 43 times
+- **error**: 31 times
+
+### Prioritize These Improvement Types
+
+- Control (Earth) (16% keep rate, 49 kept out of 304)
+- Coordination (Metal) (12% keep rate, 7 kept out of 58)
+- Identity (Water) (14% keep rate, 11 kept out of 76)
+- Operations (Wood) (14% keep rate, 27 kept out of 197)
+
+### Reconsider These Improvement Types
+
+- Intelligence (Fire) (0% keep rate, 3 total attempts)

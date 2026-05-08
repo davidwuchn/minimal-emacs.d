@@ -4,7 +4,8 @@ description: |
   Defines tool permission profiles for programmatic agent execution.
   Controls which tools an agent can use based on execution mode and project type.
 version: 1.0
-updated: 2026-05-08 18:54
+evolve-script: evolve_profiles.py
+updated: 2026-05-08 19:04
 metadata:
   category: security
   author: auto-workflow

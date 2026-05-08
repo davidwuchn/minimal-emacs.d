@@ -3,7 +3,8 @@ name: eight-keys-grader
 description: |
   Grading rubric based on Eight Keys (φ vitality, fractal clarity, ε purpose, τ wisdom, π synthesis, μ directness, ∃ truth, ∀ vigilance) and Wu Xing (Five Elements) framework. Use when evaluating AI-generated code quality, experiment results, or improvement proposals.
 version: 2.0
-updated: 2026-05-08 18:54
+evolve-script: evolve_rubric.py
+updated: 2026-05-08 19:04
 metadata:
   category: quality-assurance
   author: auto-workflow
@@ -216,10 +217,10 @@ When code quality is low, trace through Five Elements:
 ```
 
 
+
 ## Evolved Weights
 
 Based on analysis of experiment results.
 
 | Key | Weight | Discrimination | Avg (Success) | Avg (Failure) |
 |-----|--------|----------------|---------------|---------------|
-
