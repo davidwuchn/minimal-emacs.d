@@ -228,6 +228,18 @@ Returns skill body string or empty string if not found.
 Backward compatible with existing code."
   (plist-get (gptel-auto-workflow--load-skill skill-name) :body))
 
+(defun gptel-auto-workflow--load-evolved-recommendations ()
+  "Load evolved recommendations from benchmark-improver skill.
+Returns formatted string of data-driven improvement priorities, or nil."
+  (when (fboundp 'gptel-auto-workflow--load-skill-content)
+    (let ((skill (gptel-auto-workflow--load-skill-content "benchmark-improver")))
+      (when (and skill (> (length skill) 0))
+        ;; Extract the Evolved Recommendations section
+        (if (string-match "## Evolved Recommendations\\(.*\\)\\(## \\|\\'\\)" skill)
+            (let ((section (match-string 1 skill)))
+              (format "## Data-Driven Improvement Priorities\n%s" section))
+          nil)))))
+
 (defun gptel-auto-workflow--load-skill-file (skill-name file-path)
   "Load FILE-PATH relative to SKILL-NAME's directory.
 Useful for loading references/ or scripts/ files on demand (stage 3)."
@@ -299,6 +311,8 @@ Overall Eight Keys score: {{baseline}}
 {{suggested-hypothesis}}
 
 {{mutation-templates}}
+
+{{evolved-recommendations}}
 
 ## Objective
 Improve the CODE QUALITY for {{target}}.
@@ -465,11 +479,12 @@ Implements section-level A/B testing to identify effective prompt components."
                (suggestions . ,(if (funcall section-included-p 'suggestions)
                                    (or suggestions "None")
                                  ""))
-               (self-evolution . ,(if (funcall section-included-p 'self-evolution)
-                                      (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
-                                          (gptel-auto-workflow--evolution-get-knowledge)
-                                        "")
-                                    ""))
+                (self-evolution . ,(if (funcall section-included-p 'self-evolution)
+                                       (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
+                                           (gptel-auto-workflow--evolution-get-knowledge)
+                                         "")
+                                     ""))
+                (evolved-recommendations . ,(or (gptel-auto-workflow--load-evolved-recommendations) ""))
                (topic-knowledge . ,(if (funcall section-included-p 'topic-specific)
                                        (gptel-auto-experiment--get-topic-knowledge target)
                                      ""))
