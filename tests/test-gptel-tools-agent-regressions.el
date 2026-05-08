@@ -1017,7 +1017,7 @@ experiment phases do not trip the real pre-grade target validator."
     (should (plist-get decision :keep))
     (should-not (string-match-p "Comparator override:" (plist-get decision :reasoning)))
     (should (string-match-p
-             (format "Kept: score tie with >= %.2f quality gain"
+             (format "Kept: score tie with >= %.3f quality gain"
                      gptel-auto-experiment-min-quality-gain-on-score-tie)
              (plist-get decision :reasoning)))))
 
