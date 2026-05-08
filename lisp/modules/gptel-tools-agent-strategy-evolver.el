@@ -167,64 +167,69 @@ Returns nil if there's a genuine new mechanism."
       (replace-match " "))
     (buffer-string)))
 
+(defun gptel-auto-workflow--valid-code-string-p (code)
+  "Check if CODE is a non-empty string suitable for extraction.
+Returns CODE if valid, nil otherwise."
+  (and (stringp code) (not (string-empty-p code)) code))
+
 (defun gptel-auto-workflow--extract-matches (code pattern &optional group-index)
   "Extract all matches of PATTERN from CODE.
 PATTERN is a regex to search for.
 GROUP-INDEX (default 0) is which match group to extract.
 Returns sorted list of unique matches."
-  (if (or (null code) (string-empty-p code))
-      '()
-    (let (matches)
-      (with-temp-buffer
-        (insert code)
-        (goto-char (point-min))
-        (while (re-search-forward pattern nil t)
-          (push (match-string (or group-index 0)) matches)))
-      (sort (delete-dups matches) #'string<))))
+  (if-let ((valid-code (gptel-auto-workflow--valid-code-string-p code)))
+      (let (matches)
+        (with-temp-buffer
+          (insert valid-code)
+          (goto-char (point-min))
+          (while (re-search-forward pattern nil t)
+            (push (match-string (or group-index 0)) matches)))
+        (sort (delete-dups matches) #'string<))
+    '()))
 
 (defun gptel-auto-workflow--extract-function-names (code)
   "Extract defined function names from CODE.
 Returns empty list if CODE is nil or empty."
-  (if (or (null code) (string-empty-p code))
-      '()
-    (let (names)
-      (with-temp-buffer
-        (insert code)
-        (goto-char (point-min))
-        (while (re-search-forward "(defun\\s-+\\([^ ]+\\)" nil t)
-          (push (match-string 1) names)))
-      (sort names #'string<))))
+  (if-let ((valid-code (gptel-auto-workflow--valid-code-string-p code)))
+      (let (names)
+        (with-temp-buffer
+          (insert valid-code)
+          (goto-char (point-min))
+          (while (re-search-forward "(defun\\s-+\\([^ ]+\\)" nil t)
+            (push (match-string 1) names)))
+        (sort names #'string<))
+    '()))
 
 (defun gptel-auto-workflow--extract-control-flow (code)
   "Extract control flow structure from CODE (if/cond/while/etc).
 Returns empty list if CODE is nil or empty."
-  (if (or (null code) (string-empty-p code))
-      '()
-    (let (structures)
-      (with-temp-buffer
-        (insert code)
-        (goto-char (point-min))
-        (while (re-search-forward "(\\(if\\|cond\\|when\\|unless\\|while\\|dolist\\|dotimes\\|cl-loop\\)" nil t)
-          (push (match-string 1) structures)))
-      (sort structures #'string<))))
+  (if-let ((valid-code (gptel-auto-workflow--valid-code-string-p code)))
+      (let (structures)
+        (with-temp-buffer
+          (insert valid-code)
+          (goto-char (point-min))
+          (while (re-search-forward "(\\(if\\|cond\\|when\\|unless\\|while\\|dolist\\|dotimes\\|cl-loop\\)" nil t)
+            (push (match-string 1) structures)))
+        (sort structures #'string<))
+    '()))
 
 (defun gptel-auto-workflow--extract-constants (code)
   "Extract string and number constants from CODE.
 Returns empty list if CODE is nil or empty."
-  (if (or (null code) (string-empty-p code))
-      '()
-    (let (constants)
-      (with-temp-buffer
-        (insert code)
-        (goto-char (point-min))
-        ;; Extract strings
-        (while (re-search-forward "\"[^\"]*\"" nil t)
-          (push (match-string 0) constants))
-        ;; Extract numbers
-        (goto-char (point-min))
-        (while (re-search-forward "\\b[0-9]+\\b" nil t)
-          (push (match-string 0) constants)))
-      (sort constants #'string<))))
+  (if-let ((valid-code (gptel-auto-workflow--valid-code-string-p code)))
+      (let (constants)
+        (with-temp-buffer
+          (insert valid-code)
+          (goto-char (point-min))
+          ;; Extract strings
+          (while (re-search-forward "\"[^\"]*\"" nil t)
+            (push (match-string 0) constants))
+          ;; Extract numbers
+          (goto-char (point-min))
+          (while (re-search-forward "\\b[0-9]+\\b" nil t)
+            (push (match-string 0) constants)))
+        (sort constants #'string<))
+    '()))
 
 ;;; Prototyping Phase
 
@@ -270,44 +275,49 @@ Returns plist with :valid t/nil :errors list :test-output string."
         (delete-file temp-file)))))
 
 (defun gptel-auto-workflow--extract-build-function-name (code)
-  "Extract the build function name from strategy CODE."
-  (with-temp-buffer
-    (insert code)
-    (goto-char (point-min))
-    (if (re-search-forward "(defun\\s-+\\(strategy-[^ ]+-build-prompt\\)" nil t)
-        (match-string 1)
-      "strategy-unknown-build-prompt")))
+  "Extract the build function name from strategy CODE.
+Returns default name if CODE is nil or invalid."
+  (if-let ((valid-code (gptel-auto-workflow--valid-code-string-p code)))
+      (with-temp-buffer
+        (insert valid-code)
+        (goto-char (point-min))
+        (if (re-search-forward "(defun\\s-+\\(strategy-[^ ]+-build-prompt\\)" nil t)
+            (match-string 1)
+          "strategy-unknown-build-prompt"))
+    "strategy-unknown-build-prompt"))
 
 (defun gptel-auto-workflow--extract-build-function-body (code)
   "Extract just the function body from strategy CODE.
-Returns the body as a string, or the full code if extraction fails."
-  (with-temp-buffer
-    (insert code)
-    (goto-char (point-min))
-    ;; Find the build-prompt function
-    (if (re-search-forward "(defun\\s-+strategy-[^ ]+-build-prompt\\s-+" nil t)
-        (let ((start (point)))
-          ;; Find matching closing paren
-          (condition-case nil
-              (progn
-                (forward-sexp)
-                ;; Extract body (skip docstring if present)
-                (let ((func-end (point))
-                      (body-start start))
-                  (goto-char start)
-                  ;; Skip docstring
-                  (when (looking-at "\\s-*\"")
+Returns the body as a string, or CODE if extraction fails or CODE is nil."
+  (if-let ((valid-code (gptel-auto-workflow--valid-code-string-p code)))
+      (with-temp-buffer
+        (insert valid-code)
+        (goto-char (point-min))
+        ;; Find the build-prompt function
+        (if (re-search-forward "(defun\\s-+strategy-[^ ]+-build-prompt\\s-+" nil t)
+            (let ((start (point)))
+              ;; Find matching closing paren
+              (condition-case nil
+                  (progn
                     (forward-sexp)
-                    (setq body-start (point)))
-                  ;; Skip interactive declaration
-                  (goto-char body-start)
-                  (when (looking-at "\\s-*(interactive")
-                    (forward-sexp)
-                    (setq body-start (point)))
-                  ;; Return body
-                  (string-trim (buffer-substring body-start (1- func-end)))))
-            (error code)))
-      code)))
+                    ;; Extract body (skip docstring if present)
+                    (let ((func-end (point))
+                          (body-start start))
+                      (goto-char start)
+                      ;; Skip docstring
+                      (when (looking-at "\\s-*\"")
+                        (forward-sexp)
+                        (setq body-start (point)))
+                      ;; Skip interactive declaration
+                      (goto-char body-start)
+                      (when (looking-at "\\s-*(interactive")
+                        (forward-sexp)
+                        (setq body-start (point)))
+                      ;; Return body
+                      (string-trim (buffer-substring body-start (1- func-end)))))
+                (error valid-code)))
+          valid-code))
+    code))
 
 ;;; Warm-Start from Historical Trace Analysis
 
