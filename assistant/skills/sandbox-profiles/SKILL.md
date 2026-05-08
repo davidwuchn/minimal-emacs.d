@@ -5,7 +5,7 @@ description: |
   Controls which tools an agent can use based on execution mode and project type.
 version: 1.0
 evolve-script: evolve_profiles.py
-updated: 2026-05-08 21:00
+updated: 2026-05-08 21:31
 metadata:
   category: security
   author: auto-workflow
@@ -95,6 +95,7 @@ Load profile in Emacs Lisp:
 
 - `scripts/validate_profile.py` - Validate profile JSON against schema
 - `scripts/generate_profile.py` - Generate profile from project analysis
+
 
 
 
