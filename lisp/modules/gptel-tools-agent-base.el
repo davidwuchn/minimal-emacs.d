@@ -62,11 +62,14 @@ Helper for validation in callback-based functions."
 
 
 (defun gptel-auto-workflow--plist-get (plist key &optional default)
-  "Get value from PLIST for KEY, returning DEFAULT if not found.
-Reduces duplication of `(or (plist-get ...) default-value)` patterns."
+  "Get value from PLIST for KEY, returning DEFAULT if not found or nil.
+Reduces duplication of `(or (plist-get ...) default-value)` patterns.
+Handles the common case where a key exists in the plist but has a nil value,
+which would otherwise cause format specifier errors when passed to format strings."
   (if (listp plist)
       (if (plist-member plist key)
-          (plist-get plist key)
+          (let ((value (plist-get plist key)))
+            (if (null value) default value))
         default)
     default))
 
