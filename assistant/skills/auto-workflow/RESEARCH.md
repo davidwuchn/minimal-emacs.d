@@ -1,13 +1,19 @@
 ---
 name: research-strategies
-description: Evolved research patterns based on downstream experiment success
-version: 1.0
-updated: 2026-05-08 19:40
+description: External research insights digested by LLM. Feeds into directive hypotheses.
+version: 2.0
+updated: 2026-05-08 20:11
 ---
 
-# Research Strategy Guide
+# External Research Insights
 
-*Auto-evolved from experiment outcomes. Higher keep rate = better research.*
+*Digested by LLM from internet sources. Avoid re-researching these topics.*
 
-*Insufficient data. Run more experiments with research-enabled target selection.*
+*No recent external research. Run researcher to discover new ideas.*
+
+## Internal Research Strategy Performance
+
+*These are our own code-analysis strategies, ranked by experiment success.*
+
+*Insufficient internal data. Run more experiments with research-enabled target selection.*
 
