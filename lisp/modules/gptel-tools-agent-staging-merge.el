@@ -525,7 +525,7 @@ initial remote-advance rejection. Returns a plist with keys `:success',
   "Return the current commit at the staging branch head, or nil if unavailable."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root))
-    (when (gptel-auto-workflow--ensure-staging-branch-exists)
+    (when (and proj-root (gptel-auto-workflow--ensure-staging-branch-exists))
       (let* ((staging-q (shell-quote-argument
                          (gptel-auto-workflow--configured-staging-branch)))
              (head-result
