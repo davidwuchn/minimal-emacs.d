@@ -2,7 +2,7 @@
 
 > Last session: 2026-05-08 19:00
 
-## Current Session: 2026-05-08 Skill Extraction & Evolution
+## Current Session: 2026-05-08 Skill Extraction & Evolution → Closed Loop
 
 **Status:** ✅ All skills extracted, evolved, and pushed to main (88e9350a)
 
@@ -16,8 +16,21 @@
 - All skills now agentskills.io compliant with metadata and evolution stats
 - Pushed to main (commit `88e9350a`)
 
+**Closed the Self-Improvement Loop (9324b264):**
+- Workflow now INJECTS evolved skill data into executor prompts
+- `gptel-auto-workflow--load-evolved-recommendations()` loads from benchmark-improver
+- Executor sees data-driven priorities:
+  * Earth/Control: 16% success (HIGH priority - validation, error handling)
+  * Wood/Operations: 14% success (HIGH priority - efficiency, caching)
+  * Water/Identity: 14% success (HIGH priority - clarity, purpose)
+  * Metal/Coordination: 12% success (MEDIUM)
+  * Fire/Intelligence: 0% success (LOW - skip planning/analysis)
+- Loop: Experiments → Analysis → Skill Evolution → Prompt Injection → Better Experiments
+
 **Pattern Captured:**
 - λ extract(skill). grep hardcoded in .el → create SKILL.md → add loader → fallback to defaults
+- λ evolve(skill). analyze(experiments) → generate(suggestions) → update(SKILL.md) → inject(prompt)
+- λ closed-loop(x). experiment → analyze → evolve → inject → experiment | open_loop ≢ evolve
 - Externalized skills can evolve via Python without recompiling Emacs
 - Humans can edit skills directly; system loads them dynamically
 
