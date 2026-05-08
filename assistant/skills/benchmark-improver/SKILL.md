@@ -2,7 +2,6 @@
 name: benchmark-improver
 description: Wu Xing-based auto-improvement system for benchmarks. Detects anti-patterns via 相克 and generates improvements via 相生 pathways.
 version: 1.0
-evolve-script: evolve_benchmark.py
 ---
 metadata:
   evolution-stats:
@@ -190,38 +189,23 @@ Map low scores to their element and apply the corresponding improvement rules ab
 
 ## Evolved Improvement Effectiveness
 
-Based on analysis of 117 kept and 753 discarded experiments.
+Based on analysis of which improvement types led to score increases.
 
-| Element | Effectiveness | Keep Rate | Improvement Rate | Total | Kept |
-|---------|---------------|-----------|------------------|-------|------|
-| Control (Earth) | moderately-effective | 16% | 7% | 304 | 49 |
-| Intelligence (Fire) | ineffective | 0% | 0% | 3 | 0 |
-| Coordination (Metal) | moderately-effective | 12% | 2% | 58 | 7 |
-| Identity (Water) | moderately-effective | 14% | 4% | 76 | 11 |
-| Operations (Wood) | moderately-effective | 14% | 6% | 197 | 27 |
+| Element | Effectiveness | Improvement Rate | Total | Improved | Worsened |
+|---------|---------------|------------------|-------|----------|----------|
+| Control (Earth) | marginally-effective | 22% | 18 | 4 | 5 |
+| Intelligence (Fire) | highly-effective | 67% | 3 | 2 | 0 |
+| Coordination (Metal) | ineffective | 12% | 77 | 9 | 15 |
+| Identity (Water) | ineffective | 18% | 148 | 27 | 27 |
+| Operations (Wood) | ineffective | 8% | 78 | 6 | 9 |
 
-### Top Words in Successful Hypotheses
+### Recommendations
 
-These words appear most frequently in hypotheses that were kept:
+**Prioritize these improvement types:**
+- Intelligence (Fire) (67% success rate)
 
-- **will**: 76 times
-- **adding**: 69 times
-- **prevent**: 51 times
-- **errors**: 50 times
-- **validation**: 50 times
-- **explicit**: 48 times
-- **runtime**: 45 times
-- **clarity**: 44 times
-- **when**: 43 times
-- **error**: 31 times
-
-### Prioritize These Improvement Types
-
-- Control (Earth) (16% keep rate, 49 kept out of 304)
-- Coordination (Metal) (12% keep rate, 7 kept out of 58)
-- Identity (Water) (14% keep rate, 11 kept out of 76)
-- Operations (Wood) (14% keep rate, 27 kept out of 197)
-
-### Reconsider These Improvement Types
-
-- Intelligence (Fire) (0% keep rate, 3 total attempts)
+**Reconsider these improvement types:**
+- Control (Earth) (22% success rate, 5 worsened)
+- Coordination (Metal) (12% success rate, 15 worsened)
+- Identity (Water) (18% success rate, 27 worsened)
+- Operations (Wood) (8% success rate, 9 worsened)

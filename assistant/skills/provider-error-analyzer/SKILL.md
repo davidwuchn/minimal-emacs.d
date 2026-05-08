@@ -4,7 +4,6 @@ description: |
   Analyzes LLM provider error messages to determine retry strategy, failover candidates,
   and root cause. Supports multiple providers (OpenAI, Anthropic, Google, local models).
 version: 1.0
-evolve-script: evolve_patterns.py
 updated: 2026-05-08 19:04
 metadata:
   category: reliability
@@ -139,10 +138,11 @@ When encountering new error formats:
 3. Commit with message: `🔄 update provider-error patterns`
 
 
+
+
 ## Evolved Error Patterns
 
 Based on analysis of experiment errors.
 
 | Pattern | Category | Action | Frequency | Regex |
 |---------|----------|--------|-----------|-------|
-
