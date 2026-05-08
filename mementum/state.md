@@ -1,10 +1,74 @@
 # Mementum State
 
-> Last session: 2026-05-08 19:00
+> Last session: 2026-05-08 21:30
 
-## Current Session: 2026-05-08 Skill Extraction Round 2 + Provider Fallback Fixed
+## Current Session: 2026-05-08 Meta-Learning Directive Skill
 
-**Status:** 4 skills extracted, provider failover bug FIXED
+**Status:** Implementation complete. Directive skill now auto-evolves from mementum + git history.
+
+**Done (This Session):**
+- **Corrected architecture:** Meta-learning belongs in DIRECTIVE skill (internal strategy), not researcher (external idea hunter)
+  - Researcher = hunts external novel ideas (YouTube, arXiv, GitHub)
+  - Directive = learns from our own history what targets/strategies work
+
+- Implemented meta-learning pattern analyzer:
+  - `assistant/skills/auto-workflow/scripts/analyze_patterns.py`
+    - Parses mementum memories (112 success patterns, 69 failure patterns)
+    - Analyzes git history (6 change types, 15 file categories)
+    - Scans 179 results.tsv files across all experiment directories
+    - Synthesizes learned patterns: high-value, avoid, priority targets, techniques, error mitigation
+  - Key findings:
+    - unless-guard: 19× in git history — TOP pattern
+    - error-handling: 10× — high value
+    - extract-helper-function: 9× — high value
+    - nil-guard-pattern: 6× — high value
+
+- Updated directive generation with meta-learning:
+  - `assistant/skills/auto-workflow/scripts/generate_directive.py`
+    - New sections: 🧬 Meta-Learned Patterns, 🛠️ Effective Techniques, 🛡️ Error Mitigation
+    - Auto-generated from analyze_patterns.py output
+    - Data-driven hypotheses using learned patterns
+  - Updated `evolve_skills.py` to run pattern analysis before directive generation
+    - Step 1: Analyze experiment results
+    - Step 2: Meta-learn patterns from mementum + git
+    - Step 3: Evolve skills with pattern data
+    - Step 4: Update metadata
+
+- Top targets by keep rate (from 870 experiments):
+  - gptel-tools-agent-staging-baseline.el: 33% (1/3)
+  - gptel-benchmark-evolution.el: 33% (1/3)
+  - gptel-tools-agent-git.el: 29% (5/17)
+  - gptel-ext-tool-sanitize.el: 25% (4/16)
+  - gptel-agent-loop.el: 22% (19/85)
+
+**Verification:**
+- Python scripts run successfully on 870 experiments
+- Generated DIRECTIVE.md includes meta-learned sections
+- Pipeline: analyze_patterns.py → generate_directive.py → updated DIRECTIVE.md
+
+**Why not gptel-agent skill tools:**
+- gptel-agent tools (list_skills, load_skill, create_skill) designed for interactive agents
+- Auto-workflow runs in batch mode via cron — needs direct file access, not FSM tool calls
+- Custom skill loaders (`gptel-auto-workflow--load-skill-content`) are simpler for batch mode
+- However, we use same skill format (SKILL.md + frontmatter) for compatibility
+
+**Current Blockers:**
+1. **API quota exhausted** (45,000/45,000 weekly tokens)
+   - Quota resets: 2026-05-11T00:00:00+08:00
+   - Cannot test evolved directive with live experiments until quota resets
+
+**Next Steps:**
+1. Wait for API quota reset (2026-05-11)
+2. Run experiments with meta-learned directive
+3. Measure if directive-improved targets have better keep rate
+4. Target: Directive-informed keep rate ↑ from 14% to 18%+
+5. Add temporal analysis (are patterns seasonal? do they decay?)
+
+---
+
+## Previous Session: 2026-05-08 Skill Extraction Round 2 + Provider Fallback Fixed
+
+**Status:** Committed and pushed to origin/main. Provider failover bug FIXED. Remote merged cleanly.
 
 **Done (This Session):**
 - Extracted 4 domain knowledge skills from hardcoded elisp

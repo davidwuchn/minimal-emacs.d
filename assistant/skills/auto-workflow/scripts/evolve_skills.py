@@ -105,7 +105,27 @@ def run_analysis(root_dir, output_dir):
     return analysis_path
 
 
-def generate_skill(skill_name, skill_info, analysis_path, root_dir):
+def run_pattern_analysis(root_dir, output_dir):
+    """Run analyze_patterns.py and return path to output JSON."""
+    patterns_path = output_dir / "patterns.json"
+    
+    script = Path(__file__).parent / "analyze_patterns.py"
+    cmd = [
+        sys.executable, str(script),
+        "--root", root_dir,
+        "--output", str(patterns_path)
+    ]
+    
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Pattern analysis failed: {result.stderr}", file=sys.stderr)
+        # Don't exit, just return None - analysis is optional
+        return None
+    
+    return patterns_path
+
+
+def generate_skill(skill_name, skill_info, analysis_path, root_dir, patterns_path=None):
     """Generate a specific skill from analysis."""
     skills_dir = Path(root_dir) / skill_info['output_dir']
     scripts_dir = Path(root_dir) / "assistant" / "skills" / "auto-workflow" / "scripts"
@@ -128,13 +148,20 @@ def generate_skill(skill_name, skill_info, analysis_path, root_dir):
         if not script_path.exists():
             print(f"    Script not found: {script_name}")
             continue
-            
-        result = subprocess.run([
+        
+        # Build command
+        cmd = [
             sys.executable, str(script_path),
             "--analysis", str(analysis_path),
             "--output-dir", str(skills_dir),
             "--root", root_dir
-        ], capture_output=True, text=True)
+        ]
+        
+        # Pass patterns if available and script supports it
+        if patterns_path and script_name == 'generate_directive.py':
+            cmd.extend(["--patterns", str(patterns_path)])
+            
+        result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode != 0:
             print(f"    Failed: {result.stderr}", file=sys.stderr)
@@ -213,7 +240,7 @@ def main():
     print(f"\nSkills to evolve: {', '.join(skills_to_evolve)}")
     
     # Step 1: Analyze results (shared across all skills)
-    print("\n[1/3] Analyzing experiment results...")
+    print("\n[1/4] Analyzing experiment results...")
     analysis_path = run_analysis(root_dir, output_dir)
     
     with open(analysis_path, 'r') as f:
@@ -222,16 +249,30 @@ def main():
     print(f"  Total experiments: {analysis['total_experiments']}")
     print(f"  Targets tracked: {len(analysis['target_stats'])}")
     
-    # Step 2: Evolve each skill
-    print("\n[2/3] Evolving skills...")
+    # Step 2: Meta-learning pattern analysis
+    print("\n[2/4] Meta-learning from mementum + git history...")
+    patterns_path = run_pattern_analysis(root_dir, output_dir)
+    
+    if patterns_path:
+        with open(patterns_path, 'r') as f:
+            patterns = json.load(f)
+        learned = patterns.get('learned_patterns', {})
+        print(f"  High-value patterns: {len(learned.get('high_value_patterns', []))}")
+        print(f"  Effective techniques: {len(learned.get('effective_techniques', []))}")
+        print(f"  Error mitigations: {len(learned.get('error_mitigation', []))}")
+    else:
+        print("  Pattern analysis skipped or failed")
+    
+    # Step 3: Evolve each skill
+    print("\n[3/4] Evolving skills...")
     evolved = []
     for skill_name in skills_to_evolve:
         skill_info = SKILL_REGISTRY[skill_name]
-        if generate_skill(skill_name, skill_info, analysis_path, root_dir):
+        if generate_skill(skill_name, skill_info, analysis_path, root_dir, patterns_path):
             evolved.append(skill_name)
     
-    # Step 3: Update metadata across all skills
-    print("\n[3/3] Updating skill metadata...")
+    # Step 4: Update metadata across all skills
+    print("\n[4/4] Updating skill metadata...")
     skills_root = root_path / "assistant" / "skills"
     update_skill_metadata(skills_root, analysis)
     

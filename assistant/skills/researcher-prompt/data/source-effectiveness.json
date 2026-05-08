@@ -1,0 +1,17 @@
+{
+  "version": "2026-05-08T21:27:51.346577",
+  "sources": {
+    "github:karthink/gptel": {
+      "source_type": "github",
+      "identifier": "karthink/gptel",
+      "mentions": 1,
+      "techniques_suggested": [
+        "validation-guard"
+      ],
+      "experiments_enabled": 456,
+      "experiments_kept": 85,
+      "success_rate": 0.186,
+      "last_seen": null
+    }
+  }
+}

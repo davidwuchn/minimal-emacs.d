@@ -349,14 +349,117 @@ Uses standard skill loader so humans can edit RESEARCHER.md."
         (message "[research] Loaded researcher skill (%d chars)" (length content))
         content))))
 
+(defun gptel-auto-workflow--load-researcher-meta-learning ()
+  "Load meta-learning data for researcher skill.
+Reads topic-performance.json and returns formatted stats.
+Returns nil if data not available."
+  (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data" 
+                                     (projectile-project-root)))
+         (topic-file (expand-file-name "topic-performance.json" data-dir)))
+    (when (file-exists-p topic-file)
+      (condition-case err
+          (let* ((json-object-type 'hash-table)
+                 (json-array-type 'list)
+                 (data (json-read-file topic-file))
+                 (topics (gethash "topics" data)))
+            (when topics
+              (let ((total-exp (gethash "total_experiments" data 0))
+                    (total-kept 0))
+                ;; Calculate total kept across all topics
+                (maphash (lambda (topic stats)
+                           (setq total-kept (+ total-kept (gethash "kept" stats 0))))
+                         topics)
+                (list :effectiveness (if (> total-exp 0)
+                                        (round (* 100.0 (/ total-kept total-exp)))
+                                      0)
+                      :kept total-kept
+                      :total total-exp
+                      :topics topics))))
+        (error 
+         (message "[research] Error loading meta-learning data: %s" err)
+         nil)))))
+
+(defun gptel-auto-workflow--substitute-researcher-variables (skill-content)
+  "Substitute template variables in SKILL-CONTENT with meta-learning data.
+Replaces {{research-effectiveness}}, {{kept-research}}, {{total-research}},
+and {{topic-performance}} with live data."
+  (if (null skill-content)
+      skill-content
+    (let* ((meta-data (gptel-auto-workflow--load-researcher-meta-learning))
+           (effectiveness (or (plist-get meta-data :effectiveness) 16))
+           (kept (or (plist-get meta-data :kept) 0))
+           (total (or (plist-get meta-data :total) 870))
+           (topics (plist-get meta-data :topics)))
+      ;; Replace variables
+      (setq skill-content 
+            (replace-regexp-in-string 
+             "{{research-effectiveness}}" 
+             (number-to-string effectiveness)
+             skill-content t t))
+      (setq skill-content 
+            (replace-regexp-in-string 
+             "{{kept-research}}" 
+             (number-to-string kept)
+             skill-content t t))
+      (setq skill-content 
+            (replace-regexp-in-string 
+             "{{total-research}}" 
+             (number-to-string total)
+             skill-content t t))
+      ;; Replace topic-performance with formatted table
+      (if topics
+          (let ((topic-md (gptel-auto-workflow--format-topic-performance topics)))
+            (setq skill-content 
+                  (replace-regexp-in-string 
+                   "{{topic-performance}}" topic-md
+                   skill-content t t)))
+        (setq skill-content 
+              (replace-regexp-in-string 
+               "{{topic-performance}}" 
+               "*No topic data available yet.*"
+               skill-content t t)))
+      skill-content)))
+
+(defun gptel-auto-workflow--format-topic-performance (topics)
+  "Format TOPICS hash-table as markdown table."
+  (let ((topic-list nil))
+    ;; Convert hash table to list for sorting
+    (maphash (lambda (topic stats)
+               (let ((success-rate (gethash "success_rate" stats 0))
+                     (total (gethash "total_experiments" stats 0))
+                     (kept (gethash "kept" stats 0))
+                     (trend (gethash "trend" stats "stable")))
+                 (push (list topic success-rate total kept trend) topic-list)))
+             topics)
+    ;; Sort by success rate descending
+    (setq topic-list (sort topic-list (lambda (a b) (> (nth 1 a) (nth 1 b)))))
+    ;; Format as markdown
+    (concat "| Topic | Success Rate | Kept/Total | Trend |\n"
+            "|-------|--------------|------------|-------|\n"
+            (mapconcat 
+             (lambda (item)
+               (let ((topic (nth 0 item))
+                     (rate (nth 1 item))
+                     (total (nth 2 item))
+                     (kept (nth 3 item))
+                     (trend (nth 4 item)))
+                 (format "| %s | %.0f%% | %d/%d | %s |"
+                         topic (* 100 rate) kept total trend)))
+             (seq-take topic-list 10)
+             "\n"))))
+
 (defun gptel-auto-workflow--build-research-prompt ()
   "Build external research prompt by loading RESEARCHER.md skill.
 
-The researcher prompt is defined in assistant/skills/auto-workflow/RESEARCHER.md
+The researcher prompt is defined in assistant/skills/researcher-prompt/SKILL.md
 so humans can easily review and edit it without touching code.
 
+Meta-learning data (topic performance, source effectiveness) is dynamically
+substituted into the template before building the prompt.
+
 Results feed into directive's 'Next Hypotheses' for target selection."
-  (let* ((base-prompt (gptel-auto-workflow--load-researcher-skill))
+  (let* ((raw-skill (gptel-auto-workflow--load-researcher-skill))
+         (base-prompt (gptel-auto-workflow--substitute-researcher-variables raw-skill))
          (skill-content (gptel-auto-workflow--load-research-skill))
          (directive-content (gptel-auto-workflow--load-directive-skill))
          (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content)))
@@ -380,6 +483,85 @@ Results feed into directive's 'Next Hypotheses' for target selection."
             "\n\n"
             "---\n"
             "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
+
+;;; Meta-Learning Researcher Triggers
+
+(defun gptel-auto-workflow--trigger-researcher-meta-learning (trigger-type)
+  "Trigger researcher skill evolution based on TRIGGER-TYPE.
+
+TRIGGER-TYPE can be:
+- `pre-research' — Lightweight cache read before research cycle
+- `post-batch' — Full analysis after N experiments complete
+- `threshold' — Emergency re-analysis when keep rate drops
+- `memory' — Incremental update when new research memory created
+
+Returns t if evolution was triggered, nil otherwise."
+  (let* ((root (gptel-auto-workflow--effective-project-root))
+         (script-dir (expand-file-name "assistant/skills/researcher-prompt/scripts" root))
+         (data-dir (expand-file-name "assistant/skills/researcher-prompt/data" root))
+         (skill-file (expand-file-name "assistant/skills/researcher-prompt/SKILL.md" root))
+         (triggered nil))
+    (cl-case trigger-type
+      (pre-research
+       ;; Lightweight: just ensure cache exists, substitute variables
+       (message "[meta-learn] Pre-research: Loading topic performance cache")
+       (gptel-auto-workflow--load-researcher-meta-learning)
+       (setq triggered t))
+      
+      (post-batch
+       ;; Full analysis: run Python scripts
+       (message "[meta-learn] Post-batch: Running full research outcome analysis")
+       (let ((analyze-script (expand-file-name "analyze_research_outcomes.py" script-dir))
+             (evolve-script (expand-file-name "evolve_researcher.py" script-dir)))
+         (when (and (file-exists-p analyze-script) (file-exists-p evolve-script))
+           ;; Run analysis
+           (let ((analyze-cmd (format "cd %s && python3 %s --experiments-dir var/tmp/experiments --memories-dir mementum/memories --output-dir %s --lookback-days 90"
+                                     root analyze-script data-dir)))
+             (message "[meta-learn] Running: %s" analyze-cmd)
+             (let ((output (shell-command-to-string analyze-cmd)))
+               (message "[meta-learn] Analysis output: %s" output)))
+           ;; Evolve skill
+           (let ((evolve-cmd (format "cd %s && python3 %s --data-dir %s --skill %s"
+                                    root evolve-script data-dir skill-file)))
+             (message "[meta-learn] Running: %s" evolve-cmd)
+             (let ((output (shell-command-to-string evolve-cmd)))
+               (message "[meta-learn] Evolution output: %s" output)))
+           (setq triggered t))))
+      
+      (threshold
+       ;; Emergency: check if keep rate below threshold
+       (let* ((meta-data (gptel-auto-workflow--load-researcher-meta-learning))
+              (effectiveness (or (plist-get meta-data :effectiveness) 100)))
+         (when (< effectiveness 14)
+           (message "[meta-learn] Threshold alert: keep rate %d%% < 14%%, triggering emergency re-analysis"
+                   effectiveness)
+           (gptel-auto-workflow--trigger-researcher-meta-learning 'post-batch)
+           (setq triggered t))))
+      
+      (memory
+       ;; Incremental: just update source effectiveness
+       (message "[meta-learn] Memory ingestion: Incremental update")
+       ;; For now, just reload cache. In future, could append to JSON directly.
+       (gptel-auto-workflow--load-researcher-meta-learning)
+       (setq triggered t)))
+    
+    triggered))
+
+(defun gptel-auto-workflow--maybe-trigger-researcher-evolution ()
+  "Check if researcher evolution should be triggered.
+Called periodically by the auto-workflow loop.
+Returns t if triggered."
+  (let* ((meta-data (gptel-auto-workflow--load-researcher-meta-learning))
+         (effectiveness (or (plist-get meta-data :effectiveness) 100))
+         (total (or (plist-get meta-data :total) 0))
+         ;; Trigger every 50 experiments or when keep rate drops
+         (should-trigger (or (< effectiveness 14)
+                            (and (> total 0) (zerop (mod total 50))))))
+    (when should-trigger
+      (if (< effectiveness 14)
+          (gptel-auto-workflow--trigger-researcher-meta-learning 'threshold)
+        (gptel-auto-workflow--trigger-researcher-meta-learning 'post-batch)))
+    should-trigger))
 
 (defun gptel-auto-workflow--directive-extract-priority-targets (directive-content)
   "Extract high-priority targets from DIRECTIVE-CONTENT.
