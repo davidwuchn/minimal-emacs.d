@@ -443,8 +443,15 @@ Digestion process:
 4. Format as actionable hypotheses for directive"
   (if (or (null raw-findings) (string-empty-p raw-findings))
       (funcall callback "")
-    (let ((digest-prompt
-           (format "You are a research digest specialist. Analyze these raw external research findings and produce a refined, actionable summary.
+    (let* ((template (when (fboundp 'gptel-auto-workflow--load-skill-content)
+                       (gptel-auto-workflow--load-skill-content "research-digest")))
+           (digest-prompt
+            (if template
+                (gptel-auto-workflow--substitute-template
+                 template
+                 `((raw-findings . ,(truncate-string-to-width raw-findings 2000 nil nil "..."))))
+              ;; Fallback to hardcoded prompt
+              (format "You are a research digest specialist. Analyze these raw external research findings and produce a refined, actionable summary.
 
 RAW FINDINGS:
 %s
@@ -478,7 +485,7 @@ RULES:
 - Be specific. 'Use AI better' is banned.
 - Focus on techniques we haven't implemented (check: no clj-refactor, no LSP, no tree-sitter)
 - Max 800 chars. Quality over quantity."
-                   (truncate-string-to-width raw-findings 2000 nil nil "..."))))
+                      (truncate-string-to-width raw-findings 2000 nil nil "...")))))
       (message "[auto-workflow] Digesting research findings with LLM...")
       (if (fboundp 'gptel-request)
           (gptel-request

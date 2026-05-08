@@ -110,9 +110,35 @@ instead of passing an unsupported `:model' keyword."
 
 ;;; Prompt Generation
 
+(defun gptel-benchmark--load-llm-prompt (prompt-name)
+  "Load PROMPT-NAME from benchmark-llm-prompts skill.
+Returns prompt template string or nil if not found."
+  (when (fboundp 'gptel-auto-workflow--load-skill-content)
+    (let ((skill (gptel-auto-workflow--load-skill-content "benchmark-llm-prompts")))
+      (when skill
+        (let ((section-regexp
+               (format "## %s\\(.*?\\)## \\|\\'"
+                       (regexp-quote prompt-name))))
+          (when (string-match section-regexp skill)
+            (string-trim (match-string 1 skill))))))))
+
 (defun gptel-benchmark--make-improvement-prompt (name type anti-patterns)
-  "Create prompt for improvement suggestions."
-  (format "You are an AI benchmark improvement system using Wu Xing principles.
+  "Create prompt for improvement suggestions.
+Uses skill if available, otherwise falls back to hardcoded template."
+  (let ((template (gptel-benchmark--load-llm-prompt "Improvement Suggestions Prompt")))
+    (if template
+        (gptel-auto-workflow--substitute-template
+         template
+         `((name . ,name)
+           (type . ,type)
+           (anti-patterns . ,(mapconcat (lambda (ap)
+                                          (format "- %s (%s): %s"
+                                                  (plist-get ap :pattern)
+                                                  (plist-get ap :element)
+                                                  (plist-get ap :symptom)))
+                                        anti-patterns "\n"))))
+      ;; Fallback to hardcoded prompt
+      (format "You are an AI benchmark improvement system using Wu Xing principles.
 
 Analyze the following anti-patterns detected in %s %s and suggest specific improvements.
 
@@ -139,83 +165,45 @@ Format your response as JSON:
   ]
 }
 ```"
-          type name
-          (mapconcat (lambda (ap)
-                       (format "- %s (%s): %s"
-                               (plist-get ap :pattern)
-                               (plist-get ap :element)
-                               (plist-get ap :symptom)))
-                     anti-patterns "\n")))
+              type name
+              (mapconcat (lambda (ap)
+                           (format "- %s (%s): %s"
+                                   (plist-get ap :pattern)
+                                   (plist-get ap :element)
+                                   (plist-get ap :symptom)))
+                         anti-patterns "\n")))))
 
 (defun gptel-benchmark--make-analysis-prompt (name type results)
-  "Create prompt for results analysis."
-  (format "Analyze these benchmark results for %s %s:
-
-%s
-
-Provide:
-1. Overall assessment
-2. Key strengths
-3. Areas for improvement
-4. Recommended focus areas
-
-Be concise and specific." type name
-          (if (listp results)
-              (format "Overall score: %.1f%%" 
-                      (* 100 (or (plist-get results :overall-score) 0)))
-            (format "%S" results))))
+  "Create prompt for results analysis.
+Uses skill if available, otherwise falls back to hardcoded template."
+  (let ((template (gptel-benchmark--load-llm-prompt "Results Analysis Prompt"))
+        (results-str (if (listp results)
+                        (format "Overall score: %.1f%%"
+                                (* 100 (or (plist-get results :overall-score) 0)))
+                      (format "%S" results))))
+    (if template
+        (gptel-auto-workflow--substitute-template
+         template
+         `((name . ,name)
+           (type . ,type)
+           (results . ,results-str)))
+      ;; Fallback to hardcoded prompt
+      (format "Analyze these benchmark results for %s %s:\n\n%s\n\nProvide:\n1. Overall assessment\n2. Key strengths\n3. Areas for improvement\n4. Recommended focus areas\n\nBe concise and specific."
+              type name results-str))))
 
 (defun gptel-benchmark--make-synthesis-prompt (topic memories)
-  "Create prompt for knowledge synthesis."
-  (format "Synthesize the following memories into a knowledge page.
-
-TOPIC: %s
-
-REQUIREMENTS:
-1. Minimum 50 lines of actual content
-2. Concrete examples (code, tables, commands)
-3. Actionable patterns (not just descriptions)
-4. Cross-references to related topics
-5. Return the full markdown page directly in your final response
-
-IMPORTANT:
-- Return the complete knowledge page inline, not a summary
-- Do not describe what you would write; write the page itself
-- Start with frontmatter and include the full document body
-
-OUTPUT FORMAT:
----
-title: [Title]
-status: active
-category: knowledge
-tags: [tag1, tag2]
----
-
-# [Title]
-
-## [Section 1]
-
-[Content with examples]
-
-## [Section 2]
-
-[Content with patterns]
-
-## Related
-
-- [Related topics]
-
----
-
-MEMORIES TO SYNTHESIZE:
-
-%s
-
----
-
-Generate the complete knowledge page now. Start with the frontmatter and include ALL content. Do not truncate or summarize."
-          topic
-          (mapconcat #'identity memories "\n\n---\n\n")))
+  "Create prompt for knowledge synthesis.
+Uses skill if available, otherwise falls back to hardcoded template."
+  (let ((template (gptel-benchmark--load-llm-prompt "Knowledge Synthesis Prompt"))
+        (memories-str (mapconcat #'identity memories "\n\n---\n\n")))
+    (if template
+        (gptel-auto-workflow--substitute-template
+         template
+         `((topic . ,topic)
+           (memories . ,memories-str)))
+      ;; Fallback to hardcoded prompt
+      (format "Synthesize the following memories into a knowledge page.\n\nTOPIC: %s\n\nREQUIREMENTS:\n1. Minimum 50 lines of actual content\n2. Concrete examples (code, tables, commands)\n3. Actionable patterns (not just descriptions)\n4. Cross-references to related topics\n5. Return the full markdown page directly in your final response\n\nIMPORTANT:\n- Return the complete knowledge page inline, not a summary\n- Do not describe what you would write; write the page itself\n- Start with frontmatter and include the full document body\n\nOUTPUT FORMAT:\n---\ntitle: [Title]\nstatus: active\ncategory: knowledge\ntags: [tag1, tag2]\n---\n\n# [Title]\n\n## [Section 1]\n\n[Content with examples]\n\n## [Section 2]\n\n[Content with patterns]\n\n## Related\n\n- [Related topics]\n\n---\n\nMEMORIES TO SYNTHESIZE:\n\n%s\n\n---\n\nGenerate the complete knowledge page now. Start with the frontmatter and include ALL content. Do not truncate or summarize."
+              topic memories-str))))
 
 ;;; Response Parsing
 

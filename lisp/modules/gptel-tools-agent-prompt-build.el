@@ -964,11 +964,14 @@ and advance through the configured fallback chain instead.")
 (defun gptel-auto-workflow--backend-available-p (backend-name)
   "Return non-nil when BACKEND-NAME has credentials configured."
   (let ((host (alist-get backend-name gptel-auto-workflow--backend-key-hosts
-                         nil nil #'string=)))
-    (and host
-         (fboundp 'my/gptel-api-key)
-         (gptel-auto-workflow--non-empty-string-p
-          (my/gptel-api-key host)))))
+                          nil nil #'string=)))
+    (or (and host
+             (fboundp 'my/gptel-api-key)
+             (gptel-auto-workflow--non-empty-string-p
+              (my/gptel-api-key host)))
+        ;; Fallback: if auth-source returns nil (batch mode), trust that
+        ;; a bound backend object means the backend was configured at startup.
+        (gptel-auto-workflow--backend-object backend-name))))
 
 (defun gptel-auto-workflow--headless-provider-override-active-p ()
   "Return non-nil when headless auto-workflow provider override should apply."

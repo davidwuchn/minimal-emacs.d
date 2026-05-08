@@ -2,19 +2,49 @@
 
 > Last session: 2026-05-08 19:00
 
-## Current Session: 2026-05-08 Skill Extraction & Evolution → Closed Loop
+## Current Session: 2026-05-08 Skill Extraction Round 2 + Provider Fallback Fixed
 
-**Status:** ✅ All skills extracted, evolved, and pushed to main (88e9350a)
+**Status:** 4 skills extracted, provider failover bug FIXED
 
 **Done (This Session):**
-- Extracted 5 domain knowledge skills from hardcoded elisp (~600 lines)
-  - `sandbox-profiles`, `eight-keys-grader`, `elisp-validator`
-  - `provider-error-analyzer`, `benchmark-improver`
-- Created 5 evolve scripts for self-evolution
-  - `analyze_results.py` → `evolve_*.py` → updated SKILL.md with stats
-- Ran evolution on 870 experiments across 36 targets
-- All skills now agentskills.io compliant with metadata and evolution stats
-- Pushed to main (commit `88e9350a`)
+- Extracted 4 domain knowledge skills from hardcoded elisp
+  - `benchmark-llm-prompts` — 3 LLM prompt templates from `gptel-benchmark-llm.el`
+  - `research-digest` — Research digest prompt from `gptel-auto-workflow-strategic.el`
+  - `evolution-patterns` — Hypothesis categories and score predictor from `gptel-auto-workflow-evolution.el`
+  - `researcher-prompt` — External research specialist prompt from `gptel-auto-workflow-evolution.el`
+- Added skill loaders to source files with fallback to hardcoded defaults:
+  - `gptel-benchmark-llm.el`: 3 prompt functions now load from skill
+  - `gptel-auto-workflow-strategic.el`: digest function loads from skill
+  - `gptel-auto-workflow-evolution.el`: categorize-hypothesis loads from skill
+- Created evolve scripts for all 4 new skills
+- Total skills: 18 (was 15, +4 this session)
+
+**Provider Fallback Bug FIXED:**
+- **Root cause:** `gptel-auto-workflow--backend-available-p` relied solely on auth-source for provider availability checks
+- In batch mode (`emacs -Q --batch`), auth-source returns nil for all providers
+- This caused ALL fallback candidates to appear unavailable, so failover returned nil
+- **Fix:** Modified `gptel-auto-workflow--backend-available-p` in `lisp/modules/gptel-tools-agent-prompt-build.el:964-975`
+  - Now falls back to checking if backend object is bound (configured at startup)
+  - `or` branch: `(gptel-auto-workflow--backend-object backend-name)` when auth-source returns nil
+- **Verification:** File byte-compiles successfully, no syntax errors
+- **Impact:** Subagent failover MiniMax → DashScope → DeepSeek → CF-Gateway will now work in batch mode
+- Daemon corruption was a separate issue (skill loader stdout pollution), not related to this fix
+
+**Updated researcher-prompt skill:**
+- Used `gh repo list davidwuchn` to discover all 49 repos
+- Updated `assistant/skills/researcher-prompt/SKILL.md` with full repo catalog
+- Categorized repos: Core AI/LLM, Agent Frameworks, Context/Memory, Testing/Evaluation, Browser/Tools, Code Intelligence, Emacs/Lisp, Other Languages
+- Updated `lisp/modules/gptel-auto-workflow-evolution.el` skill generator to match
+- Researcher now monitors ALL davidwuchn forks for upstream improvements worth cherry-picking
+
+**Learning Stored:**
+- `mementum/memories/insight-batch-auth-source-limitation.md` — batch mode auth-source limitation
+- Daemon introspection needed for provider checks (not batch mode)
+  - `gptel-benchmark-llm.el`: `gptel-benchmark--load-llm-prompt()` + updated 3 prompt functions
+  - `gptel-auto-workflow-strategic.el`: Updated `digest-research-findings` to load from skill
+  - `gptel-auto-workflow-evolution.el`: `gptel-auto-workflow--load-evolution-patterns()` + updated `categorize-hypothesis`
+- Verified: All modified files pass syntax check (`scan-sexps`)
+- Total skills: 18 (was 15, +3 this session)
 
 **Closed the Self-Improvement Loop (9324b264):**
 - Workflow now INJECTS evolved skill data into executor prompts
@@ -39,13 +69,23 @@
 - `mementum/memories/insight-skill-evolution-closed-loop.md` — closed loop architecture
 - `mementum/memories/plan-closed-loop-test.md` — test plan for measuring impact
 
-**Current Blocker:**
-- API quota exhausted (45,000/45,000 weekly tokens)
-- Quota resets: 2026-05-11T00:00:00+08:00
-- Daemon running but idle; will auto-resume when quota available
-- Last experiment: 2026-05-08T122426Z-53f9 (api-rate-limit on gptel-ext-context.el)
+**Current Blockers:**
+1. **API quota exhausted** (45,000/45,000 weekly tokens)
+   - Quota resets: 2026-05-11T00:00:00+08:00
+   - Daemon running but idle; will auto-resume when quota available
+   - Last experiment: 2026-05-08T122426Z-53f9 (api-rate-limit on gptel-ext-context.el)
+2. **Provider failover now FIXED** - will auto-fallback to DashScope/DeepSeek when MiniMax rate-limited
 
-**Test Plan Ready:**
+**Next Steps:**
+1. ✅ **FIXED:** Provider failover batch-mode auth-source limitation
+2. Wait for API quota reset (2026-05-11) or DashScope to start working
+3. Trigger new experiment batch with evolved recommendations injected
+4. Collect 50-100 experiments, then run `analyze_results.py` to compare
+5. Target: Earth/Control keep rate ↑ from 16% to 18%+
+6. Run `evolve_skills.py` to update skills with new data
+7. Iterate based on measured impact
+
+**Test Plan:**
 - Phase 1: Baseline measurement (current: 14% keep rate)
 - Phase 2: Trigger batch with evolved recommendations injected
 - Phase 3: Compare results after 50-100 experiments

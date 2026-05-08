@@ -37,12 +37,17 @@
 (declare-function gptel-benchmark-load-history "gptel-benchmark-core")
 (defvar gptel-benchmark-default-dir)
 (defvar my/gptel-agent-task-timeout)
+(defvar gptel-agent-preset)
 
 (declare-function gptel-agent--task "gptel-tools-agent")
 (declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent")
 (declare-function my/gptel--agent-task-with-timeout "gptel-tools-agent"
                   (callback agent-type description prompt
                             &optional files include-history include-diff))
+(declare-function gptel-auto-workflow--maybe-override-subagent-provider "gptel-tools-agent-error"
+                  (agent-type preset))
+(declare-function gptel-auto-workflow--agent-base-preset "gptel-tools-agent-benchmark"
+                  (agent-type))
 
 ;;; Customization
 
@@ -97,25 +102,41 @@ subagent context for a single dispatch.")
 (defun gptel-benchmark-call-subagent (type description prompt callback &optional timeout)
   "Call subagent of TYPE with DESCRIPTION and PROMPT.
 Calls CALLBACK with result when complete.
-TIMEOUT overrides the default benchmark subagent timeout."
+TIMEOUT overrides the default benchmark subagent timeout.
+Auto-applies LLM backend failover when current provider is rate-limited."
   (if (and gptel-benchmark-use-subagents
            (fboundp 'gptel-agent--task))
-      (let ((agent-type (symbol-name type))
-            (files gptel-benchmark--subagent-files))
+      (let* ((agent-type (symbol-name type))
+             (files gptel-benchmark--subagent-files)
+             ;; Auto-apply provider failover if available
+             (override-preset
+              (when (and (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider)
+                         (fboundp 'gptel-auto-workflow--agent-base-preset))
+                (let ((base-preset (gptel-auto-workflow--agent-base-preset agent-type)))
+                  (when base-preset
+                    (gptel-auto-workflow--maybe-override-subagent-provider agent-type base-preset))))))
+        (if override-preset
+            (message "[subagent] %s using fallback provider: %s"
+                     agent-type
+                     (or (plist-get override-preset :backend) "unknown")))
         (if (fboundp 'my/gptel--agent-task-with-timeout)
             (let ((my/gptel-agent-task-timeout
-                   (or timeout gptel-benchmark-subagent-timeout)))
+                   (or timeout gptel-benchmark-subagent-timeout))
+                  (gptel-agent-preset
+                   (or override-preset gptel-agent-preset)))
               (my/gptel--agent-task-with-timeout
                callback
                agent-type
                description
                prompt
                files))
-          (gptel-agent--task
-           callback
-           agent-type
-           description
-           prompt)))
+          (let ((gptel-agent-preset
+                 (or override-preset gptel-agent-preset)))
+            (gptel-agent--task
+             callback
+             agent-type
+             description
+             prompt))))
     (funcall callback (format "[MOCK] %s: %s"
                               type
                               (truncate-string-to-width prompt 100 nil nil "...")))))
