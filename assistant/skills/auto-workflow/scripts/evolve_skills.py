@@ -68,11 +68,13 @@ def discover_skills(root_dir):
                 scripts.append(script_name)
         
         # 2. Check skill-specific scripts directory
-        scripts_dir = skill_dir / "scripts"
-        if scripts_dir.exists():
-            for script in scripts_dir.glob("evolve_*.py"):
-                if script.name not in scripts:
-                    scripts.append(script.name)
+        # Skip auto-workflow/scripts since it contains shared scripts
+        if skill_dir.name != 'auto-workflow':
+            scripts_dir = skill_dir / "scripts"
+            if scripts_dir.exists():
+                for script in scripts_dir.glob("evolve_*.py"):
+                    if script.name not in scripts:
+                        scripts.append(script.name)
         
         registry[skill_name] = {
             'scripts': scripts,

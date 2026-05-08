@@ -5,7 +5,7 @@ description: |
   result analysis, and skill evolution. Loads domain knowledge from other skills to avoid
   hardcoding prompts and rules.
 version: 2.0
-updated: 2026-05-08 19:30
+updated: 2026-05-08 19:37
 metadata:
   category: orchestration
   author: auto-workflow
@@ -162,3 +162,71 @@ The workflow now injects evolved knowledge back into prompts:
 3. **Evolution is data-driven** — analyze experiments, update skills, repeat
 4. **Fallback to defaults** — if skill missing, use hardcoded defaults
 5. **Git-based persistence** — skills live in repo, versioned with commits
+
+
+## Evolved Weights
+
+Based on analysis of experiment results.
+
+| Key | Weight | Discrimination | Avg (Success) | Avg (Failure) |
+|-----|--------|----------------|---------------|---------------|
+
+
+## Evolved Validation Rules
+
+Based on analysis of failed experiments.
+
+| Rule | Severity | Frequency | Check |
+|------|----------|-----------|-------|
+
+
+## Evolved Tool Profiles
+
+Based on analysis of 0 experiments.
+
+| Tool | Level | Success Rate | Experiments |
+|------|-------|--------------|-------------|
+## Evolved Recommendations (Updated 2026-05-08 19:34)
+
+Based on analysis of 588 experiments.
+
+### Wood (Operations)
+
+- **Success rate:** 15% (28/185 experiments)
+- **Priority:** HIGH - prioritize improvements targeting this element
+
+### Fire (Intelligence)
+
+- **Success rate:** 0% (0/3 experiments)
+- **Priority:** LOW - limited success, reconsider approach
+
+### Earth (Control)
+
+- **Success rate:** 16% (40/245 experiments)
+- **Priority:** HIGH - prioritize improvements targeting this element
+
+### Metal (Coordination)
+
+- **Success rate:** 15% (6/39 experiments)
+- **Priority:** HIGH - prioritize improvements targeting this element
+
+### Water (Identity)
+
+- **Success rate:** 12% (14/116 experiments)
+- **Priority:** MEDIUM - moderate success with this element
+
+### Top Successful Patterns
+
+These action patterns appear most frequently in kept experiments:
+
+- Fix bug (1 times)
+- Fix cache (1 times)
+
+
+## Evolved Error Patterns
+
+Based on analysis of experiment errors.
+
+| Pattern | Category | Action | Frequency | Regex |
+|---------|----------|--------|-----------|-------|
+

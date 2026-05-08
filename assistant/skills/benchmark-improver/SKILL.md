@@ -2,6 +2,7 @@
 name: benchmark-improver
 description: Wu Xing-based auto-improvement system for benchmarks. Detects anti-patterns via 相克 and generates improvements via 相生 pathways.
 version: 1.0
+evolve-script: evolve_benchmark.py
 ---
 metadata:
   evolution-stats:
@@ -209,3 +210,39 @@ Based on analysis of which improvement types led to score increases.
 - Coordination (Metal) (12% success rate, 15 worsened)
 - Identity (Water) (18% success rate, 27 worsened)
 - Operations (Wood) (8% success rate, 9 worsened)
+## Evolved Recommendations (Updated 2026-05-08 19:37)
+
+Based on analysis of 588 experiments.
+
+### Wood (Operations)
+
+- **Success rate:** 15% (28/185 experiments)
+- **Priority:** HIGH - prioritize improvements targeting this element
+
+### Fire (Intelligence)
+
+- **Success rate:** 0% (0/3 experiments)
+- **Priority:** LOW - limited success, reconsider approach
+
+### Earth (Control)
+
+- **Success rate:** 16% (40/245 experiments)
+- **Priority:** HIGH - prioritize improvements targeting this element
+
+### Metal (Coordination)
+
+- **Success rate:** 15% (6/39 experiments)
+- **Priority:** HIGH - prioritize improvements targeting this element
+
+### Water (Identity)
+
+- **Success rate:** 12% (14/116 experiments)
+- **Priority:** MEDIUM - moderate success with this element
+
+### Top Successful Patterns
+
+These action patterns appear most frequently in kept experiments:
+
+- Fix bug (1 times)
+- Fix cache (1 times)
+
