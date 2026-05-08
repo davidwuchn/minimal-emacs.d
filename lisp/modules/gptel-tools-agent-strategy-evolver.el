@@ -547,7 +547,11 @@ CANDIDATE_3:
   "Parse 3 strategy candidates from gptel RESPONSE.
 Returns list of 3 code strings.
 Handles multiple formats: CANDIDATE_N markers, numbered lists, or bare code blocks."
-  (let ((candidates '()))
+  (if (or (null response) (not (stringp response)) (string-empty-p response))
+      (progn
+        (message "[strategy-evolution] Invalid response for parsing")
+        (list nil nil nil))
+    (let ((candidates '()))
     ;; Try CANDIDATE_N format first
     (dotimes (i 3)
       (let* ((start-label (format "CANDIDATE_%d:" (1+ i)))
@@ -592,7 +596,7 @@ Handles multiple formats: CANDIDATE_N markers, numbered lists, or bare code bloc
       (setq candidates (append candidates (list nil))))
     (message "[strategy-evolution] Parsed %d valid candidates"
              (length (cl-remove-if #'null candidates)))
-    candidates))
+    candidates)))
 
 (defun gptel-auto-workflow--strategy-code-rewrite-name (code old-name new-name)
   "Rewrite strategy CODE from OLD-NAME to NEW-NAME."
