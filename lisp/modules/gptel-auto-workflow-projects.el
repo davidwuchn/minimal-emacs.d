@@ -345,10 +345,10 @@ When ERRORED is non-nil, preserve the existing error phase."
   (when (fboundp 'gptel-auto-workflow--persist-status)
     (gptel-auto-workflow--persist-status)))
 
-(defun gptel-auto-workflow--queue-cron-job (label fn async)
+(defun gptel-auto-workflow--queue-cron-job (label fn use-async)
   "Queue FN for LABEL and return immediately.
 This keeps `emacsclient --eval' callers from monopolizing the daemon.
-When ASYNC is non-nil, FN must accept a completion callback and invoke it when
+When USE-ASYNC is non-nil, FN must accept a completion callback and invoke it when
 the queued job actually finishes."
   (if (or gptel-auto-workflow--cron-job-running
           (bound-and-true-p gptel-auto-workflow--running))
@@ -390,7 +390,7 @@ the queued job actually finishes."
                          (when (fboundp 'gptel-auto-workflow--persist-status)
                            (gptel-auto-workflow--persist-status))
                          (condition-case err
-                             (if async
+                             (if use-async
                                  (funcall fn finish-job)
                                (progn
                                  (funcall fn)
