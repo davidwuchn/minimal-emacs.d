@@ -145,6 +145,14 @@ ELSE:
 
 **Key insight:** You need EITHER score improvement OR quality improvement of at least 0.01. Both improving is ideal.
 
+**High-Baseline Target Exception (Quality >= 0.85):**
+For well-written code with high baseline quality, the quality gain threshold is reduced:
+- Baseline quality 0.85-0.89: need only 0.001 quality gain
+- Baseline quality >= 0.90: any non-negative quality change accepted
+- This prevents discarding excellent bug fixes just because the code was already well-structured
+
+**Example:** Cache target has baseline quality 0.87. A bug fix that corrects integer normalization (graded 9/9) was previously discarded because quality didn't improve by 0.005. With the adjusted threshold, it would be kept because the combined score is stable and the change is functionally correct.
+
 ### Decision Predictors
 
 | Signal | Predicts | Confidence |

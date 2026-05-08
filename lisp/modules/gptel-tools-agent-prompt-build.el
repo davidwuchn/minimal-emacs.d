@@ -272,6 +272,21 @@ Improve the CODE QUALITY for {{target}}.
 Focus on one improvement at a time.
 Make minimal, targeted changes to CODE, not documentation.
 
+## Code Quality Metrics (What the Scorer Measures)
+The automated scorer evaluates these metrics (weighted):
+- **Docstring coverage** (20%): % of functions with docstrings
+- **Positive patterns** (30%): error handling, naming conventions, predicates
+- **Function length** (25%): shorter functions score higher (ideal: <20 lines)
+- **Cyclomatic complexity** (25%): fewer conditionals score higher
+
+**IMPORTANT**: For targets with high baseline quality (>0.85), focus on:
+1. **Bug fixes** that correct actual behavior (these improve the Eight Keys score)
+2. **Error handling** that adds validation guards (improves safety patterns)
+3. **Refactoring** that reduces function length or complexity
+4. Avoid changes that only add comments or docstrings (forbidden anyway)
+
+A change can be excellent (graded 9/9) but still not improve quality metrics if the code was already well-structured. The system is aware of this and adjusts thresholds for high-baseline targets.
+
 ## Constraints
 - Time budget: {{time-budget}} minutes
 - Immutable files: early-init.el, pre-early-init.el, lisp/eca-security.el

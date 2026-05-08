@@ -817,41 +817,53 @@ THRESHOLD defaults to 0.005 and matches the comparator prompt rules."
 
 The gate rejects changes whose combined score (60% eight-keys + 40% code quality)
 regresses.  A small eight-keys score dip is tolerated when code quality improves
-enough to lift the combined score above threshold."
+enough to lift the combined score above threshold.
+
+For high-baseline targets (quality >= 0.85), the quality gain requirement is
+reduced because well-written code is harder to improve measurably."
   (let* ((decision-threshold (or threshold 0.005))
          (score-delta (- score-after score-before))
          (quality-delta (- quality-after quality-before))
-         (combined-delta (- combined-after combined-before)))
+         (combined-delta (- combined-after combined-before))
+         ;; Adjust quality gain threshold based on baseline quality
+         (quality-gain-threshold
+          (cond
+           ;; Very high baseline: accept any non-negative quality change
+           ((>= quality-before 0.90) 0.0)
+           ;; High baseline: require minimal gain
+           ((>= quality-before 0.85) 0.001)
+           ;; Normal baseline: standard threshold
+           (t gptel-auto-experiment-min-quality-gain-on-score-tie))))
     (cond
-     ;; Combined score regression: reject outright regardless of individual deltas
-     ((<= combined-delta (- decision-threshold))
-      (list :winner "A"
-            :note "Rejected: combined score regressed"))
-     ;; Score regressed but combined score improves: quality gain compensates
-     ((< score-delta (- decision-threshold))
-      (if (> combined-delta decision-threshold)
-          (list :winner "B"
-                :note (format "Kept: quality gain (%.2f) compensates for score regression (%.3f)"
-                              quality-delta score-delta))
-        (list :winner "A"
-              :note "Rejected: score regressed without sufficient combined improvement")))
-     ;; Score tie (within decision threshold)
-     ((< (abs score-delta) decision-threshold)
-      (if (and (> combined-delta 0)
-               (>= quality-delta gptel-auto-experiment-min-quality-gain-on-score-tie))
-          (list :winner "B"
-                :note (format "Kept: score tie with >= %.2f quality gain"
-                              gptel-auto-experiment-min-quality-gain-on-score-tie))
-        (list :winner "A"
-              :note (if (<= combined-delta 0)
-                        "Rejected: score tie without positive combined improvement"
-                      (format "Rejected: score tie without >= %.2f quality gain"
-                              gptel-auto-experiment-min-quality-gain-on-score-tie)))))
-     ;; Score improved: accept
-     (t
-      (list :winner (if (string= winner "tie") "B" winner)
-            :note (and (string= winner "tie")
-                       "Kept: score improved despite combined tie"))))))
+      ;; Combined score regression: reject outright regardless of individual deltas
+      ((<= combined-delta (- decision-threshold))
+       (list :winner "A"
+             :note "Rejected: combined score regressed"))
+      ;; Score regressed but combined score improves: quality gain compensates
+      ((< score-delta (- decision-threshold))
+       (if (> combined-delta decision-threshold)
+           (list :winner "B"
+                 :note (format "Kept: quality gain (%.2f) compensates for score regression (%.3f)"
+                               quality-delta score-delta))
+         (list :winner "A"
+               :note "Rejected: score regressed without sufficient combined improvement")))
+      ;; Score tie (within decision threshold)
+      ((< (abs score-delta) decision-threshold)
+       (if (and (> combined-delta 0)
+                (>= quality-delta quality-gain-threshold))
+           (list :winner "B"
+                 :note (format "Kept: score tie with >= %.3f quality gain (baseline %.2f)"
+                               quality-gain-threshold quality-before))
+         (list :winner "A"
+               :note (if (<= combined-delta 0)
+                         "Rejected: score tie without positive combined improvement"
+                       (format "Rejected: score tie without >= %.3f quality gain (baseline %.2f, got %.3f)"
+                               quality-gain-threshold quality-before quality-delta))))))
+      ;; Score improved: accept
+      (t
+       (list :winner (if (string= winner "tie") "B" winner)
+             :note (and (string= winner "tie")
+                        "Kept: score improved despite combined tie"))))))
 
 (provide 'gptel-tools-agent-benchmark)
 ;;; gptel-tools-agent-benchmark.el ends here
