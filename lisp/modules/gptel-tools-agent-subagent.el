@@ -229,7 +229,9 @@ subagent callback fired, and avoids reusing a deleted worktree as
                 (with-current-buffer safe-buffer
                   (setq default-directory safe-default-directory)
                   (funcall callback result))
-              (error (message "[nucleus] Callback error ignored after cleanup from %S: %S" callback err)
+              (error (message "[nucleus] Callback error ignored after cleanup (%s): %S"
+                              (if (symbolp callback) callback (type-of callback))
+                              err)
                      (when (and (boundp 'debug-on-error) debug-on-error) (signal (car err) (cdr err)))))))
         (t
          (message "[nucleus] Warning: my/gptel--invoke-callback-safely skipped invalid callback: %S"
