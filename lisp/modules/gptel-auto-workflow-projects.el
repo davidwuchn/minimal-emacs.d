@@ -911,30 +911,16 @@ PER-PROJECT-FN should accept a project root and return t/nil for success."
   (interactive)
   (gptel-auto-workflow--queue-cron-job
    "mementum"
-   #'gptel-auto-workflow-run-all-mementum))
-
-;;; Instincts (Benchmark) Multi-Project Support
-
-(defun gptel-auto-workflow-run-instincts-for-project (project-root)
-  "Run instincts weekly job for specific PROJECT-ROOT."
-  (interactive "DProject root: ")
-  (gptel-auto-workflow--run-weekly-job-for-project
-   project-root "instincts" 'gptel-benchmark-instincts
-   "lisp/modules/gptel-benchmark-instincts.el"
-   #'gptel-benchmark-instincts-weekly-job))
-
-(defun gptel-auto-workflow-run-all-instincts ()
-  "Run instincts weekly job for all configured projects."
-  (interactive)
-  (gptel-auto-workflow--run-all-weekly-jobs
-   "instincts" #'gptel-auto-workflow-run-instincts-for-project))
-
+   #'gptel-auto-workflow-run-all-mementum
+   nil))
+...
 (defun gptel-auto-workflow-queue-all-instincts ()
   "Queue `gptel-auto-workflow-run-all-instincts' and return immediately."
   (interactive)
   (gptel-auto-workflow--queue-cron-job
    "instincts"
-   #'gptel-auto-workflow-run-all-instincts))
+   #'gptel-auto-workflow-run-all-instincts
+   nil))
 
 (provide 'gptel-auto-workflow-projects)
 ;;; gptel-auto-workflow-projects.el ends here
