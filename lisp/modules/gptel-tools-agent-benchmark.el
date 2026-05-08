@@ -858,7 +858,7 @@ reduced because well-written code is harder to improve measurably."
                :note (if (<= combined-delta 0)
                          "Rejected: score tie without positive combined improvement"
                        (format "Rejected: score tie without >= %.3f quality gain (baseline %.2f, got %.3f)"
-                               quality-gain-threshold quality-before quality-delta))))))
+                               quality-gain-threshold quality-before quality-delta)))))
       ;; Score improved: accept
       (t
        (list :winner (if (string= winner "tie") "B" winner)
