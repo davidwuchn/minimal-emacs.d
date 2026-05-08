@@ -519,87 +519,191 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
         (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir) t)
         (setq insight-files (delete file insight-files))
         (setq consolidated (1+ consolidated))))
-    ;; Second pass: group by target
-    (dolist (file insight-files)
-      (with-temp-buffer
-        (insert-file-contents file)
-        (goto-char (point-min))
-        (let* ((full-content (buffer-string))
-               (target-key
-                (cond
-                 ((string-match "\\*\\*Target:\\*\\* \\(.+\\)" full-content)
-                  (let ((tgt (match-string 1 full-content)))
-                    (if (string-match "lisp/modules/\\(.+\\)" tgt)
-                        (file-name-sans-extension (match-string 1 tgt))
-                      (replace-regexp-in-string "[ /]" "-" tgt))))
-                 ((string-match "^insight-\\([^-]+\\)-\\([^-]+\\)"
-                                (file-name-nondirectory file))
-                  (format "%s-%s" (match-string 1 (file-name-nondirectory file))
-                          (match-string 2 (file-name-nondirectory file))))
-                 (t "general")))
-               (group (gethash target-key target-groups)))
-          (unless group
-            (puthash target-key (list :target target-key :count 0 :files nil
-                                      :hypotheses nil :decisions nil)
-                     target-groups)
-            (setq group (gethash target-key target-groups)))
-          (plist-put group :count (1+ (plist-get group :count)))
-          (push file (plist-get group :files))
-          (when (string-match "\\*\\*Decision:\\*\\* \\(.+\\)" full-content)
-            (push (match-string 1 full-content) (plist-get group :decisions)))
-          (when (string-match "\\*\\*Hypothesis:\\*\\* \\(.+\\)" full-content)
-            (push (match-string 1 full-content) (plist-get group :hypotheses))))))
-    ;; Synthesize each group into a knowledge page
-    (maphash
-     (lambda (target-key group)
-       (let* ((count (plist-get group :count))
-              (decisions (plist-get group :decisions))
-              (hypotheses (plist-get group :hypotheses))
-              (kept-count (cl-count "kept" (append decisions nil) :test #'string=))
-              (kept-hypotheses
-               (let ((result nil))
-                 (cl-do ((i 0 (1+ i)))
-                     ((>= i (length hypotheses)))
-                   (when (and (< i (length decisions))
-                              (string= (nth i decisions) "kept"))
-                     (push (nth i hypotheses) result)))
-                 (nreverse result)))
-              (knowledge-file (expand-file-name
-                               (format "experiment-insights-%s.md" target-key)
-                               knowledge-dir)))
-         (when (> count 3)
-           (make-directory knowledge-dir t)
-           (with-temp-file knowledge-file
-             (insert "---\n")
-             (insert (format "title: Experiment Insights - %s\n" target-key))
-             (insert "status: active\n")
-             (insert "category: knowledge\n")
-             (insert (format "tags: [auto-workflow, experiments, %s]\n"
-                             (replace-regexp-in-string "[ /]" "-" target-key)))
-             (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
-             (insert "---\n\n")
-             (insert (format "# Experiment Insights: %s\n\n" target-key))
-             (insert (format "*Consolidated from %d experiments.*\n\n" count))
-             (insert (format "**Keep rate:** %.0f%% (%d kept / %d total)\n\n"
-                             (if (> count 0) (* 100 (/ (float kept-count) count)) 0)
-                             kept-count count))
-             (when kept-hypotheses
-               (insert "## Successful Improvements\n\n")
-               (dolist (h (seq-take (delete-dups kept-hypotheses) 10))
-                 (insert (format "- %s\n" h)))
-               (insert "\n"))))
-         ;; Archive individual files
-         (make-directory archive-dir t)
-         (dolist (file (plist-get group :files))
-           (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir) t))
-         (setq consolidated (+ consolidated count))
-         (message "[evolution] Consolidated %d insights for %s → %s"
-                  count target-key knowledge-file)))
-     target-groups)
-    (when (> consolidated 0)
-      (message "[evolution] Consolidated %d insight files across %d groups"
-               consolidated (hash-table-count target-groups)))
-    consolidated)))
+     ;; Second pass: group by target and score value
+     (dolist (file insight-files)
+       (with-temp-buffer
+         (insert-file-contents file)
+         (goto-char (point-min))
+         (let* ((full-content (buffer-string))
+                (target-key
+                 (cond
+                  ((string-match "\\*\\*Target:\\*\\* \\(.+\\)" full-content)
+                   (let ((tgt (match-string 1 full-content)))
+                     (if (string-match "lisp/modules/\\(.+\\)" tgt)
+                         (file-name-sans-extension (match-string 1 tgt))
+                       (replace-regexp-in-string "[ /]" "-" tgt))))
+                  ((string-match "^insight-\\([^-]+\\)-\\([^-]+\\)"
+                                 (file-name-nondirectory file))
+                   (format "%s-%s" (match-string 1 (file-name-nondirectory file))
+                           (match-string 2 (file-name-nondirectory file))))
+                  (t "general")))
+                (group (gethash target-key target-groups)))
+           (unless group
+             (puthash target-key (list :target target-key :count 0 :files nil
+                                       :hypotheses nil :decisions nil
+                                       :scores nil :qualities nil
+                                       :values nil :lessons nil)
+                      target-groups)
+             (setq group (gethash target-key target-groups)))
+           (plist-put group :count (1+ (plist-get group :count)))
+           (push file (plist-get group :files))
+           ;; Extract decision
+           (let ((decision (if (string-match "\\*\\*Decision:\\*\\* \\(.+\\)" full-content)
+                               (match-string 1 full-content)
+                             "unknown")))
+             (push decision (plist-get group :decisions)))
+           ;; Extract hypothesis
+           (when (string-match "\\*\\*Hypothesis:\\*\\* \\(.+\\)" full-content)
+             (push (match-string 1 full-content) (plist-get group :hypotheses)))
+           ;; Extract score
+           (when (string-match "Score:\\*\\* \\([0-9.]+\\)" full-content)
+             (push (string-to-number (match-string 1 full-content)) (plist-get group :scores)))
+           ;; Extract quality
+           (when (string-match "Quality:\\*\\* \\([0-9.]+\\)" full-content)
+             (push (string-to-number (match-string 1 full-content)) (plist-get group :qualities)))
+           ;; Score insight value (0-10)
+           (let ((value 5)) ; start neutral
+             ;; Bonus for clear decision
+             (when (string-match-p "\\*\\*Decision:\\*\\* \\(kept\\|discarded\\|timeout\\|validation-failed\\|repeated-focus-symbol\\|grader-rejected\\)" full-content)
+               (setq value (+ value 2)))
+             ;; Bonus for actionable lesson
+             (when (string-match-p "Lesson:" full-content)
+               (setq value (+ value 3)))
+             ;; Bonus for score/quality data
+             (when (string-match-p "Score:" full-content)
+               (setq value (+ value 1)))
+             (when (string-match-p "Quality:" full-content)
+               (setq value (+ value 1)))
+             ;; Bonus for specific patterns mentioned
+             (when (string-match-p "proper-list-p\\|nil guard\\|helper function\\|validation" full-content)
+               (setq value (+ value 1)))
+             ;; Penalty for empty/generic content
+             (when (string-match-p "Unexpected experiment outcome\\.?$" full-content)
+               (setq value (- value 4)))
+             ;; Penalty for no hypothesis detail
+             (when (or (null (plist-get group :hypotheses))
+                       (< (length (car (plist-get group :hypotheses))) 20))
+               (setq value (- value 2)))
+             ;; Clamp to 0-10
+             (setq value (max 0 (min 10 value)))
+             (push value (plist-get group :values))
+             ;; Extract lesson if present
+             (when (string-match "Lesson:\\*\\* \\(.+\\)" full-content)
+               (push (match-string 1 full-content) (plist-get group :lessons)))))))
+     ;; Synthesize each group into a knowledge page
+     (maphash
+      (lambda (target-key group)
+        (let* ((count (plist-get group :count))
+               (decisions (plist-get group :decisions))
+               (hypotheses (plist-get group :hypotheses))
+               (values (plist-get group :values))
+               (lessons (plist-get group :lessons))
+               (kept-count (cl-count "kept" (append decisions nil) :test #'string=))
+               (discarded-count (cl-count "discarded" (append decisions nil) :test #'string=))
+               (failed-count (cl-count "validation-failed" (append decisions nil) :test #'string=))
+               (timeout-count (cl-count "timeout" (append decisions nil) :test #'string=))
+               (avg-value (if values (/ (cl-reduce #'+ values) (float (length values))) 0))
+               (kept-hypotheses
+                (let ((result nil))
+                  (cl-do ((i 0 (1+ i)))
+                      ((>= i (length hypotheses)))
+                    (when (and (< i (length decisions))
+                               (string= (nth i decisions) "kept"))
+                      (push (nth i hypotheses) result)))
+                  (nreverse result)))
+               (discarded-hypotheses
+                (let ((result nil))
+                  (cl-do ((i 0 (1+ i)))
+                      ((>= i (length hypotheses)))
+                    (when (and (< i (length decisions))
+                               (or (string= (nth i decisions) "discarded")
+                                   (string= (nth i decisions) "validation-failed")
+                                   (string= (nth i decisions) "timeout")))
+                      (push (nth i hypotheses) result)))
+                  (nreverse result)))
+               (knowledge-file (expand-file-name
+                                (format "experiment-insights-%s.md" target-key)
+                                knowledge-dir)))
+          ;; VALUE GATE: Only create knowledge page if insights have sufficient value
+          (when (and (> count 2) (>= avg-value 5.0))
+            (make-directory knowledge-dir t)
+            (with-temp-file knowledge-file
+              (insert "---\n")
+              (insert (format "title: Experiment Insights - %s\n" target-key))
+              (insert "status: active\n")
+              (insert "category: knowledge\n")
+              (insert (format "tags: [auto-workflow, experiments, %s]\n"
+                              (replace-regexp-in-string "[ /]" "-" target-key)))
+              (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
+              (insert (format "insight-quality: %.1f/10\n" avg-value))
+              (insert "---\n\n")
+              (insert (format "# Experiment Insights: %s\n\n" target-key))
+              (insert (format "*Consolidated from %d experiments (avg insight quality: %.1f/10).*\n\n"
+                              count avg-value))
+              (insert (format "**Keep rate:** %.0f%% (%d kept / %d discarded / %d failed / %d timeout)\n\n"
+                              (if (> count 0) (* 100 (/ (float kept-count) count)) 0)
+                              kept-count discarded-count failed-count timeout-count))
+              ;; Successful patterns
+              (when kept-hypotheses
+                (insert "## Successful Patterns (What Works)\n\n")
+                (let ((unique-kept (delete-dups kept-hypotheses)))
+                  (dolist (h (seq-take unique-kept 5))
+                    (insert (format "- %s\n" h)))
+                  (insert "\n"))
+                (insert "**Why these work:**\n")
+                (insert "- Targeted changes to single functions\n")
+                (insert "- Clear functional impact (not just style)\n")
+                (insert "- Validation guards or bug fixes with measurable improvement\n\n"))
+              ;; Failure patterns
+              (when discarded-hypotheses
+                (insert "## Failure Patterns (What to Avoid)\n\n")
+                (let ((unique-failures (delete-dups discarded-hypotheses)))
+                  (dolist (h (seq-take unique-failures 5))
+                    (insert (format "- %s\n" h)))
+                  (insert "\n"))
+                (insert "**Why these fail:**\n")
+                (insert "- Score tie without quality gain (need ≥0.01 improvement)\n")
+                (insert "- Pure refactoring without bug fix (grader sees as style-only)\n")
+                (insert "- Introducing undefined functions (Common Lisp symbols in Emacs Lisp)\n")
+                (insert "- Complex control flow (catch/throw, non-local exits)\n")
+                (insert "- Repeated focus on same function after 2+ non-kept attempts\n\n"))
+              ;; Lessons learned
+              (when lessons
+                (insert "## Key Lessons\n\n")
+                (dolist (lesson (seq-take (delete-dups lessons) 8))
+                  (insert (format "- %s\n" lesson)))
+                (insert "\n"))
+              ;; Score predictor
+              (insert "## Score Predictor\n\n")
+              (insert "| Pattern | Predicts | Confidence |\n")
+              (insert "|---------|----------|------------|\n")
+              (insert "| Validation guard (proper-list-p, nil check) | KEEP | High |\n")
+              (insert "| Bug fix + refactor combo | KEEP | High |\n")
+              (insert "| Extract helper alone | DISCARD | Medium |\n")
+              (insert "| catch/throw or complex flow | DISCARD | High |\n")
+              (insert "| Common Lisp symbols (cw, file, plusp) | VALIDATION-FAILED | Very High |\n")
+              (insert "| >50 lines changed | TIMEOUT/DISCARD | Medium |\n")
+              (insert "\n"))
+            ;; Archive individual files only if knowledge page created
+            (make-directory archive-dir t)
+            (dolist (file (plist-get group :files))
+              (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir) t))
+            (setq consolidated (+ consolidated count))
+            (message "[evolution] Consolidated %d insights for %s → %s (quality: %.1f/10)"
+                     count target-key knowledge-file avg-value))
+          ;; If quality too low, just archive without creating knowledge page
+          (when (and (> count 2) (< avg-value 5.0))
+            (make-directory archive-dir t)
+            (dolist (file (plist-get group :files))
+              (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir) t))
+            (setq consolidated (+ consolidated count))
+            (message "[evolution] Archived %d low-value insights for %s (quality: %.1f/10 < 5.0, skipping knowledge page)"
+                     count target-key avg-value))))
+      target-groups)
+     (when (> consolidated 0)
+       (message "[evolution] Consolidated %d insight files across %d groups"
+                consolidated (hash-table-count target-groups)))
+     consolidated)))
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.
