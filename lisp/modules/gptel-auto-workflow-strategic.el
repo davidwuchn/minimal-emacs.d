@@ -197,10 +197,13 @@ EDGE CASE: Only caches context when shell commands produce non-empty output."
          (now (float-time))
          (cache-entry (and (listp gptel-auto-workflow--context-cache)
                            (eq (car gptel-auto-workflow--context-cache) proj-root)
+                           (listp (cdr gptel-auto-workflow--context-cache))
                            (cdr gptel-auto-workflow--context-cache)))
          (cached-context (and cache-entry
+                              (plist-member cache-entry :context)
                               (plist-get cache-entry :context)))
          (cache-time (and cache-entry
+                          (plist-member cache-entry :timestamp)
                           (plist-get cache-entry :timestamp)))
          (cache-valid (and cached-context cache-time
                            (< (- now cache-time) cache-ttl))))
