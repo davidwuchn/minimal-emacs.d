@@ -37,14 +37,49 @@ file."
   :type 'integer
   :group 'gptel-sandbox)
 
+(defun gptel-sandbox--load-profile-from-skill (profile-name)
+  "Load tool profile PROFILE-NAME from sandbox-profiles skill.
+Returns list of tool names or nil if skill not found."
+  (when (fboundp 'gptel-auto-workflow--load-skill-content)
+    (let* ((skill (gptel-auto-workflow--load-skill-content "sandbox-profiles"))
+           (profile-regexp (format "### %s\\n.*?```json\\n\\(.*?\\)\\n```"
+                                   (regexp-quote profile-name))))
+      (when (and skill (string-match profile-regexp skill))
+        (let ((json-str (match-string 1 skill)))
+          (condition-case nil
+              (let ((profile (json-read-from-string json-str)))
+                (cdr (assq 'allowed profile)))
+            (error nil)))))))
+
 (defcustom my/gptel-programmatic-allowed-tools
-  '("Read" "Grep" "Glob"
-    "Edit" "ApplyPatch"
-    "Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages" "Diagnostics"
-    "describe_symbol" "get_symbol_source" "find_buffers_and_recent")
+  (or (gptel-sandbox--load-profile-from-skill "emacs-lisp")
+      '("Read" "Grep" "Glob"
+        "Edit" "ApplyPatch"
+        "Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages" "Diagnostics"
+        "describe_symbol" "get_symbol_source" "find_buffers_and_recent"))
   "Tool names allowed inside Programmatic execution.
+Loaded from sandbox-profiles skill if available, otherwise uses defaults.
 The initial v1 slice focuses on read-mostly tools plus preview-backed patch
-editors (`Edit`, `ApplyPatch`, `Code_Replace`)."
+editors (`Edit', `ApplyPatch', `Code_Replace')."
+  :type '(repeat string)
+  :group 'gptel-sandbox)
+
+(defcustom my/gptel-programmatic-readonly-tools
+  (or (gptel-sandbox--load-profile-from-skill "readonly-audit")
+      '("Read" "Grep" "Glob"
+        "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"
+        "describe_symbol" "get_symbol_source" "find_buffers_and_recent"))
+  "Tool names allowed inside Programmatic when running in readonly mode.
+Loaded from sandbox-profiles skill if available, otherwise uses defaults.
+This profile is used by `gptel-plan' and excludes mutating or confirming tools."
+  :type '(repeat string)
+  :group 'gptel-sandbox)
+
+(defcustom my/gptel-programmatic-confirming-tools
+  '("Edit" "ApplyPatch" "Code_Replace")
+  "Tool names allowed to request confirmation inside Programmatic.
+These tools keep their own preview/apply flow after the initial nested
+confirmation step."
   :type '(repeat string)
   :group 'gptel-sandbox)
 

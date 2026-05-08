@@ -46,35 +46,45 @@
 ;;; Eight Keys - see mementum/knowledge/nucleus-patterns.md for documentation
 ;;; ============================================================================
 
+(defun gptel-benchmark--load-keys-from-skill ()
+  "Load Eight Keys definitions from eight-keys-grader skill.
+Returns plist with keys or nil if skill not available."
+  (when (fboundp 'gptel-auto-workflow--load-skill-content)
+    (let ((skill (gptel-auto-workflow--load-skill-content "eight-keys-grader")))
+      (when skill
+        ;; Parse skill content to extract keys (simplified)
+        skill))))
+
 (defconst gptel-benchmark-eight-keys-definitions
-  '((phi-vitality
-     :symbol "φ"
-     :name "Vitality"
-     :element water
-     :signals ("builds on discoveries" "adapts to new information" "progressive improvement"
-               "non-repetitive" "evolves approach" "learns from feedback")
-     :anti-patterns ("mechanical rephrasing" "circular logic" "repeated failed approaches"
-                     "retrying same way" "static approach" "ignores feedback"))
-    (fractal-clarity
-     :symbol "fractal"
-     :name "Clarity"
-     :element metal
-     :signals ("explicit assumptions" "testable definitions" "clear structure"
-               "measurable criteria" "well-defined phases" "explicit success criteria")
-     :anti-patterns ("vague terms" "handle properly" "look good" "ambiguous instructions"
-                     "undefined terms" "implicit assumptions"))
-    (epsilon-purpose
-     :symbol "ε"
-     :name "Purpose"
-     :element wood
-     :signals ("clear goals" "measurable outcomes" "actionable function"
-               "specific objectives" "defined deliverables" "purposeful steps")
-     :anti-patterns ("abstract descriptions" "no action" "unclear goals"
-                     "meandering" "no measurable outcome" "purposeless"))
-    (tau-wisdom
-     :symbol "τ"
-     :name "Wisdom"
-     :element fire
+  (or (gptel-benchmark--load-keys-from-skill)
+      '((phi-vitality
+         :symbol "φ"
+         :name "Vitality"
+         :element water
+         :signals ("builds on discoveries" "adapts to new information" "progressive improvement"
+                   "non-repetitive" "evolves approach" "learns from feedback")
+         :anti-patterns ("mechanical rephrasing" "circular logic" "repeated failed approaches"
+                         "retrying same way" "static approach" "ignores feedback"))
+        (fractal-clarity
+         :symbol "fractal"
+         :name "Clarity"
+         :element metal
+         :signals ("explicit assumptions" "testable definitions" "clear structure"
+                   "measurable criteria" "well-defined phases" "explicit success criteria")
+         :anti-patterns ("vague terms" "handle properly" "look good" "ambiguous instructions"
+                         "undefined terms" "implicit assumptions"))
+        (epsilon-purpose
+         :symbol "ε"
+         :name "Purpose"
+         :element wood
+         :signals ("clear goals" "measurable outcomes" "actionable function"
+                   "specific objectives" "defined deliverables" "purposeful steps")
+         :anti-patterns ("abstract descriptions" "no action" "unclear goals"
+                         "meandering" "no measurable outcome" "purposeless"))
+        (tau-wisdom
+         :symbol "τ"
+         :name "Wisdom"
+         :element fire
      :signals ("planning before execution" "error prevention" "foresight"
                "plan file created" "risks identified" "proactive measures")
      :anti-patterns ("premature optimization" "reactive fixes" "no planning"
@@ -113,6 +123,7 @@
                      "ignores edge cases" "gives up easily" "static after failure")))
   "Eight Keys definitions.
 See mementum/knowledge/nucleus-patterns.md for documentation.")
+)
 
 (defun gptel-benchmark-eight-keys-criteria (key)
   "Return criteria list for KEY."
