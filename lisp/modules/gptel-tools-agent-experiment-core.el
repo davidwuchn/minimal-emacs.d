@@ -6,6 +6,31 @@
 (defvar gptel-auto-workflow--run-id)
 (defvar gptel-auto-experiment--no-improvement-count)
 
+(defun gptel-auto-experiment--maybe-failover-main-backend ()
+  "Switch `gptel-backend' to a fallback if the current one is rate-limited.
+Checks `gptel-auto-workflow--rate-limited-backends' and uses
+`gptel-auto-workflow-executor-rate-limit-fallbacks' to find an alternative."
+  (when (and (boundp 'gptel-backend) gptel-backend
+             (fboundp 'gptel-backend-name)
+             (fboundp 'gptel-auto-workflow--backend-rate-limited-p)
+             (fboundp 'gptel-auto-workflow--first-available-provider-candidate)
+             (fboundp 'gptel-auto-workflow--backend-object))
+    (let* ((current-name (gptel-backend-name gptel-backend))
+           (is-limited (gptel-auto-workflow--backend-rate-limited-p current-name)))
+      (when is-limited
+        (if-let* ((fallback (gptel-auto-workflow--first-available-provider-candidate
+                             gptel-auto-workflow-executor-rate-limit-fallbacks
+                             gptel-auto-workflow--rate-limited-backends))
+                  (new-backend (gptel-auto-workflow--backend-object (car fallback)))
+                  (new-model (intern (cdr fallback))))
+            (progn
+              (setq gptel-backend new-backend
+                    gptel-model new-model)
+              (message "[auto-experiment] Main backend switched from %s to %s/%s (rate-limited)"
+                       current-name (car fallback) (cdr fallback)))
+          (message "[auto-experiment] Main backend %s is rate-limited but no fallback available"
+                   current-name))))))
+
 (defun gptel-auto-experiment-run (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional log-fn)
   "Run single experiment. Call CALLBACK with result plist.
 BASELINE-CODE-QUALITY is the initial code quality score.
@@ -13,6 +38,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
   ;; Clear per-experiment provider overrides so MiniMax gets first crack
   ;; at each new experiment. Rate-limited backends still stay blacklisted.
   (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+  ;; Also switch main backend if it's been rate-limited
+  (gptel-auto-experiment--maybe-failover-main-backend)
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
