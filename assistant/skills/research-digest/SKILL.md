@@ -68,7 +68,7 @@ When LLM is unavailable, return raw findings unmodified.
 
 ## Evolution Statistics
 
-Updated: 2026-05-09 21:27
+Updated: 2026-05-09 21:37
 
 - **Techniques extracted per digest**: 0
 - **Implementation rate**: 0.0%
