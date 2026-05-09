@@ -5,7 +5,7 @@ description: |
   dangerous patterns, undefined symbols, and Common Lisp compatibility issues.
 version: 1.0
 evolve-script: evolve_rules.py
-updated: 2026-05-09 19:00
+updated: 2026-05-09 19:27
 metadata:
   category: code-quality
   language: emacs-lisp

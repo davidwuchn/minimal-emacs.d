@@ -4,7 +4,7 @@ description: |
   Grading rubric based on Eight Keys (φ vitality, fractal clarity, ε purpose, τ wisdom, π synthesis, μ directness, ∃ truth, ∀ vigilance) and Wu Xing (Five Elements) framework. Use when evaluating AI-generated code quality, experiment results, or improvement proposals.
 version: 2.0
 evolve-script: evolve_rubric.py
-updated: 2026-05-09 19:00
+updated: 2026-05-09 19:27
 metadata:
   category: quality-assurance
   author: auto-workflow

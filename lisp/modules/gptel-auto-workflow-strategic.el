@@ -285,7 +285,7 @@ EDGE CASE: Returns empty string if no patterns found or git unavailable."
 Returns skill content or empty string if not found.
 Uses standard skill loader for consistency."
   (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/FINDINGS")))
-    (if (string-empty-p content)
+    (if (or (null content) (string-empty-p content))
         ""
       (progn
         (message "[research] Loaded evolved skill (%d chars)" (length content))
@@ -296,7 +296,7 @@ Uses standard skill loader for consistency."
 Returns skill content or empty string if not found.
 Uses standard skill loader for consistency."
   (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/DIRECTIVE")))
-    (if (string-empty-p content)
+    (if (or (null content) (string-empty-p content))
         ""
       (progn
         (message "[directive] Loaded evolved skill (%d chars)" (length content))
@@ -341,7 +341,7 @@ Returns formatted string for research prompt."
 Returns skill content or empty string if not found.
 Uses standard skill loader so humans can edit RESEARCHER.md."
   (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/researcher")))
-    (if (string-empty-p content)
+    (if (or (null content) (string-empty-p content))
         (progn
           (message "[research] RESEARCHER.md skill not found, using default")
           "")
@@ -370,8 +370,8 @@ Returns nil if data not available."
                            (setq total-kept (+ total-kept (gethash "kept" stats 0))))
                          topics)
                 (list :effectiveness (if (> total-exp 0)
-                                        (round (* 100.0 (/ total-kept total-exp)))
-                                      0)
+                                         (round (* 100.0 (/ total-kept total-exp)))
+                                       0)
                       :kept total-kept
                       :total total-exp
                       :topics topics))))
@@ -516,13 +516,13 @@ Returns t if evolution was triggered, nil otherwise."
          (when (and (file-exists-p analyze-script) (file-exists-p evolve-script))
            ;; Run analysis
            (let ((analyze-cmd (format "cd %s && python3 %s --experiments-dir var/tmp/experiments --memories-dir mementum/memories --output-dir %s --lookback-days 90"
-                                     root analyze-script data-dir)))
+                                      root analyze-script data-dir)))
              (message "[meta-learn] Running: %s" analyze-cmd)
              (let ((output (shell-command-to-string analyze-cmd)))
                (message "[meta-learn] Analysis output: %s" output)))
            ;; Evolve skill
            (let ((evolve-cmd (format "cd %s && python3 %s --data-dir %s --skill %s"
-                                    root evolve-script data-dir skill-file)))
+                                     root evolve-script data-dir skill-file)))
              (message "[meta-learn] Running: %s" evolve-cmd)
              (let ((output (shell-command-to-string evolve-cmd)))
                (message "[meta-learn] Evolution output: %s" output)))
@@ -534,7 +534,7 @@ Returns t if evolution was triggered, nil otherwise."
               (effectiveness (or (plist-get meta-data :effectiveness) 100)))
          (when (< effectiveness 14)
            (message "[meta-learn] Threshold alert: keep rate %d%% < 14%%, triggering emergency re-analysis"
-                   effectiveness)
+                    effectiveness)
            (gptel-auto-workflow--trigger-researcher-meta-learning 'post-batch)
            (setq triggered t))))
       
@@ -556,7 +556,7 @@ Returns t if triggered."
          (total (or (plist-get meta-data :total) 0))
          ;; Trigger every 50 experiments or when keep rate drops
          (should-trigger (or (< effectiveness 14)
-                            (and (> total 0) (zerop (mod total 50))))))
+                             (and (> total 0) (zerop (mod total 50))))))
     (when should-trigger
       (if (< effectiveness 14)
           (gptel-auto-workflow--trigger-researcher-meta-learning 'threshold)
@@ -674,7 +674,7 @@ RULES:
         (gptel-auto-experiment--maybe-failover-main-backend))
       (if (fboundp 'gptel-request)
           (gptel-request
-           digest-prompt
+              digest-prompt
             :callback
             (lambda (response _info)
               (let* ((candidate (if (stringp response)
@@ -696,7 +696,7 @@ RULES:
                   (plist-put gptel-auto-workflow--current-research-context
                              :digested digested))
                 (funcall callback digested)))
-           :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
+            :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
         (progn
           (message "[auto-workflow] gptel-request unavailable, using raw findings")
           (funcall callback raw-findings))))))
@@ -725,8 +725,8 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
                   (source (if research-error-p "local-fallback" "external"))
                   (findings-hash (sha1 raw-findings))
                   (strategy (or (and (boundp 'gptel-auto-workflow--active-strategy)
-                                      gptel-auto-workflow--active-strategy)
-                                 "default")))
+                                     gptel-auto-workflow--active-strategy)
+                                "default")))
              (when research-error-p
                (message "[auto-workflow] External research failed; using local research fallback (%d chars)"
                         (length effective-findings)))
@@ -1193,15 +1193,15 @@ When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
        (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
        (let ((file (gptel-auto-workflow--research-file)))
          (make-directory (file-name-directory file) t)
-          (with-temp-file file
-            (insert (format "# Research Findings\n\n> Project: %s\n> Updated: %s\n\n%s"
-                            proj-root
-                            (format-time-string "%Y-%m-%d %H:%M")
-                            findings)))
-          (message "[research] Findings cached for %s (%d chars)"
-                   proj-root (length findings))
-          (when completion-callback
-            (funcall completion-callback findings)))))))
+         (with-temp-file file
+           (insert (format "# Research Findings\n\n> Project: %s\n> Updated: %s\n\n%s"
+                           proj-root
+                           (format-time-string "%Y-%m-%d %H:%M")
+                           findings)))
+         (message "[research] Findings cached for %s (%d chars)"
+                  proj-root (length findings))
+         (when completion-callback
+           (funcall completion-callback findings)))))))
 
 (defun gptel-auto-workflow-load-research-findings ()
   "Load cached research findings for current project.
@@ -1276,8 +1276,8 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
          (findings (gethash cache-key
-                           gptel-auto-workflow--research-findings-cache
-                           "")))
+                            gptel-auto-workflow--research-findings-cache
+                            "")))
     (list :running (timerp gptel-auto-workflow--research-timer)
           :interval gptel-auto-workflow-research-interval
           :project proj-root
