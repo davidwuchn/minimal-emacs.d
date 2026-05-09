@@ -326,10 +326,17 @@ Returns nil if SCORES is not a list."
    ((null scores) nil)
    ((not (listp scores)) nil)
    ((proper-list-p scores)
-    (mapcar (lambda (score-type)
-              (cons score-type (gptel-benchmark--normalize-score
-                                (gptel-benchmark--get-field scores score-type))))
-            gptel-benchmark--score-types))
+    (let ((is-plist (and (keywordp (car scores)) (zerop (mod (length scores) 2)))))
+      (mapcar (lambda (score-type)
+                (cons score-type
+                      (gptel-benchmark--normalize-score
+                       (if is-plist
+                           (plist-get scores score-type)
+                         (or (cdr (assoc score-type scores))
+                             (let ((alist-key (gptel-benchmark--keyword-to-alist-key score-type)))
+                               (unless (eq alist-key score-type)
+                                 (cdr (assoc alist-key scores)))))))))
+              gptel-benchmark--score-types)))
    (t nil)))
 
 (defun gptel-benchmark--calculate-average (score-totals total score-type)
