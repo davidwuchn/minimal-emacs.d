@@ -86,12 +86,13 @@ Each worktree gets its own isolated buffer for subagent overlays.")
 
 (defun gptel-auto-workflow--normalized-projects ()
   "Return configured project roots as unique expanded directory names."
-  (delete-dups
-   (mapcar (lambda (project-root)
-             (and (stringp project-root)
-                  (> (length project-root) 0)
-                  (file-name-as-directory (expand-file-name project-root))))
-           gptel-auto-workflow-projects)))
+  (delq nil
+        (delete-dups
+         (mapcar (lambda (project-root)
+                   (and (stringp project-root)
+                        (> (length project-root) 0)
+                        (file-name-as-directory (expand-file-name project-root))))
+                 gptel-auto-workflow-projects))))
 
 (defun gptel-auto-workflow--normalize-worktree-dir (worktree-dir &optional project-root)
   "Return WORKTREE-DIR as an absolute directory name.
