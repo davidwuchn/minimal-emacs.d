@@ -284,7 +284,7 @@ EDGE CASE: Returns empty string if no patterns found or git unavailable."
   "Load evolved research skill from FINDINGS.md.
 Returns skill content or empty string if not found.
 Uses standard skill loader for consistency."
-  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/RESEARCH")))
+  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/FINDINGS")))
     (if (string-empty-p content)
         ""
       (progn
