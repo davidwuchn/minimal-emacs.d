@@ -2,7 +2,7 @@
 name: research-strategies
 description: External research insights digested by LLM. Feeds into directive hypotheses.
 version: 2.0
-updated: 2026-05-09 17:16
+updated: 2026-05-09 17:28
 ---
 
 # External Research Insights
