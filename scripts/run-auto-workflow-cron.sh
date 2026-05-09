@@ -1265,6 +1265,7 @@ if [ "$ACTION" = "stop" ]; then
             exit 124
         fi
     fi
+    discard_stale_worker_daemon
     clear_stale_running_status
     if status_looks_active; then
         rewrite_status_idle
