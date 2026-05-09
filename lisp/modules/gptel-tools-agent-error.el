@@ -133,13 +133,14 @@ REASON is only used for logging."
       candidate)))
 
 (defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
-  "Activate a per-run fallback for AGENT-TYPE when RESULT shows provider pressure."
+  "Activate a per-run fallback for AGENT-TYPE when RESULT shows a real rate limit.
+Only blacklists for actual rate limits or hard quotas, NOT timeouts or transient errors."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
-             (gptel-auto-experiment--provider-pressure-error-p result))
+             (gptel-auto-experiment--should-blacklist-provider-p result))
     ;; Capture quota reset timestamp if present in the error message
     (gptel-auto-experiment--parse-quota-reset-time result)
     (gptel-auto-workflow--activate-provider-failover
-     agent-type preset "provider pressure")))
+     agent-type preset "rate limit or hard quota")))
 
 (defun gptel-auto-workflow--maybe-override-subagent-provider (agent-type preset)
   "Return PRESET with a fallback provider for headless auto-workflow AGENT-TYPE."
@@ -241,7 +242,8 @@ Returns the parsed timestamp (seconds since epoch) or nil if not found."
             msg)))))
 
 (defun gptel-auto-experiment--provider-pressure-error-p (error-output)
-  "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend."
+  "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend.
+This is used for retry logic and includes transient errors."
   (or (gptel-auto-experiment--rate-limit-error-p error-output)
       (gptel-auto-experiment--provider-auth-error-p error-output)
       (gptel-auto-experiment--shared-transient-error-p error-output)
@@ -251,6 +253,13 @@ Returns the parsed timestamp (seconds since epoch) or nil if not found."
                (string-match-p
                 "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|Malformed JSON"
                 msg))))))
+
+(defun gptel-auto-experiment--should-blacklist-provider-p (error-output)
+  "Return non-nil only when ERROR-OUTPUT shows a real rate limit or hard quota.
+Unlike `provider-pressure-error-p', this does NOT blacklist for timeouts,
+connection errors, or other transient failures."
+  (or (gptel-auto-experiment--rate-limit-error-p error-output)
+      (gptel-auto-experiment--hard-quota-exhausted-p error-output)))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
@@ -528,15 +537,14 @@ RETRY-COUNT tracks current retry attempt."
                   (< retries gptel-auto-experiment-max-retries)
                   retryable-failure)
              (progn
-               (when (and raw-error
-                          (or (gptel-auto-experiment--provider-pressure-error-p raw-error)
-                              (gptel-auto-experiment--is-retryable-error-p raw-error)))
-                 (condition-case nil
-                     (gptel-auto-workflow--activate-provider-failover
-                      "executor"
-                      (gptel-auto-workflow--get-active-agent-preset "executor")
-                      raw-error)
-                   (error nil)))
+                (when (and raw-error
+                           (gptel-auto-experiment--should-blacklist-provider-p raw-error))
+                  (condition-case nil
+                      (gptel-auto-workflow--activate-provider-failover
+                       "executor"
+                       (gptel-auto-workflow--get-active-agent-preset "executor")
+                       raw-error)
+                    (error nil)))
                (setq attempt-logs nil)
                (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
                         experiment-id (1+ retries) gptel-auto-experiment-max-retries

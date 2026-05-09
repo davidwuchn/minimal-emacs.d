@@ -555,11 +555,13 @@ subagent request."
        (if (and category
                 (< attempt gptel-auto-experiment-max-aux-subagent-retries))
            (progn
-             (when-let ((preset
-                         (gptel-auto-experiment--current-subagent-preset
-                          agent-type)))
-               (gptel-auto-workflow--activate-provider-failover
-                agent-type preset raw))
+             (when (and raw
+                        (gptel-auto-experiment--should-blacklist-provider-p raw))
+               (when-let ((preset
+                           (gptel-auto-experiment--current-subagent-preset
+                            agent-type)))
+                 (gptel-auto-workflow--activate-provider-failover
+                  agent-type preset raw)))
              (message "[auto-exp] %s failed transiently (%s), retrying (%d/%d)"
                       agent-type category
                       (1+ attempt) gptel-auto-experiment-max-aux-subagent-retries)

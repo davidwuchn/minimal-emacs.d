@@ -678,11 +678,12 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
       (if (< gptel-auto-workflow--review-error-retry-count
              gptel-auto-workflow--review-max-retries)
           (progn
-            (when (memq review-error-category '(:api-rate-limit :api-error :timeout))
-              (when-let ((reviewer-preset
-                          (gptel-auto-workflow--agent-base-preset "reviewer")))
-                (gptel-auto-workflow--activate-provider-failover
-                 "reviewer" reviewer-preset review-output)))
+             (when (and (memq review-error-category '(:api-rate-limit :api-error :timeout))
+                        (gptel-auto-experiment--should-blacklist-provider-p review-output))
+               (when-let ((reviewer-preset
+                           (gptel-auto-workflow--agent-base-preset "reviewer")))
+                 (gptel-auto-workflow--activate-provider-failover
+                  "reviewer" reviewer-preset review-output)))
             (cl-incf gptel-auto-workflow--review-error-retry-count)
             (message "[auto-workflow] Review failed transiently, retrying review (%d/%d)..."
                      gptel-auto-workflow--review-error-retry-count
