@@ -255,12 +255,12 @@ Handles both (run . scores) cons cells and plists with :scores key.
 Returns nil for nil or malformed input."
   (cond
    ((null r) nil)
-   ((and (listp r) (keywordp (car r)) (zerop (mod (length r) 2)))
+   ((and (proper-list-p r) (keywordp (car r)) (zerop (mod (length r) 2)))
     (let ((scores (plist-get r :scores)))
-      (when (listp scores) scores)))
+      (when (proper-list-p scores) scores)))
    ((consp r)
     (let ((scores (cdr r)))
-      (when (and (listp scores)
+      (when (and (proper-list-p scores)
                  (or (and (keywordp (car scores))
                           (zerop (mod (length scores) 2)))
                      (and (cl-every #'consp scores)
