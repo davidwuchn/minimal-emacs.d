@@ -1254,6 +1254,7 @@ if [ "$ACTION" = "stop" ]; then
            printf '%s' "$output" | grep -q ':phase '; then
             refresh_snapshot_paths_from_daemon >/dev/null 2>&1 || true
             printf '%s\n' "$output" >"$STATUS_FILE"
+            discard_stale_worker_daemon
             printf '%s\n' "$output"
             exit 0
         fi
