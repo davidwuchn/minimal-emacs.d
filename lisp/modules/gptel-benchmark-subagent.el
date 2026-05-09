@@ -55,8 +55,10 @@
   "Subagent dispatch for benchmarking."
   :group 'gptel)
 
-(defcustom gptel-benchmark-subagent-timeout 60
-  "Default timeout for subagent calls in seconds."
+(defcustom gptel-benchmark-subagent-timeout 120
+  "Default timeout for subagent calls in seconds.
+Increased from 60s to 120s because moonshot/kimi-k2.6 takes longer
+for thorough analysis but produces better results."
   :type 'integer
   :group 'gptel-benchmark-subagent)
 
