@@ -23,7 +23,9 @@
          (source (and dir (expand-file-name (format "%s.el" feature) dir))))
     (if (and source (file-readable-p source))
         (load source nil 'nomessage)
-      (require feature))))
+      (require feature))
+    (unless (featurep feature)
+      (error "Module %s did not provide feature %S" (or source feature) feature))))
 
 (dolist (feature '(gptel-tools-agent-base
                    gptel-tools-agent-git
