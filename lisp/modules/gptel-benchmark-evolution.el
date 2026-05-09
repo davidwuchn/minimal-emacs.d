@@ -238,7 +238,7 @@ Engine + Query + Graph + Introspection + History + Knowledge + Memory = SYSTEM"
         (emergences (plist-get gptel-benchmark-evolution-state :emergences))
         (emergence-history (plist-get gptel-benchmark-evolution-state :emergence-history)))
     (when (and (>= cycle gptel-benchmark-evolution-cycle-threshold)
-               (< (length capabilities) 7))
+               (< (length capabilities) 5))
       (when (and (>= cycle (* 1 gptel-benchmark-evolution-cycle-threshold))
                  (not (memq 'interface capabilities)))
         (push 'interface capabilities)
@@ -306,7 +306,7 @@ Rate = 0: no growth."
   "Check if AI COMPLETE has been reached.
 SYSTEM + Feed Forward = AI COMPLETE"
   (let ((capabilities (plist-get gptel-benchmark-evolution-state :capabilities)))
-    (when (= (length capabilities) 7)
+    (when (= (length capabilities) 5)
       (message "[evolution] AI COMPLETE achieved!")
       t)))
 
