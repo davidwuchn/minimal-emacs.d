@@ -828,7 +828,7 @@ Without PROJECT-ROOT, clears cache for all projects."
         (message "Research cache status:\n%s"
                  cached-result)
       (let ((status-lines '()))
-        (dolist (project-root gptel-auto-workflow-projects)
+        (dolist (project-root (gptel-auto-workflow--normalized-projects))
           (let* ((findings (gethash project-root gptel-auto-workflow--research-findings-cache ""))
                  (cache-file (expand-file-name "var/tmp/research-findings.md" project-root))
                  (attrs (file-attributes cache-file))
@@ -882,9 +882,9 @@ and restores headless state. Returns t on success, nil on failure."
   "Run a weekly job for all projects using PREFIX and PER-PROJECT-FN.
 PER-PROJECT-FN should accept a project root and return t/nil for success."
   (message "[%s] Running weekly job for %d projects..."
-           prefix (length gptel-auto-workflow-projects))
+           prefix (length (gptel-auto-workflow--normalized-projects)))
   (let ((results nil))
-    (dolist (project-root gptel-auto-workflow-projects)
+    (dolist (project-root (gptel-auto-workflow--normalized-projects))
       (message "[%s] Processing project: %s" prefix project-root)
       (condition-case err
           (if (funcall per-project-fn project-root)
