@@ -284,6 +284,10 @@ otherwise collect each mapped result.
 Supported shape:
   (mapcar (lambda (item) BODY...) LIST)
   (filter (lambda (item) BODY...) LIST)"
+  ;; ASSUMPTION: list-expr must evaluate to a proper list for safe iteration
+  ;; BEHAVIOR: Maps or filters items using an isolated child env per iteration
+  ;; EDGE CASE: Rejects improper/dotted lists that would cause dolist errors
+  ;; TEST: Pass a dotted list as input and verify error is raised
   (let ((op-name (if filterp "filter" "mapcar")))
     (pcase expr
       (`(,_ (lambda (,arg) . ,body) ,list-expr)
@@ -291,8 +295,8 @@ Supported shape:
          (error "Programmatic %s lambda arg must be a symbol" op-name))
        (let ((items (gptel-sandbox--eval-expr list-expr env))
              (results nil))
-         (unless (listp items)
-           (error "Programmatic %s expects a list input" op-name))
+         (unless (proper-list-p items)
+           (error "Programmatic %s expects a proper list input, got: %S" op-name items))
          (dolist (item items (nreverse results))
            ;; Each lambda invocation needs an isolated child env so `setq'
            ;; state does not leak between map/filter iterations.
@@ -332,8 +336,12 @@ Supported shape:
 INITIAL-VALUE is the starting value. STOP-PRED is called on each result;
 when non-nil, evaluation short-circuits and returns that result.
 Used by `and' and `or' to share short-circuit evaluation logic."
-  (unless (listp forms)
-    (error "Programmatic short-circuit requires a list of forms, got: %S" forms))
+  ;; ASSUMPTION: forms must be a proper list for safe dolist iteration
+  ;; BEHAVIOR: Evaluates forms left-to-right, stopping when stop-pred matches
+  ;; EDGE CASE: Rejects improper/dotted lists that would cause dolist errors
+  ;; TEST: Pass a dotted list like '(t . nil) and verify error is raised
+  (unless (proper-list-p forms)
+    (error "Programmatic short-circuit requires a proper list of forms, got: %S" forms))
   (unless (functionp stop-pred)
     (error "Programmatic short-circuit requires a function predicate, got: %S" stop-pred))
   (let ((value initial-value))
@@ -346,8 +354,14 @@ Used by `and' and `or' to share short-circuit evaluation logic."
 (defun gptel-sandbox--apply-builtin (func args env)
   "Apply built-in function FUNC to evaluated ARGS in ENV.
 Errors propagate to the outer condition-case in `execute-tool'."
+  ;; ASSUMPTION: args must be a proper list for safe mapcar evaluation
+  ;; BEHAVIOR: Validates args, evaluates each, checks arity, applies func
+  ;; EDGE CASE: Rejects dotted lists that would cause silent truncation
+  ;; TEST: Pass a dotted list like '(a b . c) and verify error is raised
   (unless (functionp func)
     (error "Programmatic builtin requires a function, got: %S" func))
+  (unless (proper-list-p args)
+    (error "Programmatic builtin arguments must be a proper list, got: %S" args))
   (let ((evaluated (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args))
         (arity (assq func gptel-sandbox--builtin-arity)))
     (when arity
