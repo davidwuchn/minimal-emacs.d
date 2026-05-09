@@ -2716,14 +2716,6 @@
 {"timestamp":"2026-05-08 15:27:11","strategy":"template-default","target":"two","experiment-id":4,"score":0,"outcome":"kept","axis":"?"}
 {"timestamp":"2026-05-08 15:29:04","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":5,"score":0,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-08 15:34:44","strategy":"template-default","target":"lisp/modules/gptel-ext-context.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-09 14:30:05","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":1,"score":0.4000000000000001,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-09 14:30:34","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":1,"score":0.4000000000000001,"outcome":"kept","axis":"?"}
-{"timestamp":"2026-05-09 14:45:31","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":2,"score":0.43333333333333335,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-09 14:46:22","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":2,"score":0.43333333333333335,"outcome":"kept","axis":"?"}
-{"timestamp":"2026-05-09 15:02:40","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":3,"score":0.4000000000000001,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-09 15:14:48","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":4,"score":0.4,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-09 15:40:56","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":5,"score":0.4666666666666666,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-09 15:41:46","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":5,"score":0.4666666666666666,"outcome":"kept","axis":"?"}
-{"timestamp":"2026-05-09 15:48:05","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":6,"score":0.43333333333333335,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-09 15:55:18","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":7,"score":0,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-09 15:56:59","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-09 15:33:20","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-09 15:48:01","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-09 15:49:58","strategy":"template-default","target":"lisp/modules/gptel-agent-loop.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
