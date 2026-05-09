@@ -888,10 +888,10 @@ PER-PROJECT-FN should accept a project root and return t/nil for success."
       (message "[%s] Processing project: %s" prefix project-root)
       (condition-case err
           (if (funcall per-project-fn project-root)
-              (push (cons project-root 'success) results)
-            (push (cons project-root 'error) results))
+              (push (cons (directory-file-name project-root) 'success) results)
+            (push (cons (directory-file-name project-root) 'error) results))
         (error
-         (push (cons project-root (format "error: %s" err)) results)
+         (push (cons (directory-file-name project-root) (format "error: %s" err)) results)
          (message "[%s] ✗ Failed: %s - %s" prefix project-root err))))
     (message "[%s] All projects processed: %s"
              prefix
@@ -922,6 +922,20 @@ PER-PROJECT-FN should accept a project root and return t/nil for success."
    "mementum"
    #'gptel-auto-workflow-run-all-mementum
     nil))
+
+(defun gptel-auto-workflow-run-instincts-for-project (project-root)
+  "Run instincts weekly job for specific PROJECT-ROOT."
+  (interactive "DProject root: ")
+  (gptel-auto-workflow--run-weekly-job-for-project
+   project-root "instincts" 'gptel-benchmark-instincts
+   "lisp/modules/gptel-benchmark-instincts.el"
+   #'gptel-benchmark-instincts-weekly-job))
+
+(defun gptel-auto-workflow-run-all-instincts ()
+  "Run instincts weekly job for all configured projects."
+  (interactive)
+  (gptel-auto-workflow--run-all-weekly-jobs
+   "instincts" #'gptel-auto-workflow-run-instincts-for-project))
 
 (defun gptel-auto-workflow-queue-all-instincts ()
   "Queue `gptel-auto-workflow-run-all-instincts' and return immediately."
