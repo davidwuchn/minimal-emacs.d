@@ -197,5 +197,55 @@ Called when research context changes or run completes."
            gptel-auto-workflow-evolution-enabled)
   (gptel-auto-workflow-evolution-auto-start))
 
+;; ─── Pipeline Verification ───
+
+(defun gptel-auto-workflow--verify-pipeline-integration ()
+  "Verify that research findings feed into directive and auto-workflow.
+Checks:
+1. Research findings file exists and has content
+2. Directive skill exists and references recent findings
+3. Research context is set for next auto-workflow run
+Returns t if all checks pass, nil with warnings otherwise."
+  (let* ((findings-file (expand-file-name "var/tmp/research-findings.md"))
+         (directive-file (expand-file-name "assistant/skills/auto-workflow/DIRECTIVE.md"))
+         (findings-ok nil)
+         (directive-ok nil)
+         (context-ok nil)
+         (issues nil))
+    
+    ;; Check 1: Findings file
+    (if (and (file-exists-p findings-file)
+             (> (nth 7 (file-attributes findings-file)) 100))
+        (setq findings-ok t)
+      (push "Research findings file missing or too small" issues))
+    
+    ;; Check 2: Directive references findings (has been updated recently)
+    (if (file-exists-p directive-file)
+        (let ((mtime (nth 5 (file-attributes directive-file)))
+              (findings-mtime (when (file-exists-p findings-file)
+                                (nth 5 (file-attributes findings-file)))))
+          (if (and findings-mtime mtime
+                   (time-less-p findings-mtime mtime))
+              (setq directive-ok t)
+            (push "Directive not updated after latest findings" issues)))
+      (push "Directive skill file not found" issues))
+    
+    ;; Check 3: Research context available
+    (if (and (boundp 'gptel-auto-workflow--current-research-context)
+             gptel-auto-workflow--current-research-context
+             (plist-get gptel-auto-workflow--current-research-context :digested))
+        (setq context-ok t)
+      (push "No digested research context available" issues))
+    
+    ;; Report
+    (if (and findings-ok directive-ok context-ok)
+        (progn
+          (message "[pipeline-verification] ✓ All checks passed: findings→directive integration working")
+          t)
+      (progn
+        (message "[pipeline-verification] ✗ Issues found: %s"
+                 (string-join (reverse issues) "; "))
+        nil))))
+
 (provide 'gptel-auto-workflow-production)
 ;;; gptel-auto-workflow-production.el ends here

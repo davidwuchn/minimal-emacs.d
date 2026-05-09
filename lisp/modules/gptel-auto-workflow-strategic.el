@@ -669,6 +669,9 @@ RULES:
 - Max 800 chars. Quality over quantity."
                       (truncate-string-to-width raw-findings 2000 nil nil "...")))))
       (message "[auto-workflow] Digesting research findings with LLM...")
+      ;; Ensure we use an available backend for digestion
+      (when (fboundp 'gptel-auto-experiment--maybe-failover-main-backend)
+        (gptel-auto-experiment--maybe-failover-main-backend))
       (if (fboundp 'gptel-request)
           (gptel-request
            digest-prompt
