@@ -24,17 +24,25 @@
   - This unblocks: executor experiments, digestion, and any direct `gptel-request` calls
   - **Revert this change when MiniMax quota resets on May 11**
 
+- ✅ **Fixed main backend auto-failover** (`lisp/modules/gptel-tools-agent-experiment-core.el`):
+  - Added `gptel-auto-experiment--maybe-failover-main-backend`
+  - Checks if current `gptel-backend` is rate-limited at experiment start
+  - Automatically switches to DashScope/moonshot from `executor-rate-limit-fallbacks`
+  - This fixes the root cause: executor uses global `gptel-backend`, not subagent preset override
+  - Committed and pushed to origin/main
+
 **Current Blockers:**
 1. **MiniMax API quota exhausted** - 45,000/45,000 weekly tokens
    - Quota resets: 2026-05-11T00:00:00+08:00
    - Workaround: Default backend now set to DashScope
    - Subagent fallback also configured to use DashScope
+   - Main backend auto-failover now implemented
 
 **Next Steps:**
-1. Monitor next auto-workflow run (scheduled 15:00 today) with DashScope backend
-2. Verify experiments complete successfully with DashScope
+1. ✅ **FIXED:** Main backend auto-failover implemented
+2. Monitor next auto-workflow run with full failover chain
 3. Revert default backend to MiniMax when quota resets on May 11
-4. Investigate why executor fallback wasn't working automatically (root cause: experiment core doesn't apply subagent backend override to `gptel-request` calls)
+4. When MiniMax returns: test that failover MiniMax → DashScope → moonshot works end-to-end
 
 ---
 
