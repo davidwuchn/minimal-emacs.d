@@ -176,19 +176,19 @@ HOSTNAME=$(hostname -s 2>/dev/null || hostname)
 case "$MACHINE" in
     pi5|linux)
         PLATFORM="Linux"
-        SCHEDULE="11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6 runs/day)"
+        SCHEDULE="11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6 pipeline runs/day)"
         DAEMON_CMD="systemctl --user start emacs"
         MACHINE_RENDER="pi5"
         ;;
     macos)
         PLATFORM="macOS"
-        SCHEDULE="10AM, 2PM, 6PM (3 runs/day) + weekly instincts"
+        SCHEDULE="10AM, 2PM, 6PM (3 pipeline runs/day) + weekly mementum/instincts"
         DAEMON_CMD="launchctl start emacs (or start Emacs.app)"
         MACHINE_RENDER="macos"
         ;;
     single)
         PLATFORM="Generic"
-        SCHEDULE="Every 4 hours"
+        SCHEDULE="Every 4 hours (6 pipeline runs/day) + weekly mementum/instincts"
         DAEMON_CMD="emacs --daemon (or start Emacs GUI)"
         MACHINE_RENDER="single"
         ;;
@@ -209,6 +209,14 @@ case "$MODE" in
         exit 0
         ;;
     install)
+        # Verify pipeline script exists and is executable
+        PIPELINE_SCRIPT="$DIR/scripts/run-pipeline.sh"
+        if [ ! -x "$PIPELINE_SCRIPT" ]; then
+            echo "ERROR: Pipeline script not found or not executable: $PIPELINE_SCRIPT" >&2
+            echo "Run: chmod +x scripts/run-pipeline.sh" >&2
+            exit 1
+        fi
+
         mkdir -p "$DIR/var/tmp/cron" "$DIR/var/tmp/experiments"
         echo "=== Installing Cron Jobs for Autonomous Operation ==="
         echo
@@ -221,6 +229,13 @@ case "$MODE" in
         merge_crontab "$rendered_file" "$tmp_file"
         crontab "$tmp_file"
         rm -f "$tmp_file" "$rendered_file"
+
+        # Verify pipeline job was installed
+        if ! crontab -l | grep -q "run-pipeline.sh"; then
+            echo "WARNING: Pipeline cron job not found in installed crontab" >&2
+            echo "Check: crontab -l | grep pipeline" >&2
+        fi
+
         echo "Installed auto-workflow cron block with $PLATFORM schedule"
         echo
         echo "Active jobs:"
@@ -228,12 +243,22 @@ case "$MODE" in
         echo
         echo "Schedule: $SCHEDULE"
         echo
-        echo "=== Prerequisites ==="
+        echo "=== Pipeline Architecture ==="
         echo
-        echo "1. No manual cron daemon setup is required; the wrapper starts a dedicated auto-workflow daemon on demand."
-        echo "2. Smoke test a real run: ./scripts/run-auto-workflow-cron.sh auto-workflow"
-        echo "3. Confirm progress/results: ./scripts/run-auto-workflow-cron.sh status && ./scripts/run-auto-workflow-cron.sh messages"
-        echo "4. Check logs: tail -f var/tmp/cron/*.log"
+        echo "Each scheduled run executes the full pipeline:"
+        echo "  1. Research   → Hunts external ideas + local pattern analysis"
+        echo "  2. Digestion  → LLM distills findings into actionable hypotheses"
+        echo "  3. Verify     → Checks findings feed into directive skill"
+        echo "  4. Auto-work  → Runs experiments using directive hypotheses"
+        echo "  5. Evolution  → Self-evolves skills internally (1h timer)"
+        echo
+        echo "=== Quick Start ==="
+        echo
+        echo "1. Smoke test pipeline:     ./scripts/run-pipeline.sh"
+        echo "2. Check daemon status:     ./scripts/run-auto-workflow-cron.sh status"
+        echo "3. View pipeline logs:      tail -f var/tmp/cron/pipeline.log"
+        echo "4. View experiment logs:    tail -f var/tmp/cron/copilot-auto-workflow.log"
+        echo "5. Quota-aware skip:        SKIP_IF_QUOTA_EXHAUSTED=yes ./scripts/run-pipeline.sh"
         echo
         echo "Done."
         exit 0
