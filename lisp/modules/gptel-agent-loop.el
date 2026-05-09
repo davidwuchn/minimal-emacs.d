@@ -290,9 +290,11 @@ Used when task stops but work remains to be done."
 (defun gptel-agent-loop--transient-error-p (error-data)
   "Check if ERROR-DATA represents a transient/retryable error.
 Delegates to `my/gptel--transient-error-p' for consistent error detection.
-Extracts :code/:status from error-data to enable HTTP status checks."
+Extracts :code/:status from error-data to enable HTTP status checks.
+ASSUMPTION: error-data is either a proper plist, a number, or nil.
+BEHAVIOR: Only extracts plist keys from proper lists, not dotted pairs."
   (when (and error-data (fboundp 'my/gptel--transient-error-p))
-    (let ((http-status (or (when (listp error-data)
+    (let ((http-status (or (when (proper-list-p error-data)
                              (or (plist-get error-data :code)
                                  (plist-get error-data :status)))
                            (and (numberp error-data) error-data))))
