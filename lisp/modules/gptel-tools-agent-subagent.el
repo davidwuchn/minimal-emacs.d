@@ -212,14 +212,13 @@ its async continuation layer in the worker daemon."
 
 (defun my/gptel--invoke-callback-safely (callback result &optional agent-type)
   "Invoke CALLBACK with RESULT, catching errors to prevent cascade failures.
-Optional AGENT-TYPE is used for debug tracing.
+Optional AGENT-TYPE identifies the callback source in error logs.
 
 This prevents `Selecting deleted buffer' errors when callback side effects
 delete the request or file buffer that happened to be current when the
 subagent callback fired, and avoids reusing a deleted worktree as
 `default-directory'."
   (cond ((functionp callback)
-         (message "[DEBUG] my/gptel--invoke-callback-safely calling %s callback with result type=%S" (or agent-type "unknown") (type-of result))
          (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
                 (safe-default-directory
                  (or (my/gptel--first-existing-directory
