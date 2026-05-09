@@ -224,6 +224,8 @@ MAX-ARGS of nil means no upper bound. Comparison ops need >= 2 args.")
 (defun gptel-sandbox--validate-setq-pairs (pairs)
   "Validate PAIRS as symbol/value pairs, returning (SYMBOL . VALUE-FORM) entries.
 Raises an error if PAIRS is malformed."
+  (unless (proper-list-p pairs)
+    (error "Programmatic setq requires a proper list of pairs, got: %S" pairs))
   (unless (cl-evenp (length pairs))
     (error "Programmatic setq requires symbol/value pairs"))
   (cl-loop
@@ -319,8 +321,8 @@ Supported shape:
 
 (defun gptel-sandbox--eval-sequential (forms env)
   "Evaluate FORMS sequentially in ENV, returning the last result."
-  (unless (listp forms)
-    (error "Programmatic eval-sequential requires a list, got: %S" forms))
+  (unless (proper-list-p forms)
+    (error "Programmatic eval-sequential requires a proper list, got: %S" forms))
   (let ((value nil))
     (dolist (form forms value)
       (setq value (gptel-sandbox--eval-expr form env)))))
@@ -841,8 +843,8 @@ CALLBACK receives final outcome plist."
     (error "Programmatic eval-progn requires a hash table environment, got: %S" env))
   (unless (proper-list-p state)
     (error "Programmatic eval-progn requires a proper plist state, got: %S" state))
-  (unless (listp body)
-    (error "Programmatic eval-progn requires a list of forms, got: %S" body))
+  (unless (proper-list-p body)
+    (error "Programmatic eval-progn requires a proper list of forms, got: %S" body))
   (if (null body)
       (funcall callback (list :done t :result nil))
     (gptel-sandbox--eval-statement

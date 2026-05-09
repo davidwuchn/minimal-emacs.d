@@ -242,9 +242,9 @@ memory after long sessions or if tasks appear stuck."
 
 (defun gptel-agent-loop--safe-accumulated-output (state)
   "Return STATE's accumulated output or empty string if nil.
-Returns empty string if STATE is nil (defensive guard).
-BEHAVIOR: Guards against nil state to prevent slot access errors."
-  (if state
+Returns empty string if STATE is nil or invalid (defensive guard).
+BEHAVIOR: Guards against nil or invalid state to prevent slot access errors."
+  (if (and state (gptel-agent-loop--task-p state))
       (or (gptel-agent-loop--task-accumulated-output state) "")
     ""))
 
@@ -290,9 +290,11 @@ Used when task stops but work remains to be done."
 (defun gptel-agent-loop--transient-error-p (error-data)
   "Check if ERROR-DATA represents a transient/retryable error.
 Delegates to `my/gptel--transient-error-p' for consistent error detection.
-Extracts :code/:status from error-data to enable HTTP status checks."
+Extracts :code/:status from error-data to enable HTTP status checks.
+ASSUMPTION: error-data is either a proper plist, a number, or nil.
+BEHAVIOR: Only extracts plist keys from proper lists, not dotted pairs."
   (when (and error-data (fboundp 'my/gptel--transient-error-p))
-    (let ((http-status (or (when (listp error-data)
+    (let ((http-status (or (when (proper-list-p error-data)
                              (or (plist-get error-data :code)
                                  (plist-get error-data :status)))
                            (and (numberp error-data) error-data))))
@@ -589,13 +591,18 @@ ASSUMPTION: RESP is a string (validated by callers)."
 (defun gptel-agent-loop--schedule-request (state prompt use-tools &optional delay)
   "Schedule a request for STATE with PROMPT.
 USE-TOOLS determines tool usage.  DELAY defaults to 0.1 seconds.
-Cancels any pending continuation timer before scheduling a new one."
-  (gptel-agent-loop--cancel-timer-if-active
-   (gptel-agent-loop--task-continuation-timer state))
-  (let ((timer (run-with-timer (or delay 0.1) nil
-                               (lambda ()
-                                 (gptel-agent-loop--request state prompt use-tools nil)))))
-    (setf (gptel-agent-loop--task-continuation-timer state) timer)))
+Cancels any pending continuation timer before scheduling a new one.
+ASSUMPTION: PROMPT must be a non-nil string for valid request.
+BEHAVIOR: Drops request silently if PROMPT is invalid, preventing crashes.
+EDGE CASE: nil or non-string PROMPT from malformed continuation logic.
+TEST: Call with nil prompt; should not schedule or crash."
+  (when (stringp prompt)
+    (gptel-agent-loop--cancel-timer-if-active
+     (gptel-agent-loop--task-continuation-timer state))
+    (let ((timer (run-with-timer (or delay 0.1) nil
+                                 (lambda ()
+                                   (gptel-agent-loop--request state prompt use-tools nil)))))
+      (setf (gptel-agent-loop--task-continuation-timer state) timer))))
 
 (defun gptel-agent-loop--check-aborted (state ov)
   "Check if STATE is aborted and deliver abort result.
@@ -664,7 +671,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 
          ((and (consp resp) (eq (car resp) 'tool-call))
           (let ((calls (cdr resp)))
-            (when (and (listp calls) (not (null calls)))
+            (when (and (proper-list-p calls) (not (null calls)))
               (setf (gptel-agent-loop--task-step-count state)
                     (+ (gptel-agent-loop--step-count state)
                        (length calls)))
