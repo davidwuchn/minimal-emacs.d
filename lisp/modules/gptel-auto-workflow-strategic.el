@@ -281,7 +281,7 @@ EDGE CASE: Returns empty string if no patterns found or git unavailable."
       "")))
 
 (defun gptel-auto-workflow--load-research-skill ()
-  "Load evolved research skill from RESEARCH.md.
+  "Load evolved research skill from FINDINGS.md.
 Returns skill content or empty string if not found.
 Uses standard skill loader for consistency."
   (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/RESEARCH")))
@@ -706,7 +706,7 @@ Pipeline: External hunt → Raw findings → LLM digestion → Actionable insigh
 ASSUMPTION: Subagent may or may not be available.
 BEHAVIOR: Uses subagent with web tools if available, otherwise returns empty.
 EDGE CASE: Returns empty findings if subagent unavailable.
-META-LEARNING: Stores digested insights in RESEARCH.md for future reference."
+META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
   (let ((research-prompt (gptel-auto-workflow--build-research-prompt)))
     (message "[auto-workflow] Hunting external ideas...")
     (if (and gptel-auto-experiment-use-subagents

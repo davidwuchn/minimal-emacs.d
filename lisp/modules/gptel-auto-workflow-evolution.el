@@ -822,13 +822,13 @@ Creates/updates knowledge pages per research strategy."
     synthesized))
 
 (defun gptel-auto-workflow--generate-research-skill ()
-  "Generate RESEARCH.md skill file from research knowledge.
+  "Generate FINDINGS.md skill file from research knowledge.
 This skill is consumed by the researcher prompt builder."
   (let* ((skills-dir (expand-file-name "assistant/skills/auto-workflow"
                                        (gptel-auto-workflow--worktree-base-root)))
          (knowledge-dir (expand-file-name "mementum/knowledge"
                                           (gptel-auto-workflow--worktree-base-root)))
-         (skill-file (expand-file-name "RESEARCH.md" skills-dir))
+         (skill-file (expand-file-name "FINDINGS.md" skills-dir))
          (knowledge-files (when (file-directory-p knowledge-dir)
                             (directory-files knowledge-dir t "research-insights-.+\\.md$")))
          (best-strategy nil)
