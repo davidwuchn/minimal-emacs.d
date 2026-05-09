@@ -718,6 +718,7 @@ Called only from `handle-string-response' when RESP is
 confirmed string and STATE is task-p.
 Returns non-nil if result was delivered."
   (when (and (gptel-agent-loop--task-p state)
+             (stringp resp)
              (string-blank-p resp))
     (let ((id (gptel-agent-loop--task-identity state)))
       (if (= (gptel-agent-loop--step-count state) 0)
