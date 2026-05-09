@@ -854,8 +854,8 @@ CALLBACK receives final outcome plist."
 
 (defun gptel-sandbox--run-forms (forms env state callback)
   "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
-  (unless (listp forms)
-    (error "Programmatic run-forms requires a list, got: %S" forms))
+  (unless (proper-list-p forms)
+    (error "Programmatic run-forms requires a proper list, got: %S" forms))
   (unless (proper-list-p state)
     (error "Programmatic run-forms requires a proper plist state, got: %S" state))
   (unless (functionp callback)
