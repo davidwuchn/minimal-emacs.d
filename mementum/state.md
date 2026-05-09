@@ -1,8 +1,46 @@
 # Mementum State
 
-> Last session: 2026-05-08 21:30
+> Last session: 2026-05-09 14:00
 
-## Current Session: 2026-05-08 Meta-Learning Directive Skill
+## Current Session: 2026-05-09 Callback Fix + Researcher Validation + DashScope Fallback
+
+**Status:** Researcher fix validated. MiniMax quota exhausted until 2026-05-11. Temporarily switched default backend to DashScope.
+
+**Done (This Session):**
+- ✅ **Validated researcher projectile fix** (`ae83b6bd`):
+  - Manually triggered researcher run at 14:00
+  - No more `(void-function projectile-project-root)` error
+  - Researcher completed successfully with local fallback (2290 chars of findings cached)
+  - External research subagent failed due to MiniMax quota exhaustion (expected)
+
+- ✅ **Added "researcher" to fallback agents** (`lisp/modules/gptel-tools-agent-prompt-build.el:911`):
+  - `gptel-auto-workflow-headless-fallback-agents` now includes "researcher"
+  - This ensures researcher subagent gets DashScope fallback when MiniMax is rate-limited
+
+- ✅ **Temporarily switched default backend to DashScope** (`lisp/modules/gptel-auto-workflow-bootstrap.el:141`):
+  - MiniMax quota exhausted: 45,000/45,000 weekly tokens (resets 2026-05-11T00:00:00+08:00)
+  - Changed `gptel-backend` from `gptel--minimax` to `gptel--dashscope`
+  - Changed `gptel-model` from `'minimax-m2.7-highspeed` to `'qwen3.6-plus`
+  - This unblocks: executor experiments, digestion, and any direct `gptel-request` calls
+  - **Revert this change when MiniMax quota resets on May 11**
+
+**Current Blockers:**
+1. **MiniMax API quota exhausted** - 45,000/45,000 weekly tokens
+   - Quota resets: 2026-05-11T00:00:00+08:00
+   - Workaround: Default backend now set to DashScope
+   - Subagent fallback also configured to use DashScope
+
+**Next Steps:**
+1. Monitor next auto-workflow run (scheduled 15:00 today) with DashScope backend
+2. Verify experiments complete successfully with DashScope
+3. Revert default backend to MiniMax when quota resets on May 11
+4. Investigate why executor fallback wasn't working automatically (root cause: experiment core doesn't apply subagent backend override to `gptel-request` calls)
+
+---
+
+## Previous Session: 2026-05-08 Meta-Learning Directive Skill
+
+**Status:** Implementation complete. Directive skill now auto-evolves from mementum + git history.
 
 **Status:** Implementation complete. Directive skill now auto-evolves from mementum + git history.
 

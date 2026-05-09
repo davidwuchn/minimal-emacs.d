@@ -138,8 +138,9 @@
               (propertize (or name "unknown") 'font-lock-face 'font-lock-keyword-face)
               (propertize (format "%s" arg-values) 'font-lock-face 'font-lock-string-face))))
   (load-file (expand-file-name "lisp/modules/gptel-ext-backends.el" root))
-  (setq gptel-backend gptel--minimax
-        gptel-model 'minimax-m2.7-highspeed)
+  ;; MiniMax quota exhausted until 2026-05-11; temporarily default to DashScope
+  (setq gptel-backend gptel--dashscope
+        gptel-model 'qwen3.6-plus)
   (load-file (expand-file-name "lisp/modules/gptel-tools.el" root))
   (when (fboundp 'gptel-tools-setup)
     (gptel-tools-setup))

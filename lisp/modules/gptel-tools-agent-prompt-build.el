@@ -908,7 +908,7 @@ tries backends in order when the primary is unavailable or rate-limited."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-headless-fallback-agents
-  '("analyzer" "comparator" "executor" "grader" "reviewer")
+  '("analyzer" "comparator" "executor" "grader" "researcher" "reviewer")
   "Headless subagents that should use the fallback provider list.
 
 Headless workflow runs prefer MiniMax as the workhorse, falling back to
