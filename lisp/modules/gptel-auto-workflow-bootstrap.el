@@ -141,6 +141,9 @@
   ;; MiniMax quota exhausted until 2026-05-11; temporarily default to DashScope
   (setq gptel-backend gptel--dashscope
         gptel-model 'qwen3.6-plus)
+  ;; Auto-switch back to MiniMax if the stored quota-reset time has elapsed
+  (when (fboundp 'gptel-auto-experiment--check-quota-reset-and-switch-back)
+    (gptel-auto-experiment--check-quota-reset-and-switch-back))
   (load-file (expand-file-name "lisp/modules/gptel-tools.el" root))
   (when (fboundp 'gptel-tools-setup)
     (gptel-tools-setup))

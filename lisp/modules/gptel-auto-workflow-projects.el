@@ -726,6 +726,9 @@ To be called from cron - visits each project directory (loading .dir-locals.el),
 then runs researcher for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   (interactive)
+  ;; Load full workflow stack when running in researcher daemon context
+  (when (fboundp 'gptel-auto-workflow--reload-live-support)
+    (gptel-auto-workflow--reload-live-support))
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[research] Running for %d projects..." (length projects))
     (let ((results nil)
