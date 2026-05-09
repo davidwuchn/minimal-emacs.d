@@ -6,14 +6,12 @@ description: |
   Prompts live in assistant/prompts/tools/ and are loaded by nucleus-prompts.el.
 version: 1.0
 evolve-script: evolve_tool_prompts.py
----
 metadata:
   evolution-stats:
     total-experiments: 870
     last-evolution: 2026-05-08 19:34
 
 ---
-
 # Tool Prompts
 
 ## Overview

@@ -3,14 +3,12 @@ name: benchmark-llm-prompts
 description: LLM prompt templates for benchmark improvement suggestions, results analysis, and knowledge synthesis. Extracted from gptel-benchmark-llm.el.
 version: 1.0
 evolve-script: evolve_llm_prompts.py
----
 metadata:
   evolution-stats:
     total-experiments: 870
     last-evolution: 2026-05-08 20:01
 
 ---
-
 # Benchmark LLM Prompts
 
 Prompt templates used by the benchmark system when calling LLM backends for improvement generation.
@@ -163,3 +161,11 @@ When LLM is unavailable, use these element-to-action mappings:
 - Track which prompt variations produce better JSON parsing rates
 - Monitor anti-pattern detection accuracy per element
 - A/B test synthesis prompt length vs. output quality
+
+## Evolution Statistics
+
+Updated: 2026-05-08 22:19
+
+- **improvement_suggestions**: 0/0 successful
+- **results_analysis**: 0/0 successful
+- **knowledge_synthesis**: 0/0 successful

@@ -3,14 +3,12 @@ name: evolution-patterns
 description: Domain knowledge for experiment hypothesis categorization and score prediction. Extracted from gptel-auto-workflow-evolution.el.
 version: 1.0
 evolve-script: evolve_patterns.py
----
 metadata:
   evolution-stats:
     total-experiments: 870
     last-evolution: 2026-05-08 20:01
 
 ---
-
 # Evolution Patterns
 
 ## Hypothesis Categories
@@ -106,3 +104,29 @@ Based on analysis of experiment errors.
 | Pattern | Category | Action | Frequency | Regex |
 |---------|----------|--------|-----------|-------|
 
+## Evolved Patterns
+
+Updated: 2026-05-08 22:19
+
+### High-Signal Keywords
+
+- `inputs`: 75% (6/8)
+- ``state``: 67% (4/6)
+- `avoiding`: 60% (3/5)
+- `corrupted`: 50% (3/6)
+- ``gptel-auto-workflow--filter-large-files``: 50% (3/6)
+- `defensive`: 45% (15/33)
+- `task`: 45% (5/11)
+- `become`: 43% (3/7)
+- `nil-guard`: 43% (3/7)
+- `inputs.`: 43% (3/7)
+- `sandbox`: 43% (3/7)
+- `calling`: 41% (7/17)
+- `calls.`: 40% (2/5)
+- `nil-safety`: 40% (2/5)
+- `local`: 40% (2/5)
+- ``stringp``: 40% (2/5)
+- ``downcase``: 40% (2/5)
+- `hash-table`: 40% (2/5)
+- `structures`: 40% (2/5)
+- `score`: 40% (2/5)
