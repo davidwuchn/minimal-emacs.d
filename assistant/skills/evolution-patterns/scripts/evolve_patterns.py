@@ -6,6 +6,7 @@ Updates hypothesis categories and score predictor based on observed outcomes.
 
 import argparse
 import json
+import re
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict

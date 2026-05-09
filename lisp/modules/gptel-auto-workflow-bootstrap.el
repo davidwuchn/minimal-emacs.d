@@ -138,9 +138,10 @@
               (propertize (or name "unknown") 'font-lock-face 'font-lock-keyword-face)
               (propertize (format "%s" arg-values) 'font-lock-face 'font-lock-string-face))))
   (load-file (expand-file-name "lisp/modules/gptel-ext-backends.el" root))
-  ;; MiniMax quota exhausted until 2026-05-11; temporarily default to DashScope
-  (setq gptel-backend gptel--dashscope
-        gptel-model 'qwen3.6-plus)
+  ;; MiniMax quota exhausted until 2026-05-11; temporarily default to moonshot
+  ;; (DashScope/qwen3.6-plus was too cautious - inspection-thrash on code edits)
+  (setq gptel-backend gptel--moonshot
+        gptel-model 'kimi-k2.6)
   ;; Auto-switch back to MiniMax if the stored quota-reset time has elapsed
   (when (fboundp 'gptel-auto-experiment--check-quota-reset-and-switch-back)
     (gptel-auto-experiment--check-quota-reset-and-switch-back))

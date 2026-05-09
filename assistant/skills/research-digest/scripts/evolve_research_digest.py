@@ -6,6 +6,7 @@ Tracks digestion rule effectiveness and output quality.
 
 import argparse
 import json
+import re
 from pathlib import Path
 from datetime import datetime
 

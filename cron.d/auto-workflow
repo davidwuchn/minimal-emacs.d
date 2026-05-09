@@ -19,7 +19,7 @@
 #   - Self-evolution: ensure `gptel-auto-workflow-evolution-enabled` is non-nil
 #
 # QUOTA-AWARE: Set SKIP_IF_QUOTA_EXHAUSTED=yes to skip runs when primary provider
-#   is rate-limited. Pipeline auto-switches to fallback providers (DashScope, moonshot).
+#   is rate-limited. Pipeline auto-switches to fallback providers (moonshot, DashScope).
 
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin

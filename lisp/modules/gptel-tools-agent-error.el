@@ -311,20 +311,16 @@ Only successful executor output may take the local grader retry path."
      gptel-auto-workflow--rate-limited-backends)))
 
 (defun gptel-auto-experiment--check-quota-reset-and-switch-back ()
-  "If quota reset time has passed, switch `gptel-backend' back to primary.
-Uses `gptel-auto-experiment--quota-reset-timestamp' and falls back to MiniMax."
+  "If quota reset time has passed, switch `gptel-backend' to first available fallback.
+Uses `gptel-auto-experiment--quota-reset-timestamp' and clears rate-limited backends
+so the next experiment can try MiniMax first, falling back to moonshot if needed."
   (when (and gptel-auto-experiment--quota-reset-timestamp
              (> (float-time) gptel-auto-experiment--quota-reset-timestamp)
-             (boundp 'gptel--minimax)
-             gptel--minimax)
-    (let ((current (when (and (boundp 'gptel-backend) gptel-backend
-                              (fboundp 'gptel-backend-name))
-                     (gptel-backend-name gptel-backend))))
-      (unless (string= current "MiniMax")
-        (setq gptel-backend gptel--minimax
-              gptel-model 'minimax-m2.7-highspeed
-              gptel-auto-experiment--quota-reset-timestamp nil)
-        (message "[auto-workflow] Quota window elapsed. Switched back to MiniMax.")))))
+             (boundp 'gptel-auto-workflow--rate-limited-backends))
+    ;; Clear rate-limited backends so MiniMax gets first crack again
+    (setq gptel-auto-workflow--rate-limited-backends nil)
+    (setq gptel-auto-experiment--quota-reset-timestamp nil)
+    (message "[auto-workflow] Quota window elapsed. Cleared rate-limited backends. MiniMax will be tried first on next experiment.")))
 
 (defun gptel-auto-experiment--hard-quota-stops-run-p (agent-type error-output)
   "Return non-nil when ERROR-OUTPUT should stop the run for AGENT-TYPE.

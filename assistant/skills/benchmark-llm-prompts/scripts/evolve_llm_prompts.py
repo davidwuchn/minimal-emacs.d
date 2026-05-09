@@ -7,6 +7,7 @@ and anti-pattern detection accuracy.
 
 import argparse
 import json
+import re
 from pathlib import Path
 from datetime import datetime
 

@@ -24,7 +24,6 @@ log() {
 
 # Prevent overlapping runs
 if [ -f "$LOCK_FILE" ]; then
-    local lock_pid
     lock_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
     if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
         log "Pipeline already running (PID $lock_pid), skipping"
@@ -36,11 +35,10 @@ trap 'rm -f "$LOCK_FILE"' EXIT
 
 # Check if we should skip due to quota exhaustion
 if [ "$SKIP_IF_QUOTA_EXHAUSTED" = "yes" ] && [ -f "$QUOTA_RESET_FILE" ]; then
-    local reset_ts now_ts
     reset_ts=$(cat "$QUOTA_RESET_FILE")
     now_ts=$(date +%s)
     if [ "$now_ts" -lt "$reset_ts" ]; then
-        local hours_left=$(( (reset_ts - now_ts) / 3600 ))
+        hours_left=$(( (reset_ts - now_ts) / 3600 ))
         log "Quota exhausted, ${hours_left}h until reset. Skipping pipeline run."
         exit 0
     fi
@@ -50,21 +48,21 @@ wait_for_idle() {
     local action="$1"
     local max_wait="${2:-900}"
     local elapsed=0
-    
+
     log "Waiting for $action to complete (max ${max_wait}s)..."
     while [ "$elapsed" -lt "$max_wait" ]; do
         local phase
-        phase="$($SCRIPT status 2>/dev/null | grep -oP ':phase "\K[^"]+' || echo "unknown")"
-        
+        phase="$($SCRIPT status 2>/dev/null | sed -n 's/.*:phase "\([^"]*\)".*/\1/p' || echo "unknown")"
+
         if [ "$phase" = "idle" ] || [ "$phase" = "complete" ]; then
             log "$action completed after ${elapsed}s"
             return 0
         fi
-        
+
         sleep "$POLL_INTERVAL"
         elapsed=$((elapsed + POLL_INTERVAL))
     done
-    
+
     log "WARNING: $action did not complete within ${max_wait}s, proceeding anyway"
     return 1
 }
