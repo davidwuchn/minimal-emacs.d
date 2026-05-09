@@ -10,14 +10,12 @@ author: Your Name
 license: MIT
 triggers: ["template", "example"]
 lambda: template.example
----
 metadata:
   evolution-stats:
     total-experiments: 870
     last-evolution: 2026-05-08 18:52
 
 ---
-
 # Template Skill
 
 ## Identity

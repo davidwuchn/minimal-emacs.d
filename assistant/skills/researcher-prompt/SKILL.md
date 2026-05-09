@@ -3,14 +3,12 @@ name: researcher-prompt
 description: Prompt template for external research specialist subagent. Auto-evolves based on experiment outcomes.
 version: 2.0
 evolve-script: evolve_researcher.py
----
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-09 07:19
+    last-evolution: 2026-05-09 07:18
 
 ---
-
 # Auto-Workflow Researcher Prompt
 
 ## Role

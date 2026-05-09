@@ -191,9 +191,10 @@ def update_skill_metadata(skills_dir, analysis):
         
         # Add evolution metadata if not present
         if 'evolution-stats:' not in content:
+            # Insert metadata inside the existing frontmatter block
             content = content.replace(
                 '---\n\n#',
-                f'---\nmetadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n    last-evolution: {now}\n\n---\n\n#',
+                f'---\nmetadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n    last-evolution: {now}\n\n#',
                 1
             )
         

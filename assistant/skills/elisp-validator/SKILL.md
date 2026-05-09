@@ -5,19 +5,17 @@ description: |
   dangerous patterns, undefined symbols, and Common Lisp compatibility issues.
 version: 1.0
 evolve-script: evolve_rules.py
-updated: 2026-05-09 07:19
+updated: 2026-05-09 07:18
 metadata:
   category: code-quality
   language: emacs-lisp
   author: auto-workflow
----
 metadata:
   evolution-stats:
     total-experiments: 870
     last-evolution: 2026-05-08 18:52
 
 ---
-
 # Emacs Lisp Validator
 
 ## Overview

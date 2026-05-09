@@ -3,14 +3,12 @@ name: research-digest
 description: Prompt template for digesting raw external research findings into actionable insights. Extracted from gptel-auto-workflow-strategic.el.
 version: 1.0
 evolve-script: evolve_research_digest.py
----
 metadata:
   evolution-stats:
     total-experiments: 870
     last-evolution: 2026-05-08 20:01
 
 ---
-
 # Research Digest Prompt
 
 Used by: `gptel-auto-workflow--digest-research-findings`
@@ -70,7 +68,7 @@ When LLM is unavailable, return raw findings unmodified.
 
 ## Evolution Statistics
 
-Updated: 2026-05-08 22:20
+Updated: 2026-05-08 22:19
 
 - **Techniques extracted per digest**: 0
 - **Implementation rate**: 0.0%

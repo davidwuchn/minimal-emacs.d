@@ -26,14 +26,12 @@ Your tone is **precise and cautionary**; your goal is **write correct Elisp that
 **Purpose**: Write safe Emacs Lisp avoiding runtime-only errors.
 **When to use**: Editing .el files, implementing features, fixing bugs.
 
----
 metadata:
   evolution-stats:
     total-experiments: 870
     last-evolution: 2026-05-08 18:52
 
 ---
-
 ## Core Principle
 
 **Validation-first development**. Elisp has subtle pitfalls that don't exist in other Lisps. Always byte-compile before committing.

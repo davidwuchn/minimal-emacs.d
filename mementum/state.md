@@ -52,24 +52,34 @@
 - Custom skill loaders (`gptel-auto-workflow--load-skill-content`) are simpler for batch mode
 - However, we use same skill format (SKILL.md + frontmatter) for compatibility
 
-**Attempted Experiment Run — FAILED (not provider issue):**
+**Experiment Run IN PROGRESS — Meta-Learned Directive + DashScope Fallback**
 - Triggered auto-workflow: ./scripts/run-auto-workflow-cron.sh auto-workflow
-- Evolution cycle: ✅ SUCCESS (skills evolved, patterns analyzed)
-- Experiment phase: ❌ FAILED before starting
-- Error: `Symbol's value as variable is void: monitoring`
-- Root cause: Daemon state corruption (not provider-related)
+- Evolution cycle: ✅ SUCCESS (all 19 skills evolved)
+- Provider fallback: ✅ WORKING!
+  - MiniMax → rate limited (provider pressure)
+  - DashScope → ✅ FALLBACK SUCCESSFUL!
+- Current target: `lisp/modules/gptel-sandbox.el`
+- Current phase: "running" (5 experiments queued)
+- Status: Waiting for experiments to complete
 
-**Why Fallback Provider Won't Help Right Now:**
-1. ✅ Provider failover bug IS fixed (batch-mode backend-available-p)
-2. ❌ Daemon has state corruption (`void: monitoring` variable)
-3. ❌ Workflow errors out BEFORE reaching experiment phase
-4. ❌ evolve_researcher.py script has argument errors
-5. Even with DashScope/DeepSeek available, workflow can't reach experiments
+**Fixes Applied:**
+1. ✅ Killed corrupted daemon, restarted with hot-start script
+2. ✅ Fixed evolve_researcher.py argument handling (--analysis, --output-dir, --root)
+3. ✅ Fixed evolve_llm_prompts.py argument handling
+4. ✅ Fixed evolve_patterns.py argument handling
+5. ✅ Fixed evolve_research_digest.py argument handling
+6. ✅ Committed and pushed all fixes to origin/main
 
-**Fix Required:**
-- Restart daemon with fresh state (kill PID 3838467, start new)
-- Fix evolve_researcher.py argument handling
-- Test end-to-end workflow before running experiments
+**Provider Fallback Chain WORKING:**
+- MiniMax exhausted → automatically falls back to DashScope
+- Workflow running experiments with DashScope/qwen3.6-plus
+- Meta-learned directive active (prioritizes unless-guard/error-handling patterns)
+
+**Monitoring:**
+- Daemon PID: 4043287
+- Run ID: 2026-05-08T221834Z-0b3b
+- Results: var/tmp/experiments/2026-05-08T221834Z-0b3b/results.tsv
+- Next check: In 10-15 minutes for first results
 
 **Next Steps:**
 1. Test provider failover end-to-end with single experiment
