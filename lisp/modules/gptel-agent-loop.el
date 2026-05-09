@@ -591,13 +591,18 @@ ASSUMPTION: RESP is a string (validated by callers)."
 (defun gptel-agent-loop--schedule-request (state prompt use-tools &optional delay)
   "Schedule a request for STATE with PROMPT.
 USE-TOOLS determines tool usage.  DELAY defaults to 0.1 seconds.
-Cancels any pending continuation timer before scheduling a new one."
-  (gptel-agent-loop--cancel-timer-if-active
-   (gptel-agent-loop--task-continuation-timer state))
-  (let ((timer (run-with-timer (or delay 0.1) nil
-                               (lambda ()
-                                 (gptel-agent-loop--request state prompt use-tools nil)))))
-    (setf (gptel-agent-loop--task-continuation-timer state) timer)))
+Cancels any pending continuation timer before scheduling a new one.
+ASSUMPTION: PROMPT must be a non-nil string for valid request.
+BEHAVIOR: Drops request silently if PROMPT is invalid, preventing crashes.
+EDGE CASE: nil or non-string PROMPT from malformed continuation logic.
+TEST: Call with nil prompt; should not schedule or crash."
+  (when (stringp prompt)
+    (gptel-agent-loop--cancel-timer-if-active
+     (gptel-agent-loop--task-continuation-timer state))
+    (let ((timer (run-with-timer (or delay 0.1) nil
+                                 (lambda ()
+                                   (gptel-agent-loop--request state prompt use-tools nil)))))
+      (setf (gptel-agent-loop--task-continuation-timer state) timer))))
 
 (defun gptel-agent-loop--check-aborted (state ov)
   "Check if STATE is aborted and deliver abort result.
