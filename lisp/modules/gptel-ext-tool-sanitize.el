@@ -99,7 +99,7 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
           (args (plist-get tc :args)))
       (or (null name) (eq name :null) (equal name "null") (equal name "")
           ;; Validate args is a proper plist structure to prevent downstream errors
-          (and (not (listp args)) t)))))
+          (not (proper-list-p args))))))
 
 (defun my/gptel--repair-tool-call (tc correct-name)
   "Repair tool call TC to use CORRECT-NAME.
