@@ -354,7 +354,7 @@ Uses standard skill loader so humans can edit RESEARCHER.md."
 Reads topic-performance.json and returns formatted stats.
 Returns nil if data not available."
   (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data" 
-                                     (projectile-project-root)))
+                                     (gptel-auto-workflow--effective-project-root)))
          (topic-file (expand-file-name "topic-performance.json" data-dir)))
     (when (file-exists-p topic-file)
       (condition-case err
