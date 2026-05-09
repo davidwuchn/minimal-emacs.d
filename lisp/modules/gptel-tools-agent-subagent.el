@@ -210,14 +210,16 @@ its async continuation layer in the worker daemon."
   (advice-add 'gptel-curl-get-response :before
               #'my/gptel--prime-curl-buffer-directory))
 
-(defun my/gptel--invoke-callback-safely (callback result)
-  "Invoke CALLBACK with RESULT from a stable internal buffer.
+(defun my/gptel--invoke-callback-safely (callback result &optional agent-type)
+  "Invoke CALLBACK with RESULT, catching errors to prevent cascade failures.
+Optional AGENT-TYPE is used for debug tracing.
 
 This prevents `Selecting deleted buffer' errors when callback side effects
 delete the request or file buffer that happened to be current when the
 subagent callback fired, and avoids reusing a deleted worktree as
 `default-directory'."
   (cond ((functionp callback)
+         (message "[DEBUG] my/gptel--invoke-callback-safely calling %s callback with result type=%S" (or agent-type "unknown") (type-of result))
          (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
                 (safe-default-directory
                  (or (my/gptel--first-existing-directory
@@ -233,7 +235,8 @@ subagent callback fired, and avoids reusing a deleted worktree as
                             (short-err (if (> (length err-text) 300)
                                            (concat (substring err-text 0 300) "...")
                                          err-text)))
-                       (message "[nucleus] Callback error ignored after cleanup (%s): %s"
+                       (message "[nucleus] Callback error ignored after cleanup (%s %s): %s"
+                                (or agent-type "unknown")
                                 (if (symbolp callback) callback (type-of callback))
                                 short-err))
                      (when (and (boundp 'debug-on-error) debug-on-error) (signal (car err) (cdr err)))))))
@@ -296,32 +299,32 @@ Uses hash table keyed by task-id to support parallel execution."
                   (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
                            agent-type (float-time (time-since start-time))
                            (if (stringp result) (length result) 0))
-                  (funcall restore-origin-fsm child-fsm)
-                  (unwind-protect
-                      (my/gptel--invoke-callback-safely callback result)
-                    (remhash task-id my/gptel--agent-task-state))))))))
-    (cl-labels
-        ((finish-timeout (state timeout-seconds timeout-suffix
-                                &optional timeout-kind total-elapsed-seconds)
-           (puthash task-id (plist-put state :done t)
-                    my/gptel--agent-task-state)
-           (my/gptel--cancel-agent-task-timers state)
-           (if (eq timeout-kind :idle)
-               (message "[nucleus] Subagent %s timed out after %ds idle timeout (%.1fs total runtime), aborting request"
-                        agent-type timeout-seconds (or total-elapsed-seconds 0.0))
-             (message "[nucleus] Subagent %s timed out after %ds%s, aborting request"
-                      agent-type timeout-seconds timeout-suffix))
-           (my/gptel--cleanup-agent-request-buffer state)
-           (let ((timeout-result
-                  (if (eq timeout-kind :idle)
-                      (format "Error: Task \"%s\" (%s) timed out after %ds idle timeout (%.1fs total runtime)."
-                              description agent-type timeout-seconds (or total-elapsed-seconds 0.0))
-                    (format "Error: Task \"%s\" (%s) timed out after %ds%s."
-                            description agent-type timeout-seconds timeout-suffix))))
-             (funcall restore-origin-fsm child-fsm)
-             (unwind-protect
-                 (my/gptel--invoke-callback-safely callback timeout-result)
-               (remhash task-id my/gptel--agent-task-state))))
+                   (funcall restore-origin-fsm child-fsm)
+                   (unwind-protect
+                       (my/gptel--invoke-callback-safely callback result agent-type)
+                     (remhash task-id my/gptel--agent-task-state))))))))
+      (cl-labels
+         ((finish-timeout (state timeout-seconds timeout-suffix
+                                 &optional timeout-kind total-elapsed-seconds)
+            (puthash task-id (plist-put state :done t)
+                     my/gptel--agent-task-state)
+            (my/gptel--cancel-agent-task-timers state)
+            (if (eq timeout-kind :idle)
+                (message "[nucleus] Subagent %s timed out after %ds idle timeout (%.1fs total runtime), aborting request"
+                         agent-type timeout-seconds (or total-elapsed-seconds 0.0))
+              (message "[nucleus] Subagent %s timed out after %ds%s, aborting request"
+                       agent-type timeout-seconds timeout-suffix))
+            (my/gptel--cleanup-agent-request-buffer state)
+            (let ((timeout-result
+                   (if (eq timeout-kind :idle)
+                       (format "Error: Task \"%s\" (%s) timed out after %ds idle timeout (%.1fs total runtime)."
+                               description agent-type timeout-seconds (or total-elapsed-seconds 0.0))
+                     (format "Error: Task \"%s\" (%s) timed out after %ds%s."
+                             description agent-type timeout-seconds timeout-suffix))))
+              (funcall restore-origin-fsm child-fsm)
+              (unwind-protect
+                  (my/gptel--invoke-callback-safely callback timeout-result agent-type)
+                (remhash task-id my/gptel--agent-task-state))))
          (rearm-timeout (state)
            (when task-timeout
              (when (timerp (plist-get state :timeout-timer))

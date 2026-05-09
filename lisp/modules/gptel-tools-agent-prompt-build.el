@@ -1063,9 +1063,17 @@ can use newer models without a restart."
     model))
 
 (defun gptel-auto-workflow--clear-runtime-subagent-provider-overrides ()
-  "Reset per-run provider failover state."
-  (setq gptel-auto-workflow--runtime-subagent-provider-overrides nil
-        gptel-auto-workflow--rate-limited-backends nil))
+  "Reset per-run provider failover state.
+Preserves rate-limited backends blacklist across experiments within a run."
+  (setq gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+  ;; Note: gptel-auto-workflow--rate-limited-backends is intentionally NOT cleared above.
+  ;; It persists across experiments within a single run so backends that hit hard quotas
+  ;; don't get retried for each new experiment. Cleared when run finishes or on manual reset.
+
+(defun gptel-auto-workflow--clear-rate-limited-backends ()
+  "Clear the rate-limited backends blacklist.
+Call at the start of a new workflow run."
+  (setq gptel-auto-workflow--rate-limited-backends nil))
 
 (defun gptel-auto-workflow--rate-limit-failover-candidates (agent-type)
   "Return fallback provider candidates for AGENT-TYPE after rate limiting."

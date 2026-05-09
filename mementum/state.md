@@ -1318,3 +1318,83 @@ Don't reinvent the wheel. Use the daemon.
 - ✅ Updated nucleus-patterns.md (vitality: φ 0.88→0.90, evidence 8→9)
 
 **Commit:** `b33db20a`
+
+---
+
+### Debug: Callback Error in Experiment Loop (2026-05-09)
+
+**Problem:** First experiment callback fails with `Wrong type argument: listp, "# Eight Keys Grader..."`.
+
+**Suspected Root Cause:** `gptel-benchmark-eight-keys-definitions` was being set to the raw skill content string (from `gptel-auto-workflow--load-skill-content`), breaking Eight Keys scoring and potentially corrupting callback arguments.
+
+**Fix Applied:**
+1. Fixed `gptel-benchmark--load-keys-from-skill` in `lisp/modules/gptel-benchmark-principles.el:49` to return nil (use hardcoded fallback) instead of raw markdown string.
+2. Added tracing to callback chain to identify where string leaks into results:
+   - `lisp/modules/gptel-tools-agent-experiment-loop.el` - trace result types
+   - `lisp/modules/gptel-tools-agent-error.el` - trace run-with-retry callback args
+   - `lisp/modules/gptel-tools-agent-experiment-core.el` - trace experiment-run callback args
+   - `lisp/modules/gptel-tools-agent-subagent.el` - trace invoke-callback-safely args
+   - `lisp/modules/gptel-tools-agent-main.el` - trace target-complete callback args
+
+**Status:** Tracing added, pending next workflow run to see which callback receives the string.
+
+**Next Step:** Run auto-workflow and check logs for `[DEBUG]` messages showing callback argument types.
+
+---
+
+### Fix: Callback Error Root Cause Identified (2026-05-09)
+
+**Problem:** `Wrong type argument: listp, "# Eight Keys Grader..."` in experiment callbacks.
+
+**Root Cause:** `gptel-benchmark-eight-keys-definitions` was set to raw markdown skill content string.
+- `gptel-benchmark--load-keys-from-skill` returned skill string instead of list
+- `defconst` at load time captured this string as the definitions
+- `dolist` on string iterates characters, not key definitions
+- Each character passed to scoring functions expecting lists → `Wrong type argument: listp`
+
+**Fix:**
+1. `lisp/modules/gptel-benchmark-principles.el:49` - `gptel-benchmark--load-keys-from-skill` now returns `nil`
+2. Reset `gptel-benchmark-eight-keys-definitions` in daemon to hardcoded fallback list
+
+**Verification:**
+- ✅ Callback traces show `type=cons` (lists)
+- ✅ Eight Keys baseline scoring works (0.40 for gptel-sandbox.el)
+- ✅ Workflow running with 5 targets
+- ✅ MiniMax rate limits trigger DashScope fallback correctly
+
+**Lesson:** `defconst` evaluates at load time. Fixing the source function is not enough for already-loaded code.
+
+---
+
+### Session Complete: Callback Error Fixed + Experiment Committed (2026-05-09)
+
+**Summary:**
+Fixed the callback error that blocked all experiments, then ran a successful workflow and committed the first kept experiment.
+
+**Fixes Applied:**
+1. **Callback Error Root Cause** (`lisp/modules/gptel-benchmark-principles.el:49`)
+   - `gptel-benchmark-eight-keys-definitions` was set to raw markdown string
+   - Fixed `gptel-benchmark--load-keys-from-skill` to return `nil` (hardcoded fallback)
+   - Reset defconst in running daemon
+
+2. **Rate-Limit Persistence** (`lisp/modules/gptel-tools-agent-prompt-build.el:1065`)
+   - `gptel-auto-workflow--clear-runtime-subagent-provider-overrides` was clearing the blacklist
+   - Fixed to preserve `gptel-auto-workflow--rate-limited-backends` across experiments
+   - Added `gptel-auto-workflow--clear-rate-limited-backends` for run-start cleanup
+
+3. **Callback Tracing** (multiple files)
+   - Added debug traces to identify callback argument types
+   - Fixed in `gptel-tools-agent-subagent.el`, `experiment-loop.el`, `error.el`, `main.el`
+
+**Experiment Result:**
+- Target: `lisp/modules/gptel-sandbox.el`
+- Change: `listp` → `proper-list-p` in `gptel-sandbox--run-forms`
+- Score: 0.40 → 0.40 (tie), Quality: 0.79 → 0.88 (+0.09)
+- Decision: Kept (score tie with quality gain above threshold)
+- Committed: `6b6d3ca8`
+
+**Status:**
+- Callback error: ✅ Fixed
+- Eight Keys scoring: ✅ Working
+- Provider fallback: ✅ DashScope active
+- Workflow: ✅ Running end-to-end

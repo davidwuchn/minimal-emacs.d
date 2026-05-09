@@ -239,6 +239,7 @@ Usage:
     (gptel-auto-workflow--require-magit-dependencies)
     (gptel-auto-workflow--migrate-legacy-provider-defaults)
     (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+    (gptel-auto-workflow--clear-rate-limited-backends)
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
@@ -635,11 +636,14 @@ into staging or main."
                (setq gptel-auto-workflow--current-target target)
                (let ((target-complete
                       (gptel-auto-workflow--make-idempotent-callback
-                       (lambda (results)
-                         (if (not (gptel-auto-workflow--run-callback-live-p callback-run-id))
-                             (message "[auto-workflow] Ignoring stale target completion for %s; run %s is no longer active"
-                                      target run-id)
-                           (setq all-results (append all-results results))
+                        (lambda (results)
+                          (if (not (gptel-auto-workflow--run-callback-live-p callback-run-id))
+                              (message "[auto-workflow] Ignoring stale target completion for %s; run %s is no longer active"
+                                       target run-id)
+                            (message "[DEBUG] target-complete received results type=%S first-element-type=%S"
+                                     (type-of results)
+                                     (type-of (car-safe results)))
+                            (setq all-results (append all-results results))
                            (setq kept-count
                                  (gptel-auto-workflow--kept-target-count all-results))
                            (setq gptel-auto-workflow--stats

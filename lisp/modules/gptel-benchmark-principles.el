@@ -48,12 +48,11 @@
 
 (defun gptel-benchmark--load-keys-from-skill ()
   "Load Eight Keys definitions from eight-keys-grader skill.
-Returns plist with keys or nil if skill not available."
-  (when (fboundp 'gptel-auto-workflow--load-skill-content)
-    (let ((skill (gptel-auto-workflow--load-skill-content "eight-keys-grader")))
-      (when skill
-        ;; Parse skill content to extract keys (simplified)
-        skill))))
+Returns list of key definitions or nil if skill not available.
+Currently returns nil to use hardcoded fallback until skill parsing is implemented."
+  ;; TODO: Parse eight-keys-grader SKILL.md into proper list structure
+  ;; The skill content is markdown text, not an Elisp data structure
+  nil)
 
 (defconst gptel-benchmark-eight-keys-definitions
   (or (gptel-benchmark--load-keys-from-skill)
