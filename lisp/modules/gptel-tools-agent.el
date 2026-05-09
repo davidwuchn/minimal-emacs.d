@@ -15,12 +15,19 @@
 
 ;; Split modules.  Load source files explicitly so cron `load-file' hot-reloads
 ;; patched module definitions in long-lived workflow daemons.
+(defvar gptel-tools-agent--module-dir nil
+  "Directory containing gptel-tools-agent modules.")
+
 (defun gptel-tools-agent--load-module (feature)
   "Load split module FEATURE from this directory, falling back to `require'."
   (unless (symbolp feature)
     (error "Feature must be a symbol: %S" feature))
-  (let* ((dir (file-name-directory (or load-file-name buffer-file-name)))
-         (source (and dir (expand-file-name (format "%s.el" feature) dir))))
+  (unless gptel-tools-agent--module-dir
+    (setq gptel-tools-agent--module-dir
+          (file-name-directory (or load-file-name buffer-file-name))))
+  (let* ((source (and gptel-tools-agent--module-dir
+                      (expand-file-name (format "%s.el" feature)
+                                        gptel-tools-agent--module-dir))))
     (if (and source (file-readable-p source))
         (load source nil 'nomessage)
       (require feature))
