@@ -3,7 +3,7 @@ title: Experiment Insights - gptel-sandbox
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-sandbox]
-updated: 2026-05-09 21:37
+updated: 2026-05-09 22:19
 insight-quality: 7.0/10
 ---
 
