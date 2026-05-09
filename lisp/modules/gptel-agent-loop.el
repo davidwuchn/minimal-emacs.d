@@ -259,7 +259,7 @@ and description defaults to \"unknown\" if not set or STATE is invalid."
 (defun gptel-agent-loop--append-output (state text)
   "Append TEXT to STATE's accumulated output.
 Returns nil if TEXT is not a string (defensive guard)."
-  (when (stringp text)
+  (when (and (gptel-agent-loop--task-p state) (stringp text))
     (setf (gptel-agent-loop--task-accumulated-output state)
           (concat (gptel-agent-loop--safe-accumulated-output state)
                   text
