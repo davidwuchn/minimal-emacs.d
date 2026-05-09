@@ -242,9 +242,9 @@ memory after long sessions or if tasks appear stuck."
 
 (defun gptel-agent-loop--safe-accumulated-output (state)
   "Return STATE's accumulated output or empty string if nil.
-Returns empty string if STATE is nil (defensive guard).
-BEHAVIOR: Guards against nil state to prevent slot access errors."
-  (if state
+Returns empty string if STATE is nil or invalid (defensive guard).
+BEHAVIOR: Guards against nil or invalid state to prevent slot access errors."
+  (if (and state (gptel-agent-loop--task-p state))
       (or (gptel-agent-loop--task-accumulated-output state) "")
     ""))
 
