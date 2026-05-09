@@ -12,10 +12,14 @@
 #
 # PREREQUISITES:
 #   - No manual daemon setup required; the wrapper starts its dedicated daemon on demand
-#   - Smoke test a real run: ./scripts/run-auto-workflow-cron.sh auto-workflow
-#   - Confirm progress/results: ./scripts/run-auto-workflow-cron.sh status && ./scripts/run-auto-workflow-cron.sh messages
+#   - Pipeline: research → digestion → auto-workflow (self-evolution runs internally)
+#   - Smoke test: ./scripts/run-pipeline.sh
+#   - Status: ./scripts/run-auto-workflow-cron.sh status
+#   - Pipeline logs: tail -f var/tmp/cron/pipeline.log
+#   - Self-evolution: ensure `gptel-auto-workflow-evolution-enabled` is non-nil
 #
-# STATUS: ./scripts/run-auto-workflow-cron.sh status
+# QUOTA-AWARE: Set SKIP_IF_QUOTA_EXHAUSTED=yes to skip runs when primary provider
+#   is rate-limited. Pipeline auto-switches to fallback providers (DashScope, moonshot).
 
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
