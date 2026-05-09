@@ -3,12 +3,24 @@ title: Experiment Insights - gptel-auto-workflow-projects
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-auto-workflow-projects]
-updated: 2026-05-08 06:49
+updated: 2026-05-09 21:37
+insight-quality: 6.6/10
 ---
 
 # Experiment Insights: gptel-auto-workflow-projects
 
-*Consolidated from 5 experiments.*
+*Consolidated from 5 experiments (avg insight quality: 6.6/10).*
 
-**Keep rate:** 0% (0 kept / 5 total)
+**Keep rate:** 0% (0 kept / 0 discarded / 0 failed / 0 timeout)
+
+## Score Predictor
+
+| Pattern | Predicts | Confidence |
+|---------|----------|------------|
+| Validation guard (proper-list-p, nil check) | KEEP | High |
+| Bug fix + refactor combo | KEEP | High |
+| Extract helper alone | DISCARD | Medium |
+| catch/throw or complex flow | DISCARD | High |
+| Common Lisp symbols (cw, file, plusp) | VALIDATION-FAILED | Very High |
+| >50 lines changed | TIMEOUT/DISCARD | Medium |
 

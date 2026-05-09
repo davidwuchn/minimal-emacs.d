@@ -106,20 +106,22 @@ Based on analysis of experiment errors.
 
 ## Evolved Patterns
 
-Updated: 2026-05-09 20:15
+Updated: 2026-05-09 21:37
 
 ### High-Signal Keywords
 
 - `explicitly`: 83% (5/6)
 - `expressions`: 80% (4/5)
+- `paths.`: 80% (4/5)
 - `pass`: 80% (4/5)
 - `messages`: 71% (5/7)
+- `contains`: 71% (5/7)
 - `identical`: 67% (4/6)
-- `contains`: 67% (4/6)
 - `targets`: 67% (4/6)
-- `don't`: 60% (3/5)
 - `score`: 60% (3/5)
+- `don't`: 60% (3/5)
 - `values,`: 60% (3/5)
+- `receive`: 60% (3/5)
 - `preserving`: 60% (3/5)
 - `code.`: 60% (3/5)
 - `consolidating`: 57% (4/7)
@@ -128,5 +130,3 @@ Updated: 2026-05-09 20:15
 - `robustness`: 57% (4/7)
 - ``gptel-sandbox--execute-tool``: 57% (4/7)
 - `them`: 56% (5/9)
-- `clear`: 56% (5/9)
-- `lookup`: 55% (6/11)
