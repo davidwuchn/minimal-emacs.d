@@ -452,7 +452,6 @@ RETRY-COUNT tracks current retry attempt."
     (gptel-auto-experiment-run
      target experiment-id max-experiments baseline baseline-code-quality previous-results
       (lambda (result)
-        (message "[DEBUG] gptel-auto-experiment--run-with-retry received result type=%S" (type-of result))
         (let* ((agent-output (plist-get result :agent-output))
               (raw-error (or (plist-get result :error)
                              (and (gptel-auto-experiment--agent-error-p agent-output)
@@ -536,7 +535,6 @@ RETRY-COUNT tracks current retry attempt."
            (when quota-exhausted
              (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
                       experiment-id))
-            (message "[DEBUG] gptel-auto-experiment--run-with-retry calling callback with result type=%S" (type-of result))
             (funcall callback result))))
      (lambda (_logged-run-id exp-result)
        (push exp-result attempt-logs)))))

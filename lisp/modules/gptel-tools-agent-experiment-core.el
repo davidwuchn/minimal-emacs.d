@@ -10,12 +10,6 @@
   "Run single experiment. Call CALLBACK with result plist.
 BASELINE-CODE-QUALITY is the initial code quality score.
 LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
-  ;; Trace callback arguments to diagnose type mismatches
-  (let ((orig-callback callback))
-    (setq callback
-          (lambda (result)
-            (message "[DEBUG] gptel-auto-experiment-run calling callback with type=%S" (type-of result))
-            (funcall orig-callback result))))
   ;; Clear per-experiment provider overrides so MiniMax gets first crack
   ;; at each new experiment. Rate-limited backends still stay blacklisted.
   (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)

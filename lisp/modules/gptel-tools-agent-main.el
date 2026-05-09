@@ -640,9 +640,6 @@ into staging or main."
                           (if (not (gptel-auto-workflow--run-callback-live-p callback-run-id))
                               (message "[auto-workflow] Ignoring stale target completion for %s; run %s is no longer active"
                                        target run-id)
-                            (message "[DEBUG] target-complete received results type=%S first-element-type=%S"
-                                     (type-of results)
-                                     (type-of (car-safe results)))
                             (setq all-results (append all-results results))
                            (setq kept-count
                                  (gptel-auto-workflow--kept-target-count all-results))

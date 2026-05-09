@@ -236,19 +236,14 @@ Adapts max-experiments based on API error rate."
                            (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
                                     target (length results)
                                     best-score)
-                           (let ((final-results (nreverse results)))
-                             (message "[DEBUG] gptel-auto-experiment-loop calling callback with type=%S first-element-type=%S"
-                                      (type-of final-results)
-                                      (type-of (car-safe final-results)))
-                             (funcall callback final-results)))
+                           (funcall callback (nreverse results)))
                       (gptel-auto-experiment--run-with-retry
                        target exp-id max-exp
                        best-score
                        baseline-code-quality
                        results
-                        (lambda (result)
-                          (message "[DEBUG] gptel-auto-experiment-loop received result type=%S" (type-of result))
-                          (push result results)
+                         (lambda (result)
+                           (push result results)
                           (gptel-auto-workflow--update-progress)
                          (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
                                 (kept (gptel-auto-workflow--plist-get result :kept nil))
