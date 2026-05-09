@@ -17,6 +17,8 @@
 ;; patched module definitions in long-lived workflow daemons.
 (defun gptel-tools-agent--load-module (feature)
   "Load split module FEATURE from this directory, falling back to `require'."
+  (unless (symbolp feature)
+    (error "Feature must be a symbol: %S" feature))
   (let* ((dir (file-name-directory (or load-file-name buffer-file-name)))
          (source (and dir (expand-file-name (format "%s.el" feature) dir))))
     (if (and source (file-readable-p source))
