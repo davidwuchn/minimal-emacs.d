@@ -136,6 +136,8 @@ REASON is only used for logging."
   "Activate a per-run fallback for AGENT-TYPE when RESULT shows provider pressure."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
              (gptel-auto-experiment--provider-pressure-error-p result))
+    ;; Capture quota reset timestamp if present in the error message
+    (gptel-auto-experiment--parse-quota-reset-time result)
     (gptel-auto-workflow--activate-provider-failover
      agent-type preset "provider pressure")))
 
@@ -191,6 +193,11 @@ Returns the message string or nil."
                 "timeout\\|timed out\\|temporary\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\"\\|Malformed JSON"
                 msg))))))
 
+(defvar gptel-auto-experiment--quota-reset-timestamp nil
+  "Parsed timestamp (seconds since epoch) when the current provider quota resets.
+Set automatically from rate-limit error messages.  Checked at startup to auto-switch
+back to the primary backend when the quota window has elapsed.")
+
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
   (let ((msg (gptel-auto-experiment--error-message error-output)))
@@ -199,6 +206,20 @@ Returns the message string or nil."
            (string-match-p
             "access_terminated_error\\|usage limit exceeded\\|usage limit for this billing cycle\\|reached your usage limit for this billing cycle"
             msg)))))
+
+(defun gptel-auto-experiment--parse-quota-reset-time (error-output)
+  "Extract quota-reset timestamp from ERROR-OUTPUT and store it.
+Returns the parsed timestamp (seconds since epoch) or nil if not found."
+  (let ((msg (gptel-auto-experiment--error-message error-output)))
+    (when (and (stringp msg)
+               (string-match "resets at \\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}:[0-9]\\{2\\}:[0-9]\\{2\\}[^ ]*\\)" msg))
+      (let* ((iso (match-string 1 msg))
+             (ts (ignore-errors (date-to-time iso))))
+        (when ts
+          (setq gptel-auto-experiment--quota-reset-timestamp (float-time ts))
+          (message "[auto-workflow] Quota resets at %s (%.0fs from now)"
+                   iso (- gptel-auto-experiment--quota-reset-timestamp (float-time)))
+          gptel-auto-experiment--quota-reset-timestamp)))))
 
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure."
@@ -288,6 +309,22 @@ Only successful executor output may take the local grader retry path."
     (gptel-auto-workflow--first-available-provider-candidate
      (gptel-auto-workflow--rate-limit-failover-candidates agent-type)
      gptel-auto-workflow--rate-limited-backends)))
+
+(defun gptel-auto-experiment--check-quota-reset-and-switch-back ()
+  "If quota reset time has passed, switch `gptel-backend' back to primary.
+Uses `gptel-auto-experiment--quota-reset-timestamp' and falls back to MiniMax."
+  (when (and gptel-auto-experiment--quota-reset-timestamp
+             (> (float-time) gptel-auto-experiment--quota-reset-timestamp)
+             (boundp 'gptel--minimax)
+             gptel--minimax)
+    (let ((current (when (and (boundp 'gptel-backend) gptel-backend
+                              (fboundp 'gptel-backend-name))
+                     (gptel-backend-name gptel-backend))))
+      (unless (string= current "MiniMax")
+        (setq gptel-backend gptel--minimax
+              gptel-model 'minimax-m2.7-highspeed
+              gptel-auto-experiment--quota-reset-timestamp nil)
+        (message "[auto-workflow] Quota window elapsed. Switched back to MiniMax.")))))
 
 (defun gptel-auto-experiment--hard-quota-stops-run-p (agent-type error-output)
   "Return non-nil when ERROR-OUTPUT should stop the run for AGENT-TYPE.

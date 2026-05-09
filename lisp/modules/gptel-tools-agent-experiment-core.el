@@ -38,8 +38,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
   ;; Clear per-experiment provider overrides so MiniMax gets first crack
   ;; at each new experiment. Rate-limited backends still stay blacklisted.
   (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-  ;; Also switch main backend if it's been rate-limited
+  ;; Switch main backend if it's been rate-limited, or switch BACK if quota
+  ;; reset window has elapsed while this daemon was running.
   (gptel-auto-experiment--maybe-failover-main-backend)
+  (when (fboundp 'gptel-auto-experiment--check-quota-reset-and-switch-back)
+    (gptel-auto-experiment--check-quota-reset-and-switch-back))
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
