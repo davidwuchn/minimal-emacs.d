@@ -354,8 +354,14 @@ Used by `and' and `or' to share short-circuit evaluation logic."
 (defun gptel-sandbox--apply-builtin (func args env)
   "Apply built-in function FUNC to evaluated ARGS in ENV.
 Errors propagate to the outer condition-case in `execute-tool'."
+  ;; ASSUMPTION: args must be a proper list for safe mapcar evaluation
+  ;; BEHAVIOR: Validates args, evaluates each, checks arity, applies func
+  ;; EDGE CASE: Rejects dotted lists that would cause silent truncation
+  ;; TEST: Pass a dotted list like '(a b . c) and verify error is raised
   (unless (functionp func)
     (error "Programmatic builtin requires a function, got: %S" func))
+  (unless (proper-list-p args)
+    (error "Programmatic builtin arguments must be a proper list, got: %S" args))
   (let ((evaluated (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args))
         (arity (assq func gptel-sandbox--builtin-arity)))
     (when arity
