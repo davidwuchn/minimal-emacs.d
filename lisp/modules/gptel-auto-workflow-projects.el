@@ -706,6 +706,9 @@ When COMPLETION-CALLBACK is non-nil, call it after research completes."
   (let* ((root (expand-file-name project-root))
          (project-buf (gptel-auto-workflow--get-project-buffer root)))
     (message "[research] Starting for project: %s" root)
+    ;; Load full workflow stack when running in researcher daemon context
+    (when (fboundp 'gptel-auto-workflow--reload-live-support)
+      (gptel-auto-workflow--reload-live-support root))
     ;; Ensure gptel-auto-workflow-strategic is loaded
     (unless (featurep 'gptel-auto-workflow-strategic)
       (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)))
