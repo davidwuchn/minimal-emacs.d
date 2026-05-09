@@ -170,7 +170,7 @@ corrupted data from propagating to functions that expect lists."
 FIELD should be a keyword like :score or a symbol like 'score.
 For alist lookup, tries both keyword and symbol keys.
 Returns nil if OBJ is not a valid plist or alist, or if FIELD is nil."
-  (when (and (listp obj) field)
+  (when (and (proper-list-p obj) field)
     (or (plist-get obj field)
         (cdr (assoc field obj))
         (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
