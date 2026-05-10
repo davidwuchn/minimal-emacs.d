@@ -1,0 +1,1 @@
+{"name":"candidate-template-d-3","version":"1.0","hypothesis":"When the improvement frontier saturates, reframing the task as critique of previous attempts breaks plateaus better than continued generation.","axis":"A","components":["saturation-detection","template-envelope","critique-mode"]}
