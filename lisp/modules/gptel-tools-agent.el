@@ -30,16 +30,17 @@
       (unless file
         (error "Cannot determine module directory"))
       (setq gptel-tools-agent--module-dir (file-name-directory file))))
-  (let* ((source (and gptel-tools-agent--module-dir
-                      (expand-file-name (format "%s.el" feature)
-                                        gptel-tools-agent--module-dir))))
-    (if (and source (file-readable-p source))
-        (condition-case err
-            (load source nil 'nomessage)
-          (error (require feature)))
-      (require feature))
-    (unless (featurep feature)
-      (error "Module %s did not provide feature %S" (or source feature) feature))))
+  (unless (featurep feature)
+    (let* ((source (and gptel-tools-agent--module-dir
+                        (expand-file-name (format "%s.el" feature)
+                                          gptel-tools-agent--module-dir))))
+      (if (and source (file-readable-p source))
+          (condition-case err
+              (load source nil 'nomessage)
+            (error (require feature)))
+        (require feature))
+      (unless (featurep feature)
+        (error "Module %s did not provide feature %S" (or source feature) feature)))))
 
 (dolist (feature '(gptel-tools-agent-base
                    gptel-tools-agent-git
