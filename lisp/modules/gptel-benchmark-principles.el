@@ -49,7 +49,8 @@
 (defun gptel-benchmark--load-keys-from-skill ()
   "Load Eight Keys definitions from eight-keys-grader skill.
 Returns list of key definitions or nil if skill not available.
-Currently returns nil to use hardcoded fallback until skill parsing is implemented."
+Currently returns nil to use hardcoded fallback until skill
+parsing is implemented."
   ;; TODO: Parse eight-keys-grader SKILL.md into proper list structure
   ;; The skill content is markdown text, not an Elisp data structure
   nil)
@@ -170,8 +171,9 @@ Helper to reduce duplication in accessor functions."
 Each entry: (task-type (keys...) description).")
 
 (defun gptel-benchmark--detect-task-type (hypothesis)
-  "Detect task type from HYPOTHESIS string using keyword matching.
-Returns a symbol: refactoring, bug-fix, performance, feature, validation, or default."
+  "Detect task type from HYPOTHESIS using keyword matching.
+Returns a symbol: refactoring, bug-fix, performance, feature,
+validation, or default."
   (when (stringp hypothesis)
     (let ((h (downcase hypothesis)))
       (cond
@@ -230,7 +232,7 @@ SCORES is the alist returned by gptel-benchmark-eight-keys-score."
 
 (defun gptel-benchmark-eight-keys-weakest (scores &optional n)
   "Return N weakest keys from SCORES alist.
-Excludes 'overall from results.
+Excludes `overall' from results.
 Returns list of (key . score) pairs sorted ascending by score."
   (let ((key-scores (cl-remove-if (lambda (x) (eq (car x) 'overall)) scores)))
     (cl-subseq (sort key-scores (lambda (a b) (< (cdr a) (cdr b)))) 0 (or n 2))))
