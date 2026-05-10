@@ -84,52 +84,24 @@ CONTENT is the body text."
 EXPERIMENT is a plist with :target :hypothesis :score-before :score-after
 :code-quality :decision :grader-quality :grader-reason."
   (when gptel-auto-workflow-mementum-enabled
-     (let* ((target (plist-get experiment :target))
-            (hypothesis (plist-get experiment :hypothesis))
-            (decision (plist-get experiment :decision))
-            (score-before (or (plist-get experiment :score-before) 0.0))
-            (score-after (or (plist-get experiment :score-after) 0.0))
-            (quality (or (plist-get experiment :code-quality) 0.0))
-            (grader-q (or (plist-get experiment :grader-quality) 0))
-            (change-type (gptel-auto-workflow--categorize-hypothesis hypothesis))
-            (slug (gptel-auto-workflow--mementum-slug
-                   (format "%s-%s" target hypothesis))))
-       (pcase decision
-         ("kept"
+      ;; Only write memory files for kept experiments.
+      ;; Discarded/timeout/validation-failed experiments are captured
+      ;; statistically in evaluation records and knowledge pages.
+      (when (equal (plist-get experiment :decision) "kept")
+        (let* ((target (plist-get experiment :target))
+               (hypothesis (plist-get experiment :hypothesis))
+               (decision (plist-get experiment :decision))
+               (score-before (or (plist-get experiment :score-before) 0.0))
+               (score-after (or (plist-get experiment :score-after) 0.0))
+               (quality (or (plist-get experiment :code-quality) 0.0))
+               (grader-q (or (plist-get experiment :grader-quality) 0))
+               (change-type (gptel-auto-workflow--categorize-hypothesis hypothesis))
+               (slug (gptel-auto-workflow--mementum-slug
+                      (format "%s-%s" target hypothesis))))
           (gptel-auto-workflow--mementum-write-memory
            '✅ slug
            (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Score:** %.2f → %.2f\n**Quality:** %.2f\n**Grader:** %d/9\n\nThis change was kept because it improved the combined score or had significant quality gains."
-                   target change-type hypothesis score-before score-after quality grader-q)))
-         ("discarded"
-          (gptel-auto-workflow--mementum-write-memory
-           '❌ slug
-           (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Score:** %.2f → %.2f\n**Quality:** %.2f\n**Grader:** %d/9\n\nThis change was discarded. Score tie without sufficient quality gain, or regression."
-                   target change-type hypothesis score-before score-after quality grader-q)))
-         ("timeout"
-          (gptel-auto-workflow--mementum-write-memory
-           '❌ slug
-           (format "**Target:** %s\n**Hypothesis:** %s\n**Result:** TIMEOUT\n\nExperiment timed out. Consider reducing scope or increasing time budget for this target."
-                   target hypothesis)))
-         ("grader-rejected"
-          (gptel-auto-workflow--mementum-write-memory
-           '❌ slug
-           (format "**Target:** %s\n**Hypothesis:** %s\n**Result:** GRADER REJECTED\n**Grader:** %d/9\n\nChange failed grader review. Hypothesis did not match actual changes, or change was too large/unsafe."
-                   target hypothesis grader-q)))
-          ("validation-failed"
-           (gptel-auto-workflow--mementum-write-memory
-            '❌ slug
-            (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Result:** VALIDATION FAILED\n\nPre-grade validation caught an error (undefined function, syntax error, or unavailable symbol). Common causes: using Common Lisp functions not available in Emacs Lisp (plusp, getf, cw, file), or introducing symbols that don't exist.\n\n**Lesson:** Always verify new functions exist in Emacs Lisp before using them."
-                    target change-type hypothesis)))
-         ("repeated-focus-symbol"
-           (gptel-auto-workflow--mementum-write-memory
-            '❌ slug
-            (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Result:** REPEATED FOCUS BLOCKED\n\nThis function was already focused on in 2+ prior non-kept experiments. The system correctly prevents stagnation by blocking repeated attempts on the same function.\n\n**Lesson:** After 2 non-kept attempts on a function, switch to a different function or subsystem."
-                    target change-type hypothesis)))
-          (_
-            (gptel-auto-workflow--mementum-write-memory
-             '💡 slug
-             (format "**Target:** %s\n**Change type:** %s\n**Hypothesis:** %s\n**Decision:** %s\n**Score:** %.2f → %.2f\n**Quality:** %.2f\n\nUnexpected outcome. Review grader feedback and comparator reasoning to determine why this experiment did not produce a clear keep/discard decision."
-                      target change-type hypothesis decision score-before score-after quality)))))))
+                   target change-type hypothesis score-before score-after quality grader-q))))))
 
 (defun gptel-auto-workflow--mementum-record-research (research-result)
   "Record RESEARCH-RESULT to mementum as an atomic memory.
