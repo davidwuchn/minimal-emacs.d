@@ -134,7 +134,14 @@ else
 fi
 
 if [ -f "$FINDINGS_FILE" ]; then
-    FINDINGS_AGE=$(( $(date +%s) - $(stat -c %Y "$FINDINGS_FILE" 2>/dev/null || echo 0) ))
+    if FINDINGS_MTIME=$(stat -f %m "$FINDINGS_FILE" 2>/dev/null); then
+        :
+    elif FINDINGS_MTIME=$(stat -c %Y "$FINDINGS_FILE" 2>/dev/null); then
+        :
+    else
+        FINDINGS_MTIME=0
+    fi
+    FINDINGS_AGE=$(( $(date +%s) - FINDINGS_MTIME ))
     if [ "$FINDINGS_AGE" -lt 86400 ]; then
         log "  ✓ Findings are recent ($(( FINDINGS_AGE / 3600 ))h old)"
     else
