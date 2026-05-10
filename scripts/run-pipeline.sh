@@ -99,7 +99,9 @@ log "=== Step 2: Verify Pipeline Integration ==="
 # Ensure auto-workflow daemon is running for verification
 if ! emacsclient --socket-name=copilot-auto-workflow --eval nil 2>/dev/null; then
     EMACS="${EMACS:-emacs}"
-    "$EMACS" --init-directory="$DIR" --fg-daemon=copilot-auto-workflow >> "$LOG_DIR/copilot-auto-workflow.log" 2>&1 &
+    MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+        "$EMACS" --init-directory="$DIR" --fg-daemon=copilot-auto-workflow \
+        >> "$LOG_DIR/copilot-auto-workflow.log" 2>&1 &
     for i in $(seq 1 30); do
         emacsclient --socket-name=copilot-auto-workflow --eval nil 2>/dev/null && break
         sleep 1
