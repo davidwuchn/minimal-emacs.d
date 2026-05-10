@@ -137,9 +137,11 @@ gptel preset.")
     (assoc 2 3) (plist-get 2 3) (string-empty-p 1 1)
     (string-match-p 2 3) (format 1 nil) (split-string 1 4)
     (string-join 1 2) (string-trim 1 3) (substring 2 3)
-    (alist-get 2 5))
+    (alist-get 2 5)
+    (equal 2 nil) (string= 2 nil) (= 2 nil)
+    (< 2 nil) (> 2 nil) (<= 2 nil) (>= 2 nil))
   "Alist of (FUNC MIN-ARGS MAX-ARGS) for arity validation.
-MAX-ARGS of nil means no upper bound. Comparison ops need >= 2 args.")
+MAX-ARGS of nil means no upper bound.")
 ;;; Internal Helpers
 
 (defvar gptel-sandbox--missing-marker (make-symbol "gptel-sandbox-missing")
@@ -374,10 +376,6 @@ Errors propagate to the outer condition-case in `execute-tool'."
         (when (and max-args (> n max-args))
           (error "Programmatic `%s` requires at most %d argument%s, got %d"
                  func max-args (if (= max-args 1) "" "s") n))))
-    (when (memq func gptel-sandbox--comparison-ops)
-      (when (< (length evaluated) 2)
-        (error "Programmatic `%s` requires at least 2 arguments, got %d"
-               func (length evaluated))))
     (apply func evaluated)))
 
 (defun gptel-sandbox--eval-expr (expr env)
