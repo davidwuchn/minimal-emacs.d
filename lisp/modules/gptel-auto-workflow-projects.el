@@ -221,8 +221,9 @@ Interactively prompts for directory."
       (error "No .dir-locals.el found in %s" root))
     (unless (member root gptel-auto-workflow-projects)
       (push root gptel-auto-workflow-projects)
-      (customize-save-variable 'gptel-auto-workflow-projects 
+      (customize-save-variable 'gptel-auto-workflow-projects
                                gptel-auto-workflow-projects)
+      (gptel-auto-workflow--ensure-buffer-tables)
       (remhash root gptel-auto-workflow--project-buffers)
       (remhash root gptel-auto-workflow--worktree-buffers)
       (remhash root gptel-auto-workflow--research-findings-cache))
@@ -237,11 +238,12 @@ Interactively prompts for directory."
      (list (completing-read "Remove project: " projects))))
   (let ((root (file-name-as-directory (expand-file-name project-root)))
         (was-present (member root gptel-auto-workflow-projects)))
-    (setq gptel-auto-workflow-projects 
+    (setq gptel-auto-workflow-projects
           (delete root gptel-auto-workflow-projects))
     (when was-present
-      (customize-save-variable 'gptel-auto-workflow-projects 
+      (customize-save-variable 'gptel-auto-workflow-projects
                                gptel-auto-workflow-projects)
+      (gptel-auto-workflow--ensure-buffer-tables)
       (remhash root gptel-auto-workflow--project-buffers)
       (remhash root gptel-auto-workflow--worktree-buffers)
       (remhash root gptel-auto-workflow--research-findings-cache))
@@ -413,9 +415,9 @@ the queued job actually finishes."
   (interactive)
   (gptel-auto-workflow--queue-cron-job
    "auto-workflow"
-    (lambda (completion-callback)
-      (gptel-auto-workflow-run-all-projects completion-callback))
-    t))
+   (lambda (completion-callback)
+     (gptel-auto-workflow-run-all-projects completion-callback))
+   t))
 
 ;;; Per-Project Subagent Buffer Support
 
@@ -456,7 +458,7 @@ Returns (project-root . project-buffer) or nil if can't determine."
                        (error default-directory))
                      default-directory))
            (expanded-proj (and (stringp proj) (> (length proj) 0)
-                              (expand-file-name proj))))
+                               (expand-file-name proj))))
       (when expanded-proj
         (cons expanded-proj (gptel-auto-workflow--get-project-buffer expanded-proj)))))))
 
@@ -525,15 +527,15 @@ Also handles caching and result truncation from old advice."
             (if (and target-buf 
                      (buffer-live-p target-buf)
                      (not (string= (buffer-name target-buf) "*Messages*")))
-                 (progn
-                   (when (fboundp 'my/gptel--register-agent-task-buffer)
-                     (my/gptel--register-agent-task-buffer target-buf))
-                   (with-current-buffer target-buf
-                     (when (and (not gptel-auto-workflow--defer-subagent-env-persistence)
-                                (fboundp 'gptel-auto-workflow--persist-subagent-process-environment))
-                       (gptel-auto-workflow--persist-subagent-process-environment
-                        target-buf))
-                     ;; Ensure FSM exists for agent task
+                (progn
+                  (when (fboundp 'my/gptel--register-agent-task-buffer)
+                    (my/gptel--register-agent-task-buffer target-buf))
+                  (with-current-buffer target-buf
+                    (when (and (not gptel-auto-workflow--defer-subagent-env-persistence)
+                               (fboundp 'gptel-auto-workflow--persist-subagent-process-environment))
+                      (gptel-auto-workflow--persist-subagent-process-environment
+                       target-buf))
+                    ;; Ensure FSM exists for agent task
                     (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
                       ;; Create minimal FSM for agent context
                       (when (fboundp 'gptel-make-fsm)
@@ -551,10 +553,10 @@ Also handles caching and result truncation from old advice."
                                      (my/gptel--coerce-fsm gptel--fsm-last)
                                    gptel--fsm-last)))
                            (orig-gptel-fsm-info (symbol-function 'gptel-fsm-info))
-                            (info (or (and parent-fsm
-                                           (ignore-errors
-                                             (gptel-fsm-info parent-fsm)))
-                                      (list :buffer target-buf :position target-marker)))
+                           (info (or (and parent-fsm
+                                          (ignore-errors
+                                            (gptel-fsm-info parent-fsm)))
+                                     (list :buffer target-buf :position target-marker)))
                            (modified-info (gptel-auto-workflow--routed-fsm-info
                                            info target-buf target-marker))
                            ;; Wrap callback to cache results
@@ -568,21 +570,21 @@ Also handles caching and result truncation from old advice."
                                           orig-fun)))
                       (cl-letf (((symbol-function 'gptel-fsm-info)
                                  (lambda (&optional fsm)
-                                    (let* ((active-fsm
-                                            (or fsm
-                                                (and (boundp 'gptel--fsm-last)
-                                                     gptel--fsm-last)))
-                                           (coerced-fsm
-                                            (if (fboundp 'my/gptel--coerce-fsm)
-                                                (my/gptel--coerce-fsm active-fsm)
-                                              active-fsm)))
-                                      (cond
-                                       ((and coerced-fsm parent-fsm
-                                             (eq coerced-fsm parent-fsm))
-                                        modified-info)
-                                       (coerced-fsm
-                                        (funcall orig-gptel-fsm-info coerced-fsm))
-                                       (t nil))))))
+                                   (let* ((active-fsm
+                                           (or fsm
+                                               (and (boundp 'gptel--fsm-last)
+                                                    gptel--fsm-last)))
+                                          (coerced-fsm
+                                           (if (fboundp 'my/gptel--coerce-fsm)
+                                               (my/gptel--coerce-fsm active-fsm)
+                                             active-fsm)))
+                                     (cond
+                                      ((and coerced-fsm parent-fsm
+                                            (eq coerced-fsm parent-fsm))
+                                       modified-info)
+                                      (coerced-fsm
+                                       (funcall orig-gptel-fsm-info coerced-fsm))
+                                      (t nil))))))
                         (if (and gptel-auto-workflow--persist-executor-overlays
                                  (equal agent-type "executor"))
                             (cl-letf (((symbol-function 'delete-overlay)
@@ -781,14 +783,14 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   "Queue `gptel-auto-workflow-run-all-research' and return immediately."
   (interactive)
   (gptel-auto-workflow--queue-cron-job
-    "research"
-    (lambda (completion-callback)
-      (gptel-auto-workflow-run-all-research
-       (lambda (&rest args)
-         (funcall completion-callback)
-         (when shutdown-after-completion
-           (apply #'gptel-auto-workflow--shutdown-researcher-daemon-after-job args)))))
-    t))
+   "research"
+   (lambda (completion-callback)
+     (gptel-auto-workflow-run-all-research
+      (lambda (&rest args)
+        (funcall completion-callback)
+        (when shutdown-after-completion
+          (apply #'gptel-auto-workflow--shutdown-researcher-daemon-after-job args)))))
+   t))
 
 ;;; Research Cache Management
 
@@ -921,7 +923,7 @@ PER-PROJECT-FN should accept a project root and return t/nil for success."
   (gptel-auto-workflow--queue-cron-job
    "mementum"
    #'gptel-auto-workflow-run-all-mementum
-    nil))
+   nil))
 
 (defun gptel-auto-workflow-run-instincts-for-project (project-root)
   "Run instincts weekly job for specific PROJECT-ROOT."
