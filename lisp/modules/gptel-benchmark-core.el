@@ -503,9 +503,14 @@ Signals error if CURRENT-SCORE is not a number or OUTCOME is invalid."
 MIN-RUNS is minimum runs before suggesting changes (default 5).
 Returns plist with suggested threshold adjustments."
   (let ((runs (or min-runs 5)))
-    (if (< (length history) runs)
-        (list :status :insufficient-data
-              :message (format "Need %d runs, have %d" runs (length history)))
+    (cond
+     ((not (proper-list-p history))
+      (list :status :invalid-input
+            :message "HISTORY must be a proper list"))
+     ((< (length history) runs)
+      (list :status :insufficient-data
+            :message (format "Need %d runs, have %d" runs (length history))))
+     (t
       (let* ((recent (cl-subseq history 0 (min runs (length history))))
              (raw-scores (mapcar (lambda (h)
                                    (gptel-benchmark--plist-get
@@ -531,7 +536,7 @@ Returns plist with suggested threshold adjustments."
              (t
               (list :status :stable
                     :message "Thresholds are well-calibrated"
-                    :current-avg overall-avg)))))))))
+                    :current-avg overall-avg))))))))))
 
 ;;; Temp File Helper
 
