@@ -106,7 +106,7 @@ Based on analysis of experiment errors.
 
 ## Evolved Patterns
 
-Updated: 2026-05-10 00:07
+Updated: 2026-05-10 08:09
 
 ### High-Signal Keywords
 
@@ -114,8 +114,8 @@ Updated: 2026-05-10 00:07
 - `expressions`: 80% (4/5)
 - `paths.`: 80% (4/5)
 - `pass`: 80% (4/5)
+- `contains`: 75% (6/8)
 - `messages`: 71% (5/7)
-- `contains`: 71% (5/7)
 - `identical`: 67% (4/6)
 - `targets`: 67% (4/6)
 - `don't`: 60% (3/5)

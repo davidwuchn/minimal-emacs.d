@@ -1,10 +1,10 @@
-# Insight: 2026-05-09 23:40
+# Insight: 2026-05-10 09:03
 
-**Target:** lisp/modules/gptel-auto-workflow-projects.el
+**Target:** lisp/modules/gptel-tools-agent.el
 **Change type:** bug-fix
 **Hypothesis:** Agent error
 **Decision:** nil
-**Score:** 0.41 → 0.00
+**Score:** 0.40 → 0.00
 **Quality:** 0.00
 
 Unexpected outcome. Review grader feedback and comparator reasoning to determine why this experiment did not produce a clear keep/discard decision.
