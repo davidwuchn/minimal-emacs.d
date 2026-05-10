@@ -85,6 +85,24 @@
   - This fixes the root cause: executor uses global `gptel-backend`, not subagent preset override
   - Committed and pushed to origin/main
 
+**Commits:**
+- `8ca9c303` — ⊘ fix: reduce rate-limiting with dual model presets and timeouts
+  - All fixes committed and pushed to origin/main
+  - Pre-commit hooks passed (byte-compile + submodule sync)
+- `bbd8414c` — ⊘ fix: pipeline wait_for_idle uses direct emacsclient eval (remote)
+  - Fixes pipeline script to properly check daemon phase
+  - Better researcher daemon startup handling
+  - Merged from origin/main
+
+**Cleanup:**
+- ✅ **Deleted 569 junk insight files** (`insight-lisp-modules-*.md`)
+  - 449 from `mementum/memories/` (untracked generated files)
+  - 120 from experiment worktrees
+  - Root cause: Buggy worktree version of `gptel-auto-workflow-mementum.el` created memories for ALL experiments (not just kept)
+  - These files had no actual insight (all said "Unexpected outcome, Decision: nil")
+  - 102 real memory files remain
+  - Main repo code is correct: only writes memories for `decision == "kept"`
+
 **Current Blockers:**
 1. **MiniMax API quota exhausted** - 45,000/45,000 weekly tokens
    - Quota resets: 2026-05-11T00:00:00+08:00
@@ -92,12 +110,17 @@
    - Subagent fallback also configured with moonshot as primary
    - Main backend auto-failover now implemented
 2. **DeepSeek grader timeouts** - Subagent executor hung on API call for 670+ seconds
-   - Need to investigate: why didn't 120s subagent timeout kill the executor?
-   - DeepSeek API may be slow; consider reducing max-time or adding request-level timeout
+   - ✅ **FIXED:** Timeout reduced to 180s idle + 60s grace = 240s max
+   - Root cause: Was 600s + 420s = 1020s (17 min), no effective limit
 
 **Next Steps:**
 1. ✅ **FIXED:** Main backend auto-failover implemented
 2. ✅ **FIXED:** Daemon restarted after hung subagent
+3. ✅ **FIXED:** Timeout reduced (600s→180s, grace 420s→60s)
+4. ✅ **FIXED:** Hard quota pattern includes "usage limit exceeded"
+5. ✅ **FIXED:** Rate-limiting reduced (delay 3s→30s, retries 25→10)
+6. ✅ **FIXED:** Dual model presets (cheap for analyzer, capable for executor)
+7. Monitor next run `2026-05-10T110002Z-0411` for new timeout behavior
 3. Monitor new run `2026-05-10T092628Z-3ce6` for progress
 4. Investigate subagent timeout not killing hung executor (should timeout at 120s)
 5. Revert default backend to MiniMax when quota resets on May 11
