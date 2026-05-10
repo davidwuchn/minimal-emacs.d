@@ -607,9 +607,13 @@ in the hypothesis text. Returns single letter or question mark."
             (upcase (match-string 1 agent-output))
           ;; Second: infer from keywords in hypothesis
           (cond
-           ;; A: Error Handling
-           ((string-match "\\b\\(error\\|exception\\|handle\\|catch\\|throw\\|guard\\|validation\\|nil guard\\|nil check\\|wrong-type\\)\\b" text)
-            "A")
+           ;; D: Safety (check first — more specific than general error handling)
+             ;; A: Error Handling (specific nil-checking patterns)
+             ((string-match "\\b\\(nil guard\\|nil check\\|wrong-type\\|error\\|exception\\|handle\\|catch\\|throw\\)\\b" text)
+              "A")
+             ;; D: Safety
+             ((string-match "\\b\\(safety\\|guard\\|check\\|validat\\|boundary\\|edge case\\|defensive\\|sanitize\\)\\b" text)
+              "D")
            ;; B: Performance
            ((string-match "\\b\\(speed\\|slow\\|fast\\|optimiz\\|cache\\|bottleneck\\|efficien\\|performance\\|latency\\|throughput\\)\\b" text)
             "B")
