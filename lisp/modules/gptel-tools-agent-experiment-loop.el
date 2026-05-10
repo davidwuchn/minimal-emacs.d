@@ -4,6 +4,19 @@
 (declare-function gptel-auto-experiment--frontier-saturated-p "gptel-tools-agent-prompt-build" (target &optional min-frontier-size min-axes min-quality))
 (declare-function gptel-auto-experiment--compute-frontier "gptel-tools-agent-prompt-build" (target))
 
+(defvar gptel-auto-experiment-max-per-target)
+(defvar gptel-auto-experiment-no-improvement-threshold)
+(defvar gptel-auto-workflow--run-id)
+(defvar gptel-auto-experiment--quota-exhausted)
+(defvar gptel-auto-experiment--api-error-count)
+(defvar gptel-auto-experiment--api-error-threshold)
+(defvar gptel-auto-experiment-delay-between)
+(defvar gptel-auto-workflow--status-run-id)
+(defvar gptel-auto-workflow--defer-subagent-env-persistence)
+(defvar gptel-auto-workflow--staging-worktree-dir)
+(defvar gptel-auto-workflow--run-project-root)
+(defvar gptel-auto-workflow--current-project)
+
 (defun gptel-auto-experiment--extract-last-explicit-hypothesis (output pattern)
   "Return the last non-placeholder hypothesis in OUTPUT matching PATTERN."
   (when (stringp output)
@@ -22,10 +35,10 @@
 (defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT.
 Tries multiple patterns in order:
-1. Check for error message (returns 'Agent error')
+1. Check for error message (returns \='Agent error\=')
 2. Explicit HYPOTHESIS: prefix
 3. **HYPOTHESIS** markdown
-4. Sentence with 'will improve' (predictive statement)
+4. Sentence with \='will improve\=' (predictive statement)
 5. Action verb at start of sentence
 6. Summary after ✓ checkmark (fallback)"
   (cond
@@ -122,10 +135,10 @@ getf (use plist-get), plusp (use (> n 0)), remf (use cl-remf),
 psetq (use setq), incf/decf (use setq with +), key (use plist-get),
 cons? (use consp), atom? (use atom).
 CRITICAL: Do NOT call single-letter or short variable names as functions.
-If you see a function like 'tool' or 'key' in the error, it means you wrote
+If you see a function like \='tool\=' or \='key\=' in the error, it means you wrote
 (tool ...) or (key ...) — these are NOT valid Emacs Lisp functions.
 Replace undefined calls with valid Emacs Lisp equivalents or remove them.
-Use function-quote #' for symbols meant as functions, not bare-quote '.")
+Use function-quote #' for symbols meant as functions, not bare-quote \='.")
           ;; Add more skill mappings here as needed
           (t "")))
         (original-contract
@@ -315,10 +328,12 @@ Adapts max-experiments based on API error rate."
   "Remember uniquify-buffer-name-style before headless operation.")
 
 (defvar gptel-auto-workflow--compile-angel-on-load-was-enabled nil
-  "Remember whether `compile-angel-on-load-mode' was enabled before headless operation.")
+  "Remember whether `compile-angel-on-load-mode' was enabled
+before headless operation.")
 
 (defvar gptel-auto-workflow--undo-fu-session-was-enabled nil
-  "Remember whether `undo-fu-session-global-mode' was enabled before headless operation.")
+  "Remember whether `undo-fu-session-global-mode' was enabled
+before headless operation.")
 
 (defvar gptel-auto-workflow--recentf-was-enabled nil
   "Remember whether `recentf-mode' was enabled before headless operation.")
@@ -569,7 +584,7 @@ When not in headless mode, returns t to not interfere with normal behavior."
   (or gptel-auto-workflow--headless t))
 
 (defun gptel-auto-workflow--suppress-kill-buffer-modified (orig-fn &optional buffer-or-name)
-  "Suppress 'Buffer modified; kill anyway?' prompt in headless mode.
+  "Suppress \='Buffer modified; kill anyway?\=' prompt in headless mode.
 ORIG-FN is the original `kill-buffer'. BUFFER-OR-NAME is the buffer to kill.
 In headless mode, marks buffer as unmodified before killing to bypass prompt."
   (if gptel-auto-workflow--headless
@@ -838,7 +853,8 @@ ACTION is a short description used in the failure message."
       hash)))
 
 (defun gptel-auto-workflow--checked-out-submodule-head (&optional worktree path)
-  "Return the checked-out HEAD for top-level submodule PATH in WORKTREE, or nil."
+  "Return the checked-out HEAD for top-level submodule PATH in WORKTREE.
+Return nil on failure."
   (let* ((root (or worktree default-directory))
          (target (and (stringp path) (expand-file-name path root)))
          (git-marker (and target (expand-file-name ".git" target)))
@@ -858,7 +874,8 @@ ACTION is a short description used in the failure message."
 (defun gptel-auto-workflow--restage-top-level-submodule-gitlinks (&optional worktree)
   "Restore top-level submodule gitlinks in WORKTREE after `git add -A'.
 Hydrated experiment worktrees materialize submodules as checked-out directories.
-Reassert gitlink index entries so commits do not record those paths as typechanges."
+Reassert gitlink index entries so commits do not record those paths as
+typechanges."
   (let* ((root (or worktree default-directory))
          (paths (gptel-auto-workflow--staging-submodule-paths root))
          failure)
@@ -947,9 +964,9 @@ ACTION is used for failure logging."
      (or timeout 60))))
 
 (defun gptel-auto-experiment--prepare-validation-retry-worktree (target provisional-hash)
-  "Reset the current experiment worktree to a clean base before retrying validation.
-Drops PROVISIONAL-HASH when it is still the current HEAD so retries do not
-start from a syntax-invalid provisional commit."
+  "Reset experiment worktree to clean base before retrying validation.
+Drops PROVISIONAL-HASH when it is still the current HEAD so retries
+start from a clean state."
   (and (magit-git-success "checkout" "--" ".")
        (or (null provisional-hash)
            (not (equal provisional-hash (gptel-auto-workflow--current-head-hash)))
