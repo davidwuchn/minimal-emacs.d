@@ -3,13 +3,13 @@ title: Experiment Insights - gptel-auto-workflow-projects
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-auto-workflow-projects]
-updated: 2026-05-09 22:19
-insight-quality: 6.6/10
+updated: 2026-05-10 08:09
+insight-quality: 6.3/10
 ---
 
 # Experiment Insights: gptel-auto-workflow-projects
 
-*Consolidated from 5 experiments (avg insight quality: 6.6/10).*
+*Consolidated from 3 experiments (avg insight quality: 6.3/10).*
 
 **Keep rate:** 0% (0 kept / 0 discarded / 0 failed / 0 timeout)
 
