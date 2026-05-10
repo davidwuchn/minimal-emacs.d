@@ -1282,13 +1282,23 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
          (findings (gethash cache-key
                             gptel-auto-workflow--research-findings-cache
-                            "")))
+                            ""))
+         (cache-file (gptel-auto-workflow--research-file))
+         (file-exists (file-exists-p cache-file))
+         (file-attrs (and file-exists (file-attributes cache-file)))
+         (file-size (or (and file-attrs (nth 7 file-attrs)) 0))
+         (file-mtime (and file-attrs (nth 5 file-attrs)))
+         (file-mtime-str (and file-mtime
+                              (format-time-string "%Y-%m-%d %H:%M" file-mtime))))
     (list :running (timerp gptel-auto-workflow--research-timer)
           :interval gptel-auto-workflow-research-interval
           :project proj-root
           :findings-cached (and (stringp findings) (not (string-empty-p findings)))
           :findings-length (length findings)
-          :cache-file (gptel-auto-workflow--research-file))))
+          :cache-file cache-file
+          :cache-file-exists file-exists
+          :cache-file-size file-size
+          :cache-file-mtime file-mtime-str)))
 
 (provide 'gptel-auto-workflow-strategic)
 
