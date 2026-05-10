@@ -22,22 +22,25 @@
   "Load split module FEATURE from this directory, falling back to `require'."
   (unless (and feature (symbolp feature))
     (error "Feature must be a non-nil symbol: %S" feature))
+  (when (string-match-p "[/\\]" (symbol-name feature))
+    (error "Feature name contains invalid characters: %S" feature))
   (unless gptel-tools-agent--module-dir
     (let ((file (or (bound-and-true-p load-file-name)
                     buffer-file-name)))
       (unless file
         (error "Cannot determine module directory"))
       (setq gptel-tools-agent--module-dir (file-name-directory file))))
-  (let* ((source (and gptel-tools-agent--module-dir
-                      (expand-file-name (format "%s.el" feature)
-                                        gptel-tools-agent--module-dir))))
-    (if (and source (file-readable-p source))
-        (condition-case err
-            (load source nil 'nomessage)
-          (error (require feature)))
-      (require feature))
-    (unless (featurep feature)
-      (error "Module %s did not provide feature %S" (or source feature) feature))))
+  (unless (featurep feature)
+    (let* ((source (and gptel-tools-agent--module-dir
+                        (expand-file-name (format "%s.el" feature)
+                                          gptel-tools-agent--module-dir))))
+      (if (and source (file-readable-p source))
+          (condition-case err
+              (load source nil 'nomessage)
+            (error (require feature)))
+        (require feature))
+      (unless (featurep feature)
+        (error "Module %s did not provide feature %S" (or source feature) feature)))))
 
 (dolist (feature '(gptel-tools-agent-base
                    gptel-tools-agent-git
