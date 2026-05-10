@@ -421,32 +421,37 @@ and {{topic-performance}} with live data."
       skill-content)))
 
 (defun gptel-auto-workflow--format-topic-performance (topics)
-  "Format TOPICS hash-table as markdown table."
-  (let ((topic-list nil))
-    ;; Convert hash table to list for sorting
-    (maphash (lambda (topic stats)
-               (let ((success-rate (gethash "success_rate" stats 0))
-                     (total (gethash "total_experiments" stats 0))
-                     (kept (gethash "kept" stats 0))
-                     (trend (gethash "trend" stats "stable")))
-                 (push (list topic success-rate total kept trend) topic-list)))
-             topics)
-    ;; Sort by success rate descending
-    (setq topic-list (sort topic-list (lambda (a b) (> (nth 1 a) (nth 1 b)))))
-    ;; Format as markdown
-    (concat "| Topic | Success Rate | Kept/Total | Trend |\n"
-            "|-------|--------------|------------|-------|\n"
-            (mapconcat 
-             (lambda (item)
-               (let ((topic (nth 0 item))
-                     (rate (nth 1 item))
-                     (total (nth 2 item))
-                     (kept (nth 3 item))
-                     (trend (nth 4 item)))
-                 (format "| %s | %.0f%% | %d/%d | %s |"
-                         topic (* 100 rate) kept total trend)))
-             (seq-take topic-list 10)
-             "\n"))))
+  "Format TOPICS hash-table as markdown table.
+Returns placeholder message if TOPICS is nil or empty."
+  (if (or (null topics)
+          (not (hash-table-p topics))
+          (zerop (hash-table-count topics)))
+      "*No topic performance data available.*"
+    (let ((topic-list nil))
+      ;; Convert hash table to list for sorting
+      (maphash (lambda (topic stats)
+                 (let ((success-rate (gethash "success_rate" stats 0))
+                       (total (gethash "total_experiments" stats 0))
+                       (kept (gethash "kept" stats 0))
+                       (trend (gethash "trend" stats "stable")))
+                   (push (list topic success-rate total kept trend) topic-list)))
+               topics)
+      ;; Sort by success rate descending
+      (setq topic-list (sort topic-list (lambda (a b) (> (nth 1 a) (nth 1 b)))))
+      ;; Format as markdown
+      (concat "| Topic | Success Rate | Kept/Total | Trend |\n"
+              "|-------|--------------|------------|-------|\n"
+              (mapconcat 
+               (lambda (item)
+                 (let ((topic (nth 0 item))
+                       (rate (nth 1 item))
+                       (total (nth 2 item))
+                       (kept (nth 3 item))
+                       (trend (nth 4 item)))
+                   (format "| %s | %.0f%% | %d/%d | %s |"
+                           topic (* 100 rate) kept total trend)))
+               (seq-take topic-list 10)
+               "\n")))))
 
 (defun gptel-auto-workflow--build-research-prompt ()
   "Build external research prompt by loading RESEARCHER.md skill.
