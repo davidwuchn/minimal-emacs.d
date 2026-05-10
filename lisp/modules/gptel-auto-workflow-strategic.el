@@ -333,7 +333,7 @@ Returns formatted string for research prompt."
                     (format "\nRecent failure patterns: %d validation/timeout errors in last 10 commits"
                             (length lines)))))
             (error nil))))
-    (concat (mapconcat (lambda (t) (concat "- " t)) topics "\n")
+    (concat (mapconcat (lambda (topic) (concat "- " topic)) topics "\n")
             (or failure-patterns ""))))
 
 (defun gptel-auto-workflow--load-researcher-skill ()
@@ -463,7 +463,7 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (skill-content (gptel-auto-workflow--load-research-skill))
          (directive-content (gptel-auto-workflow--load-directive-skill))
          (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content)))
-    (concat base-prompt
+    (concat (or base-prompt "")
             "\n\n"
             "## Dynamic Context\n\n"
             (if (string-empty-p skill-content)
