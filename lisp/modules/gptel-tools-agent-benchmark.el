@@ -617,9 +617,10 @@ Values are plist: (:done :timer).")
 (defvar gptel-auto-experiment--grading-worktree nil
   "Dynamically bound experiment worktree for the current grade request.")
 
-(defvar gptel-auto-experiment-grade-timeout 120
+(defvar gptel-auto-experiment-grade-timeout 180
   "Timeout in seconds for grading subagent.
-Default 120s (2 min) allows grader to process complex outputs.")
+Default 180s (3 min) allows grader to process complex outputs with CF-Gateway.
+Increased from 120s because CF-Gateway grader needs more time for detailed analysis.")
 
 (defun gptel-auto-experiment--reset-grade-state ()
   "Cancel and clear all pending grade callbacks."
