@@ -88,10 +88,9 @@ EXPERIMENT is a plist with :target :hypothesis :score-before :score-after
       ;; Discarded/timeout/validation-failed experiments are captured
       ;; statistically in evaluation records and knowledge pages.
       (when (equal (plist-get experiment :decision) "kept")
-        (let* ((target (plist-get experiment :target))
-               (hypothesis (plist-get experiment :hypothesis))
-               (decision (plist-get experiment :decision))
-               (score-before (or (plist-get experiment :score-before) 0.0))
+         (let* ((target (plist-get experiment :target))
+                (hypothesis (plist-get experiment :hypothesis))
+                (score-before (or (plist-get experiment :score-before) 0.0))
                (score-after (or (plist-get experiment :score-after) 0.0))
                (quality (or (plist-get experiment :code-quality) 0.0))
                (grader-q (or (plist-get experiment :grader-quality) 0))

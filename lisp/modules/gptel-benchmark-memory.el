@@ -340,7 +340,6 @@ Uses git grep for semantic search, git log for temporal search.
 Returns list of matching file paths."
   (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
          (d (or depth 2))
-         (grep-regexp (format "--grep=%s" query))
          (results '()))
     (dolist (subdir '("memories" "knowledge"))
       (let ((subdir-path (expand-file-name subdir mem-dir)))
@@ -351,9 +350,9 @@ Returns list of matching file paths."
                     (goto-char (point-min))
                     (re-search-forward query nil t))
               (push file results))))))
-    (when (>= (length results) d)
-      (nreverse (butlast results (- (length results) d))))
-    (nreverse results)))
+    (if (>= (length results) d)
+        (nreverse (butlast results (- (length results) d)))
+      (nreverse results))))
 
 (defun gptel-benchmark-memory-read (path)
   "Read memory or knowledge at PATH."

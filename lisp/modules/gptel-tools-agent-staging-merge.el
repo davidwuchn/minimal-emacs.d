@@ -3,6 +3,19 @@
 
 (require 'gptel-auto-workflow-behavioral-tests nil t)
 
+;; Forward declarations for dynamic variables
+(defvar gptel-auto-experiment-max-changed-files)
+(defvar gptel-auto-experiment-retry-delay)
+(defvar gptel-auto-workflow-git-timeout)
+(defvar gptel-auto-workflow--last-staging-push-output)
+(defvar gptel-auto-workflow--review-error-retry-count)
+(defvar gptel-auto-workflow--review-max-retries)
+(defvar gptel-auto-workflow--review-retry-count)
+(defvar gptel-auto-workflow--running)
+(defvar gptel-auto-workflow--skip-submodule-sync-env)
+(defvar gptel-auto-workflow--staging-push-max-retries)
+(defvar gptel-auto-workflow--staging-worktree-dir)
+
 (defconst gptel-auto-workflow--empty-cherry-pick-pattern
   "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
   "Regex pattern matching git output indicating cherry-pick is already applied.")
@@ -20,9 +33,10 @@ Returns nil if not in a staging worktree or if no changes."
           (split-string output "\n" t))))))
 
 (defun gptel-auto-workflow--empty-cherry-pick-state-p (&optional output allow-missing-head)
-  "Return non-nil when the current worktree reflects an already-applied cherry-pick.
+  "Return non-nil when worktree reflects an already-applied cherry-pick.
 When ALLOW-MISSING-HEAD is non-nil, also treat a clean worktree plus localized
-empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD' is absent."
+  empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD'
+  is absent."
   (let ((cherry-pick-head
          (ignore-errors
            (gptel-auto-workflow--git-cmd
@@ -294,7 +308,8 @@ Returns (success-p . output)."
          (gptel-auto-workflow--parse-remote-head branch (car remote-result)))))
 
 (defun gptel-auto-workflow--push-branch-with-lease (branch action &optional timeout)
-  "Push BRANCH to the shared remote, using `--force-with-lease' when it already exists.
+  "Push BRANCH to the shared remote.
+Use `--force-with-lease' when branch already exists.
 ACTION is a short description used in failure messages."
   (let* ((remote (gptel-auto-workflow--shared-remote))
          (branch-q (shell-quote-argument branch))

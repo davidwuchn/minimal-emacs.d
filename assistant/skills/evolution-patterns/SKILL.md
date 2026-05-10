@@ -106,27 +106,27 @@ Based on analysis of experiment errors.
 
 ## Evolved Patterns
 
-Updated: 2026-05-10 12:20
+Updated: 2026-05-10 13:42
 
 ### High-Signal Keywords
 
-- `explicitly`: 83% (5/6)
-- `expressions`: 80% (4/5)
-- `paths.`: 80% (4/5)
-- `pass`: 80% (4/5)
-- `contains`: 75% (6/8)
-- `messages`: 71% (5/7)
-- `identical`: 67% (4/6)
-- `targets`: 67% (4/6)
-- `score`: 60% (3/5)
-- `don't`: 60% (3/5)
-- `values,`: 60% (3/5)
-- `receive`: 60% (3/5)
-- `preserving`: 60% (3/5)
-- `code.`: 60% (3/5)
-- `consolidating`: 57% (4/7)
-- `since`: 57% (4/7)
-- ``gptel-agent-loop--continuation-needed-p``: 57% (4/7)
-- `providing`: 57% (4/7)
-- `robustness`: 57% (4/7)
-- ``gptel-sandbox--execute-tool``: 57% (4/7)
+- `inputs`: 71% (5/7)
+- ``listp``: 62% (10/16)
+- `corrupted`: 60% (3/5)
+- `pairs)`: 60% (3/5)
+- ``state``: 60% (3/5)
+- `become`: 60% (3/5)
+- `buffer`: 60% (3/5)
+- `errors.`: 60% (3/5)
+- `loading`: 60% (3/5)
+- `defensive`: 53% (16/30)
+- `assumptions).`: 50% (3/6)
+- `score`: 50% (5/10)
+- `nil-guard`: 50% (3/6)
+- `task`: 50% (3/6)
+- `calling`: 50% (6/12)
+- `silent`: 50% (9/18)
+- ``gptel-auto-workflow--filter-large-files``: 50% (3/6)
+- `sandbox`: 50% (3/6)
+- `potential`: 47% (9/19)
+- `failures`: 47% (8/17)

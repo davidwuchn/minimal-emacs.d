@@ -402,7 +402,8 @@ FUNC-DATA may be passed to avoid redundant extraction."
   :group 'gptel-benchmark-subagent)
 
 (defun gptel-benchmark--detect-llm-degradation (response expected-keywords)
-  "Detect if RESPONSE shows LLM degradation (hallucination, off-topic, lost context).
+  "Detect if RESPONSE shows LLM degradation.
+Checks for hallucination, off-topic content, or lost context.
 EXPECTED-KEYWORDS: should be present for on-topic response.
 Returns plist: (:degraded-p :reason :score)."
   (let* ((expected-matches 0)

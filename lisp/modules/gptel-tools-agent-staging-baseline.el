@@ -1,8 +1,24 @@
 ;;; gptel-tools-agent-staging-baseline.el --- Staging branch protection - baseline & review -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+;; Forward declarations for dynamic variables
+(defvar gptel-auto-experiment-use-subagents)
+(defvar gptel-auto-workflow-git-timeout)
+(defvar gptel-auto-workflow-require-review)
+(defvar gptel-auto-workflow-research-before-fix)
+(defvar gptel-auto-workflow-review-file-context-max-bytes)
+(defvar gptel-auto-workflow-review-file-context-max-total-bytes)
+(defvar gptel-auto-workflow--review-max-retries)
+(defvar gptel-auto-workflow--review-retry-count)
+(defvar gptel-auto-workflow-review-time-budget)
+(defvar gptel-auto-workflow--skip-submodule-sync-env)
+(defvar gptel-auto-workflow--staging-worktree-dir)
+(defvar my/gptel-agent-task-timeout)
+(defvar gptel-benchmark--subagent-files)
+
 (defun gptel-auto-workflow--with-temporary-worktree (slug ref fn)
-  "Create a detached temporary worktree for REF, call FN with its path, then clean up."
+  "Create a detached temporary worktree for REF.
+Call FN with its path, then clean up."
   (let* ((proj-root (gptel-auto-workflow--default-dir))
          (default-directory proj-root)
          (worktree-dir (gptel-auto-workflow--temporary-worktree-path slug))
@@ -53,7 +69,8 @@ Explicitly assumes: exit code 0 means success, non-zero means failure."
       (car result))))
 
 (defun gptel-auto-workflow--main-baseline-test-results ()
-  "Return plist describing verification failures for the current staging baseline ref."
+  "Return plist describing verification failures for the current
+staging baseline ref."
   (let ((main-ref (gptel-auto-workflow--staging-main-ref)))
     (cond
      ((not main-ref)
@@ -124,7 +141,8 @@ Explicitly assumes: exit code 0 means success, non-zero means failure."
              :error (format "Failed to create %s baseline worktree" main-ref)))))))
 
 (defun gptel-auto-workflow--staging-tests-match-main-baseline-p (staging-output)
-  "Return (PASS-P . NOTE) comparing STAGING-OUTPUT verification failures against main baseline."
+  "Return (PASS-P . NOTE) comparing STAGING-OUTPUT against main baseline.
+Checks verification failures."
   (let ((staging-failures (gptel-auto-workflow--extract-failed-tests staging-output)))
     (cond
      ((null staging-failures)
@@ -166,7 +184,8 @@ Explicitly assumes: exit code 0 means success, non-zero means failure."
 
 (defun gptel-auto-workflow--hydrate-staging-submodules (&optional worktree)
   "Materialize top-level submodules in WORKTREE from shared module repos.
-This avoids broken linked-worktree submodule metadata under `.git/worktrees/.../modules'."
+This avoids broken linked-worktree submodule metadata
+under `.git/worktrees/.../modules'."
   (let* ((root (or worktree gptel-auto-workflow--staging-worktree-dir))
          (paths (gptel-auto-workflow--staging-submodule-paths root))
          (hydrated nil)
@@ -268,10 +287,11 @@ stub away linked worktrees lightweight."
                 60)))))
 
 (defun gptel-auto-workflow--resolve-ancestor-submodule-merge-conflicts (&optional worktree)
-  "Resolve unmerged top-level submodule conflicts in WORKTREE when ancestry is clear.
-If every unmerged path is a declared top-level submodule and one side's gitlink is
-an ancestor of the other, record the descendant gitlink in the index and return
-non-nil. Otherwise leave the merge unresolved and return nil."
+  "Resolve unmerged top-level submodule conflicts in WORKTREE.
+When ancestry is clear: if every unmerged path is a declared submodule
+and one side's gitlink is an ancestor of the other, record the
+descendant gitlink in the index and return non-nil.
+Otherwise leave the merge unresolved and return nil."
   (let* ((root (or worktree default-directory))
          (default-directory root)
          (submodule-paths (gptel-auto-workflow--staging-submodule-paths root))
@@ -608,10 +628,10 @@ Used to catch reviewer false positives before they enter the fix loop."
            content)))))
 
 (defun gptel-auto-workflow--review-disproven-undefined-function-blocker-p (optimize-branch review-output)
-  "Return blocker symbol when REVIEW-OUTPUT makes a disproven undefined-function claim.
-The blocker is treated as disproven only when the review output cites a single
-undefined-function claim and a changed Elisp file in OPTIMIZE-BRANCH defines
-that function locally."
+  "Return blocker symbol when REVIEW-OUTPUT makes a disproven claim.
+Treated as disproven only when the review cites a single
+undefined-function claim and a changed Elisp file in OPTIMIZE-BRANCH
+defines that function locally."
   (when-let* ((function-name
                (gptel-auto-workflow--review-undefined-function-symbol review-output))
               ((stringp review-output))
@@ -866,7 +886,7 @@ INSTRUCTIONS:
 (defun gptel-auto-workflow--ensure-on-main-branch ()
   "Ensure main repo is on main branch.
 Returns t on success, nil if unable to switch.
-This prevents 'branch already used by worktree' errors."
+This prevents \='branch already used by worktree\=' errors."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (current-branch (string-trim 

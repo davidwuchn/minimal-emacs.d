@@ -8,6 +8,15 @@
 
 ;;; Code:
 
+;; Forward declarations for external variables
+(defvar package-gnupghome-dir)
+(defvar package-archives)
+(defvar package-archive-priorities)
+(defvar package-archive-contents)
+(defvar gptel-backend)
+(defvar gptel-model)
+(defvar gptel--moonshot)
+
 (defconst gptel-auto-workflow-bootstrap--package-archives
   '(("melpa"        . "https://melpa.org/packages/")
     ("gnu"          . "https://elpa.gnu.org/packages/")

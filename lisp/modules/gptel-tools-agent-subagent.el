@@ -1,6 +1,27 @@
 ;;; gptel-tools-agent-subagent.el --- Subagent caching, context, delegation -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+;; Forward declarations for dynamic variables from gptel-agent package
+(defvar my/gptel--current-agent-task-id)
+(defvar my/gptel--agent-task-state)
+(defvar my/gptel--agent-task-counter)
+(defvar my/gptel-agent-task-timeout)
+(defvar my/gptel-agent-task-hard-timeout)
+(defvar gptel--fsm-last)
+(defvar my/gptel-subagent-progress-interval)
+(defvar my/gptel--subagent-origin-buffer)
+(defvar gptel-agent-loop--bypass)
+(defvar gptel-auto-workflow--defer-subagent-env-persistence)
+(defvar gptel-auto-workflow--subagent-process-environment)
+(defvar gptel-agent--agents)
+(defvar my/gptel-subagent-include-history-default)
+(defvar gptel-auto-experiment-active-grace)
+(defvar gptel-agent--todos)
+(defvar gptel-auto-workflow--current-validation-retry-active-grace)
+(defvar gptel-auto-experiment-delay-between)
+(defvar gptel-auto-experiment-auto-push)
+(defvar gptel-auto-workflow--run-id)
+
 (defun my/gptel--agent-task-note-write-region-activity (_start _end filename &rest _args)
   "Treat direct worktree writes to FILENAME as executor activity."
   (when-let* ((path (and (stringp filename)
@@ -516,7 +537,8 @@ Uses hash table keyed by task-id to support parallel execution."
 
 AGENT-NAME must exist in `gptel-agent--agents`.
 
-INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil."
+  INCLUDE-HISTORY defaults to
+`my/gptel-subagent-include-history-default' when nil."
   (cl-block my/gptel--run-agent-tool
     (unless (and (require 'gptel nil t) (require 'gptel-agent nil t))
       (funcall callback "Error: gptel or gptel-agent is not available")
@@ -624,8 +646,6 @@ Avoids scanning entire buffer on each update.")
 Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
   (setq gptel-agent--todos todos)
   (let* ((info (gptel-fsm-info gptel--fsm-last))
-         (pos (or (plist-get info :tracking-marker)
-                  (plist-get info :position)))
          (buf (plist-get info :buffer))
          (existing-ov (and buf
                            (buffer-live-p buf)
@@ -736,14 +756,16 @@ time to apply and verify a focused fix."
   "Previous default for `gptel-auto-experiment-validation-retry-active-grace'.")
 
 (defconst gptel-auto-workflow--current-validation-retry-active-grace 180
-  "Current runtime default for `gptel-auto-experiment-validation-retry-active-grace'.")
+  "Current runtime default for
+`gptel-auto-experiment-validation-retry-active-grace'.")
 
 (defcustom gptel-auto-experiment-delay-between 30
   "Seconds to wait between experiments to avoid API rate limits.
 
 Increased from 3s to 30s because:
 1. Provider APIs need cooldown between requests
-2. Multiple subagent calls per experiment (executor + grader + comparator + reviewer)
+ 2. Multiple subagent calls per experiment
+   (executor + grader + comparator + reviewer)
 3. Reduces quota exhaustion across fallback chain"
   :type 'integer
   :safe #'integerp
@@ -803,7 +825,7 @@ Lowered to 0.005: refactoring and validation tasks produce small quality deltas
 
 (defcustom gptel-auto-experiment-auto-push t
   "Automatically push experiment branches to the shared remote after commit.
-When non-nil, branches are pushed to the workflow remote for PR review on Forgejo."
+When non-nil, branches are pushed to the workflow remote for PR review."
   :type 'boolean
   :group 'gptel-tools-agent)
 
@@ -910,7 +932,8 @@ TESTABLE: Can verify state is cleared by checking gethash result."
 
 (defun gptel-auto-workflow--run-branch-token ()
   "Return a short run token for unique optimize branch names.
-Uses the trailing time/hash portion of `gptel-auto-workflow--run-id' when available."
+Uses the trailing time/hash portion of `gptel-auto-workflow--run-id'
+when available."
   (let ((run-id (and (stringp gptel-auto-workflow--run-id)
                      (downcase gptel-auto-workflow--run-id))))
     (when (and run-id
@@ -922,7 +945,7 @@ Uses the trailing time/hash portion of `gptel-auto-workflow--run-id' when availa
 (defun gptel-auto-workflow--branch-name (target &optional experiment-id)
   "Generate branch name for TARGET with machine hostname.
 Format: optimize/{target}-{hostname}[-r{run}]-exp{N}
-Base branch is always 'main'.
+  Base branch is always \='main\='.
 Multiple machines can optimize same target without conflicts."
   (let* ((basename (file-name-sans-extension (file-name-nondirectory target)))
          (name (car (last (split-string basename "-"))))
