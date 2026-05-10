@@ -86,9 +86,9 @@ PATTERNS-TYPE indicates what kind of patterns these are."
   "Build prompt using confidence-weighted guidance.
 This strategy annotates guidance patterns with confidence scores."
   ;; Get baseline prompt
-  (let* ((base-prompt (gptel-auto-experiment-build-prompt target experiment-id max-experiments analysis baseline previous-results))
+(let* ((base-prompt (gptel-auto-experiment-build-prompt target experiment-id max-experiments analysis baseline previous-results))
          ;; Format failure patterns with confidence scoring
-         (failure-patterns (gptel-auto-experiment--format-failure-patterns analysis baseline previous-results))
+         (failure-patterns (gptel-auto-experiment--format-failure-patterns target))
          ;; Build confidence-weighted guidance section
          (weighted-guidance
           (when failure-patterns
