@@ -64,9 +64,7 @@ def extract_phrases(analysis):
 
 def generate_evolved_md(element_results, phrases):
     """Generate markdown for evolved recommendations."""
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    
-    md = f"\n## Evolved Recommendations (Updated {now})\n\n"
+    md = "\n## Evolved Recommendations\n\n"
     md += f"Based on analysis of {sum(s['total'] for s in element_results.values())} experiments.\n\n"
     
     element_names = {
@@ -122,13 +120,7 @@ def update_skill_file(output_dir, evolved_md):
     # Append new evolved section
     content = content.rstrip() + evolved_md
     
-    # Update timestamp
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    content = re.sub(
-        r'updated: \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?',
-        f'updated: {now}',
-        content
-    )
+    content = re.sub(r'^updated: \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n?', '', content, flags=re.MULTILINE)
     
     with open(skill_file, 'w') as f:
         f.write(content)

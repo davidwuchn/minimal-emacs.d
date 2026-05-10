@@ -37,7 +37,6 @@ def generate_directive(analysis, skill_dir, patterns=None):
     lines.append("name: auto-workflow-directive")
     lines.append("description: Evolving program definition for auto-workflow")
     lines.append(f"version: {datetime.now().strftime('%Y.%m.%d')}")
-    lines.append(f"updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     lines.append(f"total-experiments: {total}")
     lines.append(f"total-kept: {kept}")
     lines.append("---")

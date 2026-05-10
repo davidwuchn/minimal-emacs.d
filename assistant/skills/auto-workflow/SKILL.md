@@ -2,12 +2,10 @@
 name: token-efficiency
 description: Controls prompt compression and section inclusion based on experiment results
 version: 1.0
-updated: 2026-05-10 19:37
 ---
 metadata:
   evolution-stats:
-    total-experiments: 577
-    last-evolution: 2026-05-10 19:37
+    total-experiments: 572
 
 # Token Efficiency
 
@@ -18,11 +16,11 @@ It controls prompt compression and section inclusion.
 
 Correlation between prompt size and experiment success:
 
-- **Average prompt size (kept):** 19593 chars
-- **Average prompt size (discarded):** 19622 chars
-- **Success rate per 1000 chars (kept):** 0.56%
-- **Discarded rate per 1000 chars:** 1.73%
-- **Optimal prompt range:** Shorter prompts work better (19593 vs 19622 chars)
+- **Average prompt size (kept):** 19482 chars
+- **Average prompt size (discarded):** 19583 chars
+- **Success rate per 1000 chars (kept):** 0.55%
+- **Discarded rate per 1000 chars:** 1.72%
+- **Optimal prompt range:** Shorter prompts work better (19482 vs 19583 chars)
 
 **Prompt Compression Config:**
 - topic-knowledge-max-chars: 800
@@ -33,7 +31,7 @@ Correlation between prompt size and experiment success:
 
 Which prompt sections improve outcomes:
 
-- **all**: 19% success (110/577 experiments)
+- **all**: 19% success (108/572 experiments)
 
 **Section Inclusion Config:**
 - default: include all

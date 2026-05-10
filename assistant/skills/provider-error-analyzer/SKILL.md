@@ -11,7 +11,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 # Provider Error Analyzer
@@ -134,7 +133,6 @@ When encountering new error formats:
 1. Add pattern to `references/error-patterns.md`
 2. Run `scripts/update_patterns.py`
 3. Commit with message: `🔄 update provider-error patterns`
-
 
 
 

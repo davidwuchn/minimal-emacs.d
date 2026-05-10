@@ -228,8 +228,6 @@ def generate_evolved_skill(skill_path, data_dir):
     anti_patterns_md = format_anti_patterns(topic_data)
     
     # Build the evolved skill content
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    
     evolved_content = f"""---
 name: researcher-prompt
 description: Prompt template for external research specialist subagent. Auto-evolves based on experiment outcomes.
@@ -239,7 +237,6 @@ evolve-script: evolve_researcher.py
 metadata:
   evolution-stats:
     total-experiments: {topic_data.get('total_experiments', 870)}
-    last-evolution: {now}
 
 ---
 

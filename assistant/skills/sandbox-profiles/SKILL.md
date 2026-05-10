@@ -11,7 +11,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 # Sandbox Tool Profiles
@@ -92,7 +91,6 @@ Load profile in Emacs Lisp:
 
 - `scripts/validate_profile.py` - Validate profile JSON against schema
 - `scripts/generate_profile.py` - Generate profile from project analysis
-
 
 
 

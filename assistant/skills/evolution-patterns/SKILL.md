@@ -6,7 +6,6 @@ evolve-script: evolve_patterns.py
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 20:01
 
 ---
 # Evolution Patterns
@@ -106,7 +105,6 @@ Based on analysis of experiment errors.
 
 ## Evolved Patterns
 
-Updated: 2026-05-10 19:37
 
 ### High-Signal Keywords
 
@@ -118,8 +116,6 @@ Updated: 2026-05-10 19:37
 - `corrupted`: 60% (3/5)
 - `buffer`: 60% (3/5)
 - `errors.`: 60% (3/5)
-- `avoiding`: 60% (3/5)
-- `loading`: 57% (4/7)
 - `defensive`: 53% (16/30)
 - `nil-guard`: 50% (3/6)
 - `task`: 50% (3/6)
@@ -127,6 +123,8 @@ Updated: 2026-05-10 19:37
 - `silent`: 50% (10/20)
 - `assumptions).`: 50% (3/6)
 - `score`: 50% (5/10)
+- `loading`: 50% (3/6)
 - ``gptel-auto-workflow--filter-large-files``: 50% (3/6)
 - `(explicit`: 48% (12/25)
 - `potential`: 47% (9/19)
+- `failures`: 47% (8/17)

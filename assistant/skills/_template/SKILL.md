@@ -13,7 +13,6 @@ lambda: template.example
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 # Template Skill
@@ -29,7 +28,6 @@ Your tone is [professional/casual/technical].
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -41,7 +39,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -55,7 +52,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -78,7 +74,6 @@ Main content
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -96,7 +91,6 @@ Output: [Expected response]
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -111,7 +105,6 @@ Before output, verify:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 

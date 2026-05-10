@@ -6,7 +6,6 @@ evolve-script: evolve_benchmark.py
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 # Benchmark Auto-Improver
@@ -208,13 +207,13 @@ Based on analysis of which improvement types led to score increases.
 - Coordination (Metal) (12% success rate, 15 worsened)
 - Identity (Water) (18% success rate, 27 worsened)
 - Operations (Wood) (8% success rate, 9 worsened)
-## Evolved Recommendations (Updated 2026-05-10 19:37)
+## Evolved Recommendations (Updated 2026-05-10 18:19)
 
-Based on analysis of 446 experiments.
+Based on analysis of 405 experiments.
 
 ### Wood (Operations)
 
-- **Success rate:** 17% (24/143 experiments)
+- **Success rate:** 21% (24/112 experiments)
 - **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Fire (Intelligence)
@@ -224,23 +223,23 @@ Based on analysis of 446 experiments.
 
 ### Earth (Control)
 
-- **Success rate:** 22% (41/183 experiments)
+- **Success rate:** 28% (46/162 experiments)
 - **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Metal (Coordination)
 
-- **Success rate:** 24% (8/34 experiments)
-- **Priority:** HIGH - prioritize improvements targeting this element
+- **Success rate:** 12% (6/49 experiments)
+- **Priority:** MEDIUM - moderate success with this element
 
 ### Water (Identity)
 
-- **Success rate:** 16% (12/77 experiments)
-- **Priority:** HIGH - prioritize improvements targeting this element
+- **Success rate:** 12% (9/73 experiments)
+- **Priority:** MEDIUM - moderate success with this element
 
 ### Top Successful Patterns
 
 These action patterns appear most frequently in kept experiments:
 
-- Fix bug (1 times)
 - Fix cache (1 times)
+- Fix bug (1 times)
 

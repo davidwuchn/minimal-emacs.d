@@ -8,7 +8,6 @@ evolve-script: evolve_strategies.py
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 19:34
 
 ---
 # Meta-Harness Strategy Proposer
