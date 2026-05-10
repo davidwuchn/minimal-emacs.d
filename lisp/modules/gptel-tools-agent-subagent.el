@@ -711,14 +711,14 @@ Monthly subscription: LLM selection finds best targets each run."
   :type 'directory
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-time-budget 180
-  "Time budget per experiment in seconds (default: 3 min).
+(defcustom gptel-auto-experiment-time-budget 300
+  "Time budget per experiment in seconds (default: 5 min).
 
-Reduced from 600s to 180s because:
-1. Most code changes complete in under 2 minutes
-2. Long timeouts waste API quota on stuck requests
-3. Provider APIs have their own timeouts (30-180s)
-4. Failed experiments can be retried quickly instead of hanging"
+Increased from 180s to 300s because:
+1. moonshot fallback needs more time for thorough code analysis
+2. 180s was too aggressive, causing timeout losses on good experiments
+3. 300s idle + 60s grace = 360s max still reasonable for provider APIs
+4. MiniMax exhausted; moonshot/kimi-k2.6 needs extra time for multi-step reasoning"
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
