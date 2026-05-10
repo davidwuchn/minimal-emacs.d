@@ -2736,7 +2736,19 @@
 {"axis": "?", "experiment-id": 2, "outcome": "discarded", "score": 0, "strategy": "template-default", "target": "lisp/modules/gptel-auto-workflow-projects.el", "timestamp": "2026-05-09 19:58:54"}
 {"axis": "?", "experiment-id": 3, "outcome": "discarded", "score": 0, "strategy": "template-default", "target": "lisp/modules/gptel-auto-workflow-projects.el", "timestamp": "2026-05-09 20:00:47"}
 {"timestamp":"2026-05-09 22:54:48","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-10 00:24:02","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":1,"score":0.4000000000000001,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-10 00:26:37","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":1,"score":0.4000000000000001,"outcome":"kept","axis":"?"}
-{"timestamp":"2026-05-10 00:53:57","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":2,"score":0.4,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-10 00:57:34","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":2,"score":0.4,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-09 23:40:01","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 00:13:13","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 00:45:55","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 01:17:17","strategy":"template-default","target":"lisp/modules/gptel-ext-tool-sanitize.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 01:50:34","strategy":"template-default","target":"lisp/modules/gptel-ext-tool-sanitize.el","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 02:23:26","strategy":"template-default","target":"lisp/modules/gptel-ext-tool-sanitize.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 02:54:50","strategy":"template-default","target":"lisp/modules/gptel-sandbox.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 03:26:38","strategy":"template-default","target":"lisp/modules/gptel-sandbox.el","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 03:59:10","strategy":"template-default","target":"lisp/modules/gptel-sandbox.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 04:29:49","strategy":"template-default","target":"lisp/modules/gptel-benchmark-core.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 05:01:28","strategy":"template-default","target":"lisp/modules/gptel-benchmark-core.el","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 05:33:06","strategy":"template-default","target":"lisp/modules/gptel-benchmark-core.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 06:03:47","strategy":"template-default","target":"lisp/modules/gptel-tools-agent-benchmark.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 06:35:50","strategy":"template-default","target":"lisp/modules/gptel-tools-agent-benchmark.el","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 07:07:52","strategy":"template-default","target":"lisp/modules/gptel-tools-agent-benchmark.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 07:42:09","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}

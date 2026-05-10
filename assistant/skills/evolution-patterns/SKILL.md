@@ -106,27 +106,27 @@ Based on analysis of experiment errors.
 
 ## Evolved Patterns
 
-Updated: 2026-05-10 00:07
+Updated: 2026-05-10 08:03
 
 ### High-Signal Keywords
 
-- `explicitly`: 83% (5/6)
-- `expressions`: 80% (4/5)
-- `paths.`: 80% (4/5)
-- `pass`: 80% (4/5)
-- `messages`: 71% (5/7)
-- `contains`: 71% (5/7)
-- `identical`: 67% (4/6)
-- `targets`: 67% (4/6)
-- `don't`: 60% (3/5)
-- `score`: 60% (3/5)
-- `values,`: 60% (3/5)
-- `receive`: 60% (3/5)
-- `preserving`: 60% (3/5)
-- `code.`: 60% (3/5)
-- `consolidating`: 57% (4/7)
-- `since`: 57% (4/7)
-- ``gptel-agent-loop--continuation-needed-p``: 57% (4/7)
-- `providing`: 57% (4/7)
-- `robustness`: 57% (4/7)
-- ``gptel-sandbox--execute-tool``: 57% (4/7)
+- `defensive`: 70% (14/20)
+- `bindings`: 60% (3/5)
+- `benchmark`: 60% (3/5)
+- `files`: 60% (3/5)
+- `other`: 60% (3/5)
+- `results`: 60% (3/5)
+- `reusable`: 60% (3/5)
+- `symbol`: 60% (3/5)
+- `nil,`: 56% (5/9)
+- `non-string`: 50% (4/8)
+- `robustness`: 50% (5/10)
+- `nil.`: 50% (3/6)
+- `passed`: 50% (6/12)
+- `checks`: 50% (4/8)
+- `already`: 45% (5/11)
+- `buffer`: 44% (4/9)
+- `run`: 43% (3/7)
+- ``(or`: 43% (3/7)
+- `inputs`: 43% (3/7)
+- `progressive`: 43% (3/7)

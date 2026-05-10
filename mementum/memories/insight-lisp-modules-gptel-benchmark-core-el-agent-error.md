@@ -1,6 +1,6 @@
-# Insight: 2026-05-10 07:42
+# Insight: 2026-05-10 05:33
 
-**Target:** lisp/modules/gptel-auto-workflow-projects.el
+**Target:** lisp/modules/gptel-benchmark-core.el
 **Change type:** bug-fix
 **Hypothesis:** Agent error
 **Decision:** nil
