@@ -13,6 +13,8 @@
 
 ;; HARDEN: Prevent void-variable errors when native-comp closure captures
 ;; fail to resolve lexically-bound parameters on arm64 Emacs 30.1.
+;; Intentionally unprefixed — these names match closure variable names
+;; that native-comp expects to find dynamically bound.
 (defvar async nil)
 (defvar process nil)
 

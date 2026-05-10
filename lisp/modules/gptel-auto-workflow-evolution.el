@@ -971,12 +971,6 @@ Uses analyze_results.py + generate_directive.py pipeline."
                                 (gptel-auto-workflow--worktree-base-root))))
     output))
 
-(defun gptel-auto-workflow--evolve-researcher-skill ()
-  "Update RESEARCHER.md by calling Python generation script.
-Researcher skill is now generated as part of evolve_skills.py."
-  (message "[evolution] Researcher skill updated via unified evolution script")
-  t)
-
 (defun gptel-auto-workflow--evolve-token-efficiency-skill ()
   "Update token-efficiency skill by calling Python generation script.
 Token efficiency is now part of the unified evolution pipeline."
@@ -1194,7 +1188,8 @@ Uses agentskills.io standard scripts/ directory."
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.
-Extract → Verify → Synthesize → Evolve All Skills → (Inject happens on next prompt)."
+Extract → Verify → Synthesize → Evolve All Skills.
+Skill injection happens on the next prompt."
   (interactive)
   (message "[auto-workflow] Running self-evolution cycle...")
   (gptel-auto-workflow--evolution-synthesize)
