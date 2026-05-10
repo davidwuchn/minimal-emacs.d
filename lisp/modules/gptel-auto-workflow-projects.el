@@ -796,6 +796,9 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
 
 ;;; Research Cache Management
 
+(defvar gptel-auto-workflow--research-status-cache nil
+  "Cache for research status with timestamp for TTL control.")
+
 (defun gptel-auto-workflow-clear-research-cache (&optional project-root)
   "Clear research findings cache for PROJECT-ROOT or all projects.
 Without PROJECT-ROOT, clears cache for all projects."
@@ -807,9 +810,6 @@ Without PROJECT-ROOT, clears cache for all projects."
         (message "[research] Cleared findings cache for %s" root))
     (clrhash gptel-auto-workflow--research-findings-cache)
     (message "[research] Cleared findings cache for all projects")))
-
-(defvar gptel-auto-workflow--research-status-cache nil
-  "Cache for research status with timestamp for TTL control.")
 
 (defvar gptel-auto-workflow--research-status-ttl-seconds 5
   "Time-to-live in seconds for the research status cache.")
