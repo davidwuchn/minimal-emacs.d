@@ -2,12 +2,12 @@
 name: token-efficiency
 description: Controls prompt compression and section inclusion based on experiment results
 version: 1.0
-updated: 2026-05-10 14:39
+updated: 2026-05-10 15:38
 ---
 metadata:
   evolution-stats:
-    total-experiments: 554
-    last-evolution: 2026-05-10 14:39
+    total-experiments: 558
+    last-evolution: 2026-05-10 15:38
 
 # Token Efficiency
 
@@ -33,7 +33,7 @@ Correlation between prompt size and experiment success:
 
 Which prompt sections improve outcomes:
 
-- **all**: 19% success (105/554 experiments)
+- **all**: 19% success (105/558 experiments)
 
 **Section Inclusion Config:**
 - default: include all
