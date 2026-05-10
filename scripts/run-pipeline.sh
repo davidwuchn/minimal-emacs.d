@@ -80,30 +80,21 @@ wait_for_idle() {
 
 # ─── Step 1: Research ───
 log "=== Step 1: Research ==="
-# Try to start/connect researcher daemon
-RESEARCHER_READY=false
-if emacsclient --socket-name=copilot-researcher -e t >/dev/null 2>&1; then
-    RESEARCHER_READY=true
-else
-    # Try starting researcher daemon via cron script
-    log "Starting researcher daemon..."
-    MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-        "$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
-    for i in $(seq 1 30); do
-        emacsclient --socket-name=copilot-researcher -e t >/dev/null 2>&1 && { RESEARCHER_READY=true; break; }
-        sleep 1
-    done
-fi
+# The cron script's research action starts daemon, queues job, and returns.
+# The researcher daemon auto-processes the job and then shuts down.
+# We just need to wait for it to complete.
+MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+    "$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
 
-if $RESEARCHER_READY; then
-    # Queue research job with auto-shutdown
-    emacsclient --socket-name=copilot-researcher \
-        --eval '(when (fboundp (quote gptel-auto-workflow-queue-all-research)) (gptel-auto-workflow-queue-all-research t))' \
-        >> "$PIPELINE_LOG" 2>&1 || log "WARNING: Could not queue research"
-    wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher"
-else
-    log "WARNING: Researcher daemon unavailable, skipping research step"
-fi
+# Wait for researcher daemon to finish its job (socket closes when done)
+log "Waiting for research daemon to complete..."
+for i in $(seq 1 $((MAX_WAIT_RESEARCH / 5))); do
+    if ! emacsclient --socket-name=copilot-researcher -e t >/dev/null 2>&1; then
+        log "Research completed after $((i * 5))s (daemon shut down)"
+        break
+    fi
+    sleep 5
+done
 
 # Verify findings were produced
 FINDINGS_FILE="$DIR/var/tmp/research-findings.md"
@@ -145,7 +136,13 @@ fi
 
 # ─── Step 3: Auto-Workflow (uses digested findings via directive) ───
 log "=== Step 3: Auto-Workflow ==="
-"$SCRIPT" auto-workflow >> "$PIPELINE_LOG" 2>&1 || true
+# Ensure daemon is running, then queue the workflow job
+if ! emacsclient --socket-name=copilot-auto-workflow -e t >/dev/null 2>&1; then
+    MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+        "$SCRIPT" auto-workflow >> "$PIPELINE_LOG" 2>&1 || true
+else
+    "$SCRIPT" auto-workflow >> "$PIPELINE_LOG" 2>&1 || true
+fi
 wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "copilot-auto-workflow"
 
 # ─── Step 4: Report results ───
