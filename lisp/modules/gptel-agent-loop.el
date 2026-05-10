@@ -824,11 +824,14 @@ Cache behavior:
           (progn
             (message "[nucleus] Subagent '%s' cache hit" agent-type)
             (gptel-agent-loop--deliver-result state cached nil))
-        (let* ((preset (append (list :include-reasoning nil
+        (let* ((agent-config (cdr (assoc agent-type gptel-agent--agents)))
+               (agent-config (if (or (null agent-config) (proper-list-p agent-config))
+                                 agent-config nil))
+               (preset (append (list :include-reasoning nil
                                      :use-tools use-tools
                                      :use-context nil
                                      :stream my/gptel-subagent-stream)
-                               (cdr (assoc agent-type gptel-agent--agents))))
+                               agent-config))
                (syms (cons 'gptel--preset (gptel--preset-syms preset)))
                (vals (mapcar (lambda (sym)
                                (if (boundp sym) (symbol-value sym) nil))
