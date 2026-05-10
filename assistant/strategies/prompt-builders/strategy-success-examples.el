@@ -43,7 +43,7 @@
           (seq-take examples 3)))
 
 (defun strategy-success-examples-get-metadata ()
-  (list :name "evolved-0002"
+  (list :name "success-examples"
         :version "1.0"
         :hypothesis "Including successful prior examples as in-prompt demonstrations improves code improvement"
         :axis "A"))

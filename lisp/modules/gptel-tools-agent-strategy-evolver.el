@@ -657,9 +657,8 @@ Returns new strategy name or nil if rejected."
                         (with-temp-buffer
                           (insert-file-contents parent-file)
                           (buffer-string))))
-         (parent-perf (gptel-auto-workflow--get-strategy-performance parent-strategy-name))
-         (new-name nil)  ; determined by proposer or generated
-         ;; Generate 3 candidates using agent-driven proposer
+(parent-perf (gptel-auto-workflow--get-strategy-performance parent-strategy-name))
+          ;; Generate 3 candidates using agent-driven proposer
          (candidates (gptel-auto-workflow--propose-strategies
                       parent-strategy-name axis hypothesis parent-code parent-perf))
          (valid-candidates '()))
@@ -674,7 +673,8 @@ Returns new strategy name or nil if rejected."
                                             (substring (format "%s" parent-strategy-name) 0 (min 10 (length parent-strategy-name)))
                                           "evolved")
                                         candidate-index))
-               (candidate-code (gptel-auto-workflow--prepare-strategy-candidate candidate candidate-name)))
+                (proposer-name (gptel-auto-workflow--extract-proposer-name candidate))
+                (candidate-code (gptel-auto-workflow--prepare-strategy-candidate candidate candidate-name)))
 
           ;; Check 1: Not a parameter variant
           (if (and parent-code
@@ -699,6 +699,7 @@ Returns new strategy name or nil if rejected."
                     ;; Valid candidate
                     (push (list :code candidate-code
                                :name candidate-name
+                               :proposer-name proposer-name
                                :output output
                                :output-length (length output))
                            valid-candidates)))))))))
@@ -709,11 +710,11 @@ Returns new strategy name or nil if rejected."
                           (lambda (a b)
                             (> (plist-get a :output-length)
                                (plist-get b :output-length)))))
-             (best (car sorted))
-             (best-code (plist-get best :code))
-              ;; Use proposer-suggested meaningful name; reject if generic
-              (proposer-name (gptel-auto-workflow--extract-proposer-name best-code))
-              (new-name (gptel-auto-workflow--generate-strategy-name proposer-name)))
+(best (car sorted))
+              (best-code (plist-get best :code))
+               ;; Use stored proposer-name from original candidate, reject if generic
+               (proposer-name (plist-get best :proposer-name))
+               (new-name (gptel-auto-workflow--generate-strategy-name proposer-name)))
          (if (not new-name)
              (message "[strategy-evolution] REJECTED candidate: Proposed name '%s' is generic (must be descriptive)"
                       (or proposer-name "nil"))
