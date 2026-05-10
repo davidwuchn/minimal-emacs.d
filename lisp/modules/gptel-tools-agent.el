@@ -23,8 +23,11 @@
   (unless (symbolp feature)
     (error "Feature must be a symbol: %S" feature))
   (unless gptel-tools-agent--module-dir
-    (setq gptel-tools-agent--module-dir
-          (file-name-directory (or load-file-name buffer-file-name))))
+    (let ((file (or (bound-and-true-p load-file-name)
+                    buffer-file-name)))
+      (unless file
+        (error "Cannot determine module directory"))
+      (setq gptel-tools-agent--module-dir (file-name-directory file))))
   (let* ((source (and gptel-tools-agent--module-dir
                       (expand-file-name (format "%s.el" feature)
                                         gptel-tools-agent--module-dir))))
