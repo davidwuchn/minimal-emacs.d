@@ -14,6 +14,7 @@
 (defvar gptel-auto-experiment-max-retries)
 (defvar gptel-auto-experiment--quota-exhausted)
 (defvar gptel-auto-workflow--run-id)
+(defvar gptel-auto-experiment--grading-target)
 
 (defun gptel-error--load-patterns-from-skill ()
   "Load error patterns from provider-error-analyzer skill.
@@ -201,9 +202,9 @@ Returns the message string or nil."
                 msg))))))
 
 (defvar gptel-auto-experiment--quota-reset-timestamp nil
-  "Parsed timestamp (seconds since epoch) when the current provider quota resets.
-Set automatically from rate-limit error messages.  Checked at startup to auto-switch
-back to the primary backend when the quota window has elapsed.")
+  "Parsed timestamp (seconds since epoch) when quota resets.
+Set automatically from rate-limit error messages.
+Checked at startup to auto-switch back to the primary backend.")
 
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
@@ -326,9 +327,9 @@ Only successful executor output may take the local grader retry path."
      gptel-auto-workflow--rate-limited-backends)))
 
 (defun gptel-auto-experiment--check-quota-reset-and-switch-back ()
-  "If quota reset time has passed, switch `gptel-backend' to first available fallback.
-Uses `gptel-auto-experiment--quota-reset-timestamp' and clears rate-limited backends
-so the next experiment can try MiniMax first, falling back to moonshot if needed."
+  "If quota reset time has passed, switch to first available fallback.
+Uses `gptel-auto-experiment--quota-reset-timestamp' and clears rate-limited
+backends so the next experiment can try MiniMax first."
   (when (and gptel-auto-experiment--quota-reset-timestamp
              (> (float-time) gptel-auto-experiment--quota-reset-timestamp)
              (boundp 'gptel-auto-workflow--rate-limited-backends))
@@ -394,15 +395,15 @@ the shared run-wide API counter or stopping the rest of the workflow."
 
 (defun gptel-auto-experiment--grade-with-retry (output callback &optional retry-count)
   "Grade OUTPUT and locally retry transient grader failures.
-CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries."
+CALLBACK receives the final grade plist.
+RETRY-COUNT tracks local grader retries."
   (let* ((retries (or retry-count 0))
          (grade-buffer (current-buffer))
-         (target gptel-auto-experiment--grading-target)
-         (worktree gptel-auto-experiment--grading-worktree))
+         (target (or gptel-auto-experiment--grading-target "unknown")))
     (gptel-auto-experiment-grade
      output
      (lambda (grade)
-       (let* ((grade-passed (plist-get grade :passed))
+        (let* ((grade-passed (plist-get grade :passed))
               (grade-details (plist-get grade :details))
               (grade-error-output
                (gptel-auto-experiment--grade-failure-error-output
@@ -415,9 +416,9 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
          (if (and (not grade-passed)
                   (gptel-auto-experiment--should-retry-grader-p
                    output grade-error-output error-category retries))
-             (progn
-               (gptel-auto-experiment--note-api-pressure
-                target error-category grade-error-output "grader" nil)
+              (progn
+                (gptel-auto-experiment--note-api-pressure
+                 target error-category grade-error-output "grader" nil)
                (let ((retry-delay
                       (gptel-auto-experiment--retry-delay-seconds
                        grade-error-output retries)))
@@ -426,12 +427,10 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
                  (run-with-timer
                   retry-delay nil
                   (lambda ()
-                    (if (buffer-live-p grade-buffer)
-                        (with-current-buffer grade-buffer
-                          (let ((gptel-auto-experiment--grading-target target)
-                                (gptel-auto-experiment--grading-worktree worktree))
-                            (gptel-auto-experiment--grade-with-retry
-                             output callback (1+ retries))))
+                     (if (buffer-live-p grade-buffer)
+                         (with-current-buffer grade-buffer
+                           (gptel-auto-experiment--grade-with-retry
+                            output callback (1+ retries)))
                       (let ((final-grade (copy-sequence grade)))
                         (when grade-error-output
                           (setq final-grade
@@ -585,9 +584,11 @@ RETRY-COUNT tracks current retry attempt."
             (funcall callback result))))
      (lambda (_logged-run-id exp-result)
        (push exp-result attempt-logs)))))
+
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
-Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown
+Categories: :api-rate-limit :api-error :tool-error :timeout
+  :grader-failed :unknown
 Also logs agent-output snippet for debugging when category is :unknown."
   (cond
    ((or (null agent-output) (not (stringp agent-output)) (string= agent-output ""))
