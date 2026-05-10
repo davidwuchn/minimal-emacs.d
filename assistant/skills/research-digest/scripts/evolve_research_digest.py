@@ -30,9 +30,7 @@ def update_skill(skill_path, stats):
     with open(skill_path, 'r') as f:
         content = f.read()
     
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    
-    evolution_section = f"""\n\n## Evolution Statistics\n\nUpdated: {now}\n\n"""
+    evolution_section = """\n\n## Evolution Statistics\n\n"""
     evolution_section += f"- **Techniques extracted per digest**: {stats['techniques_extracted']}\n"
     evolution_section += f"- **Implementation rate**: {stats['implementation_rate']:.1%}\n"
     evolution_section += f"- **Average impact score**: {stats['avg_impact_score']:.1f}/10\n"

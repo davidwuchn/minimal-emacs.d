@@ -32,7 +32,6 @@ def generate_researcher(analysis):
     lines.append("name: auto-workflow-researcher")
     lines.append("description: External idea hunter for auto-workflow. Searches internet for novel AI agent techniques and digests them for directive skill evolution.")
     lines.append(f"version: {datetime.now().strftime('%Y.%m.%d')}")
-    lines.append(f"updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     lines.append(f"research-effectiveness: {research_rate*100:.1f}%")
     lines.append(f"total-research-experiments: {research_experiments}")
     lines.append("---")

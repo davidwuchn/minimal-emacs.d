@@ -9,7 +9,6 @@ import argparse
 import json
 import re
 from pathlib import Path
-from datetime import datetime
 
 
 def analyze_prompt_effectiveness(analysis):
@@ -31,11 +30,8 @@ def update_skill(skill_path, stats):
     with open(skill_path, 'r') as f:
         content = f.read()
     
-    # Update metadata section
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    
     # Add evolution section if not present
-    evolution_section = f"""\n\n## Evolution Statistics\n\nUpdated: {now}\n\n"""
+    evolution_section = """\n\n## Evolution Statistics\n\n"""
     
     for prompt_type, data in stats.items():
         evolution_section += f"- **{prompt_type}**: {data['success']}/{data['total']} successful\n"
