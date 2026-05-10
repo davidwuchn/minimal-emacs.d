@@ -148,6 +148,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                agent-output executor-prompt target experiment-worktree))
                               (effective-agent-output
                                (or salvaged-agent-output agent-output))
+                              ;; Capture actual backend AFTER executor completes
+                              ;; (backend may have switched during execution due to rate-limit)
+                              (actual-backend
+                               (if (and (boundp 'gptel-backend) gptel-backend
+                                        (fboundp 'gptel-backend-name))
+                                   (gptel-backend-name gptel-backend)
+                                 experiment-backend))
                               (candidate-validation
                                (when (fboundp 'gptel-auto-experiment--batch-validate-candidates)
                                  (condition-case err
@@ -193,7 +200,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                              :comparator-reason "repeated-focus-symbol"
                                              :analyzer-patterns (format "%s" patterns)
                                              :agent-output effective-agent-output
-                                             :backend experiment-backend)))
+                                             :backend actual-backend)))
                                 (setq finished t)
                                 (let ((default-directory experiment-worktree))
                                   (message "[auto-exp] Repeated focus on %s after %d prior non-kept attempts; discarding without grading"
@@ -282,7 +289,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                      :analyzer-patterns (format "%s" patterns)
                                                                      :agent-output effective-agent-output
                                                                      :validation-error validation-error
-                                                                     :backend experiment-backend)))
+                                                                     :backend actual-backend)))
                                                          (setq finished t)
                                                          (cl-incf gptel-auto-experiment--no-improvement-count)
                                                          (funcall log-fn run-id retry-exp-result)
@@ -312,7 +319,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                         :analyzer-patterns (format "%s" patterns)
                                                         :agent-output effective-agent-output
                                                         :validation-error validation-error
-                                                        :backend experiment-backend)))
+                                                        :backend actual-backend)))
                                            (setq finished t)
                                            (cl-incf gptel-auto-experiment--no-improvement-count)
                                            (funcall log-fn run-id exp-result)
@@ -387,7 +394,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                        (symbol-name (or error-category :unknown))))
                                                                       :analyzer-patterns (format "%s" patterns)
                                                                       :agent-output effective-agent-output
-                                                                      :backend experiment-backend)))
+                                                                      :backend actual-backend)))
                                                (when grade-error-output
                                                  (setq exp-result
                                                        (plist-put exp-result :error grade-error-output)))
@@ -441,7 +448,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 												          reasoning :analyzer-patterns
 												          (format "%s" patterns) :agent-output
 												          effective-agent-output
-                          :backend experiment-backend
+                          :backend actual-backend
                           :prompt-chars (length executor-prompt)
                           :sections-included (or (and (boundp 'gptel-auto-workflow--last-prompt-sections)
                                                       gptel-auto-workflow--last-prompt-sections)
@@ -603,7 +610,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                              :analyzer-patterns (format "%s" patterns)
                                                                                              :agent-output retry-output
                                                                                              :retries 1
-                                                                                             :backend experiment-backend
+                                                                                             :backend actual-backend
                                                                                              :prompt-chars (length executor-prompt)
                                                                                              :exploration-axis (gptel-auto-experiment--extract-axis retry-output)
                                                                                               :candidate-validation (when candidate-validation
@@ -714,7 +721,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                    :agent-output retry-output
                                                                                     :retries 1
                                                                                     :validation-error retry-validation-error
-                                                                                    :backend experiment-backend)))
+                                                                                    :backend actual-backend)))
                                                                        (funcall log-fn
                                                                                 run-id exp-result)
                                                                        (gptel-auto-workflow--drop-provisional-commit
@@ -766,7 +773,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                              :analyzer-patterns (format "%s" patterns)
                                                                               :agent-output retry-output
                                                                               :retries 1
-                                                                              :backend experiment-backend)))
+                                                                              :backend actual-backend)))
                                                                  (when retry-grade-error-output
                                                                    (setq exp-result
                                                                          (plist-put exp-result :error retry-grade-error-output)))
@@ -812,7 +819,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                 :comparator-reason reason
                                                                 :analyzer-patterns (format "%s" patterns)
                                                                 :agent-output agent-output
-                                                                :backend experiment-backend
+                                                                :backend actual-backend
                                                                 :prompt-chars (length executor-prompt))))
                                                    (message "[auto-experiment] ✗ %s for %s" reason target)
                                                    (funcall log-fn
