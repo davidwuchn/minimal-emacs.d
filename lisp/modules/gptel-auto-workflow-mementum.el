@@ -176,7 +176,6 @@ Updates auto-workflow-evolution.md with patterns from recent experiments."
         (insert (format "status: active\n"))
         (insert "category: knowledge\n")
         (insert "tags: [auto-workflow, benchmark, evolution, patterns]\n")
-        (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
         (insert "---\n\n")
 
         (insert "# Auto-Workflow Evolution Patterns\n\n")

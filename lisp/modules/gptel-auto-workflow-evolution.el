@@ -648,7 +648,6 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
               (insert "category: knowledge\n")
               (insert (format "tags: [auto-workflow, experiments, %s]\n"
                               (replace-regexp-in-string "[ /]" "-" target-key)))
-              (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
               (insert (format "insight-quality: %.1f/10\n" avg-value))
               (insert "---\n\n")
               (insert (format "# Experiment Insights: %s\n\n" target-key))
@@ -753,7 +752,6 @@ Returns t if page created."
         (insert "status: active\n")
         (insert "category: knowledge\n")
         (insert (format "tags: [research, auto-workflow, %s]\n" strategy))
-        (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
         (insert (format "insight-quality: %.1f/10\n" (* 10 keep-rate)))
         (insert "---\n\n")
         (insert (format "# Research Strategy: %s\n\n" strategy))
