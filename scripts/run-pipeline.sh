@@ -125,7 +125,7 @@ if ! emacsclient --socket-name=copilot-auto-workflow --eval nil 2>/dev/null; the
 fi
 
 verify_output=$(emacsclient --socket-name=copilot-auto-workflow \
-    --eval '(when (fboundp (quote gptel-auto-workflow--verify-pipeline-integration)) (gptel-auto-workflow--verify-pipeline-integration))' 2>&1 || echo "verify-unavailable")
+    --eval '(progn (require (quote gptel-auto-workflow-production) nil t) (when (fboundp (quote gptel-auto-workflow--verify-pipeline-integration)) (gptel-auto-workflow--verify-pipeline-integration)))' 2>&1 || echo "verify-unavailable")
 
 # If verification fails and daemon is reachable, it may have stale byte-code.
 # Restart daemon once and retry.
@@ -143,7 +143,7 @@ if echo "$verify_output" | grep -q "^nil$"; then
         sleep 1
     done
     verify_output=$(emacsclient --socket-name=copilot-auto-workflow \
-        --eval '(when (fboundp (quote gptel-auto-workflow--verify-pipeline-integration)) (gptel-auto-workflow--verify-pipeline-integration))' 2>&1 || echo "verify-unavailable")
+        --eval '(progn (require (quote gptel-auto-workflow-production) nil t) (when (fboundp (quote gptel-auto-workflow--verify-pipeline-integration)) (gptel-auto-workflow--verify-pipeline-integration)))' 2>&1 || echo "verify-unavailable")
 fi
 
 if echo "$verify_output" | grep -q "verify-unavailable"; then
