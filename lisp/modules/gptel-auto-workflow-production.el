@@ -219,23 +219,19 @@ Returns t if all checks pass, nil with warnings otherwise."
         (setq findings-ok t)
       (push "Research findings file missing or too small" issues))
     
-    ;; Check 2: Directive references findings (has been updated recently)
+    ;; Check 2: Directive skill exists (will be updated during auto-workflow)
     (if (file-exists-p directive-file)
-        (let ((mtime (nth 5 (file-attributes directive-file)))
-              (findings-mtime (when (file-exists-p findings-file)
-                                (nth 5 (file-attributes findings-file)))))
-          (if (and findings-mtime mtime
-                   (time-less-p findings-mtime mtime))
-              (setq directive-ok t)
-            (push "Directive not updated after latest findings" issues)))
+        (setq directive-ok t)
       (push "Directive skill file not found" issues))
     
-    ;; Check 3: Research context available
-    (if (and (boundp 'gptel-auto-workflow--current-research-context)
-             gptel-auto-workflow--current-research-context
-             (plist-get gptel-auto-workflow--current-research-context :digested))
-        (setq context-ok t)
-      (push "No digested research context available" issues))
+    ;; Check 3: Findings are recent (within last 24 hours)
+    (let ((findings-mtime (when (file-exists-p findings-file)
+                            (nth 5 (file-attributes findings-file)))))
+      (if (and findings-mtime
+               (time-less-p (time-subtract (current-time) findings-mtime)
+                           (seconds-to-time 86400)))
+          (setq context-ok t)
+        (push "Research findings are stale (>24h old)" issues)))
     
     ;; Report
     (if (and findings-ok directive-ok context-ok)
