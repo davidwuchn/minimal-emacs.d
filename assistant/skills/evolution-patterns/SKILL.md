@@ -106,7 +106,7 @@ Based on analysis of experiment errors.
 
 ## Evolved Patterns
 
-Updated: 2026-05-10 14:21
+Updated: 2026-05-10 14:39
 
 ### High-Signal Keywords
 
@@ -119,8 +119,8 @@ Updated: 2026-05-10 14:21
 - `reusable`: 60% (3/5)
 - `symbol`: 60% (3/5)
 - `nil,`: 56% (5/9)
-- `robustness`: 50% (5/10)
 - `non-string`: 50% (4/8)
+- `robustness`: 50% (5/10)
 - `nil.`: 50% (3/6)
 - `passed`: 50% (6/12)
 - `checks`: 50% (4/8)
