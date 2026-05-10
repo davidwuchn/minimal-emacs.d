@@ -820,12 +820,26 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                    (funcall callback exp-result))))))
                                           ))))))))))))))))
                                     workflow-root))
-               ;; Capture backend before executor runs
-               (setq experiment-backend
-                     (when (and (boundp 'gptel-backend) gptel-backend)
-                       (if (fboundp 'gptel-backend-name)
-                           (gptel-backend-name gptel-backend)
-                         "unknown")))
+                ;; Capture the backend that will actually be used by the executor,
+                ;; including any subagent provider override.
+                (setq experiment-backend
+                      (let* ((executor-preset
+                              (when (fboundp 'gptel-auto-workflow--get-active-agent-preset)
+                                (gptel-auto-workflow--get-active-agent-preset "executor")))
+                             (override-preset
+                              (when (and executor-preset
+                                         (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
+                                (gptel-auto-workflow--maybe-override-subagent-provider "executor" executor-preset)))
+                             (effective-backend
+                              (or (and override-preset
+                                       (fboundp 'gptel-auto-workflow--preset-backend-name)
+                                       (gptel-auto-workflow--preset-backend-name
+                                        (plist-get override-preset :backend)))
+                                  (and (boundp 'gptel-backend) gptel-backend
+                                       (fboundp 'gptel-backend-name)
+                                       (gptel-backend-name gptel-backend))
+                                  "unknown")))
+                        effective-backend))
                ;; Routing handled by gptel-auto-workflow--advice-task-override
                 (my/gptel--run-agent-tool-with-timeout
                 experiment-timeout

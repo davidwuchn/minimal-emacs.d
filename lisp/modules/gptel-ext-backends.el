@@ -91,5 +91,24 @@ ARGS are passed to `gptel-make-openai'."
               \@cf/openai/whisper
               \@cf/openai/whisper-large-v3-turbo)))
 
+;; CF-Gateway with kimi-k2.6 returns responses in reasoning_content
+;; instead of content, causing gptel to return nil.  Intercept and
+;; fall back to reasoning_content when content is empty.
+(defun my/gptel--cf-gateway-fix-reasoning-content (orig-fun backend response info)
+  "Advice around `gptel--parse-response' to handle CF-Gateway reasoning_content."
+  (let ((result (funcall orig-fun backend response info)))
+    (if (and (null result)
+             (eq (type-of backend) 'gptel-openai)
+             (string= (gptel-backend-name backend) "CF-Gateway"))
+        (let* ((choice0 (map-nested-elt response '(:choices 0)))
+               (message (plist-get choice0 :message))
+               (reasoning (plist-get message :reasoning_content)))
+          (when (and reasoning (stringp reasoning) (not (string-empty-p reasoning)))
+            (plist-put info :reasoning reasoning)
+            reasoning))
+      result)))
+
+(advice-add #'gptel--parse-response :around #'my/gptel--cf-gateway-fix-reasoning-content)
+
 (provide 'gptel-ext-backends)
 ;;; gptel-ext-backends.el ends here
