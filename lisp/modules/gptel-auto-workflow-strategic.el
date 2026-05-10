@@ -362,7 +362,7 @@ Returns nil if data not available."
                  (json-array-type 'list)
                  (data (json-read-file topic-file))
                  (topics (gethash "topics" data)))
-            (when topics
+            (when (and topics (hash-table-p topics))
               (let ((total-exp (gethash "total_experiments" data 0))
                     (total-kept 0))
                 ;; Calculate total kept across all topics
@@ -421,32 +421,37 @@ and {{topic-performance}} with live data."
       skill-content)))
 
 (defun gptel-auto-workflow--format-topic-performance (topics)
-  "Format TOPICS hash-table as markdown table."
-  (let ((topic-list nil))
-    ;; Convert hash table to list for sorting
-    (maphash (lambda (topic stats)
-               (let ((success-rate (gethash "success_rate" stats 0))
-                     (total (gethash "total_experiments" stats 0))
-                     (kept (gethash "kept" stats 0))
-                     (trend (gethash "trend" stats "stable")))
-                 (push (list topic success-rate total kept trend) topic-list)))
-             topics)
-    ;; Sort by success rate descending
-    (setq topic-list (sort topic-list (lambda (a b) (> (nth 1 a) (nth 1 b)))))
-    ;; Format as markdown
-    (concat "| Topic | Success Rate | Kept/Total | Trend |\n"
-            "|-------|--------------|------------|-------|\n"
-            (mapconcat 
-             (lambda (item)
-               (let ((topic (nth 0 item))
-                     (rate (nth 1 item))
-                     (total (nth 2 item))
-                     (kept (nth 3 item))
-                     (trend (nth 4 item)))
-                 (format "| %s | %.0f%% | %d/%d | %s |"
-                         topic (* 100 rate) kept total trend)))
-             (seq-take topic-list 10)
-             "\n"))))
+  "Format TOPICS hash-table as markdown table.
+Returns placeholder message if TOPICS is nil or empty."
+  (if (or (null topics)
+          (not (hash-table-p topics))
+          (zerop (hash-table-count topics)))
+      "*No topic performance data available.*"
+    (let ((topic-list nil))
+      ;; Convert hash table to list for sorting
+      (maphash (lambda (topic stats)
+                 (let ((success-rate (gethash "success_rate" stats 0))
+                       (total (gethash "total_experiments" stats 0))
+                       (kept (gethash "kept" stats 0))
+                       (trend (gethash "trend" stats "stable")))
+                   (push (list topic success-rate total kept trend) topic-list)))
+               topics)
+      ;; Sort by success rate descending
+      (setq topic-list (sort topic-list (lambda (a b) (> (nth 1 a) (nth 1 b)))))
+      ;; Format as markdown
+      (concat "| Topic | Success Rate | Kept/Total | Trend |\n"
+              "|-------|--------------|------------|-------|\n"
+              (mapconcat 
+               (lambda (item)
+                 (let ((topic (nth 0 item))
+                       (rate (nth 1 item))
+                       (total (nth 2 item))
+                       (kept (nth 3 item))
+                       (trend (nth 4 item)))
+                   (format "| %s | %.0f%% | %d/%d | %s |"
+                           topic (* 100 rate) kept total trend)))
+               (seq-take topic-list 10)
+               "\n")))))
 
 (defun gptel-auto-workflow--build-research-prompt ()
   "Build external research prompt by loading RESEARCHER.md skill.
@@ -1277,13 +1282,23 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
          (findings (gethash cache-key
                             gptel-auto-workflow--research-findings-cache
-                            "")))
+                            ""))
+         (cache-file (gptel-auto-workflow--research-file))
+         (file-exists (file-exists-p cache-file))
+         (file-attrs (and file-exists (file-attributes cache-file)))
+         (file-size (or (and file-attrs (nth 7 file-attrs)) 0))
+         (file-mtime (and file-attrs (nth 5 file-attrs)))
+         (file-mtime-str (and file-mtime
+                              (format-time-string "%Y-%m-%d %H:%M" file-mtime))))
     (list :running (timerp gptel-auto-workflow--research-timer)
           :interval gptel-auto-workflow-research-interval
           :project proj-root
           :findings-cached (and (stringp findings) (not (string-empty-p findings)))
           :findings-length (length findings)
-          :cache-file (gptel-auto-workflow--research-file))))
+          :cache-file cache-file
+          :cache-file-exists file-exists
+          :cache-file-size file-size
+          :cache-file-mtime file-mtime-str)))
 
 (provide 'gptel-auto-workflow-strategic)
 
