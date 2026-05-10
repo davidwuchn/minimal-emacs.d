@@ -854,12 +854,17 @@ This skill is consumed by the researcher prompt builder."
              (with-temp-buffer
                (insert-file-contents mf)
                (goto-char (point-min))
-               ;; Extract digested insights section
-               (when (re-search-forward "## Digested Insights" nil t)
+               ;; Extract digested insights section (supports both heading and bold formats)
+               (when (re-search-forward "\\(## Digested Insights\\|\\*\\*Digested Insights:\\*\\*\\)" nil t)
+                 ;; For bold format, move past newline to content
+                 (when (looking-at-p "\n")
+                   (forward-char 1))
                  (let ((start (point)))
-                   (when (re-search-forward "^## " nil t)
-                     (backward-char 3))
-                   (push (buffer-substring start (point)) recent-insights))))))))
+                   ;; Find next section (heading or end of file)
+                   (unless (re-search-forward "^\\(## \\|\\*\\*[^:]+:\\*\\*\\)" nil t)
+                     (goto-char (point-max)))
+                   (backward-char (length (match-string 0)))
+                   (push (buffer-substring-no-properties start (point)) recent-insights))))))))
      ;; Generate skill file
     (make-directory skills-dir t)
     (with-temp-file skill-file
