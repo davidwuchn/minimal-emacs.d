@@ -3,6 +3,19 @@
 
 (require 'gptel-auto-workflow-behavioral-tests nil t)
 
+;; Forward declarations for dynamic variables
+(defvar gptel-auto-experiment-max-changed-files)
+(defvar gptel-auto-experiment-retry-delay)
+(defvar gptel-auto-workflow-git-timeout)
+(defvar gptel-auto-workflow--last-staging-push-output)
+(defvar gptel-auto-workflow--review-error-retry-count)
+(defvar gptel-auto-workflow--review-max-retries)
+(defvar gptel-auto-workflow--review-retry-count)
+(defvar gptel-auto-workflow--running)
+(defvar gptel-auto-workflow--skip-submodule-sync-env)
+(defvar gptel-auto-workflow--staging-push-max-retries)
+(defvar gptel-auto-workflow--staging-worktree-dir)
+
 (defconst gptel-auto-workflow--empty-cherry-pick-pattern
   "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
   "Regex pattern matching git output indicating cherry-pick is already applied.")

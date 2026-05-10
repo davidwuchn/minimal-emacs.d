@@ -2,6 +2,10 @@
 ;; Part of gptel-tools-agent split
 ;; Implements Meta-Harness style harness evolution
 
+;; Forward declarations for dynamic variables
+(defvar gptel-auto-workflow--generation-count)
+(defvar gptel-auto-workflow--strategy-active-test-set)
+
 ;;; Commentary:
 ;; This module evolves the PROMPT BUILDING STRATEGY itself, not just filling templates.
 ;; Strategies are stored as files in assistant/strategies/prompt-builders/

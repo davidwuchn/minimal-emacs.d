@@ -1,6 +1,12 @@
 ;;; gptel-tools-agent-research.el --- Autonomous research, skill evolution, mementum -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+;; Forward declarations for dynamic variables
+(defvar gptel-agent-dirs)
+(defvar gptel-auto-workflow-program-file)
+(defvar gptel-auto-workflow--running)
+(defvar gptel-auto-workflow-skills-dir)
+
 (defun gptel-auto-workflow-update-mutation-skill (mutation-type all-results)
   "Update MUTATION-TYPE skill file with ALL-RESULTS."
   (let* ((skill-file (format "%s/mutations/%s.md"

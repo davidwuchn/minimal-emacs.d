@@ -1,6 +1,13 @@
 ;;; gptel-tools-agent-worktree.el --- Worktree management, staging setup -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+;; Forward declarations for dynamic variables
+(defvar gptel-auto-workflow-shared-remote)
+(defvar gptel-auto-workflow--skip-submodule-sync-env)
+(defvar gptel-auto-workflow-staging-branch)
+(defvar gptel-auto-workflow--staging-worktree-dir)
+(defvar gptel-auto-workflow--worktree-state)
+
 (defun gptel-auto-workflow--remote-optimize-branches (&optional proj-root)
   "Return remote optimize branches within PROJ-ROOT.
 
