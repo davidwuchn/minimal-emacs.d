@@ -540,33 +540,44 @@ errors."
       base-preset)))
 
 (defun gptel-auto-experiment--call-aux-subagent-with-retry
-    (agent-type invoke callback &optional retries)
+    (agent-type invoke callback &optional retries provider-attempts)
   "Invoke AGENT-TYPE via INVOKE, retrying transient failures before CALLBACK.
 
 INVOKE is called with a single callback argument and must start the actual
-subagent request."
+subagent request. Retries on same provider up to
+`gptel-auto-experiment-max-per-provider-attempts' before advancing to
+the next fallback provider. PROVIDER-ATTEMPTS tracks consecutive retries
+on the current provider."
   (funcall
    invoke
    (lambda (result)
      (let* ((attempt (or retries 0))
+            (prov-attempts (or provider-attempts 0))
             (category
              (gptel-auto-experiment--retryable-aux-subagent-category result))
-            (raw (gptel-auto-experiment--subagent-raw-result result)))
+            (raw (gptel-auto-experiment--subagent-raw-result result))
+            (is-pressure (gptel-auto-experiment--provider-pressure-error-p raw))
+            ;; Advance provider only after N consecutive failures on same one
+            (should-advance (and is-pressure
+                                 (>= (1+ prov-attempts)
+                                     gptel-auto-experiment-max-per-provider-attempts))))
        (if (and category
                 (< attempt gptel-auto-experiment-max-aux-subagent-retries))
            (progn
-             (when (and raw
-                        (gptel-auto-experiment--provider-pressure-error-p raw))
+             (when should-advance
                (when-let ((preset
                            (gptel-auto-experiment--current-subagent-preset
                             agent-type)))
                  (gptel-auto-workflow--activate-provider-failover
                   agent-type preset raw)))
-             (message "[auto-exp] %s failed transiently (%s), retrying (%d/%d)"
+             (message "[auto-exp] %s failed transiently (%s), retrying (%d/%d)%s"
                       agent-type category
-                      (1+ attempt) gptel-auto-experiment-max-aux-subagent-retries)
+                      (1+ attempt) gptel-auto-experiment-max-aux-subagent-retries
+                      (if should-advance " [advanced provider]" ""))
              (gptel-auto-experiment--call-aux-subagent-with-retry
-              agent-type invoke callback (1+ attempt)))
+              agent-type invoke callback (1+ attempt)
+              ;; Reset provider counter if advancing, else increment
+              (if should-advance 0 (1+ prov-attempts))))
          (funcall callback result))))))
 
 (defun gptel-auto-experiment-analyze (previous-results callback)
