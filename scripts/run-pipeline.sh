@@ -52,12 +52,22 @@ wait_for_idle() {
 
     log "Waiting for $action to complete (max ${max_wait}s)..."
     while [ "$elapsed" -lt "$max_wait" ]; do
-        local phase
-        phase="$("$SCRIPT" status "$socket_name" 2>/dev/null | sed -n 's/.*:phase "\([^"]*\)".*/\1/p' || echo "unknown")"
-
-        if [ "$phase" = "idle" ] || [ "$phase" = "complete" ]; then
-            log "$action completed after ${elapsed}s"
-            return 0
+        # Check if daemon is still running (socket exists)
+        if ! emacsclient --socket-name="$socket_name" --eval 't' >/dev/null 2>&1; then
+            if [ "$elapsed" -gt 60 ]; then
+                log "$action daemon stopped after ${elapsed}s (socket closed)"
+                return 0
+            fi
+        else
+            # Check phase via direct emacsclient eval
+            local phase
+            phase="$(emacsclient --socket-name="$socket_name" \
+                --eval '(if (and (boundp (quote gptel-auto-workflow--stats)) gptel-auto-workflow--stats) (plist-get gptel-auto-workflow--stats :phase) "unknown")' 2>/dev/null || echo "unknown")"
+            phase="${phase//\"/}"
+            if [ "$phase" = "idle" ] || [ "$phase" = "complete" ]; then
+                log "$action completed after ${elapsed}s"
+                return 0
+            fi
         fi
 
         sleep "$POLL_INTERVAL"
@@ -70,17 +80,30 @@ wait_for_idle() {
 
 # ─── Step 1: Research ───
 log "=== Step 1: Research ==="
-# Ensure researcher daemon is running before queuing
-if ! emacsclient --socket-name=copilot-researcher -e t >/dev/null 2>&1; then
+# Try to start/connect researcher daemon
+RESEARCHER_READY=false
+if emacsclient --socket-name=copilot-researcher -e t >/dev/null 2>&1; then
+    RESEARCHER_READY=true
+else
+    # Try starting researcher daemon via cron script
     log "Starting researcher daemon..."
-    "$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
-    sleep 5
+    MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+        "$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
+    for i in $(seq 1 30); do
+        emacsclient --socket-name=copilot-researcher -e t >/dev/null 2>&1 && { RESEARCHER_READY=true; break; }
+        sleep 1
+    done
 fi
-# Queue research job
-emacsclient --socket-name=copilot-researcher \
-    --eval '(when (fboundp (quote gptel-auto-workflow-queue-all-research)) (gptel-auto-workflow-queue-all-research t))' \
-    >> "$PIPELINE_LOG" 2>&1 || log "WARNING: Could not queue research (daemon may be unavailable)"
-wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher"
+
+if $RESEARCHER_READY; then
+    # Queue research job with auto-shutdown
+    emacsclient --socket-name=copilot-researcher \
+        --eval '(when (fboundp (quote gptel-auto-workflow-queue-all-research)) (gptel-auto-workflow-queue-all-research t))' \
+        >> "$PIPELINE_LOG" 2>&1 || log "WARNING: Could not queue research"
+    wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher"
+else
+    log "WARNING: Researcher daemon unavailable, skipping research step"
+fi
 
 # Verify findings were produced
 FINDINGS_FILE="$DIR/var/tmp/research-findings.md"
