@@ -20,8 +20,8 @@
 
 (defun gptel-tools-agent--load-module (feature)
   "Load split module FEATURE from this directory, falling back to `require'."
-  (unless (symbolp feature)
-    (error "Feature must be a symbol: %S" feature))
+  (unless (and feature (symbolp feature))
+    (error "Feature must be a non-nil symbol: %S" feature))
   (unless gptel-tools-agent--module-dir
     (let ((file (or (bound-and-true-p load-file-name)
                     buffer-file-name)))
