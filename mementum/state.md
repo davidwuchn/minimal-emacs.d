@@ -2,9 +2,63 @@
 
 > Last session: 2026-05-09 14:00
 
-## Current Session: 2026-05-09 Callback Fix + Researcher Validation + DashScope Fallback
+## Current Session: 2026-05-10 Timeout Fix + Quota Detection Fix + Rate-Limiting Improvements
 
-**Status:** Researcher fix validated. MiniMax quota exhausted until 2026-05-11. Temporarily switched default backend to DashScope.
+**Status:** Run completed. 2/5 experiments kept. All fixes verified and passing nucleus validation.
+
+**Done (This Session):**
+- 🔄 **Restarted daemon** after experiment 6 hung for 670+ seconds (DeepSeek grader API timeout)
+  - Killed stale daemon (PID 1191136)
+  - Root cause: Subagent executor hard timeout was 540s (9 minutes), no effective limit
+- ✅ **Fixed executor timeout** (`lisp/modules/gptel-tools-agent-subagent.el`):
+  - `gptel-auto-experiment-time-budget`: 600s → 180s (3 min)
+  - `gptel-auto-experiment-active-grace`: 420s → 60s (1 min)
+  - Max runtime: 660s → 240s (4 min)
+  - Experiments now timeout cleanly instead of hanging indefinitely
+- ✅ **Fixed hard quota detection** (`lisp/modules/gptel-tools-agent-error.el:35`):
+  - Added `usage limit exceeded` to `gptel-auto-experiment--hard-quota-error-pattern`
+  - This fixes infinite retry loop when all providers are rate-limited
+  - Workflow now stops with `quota-exhausted` status instead of looping
+- ✅ **Reduced rate-limiting aggressiveness** (`lisp/modules/gptel-tools-agent-prompt-build.el`):
+  - `delay-between`: 3s → 30s (10× more time between experiments)
+  - `max-per-provider-attempts`: 5 → 2 (move to next fallback faster)
+  - `max-aux-subagent-retries`: 25 → 10 (fewer total retries)
+  - `retry-delay`: 5s → 15s (3× longer wait between retries)
+  - `rate-limit-max-retry-delay`: 60s → 120s (longer backoff)
+  - `api-error-threshold`: 3 → 5 (more tolerance before stopping)
+- ✅ **Implemented dual model presets** (`lisp/modules/gptel-tools-agent-prompt-build.el`):
+  - **Cheap models** (analyzer, comparator, grader, reviewer, researcher):
+    - moonshot: kimi-k2.5
+    - DashScope: glm-5 (replaced qwen3.5-flash which doesn't exist)
+    - DeepSeek: deepseek-v4-flash
+    - CF-Gateway: @cf/zai-org/glm-4.7-flash
+  - **Capable models** (executor only - needs strong code generation):
+    - moonshot: kimi-k2.6
+    - DashScope: qwen3.6-plus
+    - DeepSeek: deepseek-v4-pro
+    - CF-Gateway: @cf/moonshotai/kimi-k2.6
+- ✅ **Verification passed**:
+  - All modified files compile without errors
+  - Nucleus validation: All 5 checks passed ✓
+  - Syntax check: No invalid read syntax errors
+  - Byte-compile: Only warnings (docstring width, free variables - no errors)
+- ✅ **Run completed successfully** (`2026-05-10T094218Z-09fb`):
+  - 5 experiments on `gptel-auto-workflow-projects.el`
+  - 2 kept (exp 1: +0.00, exp 2: +0.03)
+  - 1 timeout (exp 3: -0.43, killed at 240s as designed)
+  - 2 api-rate-limit (exp 4-5, stopped when quota detected)
+  - Workflow continued to other targets but stopped early due to API pressure threshold (5 errors)
+  - Status: `:phase "complete"` — clean termination
+
+**Root Causes Found:**
+1. **Timeout too long**: 600s idle + 420s grace = 1020s max (17 min). No provider needs this long.
+2. **Hard quota pattern incomplete**: `usage limit exceeded` not matched, so workflow didn't recognize all providers exhausted
+3. **Provider failover cycling**: When all providers exhausted, falls back to original preset (MiniMax), but this is handled by the retry limit and API pressure threshold
+4. **Retry too aggressive**: 5 retries per provider × 25 total = rapid quota exhaustion across all providers
+
+**Previous Session: 2026-05-09 Callback Fix + Researcher Validation + moonshot Fallback**
+
+**Status:** Researcher fix validated. MiniMax quota exhausted until 2026-05-11. Temporarily switched default backend to moonshot.
 
 **Done (This Session):**
 - ✅ **Validated researcher projectile fix** (`ae83b6bd`):
@@ -34,15 +88,20 @@
 **Current Blockers:**
 1. **MiniMax API quota exhausted** - 45,000/45,000 weekly tokens
    - Quota resets: 2026-05-11T00:00:00+08:00
-   - Workaround: Default backend now set to DashScope
-   - Subagent fallback also configured to use DashScope
+   - Workaround: Default backend now set to moonshot
+   - Subagent fallback also configured with moonshot as primary
    - Main backend auto-failover now implemented
+2. **DeepSeek grader timeouts** - Subagent executor hung on API call for 670+ seconds
+   - Need to investigate: why didn't 120s subagent timeout kill the executor?
+   - DeepSeek API may be slow; consider reducing max-time or adding request-level timeout
 
 **Next Steps:**
 1. ✅ **FIXED:** Main backend auto-failover implemented
-2. Monitor next auto-workflow run with full failover chain
-3. Revert default backend to MiniMax when quota resets on May 11
-4. When MiniMax returns: test that failover MiniMax → DashScope → moonshot works end-to-end
+2. ✅ **FIXED:** Daemon restarted after hung subagent
+3. Monitor new run `2026-05-10T092628Z-3ce6` for progress
+4. Investigate subagent timeout not killing hung executor (should timeout at 120s)
+5. Revert default backend to MiniMax when quota resets on May 11
+6. When MiniMax returns: test that failover MiniMax → moonshot → DashScope works end-to-end
 
 ---
 

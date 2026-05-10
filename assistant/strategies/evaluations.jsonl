@@ -2754,4 +2754,11 @@
 {"timestamp":"2026-05-10 07:42:09","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-10 08:14:50","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-10 09:04:40","strategy":"template-default","target":"lisp/modules/gptel-tools-agent.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
-{"timestamp":"2026-05-10 09:53:20","strategy":"template-default","target":"lisp/modules/gptel-benchmark-evolution.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 09:25:48","strategy":"evolved-0001","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":1,"score":0.4,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 09:50:49","strategy":"section-reorder","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":1,"score":0.4,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 09:51:35","strategy":"section-reorder","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":1,"score":0.4,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-10 09:57:12","strategy":"candidate-section-re-1","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":2,"score":0.42500000000000004,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 09:57:52","strategy":"candidate-section-re-1","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":2,"score":0.42500000000000004,"outcome":"kept","axis":"?"}
+{"timestamp":"2026-05-10 10:02:49","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 10:12:00","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":4,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 10:16:47","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-projects.el","experiment-id":5,"score":0,"outcome":"discarded","axis":"?"}

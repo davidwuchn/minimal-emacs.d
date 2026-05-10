@@ -3,13 +3,13 @@ title: Experiment Insights - gptel-tools-agent
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-tools-agent]
-updated: 2026-05-10 09:20
-insight-quality: 7.3/10
+updated: 2026-05-10 09:27
+insight-quality: 7.2/10
 ---
 
 # Experiment Insights: gptel-tools-agent
 
-*Consolidated from 3 experiments (avg insight quality: 7.3/10).*
+*Consolidated from 5 experiments (avg insight quality: 7.2/10).*
 
 **Keep rate:** 0% (0 kept / 0 discarded / 0 failed / 0 timeout)
 

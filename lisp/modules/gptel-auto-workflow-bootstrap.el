@@ -140,6 +140,7 @@
   (load-file (expand-file-name "lisp/modules/gptel-ext-backends.el" root))
   ;; MiniMax quota exhausted until 2026-05-11; temporarily default to moonshot
   ;; (DashScope/qwen3.6-plus was too cautious - inspection-thrash on code edits)
+  ;; Using kimi-k2.6 (capable model for executor code generation)
   (setq gptel-backend gptel--moonshot
         gptel-model 'kimi-k2.6)
   ;; Auto-switch back to MiniMax if the stored quota-reset time has elapsed

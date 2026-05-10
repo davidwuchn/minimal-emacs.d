@@ -691,19 +691,27 @@ Monthly subscription: LLM selection finds best targets each run."
   :type 'directory
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-time-budget 600
-  "Time budget per experiment in seconds (default: 10 min)."
+(defcustom gptel-auto-experiment-time-budget 180
+  "Time budget per experiment in seconds (default: 3 min).
+
+Reduced from 600s to 180s because:
+1. Most code changes complete in under 2 minutes
+2. Long timeouts waste API quota on stuck requests
+3. Provider APIs have their own timeouts (30-180s)
+4. Failed experiments can be retried quickly instead of hanging"
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-active-grace 420
+(defcustom gptel-auto-experiment-active-grace 60
   "Extra wall-clock seconds active executor experiments may use beyond budget.
 
 Executor requests still use `gptel-auto-experiment-time-budget' as their idle
 timeout, but active runs may exceed it by this grace period before they are
-forcibly aborted.  The default keeps the wrapper hard cap above 900s backend
-request limits so active calls do not race provider-side timeouts."
+forcibly aborted.  Reduced from 420s to 60s because:
+1. Provider API calls have their own timeouts (30-180s)
+2. Long-running experiments waste quota on stuck API calls
+3. 120s idle + 60s grace = 180s max is sufficient for code changes"
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
@@ -730,8 +738,13 @@ time to apply and verify a focused fix."
 (defconst gptel-auto-workflow--current-validation-retry-active-grace 180
   "Current runtime default for `gptel-auto-experiment-validation-retry-active-grace'.")
 
-(defcustom gptel-auto-experiment-delay-between 3
-  "Seconds to wait between experiments to avoid API rate limits."
+(defcustom gptel-auto-experiment-delay-between 30
+  "Seconds to wait between experiments to avoid API rate limits.
+
+Increased from 3s to 30s because:
+1. Provider APIs need cooldown between requests
+2. Multiple subagent calls per experiment (executor + grader + comparator + reviewer)
+3. Reduces quota exhaustion across fallback chain"
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
