@@ -1,6 +1,29 @@
 ;;; gptel-tools-agent-main.el --- Main entry point, workflow control -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+;; Forward declarations for dynamic variables used throughout this file
+(defvar gptel-auto-workflow--running)
+(defvar gptel-auto-workflow--cron-job-running)
+(defvar gptel-auto-workflow--watchdog-timer)
+(defvar gptel-auto-workflow--status-refresh-timer)
+(defvar gptel-auto-workflow-status-refresh-interval)
+(defvar gptel-auto-workflow--cron-job-timer)
+(defvar gptel-auto-workflow--run-id)
+(defvar gptel-auto-workflow--run-project-root)
+(defvar gptel-auto-workflow--current-project)
+(defvar gptel-auto-workflow--current-target)
+(defvar gptel-auto-workflow--stats)
+(defvar gptel-auto-workflow--force-idle-status-overwrite)
+(defvar gptel-auto-workflow--last-progress-time)
+(defvar gptel-auto-experiment--api-error-count)
+(defvar gptel-auto-experiment--quota-exhausted)
+(defvar gptel-auto-workflow-persistent-headless)
+(defvar gptel-auto-workflow--status-run-id)
+(defvar gptel-auto-workflow--worktree-state)
+(defvar gptel-auto-workflow-worktree-base)
+(defvar gptel-auto-workflow--project-root-override)
+(defvar gptel-benchmark-eight-keys-definitions)
+
 (defun gptel-auto-workflow--call-process-with-watchdog (program &optional infile destination display &rest args)
   "Run blocking PROGRAM while pausing the workflow watchdog.
 
@@ -100,12 +123,14 @@ Users can override in their config if needed."
 (defvar gptel-auto-workflow-quiet-hours (gptel-auto-workflow--default-quiet-hours)
   "List of hours (0-23) when auto-workflow should NOT run.
 Default is nil for all systems - we rely on:
-  - 30-min inactivity check (gptel-auto-workflow-skip-if-recent-input)
+  - 30-min inactivity check
   - Cron schedule (macOS: 10AM,2PM,6PM; Pi5: every 4h)
 
 Override in your config:
-  (setq gptel-auto-workflow-quiet-hours '(9 10 11 12 13 14 15 16 17))  ; Work hours
-  (setq gptel-auto-workflow-quiet-hours '(0 1 2 3 4 5 6))  ; Night only")
+  (setq gptel-auto-workflow-quiet-hours
+        \\='(9 10 11 12 13 14 15 16 17))  ; Work hours
+  (setq gptel-auto-workflow-quiet-hours
+        \\='(0 1 2 3 4 5 6))  ; Night only")
 
 (defcustom gptel-auto-workflow-skip-if-unsaved nil
   "If non-nil, skip auto-workflow when there are unsaved buffers.
@@ -214,7 +239,8 @@ Safe for external tools - contains only [auto-] and [nucleus] messages."
 
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
   "Run auto-workflow asynchronously with TARGETS.
-Non-blocking - returns immediately, check status with `gptel-auto-workflow-status'.
+Non-blocking - returns immediately.
+Check status with `gptel-auto-workflow-status'.
 TARGETS defaults to `gptel-auto-workflow-targets'.
 COMPLETION-CALLBACK is called with results when all targets are done.
 
@@ -222,8 +248,8 @@ Skips if Emacs is in active use (unsaved buffers, recent input, etc.).
 Check `gptel-auto-workflow--active-use-p' for details.
 
 Usage:
-  emacsclient -e '(gptel-auto-workflow-run-async)'
-  emacsclient -e '(gptel-auto-workflow-status)'
+  emacsclient -e \\='(gptel-auto-workflow-run-async)'
+  emacsclient -e \\='(gptel-auto-workflow-status)'
   M-x gptel-auto-workflow-run"
   (interactive)
   (cl-block gptel-auto-workflow-run-async
@@ -374,7 +400,7 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
 
 (defun gptel-auto-workflow--experiment-suffix ()
   "Get experiment suffix based on hostname.
-Returns short hostname like 'onepi5', 'daylight', or 'macbook'.
+Returns short hostname like \='onepi5\=', \='daylight\=', or \='macbook\='.
 Works across macOS and Linux."
   (let ((name (downcase (system-name))))
     (cond
@@ -383,11 +409,11 @@ Works across macOS and Linux."
      (t "unknown"))))
 
 (defun gptel-auto-workflow--cleanup-integrated-remote-optimize-branches (&optional proj-root)
-  "Delete remote optimize branches already integrated and prune stale tracking refs.
+  "Delete remote optimize branches already integrated.
+Prune stale tracking refs afterward.
 
-Only remote optimize branches whose tip commit is already contained in staging or
-main are deleted. Stale shared-remote optimize tracking refs are pruned
-afterward."
+Only remote optimize branches whose tip commit is already contained in
+staging or main are deleted."
   (let* ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
          (remote (gptel-auto-workflow--shared-remote)))
     (if (not (file-directory-p default-directory))
@@ -678,7 +704,8 @@ into staging or main."
 
 (defun gptel-auto-workflow-run (&optional targets)
   "Run auto-workflow asynchronously.
-Non-blocking - returns immediately, check status with `gptel-auto-workflow-status'.
+Non-blocking - returns immediately.
+Check status with `gptel-auto-workflow-status'.
 TARGETS defaults to `gptel-auto-workflow-targets'."
   (interactive)
   (gptel-auto-workflow-run-async targets))
@@ -745,7 +772,7 @@ TARGETS defaults to `gptel-auto-workflow-targets'."
           :file file)))
 
 (defun gptel-auto-workflow-skill-path (target type)
-  "Get skill path for TARGET. TYPE is 'target or 'mutation."
+  "Get skill path for TARGET. TYPE is \\='target or \\='mutation."
   (let* ((target-name (if (gptel-auto-workflow--non-empty-string-p target)
                           target
                         "unknown"))

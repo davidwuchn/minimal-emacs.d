@@ -106,27 +106,27 @@ Based on analysis of experiment errors.
 
 ## Evolved Patterns
 
-Updated: 2026-05-10 12:00
+Updated: 2026-05-10 12:42
 
 ### High-Signal Keywords
 
-- `inputs`: 75% (6/8)
-- ``state``: 67% (4/6)
+- `inputs`: 71% (5/7)
+- ``listp``: 62% (10/16)
+- `corrupted`: 60% (3/5)
 - `pairs)`: 60% (3/5)
-- `circular`: 60% (3/5)
+- ``state``: 60% (3/5)
+- `become`: 60% (3/5)
+- `buffer`: 60% (3/5)
+- `errors.`: 60% (3/5)
 - `loading`: 60% (3/5)
-- `avoiding`: 57% (4/7)
-- ``listp``: 53% (10/19)
-- `corrupted`: 50% (3/6)
+- `defensive`: 53% (16/30)
 - `assumptions).`: 50% (3/6)
+- `score`: 50% (5/10)
+- `nil-guard`: 50% (3/6)
+- `task`: 50% (3/6)
+- `calling`: 50% (6/12)
+- `silent`: 50% (9/18)
 - ``gptel-auto-workflow--filter-large-files``: 50% (3/6)
-- `defensive`: 49% (18/37)
-- `score`: 45% (5/11)
-- `become`: 43% (3/7)
-- ``resp``: 43% (3/7)
-- `nil-guard`: 43% (3/7)
-- ``stringp``: 43% (3/7)
-- `sandbox`: 43% (3/7)
-- `inputs.`: 43% (3/7)
-- `(explicit`: 42% (11/26)
-- `task`: 42% (5/12)
+- `sandbox`: 50% (3/6)
+- `potential`: 47% (9/19)
+- `failures`: 47% (8/17)
