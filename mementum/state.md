@@ -1,47 +1,43 @@
 # Mementum State
 
-> Last session: 2026-05-10 15:45
+> Last session: 2026-05-10 18:00
 
-## Current Session: 2026-05-10 Pipeline Run + Timestamp Noise Fix + Timeout Tuning
+## Current Session: 2026-05-10 Pipeline Completion + Timestamp Cleanup + Axis Detection
 
-**Status:** Session active. Multiple commits pushed. Key learning: timestamp noise in auto-generated files.
+**Status:** Session complete. Pipeline run finished. Multiple infrastructure improvements deployed.
 
 **Done (This Session):**
-- ✅ **Merged staging branch** — nil guard fix for `gptel-tools-agent--load-module` (9/9 score)
-- ✅ **Merged second staging** — env validation fix `proper-list-p` → `hash-table-p` in `gptel-sandbox.el` (9/9 score)
+- ✅ **Pipeline run completed** (9 experiments, 2 kept, 7 skipped due to API pressure):
+  - gptel-sandbox.el: 2 kept (hash-table-p fix + arity consolidation), 5 discarded
+  - 7 targets skipped: API pressure threshold (5 rate-limit errors) reached
 - ✅ **Fixed timestamp noise** in auto-generated tracked files:
   - Removed `updated:` from SKILL.md generation in `gptel-auto-workflow-evolution.el`
   - Removed `updated:` from knowledge files in `gptel-auto-workflow-evolution.el`
   - Removed `updated:` from mementum synthesis in `gptel-auto-workflow-mementum.el`
-  - **Why:** Git already tracks modification times; timestamps create meaningless diffs
-- ✅ **Tuned timeout for moonshot fallback**:
-  - 180s → 300s → 350s idle timeout
-  - Reason: moonshot/kimi-k2.6 needs ~350s for complex experiments
-  - Buffer: ~60s (experiment completed in 346.5s)
-- ✅ **Cron updated** to use unified `run-pipeline.sh`
-- ✅ **Pipeline run completed** (8 experiments, 1 kept):
-  - gptel-tools-agent.el: 1 kept (nil guard), 1 discarded, 2 timeouts
-  - gptel-sandbox.el: 1 kept (hash-table-p fix), 1 discarded
-  - gptel-auto-workflow-strategic.el: 3 failures (timeouts/tool errors)
-  - gptel-benchmark-core.el: 1 api-rate-limit (MiniMax exhausted)
+  - Cleaned 29 existing knowledge files and 5 skill files
+  - Moved `evaluations.jsonl` to `var/tmp/` (not source code)
+- ✅ **Tuned timeout for moonshot fallback**: 180s → 350s idle timeout
+- ✅ **Auto-detect exploration axis** from hypothesis keywords (A-F)
+- ✅ **Added inspection-thrash warning** to validation retry prompt
+- ✅ **Merged 2 staging branches** with real improvements
 
 **Key Learnings:**
-1. **Timestamp noise is harmful** — Auto-generated timestamps in tracked files create meaningless git diffs and obscure real changes
-2. **Git already has timestamp info** — `git log` shows when files were modified; no need to duplicate in content
-3. **moonshot needs 350s+** — Complex code analysis with kimi-k2.6 takes ~350s; 180s was too aggressive
-4. **CF-Gateway also exhausts** — Not just MiniMax; all providers have limits
-5. **Staging review works** — Reviewing staging vs main before merge catches issues
+1. **Timestamp noise is harmful** — Auto-generated timestamps create meaningless git diffs and obscure real changes
+2. **Git already has timestamp info** — `git log` shows when files were modified
+3. **moonshot needs 350s+** — Complex code analysis takes ~350s; 180s was too aggressive
+4. **Validation retry needs inspection-thrash guidance** — Agents get stuck reading without writing
+5. **evaluations.jsonl should be in var/tmp/** — Auto-generated data doesn't belong in source control
 
 **Provider Status:**
-- MiniMax: EXHAUSTED (45,000/45,000, resets May 11)
-- CF-Gateway: EXHAUSTED (showing rate-limit errors)
-- moonshot: WORKING (primary fallback, slower but reliable)
-- DashScope/DeepSeek: Available but slower
+- MiniMax: EXHAUSTED (45,000/45,000, resets May 11 00:00)
+- CF-Gateway: EXHAUSTED
+- moonshot: WORKING (primary fallback)
+- DashScope/DeepSeek: Available
 
 **Next Steps:**
-- Monitor next pipeline run with 350s timeout
-- Consider removing `updated:` from remaining knowledge files (experiment-insights-*.md)
-- When MiniMax resets (May 11), verify failover chain works end-to-end
+- When MiniMax quota resets (May 11), verify failover chain works end-to-end
+- Monitor axis auto-detection in next runs (should see A-F instead of "?")
+- Consider reducing API pressure threshold or adding more provider fallbacks
 
 ---
 
