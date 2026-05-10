@@ -1,1 +1,1 @@
-{"name":"evolved-0002","version":"1.0","hypothesis":"Including successful prior examples as in-prompt demonstrations improves code improvement","axis":"A"}
+{"name":"evolved-0002","version":"1.0","hypothesis":"Calibrating compression guidance based on file size tiers ensures large files retain critical structural context while small files are processed with full fidelity.","axis":"F","components":["compression","calibration","tiers"]}
