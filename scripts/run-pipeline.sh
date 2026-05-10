@@ -111,6 +111,8 @@ fi
 # ─── Step 2: Verify pipeline integration (Elisp check) ───
 log "=== Step 2: Verify Pipeline Integration ==="
 # Ensure auto-workflow daemon is running for verification
+# Remove stale compiled files to force source loading
+find "$DIR/lisp/modules" -name 'gptel-auto-workflow-production.elc' -delete 2>/dev/null || true
 if ! emacsclient --socket-name=copilot-auto-workflow --eval nil 2>/dev/null; then
     EMACS="${EMACS:-emacs}"
     MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
@@ -124,6 +126,25 @@ fi
 
 verify_output=$(emacsclient --socket-name=copilot-auto-workflow \
     --eval '(when (fboundp (quote gptel-auto-workflow--verify-pipeline-integration)) (gptel-auto-workflow--verify-pipeline-integration))' 2>&1 || echo "verify-unavailable")
+
+# If verification fails and daemon is reachable, it may have stale byte-code.
+# Restart daemon once and retry.
+if echo "$verify_output" | grep -q "^nil$"; then
+    log "WARNING: First verification attempt failed (possibly stale daemon)"
+    log "Restarting daemon to pick up latest code..."
+    emacsclient --socket-name=copilot-auto-workflow --eval '(kill-emacs)' 2>/dev/null || true
+    sleep 2
+    EMACS="${EMACS:-emacs}"
+    MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+        "$EMACS" --init-directory="$DIR" --fg-daemon=copilot-auto-workflow \
+        >> "$LOG_DIR/copilot-auto-workflow.log" 2>&1 &
+    for i in $(seq 1 30); do
+        emacsclient --socket-name=copilot-auto-workflow --eval nil 2>/dev/null && break
+        sleep 1
+    done
+    verify_output=$(emacsclient --socket-name=copilot-auto-workflow \
+        --eval '(when (fboundp (quote gptel-auto-workflow--verify-pipeline-integration)) (gptel-auto-workflow--verify-pipeline-integration))' 2>&1 || echo "verify-unavailable")
+fi
 
 if echo "$verify_output" | grep -q "verify-unavailable"; then
     log "WARNING: Could not connect to daemon for verification"
