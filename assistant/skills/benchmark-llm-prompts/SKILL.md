@@ -163,7 +163,6 @@ When LLM is unavailable, use these element-to-action mappings:
 
 ## Evolution Statistics
 
-
 - **improvement_suggestions**: 0/0 successful
 - **results_analysis**: 0/0 successful
 - **knowledge_synthesis**: 0/0 successful

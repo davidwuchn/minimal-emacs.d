@@ -1,4 +1,4 @@
-;;; strategy-evolved-0002.el --- Calibrate compression guidance by file size tier -*- lexical-binding: t; -*-
+;;; strategy-adaptive-compression.el --- Calibrate compression guidance by file size tier -*- lexical-binding: t; -*-
 ;; Hypothesis: Calibrating compression guidance based on file size tiers ensures large files retain critical structural context while small files are processed with full fidelity.
 ;; Axis: F
 ;;
@@ -8,7 +8,7 @@
 
 (require 'gptel-tools-agent-prompt-build)
 
-(defun strategy-evolved-0002-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-adaptive-compression-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt with size-calibrated compression guidance."
   (let* ((base-prompt (gptel-auto-experiment-build-prompt
                        target experiment-id max-experiments analysis baseline previous-results))
@@ -29,11 +29,11 @@
                       ('small "\n\n[COMPRESSION TIER: SMALL] File under 3KB. No compression advised. Process full source context for maximum accuracy.\n"))))
     (concat base-prompt directive)))
 
-(defun strategy-evolved-0002-get-metadata ()
-  (list :name "evolved-0002"
+(defun strategy-adaptive-compression-get-metadata ()
+  (list :name "adaptive-compression"
         :version "1.0"
         :hypothesis "Calibrating compression guidance based on file size tiers ensures large files retain critical structural context while small files are processed with full fidelity."
         :axis "F"
         :components ["compression" "calibration" "tiers"]))
 
-(provide 'strategy-evolved-0002)
+(provide 'strategy-adaptive-compression)
