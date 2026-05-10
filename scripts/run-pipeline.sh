@@ -47,12 +47,13 @@ fi
 wait_for_idle() {
     local action="$1"
     local max_wait="${2:-900}"
+    local socket_name="${3:-copilot-auto-workflow}"
     local elapsed=0
 
     log "Waiting for $action to complete (max ${max_wait}s)..."
     while [ "$elapsed" -lt "$max_wait" ]; do
         local phase
-        phase="$($SCRIPT status 2>/dev/null | sed -n 's/.*:phase "\([^"]*\)".*/\1/p' || echo "unknown")"
+        phase="$("$SCRIPT" status "$socket_name" 2>/dev/null | sed -n 's/.*:phase "\([^"]*\)".*/\1/p' || echo "unknown")"
 
         if [ "$phase" = "idle" ] || [ "$phase" = "complete" ]; then
             log "$action completed after ${elapsed}s"
@@ -69,8 +70,17 @@ wait_for_idle() {
 
 # ─── Step 1: Research ───
 log "=== Step 1: Research ==="
-"$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
-wait_for_idle "research" "$MAX_WAIT_RESEARCH"
+# Ensure researcher daemon is running before queuing
+if ! emacsclient --socket-name=copilot-researcher -e t >/dev/null 2>&1; then
+    log "Starting researcher daemon..."
+    "$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
+    sleep 5
+fi
+# Queue research job
+emacsclient --socket-name=copilot-researcher \
+    --eval '(when (fboundp (quote gptel-auto-workflow-queue-all-research)) (gptel-auto-workflow-queue-all-research t))' \
+    >> "$PIPELINE_LOG" 2>&1 || log "WARNING: Could not queue research (daemon may be unavailable)"
+wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher"
 
 # Verify findings were produced
 FINDINGS_FILE="$DIR/var/tmp/research-findings.md"
@@ -101,7 +111,7 @@ fi
 # ─── Step 3: Auto-Workflow (uses digested findings via directive) ───
 log "=== Step 3: Auto-Workflow ==="
 "$SCRIPT" auto-workflow >> "$PIPELINE_LOG" 2>&1 || true
-wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW"
+wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "copilot-auto-workflow"
 
 # ─── Step 4: Report results ───
 log "=== Pipeline Complete ==="
