@@ -859,8 +859,12 @@ experiment that had previously looked keep-worthy."
 (defvar gptel-auto-experiment--api-error-count 0
   "Count of API errors in current run.")
 
-(defvar gptel-auto-experiment--api-error-threshold 3
-  "Threshold of API errors before reducing or stopping future experiments.")
+(defvar gptel-auto-experiment--api-error-threshold 5
+  "Threshold of API errors before reducing or stopping future experiments.
+Increased from 3 to 5 because:
+1. With longer delays, API errors are less frequent
+2. More tolerance for transient issues before throttling
+3. Better utilization of fallback chain")
 
 (defvar gptel-auto-experiment--quota-exhausted nil
   "Non-nil when provider quota exhaustion should stop the current workflow.")
@@ -881,30 +885,35 @@ These retries reuse the successful executor output instead of rerunning the
 entire experiment. Two retries let the grader advance past one failing
 fallback backend before giving up on otherwise-good executor output.")
 
-(defvar gptel-auto-experiment-max-aux-subagent-retries 25
+(defvar gptel-auto-experiment-max-aux-subagent-retries 10
   "Maximum local retries for transient analyzer/comparator failures.
-Set to 25 to allow 5 attempts per provider across the 5-provider fallback chain
-(moonshot → DashScope → DeepSeek → CF-Gateway → MiniMax). Each provider gets
-`gptel-auto-experiment-max-per-provider-attempts' retries before advancing.")
+Set to 10 to allow 2 attempts per provider across the 5-provider fallback chain.
+Fewer retries reduce quota exhaustion when providers are rate-limited.")
 
-(defvar gptel-auto-experiment-max-per-provider-attempts 5
+(defvar gptel-auto-experiment-max-per-provider-attempts 2
   "Consecutive retries on the same provider before advancing to next fallback.
-Timeouts and transient errors retry on the same provider this many times
-before the failover chain advances to the next backend.")
+Reduced from 5 to 2 to reduce quota exhaustion.
+When a provider is rate-limited, don't waste retries—move to next fallback quickly.")
 
-(defvar gptel-auto-experiment-retry-delay 5
+(defvar gptel-auto-experiment-retry-delay 15
   "Seconds to wait between retries.")
 
-(defvar gptel-auto-experiment-rate-limit-max-retry-delay 60
+(defvar gptel-auto-experiment-rate-limit-max-retry-delay 120
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
-    ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-v4-pro")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
+    ("moonshot" . "kimi-k2.5")
+    ("DashScope" . "glm-5")
+    ("DeepSeek" . "deepseek-v4-flash")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
+
+Uses cheaper models to reduce costs:
+- moonshot: kimi-k2.5 (cheaper than k2.6)
+- DashScope: glm-5 (cheaper than qwen)
+- DeepSeek: deepseek-v4-flash (faster/cheaper than pro)
+- CF-Gateway: @cf/zai-org/glm-4.7-flash (cheap/fast)
 
 Each entry is (BACKEND . MODEL), where BACKEND matches the agent preset backend
 string and MODEL is the model string to use with that backend. The workflow
@@ -929,6 +938,12 @@ moonshot and others when rate-limited or unavailable."
     ("DeepSeek" . "deepseek-v4-pro")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after provider rate limits.
+
+Uses capable models for code generation:
+- moonshot: kimi-k2.6 (best for code changes)
+- DashScope: qwen3.6-plus (capable coding model)
+- DeepSeek: deepseek-v4-pro (strong reasoning)
+- CF-Gateway: @cf/moonshotai/kimi-k2.6 (reliable)
 
 Headless executor prefers MiniMax by default. When the active executor backend
 returns a rate-limit error during a headless run, later retries in that same
@@ -1016,32 +1031,32 @@ the user has not explicitly customized the variable."
         (push 'gptel-auto-workflow-headless-fallback-agents migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-headless-subagent-fallbacks)
-      (when (equal gptel-auto-workflow-headless-subagent-fallbacks
-                   '(("MiniMax" . "minimax-m2.7-highspeed")
-                     ("DashScope" . "qwen3.6-plus")
-                     ("DeepSeek" . "deepseek-chat")
-                     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-                     ("Gemini" . "gemini-3.1-pro-preview")))
-        (setq gptel-auto-workflow-headless-subagent-fallbacks
-              '(("MiniMax" . "minimax-m2.7-highspeed")
-                ("DashScope" . "qwen3.6-plus")
-                ("moonshot" . "kimi-k2.6")
-                ("DeepSeek" . "deepseek-v4-pro")
-                ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
+       (when (equal gptel-auto-workflow-headless-subagent-fallbacks
+                    '(("MiniMax" . "minimax-m2.7-highspeed")
+                      ("DashScope" . "qwen3.6-plus")
+                      ("DeepSeek" . "deepseek-chat")
+                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+                      ("Gemini" . "gemini-3.1-pro-preview")))
+         (setq gptel-auto-workflow-headless-subagent-fallbacks
+               '(("MiniMax" . "minimax-m2.7-highspeed")
+                 ("moonshot" . "kimi-k2.5")
+                  ("DashScope" . "glm-5")
+                  ("DeepSeek" . "deepseek-v4-flash")
+                  ("CF-Gateway" . "@cf/moonshotai/kimi-k2.5")))
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-executor-rate-limit-fallbacks)
-      (when (equal gptel-auto-workflow-executor-rate-limit-fallbacks
-                   '(("DeepSeek" . "deepseek-chat")
-                     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-                     ("DashScope" . "qwen3.6-plus")
-                     ("Gemini" . "gemini-3.1-pro-preview")))
+       (when (equal gptel-auto-workflow-executor-rate-limit-fallbacks
+                    '(("DeepSeek" . "deepseek-chat")
+                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+                      ("DashScope" . "qwen3.6-plus")
+                      ("Gemini" . "gemini-3.1-pro-preview")))
         (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-              '(("MiniMax" . "minimax-m2.7-highspeed")
-                ("DashScope" . "qwen3.6-plus")
-                ("moonshot" . "kimi-k2.6")
-                ("DeepSeek" . "deepseek-v4-pro")
-                ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
+                '(("MiniMax" . "minimax-m2.7-highspeed")
+                  ("moonshot" . "kimi-k2.6")
+                  ("DashScope" . "qwen3.6-plus")
+                  ("DeepSeek" . "deepseek-v4-pro")
+                  ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
         (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-experiment-validation-retry-active-grace)

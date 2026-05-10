@@ -5,7 +5,7 @@ description: |
   and root cause. Supports multiple providers (OpenAI, Anthropic, Google, local models).
 version: 1.0
 evolve-script: evolve_patterns.py
-updated: 2026-05-10 08:28
+updated: 2026-05-10 10:42
 metadata:
   category: reliability
   author: auto-workflow
@@ -135,6 +135,12 @@ When encountering new error formats:
 1. Add pattern to `references/error-patterns.md`
 2. Run `scripts/update_patterns.py`
 3. Commit with message: `🔄 update provider-error patterns`
+
+
+
+
+
+
 
 
 
