@@ -6,6 +6,10 @@
 (defvar gptel-auto-workflow-program-file)
 (defvar gptel-auto-workflow--running)
 (defvar gptel-auto-workflow-skills-dir)
+(defvar gptel-auto-workflow--current-project)
+(defvar gptel-auto-workflow--project-root-override)
+(defvar gptel-auto-workflow--run-project-root)
+(defvar gptel-auto-workflow--headless)
 
 (defun gptel-auto-workflow-update-mutation-skill (mutation-type all-results)
   "Update MUTATION-TYPE skill file with ALL-RESULTS."
@@ -111,7 +115,7 @@ Flow:
   2. run experiments with skill guidance
   3. metabolize() - synthesize to mementum
 
-Cron: emacsclient -e '(gptel-auto-workflow-run-autonomous)'
+Cron: emacsclient -e \\='(gptel-auto-workflow-run-autonomous)'
 Manual: M-x gptel-auto-workflow-run-autonomous"
   (interactive)
   (gptel-auto-workflow--require-magit-dependencies)
@@ -244,8 +248,8 @@ Run weekly via cron."
 
 (defun gptel-mementum--extract-topic (slug)
   "Extract meaningful topic from memory filename SLUG.
-Strips leading emoji (💡, ❌, ✅, etc.) and common prefixes like
-'insight-lisp-modules-' before processing.
+  Strips leading emoji (💡, ❌, ✅, etc.) and common prefixes like
+  \='insight-lisp-modules-\=' before processing.
 Returns a topic string or nil if no meaningful topic found.
 Prefers multi-segment prefixes over single words to avoid false positives."
   (let* ((clean-slug (replace-regexp-in-string "^[💡❌✅🔄🎯🌀🔁]+[-_]" "" slug))
@@ -276,7 +280,7 @@ Prefers multi-segment prefixes over single words to avoid false positives."
 (defun gptel-mementum-check-synthesis-candidates ()
   "Check for topics with ≥3 memories and suggest synthesis.
 Groups memories by meaningful topic prefixes to avoid false positives
-from generic words like 'gptel' or 'auto'.
+  from generic words like \='gptel\=' or \='auto\='.
 Returns list of synthesis candidates."
   (let* ((memories-dir (expand-file-name "mementum/memories"
                                          (gptel-auto-workflow--project-root)))

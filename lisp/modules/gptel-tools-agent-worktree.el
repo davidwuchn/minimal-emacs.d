@@ -451,7 +451,7 @@ when the remote staging branch is absent."
                 60)))))
 
 (defun gptel-auto-workflow--refresh-staging-base-with-main (main-ref)
-  "Bring the current staging worktree up to MAIN-REF without dropping staging commits.
+  "Bring staging worktree up to MAIN-REF without dropping staging commits.
 Do not require the pre-merge staging checkout to hydrate cleanly: MAIN-REF may
 be the source of truth that repairs stale submodule gitlinks from the shared
 remote staging branch."
@@ -831,9 +831,9 @@ superproject-managed `.git/modules/...` store."
             candidates)))))
 
 (defun gptel-auto-workflow--finalize-refreshed-staging-submodules (worktree main-ref)
-  "Ensure refreshed staging WORKTREE uses materializable top-level submodule gitlinks.
-If refreshed staging cannot hydrate a top-level submodule gitlink locally, try to
-repair just that gitlink from MAIN-REF, then rehydrate and commit the repair."
+  "Ensure refreshed staging WORKTREE uses materializable submodule gitlinks.
+If staging cannot hydrate a submodule gitlink locally, try to repair
+just that gitlink from MAIN-REF, then rehydrate and commit the repair."
   (let* ((default-directory worktree)
          (starting-head (string-trim
                          (gptel-auto-workflow--git-cmd "git rev-parse HEAD" 60)))
@@ -931,8 +931,8 @@ repair just that gitlink from MAIN-REF, then rehydrate and commit the repair."
                 t)))))))))
 
 (defun gptel-auto-workflow--cleanup-staging-submodule-worktree (worktree path)
-  "Remove any staged submodule worktree for PATH under WORKTREE.
-Return nil on success, or an error string if the stale path could not be removed."
+  "Remove staged submodule worktree for PATH under WORKTREE.
+  Return nil on success, or error string on failure."
   (let* ((shared-git-dir (gptel-auto-workflow--shared-submodule-git-dir path))
          (target (expand-file-name path worktree)))
     (when (file-directory-p shared-git-dir)

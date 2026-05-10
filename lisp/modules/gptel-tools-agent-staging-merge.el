@@ -33,9 +33,10 @@ Returns nil if not in a staging worktree or if no changes."
           (split-string output "\n" t))))))
 
 (defun gptel-auto-workflow--empty-cherry-pick-state-p (&optional output allow-missing-head)
-  "Return non-nil when the current worktree reflects an already-applied cherry-pick.
+  "Return non-nil when worktree reflects an already-applied cherry-pick.
 When ALLOW-MISSING-HEAD is non-nil, also treat a clean worktree plus localized
-empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD' is absent."
+  empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD'
+  is absent."
   (let ((cherry-pick-head
          (ignore-errors
            (gptel-auto-workflow--git-cmd
@@ -307,7 +308,8 @@ Returns (success-p . output)."
          (gptel-auto-workflow--parse-remote-head branch (car remote-result)))))
 
 (defun gptel-auto-workflow--push-branch-with-lease (branch action &optional timeout)
-  "Push BRANCH to the shared remote, using `--force-with-lease' when it already exists.
+  "Push BRANCH to the shared remote.
+Use `--force-with-lease' when branch already exists.
 ACTION is a short description used in failure messages."
   (let* ((remote (gptel-auto-workflow--shared-remote))
          (branch-q (shell-quote-argument branch))

@@ -65,7 +65,8 @@ When nil, outputs go to `assistant/strategies/' directly.")
 
 (defvar gptel-auto-workflow--strategy-evolution-summary-file
   "evolution_summary.jsonl"
-  "Filename for per-iteration evolution summary, relative to the active run directory.")
+  "Filename for per-iteration evolution summary.
+Relative to the active run directory.")
 
 (defvar gptel-auto-workflow--strategy-interrupted nil
   "Non-nil when strategy evolution was interrupted by signal.")
@@ -158,7 +159,7 @@ Only removes files NOT tracked by git to preserve committed strategies."
     (make-directory run-dir t)
     (make-directory reports-dir t)))
 
-(defun gptel-auto-workflow--write-evolution-summary (iteration candidates val-scores &optional timing)
+(defun gptel-auto-workflow--write-evolution-summary (iteration candidates val-scores &optional _timing)
   "Append evolution summary rows for ITERATION to the summary file.
 CANDIDATES is a list of candidate plists with :name and :hypothesis.
 VAL-SCORES is a hash table mapping strategy name to avg score.
@@ -328,7 +329,7 @@ Call after experiments to save accumulated learnings."
 
 (defun gptel-auto-workflow--record-strategy-evaluation (strategy-name target experiment-id score outcome &optional axis)
   "Record evaluation result for STRATEGY-NAME on TARGET.
-SCORE is the experiment score, OUTCOME is 'kept or 'discarded.
+SCORE is the experiment score, OUTCOME is \='kept or \='discarded.
 Optional AXIS records the exploration axis used by the experiment."
   (let ((file (gptel-auto-workflow--strategy-results-file)))
     (make-directory (file-name-directory file) t)
@@ -379,7 +380,7 @@ Returns plist with :total :kept :success-rate :avg-score."
 
 ;;; Strategy Selection
 
-(defun gptel-auto-workflow--select-best-strategy (target)
+  (defun gptel-auto-workflow--select-best-strategy (_target)
   "Select the best strategy for TARGET based on historical performance.
 Returns strategy name. Gives newly-evolved strategies a chance by
 preferring the active strategy when it has no evaluations yet."
@@ -436,11 +437,7 @@ preferring the active strategy when it has no evaluations yet."
                  ;; Exploration: small-sample strategies get 50% random chance
                  (explore (and (< best-total 5)
                                (< (random 100) 50)))
-                ;; Pad sigmal score diff by sample size: small samples get a penalty
-                (scaled-default-avg (if sufficient-sample
-                                        default-avg
-                                      (+ default-avg (* 0.1 (/ (- 50 (min best-total 50)) 50.0)))))
-                (chosen (if (and (not (equal best "template-default"))
+                 (chosen (if (and (not (equal best "template-default"))
                                 (not explore)
                                 (not sufficient-sample)
                                 (< best-success default-success)
@@ -478,7 +475,7 @@ Returns list of target file paths."
         (push (file-relative-name file (gptel-auto-workflow--project-root)) targets)))
     targets))
 
-(defun gptel-auto-workflow--synthesize-global-patterns (targets)
+  (defun gptel-auto-workflow--synthesize-global-patterns (_targets)
   "Synthesize patterns across all TARGETS from TSV history.
 Returns formatted string of global insights."
   (let ((results-file (gptel-auto-workflow--results-file-path))
