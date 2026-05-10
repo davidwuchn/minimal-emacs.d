@@ -597,12 +597,36 @@ allowed for compatibility with isolated tests."
 
 (defun gptel-auto-experiment--extract-axis (agent-output)
   "Extract exploration axis (A-F) from AGENT-OUTPUT.
-Looks for AXIS: X or Axis: X pattern. Returns single letter or question mark."
+First looks for explicit AXIS: X declaration. If missing, infers from keywords
+in the hypothesis text. Returns single letter or question mark."
   (if (stringp agent-output)
-      (let ((case-fold-search t))
+      (let ((case-fold-search t)
+            (text (downcase agent-output)))
+        ;; First: check for explicit AXIS declaration
         (if (string-match "AXIS:[[:space:]]*\([A-Fa-f]\)" agent-output)
             (upcase (match-string 1 agent-output))
-          "?"))
+          ;; Second: infer from keywords in hypothesis
+          (cond
+           ;; A: Error Handling
+           ((string-match "\\b\\(error\\|exception\\|handle\\|catch\\|throw\\|guard\\|validation\\|nil guard\\|nil check\\|wrong-type\\)\\b" text)
+            "A")
+           ;; B: Performance
+           ((string-match "\\b\\(speed\\|slow\\|fast\\|optimiz\\|cache\\|bottleneck\\|efficien\\|performance\\|latency\\|throughput\\)\\b" text)
+            "B")
+           ;; C: Refactoring
+           ((string-match "\\b\\(extract\\|helper\\|duplicate\\|dedup\\|rename\\|split\\|refactor\\|modular\\|cleanup\\|simplify\\)\\b" text)
+            "C")
+           ;; D: Safety
+           ((string-match "\\b\\(safety\\|guard\\|check\\|validat\\|boundary\\|edge case\\|defensive\\|sanitize\\|assert\\)\\b" text)
+            "D")
+           ;; E: Test Coverage
+           ((string-match "\\b\\(test\\|coverage\\|missing test\\|test case\\|verify\\|mock\\|fixture\\|assert\\)\\b" text)
+            "E")
+           ;; F: Memory Management
+           ((string-match "\\b\\(memory\\|leak\\|alloc\\|free\\|garbage\\|buffer\\|cleanup\\|dispose\\|finalize\\)\\b" text)
+            "F")
+           ;; Default
+           (t "?"))))
     "?"))
 
 (defun gptel-auto-workflow--results-file-path (&optional run-id)
