@@ -362,7 +362,7 @@ Returns nil if data not available."
                  (json-array-type 'list)
                  (data (json-read-file topic-file))
                  (topics (gethash "topics" data)))
-            (when topics
+            (when (and topics (hash-table-p topics))
               (let ((total-exp (gethash "total_experiments" data 0))
                     (total-kept 0))
                 ;; Calculate total kept across all topics
