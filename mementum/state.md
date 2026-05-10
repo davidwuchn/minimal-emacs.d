@@ -1,8 +1,51 @@
 # Mementum State
 
-> Last session: 2026-05-09 14:00
+> Last session: 2026-05-10 15:45
 
-## Current Session: 2026-05-10 Timeout Fix + Quota Detection Fix + Rate-Limiting Improvements
+## Current Session: 2026-05-10 Pipeline Run + Timestamp Noise Fix + Timeout Tuning
+
+**Status:** Session active. Multiple commits pushed. Key learning: timestamp noise in auto-generated files.
+
+**Done (This Session):**
+- ✅ **Merged staging branch** — nil guard fix for `gptel-tools-agent--load-module` (9/9 score)
+- ✅ **Merged second staging** — env validation fix `proper-list-p` → `hash-table-p` in `gptel-sandbox.el` (9/9 score)
+- ✅ **Fixed timestamp noise** in auto-generated tracked files:
+  - Removed `updated:` from SKILL.md generation in `gptel-auto-workflow-evolution.el`
+  - Removed `updated:` from knowledge files in `gptel-auto-workflow-evolution.el`
+  - Removed `updated:` from mementum synthesis in `gptel-auto-workflow-mementum.el`
+  - **Why:** Git already tracks modification times; timestamps create meaningless diffs
+- ✅ **Tuned timeout for moonshot fallback**:
+  - 180s → 300s → 350s idle timeout
+  - Reason: moonshot/kimi-k2.6 needs ~350s for complex experiments
+  - Buffer: ~60s (experiment completed in 346.5s)
+- ✅ **Cron updated** to use unified `run-pipeline.sh`
+- ✅ **Pipeline run completed** (8 experiments, 1 kept):
+  - gptel-tools-agent.el: 1 kept (nil guard), 1 discarded, 2 timeouts
+  - gptel-sandbox.el: 1 kept (hash-table-p fix), 1 discarded
+  - gptel-auto-workflow-strategic.el: 3 failures (timeouts/tool errors)
+  - gptel-benchmark-core.el: 1 api-rate-limit (MiniMax exhausted)
+
+**Key Learnings:**
+1. **Timestamp noise is harmful** — Auto-generated timestamps in tracked files create meaningless git diffs and obscure real changes
+2. **Git already has timestamp info** — `git log` shows when files were modified; no need to duplicate in content
+3. **moonshot needs 350s+** — Complex code analysis with kimi-k2.6 takes ~350s; 180s was too aggressive
+4. **CF-Gateway also exhausts** — Not just MiniMax; all providers have limits
+5. **Staging review works** — Reviewing staging vs main before merge catches issues
+
+**Provider Status:**
+- MiniMax: EXHAUSTED (45,000/45,000, resets May 11)
+- CF-Gateway: EXHAUSTED (showing rate-limit errors)
+- moonshot: WORKING (primary fallback, slower but reliable)
+- DashScope/DeepSeek: Available but slower
+
+**Next Steps:**
+- Monitor next pipeline run with 350s timeout
+- Consider removing `updated:` from remaining knowledge files (experiment-insights-*.md)
+- When MiniMax resets (May 11), verify failover chain works end-to-end
+
+---
+
+## Previous Session: 2026-05-10 Timeout Fix + Quota Detection Fix + Rate-Limiting Improvements
 
 **Status:** Session complete. Multiple runs with timeout/rate-limiting fixes deployed. Junk memory files cleaned. Salvaged nil-safety fix from timed-out experiment. Fixed pipeline verification timing bug.
 

@@ -3,7 +3,6 @@ title: Experiment Insights - gptel-agent-loop
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-agent-loop]
-updated: 2026-05-09 18:00
 insight-quality: 7.2/10
 ---
 

@@ -3,7 +3,6 @@ title: Experiment Insights - gptel-auto-workflow-strategic
 status: active
 category: knowledge
 tags: [auto-workflow, experiments, gptel-auto-workflow-strategic]
-updated: 2026-05-10 11:29
 insight-quality: 7.3/10
 ---
 
