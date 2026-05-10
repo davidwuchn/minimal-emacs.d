@@ -148,7 +148,7 @@ fi
 
 if echo "$verify_output" | grep -q "verify-unavailable"; then
     log "WARNING: Could not connect to daemon for verification"
-elif echo "$verify_output" | grep -q "✓ All checks passed"; then
+elif echo "$verify_output" | grep -q "^t$"; then
     log "Pipeline integration verified: findings → directive ✓"
 else
     log "Pipeline integration issues detected (see elisp output)"
