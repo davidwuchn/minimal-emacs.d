@@ -4,11 +4,24 @@
 (declare-function gptel-auto-workflow--record-strategy-evaluation "gptel-tools-agent-strategy-harness"
                   (strategy-name target experiment-id score outcome &optional axis))
 
+;; Forward declarations for dynamic variables
+(defvar gptel-auto-workflow--skills)
+(defvar gptel-auto-experiment-large-target-byte-threshold)
+(defvar gptel-auto-workflow--last-prompt-sections)
+(defvar gptel-auto-experiment-time-budget)
+(defvar gptel-auto-workflow-use-staging)
+(defvar gptel-auto-workflow--running)
+(defvar gptel-auto-workflow--stats)
+(defvar gptel-auto-experiment-validation-retry-active-grace)
+(defvar gptel-auto-workflow--legacy-validation-retry-active-grace)
+(defvar gptel-auto-workflow--current-validation-retry-active-grace)
+(defvar my/gptel-subagent-stream)
+
 ;; ─── Knowledge Cache ───
 
 (defvar gptel-auto-workflow--knowledge-cache (make-hash-table :test 'equal)
   "Hash table mapping knowledge keys to cached content.
-Keys: 'self-evolution or topic names like 'context-cache.
+Keys: \='self-evolution or topic names like \='context-cache.
 Values: (content . timestamp) cons cells.
 Cache is invalidated after synthesis runs.")
 
@@ -25,14 +38,13 @@ Default 400, range 100-800.")
 Returns cached content or nil if missing/stale."
   (let ((entry (gethash key gptel-auto-workflow--knowledge-cache)))
     (when entry
-      (let ((content (car entry))
-            (timestamp (cdr entry))
-            (age (float-time (time-subtract (current-time) (cdr entry)))))
-        (if (< age gptel-auto-workflow--knowledge-cache-max-age)
-            content
-          ;; Stale - remove from cache
-          (remhash key gptel-auto-workflow--knowledge-cache)
-          nil)))))
+       (let ((content (car entry))
+             (age (float-time (time-subtract (current-time) (cdr entry)))))
+         (if (< age gptel-auto-workflow--knowledge-cache-max-age)
+             content
+           ;; Stale - remove from cache
+           (remhash key gptel-auto-workflow--knowledge-cache)
+           nil)))))
 
 (defun gptel-auto-workflow--knowledge-cache-set (key content)
   "Cache CONTENT for KEY with current timestamp."
@@ -48,10 +60,10 @@ Returns cached content or nil if missing/stale."
   "Return cache statistics as string."
   (let ((count 0)
         (total-age 0))
-    (maphash (lambda (key entry)
-               (setq count (1+ count))
-               (setq total-age (+ total-age (float-time (time-subtract (current-time) (cdr entry))))))
-             gptel-auto-workflow--knowledge-cache)
+     (maphash (lambda (_key entry)
+                (setq count (1+ count))
+                (setq total-age (+ total-age (float-time (time-subtract (current-time) (cdr entry))))))
+              gptel-auto-workflow--knowledge-cache)
     (format "[knowledge-cache] %d entries, avg age %.0fs"
             count (if (> count 0) (/ total-age count) 0))))
 
@@ -183,7 +195,9 @@ With sufficient data, includes only sections with positive correlation."
 (defun gptel-auto-workflow--find-skill-file (skill-name)
   "Find SKILL.md file for SKILL-NAME.
 Returns full path or nil.
-Searches: assistant/skills/{skill-name}/SKILL.md then assistant/skills/{skill-name}.md"
+Searches:
+- assistant/skills/{skill-name}/SKILL.md
+- assistant/skills/{skill-name}.md"
   (let* ((base-dirs (list (expand-file-name "assistant/skills"
                                              (gptel-auto-workflow--project-root))
                           (expand-file-name "~/.emacs.d/assistant/skills")))
@@ -705,7 +719,7 @@ row for the same experiment and target."
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n"
+         (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n"
                           experiment-id
                           target
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
@@ -893,7 +907,7 @@ Fewer retries reduce quota exhaustion when providers are rate-limited.")
 (defvar gptel-auto-experiment-max-per-provider-attempts 2
   "Consecutive retries on the same provider before advancing to next fallback.
 Reduced from 5 to 2 to reduce quota exhaustion.
-When a provider is rate-limited, don't waste retries—move to next fallback quickly.")
+When a provider is rate-limited, move to next fallback quickly.")
 
 (defvar gptel-auto-experiment-retry-delay 15
   "Seconds to wait between retries.")
@@ -937,7 +951,7 @@ moonshot and others when rate-limited or unavailable."
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-pro")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
-  "Ordered backend/model fallbacks for executor after provider rate limits.
+  "Ordered backend/model fallbacks for executor after rate limits.
 
 Uses capable models for code generation:
 - moonshot: kimi-k2.6 (best for code changes)
@@ -947,7 +961,8 @@ Uses capable models for code generation:
 
 Headless executor prefers MiniMax by default. When the active executor backend
 returns a rate-limit error during a headless run, later retries in that same
-run can advance through this list instead of repeatedly hammering the same provider."
+run can advance through this list instead of repeatedly hammering the same
+provider."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
@@ -1154,9 +1169,10 @@ Call at the start of a new workflow run."
 
 (defun gptel-auto-experiment--compute-frontier (target)
   "Compute Pareto frontier for TARGET from TSV history.
-Returns list of non-dominated experiments, each a plist with
-:experiment-id :code-quality :delta :axis :decision.
-An experiment dominates another if it is >= on all metrics and > on at least one."
+Returns list of non-dominated experiments, each a plist with:
+  :experiment-id :code-quality :delta :axis :decision.
+An experiment dominates another if it is >= on all metrics and
+> on at least one."
   (let ((results-file (gptel-auto-workflow--results-file-path))
         (experiments '()))
     (when (file-exists-p results-file)
@@ -1372,7 +1388,8 @@ Does NOT modify the filesystem - operates on a temp copy."
 
 (defun gptel-auto-experiment--batch-validate-candidates (agent-output target-full-path)
   "Validate all candidates from AGENT-OUTPUT for TARGET-FULL-PATH.
-Returns list of (candidate . validation-result) pairs, sorted by score descending."
+Returns list of (candidate . validation-result) pairs,
+sorted by score descending."
   (let* ((candidates (gptel-auto-experiment--extract-candidates agent-output))
          (validated (mapcar (lambda (cand)
                               (cons cand (gptel-auto-experiment--validate-candidate-safely
@@ -1659,8 +1676,7 @@ Returns string with transferable insights, or empty string if none."
   "Get statistics on task types tried for TARGET.
 Returns plist with :counts (type->count) and :total."
   (let ((results-file (gptel-auto-workflow--results-file-path))
-        (counts (make-hash-table :test 'equal))
-        (total 0))
+        (counts (make-hash-table :test 'equal)))
     (when (file-exists-p results-file)
       (with-temp-buffer
         (insert-file-contents results-file)
@@ -1677,17 +1693,15 @@ Returns plist with :counts (type->count) and :total."
                        hypothesis
                        (not (string-empty-p hypothesis)))
               (let ((task-type (gptel-benchmark--detect-task-type hypothesis)))
-                (puthash task-type (1+ (gethash task-type counts 0)) counts)
-                (setq total (1+ total))))
+                (puthash task-type (1+ (gethash task-type counts 0)) counts)))
             (forward-line 1)))))
-    (list :counts counts :total total)))
+    (list :counts counts)))
 
 (defun gptel-auto-experiment--format-task-type-diversity (target)
   "Format task-type diversity guidance for TARGET.
 Shows which task types have been tried and suggests underexplored ones."
   (let* ((stats (gptel-auto-experiment--get-task-type-stats target))
          (counts (plist-get stats :counts))
-         (total (plist-get stats :total))
          (all-types '(refactoring bug-fix performance feature validation))
          (type-names '((refactoring . "Refactoring")
                        (bug-fix . "Bug Fix")
