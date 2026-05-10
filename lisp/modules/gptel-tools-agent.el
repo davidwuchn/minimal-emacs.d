@@ -29,7 +29,9 @@
                       (expand-file-name (format "%s.el" feature)
                                         gptel-tools-agent--module-dir))))
     (if (and source (file-readable-p source))
-        (load source nil 'nomessage)
+        (condition-case err
+            (load source nil 'nomessage)
+          (error (require feature)))
       (require feature))
     (unless (featurep feature)
       (error "Module %s did not provide feature %S" (or source feature) feature))))
