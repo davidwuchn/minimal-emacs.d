@@ -711,13 +711,13 @@ Monthly subscription: LLM selection finds best targets each run."
   :type 'directory
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-time-budget 500
-  "Time budget per experiment in seconds (default: ~8 min).
+(defcustom gptel-auto-experiment-time-budget 800
+  "Time budget per experiment in seconds (default: ~13 min).
 
-Increased from 350s to 500s because:
-1. CF-Gateway with kimi-k2.6 needs ~500s for complex multi-step code analysis
-2. 350s was too tight for CF-Gateway (experiments timing out at 350s)
-3. 500s idle + 60s grace = 560s max provides comfortable margin
+Increased from 500s to 800s because:
+1. CF-Gateway with kimi-k2.6 needs ~800s for complex multi-step code analysis
+2. 500s was too tight for CF-Gateway (experiments timing out at 500-900s)
+3. 800s idle + 60s grace = 860s max provides comfortable margin
 4. Prevents timeout losses on high-quality experiments that need full reasoning time"
   :type 'integer
   :safe #'integerp
