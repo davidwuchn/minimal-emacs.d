@@ -4,7 +4,7 @@
 
 ## Current Session: 2026-05-10 Timeout Fix + Quota Detection Fix + Rate-Limiting Improvements
 
-**Status:** Session complete. Multiple runs with timeout/rate-limiting fixes deployed. Junk memory files cleaned.
+**Status:** Session complete. Multiple runs with timeout/rate-limiting fixes deployed. Junk memory files cleaned. Salvaged nil-safety fix from timed-out experiment. Fixed pipeline verification timing bug.
 
 **Done (This Session):**
 - 🔄 **Restarted daemon** after experiment 6 hung for 670+ seconds (DeepSeek grader API timeout)
@@ -55,6 +55,20 @@
 2. **Hard quota pattern incomplete**: `usage limit exceeded` not matched, so workflow didn't recognize all providers exhausted
 3. **Provider failover cycling**: When all providers exhausted, falls back to original preset (MiniMax), but this is handled by the retry limit and API pressure threshold
 4. **Retry too aggressive**: 5 retries per provider × 25 total = rapid quota exhaustion across all providers
+
+**New Commits (This Session):**
+- `9ad072fb` — ⊘ fix: nil-safety guards for callback invocations in sanitize
+  - Salvaged from timed-out experiment sanitize-neopi5-r110002z0411-exp2
+  - Adds `when-let` guards around 3 callback invocations in `gptel-ext-tool-sanitize.el`
+  - Prevents errors when `(plist-get info :callback)` returns nil
+  - Also: pipeline verification stdout fix (via `princ`) to show issues instead of `nil`
+- `41d5367a` — ⊘ fix: pipeline verification timing
+  - Changed checks to not fail on things that haven't happened yet
+  - Check 2: Directive file exists (was: directive updated after findings)
+  - Check 3: Findings are <24h old (was: digested context available)
+  - Prevents false "integration issues" on every pipeline run
+- 🧹 **Archived 109 old experiment results** (>7 days old) and deleted directories
+  - Saved 0.74 MB from 109 experiments (mostly just results.tsv files)
 
 **Previous Session: 2026-05-09 Callback Fix + Researcher Validation + moonshot Fallback**
 
