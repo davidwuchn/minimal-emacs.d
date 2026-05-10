@@ -49,7 +49,7 @@
   "Currently active prompt-building strategy.")
 
 (defvar gptel-auto-workflow--strategy-evaluations-file
-  "assistant/strategies/evaluations.jsonl"
+  "var/tmp/evaluations.jsonl"
   "File storing strategy evaluation results.")
 
 (defvar gptel-auto-workflow--strategy-evolution-enabled t
@@ -79,7 +79,7 @@ Set to 0 to disable the split and use all targets for both.")
 
 (defun gptel-auto-workflow--strategy-run-directory ()
   "Return the active strategy run directory, respecting the run name."
-  (let ((base (expand-file-name "assistant/strategies"
+  (let ((base (expand-file-name "var/tmp/strategy-evaluations"
                                 (gptel-auto-workflow--project-root))))
     (if gptel-auto-workflow--strategy-run-name
         (expand-file-name (format "runs/%s" gptel-auto-workflow--strategy-run-name) base)

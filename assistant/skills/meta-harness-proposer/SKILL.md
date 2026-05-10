@@ -61,7 +61,7 @@ Check `assistant/strategies/reports/`. For each past iteration that has results 
 1. **Read all state files:**
    - `assistant/strategies/evolution_summary.jsonl` — what's been tried
    - `assistant/strategies/frontier.json` — current Pareto frontier
-   - `assistant/strategies/evaluations.jsonl` — detailed evaluation results
+   - `var/tmp/evaluations.jsonl` — detailed evaluation results
    - Recent TSV results if available
 
 2. Formulate 3 hypotheses — each must be falsifiable and target a different mechanism.
@@ -136,7 +136,7 @@ Returns a prompt string.")
 ## Directory Structure
 
 - Strategies: `assistant/strategies/prompt-builders/strategy-*.el`
-- Evaluations: `assistant/strategies/evaluations.jsonl`
+- Evaluations: `var/tmp/evaluations.jsonl`
 - Frontier: `assistant/strategies/frontier.json`
 - Evolution summary: `assistant/strategies/evolution_summary.jsonl`
 - Pending eval: `assistant/strategies/pending_eval.json`

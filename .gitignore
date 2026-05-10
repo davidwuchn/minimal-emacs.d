@@ -65,3 +65,4 @@ lisp/modules/*.elc
 !cron.d/*
 !packages/
 !packages/**
+assistant/strategies/evaluations.jsonl
