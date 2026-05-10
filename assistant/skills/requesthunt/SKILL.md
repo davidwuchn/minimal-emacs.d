@@ -29,7 +29,6 @@ Your tone is **analytical and data-driven**; your goal is **generate demand rese
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 ## Core Principle
@@ -169,7 +168,6 @@ python3 scripts/scrape_topic.py "ai-assistant" --platforms reddit,x,github
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -190,7 +188,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -221,7 +218,6 @@ ERROR: Specify topic, platforms, time range, and research goal.
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 

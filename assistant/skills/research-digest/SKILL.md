@@ -6,7 +6,6 @@ evolve-script: evolve_research_digest.py
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 20:01
 
 ---
 # Research Digest Prompt
@@ -68,7 +67,6 @@ When LLM is unavailable, return raw findings unmodified.
 
 ## Evolution Statistics
 
-Updated: 2026-05-10 17:31
 
 - **Techniques extracted per digest**: 0
 - **Implementation rate**: 0.0%

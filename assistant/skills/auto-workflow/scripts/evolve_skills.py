@@ -173,28 +173,18 @@ def generate_skill(skill_name, skill_info, analysis_path, root_dir, patterns_pat
 
 def update_skill_metadata(skills_dir, analysis):
     """Update all SKILL.md files with latest metadata."""
-    from datetime import datetime
-    
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    
     for skill_file in skills_dir.rglob("SKILL.md"):
         with open(skill_file, 'r') as f:
             content = f.read()
-        
-        # Update updated field
-        content = re.sub(
-            r'^updated:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?',
-            f'updated: {now}',
-            content,
-            flags=re.MULTILINE
-        )
+        content = re.sub(r'^updated:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n?', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^\s*last-evolution:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n?', '', content, flags=re.MULTILINE)
         
         # Add evolution metadata if not present
         if 'evolution-stats:' not in content:
             # Insert metadata inside the existing frontmatter block
             content = content.replace(
                 '---\n\n#',
-                f'---\nmetadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n    last-evolution: {now}\n\n#',
+                f'---\nmetadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n\n#',
                 1
             )
         

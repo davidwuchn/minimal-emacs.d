@@ -8,7 +8,6 @@ import argparse
 import json
 import re
 from pathlib import Path
-from datetime import datetime
 from collections import defaultdict
 
 
@@ -50,9 +49,7 @@ def update_skill(skill_path, patterns):
     with open(skill_path, 'r') as f:
         content = f.read()
     
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    
-    evolution_section = f"""\n\n## Evolved Patterns\n\nUpdated: {now}\n\n### High-Signal Keywords\n\n"""
+    evolution_section = """\n\n## Evolved Patterns\n\n### High-Signal Keywords\n\n"""
     
     # Sort by success rate
     sorted_patterns = sorted(patterns.items(), key=lambda x: x[1]['rate'], reverse=True)

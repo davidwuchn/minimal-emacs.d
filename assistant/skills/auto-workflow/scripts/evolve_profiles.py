@@ -97,13 +97,7 @@ def update_skill_file(output_dir, profiles):
         # Append before the last section or at the end
         content = content.rstrip() + "\n\n" + profiles_md
     
-    # Update timestamp
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    content = re.sub(
-        r'updated: \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?',
-        f'updated: {now}',
-        content
-    )
+    content = re.sub(r'^updated: \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n?', '', content, flags=re.MULTILINE)
     
     with open(skill_file, 'w') as f:
         f.write(content)

@@ -5,7 +5,6 @@ version: 1.0
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 # Meta-Harness Prompt-Building Strategy Evolution
