@@ -5,7 +5,7 @@ description: |
   Controls which tools an agent can use based on execution mode and project type.
 version: 1.0
 evolve-script: evolve_profiles.py
-updated: 2026-05-10 11:42
+updated: 2026-05-10 11:29
 metadata:
   category: security
   author: auto-workflow
