@@ -38,4 +38,3 @@ Which prompt sections improve outcomes:
 - a-b-test-enabled: t
 - omit-rate: 0.2
 - min-samples: 10
-

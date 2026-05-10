@@ -95,7 +95,6 @@ Based on historical experiment data:
 - Add new anti-patterns discovered during experiments
 - Consider adding target-specific patterns
 
-
 ## Evolved Error Patterns
 
 Based on analysis of experiment errors.

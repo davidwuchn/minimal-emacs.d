@@ -90,7 +90,6 @@ python3 scripts/list_requests.py --topic "ai-tools" --limit 100
 3. **Analyze & synthesize** into structured report sections.
 4. **Verify** data sources and cite sample size.
 
-
 Analyze collected data and generate a structured Markdown report:
 
 ```markdown
