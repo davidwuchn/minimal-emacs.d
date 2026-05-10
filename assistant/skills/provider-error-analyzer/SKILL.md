@@ -204,8 +204,6 @@ When encountering new error formats:
 
 
 
-
-
 ## Evolved Error Patterns
 
 Based on analysis of experiment errors.

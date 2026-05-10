@@ -215,8 +215,6 @@ Validates AI-generated Emacs Lisp code before acceptance. Catches common errors 
 
 
 
-
-
 ## Evolved Validation Rules
 
 Based on analysis of failed experiments.
