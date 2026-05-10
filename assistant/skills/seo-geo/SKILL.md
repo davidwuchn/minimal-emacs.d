@@ -29,7 +29,6 @@ Your tone is **analytical and actionable**; your goal is **improve search visibi
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 ## Core Principle
@@ -62,7 +61,6 @@ python3 scripts/seo_audit.py "https://example.com"
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -306,7 +304,6 @@ See [references/platform-algorithms.md](./references/platform-algorithms.md) for
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -330,7 +327,6 @@ This skill works best with:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 

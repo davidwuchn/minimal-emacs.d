@@ -9,7 +9,6 @@ evolve-script: evolve_tool_prompts.py
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 19:34
 
 ---
 # Tool Prompts

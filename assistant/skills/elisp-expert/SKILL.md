@@ -29,7 +29,6 @@ Your tone is **precise and cautionary**; your goal is **write correct Elisp that
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 ## Core Principle
@@ -50,7 +49,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -99,7 +97,6 @@ ALTERNATIVE (prefer when possible):
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -117,7 +114,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -154,7 +150,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -170,7 +165,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -186,7 +180,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -202,7 +195,6 @@ Clean output = no errors/warnings.
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -256,7 +248,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -273,7 +264,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 
@@ -294,7 +284,6 @@ metadata:
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 

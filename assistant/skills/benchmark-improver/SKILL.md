@@ -6,7 +6,6 @@ evolve-script: evolve_benchmark.py
 metadata:
   evolution-stats:
     total-experiments: 870
-    last-evolution: 2026-05-08 18:52
 
 ---
 # Benchmark Auto-Improver
