@@ -238,8 +238,8 @@ Interactively prompts for directory."
      (unless projects
        (user-error "No projects configured to remove"))
      (list (completing-read "Remove project: " projects))))
-  (let ((root (file-name-as-directory (expand-file-name project-root)))
-        (was-present (member root gptel-auto-workflow-projects)))
+  (let* ((root (file-name-as-directory (expand-file-name project-root)))
+         (was-present (member root gptel-auto-workflow-projects)))
     (setq gptel-auto-workflow-projects
           (delete root gptel-auto-workflow-projects))
     (when was-present
@@ -358,8 +358,8 @@ When ERRORED is non-nil, preserve the existing error phase."
 (defun gptel-auto-workflow--queue-cron-job (label fn use-async)
   "Queue FN for LABEL and return immediately.
 This keeps `emacsclient --eval' callers from monopolizing the daemon.
-When USE-ASYNC is non-nil, FN must accept a completion callback and invoke it when
-the queued job actually finishes."
+When USE-ASYNC is non-nil, FN must accept a completion callback
+and invoke it when the queued job actually finishes."
   (if (or gptel-auto-workflow--cron-job-running
           (bound-and-true-p gptel-auto-workflow--running))
       (progn
@@ -852,7 +852,8 @@ Without PROJECT-ROOT, clears cache for all projects."
 
 (defun gptel-auto-workflow--run-weekly-job-for-project
     (project-root prefix feature-name file-path job-fn)
-  "Run a weekly job for PROJECT-ROOT with given PREFIX, FEATURE-NAME, FILE-PATH, and JOB-FN.
+  "Run a weekly job for PROJECT-ROOT.
+Uses PREFIX, FEATURE-NAME, FILE-PATH, and JOB-FN.
 Loads the feature if needed, enables headless suppression, runs JOB-FN,
 and restores headless state. Returns t on success, nil on failure."
   (let* ((root (expand-file-name project-root))
