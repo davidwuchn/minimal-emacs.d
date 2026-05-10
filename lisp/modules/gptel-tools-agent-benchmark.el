@@ -556,7 +556,7 @@ subagent request."
                 (< attempt gptel-auto-experiment-max-aux-subagent-retries))
            (progn
              (when (and raw
-                        (gptel-auto-experiment--should-blacklist-provider-p raw))
+                        (gptel-auto-experiment--provider-pressure-error-p raw))
                (when-let ((preset
                            (gptel-auto-experiment--current-subagent-preset
                             agent-type)))

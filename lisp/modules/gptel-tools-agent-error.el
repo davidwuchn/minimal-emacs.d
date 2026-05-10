@@ -133,14 +133,20 @@ REASON is only used for logging."
       candidate)))
 
 (defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
-  "Activate a per-run fallback for AGENT-TYPE when RESULT shows a real rate limit.
-Only blacklists for actual rate limits or hard quotas, NOT timeouts or transient errors."
-  (when (and (gptel-auto-workflow--headless-provider-override-active-p)
-             (gptel-auto-experiment--should-blacklist-provider-p result))
-    ;; Capture quota reset timestamp if present in the error message
-    (gptel-auto-experiment--parse-quota-reset-time result)
-    (gptel-auto-workflow--activate-provider-failover
-     agent-type preset "rate limit or hard quota")))
+  "Activate a per-run fallback for AGENT-TYPE when RESULT shows provider issues.
+Triggers on rate limits, hard quotas, AND persistent timeouts.
+Only permanently blacklists for real rate limits and hard quotas."
+  (when (gptel-auto-workflow--headless-provider-override-active-p)
+    (cond
+     ;; Real rate limits or hard quotas: blacklist permanently
+     ((gptel-auto-experiment--should-blacklist-provider-p result)
+      (gptel-auto-experiment--parse-quota-reset-time result)
+      (gptel-auto-workflow--activate-provider-failover
+       agent-type preset "rate limit or hard quota"))
+     ;; Timeouts or transient errors: advance provider but don't blacklist
+     ((gptel-auto-experiment--provider-pressure-error-p result)
+      (gptel-auto-workflow--activate-provider-failover
+       agent-type preset "timeout or transient error")))))
 
 (defun gptel-auto-workflow--maybe-override-subagent-provider (agent-type preset)
   "Return PRESET with a fallback provider for headless auto-workflow AGENT-TYPE."

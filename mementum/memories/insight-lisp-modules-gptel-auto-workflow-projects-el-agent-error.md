@@ -1,4 +1,4 @@
-# Insight: 2026-05-10 07:42
+# Insight: 2026-05-10 08:14
 
 **Target:** lisp/modules/gptel-auto-workflow-projects.el
 **Change type:** bug-fix
