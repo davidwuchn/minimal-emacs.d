@@ -45,22 +45,22 @@ Returns the extracted name, or nil if not found."
 
 (defun gptel-auto-workflow--generate-strategy-name (&optional proposed-name)
   "Generate a unique strategy name.
-If PROPOSED-NAME is provided and available, use it.
-Otherwise fall back to 'evolved-NNNN' format."
+If PROPOSED-NAME is provided, meaningful (not generic like evolved-NNNN),
+and available, use it. Otherwise returns nil — the caller must reject
+the candidate and ask the proposer for a better name."
   (if (and proposed-name
            (not (string-empty-p proposed-name))
+           ;; Reject generic auto-generated names
+           (not (string-match-p "\\`evolved-?[0-9]\\{1,4\\}\\'" proposed-name))
            (not (file-exists-p
                  (expand-file-name
                   (format "strategy-%s.el" proposed-name)
                   (gptel-auto-workflow--strategies-directory)))))
       proposed-name
-    (let* ((dir (gptel-auto-workflow--strategies-directory))
-           (max-n 0))
-      (when (file-directory-p dir)
-        (dolist (file (directory-files dir nil "^strategy-evolved-[0-9]+\\.el$"))
-          (when (string-match "^strategy-evolved-\\([0-9]+\\)\\.el$" file)
-            (setq max-n (max max-n (string-to-number (match-string 1 file)))))))
-      (format "evolved-%04d" (1+ max-n)))))
+    (when (and proposed-name (string-match-p "\\`evolved-?[0-9]\\{1,4\\}\\'" proposed-name))
+      (message "[strategy-evolution] Rejected generic name '%s', proposer must use descriptive name"
+               proposed-name))
+    nil))
 
 ;;; Strategy Template
 
@@ -711,11 +711,13 @@ Returns new strategy name or nil if rejected."
                                (plist-get b :output-length)))))
              (best (car sorted))
              (best-code (plist-get best :code))
-             ;; Use proposer-suggested meaningful name, fall back to evolved-NNNN
-             (proposer-name (gptel-auto-workflow--extract-proposer-name best-code))
-             (new-name (or (gptel-auto-workflow--generate-strategy-name proposer-name)
-                          "evolved-unknown"))
-             (final-code (gptel-auto-workflow--strategy-code-rewrite-name
+              ;; Use proposer-suggested meaningful name; reject if generic
+              (proposer-name (gptel-auto-workflow--extract-proposer-name best-code))
+              (new-name (gptel-auto-workflow--generate-strategy-name proposer-name)))
+         (if (not new-name)
+             (message "[strategy-evolution] REJECTED candidate: Proposed name '%s' is generic (must be descriptive)"
+                      (or proposer-name "nil"))
+           (let* ((final-code (gptel-auto-workflow--strategy-code-rewrite-name
                           best-code
                           (plist-get best :name)
                           new-name)))
@@ -743,7 +745,7 @@ Returns new strategy name or nil if rejected."
                        (format "%s" new-name)
                        (format "%s" axis)
                        (length valid-candidates))
-              new-name)))))))
+              new-name)))))))))
 
 ;;; Periodic Strategy Evolution
 
