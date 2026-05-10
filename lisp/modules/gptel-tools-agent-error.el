@@ -32,7 +32,7 @@ Returns alist of (category . pattern) or nil."
 
 (defconst gptel-auto-experiment--hard-quota-error-pattern
   (or (car (gptel-error--load-patterns-from-skill))
-      "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached")
+      "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached")
   "Regex pattern matching hard quota exhaustion errors.
 Loaded from provider-error-analyzer skill if available.")
 
