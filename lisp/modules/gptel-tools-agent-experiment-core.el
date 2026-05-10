@@ -5,6 +5,20 @@
 (defvar gptel-auto-experiment-time-budget)
 (defvar gptel-auto-workflow--run-id)
 (defvar gptel-auto-experiment--no-improvement-count)
+(defvar gptel-auto-experiment--grading-target)
+(defvar gptel-auto-experiment--grading-worktree)
+(defvar gptel-auto-experiment-validation-retry-active-grace)
+(defvar gptel-auto-experiment-validation-retry-time-budget)
+(defvar gptel-auto-workflow-git-timeout)
+(defvar gptel-auto-experiment--best-score)
+(defvar gptel-auto-experiment-auto-push)
+(defvar gptel-auto-workflow-use-staging)
+(defvar gptel-auto-experiment--in-retry)
+(defvar gptel-auto-experiment-active-grace)
+(defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
+(defvar gptel-auto-workflow--rate-limited-backends)
+(defvar gptel-model)
+(defvar gptel-backend)
 
 (defun gptel-auto-experiment--maybe-failover-main-backend ()
   "Switch `gptel-backend' to a fallback if the current one is rate-limited.
@@ -147,8 +161,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                (gptel-auto-experiment--repeated-focus-match
                                 effective-agent-output previous-results)))
                           (when candidate-validation
-                            (let ((best-cand (car (car candidate-validation)))
-                                  (best-score (plist-get (cdar candidate-validation) :score)))
+                             (let ((best-score (plist-get (cdar candidate-validation) :score)))
                               (message "[auto-exp] Validated %d candidates for %s, best score: %.2f"
                                        (length candidate-validation) target (or best-score 0.0))))
                          (when salvaged-agent-output
@@ -534,14 +547,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                           (gptel-auto-experiment--grade-with-retry
                                                            retry-output
                                                            (lambda (retry-grade)
-                                                             (if (plist-get retry-grade :passed)
-                                                                  (let ((retry-bench (gptel-auto-experiment-benchmark t retry-hypothesis)))
-                                                                   (if (plist-get retry-bench :passed)
-                                                                       (let* ((retry-score (plist-get retry-bench :eight-keys))
-                                                                              (retry-quality
-                                                                               (or (gptel-auto-experiment--code-quality-score) 0.5))
-                                                                              (retry-hypothesis
-                                                                               (gptel-auto-experiment--extract-hypothesis retry-output)))
+                                                              (if (plist-get retry-grade :passed)
+                                                                   (let* ((retry-hypothesis
+                                                                           (gptel-auto-experiment--extract-hypothesis retry-output))
+                                                                          (retry-bench (gptel-auto-experiment-benchmark t retry-hypothesis)))
+                                                                    (if (plist-get retry-bench :passed)
+                                                                        (let* ((retry-score (plist-get retry-bench :eight-keys))
+                                                                               (retry-quality
+                                                                                (or (gptel-auto-experiment--code-quality-score) 0.5)))
                                                                          (message "[auto-experiment] ✓ Retry succeeded")
                                                                          (gptel-auto-experiment-decide
                                                                           (list :score baseline
