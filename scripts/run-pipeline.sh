@@ -86,20 +86,21 @@ fi
 
 # ─── Step 2: Verify pipeline integration (Elisp check) ───
 log "=== Step 2: Verify Pipeline Integration ==="
-verify_output=$(emacsclient --socket-name=copilot-auto-workflow \
-    --eval '(when (fboundp (quote gptel-auto-workflow--verify-pipeline-integration)) (gptel-auto-workflow--verify-pipeline-integration))' 2>&1 || echo "daemon-unavailable")
-
-# If auto-workflow daemon not running, try main daemon with explicit require
-if echo "$verify_output" | grep -q "daemon-unavailable"; then
-    verify_output=$(emacsclient \
-        --eval '(progn
-                   (require (quote gptel-auto-workflow-production) nil t)
-                   (when (fboundp (quote gptel-auto-workflow--verify-pipeline-integration))
-                     (gptel-auto-workflow--verify-pipeline-integration)))' 2>&1 || echo "verify-unavailable")
+# Ensure auto-workflow daemon is running for verification
+if ! emacsclient --socket-name=copilot-auto-workflow --eval nil 2>/dev/null; then
+    EMACS="${EMACS:-emacs}"
+    "$EMACS" --init-directory="$DIR" --fg-daemon=copilot-auto-workflow >> "$LOG_DIR/copilot-auto-workflow.log" 2>&1 &
+    for i in $(seq 1 30); do
+        emacsclient --socket-name=copilot-auto-workflow --eval nil 2>/dev/null && break
+        sleep 1
+    done
 fi
 
+verify_output=$(emacsclient --socket-name=copilot-auto-workflow \
+    --eval '(when (fboundp (quote gptel-auto-workflow--verify-pipeline-integration)) (gptel-auto-workflow--verify-pipeline-integration))' 2>&1 || echo "verify-unavailable")
+
 if echo "$verify_output" | grep -q "verify-unavailable"; then
-    log "WARNING: Could not connect to any daemon for verification"
+    log "WARNING: Could not connect to daemon for verification"
 elif echo "$verify_output" | grep -q "✓ All checks passed"; then
     log "Pipeline integration verified: findings → directive ✓"
 else
