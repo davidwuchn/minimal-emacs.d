@@ -370,7 +370,7 @@ Returns nil if data not available."
                            (setq total-kept (+ total-kept (gethash "kept" stats 0))))
                          topics)
                 (list :effectiveness (if (> total-exp 0)
-                                         (round (* 100.0 (/ total-kept total-exp)))
+                                         (round (/ (* 100.0 total-kept) total-exp))
                                        0)
                       :kept total-kept
                       :total total-exp
