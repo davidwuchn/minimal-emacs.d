@@ -22,6 +22,8 @@
   "Load split module FEATURE from this directory, falling back to `require'."
   (unless (and feature (symbolp feature))
     (error "Feature must be a non-nil symbol: %S" feature))
+  (when (string-match-p "[/\\]" (symbol-name feature))
+    (error "Feature name contains invalid characters: %S" feature))
   (unless gptel-tools-agent--module-dir
     (let ((file (or (bound-and-true-p load-file-name)
                     buffer-file-name)))
