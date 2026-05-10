@@ -279,16 +279,25 @@ If SCORES is provided, uses it directly instead of re-extracting from R."
   (let ((scores (or scores (gptel-benchmark--extract-scores r))))
     (and scores (gptel-benchmark--get-field scores field))))
 
+(defun gptel-benchmark--normalize-score (value &optional warn-p)
+  "Normalize VALUE to a number, returning 0.0 for nil or non-numeric input.
+If WARN-P is non-nil and VALUE is non-nil but not a number, log a warning.
+This consolidates the repeated pattern of score defaulting across
+accumulate-score, accumulate-scores, and extract-score-types."
+  (cond
+   ((numberp value) value)
+   ((null value) 0.0)
+   (t
+    (when warn-p
+      (message "[benchmark] Non-numeric score %S treated as 0" value))
+    0.0)))
+
 (defun gptel-benchmark--accumulate-score (total score)
   "Accumulate SCORE into TOTAL.
 Returns the new accumulated total.
 SCORE must be a number or nil; non-numeric values are treated as 0
 with a warning logged for debugging."
-  (if (numberp score)
-      (+ total score)
-    (when score
-      (message "[benchmark] Non-numeric score %S treated as 0" score))
-    total))
+  (+ total (gptel-benchmark--normalize-score score t)))
 
 (defun gptel-benchmark--accumulate-scores (totals scores-alist)
   "Accumulate scores from SCORES-ALIST into TOTALS.
@@ -304,7 +313,7 @@ Returns empty alist if TOTALS is nil to prevent nil propagation errors."
    (t
     (cl-loop for (score-type . current) in totals
              for raw-score = (alist-get score-type scores-alist)
-             for score = (if (numberp raw-score) raw-score 0.0)
+             for score = (gptel-benchmark--normalize-score raw-score)
              collect (cons score-type (+ current score))))))
 
 (defun gptel-benchmark--extract-score-types (scores)
@@ -318,7 +327,8 @@ Returns nil if SCORES is not a list."
    ((not (listp scores)) nil)
    ((proper-list-p scores)
     (mapcar (lambda (score-type)
-              (cons score-type (or (gptel-benchmark--get-field scores score-type) 0.0)))
+              (cons score-type (gptel-benchmark--normalize-score
+                                (gptel-benchmark--get-field scores score-type))))
             gptel-benchmark--score-types))
    (t nil)))
 

@@ -375,7 +375,7 @@ resume from buffers outside the original project context."
    ((null value) nil)
    ((stringp value) (not (string-empty-p (string-trim value))))
    ((vectorp value) (> (length value) 0))
-   ((listp value) (not (null value)))
+   ((proper-list-p value) (not (null value)))
    (t t)))
 
 (defun gptel-auto-experiment--analysis-list (value)
@@ -383,7 +383,7 @@ resume from buffers outside the original project context."
   (cond
    ((null value) nil)
    ((vectorp value) (append value nil))
-   ((listp value) value)
+   ((proper-list-p value) value)
    (t (list value))))
 
 (defun gptel-auto-experiment--summarize-previous-results (previous-results)
@@ -505,7 +505,7 @@ least `gptel-auto-experiment-repeat-focus-threshold' previous attempts."
   "Return raw transient error text from RESULT, or nil when unavailable."
   (cond
    ((stringp result) result)
-   ((and (listp result)
+   ((and (proper-list-p result)
          (stringp (plist-get result :raw)))
     (plist-get result :raw))
    (t nil)))
