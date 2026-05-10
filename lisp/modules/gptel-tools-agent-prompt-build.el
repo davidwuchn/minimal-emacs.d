@@ -948,14 +948,14 @@ moonshot and others when rate-limited or unavailable."
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("moonshot" . "kimi-k2.6")
-    ("DashScope" . "qwen3.6-plus")
+    ("DashScope" . "glm-5")
     ("DeepSeek" . "deepseek-v4-pro")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
 
 Uses capable models for code generation:
 - moonshot: kimi-k2.6 (best for code changes)
-- DashScope: qwen3.6-plus (capable coding model)
+- DashScope: glm-5 (capable and cost-effective)
 - DeepSeek: deepseek-v4-pro (strong reasoning)
 - CF-Gateway: @cf/moonshotai/kimi-k2.6 (reliable)
 
@@ -1067,11 +1067,11 @@ the user has not explicitly customized the variable."
                       ("DashScope" . "qwen3.6-plus")
                       ("Gemini" . "gemini-3.1-pro-preview")))
         (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-                '(("MiniMax" . "minimax-m2.7-highspeed")
-                  ("moonshot" . "kimi-k2.6")
-                  ("DashScope" . "qwen3.6-plus")
-                  ("DeepSeek" . "deepseek-v4-pro")
-                  ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
+              '(("MiniMax" . "minimax-m2.7-highspeed")
+                ("moonshot" . "kimi-k2.6")
+                ("DashScope" . "glm-5")
+                ("DeepSeek" . "deepseek-v4-pro")
+                ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
         (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-experiment-validation-retry-active-grace)
