@@ -2791,3 +2791,6 @@
 {"timestamp":"2026-05-10 16:24:40","strategy":"template-default","target":"lisp/modules/gptel-tools-agent.el","experiment-id":2,"score":0,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-10 16:27:51","strategy":"template-default","target":"lisp/modules/gptel-tools-agent.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
 {"timestamp":"2026-05-10 16:30:54","strategy":"template-default","target":"lisp/modules/gptel-auto-workflow-strategic.el","experiment-id":1,"score":0,"outcome":"discarded","axis":"?"}
+{"timestamp":"2026-05-10 17:03:59","strategy":"candidate-template-d-3","target":"lisp/modules/gptel-tools-agent.el","experiment-id":1,"score":0.4,"outcome":"discarded","axis":"A"}
+{"timestamp":"2026-05-10 17:26:32","strategy":"candidate-section-re-3","target":"lisp/modules/gptel-tools-agent.el","experiment-id":2,"score":0.4000000000000001,"outcome":"discarded","axis":"A"}
+{"timestamp":"2026-05-10 17:42:06","strategy":"template-default","target":"lisp/modules/gptel-tools-agent.el","experiment-id":3,"score":0,"outcome":"discarded","axis":"?"}
