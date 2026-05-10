@@ -101,10 +101,13 @@ name strings."
                          max-output))))
     override))
 
-(defun gptel-auto-workflow--activate-provider-failover (agent-type preset &optional reason)
+(defun gptel-auto-workflow--activate-provider-failover (agent-type preset &optional reason skip-blacklist)
   "Mark PRESET's backend unavailable for this run and fail AGENT-TYPE over.
 
-REASON is only used for logging."
+REASON is only used for logging.
+When SKIP-BLACKLIST is nil (the default), add the current backend to
+`gptel-auto-workflow--rate-limited-backends'.  When non-nil, only
+switch to a fallback without blacklisting (used for transient errors)."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
              (stringp agent-type)
              (listp preset))
@@ -114,9 +117,10 @@ REASON is only used for logging."
            (current-model (plist-get preset :model))
            (candidate nil))
       (when (stringp current-backend)
-        (cl-pushnew current-backend
-                    gptel-auto-workflow--rate-limited-backends
-                    :test #'string=)
+        (unless skip-blacklist
+          (cl-pushnew current-backend
+                      gptel-auto-workflow--rate-limited-backends
+                      :test #'string=))
         (setq candidate
               (gptel-auto-workflow--runtime-provider-failover-candidate
                agent-type preset)))
@@ -147,7 +151,7 @@ Only permanently blacklists for real rate limits and hard quotas."
      ;; Timeouts or transient errors: advance provider but don't blacklist
      ((gptel-auto-experiment--provider-pressure-error-p result)
       (gptel-auto-workflow--activate-provider-failover
-       agent-type preset "timeout or transient error")))))
+       agent-type preset "timeout or transient error" t)))))
 
 (defun gptel-auto-workflow--maybe-override-subagent-provider (agent-type preset)
   "Return PRESET with a fallback provider for headless auto-workflow AGENT-TYPE."
