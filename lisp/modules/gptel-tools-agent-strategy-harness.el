@@ -49,7 +49,7 @@
   "Currently active prompt-building strategy.")
 
 (defvar gptel-auto-workflow--strategy-evaluations-file
-  "assistant/strategies/evaluations.jsonl"
+  "var/tmp/evaluations.jsonl"
   "File storing strategy evaluation results.")
 
 (defvar gptel-auto-workflow--strategy-evolution-enabled t
