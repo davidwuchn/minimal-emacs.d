@@ -214,8 +214,9 @@ RunAgent was registered, leaving it out of the buffer's tool list."
         (when (null (plist-get info :tool-use))
           (message "gptel: all tool calls were malformed, advancing FSM to DONE")
           (when gptel-mode (gptel--update-status " Ready" 'success))
-          (funcall (plist-get info :callback)
-                   "gptel: turn skipped (all tool calls had nil/unknown names)" info)
+           (when-let ((cb (plist-get info :callback)))
+             (funcall cb
+                      "gptel: turn skipped (all tool calls had nil/unknown names)" info))
           (gptel--fsm-transition fsm 'DONE))))))
 
 ;; --- Doom-loop detection (Fix C) ---
@@ -356,9 +357,10 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                                    (car (split-string fp ":" t)) current-run)))
                       (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
                                (car (split-string fp ":" t)) current-run)
-                      (setq info (plist-put info :doom-loop-run-counts run-counts))
-                      (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
-                      (funcall (plist-get info :callback) error-message info))
+                       (setq info (plist-put info :doom-loop-run-counts run-counts))
+                       (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
+                       (when-let ((cb (plist-get info :callback)))
+                         (funcall cb error-message info)))
                     (setq aborted t)
                     (gptel--fsm-transition fsm 'DONE)
                     (cl-return-from my/gptel--detect-doom-loop))
@@ -409,8 +411,9 @@ to a write-capable tool."
                                    current-run abbrev-file)))
                       (message "gptel: inspection-thrash detected — %d read-only inspections on %s without a write, aborting turn"
                                current-run abbrev-file)
-                      (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
-                      (funcall (plist-get info :callback) error-message info))
+                       (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
+                       (when-let ((cb (plist-get info :callback)))
+                         (funcall cb error-message info)))
                     (gptel--fsm-transition fsm 'DONE)
                     (cl-return-from my/gptel--detect-inspection-thrash))
                    ((eq warning-level :urgent)

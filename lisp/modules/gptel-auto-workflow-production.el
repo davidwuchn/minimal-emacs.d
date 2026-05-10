@@ -242,9 +242,9 @@ Returns t if all checks pass, nil with warnings otherwise."
         (progn
           (message "[pipeline-verification] ✓ All checks passed: findings→directive integration working")
           t)
-      (progn
-        (message "[pipeline-verification] ✗ Issues found: %s"
-                 (string-join (reverse issues) "; "))
+      (let ((issue-str (string-join (reverse issues) "; ")))
+        (message "[pipeline-verification] ✗ Issues found: %s" issue-str)
+        (princ (format "ISSUES: %s\n" issue-str))
         nil))))
 
 (provide 'gptel-auto-workflow-production)

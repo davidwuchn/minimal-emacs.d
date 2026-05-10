@@ -4,7 +4,7 @@
 
 ## Current Session: 2026-05-10 Timeout Fix + Quota Detection Fix + Rate-Limiting Improvements
 
-**Status:** Run completed. 2/5 experiments kept. All fixes verified and passing nucleus validation.
+**Status:** Session complete. Multiple runs with timeout/rate-limiting fixes deployed. Junk memory files cleaned.
 
 **Done (This Session):**
 - 🔄 **Restarted daemon** after experiment 6 hung for 670+ seconds (DeepSeek grader API timeout)
@@ -93,6 +93,13 @@
   - Fixes pipeline script to properly check daemon phase
   - Better researcher daemon startup handling
   - Merged from origin/main
+- `27cd4864` — ⊘ fix: increase max-lisp-eval-depth to 3200 (remote)
+  - Prevents watchdog recursion errors
+- `f1b87b5b` — Merge staging: experiment fixes from kept experiments
+  - sandbox: proper-list-p guard for env parameter
+  - strategic: fixed lambda parameter shadowing `t`, nil concat guard
+  - projects: buffer table initialization fixes
+  - agent: error handling when load-file-name is nil
 
 **Cleanup:**
 - ✅ **Deleted 569 junk insight files** (`insight-lisp-modules-*.md`)
