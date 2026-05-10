@@ -8,25 +8,25 @@ extended with a full AI agent system built on
 
 | Metric | Value |
 |--------|-------|
-| **Code fixes** | 242+ real fixes merged |
-| **New features** | Auto-workflow, benchmark, retry loop, researcher, sandbox, strategic planner |
-| **Agents** | 10+ (MiniMax workhorse, DashScope/moonshot/DeepSeek/CF-Gateway fallbacks) |
+| **Code fixes** | 300+ real fixes merged |
+| **New features** | Auto-workflow, pipeline orchestrator, benchmark, retry loop, researcher, sandbox, strategic planner, skill evolution |
+| **Agents** | 10+ (MiniMax workhorse, moonshot/DashScope/DeepSeek/CF-Gateway fallbacks) |
 | **Cron jobs** | 6 scheduled jobs (auto-workflow, research, mementum, instincts) |
 
-### Latest Features (2026-05-03)
+### Latest Features (2026-05-10)
 
 | Feature | Purpose |
 |---------|---------|
-| **Auto-Workflow** | Headless experiments with grading, review, and staging merge |
-| **Strategy Evolution** | Meta-Harness style harness search: agent-driven proposer, Pareto frontier, held-out test sets, stateful lifecycle |
-| **Backend Fallback** | MiniMax → DashScope → moonshot → DeepSeek → CF-Gateway |
-| **Benchmark System** | Score tracking, quality metrics, evolution patterns |
-| **Shell Timeout Sentinel** | Wait for process exit before capturing results |
-| **FSM Registry Validation** | Bidirectional consistency checks |
+| **Pipeline Orchestrator** | `run-pipeline.sh`: Research → Digestion → Auto-Workflow in sequence |
+| **Skill Evolution** | 18 auto-evolved skills (DIRECTIVE.md, FINDINGS.md, benchmark-improver, etc.) |
+| **Provider Failover** | 5x retry per provider before advancing chain; auto-switch back when quota resets |
+| **Strategy Evolution** | Meta-Harness harness search: agent-driven proposer, Pareto frontier, held-out test sets |
+| **Backend Fallback** | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway (with auto-return) |
+| **Benchmark System** | Score tracking, quality metrics, evolution patterns, task-type-aware scoring |
 | **Review Retry Loop** | Executor fixes issues, reviewer validates, max 2 retries |
-| **Periodic Researcher** | Every 4h, finds anti-patterns for target selection |
-| **Sandbox Execution** | Safe code evaluation with nil guards and error handling |
-| **Strategic Planner** | Long-term improvement planning with hypothesis tracking |
+| **Periodic Researcher** | Every 4h, finds anti-patterns for target selection via `FINDINGS.md` |
+| **Sandbox Execution** | Safe code evaluation with `proper-list-p` validation and arity checking |
+| **Strategic Planner** | Long-term improvement planning with hypothesis tracking + directive skill |
 
 ## Quick Start
 
@@ -325,24 +325,18 @@ Exploitation axes: A=Template architecture, B=Context retrieval, C=Section order
 
 | Agent | Backend | Purpose |
 |-------|---------|---------|
-| analyzer | MiniMax | Target selection |
-| comparator | MiniMax | Before/after comparison |
-| executor | MiniMax | Code changes |
-| explorer | MiniMax | Code exploration |
-| grader | MiniMax | Quality scoring |
-| introspector | MiniMax | Self-analysis |
-| nucleus-gptel-agent | MiniMax | Main agent |
-| nucleus-gptel-plan | MiniMax | Planning |
-| researcher | moonshot | Code research, anti-pattern detection |
-| reviewer | moonshot | Pre-merge code review |
+| analyzer | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Target selection |
+| comparator | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Before/after comparison |
+| executor | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Code changes |
+| grader | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Quality scoring |
+| reviewer | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Pre-merge code review |
+| researcher | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Code research, anti-pattern detection |
 
 ### Cron Schedule
 
 | Job | Pi5 Schedule | macOS Schedule |
 |-----|-------------|----------------|
-| Auto-workflow | 11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6x) | 10AM, 2PM, 6PM (3x) |
-| Researcher | Every 4 hours | Every 4 hours |
-| Evolution | Every 6 hours | Every 6 hours |
+| Pipeline (research→workflow→evolution) | 11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6x) | 10AM, 2PM, 6PM (3x) |
 | Weekly mementum | Sunday 4AM | Sunday 4AM |
 | Weekly instincts | Sunday 5AM | Sunday 5AM |
 

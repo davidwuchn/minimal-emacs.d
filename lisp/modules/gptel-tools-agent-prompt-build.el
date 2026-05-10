@@ -881,10 +881,16 @@ These retries reuse the successful executor output instead of rerunning the
 entire experiment. Two retries let the grader advance past one failing
 fallback backend before giving up on otherwise-good executor output.")
 
-(defvar gptel-auto-experiment-max-aux-subagent-retries 2
+(defvar gptel-auto-experiment-max-aux-subagent-retries 25
   "Maximum local retries for transient analyzer/comparator failures.
-These retries keep the current experiment alive while headless provider
-failover advances past transient timeout or provider-pressure failures.")
+Set to 25 to allow 5 attempts per provider across the 5-provider fallback chain
+(moonshot → DashScope → DeepSeek → CF-Gateway → MiniMax). Each provider gets
+`gptel-auto-experiment-max-per-provider-attempts' retries before advancing.")
+
+(defvar gptel-auto-experiment-max-per-provider-attempts 5
+  "Consecutive retries on the same provider before advancing to next fallback.
+Timeouts and transient errors retry on the same provider this many times
+before the failover chain advances to the next backend.")
 
 (defvar gptel-auto-experiment-retry-delay 5
   "Seconds to wait between retries.")
