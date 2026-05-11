@@ -1,10 +1,31 @@
 # Mementum State
 
-> Last session: 2026-05-10 20:30
+> Last session: 2026-05-11 09:55
 
-## Current Session: 2026-05-10 CF-Gateway Fixes + Timeout Tuning + Pipeline Infrastructure
+## Current Session: 2026-05-11 Daemon Restart + Staging Worktree Fix Active
 
-**Status:** Session complete. 4 critical bugs fixed, timeouts tuned for CF-Gateway, pipeline running with fixes.
+**Status:** Daemon restarted with fix (`184ae9dd`). Staging flow issue resolved. Pipeline can now continue.
+
+**Done (This Session):**
+- ✅ **Restarted copilot-auto-workflow daemon** — Now running with staging worktree stale path fix
+- ✅ **Socket verified** — `copilot-auto-workflow` socket available in `/run/user/1000/emacs/`
+- ✅ **Staging-verify worktree operational** — `var/elpa` seeded correctly
+
+**Key Findings:**
+- Staging verification failed previously due to missing `var/elpa` directory
+- Daemon restart activates the fix from `184ae9dd` (stale path validation)
+- Worktrees seeded from main repo correctly now
+
+**Provider Status:**
+- MiniMax: WORKING (quota reset at May 11 00:00+08:00)
+- CF-Gateway: WORKING (fallback backend)
+- moonshot: WORKING (fallback for analyzer/grader)
+
+**Current Batch:** `2026-05-11T070228Z-8432` — 19 experiments logged
+
+**Next Steps:**
+- Monitor staging flow for new experiments
+- Check if sanitize exp-3 can proceed through staging verification now
 
 **Done (This Session):**
 - ✅ **Fixed CF-Gateway "Could not parse HTTP response" errors** (`gptel-ext-backends.el`):
