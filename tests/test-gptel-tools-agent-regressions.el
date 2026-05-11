@@ -4461,13 +4461,13 @@ experiment phases do not trip the real pre-grade target validator."
                      '(gptel-auto-workflow-headless-fallback-agents
                        gptel-auto-workflow-executor-rate-limit-fallbacks))))
           (should (equal gptel-auto-workflow-headless-fallback-agents
-                          '("analyzer" "comparator" "executor" "grader" "reviewer")))
-           (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
-                          '(("MiniMax" . "minimax-m2.7-highspeed")
-                            ("DashScope" . "qwen3.6-plus")
-                            ("moonshot" . "kimi-k2.6")
-                            ("DeepSeek" . "deepseek-v4-pro")
-                            ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))))
+                         '("analyzer" "comparator" "executor" "grader" "reviewer")))
+          (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
+                         '(("MiniMax" . "minimax-m2.7-highspeed")
+                           ("moonshot" . "kimi-k2.6")
+                           ("DashScope" . "qwen3.6-plus")
+                           ("DeepSeek" . "deepseek-v4-pro")
+                           ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))))
       (setq gptel-auto-workflow-headless-fallback-agents old-headless
             gptel-auto-workflow-executor-rate-limit-fallbacks old-rate-limit)
       (put 'gptel-auto-workflow-headless-fallback-agents 'saved-value old-headless-saved)
@@ -4729,7 +4729,7 @@ experiment phases do not trip the real pre-grade target validator."
               ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
                (lambda (&rest _args) t))
               ((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
-               (lambda (&rest _args) '("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")))
+               (lambda (&rest _args) '("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
               ((symbol-function 'run-with-timer)
                (lambda (_secs _repeat fn &rest args)
                  (cl-incf scheduled-retries)

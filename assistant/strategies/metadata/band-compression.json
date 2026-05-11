@@ -1,0 +1,1 @@
+{"name":"band-compression","version":"1.0","hypothesis":"Priority-band compression preserves critical sections while aggressively compressing low-value ones","axis":"F","components":["adaptive-compression","priority-bands"]}
