@@ -59,4 +59,30 @@
   (indent-bars-treesit-support t)
   (indent-bars-width-func '(indent-bars-width-detect)))
 
+;; dtrt-indent: Auto-detect and fix indentation on save
+;; Source: https://github.com/jscheid/dtrt-indent
+(use-package dtrt-indent
+  :ensure t
+  :hook (after-init . dtrt-indent-global-mode))
+
+;; rainbow-delimiters: Color-coded parentheses by nesting depth
+;; Source: https://github.com/Fanael/rainbow-delimiters
+(use-package rainbow-delimiters
+  :ensure t
+  :hook (prog-mode . rainbow-delimiters-mode))
+
+;; nerd-icons-ibuffer: File icons in buffer list
+;; Source: https://github.com/seagle0128/nerd-icons-ibuffer
+(use-package nerd-icons-ibuffer
+  :ensure t
+  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
+
+;; gcmh: Garbage collector optimization — reduces GC pauses during heavy operations
+;; Source: https://gitlab.com/koral/gcmh
+(use-package gcmh
+  :ensure t
+  :hook (after-init . gcmh-mode)
+  :custom
+  (gcmh-high-cons-threshold (* 64 1024 1024)))
+
 ;;; init-editor.el ends here

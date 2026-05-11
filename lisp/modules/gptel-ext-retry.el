@@ -153,6 +153,23 @@ BEHAVIOR: keep count decreases with each retry:
                     0)))
     (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries))))
 
+(defun my/gptel--info-data (info)
+  "Safely extract :data from INFO plist.
+Returns the :data value if INFO is a proper list, nil otherwise.
+Guards against malformed info that is truthy but not a list."
+  (and (listp info) (plist-get info :data)))
+
+(defun my/gptel--info-get (info key &optional default)
+  "Safely extract KEY from INFO plist, returning DEFAULT if unavailable.
+INFO must be a proper list. Returns DEFAULT (nil if not provided) when:
+  - INFO is not a list
+  - KEY is not present in INFO
+
+This helper centralizes the defensive pattern for plist access in retry logic."
+  (if (listp info)
+      (or (plist-get info key) default)
+    default))
+
 (defun my/gptel--should-trim-p (info force-trim-p)
   "Return non-nil if tool-result trimming should proceed.
 INFO is the FSM info plist.  FORCE-TRIM-P bypasses user preference.
@@ -187,7 +204,7 @@ independently of retry settings.
 Returns the number of messages truncated, or 0 if nothing was done."
   (if (not (my/gptel--should-trim-p info force-trim-p))
       0
-    (let* ((data (plist-get info :data))
+    (let* ((data (my/gptel--info-data info))
            (messages (and (listp data) (plist-get data :messages)))
            (keep (my/gptel--compute-trim-keep-count info retry-count))
            (replacement my/gptel-retry-truncated-result-text)
@@ -232,7 +249,7 @@ Returns the number of function-response parts truncated, or 0 if nothing was
 done."
   (if (not (my/gptel--should-trim-p info force-trim-p))
       0
-    (let* ((data (plist-get info :data))
+    (let* ((data (my/gptel--info-data info))
            (contents (and (listp data) (plist-get data :contents)))
            (keep (my/gptel--compute-trim-keep-count info retry-count))
            (replacement my/gptel-retry-truncated-result-text)
@@ -297,7 +314,7 @@ that accumulates across tool-use rounds.
 Returns the number of messages whose reasoning_content was stripped."
   (if (null my/gptel-reasoning-keep-turns)
       0
-    (let* ((data (and (listp info) (plist-get info :data)))
+    (let* ((data (my/gptel--info-data info))
            (messages (and (listp data) (plist-get data :messages)))
            (keep my/gptel-reasoning-keep-turns)
            (stripped 0))
@@ -359,7 +376,7 @@ This typically removes 60-80% of the tools payload (~5-8KB) on
 conversations that only use 3-5 of 18+ registered tools.
 
 Returns the number of tool definitions removed, or 0 if nothing changed."
-  (let* ((data (and (listp info) (plist-get info :data)))
+  (let* ((data (my/gptel--info-data info))
          (messages (and (listp data) (plist-get data :messages)))
          (data-tools (and (listp data) (plist-get data :tools)))  ; vector of plists
          (struct-tools (plist-get info :tools))            ; list of gptel-tool structs
@@ -417,7 +434,7 @@ Keeps the message structure intact for API compatibility.
 Returns the number of messages truncated, or 0 if nothing was done."
   (if (null my/gptel-truncate-old-messages-keep)
       0
-    (let* ((data (plist-get info :data))
+    (let* ((data (my/gptel--info-data info))
            (messages (and (listp data) (plist-get data :messages)))
            (keep my/gptel-truncate-old-messages-keep)
            (truncated 0)
@@ -470,7 +487,7 @@ EDGE CASE: Empty content or non-sequence content is skipped safely.
 EDGE CASE: Content that becomes empty after filtering is preserved as empty vector.
 
 Returns the number of image parts removed, or 0 if nothing was done."
-  (let* ((data (plist-get info :data))
+  (let* ((data (my/gptel--info-data info))
          (messages (and (listp data) (plist-get data :messages)))
          (removed 0)
          (image-p
@@ -686,12 +703,12 @@ TEST: Verify with network failure simulation — should retry 3 times with
   (unless new-state (setq new-state (gptel--fsm-next machine)))
   (let* ((info (gptel-fsm-info machine))
          ;; Guard: ensure info is a proper list before accessing with plist-get
-         (disable-auto-retry (and (listp info) (plist-get info :disable-auto-retry)))
+         (disable-auto-retry (my/gptel--info-get info :disable-auto-retry))
          (headless-agent-buffer-p
           (and (listp info) (my/gptel--headless-auto-workflow-agent-buffer-p info)))
-         (error-data (and (listp info) (plist-get info :error)))
-         (http-status (and (listp info) (plist-get info :http-status)))
-         (retries (if (listp info) (or (plist-get info :retries) 0) 0))
+         (error-data (my/gptel--info-get info :error))
+         (http-status (my/gptel--info-get info :http-status))
+         (retries (or (my/gptel--info-get info :retries) 0))
          ;; Detect subagent FSMs: they use custom handlers and should not be
          ;; retried (the parent's timeout handles failures).
          ;; A request is retryable if its handlers are one of the "main"
@@ -833,7 +850,7 @@ for a smaller-context model.")
   "Estimate the JSON byte size of INFO's :data payload.
 
 Uses `json-serialize' for accuracy.  Returns 0 if :data is nil or serialization fails."
-  (let ((data (plist-get info :data)))
+  (let ((data (my/gptel--info-data info)))
     (if data
         (condition-case err
             (string-bytes (gptel--json-encode data))

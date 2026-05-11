@@ -1,0 +1,1 @@
+{"name":"axis-impact-priority","version":"1.0","hypothesis":"Prioritizing axes by historical failure impact focuses reasoning on the highest-yield improvement areas.","axis":"D","components":["scoring","prioritization","axis-guidance"]}
