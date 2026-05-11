@@ -427,7 +427,7 @@ Reads actual memory content and creates proper knowledge page."
       (let ((content (plist-get mem :content)))
         (push (format "- %s\n" 
                       (or (gptel-benchmark--extract-key-point content)
-                          (substring content 0 (min 100 (length content)))))
+                          (and content (substring content 0 (min 100 (length content))))))
               sections)))
     (push "\n## Patterns\n\nPatterns identified across memories.\n" sections)
     (push "\n## Actions\n\nRecommended actions based on synthesis.\n" sections)
