@@ -12,6 +12,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -125,6 +126,25 @@ def compute_prompt_stats(records):
     }
 
 
+def read_existing_total_experiments(root_dir):
+    """Return the largest tracked total-experiments value in skill files."""
+    skills_dir = Path(root_dir) / "assistant" / "skills"
+    totals = []
+
+    if not skills_dir.exists():
+        return 0
+
+    for skill_file in skills_dir.rglob("SKILL.md"):
+        try:
+            text = skill_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for match in re.finditer(r'total-experiments:\s*(\d+)', text):
+            totals.append(int(match.group(1)))
+
+    return max(totals, default=0)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze experiment results')
     parser.add_argument('--root', default='.', help='Project root directory')
@@ -146,10 +166,15 @@ def main():
     research_stats = compute_research_stats(records)
     prompt_stats = compute_prompt_stats(records)
     
+    existing_total = read_existing_total_experiments(root_dir)
+    total_experiments = max(len(records), existing_total)
+
     # Build output
     output = {
         'generated_at': datetime.now().isoformat(),
-        'total_experiments': len(records),
+        'total_experiments': total_experiments,
+        'local_experiments': len(records),
+        'existing_total_experiments': existing_total,
         'target_stats': target_stats,
         'research_stats': research_stats,
         'prompt_stats': prompt_stats,

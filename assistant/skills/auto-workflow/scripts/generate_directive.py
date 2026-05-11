@@ -23,7 +23,8 @@ def generate_directive(analysis, skill_dir, patterns=None):
         skill_dir: Path to skill directory
         patterns: Optional pattern analysis from analyze_patterns.py
     """
-    total = analysis['total_experiments']
+    total = analysis.get('total_experiments', 0)
+    local_total = analysis.get('local_experiments', total)
     kept = analysis['prompt_stats']['total_kept']
     target_stats = analysis['target_stats']
     
@@ -217,7 +218,7 @@ def generate_directive(analysis, skill_dir, patterns=None):
     # Footer
     lines.append("---")
     lines.append("")
-    lines.append(f"*This directive was auto-generated from {total} experiments ({kept} kept). It evolves every self-evolution cycle.*")
+    lines.append(f"*This directive was auto-generated from {total} experiments ({kept} kept locally across {local_total} local records). It evolves every self-evolution cycle.*")
     
     return '\n'.join(lines)
 

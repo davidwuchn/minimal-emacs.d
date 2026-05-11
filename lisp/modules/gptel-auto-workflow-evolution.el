@@ -15,6 +15,7 @@
 
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
+(declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
 
 ;; ─── Helpers ───
 
@@ -276,13 +277,15 @@ Writes to optimization-skills/ as skill files that the prompt builder consumes."
     (let* ((_git-facts (gptel-auto-workflow--git-raw-facts))
             (skills-dir (expand-file-name "assistant/skills/auto-workflow"
                                           (gptel-auto-workflow--worktree-base-root)))
-            (_token-skill-file (expand-file-name "token-efficiency.md" skills-dir))
+            (token-skill-file (expand-file-name "token-efficiency.md" skills-dir))
             (_mutation-skill-file (expand-file-name "mutations.md" skills-dir)))
 
       (make-directory skills-dir t)
 
-      ;; ─── Skill 1: Token Efficiency (SKILL.md for gptel-agent) ───
-      (with-temp-file (expand-file-name "SKILL.md" skills-dir)
+      ;; ─── Skill 1: Token Efficiency (loaded by prompt builder) ───
+      ;; Do not overwrite auto-workflow/SKILL.md here; unified Python evolution
+      ;; owns canonical skill metadata and may aggregate data from other hosts.
+      (with-temp-file token-skill-file
         (insert "---\n")
         (insert "name: token-efficiency\n")
         (insert "description: Controls prompt compression and section inclusion based on experiment results\n")

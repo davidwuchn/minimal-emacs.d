@@ -125,6 +125,20 @@ def run_pattern_analysis(root_dir, output_dir):
     return patterns_path
 
 
+def skill_total_experiments(skill_dir):
+    """Return the largest total-experiments value already recorded for SKILL_DIR."""
+    skill_file = Path(skill_dir) / "SKILL.md"
+    if not skill_file.exists():
+        return 0
+    try:
+        content = skill_file.read_text(encoding="utf-8")
+    except OSError:
+        return 0
+    totals = [int(match.group(1))
+              for match in re.finditer(r'total-experiments:\s*(\d+)', content)]
+    return max(totals, default=0)
+
+
 def generate_skill(skill_name, skill_info, analysis_path, root_dir, patterns_path=None):
     """Generate a specific skill from analysis."""
     skills_dir = Path(root_dir) / skill_info['output_dir']
@@ -135,6 +149,14 @@ def generate_skill(skill_name, skill_info, analysis_path, root_dir, patterns_pat
     
     if not skill_info['scripts']:
         print(f"    No evolve scripts found, skipping")
+        return True
+
+    with open(analysis_path, 'r') as f:
+        analysis = json.load(f)
+    local_total = analysis.get('local_experiments', analysis.get('total_experiments', 0))
+    existing_total = skill_total_experiments(skills_dir)
+    if existing_total > local_total:
+        print(f"    Preserving existing aggregate stats ({existing_total} > local {local_total})")
         return True
     
     # Run each script for this skill
