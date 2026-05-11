@@ -81,20 +81,42 @@ PROACTIVE MITIGATION: Prevents recovery attempts on invalid FSMs."
            fsm-state
            (not (eq fsm-state 'DONE))))))
 
+(defun my/gptel--get-active-fsm ()
+  "Retrieve the active FSM from gptel--fsm-last if bound.
+
+ASSUMPTION: gptel--fsm-last is bound when an FSM is active.
+ASSUMPTION: gptel--fsm-last contains the current FSM or nil.
+BEHAVIOR: Returns coerced FSM if gptel--fsm-last is bound and valid.
+BEHAVIOR: Returns nil if gptel--fsm-last is not bound or is nil.
+EDGE CASE: Unbound variable returns nil (safe lookup).
+EDGE CASE: Non-FSM value returns nil (coercion fails).
+TEST: (my/gptel--get-active-fsm) => FSM or nil
+TEST: Without active FSM returns nil
+
+BUILDS ON DISCOVERY: Decoupling boundp check from recovery logic
+enables reuse in other contexts that need the active FSM.
+
+ADAPTS TO: Can be called independently to get the current FSM
+without triggering recovery logic.
+
+PROACTIVE MITIGATION: Centralizes FSM extraction in one place,
+preventing inconsistent access patterns."
+  (when (boundp 'gptel--fsm-last)
+    (my/gptel--coerce-fsm gptel--fsm-last)))
+
 (defun my/gptel--recover-fsm-on-error (_start _end)
   "Force FSM to DONE state if it has error + STOP but is still cycling.
 START and END are the response positions (ignored).
 Only operates on FSMs with a live buffer."
-  (when (boundp 'gptel--fsm-last)
-    (let* ((fsm (my/gptel--coerce-fsm gptel--fsm-last))
-           (info (and fsm (gptel-fsm-info fsm))))
-      (when (my/gptel--fsm-needs-recovery-p fsm info)
-        (cl-incf my/gptel--recovery-count)
-        (when (> my/gptel--recovery-count 3)
-          (message "[gptel-fsm] WARNING: %d FSM recoveries this session"
-                   my/gptel--recovery-count))
-        (setf (gptel-fsm-state fsm) 'DONE)
-        (force-mode-line-update t)))))
+  (let* ((fsm (my/gptel--get-active-fsm))
+         (info (and fsm (gptel-fsm-info fsm))))
+    (when (my/gptel--fsm-needs-recovery-p fsm info)
+      (cl-incf my/gptel--recovery-count)
+      (when (> my/gptel--recovery-count 3)
+        (message "[gptel-fsm] WARNING: %d FSM recoveries this session"
+                 my/gptel--recovery-count))
+      (setf (gptel-fsm-state fsm) 'DONE)
+      (force-mode-line-update t))))
 
 (add-hook 'gptel-post-response-functions #'my/gptel--recover-fsm-on-error)
 
