@@ -59,4 +59,10 @@
   (indent-bars-treesit-support t)
   (indent-bars-width-func '(indent-bars-width-detect)))
 
+;; dtrt-indent: Auto-detect and fix indentation on save
+;; Source: https://github.com/jscheid/dtrt-indent
+(use-package dtrt-indent
+  :ensure t
+  :hook (after-init . dtrt-indent-global-mode))
+
 ;;; init-editor.el ends here
