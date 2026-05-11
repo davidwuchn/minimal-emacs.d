@@ -458,10 +458,16 @@ Returns (project-root . project-buffer) or nil if can't determine."
         (cons proj (gptel-auto-workflow--get-project-buffer proj)))))
    ;; Case 4: Try to detect project from default-directory
    (t
-    (let* ((proj (or (condition-case nil
-                         (gptel-auto-workflow--project-root)
-                       (error default-directory))
-                     default-directory))
+    (let* ((default-dir (and (boundp 'default-directory)
+                             (stringp default-directory)
+                             (directory-file-name default-directory)))
+           (proj (or (and default-dir
+                         (condition-case nil
+                             (gptel-auto-workflow--project-root)
+                           (error default-dir)))
+                    default-dir
+                    gptel-auto-workflow-worktree-base
+                    (expand-file-name "~/.emacs.d")))
            (expanded-proj (and (stringp proj) (> (length proj) 0)
                                (expand-file-name proj))))
       (when expanded-proj
