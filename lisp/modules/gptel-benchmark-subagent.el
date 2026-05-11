@@ -62,6 +62,11 @@ for thorough analysis but produces better results."
   :type 'integer
   :group 'gptel-benchmark-subagent)
 
+(defcustom gptel-benchmark-subagent-slow-fallback-timeout 360
+  "Timeout in seconds for benchmark subagents using slow fallback providers."
+  :type 'integer
+  :group 'gptel-benchmark-subagent)
+
 (defcustom gptel-benchmark-use-subagents t
   "Whether to use subagents for evaluation.
 When nil, falls back to local evaluation."
@@ -99,6 +104,27 @@ subagent context for a single dispatch.")
      :prompt-template gptel-benchmark--explorer-prompt))
   "Registry of available subagent types with their configurations.")
 
+(defun gptel-benchmark--slow-fallback-preset-p (preset)
+  "Return non-nil when PRESET points at a known slow fallback provider."
+  (let ((backend (plist-get preset :backend))
+        (model (plist-get preset :model)))
+    (or (and (symbolp backend)
+             (memq backend '(moonshot CF-Gateway)))
+        (and (stringp backend)
+             (string-match-p "moonshot\\|CF-Gateway" backend))
+        (and (symbolp model)
+             (string-match-p "kimi-k2\\.6\\|@cf/moonshotai/kimi-k2\\.6"
+                             (symbol-name model)))
+        (and (stringp model)
+             (string-match-p "kimi-k2\\.6\\|@cf/moonshotai/kimi-k2\\.6" model)))))
+
+(defun gptel-benchmark--subagent-timeout (timeout preset)
+  "Return effective TIMEOUT for benchmark subagent PRESET."
+  (or timeout
+      (and (gptel-benchmark--slow-fallback-preset-p preset)
+           gptel-benchmark-subagent-slow-fallback-timeout)
+      gptel-benchmark-subagent-timeout))
+
 ;;; Core Dispatch
 
 (defun gptel-benchmark-call-subagent (type description prompt callback &optional timeout)
@@ -123,9 +149,9 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                      (or (plist-get override-preset :backend) "unknown")))
         (if (fboundp 'my/gptel--agent-task-with-timeout)
             (let ((my/gptel-agent-task-timeout
-                   (or timeout gptel-benchmark-subagent-timeout))
+                    (gptel-benchmark--subagent-timeout timeout override-preset))
                   (gptel-agent-preset
-                   (or override-preset gptel-agent-preset)))
+                    (or override-preset gptel-agent-preset)))
               (my/gptel--agent-task-with-timeout
                callback
                agent-type
