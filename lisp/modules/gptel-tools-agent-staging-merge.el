@@ -263,7 +263,7 @@ Returns (success-p . output)."
                    (not checks-pass))
           (let ((baseline-check
                  (gptel-auto-workflow--staging-tests-match-main-baseline-p output)))
-            (setq checks-pass (not (null (car-safe baseline-check))))
+            (setq checks-pass (car-safe baseline-check))
             (with-current-buffer output-buffer
               (goto-char (point-max))
               (unless (bolp)
