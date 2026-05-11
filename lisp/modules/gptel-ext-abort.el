@@ -87,6 +87,14 @@ Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running ca
     (unless (bolp) (insert "\n"))
     (insert my/gptel-prompt-marker)))
 
+(defun my/gptel--goto-prompt-marker-end ()
+  "Move point to end of prompt marker at EOB if present."
+  (goto-char (point-max))
+  (skip-chars-backward " \t\n")
+  (beginning-of-line)
+  (when (looking-at-p (concat "^" (regexp-quote my/gptel-prompt-marker)))
+    (goto-char (match-end 0))))
+
 
 
 (defun my/gptel-keyboard-quit ()
@@ -147,8 +155,7 @@ request is active."
         (goto-char (point-max))
         (my/gptel--insert-prompt-marker-at-eob)
         ;; Position cursor after marker
-        (when (search-backward "### " nil t)
-          (goto-char (match-end 0)))))
+        (my/gptel--goto-prompt-marker-end)))
     (message "Aborted gptel activity (%d process%s killed) - ready for next prompt"
              killed (if (= killed 1) "" "es"))))
 
@@ -174,9 +181,7 @@ START and END are the response region positions passed by
       ;; Only add marker if not already present at EOB
       (my/gptel--insert-prompt-marker-at-eob))
     ;; Move cursor to end for immediate typing
-    (goto-char (point-max))
-    (when (search-backward "### " nil t)
-      (goto-char (match-end 0)))))
+    (my/gptel--goto-prompt-marker-end)))
 
 ;; --- Keybindings & Hooks ---
 (with-eval-after-load 'gptel
