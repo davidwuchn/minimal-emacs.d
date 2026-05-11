@@ -31,7 +31,7 @@
     "deepseek-chat"
     "deepseek-reasoner"
     "deepseek-coder"
-    "kimi-k2.5"
+    "kimi-k2.6"
     "minimax-m2.7-highspeed"
     "minimax-m2.7"
     "minimax-m2.5")

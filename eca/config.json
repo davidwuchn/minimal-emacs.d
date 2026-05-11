@@ -149,7 +149,7 @@
             }
           }
         },
-        "kimi-k2.5": {
+        "kimi-k2.6": {
           "extraPayload": {
             "thinking": {
               "type": "enabled",
@@ -214,7 +214,7 @@
       },
       "keyRc": "api.kimi.com",
       "models": {
-        "kimi-k2.5": {
+        "kimi-k2.6": {
           "extraPayload": {
             "reasoning": {
               "effort": "high"

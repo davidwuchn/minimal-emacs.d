@@ -1,0 +1,1 @@
+{"name":"failure-type-targeted-sections","version":"1.0","hypothesis":"Injecting targeted remediation sections based on dominant failure type improves fix quality","axis":"C,D","components":["failure-classification","targeted-section-injection"]}

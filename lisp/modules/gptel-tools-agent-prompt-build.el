@@ -917,14 +917,14 @@ When a provider is rate-limited, move to next fallback quickly.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.5")
+    ("moonshot" . "kimi-k2.6")
     ("DashScope" . "glm-5")
     ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
 Uses cheaper models to reduce costs:
-- moonshot: kimi-k2.5 (cheaper than k2.6)
+- moonshot: kimi-k2.6 (high reasoning effort)
 - DashScope: glm-5 (cheaper than qwen)
 - DeepSeek: deepseek-v4-flash (faster/cheaper than pro)
 - CF-Gateway: @cf/openai/gpt-oss-120b (fast reasoning, 128k context)
@@ -1054,7 +1054,7 @@ the user has not explicitly customized the variable."
                      ("Gemini" . "gemini-3.1-pro-preview")))
         (setq gptel-auto-workflow-headless-subagent-fallbacks
               '(("MiniMax" . "minimax-m2.7-highspeed")
-                ("moonshot" . "kimi-k2.5")
+                ("moonshot" . "kimi-k2.6")
                 ("DashScope" . "glm-5")
                 ("DeepSeek" . "deepseek-v4-flash")
                 ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))
