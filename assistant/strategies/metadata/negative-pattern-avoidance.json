@@ -1,0 +1,1 @@
+{"name":"negative-pattern-avoidance","version":"1.0","hypothesis":"Explicitly avoiding patterns that failed in previous attempts improves outcomes.","axis":"D","components":["negative-learning","failure-patterns"]}
