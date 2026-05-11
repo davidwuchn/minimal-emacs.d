@@ -11,7 +11,7 @@
 BLOCKS is the list of block names currently in scope."
   (cond
    ((null forms) nil)
-   ((listp forms)
+   ((proper-list-p forms)
     (cl-some (lambda (form)
                (gptel-auto-experiment--invalid-cl-return-target form blocks))
              forms))
@@ -23,7 +23,7 @@ BLOCKS is the list of block names currently in scope."
 BLOCKS is the list of block names currently in scope."
   (cond
    ((atom form) nil)
-   ((not (listp form)) nil)
+   ((not (proper-list-p form)) nil)
    (t
     (pcase (car form)
       ((or 'quote 'quasiquote 'backquote) nil)
