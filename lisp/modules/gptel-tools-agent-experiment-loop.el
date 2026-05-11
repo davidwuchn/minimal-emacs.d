@@ -976,8 +976,12 @@ start from a clean state."
 
 (defun gptel-auto-workflow--with-staging-worktree (fn)
   "Run FN with `default-directory' bound to the staging worktree.
-Creates the worktree on demand and returns nil if unavailable."
-  (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
+Creates the worktree on demand and returns nil if unavailable.
+Handles stale cached path: if gptel-auto-workflow--staging-worktree-dir
+is set but the path doesn't exist, recreates the worktree."
+  (let ((worktree (or (and gptel-auto-workflow--staging-worktree-dir
+                           (file-exists-p gptel-auto-workflow--staging-worktree-dir)
+                           gptel-auto-workflow--staging-worktree-dir)
                       (gptel-auto-workflow--create-staging-worktree))))
     (when (and worktree (file-exists-p worktree))
       (let ((default-directory worktree))
