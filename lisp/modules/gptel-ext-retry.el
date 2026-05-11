@@ -159,6 +159,17 @@ Returns the :data value if INFO is a proper list, nil otherwise.
 Guards against malformed info that is truthy but not a list."
   (and (listp info) (plist-get info :data)))
 
+(defun my/gptel--info-get (info key &optional default)
+  "Safely extract KEY from INFO plist, returning DEFAULT if unavailable.
+INFO must be a proper list. Returns DEFAULT (nil if not provided) when:
+  - INFO is not a list
+  - KEY is not present in INFO
+
+This helper centralizes the defensive pattern for plist access in retry logic."
+  (if (listp info)
+      (or (plist-get info key) default)
+    default))
+
 (defun my/gptel--should-trim-p (info force-trim-p)
   "Return non-nil if tool-result trimming should proceed.
 INFO is the FSM info plist.  FORCE-TRIM-P bypasses user preference.
@@ -692,12 +703,12 @@ TEST: Verify with network failure simulation — should retry 3 times with
   (unless new-state (setq new-state (gptel--fsm-next machine)))
   (let* ((info (gptel-fsm-info machine))
          ;; Guard: ensure info is a proper list before accessing with plist-get
-         (disable-auto-retry (and (listp info) (plist-get info :disable-auto-retry)))
+         (disable-auto-retry (my/gptel--info-get info :disable-auto-retry))
          (headless-agent-buffer-p
           (and (listp info) (my/gptel--headless-auto-workflow-agent-buffer-p info)))
-         (error-data (and (listp info) (plist-get info :error)))
-         (http-status (and (listp info) (plist-get info :http-status)))
-         (retries (if (listp info) (or (plist-get info :retries) 0) 0))
+         (error-data (my/gptel--info-get info :error))
+         (http-status (my/gptel--info-get info :http-status))
+         (retries (or (my/gptel--info-get info :retries) 0))
          ;; Detect subagent FSMs: they use custom handlers and should not be
          ;; retried (the parent's timeout handles failures).
          ;; A request is retryable if its handlers are one of the "main"
