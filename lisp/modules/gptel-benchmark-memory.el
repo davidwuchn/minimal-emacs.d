@@ -86,10 +86,16 @@ In interactive mode, uses project.el or falls back to git root."
         (locate-dominating-file command-line-default-directory ".git"))
       default-directory))
 
+(defvar gptel-benchmark-memory--cached-dir nil
+  "Cached memory directory path to avoid repeated file system lookups.")
+
 (defun gptel-benchmark-memory--resolve-dir ()
-  "Resolve gptel-benchmark-memory-dir to absolute path."
-  (let ((root (gptel-benchmark-memory--project-root)))
-    (expand-file-name "mementum/" root)))
+  "Resolve gptel-benchmark-memory-dir to absolute path.
+Cached after first call to reduce redundant file system operations."
+  (or gptel-benchmark-memory--cached-dir
+      (setq gptel-benchmark-memory--cached-dir
+            (let ((root (gptel-benchmark-memory--project-root)))
+              (expand-file-name "mementum/" root)))))
 
 ;;; Memory Operations
 
