@@ -509,13 +509,16 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
   (let ((name-str (gptel-sandbox--normalize-tool-name tool-name)))
     (member name-str
             (pcase (gptel-sandbox--current-profile)
-              ('readonly my/gptel-programmatic-readonly-tools)
+              ('readonly (if (boundp 'my/gptel-programmatic-readonly-tools)
+                             my/gptel-programmatic-readonly-tools
+                           my/gptel-programmatic-allowed-tools))
               (_ my/gptel-programmatic-allowed-tools)))))
 
 (defun gptel-sandbox--confirm-supported-p (tool-name)
   "Return non-nil when TOOL-NAME may request confirmation in Programmatic."
   (let ((name-str (gptel-sandbox--normalize-tool-name tool-name)))
     (and (eq (gptel-sandbox--current-profile) 'agent)
+         (boundp 'my/gptel-programmatic-confirming-tools)
          (member name-str my/gptel-programmatic-confirming-tools))))
 
 (defun gptel-sandbox--current-profile ()
@@ -576,6 +579,7 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
                    (or (gptel-sandbox--statement-tool-call statement)
                        '(nil nil))))
         (when (and tool-name
+                   (boundp 'my/gptel-programmatic-confirming-tools)
                    (let ((name (gptel-sandbox--normalize-tool-name tool-name)))
                      (member name my/gptel-programmatic-confirming-tools)))
           (push (gptel-sandbox--summarize-tool-call-plan tool-name arg-forms)
