@@ -12,7 +12,7 @@ PIPELINE_LOG="$LOG_DIR/pipeline.log"
 LOCK_FILE="$LOG_DIR/pipeline.lock"
 MAX_WAIT_RESEARCH="${MAX_WAIT_RESEARCH:-900}"   # 15 minutes
 MAX_WAIT_EVOLUTION="${MAX_WAIT_EVOLUTION:-900}" # 15 minutes
-MAX_WAIT_WORKFLOW="${MAX_WAIT_WORKFLOW:-7200}"  # 2 hours
+MAX_WAIT_WORKFLOW="${MAX_WAIT_WORKFLOW:-14400}" # 4 hours
 POLL_INTERVAL="${POLL_INTERVAL:-30}"
 PIPELINE_SMOKE_ONLY="${PIPELINE_SMOKE_ONLY:-no}"
 
@@ -64,6 +64,7 @@ wait_for_idle() {
     local socket_name="${3:-copilot-auto-workflow}"
     local elapsed=0
     local daemon_was_seen=0
+    local min_start_wait="${4:-60}"
 
     log "Waiting for $action to complete (max ${max_wait}s)..."
     while [ "$elapsed" -lt "$max_wait" ]; do
@@ -76,9 +77,13 @@ wait_for_idle() {
             fi
             daemon_was_seen=1
         elif ! emacsclient --socket-name="$socket_name" --eval 't' >/dev/null 2>&1; then
-            if [ "$daemon_was_seen" -eq 1 ] || [ "$elapsed" -ge 60 ]; then
+            if [ "$daemon_was_seen" -eq 1 ]; then
                 log "$action daemon stopped after ${elapsed}s (socket closed)"
                 return 0
+            fi
+            if [ "$elapsed" -ge "$min_start_wait" ]; then
+                log "WARNING: $action daemon was not observed within ${elapsed}s"
+                return 1
             fi
         else
             daemon_was_seen=1
@@ -190,6 +195,14 @@ fi
 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
     "$SCRIPT" auto-workflow >> "$PIPELINE_LOG" 2>&1 || true
 wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "copilot-auto-workflow"
+
+# Verify auto-workflow actually completed (not timed out)
+workflow_status="$($SCRIPT status 2>/dev/null || true)"
+if printf '%s' "$workflow_status" | grep -Eq ':phase "(idle|complete|skipped|quota-exhausted)"'; then
+    log "Auto-workflow completed successfully"
+elif printf '%s' "$workflow_status" | grep -Eq ':phase "running"'; then
+    log "WARNING: Auto-workflow still running after timeout; may need more time"
+fi
 
 # ─── Step 5: Report results ───
 log "=== Pipeline Complete ==="

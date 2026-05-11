@@ -262,7 +262,7 @@ This is used for retry logic and includes transient errors."
         (and (stringp msg)
              (let ((case-fold-search t))
                (string-match-p
-                "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|Malformed JSON"
+                "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 35\\|curl failed with exit code 56\\|operation timed out\\|Malformed JSON"
                 msg))))))
 
 (defun gptel-auto-experiment--should-blacklist-provider-p (error-output)
