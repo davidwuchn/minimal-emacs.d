@@ -518,7 +518,7 @@ Returns the number of image parts removed, or 0 if nothing was done."
 ;; TEST: Each constant can be tested independently with string-match-p.
 
 (defconst my/gptel--transient-error-string-patterns
-  "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|curl: (35)\\|exit code 28\\|exit code 6\\|exit code 7\\|exit code 35\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments\\|1013\\|server is initializing"
+  "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|curl: (35)\\|curl: (56)\\|exit code 28\\|exit code 6\\|exit code 7\\|exit code 35\\|exit code 56\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments\\|1013\\|server is initializing"
   "Regex pattern for transient error messages in string form.
 Matches network failures, curl errors, gateway errors, model-side bugs, and API cold starts.")
 
