@@ -827,7 +827,11 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     (> (symbol-value bytes-var) bytes-limit)))
 
 (defconst my/gptel-model-context-bytes
-  '(("kimi-k2.5"          . 400000)   ; 131K tokens ≈ 460KB, leave room for output
+  '(("@cf/openai/gpt-oss-120b" . 350000) ; 128K tokens, leave room for output
+    ("gpt-oss-120b"       . 350000)
+    ("@cf/moonshotai/kimi-k2.6" . 800000) ; 262K tokens, leave room for output
+    ("kimi-k2.6"          . 800000)
+    ("kimi-k2.5"          . 400000)   ; 131K tokens ≈ 460KB, leave room for output
     ("kimi-for-coding"    . 400000)
     ("qwen3.5-plus"       . 400000)   ; 131K tokens
     ("qwen3-coder-next"   . 400000)

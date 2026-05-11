@@ -920,14 +920,14 @@ When a provider is rate-limited, move to next fallback quickly.")
     ("moonshot" . "kimi-k2.5")
     ("DashScope" . "glm-5")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash"))
+    ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
 Uses cheaper models to reduce costs:
 - moonshot: kimi-k2.5 (cheaper than k2.6)
 - DashScope: glm-5 (cheaper than qwen)
 - DeepSeek: deepseek-v4-flash (faster/cheaper than pro)
-- CF-Gateway: @cf/zai-org/glm-4.7-flash (cheap/fast)
+- CF-Gateway: @cf/openai/gpt-oss-120b (fast reasoning, 128k context)
 
 Each entry is (BACKEND . MODEL), where BACKEND matches the agent preset backend
 string and MODEL is the model string to use with that backend. The workflow
@@ -957,7 +957,7 @@ Uses capable models for code generation:
 - moonshot: kimi-k2.6 (best for code changes)
 - DashScope: glm-5 (capable and cost-effective)
 - DeepSeek: deepseek-v4-pro (strong reasoning)
-- CF-Gateway: @cf/moonshotai/kimi-k2.6 (reliable)
+- CF-Gateway: @cf/moonshotai/kimi-k2.6 (262k context, reasoning, function calling)
 
 Headless executor prefers MiniMax by default. When the active executor backend
 returns a rate-limit error during a headless run, later retries in that same
@@ -1046,26 +1046,26 @@ the user has not explicitly customized the variable."
         (push 'gptel-auto-workflow-headless-fallback-agents migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-headless-subagent-fallbacks)
-       (when (equal gptel-auto-workflow-headless-subagent-fallbacks
-                    '(("MiniMax" . "minimax-m2.7-highspeed")
-                      ("DashScope" . "qwen3.6-plus")
-                      ("DeepSeek" . "deepseek-chat")
-                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-                      ("Gemini" . "gemini-3.1-pro-preview")))
-         (setq gptel-auto-workflow-headless-subagent-fallbacks
-               '(("MiniMax" . "minimax-m2.7-highspeed")
-                 ("moonshot" . "kimi-k2.5")
-                  ("DashScope" . "glm-5")
-                  ("DeepSeek" . "deepseek-v4-flash")
-                  ("CF-Gateway" . "@cf/moonshotai/kimi-k2.5")))
+      (when (equal gptel-auto-workflow-headless-subagent-fallbacks
+                   '(("MiniMax" . "minimax-m2.7-highspeed")
+                     ("DashScope" . "qwen3.6-plus")
+                     ("DeepSeek" . "deepseek-chat")
+                     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+                     ("Gemini" . "gemini-3.1-pro-preview")))
+        (setq gptel-auto-workflow-headless-subagent-fallbacks
+              '(("MiniMax" . "minimax-m2.7-highspeed")
+                ("moonshot" . "kimi-k2.5")
+                ("DashScope" . "glm-5")
+                ("DeepSeek" . "deepseek-v4-flash")
+                ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-executor-rate-limit-fallbacks)
-       (when (equal gptel-auto-workflow-executor-rate-limit-fallbacks
-                    '(("DeepSeek" . "deepseek-chat")
-                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-                      ("DashScope" . "qwen3.6-plus")
-                      ("Gemini" . "gemini-3.1-pro-preview")))
+      (when (equal gptel-auto-workflow-executor-rate-limit-fallbacks
+                   '(("DeepSeek" . "deepseek-chat")
+                     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+                     ("DashScope" . "qwen3.6-plus")
+                     ("Gemini" . "gemini-3.1-pro-preview")))
         (setq gptel-auto-workflow-executor-rate-limit-fallbacks
               '(("MiniMax" . "minimax-m2.7-highspeed")
                 ("moonshot" . "kimi-k2.6")
