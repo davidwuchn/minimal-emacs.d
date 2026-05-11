@@ -525,7 +525,7 @@ CONSTRAINTS may include :minimum, :maximum, :exclusiveMinimum, :exclusiveMaximum
 (defun nucleus-tools--validate-array (val arg-name constraints)
   "Validate array VAL against CONSTRAINTS.
 CONSTRAINTS may include :minItems, :maxItems, :items."
-  (unless (or (vectorp val) (listp val))
+  (unless (or (vectorp val) (and (listp val) (proper-list-p val)))
     (nucleus-tools--validation-error arg-name :type val "an array"))
   
   (let ((len (length val)))
@@ -572,8 +572,8 @@ Supports JSON Schema-like validators:
                (normalized-args (copy-sequence actual-args))
                (i 0)
                (specs (if (functionp args) (funcall args) args)))
-          ;; Guard: if no args spec, skip validation silently
-          (when specs
+          ;; Guard: if no args spec or not a proper list, skip validation silently
+          (when (and specs (proper-list-p specs))
             (dolist (spec specs)
               (let* ((raw-val (nth i normalized-args))
                      (val (if (null raw-val)

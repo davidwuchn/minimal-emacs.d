@@ -1,0 +1,1 @@
+{"name":"skill-dependency-graph","version":"1.0","hypothesis":"Loading skills dynamically based on import/require analysis improves relevance.","axis":"E","components":["skill-loading","dependency-analysis"]}
