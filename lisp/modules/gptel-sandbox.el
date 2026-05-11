@@ -547,8 +547,8 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
 
 (defun gptel-sandbox--summarize-tool-call-plan (tool-name arg-forms)
   "Build a human-readable summary for TOOL-NAME with ARG-FORMS."
-  (unless (listp arg-forms)
-    (error "Programmatic tool-call requires a list of arguments, got: %S" arg-forms))
+  (unless (proper-list-p arg-forms)
+    (error "Programmatic tool-call requires a proper list of arguments, got: %S" arg-forms))
   (let (parts)
     (while arg-forms
       (let ((key (pop arg-forms))
@@ -676,7 +676,7 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--error-plist-p (plist)
   "Return non-nil if PLIST is an error plist with :error, :violated, or :reason keys."
-  (and (listp plist)
+  (and (proper-list-p plist)
        (or (plist-member plist :error)
            (plist-member plist :violated)
            (plist-member plist :reason))))
