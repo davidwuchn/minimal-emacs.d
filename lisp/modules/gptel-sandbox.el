@@ -674,16 +674,20 @@ CALLBACK receives non-nil when approved and nil when rejected."
     (error
      (format "Error: %s" (error-message-string err)))))
 
+(defun gptel-sandbox--error-plist-p (plist)
+  "Return non-nil if PLIST is an error plist with :error, :violated, or :reason keys."
+  (and (listp plist)
+       (or (plist-member plist :error)
+           (plist-member plist :violated)
+           (plist-member plist :reason))))
+
 (defun gptel-sandbox--error-result-p (value)
   "Return non-nil if VALUE is a sandbox error result.
 Handles both string errors (\"Error: ...\") and plist errors
 like (:error \"...\") or (:violated t :reason \"...\")."
   (cond
    ((stringp value) (string-prefix-p "Error: " value))
-   ((and (listp value) (or (plist-member value :error)
-                           (plist-member value :violated)
-                           (plist-member value :reason)))
-    t)
+   ((gptel-sandbox--error-plist-p value) t)
    (t nil)))
 
 (defun gptel-sandbox--extract-error-message (value)
@@ -693,7 +697,7 @@ like (:error \"...\") or (:violated t :reason \"...\")."
     (if (string-prefix-p "Error: " value)
         (substring value (length "Error: "))
       value))
-   ((listp value)
+   ((gptel-sandbox--error-plist-p value)
     (or (plist-get value :reason)
         (plist-get value :error)
         (format "Error: %S" value)))
