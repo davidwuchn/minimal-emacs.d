@@ -173,12 +173,7 @@ INPUT from previous cycle feeds forward."
 (defun gptel-benchmark-evolution-orient (observation)
   "Orient phase: ψ processes OBSERVATION.
 Map to elements, detect imbalances, identify evolution opportunity."
-  (let* ((diagnosis (plist-get observation :element-status))
-         (deficient-elements '()))
-    (when (listp diagnosis)
-      (dolist (d diagnosis)
-        (when (gptel-benchmark-evolution--deficient-p d)
-          (push (plist-get d :element) deficient-elements))))
+  (let ((deficient-elements (gptel-benchmark-evolution--extract-deficient-elements observation)))
     (list :imbalances deficient-elements
           :focus-element (car deficient-elements)
           :evolution-opportunity (gptel-benchmark-evolution--find-opportunity observation))))
@@ -388,7 +383,7 @@ SYSTEM + Feed Forward = AI COMPLETE"
                   (let* ((tool-calls (plist-get results :tool-calls))
                          (completed (plist-get results :completed))
                          (call-count (cond ((vectorp tool-calls) (length tool-calls))
-                                           ((listp tool-calls) (length tool-calls))
+                                           ((and (listp tool-calls) (proper-list-p tool-calls)) (length tool-calls))
                                            (t 0))))
                     (when (and (> call-count 10) (not completed))
                       'context-overflow)))
@@ -401,7 +396,7 @@ SYSTEM + Feed Forward = AI COMPLETE"
                   (let* ((tool-calls (plist-get results :tool-calls))
                          (tools (cond ((vectorp tool-calls)
                                        (mapcar (lambda (tc) (plist-get tc :tool)) (append tool-calls nil)))
-                                      ((listp tool-calls)
+                                      ((and (listp tool-calls) (proper-list-p tool-calls))
                                        (mapcar #'car tool-calls))
                                       (t nil))))
                     (when (and tools
@@ -538,6 +533,17 @@ Uses 相生 cycle to predict evolution order."
   (message "[evolution] Composing: small tools, pipelines"))
 
 ;;; Helper
+
+(defun gptel-benchmark-evolution--extract-deficient-elements (observation)
+  "Extract deficient elements from OBSERVATION plist.
+Returns list of deficient element keywords."
+  (when (and (proper-list-p observation)
+             (plist-get observation :element-status))
+    (let ((diagnosis (plist-get observation :element-status)))
+      (when (listp diagnosis)
+        (cl-loop for d in diagnosis
+                 when (gptel-benchmark-evolution--deficient-p d)
+                 collect (plist-get d :element))))))
 
 (defun gptel-benchmark-evolution--find-opportunity (observation)
   "Find evolution opportunity from OBSERVATION."
