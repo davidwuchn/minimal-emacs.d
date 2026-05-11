@@ -383,7 +383,7 @@ SYSTEM + Feed Forward = AI COMPLETE"
                   (let* ((tool-calls (plist-get results :tool-calls))
                          (completed (plist-get results :completed))
                          (call-count (cond ((vectorp tool-calls) (length tool-calls))
-                                           ((listp tool-calls) (length tool-calls))
+                                           ((and (listp tool-calls) (proper-list-p tool-calls)) (length tool-calls))
                                            (t 0))))
                     (when (and (> call-count 10) (not completed))
                       'context-overflow)))
@@ -396,7 +396,7 @@ SYSTEM + Feed Forward = AI COMPLETE"
                   (let* ((tool-calls (plist-get results :tool-calls))
                          (tools (cond ((vectorp tool-calls)
                                        (mapcar (lambda (tc) (plist-get tc :tool)) (append tool-calls nil)))
-                                      ((listp tool-calls)
+                                      ((and (listp tool-calls) (proper-list-p tool-calls))
                                        (mapcar #'car tool-calls))
                                       (t nil))))
                     (when (and tools
