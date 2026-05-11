@@ -476,6 +476,8 @@ supports a small, explicit whitelist of pure operations."
       (error "Programmatic tool spec returned invalid :args property (must be proper list), got: %S" spec-args))
     (let ((values nil))
       (dolist (arg spec-args (nreverse values))
+        (unless (proper-list-p arg)
+          (error "Programmatic tool spec returned invalid argument (must be proper list), got: %S" arg))
         (let* ((name (plist-get arg :name))
                (key (and (stringp name) (intern (concat ":" name))))
                (key-present (and key (not (eq (gethash key arg-map gptel-sandbox--missing-marker)
