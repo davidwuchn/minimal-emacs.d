@@ -445,7 +445,7 @@ to avoid repeated table scans and redundant lookups."
                                   (let ((table (symbol-value var)))
                                     (when (listp table)
                                       (let ((entry (assoc-string model-str table t)))
-                                        (when (and (consp entry) (listp (cdr entry))
+                                        (when (and (consp entry) (proper-list-p (cdr entry))
                                                    (plist-member (cdr entry) :context-window))
                                           (let ((cw (my/gptel--normalize-context-window
                                                      (plist-get (cdr entry) :context-window))))
