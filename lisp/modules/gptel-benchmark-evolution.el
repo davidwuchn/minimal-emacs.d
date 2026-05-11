@@ -165,6 +165,11 @@ INPUT from previous cycle feeds forward."
         :element-status (gptel-benchmark-diagnose-elements
                          (list (cons nil (list :overall-score 0.8))))))
 
+(defun gptel-benchmark-evolution--deficient-p (element)
+  "Return non-nil if ELEMENT has deficient or critical status."
+  (when (consp element)
+    (memq (plist-get element :status) '(deficient critical))))
+
 (defun gptel-benchmark-evolution-orient (observation)
   "Orient phase: ψ processes OBSERVATION.
 Map to elements, detect imbalances, identify evolution opportunity."
@@ -172,7 +177,7 @@ Map to elements, detect imbalances, identify evolution opportunity."
          (deficient-elements '()))
     (when (listp diagnosis)
       (dolist (d diagnosis)
-        (when (memq (plist-get d :status) '(deficient critical))
+        (when (gptel-benchmark-evolution--deficient-p d)
           (push (plist-get d :element) deficient-elements))))
     (list :imbalances deficient-elements
           :focus-element (car deficient-elements)
@@ -538,10 +543,8 @@ Uses 相生 cycle to predict evolution order."
   "Find evolution opportunity from OBSERVATION."
   (let ((deficient (plist-get observation :element-status)))
     (when (and (listp deficient)
-               (cl-find-if (lambda (d) (memq (plist-get d :status) '(deficient critical)))
-                           deficient))
-      (plist-get (cl-find-if (lambda (d) (memq (plist-get d :status) '(deficient critical)))
-                             deficient)
+               (cl-find-if #'gptel-benchmark-evolution--deficient-p deficient))
+      (plist-get (cl-find-if #'gptel-benchmark-evolution--deficient-p deficient)
                  :element))))
 
 ;;; Co-Evolution Interface
