@@ -41,4 +41,22 @@
                            "*Compile-Log*"
                            "*Help*" "*Apropos*")))
 
+;; gold-ratio: Auto-resize windows to golden ratio (active window larger)
+;; Source: https://github.com/roman/golden-ratio.el
+(use-package golden-ratio
+  :ensure t
+  :hook (after-init . golden-ratio-mode)
+  :custom
+  (golden-ratio-auto-scale t)
+  (golden-ratio-exclude-modes '("ediff-mode" "calendar-mode" "dired-mode")))
+
+;; indent-bars: Vertical indentation guide lines (tree-sitter powered)
+;; Source: https://github.com/jdtsmith/indent-bars
+(use-package indent-bars
+  :ensure t
+  :hook ((prog-mode text-mode) . indent-bars-mode)
+  :custom
+  (indent-bars-treesit-support t)
+  (indent-bars-width-func '(indent-bars-width-detect)))
+
 ;;; init-editor.el ends here

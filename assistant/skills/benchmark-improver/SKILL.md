@@ -209,41 +209,36 @@ Based on analysis of which improvement types led to score increases.
 - Operations (Wood) (8% success rate, 9 worsened)
 ## Evolved Recommendations
 
-Based on analysis of 812 experiments.
+Based on analysis of 475 experiments.
 
 ### Wood (Operations)
 
-- **Success rate:** 31% (56/180 experiments)
+- **Success rate:** 28% (35/126 experiments)
 - **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Fire (Intelligence)
 
-- **Success rate:** 29% (4/14 experiments)
+- **Success rate:** 36% (4/11 experiments)
 - **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Earth (Control)
 
-- **Success rate:** 35% (133/385 experiments)
+- **Success rate:** 30% (66/217 experiments)
 - **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Metal (Coordination)
 
-- **Success rate:** 19% (19/99 experiments)
-- **Priority:** HIGH - prioritize improvements targeting this element
+- **Success rate:** 10% (5/48 experiments)
+- **Priority:** MEDIUM - moderate success with this element
 
 ### Water (Identity)
 
-- **Success rate:** 28% (38/134 experiments)
+- **Success rate:** 29% (21/73 experiments)
 - **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Top Successful Patterns
 
 These action patterns appear most frequently in kept experiments:
 
-- Extract duplicate (3 times)
-- Fix bug (3 times)
 - Fix the (2 times)
-- Fix timer (1 times)
-- Fix cache (1 times)
-- Fix missing (1 times)
 
