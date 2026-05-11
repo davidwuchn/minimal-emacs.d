@@ -1,0 +1,1 @@
+{"name":"error-cluster-skills","version":"1.0","hypothesis":"Loading skills dynamically based on clustered error types improves fix relevance.","axis":"E","components":["error-clustering","dynamic-skill-load"]}
