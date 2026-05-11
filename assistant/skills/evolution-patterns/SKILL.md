@@ -95,6 +95,7 @@ Based on historical experiment data:
 - Add new anti-patterns discovered during experiments
 - Consider adding target-specific patterns
 
+
 ## Evolved Error Patterns
 
 Based on analysis of experiment errors.
@@ -106,23 +107,23 @@ Based on analysis of experiment errors.
 
 ### High-Signal Keywords
 
-- `defensive`: 70% (14/20)
-- `bindings`: 60% (3/5)
-- `benchmark`: 60% (3/5)
-- `files`: 60% (3/5)
-- `other`: 60% (3/5)
-- `results`: 60% (3/5)
-- `reusable`: 60% (3/5)
-- `symbol`: 60% (3/5)
-- `nil,`: 56% (5/9)
-- `robustness`: 50% (5/10)
-- `non-string`: 50% (4/8)
-- `nil.`: 50% (3/6)
-- `checks`: 50% (4/8)
-- `passed`: 50% (6/12)
-- `already`: 45% (5/11)
-- `buffer`: 44% (4/9)
-- `run`: 43% (3/7)
-- ``(or`: 43% (3/7)
-- `inputs`: 43% (3/7)
-- `progressive`: 43% (3/7)
+- `(adapts`: 100% (9/9)
+- `several`: 100% (6/6)
+- `pre-existing`: 100% (6/6)
+- ``id``: 100% (5/5)
+- `reporting`: 100% (5/5)
+- `cases.let`: 100% (5/5)
+- `about`: 83% (15/18)
+- ``my/gptel--sanitize-multimodal-content``: 83% (5/6)
+- `gptel-ext-core.el`: 83% (5/6)
+- ``fsm``: 83% (5/6)
+- `invariant`: 83% (5/6)
+- `change.`: 83% (5/6)
+- `score`: 81% (13/16)
+- `definitions)`: 80% (16/20)
+- `analyze`: 80% (4/5)
+- ``gptel-benchmark-analyze-patterns``: 80% (4/5)
+- ``gptel-benchmark-summarize-results``: 80% (4/5)
+- ``gptel-benchmark--accumulate-scores``: 80% (4/5)
+- `detection.`: 80% (4/5)
+- `their`: 80% (4/5)
