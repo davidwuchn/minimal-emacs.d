@@ -572,8 +572,8 @@ Supports JSON Schema-like validators:
                (normalized-args (copy-sequence actual-args))
                (i 0)
                (specs (if (functionp args) (funcall args) args)))
-          ;; Guard: if no args spec, skip validation silently
-          (when specs
+          ;; Guard: if no args spec or not a proper list, skip validation silently
+          (when (and specs (proper-list-p specs))
             (dolist (spec specs)
               (let* ((raw-val (nth i normalized-args))
                      (val (if (null raw-val)
