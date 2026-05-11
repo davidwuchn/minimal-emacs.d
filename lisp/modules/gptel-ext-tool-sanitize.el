@@ -277,7 +277,7 @@ and other conditions that cause `format' to signal errors."
   "Return a fingerprint string for tool call TC.
 The fingerprint is \"NAME:MD5(ARGS)\" so two calls are considered identical
 only when both the tool name and the serialized argument plist match."
-  (when (listp tc)
+  (when (proper-list-p tc)
     (let* ((raw-name (plist-get tc :name))
            (name (if (and raw-name (not (equal raw-name ""))) raw-name "nil"))
            (args (plist-get tc :args))
