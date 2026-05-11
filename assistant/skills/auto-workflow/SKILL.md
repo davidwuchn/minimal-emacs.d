@@ -5,7 +5,7 @@ version: 1.0
 ---
 metadata:
   evolution-stats:
-    total-experiments: 595
+    total-experiments: 599
 
 # Token Efficiency
 
@@ -31,7 +31,7 @@ Correlation between prompt size and experiment success:
 
 Which prompt sections improve outcomes:
 
-- **all**: 18% success (105/595 experiments)
+- **all**: 18% success (105/599 experiments)
 
 **Section Inclusion Config:**
 - default: include all
