@@ -873,7 +873,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                              "[auto-workflow] ✓ Staging pushed after refreshing remote advance."
                            "[auto-workflow] ✓ Staging pushed. Human must merge to main."))
                         (funcall finish t))))))
-            (if (not merge-result)
+            (if (null merge-result)
                 (progn
                   (message "[auto-workflow] ✗ Merge to staging failed, aborting")
                   (gptel-auto-experiment-log-tsv
