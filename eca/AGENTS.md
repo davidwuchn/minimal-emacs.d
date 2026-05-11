@@ -99,7 +99,7 @@ Single source of truth: `config.json`
 
 | Provider | Models |
 |----------|--------|
-| `dashscope` | qwen3.5-plus, kimi-k2.6, glm-5, deepseek-v3.2 |
+| `dashscope` | qwen3.5-plus, qwen3.6-plus, qwen3-coder-plus, kimi-k2.5, glm-5, glm-4.7, MiniMax-M2.5 |
 | `openrouter` | claude-sonnet-4.6, gpt-5.4 |
 | `deepseek` | deepseek-v4-flash, deepseek-v4-pro |
 | `moonshot` | kimi-k2.6, kimi-for-coding |
