@@ -176,17 +176,23 @@ def update_skill_metadata(skills_dir, analysis):
     for skill_file in skills_dir.rglob("SKILL.md"):
         with open(skill_file, 'r') as f:
             content = f.read()
-        content = re.sub(r'^updated:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n?', '', content, flags=re.MULTILINE)
-        content = re.sub(r'^\s*last-evolution:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n?', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^updated:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^\s*last-evolution:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n', '', content, flags=re.MULTILINE)
         
         # Add evolution metadata if not present
         if 'evolution-stats:' not in content:
             # Insert metadata inside the existing frontmatter block
-            content = content.replace(
-                '---\n\n#',
+            # Handle both "---\n\n#" and "---\n#" patterns
+            content = re.sub(
+                r'^---\n+#',
                 f'---\nmetadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n\n#',
-                1
+                content, count=1, flags=re.MULTILINE
             )
+        
+        # Normalize: collapse 3+ consecutive newlines to max 2
+        content = re.sub(r'\n{3,}', '\n\n', content)
+        # Ensure exactly one trailing newline
+        content = content.rstrip('\n') + '\n'
         
         with open(skill_file, 'w') as f:
             f.write(content)
