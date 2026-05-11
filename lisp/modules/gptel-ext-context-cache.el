@@ -171,7 +171,7 @@ Avoids repeated filtering of the same symbol list.")
     ;; Kimi/Moonshot
     ("@cf/moonshotai/kimi-k2.6" . 262144)
     ("kimi-k2.6" . 262144)
-    ("kimi-k2.5" . 262144)
+    ("kimi-k2.5" . 262144)  ; legacy alias
     ("kimi-for-coding" . 131072)
     ;; GLM (Zhipu AI)
     ("glm-5" . 131072)
@@ -313,7 +313,7 @@ Sources:
      :context-window 262144
      :pricing-input 0.45 :pricing-output 2.20
      :max-output 16384
-     :description "Kimi K2.5 - Moonshot AI multimodal, 256k context, visual coding")
+     :description "Kimi K2.5 - legacy alias for K2.6")
     ;; GLM (Zhipu AI)
     ("glm-5"
      :context-window 131072
@@ -897,11 +897,11 @@ Description: %s"
     (moonshot
      :description "Moonshot AI - Kimi models"
      :rate-limit "Varies by tier"
-     :pricing-model "Per-token, K2.5 competitive"
+     :pricing-model "Per-token, K2.6 competitive"
      :features (streaming tools reasoning)
-     :notes "K2.5 supports high reasoning effort. Use :thinking enabled."
+     :notes "K2.6 supports high reasoning effort. Use :thinking enabled."
      :context-windows
-     ((kimi-k2.5 . 131072)))
+     ((kimi-k2.6 . 262144)))
 
     (openai
      :description "OpenAI - GPT series"
