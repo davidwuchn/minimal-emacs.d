@@ -1,41 +1,42 @@
 # Mementum State
 
-> Last session: 2026-05-11 10:35
+> Last session: 2026-05-11 13:30
 
-## Current Session: 2026-05-11 Full Sync + Merge Complete
+## Current Session: 2026-05-11 Pipeline E2E + Self-Evolution Fixes
 
-**Status:** Main and staging fully synced at `4e8cd587`. All improvements merged.
+**Status:** Pipeline e2e reviewed and fixed locally. Main/staging were synced at `e5a1526f` before edits; worktree now has uncommitted pipeline/evolution fixes.
 
 **Done (This Session):**
-- ✅ **Daemon restarted** — staging worktree stale path fix (`184ae9dd`) now active
-- ✅ **Synced from remote** — fetched origin/main + origin/staging + upstream
-- ✅ **Reviewed staging vs main** — identified sandbox backquote bug + projects.el fix
-- ✅ **Merged main to staging** — editor packages + axis-impact-priority strategy + skill stats
-- ✅ **Fixed sandbox backquote bug** — removed spurious `,` in pcase pattern
-- ✅ **Verified all tests** — nucleus + sandbox pcase + projects proper-list-p validation
-- ✅ **Merged staging to main** — proper-list-p validation now in main
-- ✅ **Synced with imacpro** — merged sandbox experiment from origin/staging
-- ✅ **Final sync** — main == staging at `4e8cd587`
+- ✅ **Real e2e pipeline run** — research produced fresh findings, integration passed, self-evolution ran, auto-workflow queued
+- ✅ **Checked `*Messages*`** — self-evolution completed; pipeline waiter was falsely waiting on unrelated workflow status
+- ✅ **Fixed pipeline orchestration** — env-overridable waits, shared status-based idle check, explicit self-evolution step, smoke mode
+- ✅ **Fixed duplicate logs** — `log()` avoids double-appending when stdout already points at pipeline log
+- ✅ **Fixed self-evolution stat regression** — preserve aggregate skill stats when local experiment corpus is smaller
+- ✅ **Fixed token-efficiency ownership** — legacy Elisp synthesis writes `auto-workflow/token-efficiency.md`, not canonical `SKILL.md`
+- ✅ **Verified smoke e2e** — research → verify → self-evolution completes cleanly without queuing batch when `PIPELINE_SMOKE_ONLY=yes`
 
 **Key Improvements Merged:**
 
 | Component | Change | Impact |
 |-----------|--------|--------|
-| `gptel-sandbox.el:510` | Remove backquote in pcase | Cleaner syntax, functionally equivalent |
-| `gptel-auto-workflow-projects.el:129` | Add proper-list-p validation | Error on malformed FSM info |
-| `init-editor.el` | 6 new packages | golden-ratio, indent-bars, dtrt-indent, rainbow-delimiters, nerd-icons-ibuffer, gcmh |
-| `axis-impact-priority` strategy | New (Axis D) | Prioritizes axes by failure impact |
+| `scripts/run-pipeline.sh` | Explicit self-evolution stage + smoke mode + status polling | Smooth e2e orchestration |
+| `gptel-auto-workflow-evolution.el` | Write token-efficiency sidecar instead of overwriting `SKILL.md` | Prevents canonical skill stat regression |
+| `analyze_results.py` | Preserve highest existing aggregate experiment count | Avoids shrinking stats on hosts with partial local corpus |
+| `evolve_skills.py` | Skip skill generators when existing aggregate > local records | Prevents local self-evolution from overwriting broader remote stats |
 
 **Tests Verified:**
-- Sandbox pcase: readonly → readonly tools, agent → allowed tools ✓
-- Projects proper-list-p: proper list passes, nil passes, improper errors ✓
-- Nucleus: 6/6 submodule sync + tool contracts + signatures ✓
+- Real pipeline e2e: research → verify → self-evolution → auto-workflow queue observed ✓
+- Smoke pipeline e2e: `PIPELINE_SMOKE_ONLY=yes` completes cleanly ✓
+- `scripts/run-auto-workflow-cron.sh messages`: self-evolution complete, aggregate guard active ✓
+- `bash -n scripts/run-pipeline.sh` ✓
+- `python3 -m py_compile` for touched evolution scripts ✓
+- `emacs --batch -Q -L lisp/modules -f batch-byte-compile lisp/modules/gptel-auto-workflow-evolution.el` ✓
 
 **Branch Status:**
 | Branch | HEAD | Remote |
 |--------|------|--------|
-| main | `4e8cd587` | origin/main (synced) |
-| staging | `4e8cd587` | origin/staging (synced) |
+| main | `e5a1526f` + local edits | origin/main |
+| staging | `e5a1526f` | origin/staging |
 
 **Provider Status:**
 - MiniMax: WORKING (quota reset)
@@ -43,13 +44,12 @@
 - moonshot: WORKING (subagent fallback)
 
 **Daemon Status:**
-- Running batch: `2026-05-11T095504Z-11a8`
-- Progress: 1/4 kept experiments
-- Processing: projects optimization
+- Workflow daemon idle: `(:running nil :phase "idle")`
+- Last smoke run: `13:22:56` → `13:23:52`, research findings 1251 bytes, self-evolution complete
 
 **Next Steps:**
-- Monitor daemon experiment cycle completion
-- Review results from current batch
-- Consider merging upstream optimize branches
+- Review local diff, then commit/push if desired
+- If running production pipeline, omit `PIPELINE_SMOKE_ONLY=yes`
+- Consider cleaning or committing generated `assistant/skills/auto-workflow/token-efficiency.md`
 
 ---
