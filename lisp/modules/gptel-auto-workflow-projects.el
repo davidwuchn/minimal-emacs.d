@@ -127,7 +127,10 @@ project instead of the current buffer's `default-directory'."
   "Return FSM INFO rewritten for TARGET-BUF and TARGET-MARKER.
 Preserves routed buffer tool snapshots so early tool calls do not see a
 placeholder FSM with an empty `:tools' list."
-  (let ((updated-info (copy-sequence (or info '()))))
+  (let ((updated-info (if (proper-list-p info)
+                         (copy-sequence info)
+                       (if (null info) '()
+                         (error "gptel-auto-workflow--routed-fsm-info: INFO must be a proper list, got: %S" info)))))
     (setq updated-info (plist-put updated-info :buffer target-buf))
     (setq updated-info (plist-put updated-info :position target-marker))
     (setq updated-info (plist-put updated-info :tracking-marker target-marker))
