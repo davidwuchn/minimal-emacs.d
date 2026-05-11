@@ -109,7 +109,7 @@ Uses the staging worktree instead of switching branches in the root repo."
                         (format "git cherry-pick --no-commit %s"
                                 (shell-quote-argument commit-hash))
                         180))
-                      (cherry-output (car cherry-result)))
+                      (cherry-output (or (car-safe cherry-result) "")))
                  (cond
                   ((= 0 (cdr cherry-result))
                    (let ((commit-result
@@ -155,7 +155,7 @@ Uses the staging worktree instead of switching branches in the root repo."
                                           (shell-quote-argument optimize-ref)
                                           (shell-quote-argument merge-message))
                                   180))
-                                (merge-output (car merge-result)))
+                                (merge-output (or (car-safe merge-result) "")))
                            (cond
                             ((= 0 (cdr merge-result)) t)
                             ((string-match-p "Already up[ -]to[- ]date" merge-output)
