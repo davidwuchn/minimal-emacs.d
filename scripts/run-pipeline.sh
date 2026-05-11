@@ -88,13 +88,19 @@ MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
 
 # Wait for researcher daemon to finish its job (socket closes when done)
 log "Waiting for research daemon to complete..."
+researcher_seen=0
 for i in $(seq 1 $((MAX_WAIT_RESEARCH / 5))); do
-    if ! emacsclient --socket-name=copilot-researcher -e t >/dev/null 2>&1; then
+    if emacsclient --socket-name=copilot-researcher -e t >/dev/null 2>&1; then
+        researcher_seen=1
+    elif [ "$researcher_seen" -eq 1 ]; then
         log "Research completed after $((i * 5))s (daemon shut down)"
         break
     fi
     sleep 5
 done
+if [ "$researcher_seen" -eq 0 ]; then
+    log "WARNING: Research daemon never started or finished too quickly"
+fi
 
 # Verify findings were produced
 FINDINGS_FILE="$DIR/var/tmp/research-findings.md"
