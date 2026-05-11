@@ -14,10 +14,10 @@ It controls prompt compression and section inclusion.
 Correlation between prompt size and experiment success:
 
 - **Average prompt size (kept):** 17609 chars
-- **Average prompt size (discarded):** 18264 chars
+- **Average prompt size (discarded):** 18383 chars
 - **Success rate per 1000 chars (kept):** 0.41%
-- **Discarded rate per 1000 chars:** 1.06%
-- **Optimal prompt range:** Shorter prompts work better (17609 vs 18264 chars)
+- **Discarded rate per 1000 chars:** 1.07%
+- **Optimal prompt range:** Shorter prompts work better (17609 vs 18383 chars)
 
 **Prompt Compression Config:**
 - topic-knowledge-max-chars: 800
@@ -28,7 +28,7 @@ Correlation between prompt size and experiment success:
 
 Which prompt sections improve outcomes:
 
-- **all**: 19% success (296/1518 experiments)
+- **all**: 19% success (296/1527 experiments)
 
 **Section Inclusion Config:**
 - default: include all
