@@ -364,9 +364,10 @@ triggering context-aware FSM selection logic.
 ADAPTS TO: Provides quantitative measure of nesting for decision making.
 
 PROACTIVE MITIGATION: Enables detection of nested scenarios before
-wrong FSM selection occurs."
-  (let ((seen (make-hash-table :test 'eq)))
-    (my/gptel--fsm-count-internal object seen)))
+wrong FSM selection occurs.
+
+SIGNAL: explicit assumptions - Hash table creation in helper, not wrapper."
+  (my/gptel--fsm-count-internal object (make-hash-table :test 'eq)))
 
 ;;; Registry Validation
 

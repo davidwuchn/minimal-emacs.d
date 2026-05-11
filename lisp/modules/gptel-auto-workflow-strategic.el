@@ -677,34 +677,39 @@ RULES:
       ;; Ensure we use an available backend for digestion
       (when (fboundp 'gptel-auto-experiment--maybe-failover-main-backend)
         (gptel-auto-experiment--maybe-failover-main-backend))
-      (if (fboundp 'gptel-request)
-          (gptel-request
-              digest-prompt
-            :callback
-            (lambda (response _info)
-              (let* ((candidate (if (stringp response)
-                                    response
-                                  (format "%s" response)))
-                     (trimmed (string-trim candidate))
-                     (digested (if (or (string-empty-p trimmed)
-                                       (string= trimmed "nil")
-                                       (< (length trimmed) 80)
-                                       (gptel-auto-workflow--research-error-p trimmed))
-                                   raw-findings
-                                 candidate)))
-                (when (eq digested raw-findings)
-                  (message "[auto-workflow] Digestion returned unusable output; preserving raw findings"))
-                (message "[auto-workflow] Digestion complete: %d chars → %d chars"
-                         (length raw-findings) (length digested))
-                ;; Update context with digested version
-                (when (boundp 'gptel-auto-workflow--current-research-context)
-                  (plist-put gptel-auto-workflow--current-research-context
-                             :digested digested))
-                (funcall callback digested)))
-            :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
-        (progn
-          (message "[auto-workflow] gptel-request unavailable, using raw findings")
-          (funcall callback raw-findings))))))
+      ;; Use idempotent callback wrapper to prevent duplicate invocations
+      (let ((digest-callback
+             (let ((called nil))
+               (lambda (response _info)
+                 (unless called
+                   (setq called t)
+                   (let* ((candidate (if (stringp response)
+                                         response
+                                       (format "%s" response)))
+                          (trimmed (string-trim candidate))
+                          (digested (if (or (string-empty-p trimmed)
+                                            (string= trimmed "nil")
+                                            (< (length trimmed) 80)
+                                            (gptel-auto-workflow--research-error-p trimmed))
+                                        raw-findings
+                                      candidate)))
+                     (when (eq digested raw-findings)
+                       (message "[auto-workflow] Digestion returned unusable output; preserving raw findings"))
+                     (message "[auto-workflow] Digestion complete: %d chars → %d chars"
+                              (length raw-findings) (length digested))
+                     ;; Update context with digested version
+                     (when (boundp 'gptel-auto-workflow--current-research-context)
+                       (plist-put gptel-auto-workflow--current-research-context
+                                  :digested digested))
+                     (funcall callback digested)))))))
+        (if (fboundp 'gptel-request)
+            (gptel-request
+                digest-prompt
+              :callback digest-callback
+              :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
+          (progn
+            (message "[auto-workflow] gptel-request unavailable, using raw findings")
+            (funcall callback raw-findings)))))))
 
 (defun gptel-auto-workflow--research-patterns (callback)
   "Hunt for external ideas from internet sources.
