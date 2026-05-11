@@ -604,8 +604,12 @@ CALLBACK receives non-nil when approved and nil when rejected."
 (defun gptel-sandbox--default-aggregate-confirm (plan callback)
   "Prompt for confirmation before multi-step mutating Programmatic PLAN.
 CALLBACK receives non-nil when approved and nil when rejected."
+  (unless (proper-list-p plan)
+    (error "Programmatic aggregate-confirm requires a proper list plan, got: %S" plan))
   (let ((summary (mapconcat (lambda (step)
-                              (concat "- " (plist-get step :summary)))
+                              (unless (proper-list-p step)
+                                (error "Programmatic aggregate-confirm requires proper plist steps, got: %S" step))
+                              (concat "- " (or (plist-get step :summary) "")))
                             plan "\n")))
     (funcall callback
              (y-or-n-p (format "Programmatic wants to run this mutating plan:\n%s\nApprove aggregate preview? "
