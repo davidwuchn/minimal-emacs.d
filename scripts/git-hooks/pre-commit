@@ -19,6 +19,9 @@ if [[ -n "$staged_el_files" ]]; then
     while IFS= read -r file; do
         if [[ -f "$repo_root/$file" ]]; then
             pkg_load_args=()
+            for pkg_dir in "$repo_root/var/elpa"/*/; do
+                [[ -d "$pkg_dir" ]] && pkg_load_args+=(-L "$pkg_dir")
+            done
             for pkg_dir in "$repo_root/packages"/*/; do
                 [[ -d "$pkg_dir" ]] && pkg_load_args+=(-L "$pkg_dir")
             done
