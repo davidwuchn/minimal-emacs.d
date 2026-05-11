@@ -30,7 +30,7 @@ Different LLM providers return different error formats. This skill maps error me
 - **Google**: `ResourceExhausted`, `429`
 - **Local**: Varies by reverse proxy
 
-**Strategy**:
+**Strategy**: 
 - Exponential backoff: 1s, 2s, 4s, 8s, 16s
 - Max retries: 3
 - If persistent: Failover to alternate provider
@@ -133,6 +133,88 @@ When encountering new error formats:
 1. Add pattern to `references/error-patterns.md`
 2. Run `scripts/update_patterns.py`
 3. Commit with message: `🔄 update provider-error patterns`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Evolved Error Patterns
 
