@@ -182,6 +182,15 @@ Each worktree gets its own isolated buffer for subagent overlays."
           (setq-local default-directory root)
           ;; Load .dir-locals.el for project configuration
           (hack-dir-local-variables-non-file-buffer)
+          ;; Propagate dir-local workflow config to global scope
+          ;; so subagent buffers inherit project settings
+          (dolist (sym '(gptel-auto-workflow-targets
+                         gptel-auto-experiment-max-per-target
+                         gptel-auto-experiment-time-budget
+                         gptel-auto-experiment-no-improvement-threshold
+                         gptel-model))
+            (when (local-variable-p sym)
+              (set sym (buffer-local-value sym (current-buffer)))))
           ;; Create initial FSM for agent tasks
           ;; This prevents "Wrong type argument: gptel-fsm, nil" error
           ;; when gptel-agent--task tries to access gptel--fsm-last
@@ -462,12 +471,12 @@ Returns (project-root . project-buffer) or nil if can't determine."
                              (stringp default-directory)
                              (directory-file-name default-directory)))
            (proj (or (and default-dir
-                         (condition-case nil
-                             (gptel-auto-workflow--project-root)
-                           (error default-dir)))
-                    default-dir
-                    gptel-auto-workflow-worktree-base
-                    (expand-file-name "~/.emacs.d")))
+                          (condition-case nil
+                              (gptel-auto-workflow--project-root)
+                            (error default-dir)))
+                     default-dir
+                     gptel-auto-workflow-worktree-base
+                     (expand-file-name "~/.emacs.d")))
            (expanded-proj (and (stringp proj) (> (length proj) 0)
                                (expand-file-name proj))))
       (when expanded-proj
