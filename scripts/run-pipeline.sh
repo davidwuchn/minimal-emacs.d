@@ -64,6 +64,7 @@ wait_for_idle() {
     local socket_name="${3:-copilot-auto-workflow}"
     local elapsed=0
     local daemon_was_seen=0
+    local min_start_wait="${4:-60}"
 
     log "Waiting for $action to complete (max ${max_wait}s)..."
     while [ "$elapsed" -lt "$max_wait" ]; do
@@ -76,9 +77,13 @@ wait_for_idle() {
             fi
             daemon_was_seen=1
         elif ! emacsclient --socket-name="$socket_name" --eval 't' >/dev/null 2>&1; then
-            if [ "$daemon_was_seen" -eq 1 ] || [ "$elapsed" -ge 60 ]; then
+            if [ "$daemon_was_seen" -eq 1 ]; then
                 log "$action daemon stopped after ${elapsed}s (socket closed)"
                 return 0
+            fi
+            if [ "$elapsed" -ge "$min_start_wait" ]; then
+                log "WARNING: $action daemon was not observed within ${elapsed}s"
+                return 1
             fi
         else
             daemon_was_seen=1
