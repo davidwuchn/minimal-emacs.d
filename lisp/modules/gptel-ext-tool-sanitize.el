@@ -49,8 +49,12 @@ Accepts already-normalized tool structs and registry entries of the form
 COMPARISON-FN should accept two strings and return non-nil if they match.
 Defaults to `string='."
   (cl-find-if (lambda (ts)
-                (funcall (or comparison-fn #'string=)
-                         (gptel-tool-name ts) name))
+                (let ((tool-name (and (when (fboundp 'gptel-tool-p)
+                                        (gptel-tool-p ts))
+                                      (gptel-tool-name ts))))
+                  (and tool-name
+                       (funcall (or comparison-fn #'string=)
+                                tool-name name))))
               tools))
 
 (defun my/gptel--tool-name-candidates (name)
