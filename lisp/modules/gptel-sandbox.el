@@ -507,7 +507,7 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
   (let ((name-str (gptel-sandbox--normalize-tool-name tool-name)))
     (member name-str
             (pcase (gptel-sandbox--current-profile)
-              ('readonly my/gptel-programmatic-readonly-tools)
+              ('readonly `,my/gptel-programmatic-readonly-tools)
               (_ my/gptel-programmatic-allowed-tools)))))
 
 (defun gptel-sandbox--confirm-supported-p (tool-name)
