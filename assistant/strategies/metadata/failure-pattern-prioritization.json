@@ -1,0 +1,1 @@
+{"name":"failure-pattern-prioritization","version":"1.0","hypothesis":"Dynamically reordering prompt sections based on failure pattern matching improves guidance relevance.","axis":"C","components":["pattern-analysis","section-reorder"]}
