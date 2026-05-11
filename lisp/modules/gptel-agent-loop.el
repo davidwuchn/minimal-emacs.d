@@ -931,7 +931,7 @@ Reads `steps' from agent YAML to set max-steps per agent."
              (fboundp 'my/gptel-agent--task-override))
         (my/gptel-agent--task-override main-cb agent-type description prompt)
       (let* ((agent-config (cdr (assoc agent-type gptel-agent--agents)))
-             (agent-steps (and agent-config (plist-get agent-config :steps)))
+             (agent-steps (and (proper-list-p agent-config) (plist-get agent-config :steps)))
              (effective-max-steps (or agent-steps gptel-agent-loop-max-steps))
              (state (gptel-agent-loop--remember-state
                      (gptel-agent-loop--task-create

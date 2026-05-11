@@ -153,6 +153,8 @@ Avoids repeated filtering of the same symbol list.")
     ("claude-2.1" . 200000)
     ("claude-2" . 100000)
     ;; OpenAI GPT
+    ("@cf/openai/gpt-oss-120b" . 128000)
+    ("gpt-oss-120b" . 128000)
     ("gpt-5" . 128000)
     ("gpt-4o" . 128000)
     ("gpt-4-turbo" . 128000)
@@ -167,6 +169,7 @@ Avoids repeated filtering of the same symbol list.")
     ("minimax-m2.7" . 196608)
     ("MiniMax-M2.5" . 196608)
     ;; Kimi/Moonshot
+    ("@cf/moonshotai/kimi-k2.6" . 262144)
     ("kimi-k2.6" . 262144)
     ("kimi-k2.5" . 262144)
     ("kimi-for-coding" . 131072)
@@ -194,7 +197,8 @@ Sources:
 - Gemini: https://openrouter.ai/models/google/gemini-2.5-pro-preview
 - Claude: https://openrouter.ai/models/anthropic/claude-sonnet-4
 - DeepSeek: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
-- MiniMax: https://openrouter.ai/models/minimax/minimax-m2.7-highspeed")
+- MiniMax: https://openrouter.ai/models/minimax/minimax-m2.7-highspeed
+- Cloudflare Workers AI Kimi K2.6: https://developers.cloudflare.com/workers-ai/models/kimi-k2.6/")
 
 (defvar my/gptel--known-model-metadata
   '(;; Qwen (Alibaba via DashScope) - VISION ENABLED
@@ -282,7 +286,13 @@ Sources:
      :pricing-input 0.27 :pricing-output 0.95
      :max-output 16384
      :description "MiniMax M2.5 - 196k context, SWE-bench 80.2%, agent workflows")
-    ;; GPT
+    ;; GPT / OpenAI-compatible
+    ("@cf/openai/gpt-oss-120b"
+     :context-window 128000
+     :pricing-input 0.35 :pricing-output 0.75
+     :max-output 16384
+     :features (streaming tools reasoning)
+     :description "Cloudflare Workers AI GPT-OSS 120B - fast open-weight reasoning model, 128k context")
     ("gpt-4o"
      :context-window 128000
      :pricing-input 2.5 :pricing-output 10.0
@@ -294,6 +304,11 @@ Sources:
      :max-output 16384
      :description "GPT-4o Mini - fast, cheap")
     ;; Kimi
+    ("@cf/moonshotai/kimi-k2.6"
+     :context-window 262144
+     :pricing-input 0.95 :pricing-cached-input 0.16 :pricing-output 4.00
+     :features (streaming tools reasoning vision)
+     :description "Cloudflare Workers AI Kimi K2.6 - 262k context, reasoning, function calling, vision")
     ("kimi-k2.5"
      :context-window 262144
      :pricing-input 0.45 :pricing-output 2.20
@@ -445,7 +460,7 @@ to avoid repeated table scans and redundant lookups."
                                   (let ((table (symbol-value var)))
                                     (when (listp table)
                                       (let ((entry (assoc-string model-str table t)))
-                                        (when (and (consp entry) (listp (cdr entry))
+                                        (when (and (consp entry) (proper-list-p (cdr entry))
                                                    (plist-member (cdr entry) :context-window))
                                           (let ((cw (my/gptel--normalize-context-window
                                                      (plist-get (cdr entry) :context-window))))

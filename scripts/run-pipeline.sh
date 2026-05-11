@@ -10,16 +10,30 @@ SCRIPT="$DIR/scripts/run-auto-workflow-cron.sh"
 LOG_DIR="$DIR/var/tmp/cron"
 PIPELINE_LOG="$LOG_DIR/pipeline.log"
 LOCK_FILE="$LOG_DIR/pipeline.lock"
-MAX_WAIT_RESEARCH=900   # 15 minutes
-MAX_WAIT_WORKFLOW=7200  # 2 hours
-POLL_INTERVAL=30
+MAX_WAIT_RESEARCH="${MAX_WAIT_RESEARCH:-900}"   # 15 minutes
+MAX_WAIT_EVOLUTION="${MAX_WAIT_EVOLUTION:-900}" # 15 minutes
+MAX_WAIT_WORKFLOW="${MAX_WAIT_WORKFLOW:-7200}"  # 2 hours
+POLL_INTERVAL="${POLL_INTERVAL:-30}"
+PIPELINE_SMOKE_ONLY="${PIPELINE_SMOKE_ONLY:-no}"
 
 # Quota-aware scheduling: when MiniMax is exhausted, run less frequently
 QUOTA_RESET_FILE="$DIR/var/tmp/quota-reset-timestamp"
 SKIP_IF_QUOTA_EXHAUSTED="${SKIP_IF_QUOTA_EXHAUSTED:-no}"
 
+mkdir -p "$LOG_DIR"
+
 log() {
-    echo "[pipeline $(date '+%H:%M:%S')] $*" | tee -a "$PIPELINE_LOG"
+    local line stdout_path log_path
+
+    line="[pipeline $(date '+%H:%M:%S')] $*"
+    stdout_path="$(readlink -f /proc/$$/fd/1 2>/dev/null || true)"
+    log_path="$(readlink -f "$PIPELINE_LOG" 2>/dev/null || true)"
+
+    if [ -n "$stdout_path" ] && [ -n "$log_path" ] && [ "$stdout_path" = "$log_path" ]; then
+        printf '%s\n' "$line"
+    else
+        printf '%s\n' "$line" | tee -a "$PIPELINE_LOG"
+    fi
 }
 
 # Prevent overlapping runs
@@ -53,7 +67,15 @@ wait_for_idle() {
 
     log "Waiting for $action to complete (max ${max_wait}s)..."
     while [ "$elapsed" -lt "$max_wait" ]; do
-        if ! emacsclient --socket-name="$socket_name" --eval 't' >/dev/null 2>&1; then
+        if [ "$socket_name" = "copilot-auto-workflow" ]; then
+            local status
+            status="$($SCRIPT status 2>/dev/null || true)"
+            if printf '%s' "$status" | grep -Eq ':phase "(idle|complete|skipped|quota-exhausted)"|:running nil'; then
+                log "$action completed after ${elapsed}s"
+                return 0
+            fi
+            daemon_was_seen=1
+        elif ! emacsclient --socket-name="$socket_name" --eval 't' >/dev/null 2>&1; then
             if [ "$daemon_was_seen" -eq 1 ] || [ "$elapsed" -ge 60 ]; then
                 log "$action daemon stopped after ${elapsed}s (socket closed)"
                 return 0
@@ -75,7 +97,7 @@ wait_for_idle() {
     done
 
     log "WARNING: $action did not complete within ${max_wait}s, proceeding anyway"
-    return 1
+    return 0
 }
 
 # ─── Step 1: Research ───
@@ -85,16 +107,7 @@ log "=== Step 1: Research ==="
 # We just need to wait for it to complete.
 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
     "$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
-
-# Wait for researcher daemon to finish its job (socket closes when done)
-log "Waiting for research daemon to complete..."
-for i in $(seq 1 $((MAX_WAIT_RESEARCH / 5))); do
-    if ! emacsclient --socket-name=copilot-researcher -e t >/dev/null 2>&1; then
-        log "Research completed after $((i * 5))s (daemon shut down)"
-        break
-    fi
-    sleep 5
-done
+wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher" || true
 
 # Verify findings were produced
 FINDINGS_FILE="$DIR/var/tmp/research-findings.md"
@@ -154,20 +167,35 @@ if [ "$FAILED_VERIFY" -eq 0 ]; then
     log "Pipeline integration verified: findings → directive ✓"
 else
     log "WARNING: Pipeline integration issues detected (see above)"
+    exit 1
 fi
 
-# ─── Step 3: Auto-Workflow (uses digested findings via directive) ───
-log "=== Step 3: Auto-Workflow ==="
+# ─── Step 3: Self-Evolution (digest findings/results into skills) ───
+log "=== Step 3: Self-Evolution ==="
+if MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+    "$SCRIPT" evolution >> "$PIPELINE_LOG" 2>&1; then
+    log "self-evolution completed"
+else
+    log "WARNING: self-evolution command failed"
+    exit 1
+fi
+
+# ─── Step 4: Auto-Workflow (uses digested findings via directive) ───
+log "=== Step 4: Auto-Workflow ==="
+if [ "$PIPELINE_SMOKE_ONLY" = "yes" ]; then
+    log "PIPELINE_SMOKE_ONLY=yes; skipping auto-workflow batch queue"
+    exit 0
+fi
 # Queue the workflow job (daemon will be started if not running)
 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
     "$SCRIPT" auto-workflow >> "$PIPELINE_LOG" 2>&1 || true
 wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "copilot-auto-workflow"
 
-# ─── Step 4: Report results ───
+# ─── Step 5: Report results ───
 log "=== Pipeline Complete ==="
-RESULTS_FILE="$DIR/var/tmp/experiments/$(date +%F)*/results.tsv"
-if ls $RESULTS_FILE 1>/dev/null 2>&1; then
-    latest_result=$(ls -t $RESULTS_FILE | head -1)
+RESULTS_PATTERN="$DIR/var/tmp/experiments/$(date +%F)*/results.tsv"
+if compgen -G "$RESULTS_PATTERN" >/dev/null; then
+    latest_result=$(ls -t $RESULTS_PATTERN | head -1)
     result_count=$(wc -l < "$latest_result")
     log "Results: $latest_result ($((result_count - 1)) experiments)"
 else

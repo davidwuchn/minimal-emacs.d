@@ -150,6 +150,18 @@
   (should (assoc "gpt-4o" my/gptel--known-model-context-windows))
   (should (= (cdr (assoc "gpt-4o" my/gptel--known-model-context-windows)) 128000)))
 
+(ert-deftest cache/known-models/cf-gpt-oss-120b ()
+  "Cloudflare GPT-OSS 120B should have documented 128k context."
+  (test--context-cache-setup)
+  (should (assoc "@cf/openai/gpt-oss-120b" my/gptel--known-model-context-windows))
+  (should (= (cdr (assoc "@cf/openai/gpt-oss-120b" my/gptel--known-model-context-windows)) 128000)))
+
+(ert-deftest cache/known-models/cf-kimi-k2-6 ()
+  "Cloudflare Kimi K2.6 should have documented 262k context."
+  (test--context-cache-setup)
+  (should (assoc "@cf/moonshotai/kimi-k2.6" my/gptel--known-model-context-windows))
+  (should (= (cdr (assoc "@cf/moonshotai/kimi-k2.6" my/gptel--known-model-context-windows)) 262144)))
+
 (ert-deftest cache/known-models/gemini-25 ()
   "Gemini 2.5 should have 1M context."
   (test--context-cache-setup)
@@ -194,6 +206,28 @@
     (should meta)
     (should (= (plist-get meta :context-window) 1000000))
     (should (plist-get meta :description))))
+
+(ert-deftest cache/metadata/cf-gpt-oss-120b ()
+  "Should return Cloudflare GPT-OSS 120B metadata."
+  (test--context-cache-setup)
+  (let ((meta (my/gptel-get-model-metadata "@cf/openai/gpt-oss-120b")))
+    (should meta)
+    (should (= (plist-get meta :context-window) 128000))
+    (should (member 'tools (plist-get meta :features)))
+    (should (member 'reasoning (plist-get meta :features)))))
+
+(ert-deftest cache/metadata/cf-kimi-k2-6 ()
+  "Should return Cloudflare Kimi K2.6 metadata."
+  (test--context-cache-setup)
+  (let ((meta (my/gptel-get-model-metadata "@cf/moonshotai/kimi-k2.6")))
+    (should meta)
+    (should (= (plist-get meta :context-window) 262144))
+    (should (= (plist-get meta :pricing-input) 0.95))
+    (should (= (plist-get meta :pricing-cached-input) 0.16))
+    (should (= (plist-get meta :pricing-output) 4.00))
+    (should (member 'tools (plist-get meta :features)))
+    (should (member 'reasoning (plist-get meta :features)))
+    (should (member 'vision (plist-get meta :features)))))
 
 (ert-deftest cache/metadata/unknown-model ()
   "Should return nil for unknown model."
