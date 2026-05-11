@@ -40,7 +40,7 @@
   "Create an info plist with :data."
   (list :data (list :messages (vconcat (plist-get plist :messages))
                     :tools (plist-get plist :tools))
-        :model (or (plist-get plist :model) 'kimi-k2.5)
+        :model (or (plist-get plist :model) 'kimi-k2.6)
         :retries (or (plist-get plist :retries) 0)))
 
 (defun test-make-tool-result (id content)

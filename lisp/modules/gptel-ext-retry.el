@@ -831,7 +831,7 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("gpt-oss-120b"       . 350000)
     ("@cf/moonshotai/kimi-k2.6" . 800000) ; 262K tokens, leave room for output
     ("kimi-k2.6"          . 800000)
-    ("kimi-k2.5"          . 400000)   ; 131K tokens ≈ 460KB, leave room for output
+    ("kimi-k2.5"          . 800000)   ; legacy alias for k2.6
     ("kimi-for-coding"    . 400000)
     ("qwen3.5-plus"       . 400000)   ; 131K tokens
     ("qwen3-coder-next"   . 400000)
@@ -869,7 +869,7 @@ Uses `json-serialize' for accuracy.  Returns 0 if :data is nil or serialization 
 Takes the minimum of `my/gptel-payload-byte-limit' and the model-specific
 context limit from `my/gptel-model-context-bytes'.
 
-ASSUMPTION: Model names may include version/date suffixes (e.g., \"kimi-k2.5-20250711\").
+ASSUMPTION: Model names may include version/date suffixes (e.g., \"kimi-k2.6-20250711\").
   Uses prefix matching to map variant names to their family limits.
 EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'."
   (let* ((model (plist-get info :model))

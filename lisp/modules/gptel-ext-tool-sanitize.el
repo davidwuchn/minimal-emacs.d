@@ -98,11 +98,11 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
 ;; malformed tool calls with an error result so they're skipped.
 (defun my/gptel--nil-tool-call-p (tc)
   "Return non-nil when TC is a nil/null/empty-named tool call spec."
-  (when (listp tc)
+  (when (and (proper-list-p tc)
+             (plist-member tc :name))
     (let ((name (plist-get tc :name))
           (args (plist-get tc :args)))
       (or (null name) (eq name :null) (equal name "null") (equal name "")
-          ;; Validate args is a proper plist structure to prevent downstream errors
           (not (proper-list-p args))))))
 
 (defun my/gptel--repair-tool-call (tc correct-name)
@@ -269,12 +269,8 @@ streak should be treated as a stuck turn."
 Handles edge cases: circular references, objects without printers,
 and other conditions that cause `format' to signal errors."
   (if args
-      (condition-case err
-          (format "%S" args)
-        (error
-         (message "gptel: args serialization error: %s, using placeholder"
-                  (error-message-string err))
-         "unserializable"))
+      (or (ignore-errors (format "%S" args))
+          "unserializable")
     "nil"))
 
 (defun my/gptel--tool-call-fingerprint (tc)

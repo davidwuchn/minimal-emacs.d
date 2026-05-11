@@ -1,0 +1,1 @@
+{"name":"skill-relevance-routing","version":"1.0","hypothesis":"Routing skills based on relevance to target characteristics yields better skill selection","axis":"E","components":["skill-scoring","relevance-routing"]}
