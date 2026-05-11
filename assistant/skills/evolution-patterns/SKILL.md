@@ -95,7 +95,6 @@ Based on historical experiment data:
 - Add new anti-patterns discovered during experiments
 - Consider adding target-specific patterns
 
-
 ## Evolved Error Patterns
 
 Based on analysis of experiment errors.
@@ -107,23 +106,23 @@ Based on analysis of experiment errors.
 
 ### High-Signal Keywords
 
-- `explicitly`: 83% (5/6)
-- `expressions`: 80% (4/5)
-- `paths.`: 80% (4/5)
-- `pass`: 80% (4/5)
-- `contains`: 75% (6/8)
-- `messages`: 71% (5/7)
-- `identical`: 67% (4/6)
-- `targets`: 67% (4/6)
-- `score`: 60% (3/5)
-- `don't`: 60% (3/5)
-- `receive`: 60% (3/5)
-- `preserving`: 60% (3/5)
-- `code.`: 60% (3/5)
-- `consolidating`: 57% (4/7)
-- `providing`: 57% (4/7)
-- `robustness`: 57% (4/7)
-- ``gptel-sandbox--execute-tool``: 57% (4/7)
-- `them`: 56% (5/9)
-- `clear`: 56% (5/9)
-- `lookup`: 55% (6/11)
+- `inputs`: 71% (5/7)
+- ``state``: 60% (3/5)
+- `become`: 60% (3/5)
+- `testable).`: 60% (3/5)
+- `pairs)`: 60% (3/5)
+- `buffer`: 60% (3/5)
+- `corrupted`: 60% (3/5)
+- `errors.`: 60% (3/5)
+- `defensive`: 53% (16/30)
+- `nil-guard`: 50% (3/6)
+- `task`: 50% (3/6)
+- `calling`: 50% (6/12)
+- ``listp``: 50% (10/20)
+- `score`: 50% (5/10)
+- ``gptel-auto-workflow--filter-large-files``: 50% (3/6)
+- `loading`: 50% (4/8)
+- `hash-table`: 50% (3/6)
+- `potential`: 45% (9/20)
+- `-`: 44% (4/9)
+- ``stringp``: 43% (3/7)

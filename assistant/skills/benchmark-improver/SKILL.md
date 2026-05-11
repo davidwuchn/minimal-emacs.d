@@ -182,9 +182,6 @@ Anti-patterns are detected by analyzing benchmark results against Eight Keys sco
 
 Map low scores to their element and apply the corresponding improvement rules above.
 
-
-
-
 ## Evolved Improvement Effectiveness
 
 Based on analysis of which improvement types led to score increases.
@@ -209,36 +206,36 @@ Based on analysis of which improvement types led to score increases.
 - Operations (Wood) (8% success rate, 9 worsened)
 ## Evolved Recommendations
 
-Based on analysis of 475 experiments.
+Based on analysis of 494 experiments.
 
 ### Wood (Operations)
 
-- **Success rate:** 28% (35/126 experiments)
+- **Success rate:** 16% (25/160 experiments)
 - **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Fire (Intelligence)
 
-- **Success rate:** 36% (4/11 experiments)
+- **Success rate:** 23% (3/13 experiments)
 - **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Earth (Control)
 
-- **Success rate:** 30% (66/217 experiments)
+- **Success rate:** 21% (42/203 experiments)
 - **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Metal (Coordination)
 
-- **Success rate:** 10% (5/48 experiments)
-- **Priority:** MEDIUM - moderate success with this element
+- **Success rate:** 21% (8/38 experiments)
+- **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Water (Identity)
 
-- **Success rate:** 29% (21/73 experiments)
-- **Priority:** HIGH - prioritize improvements targeting this element
+- **Success rate:** 15% (12/80 experiments)
+- **Priority:** MEDIUM - moderate success with this element
 
 ### Top Successful Patterns
 
 These action patterns appear most frequently in kept experiments:
 
-- Fix the (2 times)
-
+- Fix bug (1 times)
+- Fix cache (1 times)
