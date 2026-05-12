@@ -1,0 +1,1 @@
+{"name":"failure-pattern-skill-targeting","version":"1.0","hypothesis":"Loading skills that specifically address detected failure patterns improves fix quality","axis":"E","components":["skill-targeting","pattern-analysis","dynamic-loading"]}
