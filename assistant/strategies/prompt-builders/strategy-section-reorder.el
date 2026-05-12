@@ -13,7 +13,7 @@
 (require 'gptel-tools-agent-prompt-build)
 
 (defun strategy-section-reorder-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
-  "Build prompt using evolved strategy evolved-0001.
+  "Build prompt using strategy section-reorder.
 HYPOTHESIS: Reordering prompt sections to put failure patterns and axis guidance
 ;; BEFORE the general instructions will help the agent avoid known pitfalls earlier"
   ;; Adapt compression based on token efficiency analysis
@@ -159,7 +159,7 @@ HYPOTHESIS: Reordering prompt sections to put failure patterns and axis guidance
 
 (defun strategy-section-reorder-get-metadata ()
   "Return metadata for this strategy."
-  (list :name "evolved-0001"
+  (list :name "section-reorder"
         :version "1.0"
         :hypothesis "Reordering prompt sections to put failure patterns and axis guidance BEFORE the general instructions will help the agent avoid known pitfalls earlier"
         :axis "A"
@@ -170,7 +170,7 @@ HYPOTHESIS: Reordering prompt sections to put failure patterns and axis guidance
 ;; Register self
 (when (fboundp 'gptel-auto-workflow--register-strategy)
   (gptel-auto-workflow--register-strategy
-   "evolved-0001"
+   "section-reorder"
    #'strategy-section-reorder-build-prompt
    (strategy-section-reorder-get-metadata)))
 
