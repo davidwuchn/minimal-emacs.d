@@ -12,6 +12,7 @@
 (defvar gptel-auto-experiment--api-error-count)
 (defvar gptel-auto-experiment-max-grader-retries)
 (defvar gptel-auto-experiment-max-retries)
+(defvar gptel-auto-experiment-max-per-provider-attempts)
 (defvar gptel-auto-experiment--quota-exhausted)
 (defvar gptel-auto-workflow--run-id)
 (defvar gptel-auto-experiment--grading-target)
@@ -496,10 +497,11 @@ RETRY-COUNT tracks local grader retries."
             gptel-auto-experiment--hard-quota-error-pattern
             msg)))))
 
-(defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
+(defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count provider-attempts)
   "Run experiment with automatic retry on transient errors.
 RETRY-COUNT tracks current retry attempt."
   (let ((retries (or retry-count 0))
+        (prov-attempts (or provider-attempts 0))
         (workflow-root (gptel-auto-workflow--resolve-run-root))
         (retry-buffer (current-buffer))
         (run-id gptel-auto-workflow--run-id)
@@ -542,25 +544,30 @@ RETRY-COUNT tracks current retry attempt."
                              (not hard-timeout)
                              (gptel-auto-experiment--is-retryable-error-p raw-error)))))
               (retry-history
-               (gptel-auto-experiment--retry-history previous-results result)))
+               (gptel-auto-experiment--retry-history previous-results result))
+              (is-pressure (when raw-error
+                             (gptel-auto-experiment--provider-pressure-error-p raw-error)))
+              (should-advance (and is-pressure
+                                   (>= (1+ prov-attempts)
+                                       gptel-auto-experiment-max-per-provider-attempts))))
          (gptel-auto-workflow--restore-live-target-file target workflow-root)
          (when quota-exhausted
            (setq gptel-auto-experiment--quota-exhausted t))
          (if (and (not quota-exhausted)
                   (< retries gptel-auto-experiment-max-retries)
                   retryable-failure)
-             (progn
-                (when raw-error
-                  (condition-case nil
-                      (gptel-auto-workflow--maybe-activate-rate-limit-failover
-                       "executor"
-                       (gptel-auto-workflow--get-active-agent-preset "executor")
-                       raw-error)
-                    (error nil)))
+(progn
+                 (when should-advance
+                   (condition-case nil
+                       (gptel-auto-workflow--maybe-activate-rate-limit-failover
+                        "executor"
+                        (gptel-auto-workflow--get-active-agent-preset "executor")
+                        raw-error)
+                     (error nil)))
                (setq attempt-logs nil)
-               (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
+               (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay%s"
                         experiment-id (1+ retries) gptel-auto-experiment-max-retries
-                        retry-delay)
+                        retry-delay (if should-advance " [advanced provider]" ""))
                (run-with-timer retry-delay nil
                                (lambda ()
                                  (if (gptel-auto-workflow--run-callback-live-p run-id)
@@ -569,7 +576,8 @@ RETRY-COUNT tracks current retry attempt."
                                       (lambda ()
                                         (gptel-auto-experiment--run-with-retry
                                          target experiment-id max-experiments baseline baseline-code-quality
-                                         retry-history callback (1+ retries)))
+                                         retry-history callback (1+ retries)
+                                         (if should-advance 0 (1+ prov-attempts))))
                                       retry-buffer
                                       workflow-root)
                                    (progn
