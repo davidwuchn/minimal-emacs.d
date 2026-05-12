@@ -176,6 +176,17 @@ INFO is the FSM info plist.  FORCE-TRIM-P bypasses user preference.
 Returns nil if trimming is disabled (unless FORCE-TRIM-P is set)."
   (and info (or force-trim-p my/gptel-retry-keep-recent-tool-results)))
 
+(defun my/gptel--bytes-threshold-met-p (bytes-saved)
+  "Return non-nil if BYTES-SAVED meets the minimum threshold for trimming.
+When `my/gptel-trim-min-bytes' is 0, always returns t.
+Otherwise returns t only if bytes-saved >= threshold.
+
+ASSUMPTION: Small trims are skipped to avoid breaking prompt cache consistency
+without meaningful payload reduction. Based on Anthropic guidance that context
+edits should clear at least 5000 tokens to be worthwhile."
+  (or (= my/gptel-trim-min-bytes 0)
+      (>= bytes-saved my/gptel-trim-min-bytes)))
+
 (defun my/gptel--trim-tool-results-for-retry (info &optional retry-count force-trim-p)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
@@ -227,8 +238,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
                                (> (string-bytes content) (string-bytes replacement)))
                       (push idx candidates)
                       (cl-incf bytes-saved (- (string-bytes content) (string-bytes replacement))))))
-                (when (or (= my/gptel-trim-min-bytes 0)
-                          (>= bytes-saved my/gptel-trim-min-bytes))
+                (when (my/gptel--bytes-threshold-met-p bytes-saved)
                   (dolist (idx (nreverse candidates))
                     (let* ((msg (aref messages idx))
                            (content (and (proper-list-p msg) (plist-get msg :content))))
@@ -286,8 +296,7 @@ done."
         (let* ((ordered-candidates (nreverse candidates))
                (to-truncate (seq-take ordered-candidates
                                       (max 0 (- (length ordered-candidates) keep)))))
-          (when (or (= my/gptel-trim-min-bytes 0)
-                    (>= bytes-saved my/gptel-trim-min-bytes))
+          (when (my/gptel--bytes-threshold-met-p bytes-saved)
             (dolist (candidate to-truncate)
               (pcase-let ((`(,content-index ,part-index) candidate))
                 (let* ((content-entry (elt contents content-index))
