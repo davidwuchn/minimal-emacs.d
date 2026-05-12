@@ -197,7 +197,7 @@ variable names are not mistaken for undefined function calls."
                       'define-minor-mode 'define-derived-mode 'define-globalized-minor-mode)
                   (mapc #'walk (nthcdr 3 form)))
                  ((or 'lambda 'closure)
-                  (mapc #'walk (nthcdr 2 form)))
+                  (mapc #'walk (nthcdr 3 form)))
                  ((or 'let 'let*)
                   (dolist (binding (nth 1 form))
                     (when (consp binding)
