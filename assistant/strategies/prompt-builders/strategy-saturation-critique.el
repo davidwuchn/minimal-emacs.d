@@ -1,4 +1,4 @@
-;;; strategy-candidate-template-d-3.el --- Switch to critique envelope when frontier saturates -*- lexical-binding: t; -*-
+;;; strategy-saturation-critique.el --- Switch to critique envelope when frontier saturates -*- lexical-binding: t; -*-
 ;; Hypothesis: When the improvement frontier saturates, reframing the task as critique of previous attempts breaks plateaus better than continued generation.
 ;; Axis: A
 ;;
@@ -8,7 +8,7 @@
 
 (require 'gptel-tools-agent-prompt-build)
 
-(defun strategy-candidate-template-d-3-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-saturation-critique-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt for TARGET using saturation-aware template envelope.
 EXPERIMENT-ID: current experiment number.
 MAX-EXPERIMENTS: total experiments planned.
@@ -24,12 +24,12 @@ PREVIOUS-RESULTS: list of previous experiment plists."
                      "GENERATION PROTOCOL: Standard improvement instructions follow.\n\n")))
     (concat envelope base-prompt)))
 
-(defun strategy-candidate-template-d-3-get-metadata ()
+(defun strategy-saturation-critique-get-metadata ()
   "Return metadata for this strategy."
-  (list :name "candidate-template-d-3"
+  (list :name "saturation-critique"
         :version "1.0"
         :hypothesis "When the improvement frontier saturates, reframing the task as critique of previous attempts breaks plateaus better than continued generation."
         :axis "A"
         :components ["saturation-detection" "template-envelope" "critique-mode"]))
 
-(provide 'strategy-candidate-template-d-3)
+(provide 'strategy-saturation-critique)
