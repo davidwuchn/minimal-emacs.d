@@ -629,13 +629,15 @@ usable and digestion would lose 80%+ of the content.  Only digest raw HTML dumps
    ;; Empty: nothing to do
    ((or (null raw-findings) (string-empty-p raw-findings))
     (funcall callback ""))
-   ;; Already structured external research: pass through to avoid destruction
-   ((and (> (length raw-findings) 500)
-         (or (string-match-p "https?://" raw-findings)
-             (string-match-p "## .*Technique\|Source type:\|Impact:\|Application:" raw-findings)))
-    (message "[auto-workflow] External research already structured (%d chars), skipping digestion"
-             (length raw-findings))
-    (funcall callback raw-findings))
+    ;; Already structured external research: pass through to avoid destruction
+    ((and (> (length raw-findings) 500)
+          (or (> (length raw-findings) 2000)  ; Very long = likely already structured research
+              (string-match-p "https?://" raw-findings)
+              (string-match-p "## .*Technique\|Source type:\|Impact:\|Application:" raw-findings)
+              (string-match-p "\b\(GitHub\|arXiv\|YouTube\|Reddit\|HuggingFace\|X/Twitter\)\b" raw-findings)))
+     (message "[auto-workflow] External research already structured (%d chars), skipping digestion"
+              (length raw-findings))
+     (funcall callback raw-findings))
    ;; Local/internal patterns: pass through (already formatted by local-research-patterns)
    ((and (> (length raw-findings) 100)
          (string-match-p "Pattern:" raw-findings))
@@ -1011,10 +1013,14 @@ include raw URLs in the summary."
 (defun gptel-auto-workflow--research-error-p (response)
   "Return non-nil when RESPONSE is a researcher task failure wrapper.
 Treats short responses (< 500 chars) without external references as failures.
-Long responses are assumed successful even without explicit URLs."
+Long responses (>1000 chars) are assumed successful and never flagged as errors.
+Only checks retryable-error patterns for short responses that look like error messages."
   (and (stringp response)
        (or (string-match-p "\\`Error:" response)
-           (and (fboundp 'gptel-auto-experiment--is-retryable-error-p)
+           ;; Only check retryable errors for short responses (<1000 chars)
+           ;; that are likely error messages, not valid research output
+           (and (< (length response) 1000)
+                (fboundp 'gptel-auto-experiment--is-retryable-error-p)
                 (gptel-auto-experiment--is-retryable-error-p response))
            ;; Only flag as missing external content if short AND no refs
            (and (< (length response) 500)
