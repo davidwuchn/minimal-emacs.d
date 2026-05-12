@@ -195,11 +195,20 @@ Choose which principle mutation to apply."
 (defun gptel-benchmark-evolution-act (decision)
   "Act phase: → 🐍 persist to system.
 Execute the mutation."
-  (let ((mutation (plist-get decision :mutation)))
+  (let ((mutation (plist-get decision :mutation))
+        (executed nil)
+        (error-msg nil))
     (when (functionp mutation)
-      (funcall mutation))
-    (list :executed t
-          :principle (plist-get decision :principle))))
+      (condition-case err
+          (progn
+            (funcall mutation)
+            (setq executed t))
+        (error
+         (setq error-msg (format "Mutation error: %s" err))
+         (message "[evolution] %s" error-msg))))
+    (list :executed executed
+          :principle (plist-get decision :principle)
+          :error error-msg)))
 
 (defun gptel-benchmark-evolution-mutate (act-result)
   "Generate mutation output from ACT-RESULT.
