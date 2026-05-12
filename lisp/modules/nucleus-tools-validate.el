@@ -8,6 +8,23 @@
 
 (require 'cl-lib)
 
+(defvar nucleus--validation-cache nil
+  "Cache for validation results: (timestamp . results).")
+
+(defconst nucleus--validation-cache-ttl 60
+  "Time-to-live in seconds for validation cache.")
+
+(defun nucleus--get-cached-validation ()
+  "Get cached validation results if fresh, else nil."
+  (when (and nucleus--validation-cache
+             (listp nucleus--validation-cache)
+             (= 2 (length nucleus--validation-cache)))
+    (pcase-let ((`(,timestamp . ,results) nucleus--validation-cache))
+      (when (and (numberp timestamp)
+                 (floatp (- (float-time) timestamp))
+                 (< (- (float-time) timestamp) nucleus--validation-cache-ttl))
+        results))))
+
 (defun nucleus--extract-prompt-signature (tool-name prompt-text)
   "Extract lambda signature for TOOL-NAME from PROMPT-TEXT.
 
@@ -73,13 +90,17 @@ Returns (ok . (warnings . errors)) counts."
 (defun nucleus--validate-all-tools ()
   "Validate all tool prompts match their registered signatures.
 
-Returns alist of (tool-name status . message)."
-  (let ((results '()))
-    (when (and (boundp 'nucleus-tool-prompts) nucleus-tool-prompts)
-      (cl-loop for (tool-name . prompt-text) in nucleus-tool-prompts
-               do (push (cons tool-name (nucleus--validate-tool tool-name prompt-text))
-                        results)))
-    (nreverse results)))
+Returns alist of (tool-name status . message). Results are cached
+for `nucleus--validation-cache-ttl' seconds."
+  (or (nucleus--get-cached-validation)
+      (let ((results '()))
+        (when (and (boundp 'nucleus-tool-prompts) nucleus-tool-prompts)
+          (cl-loop for (tool-name . prompt-text) in nucleus-tool-prompts
+                   do (push (cons tool-name (nucleus--validate-tool tool-name prompt-text))
+                            results)))
+        (setq nucleus--validation-cache
+              (cons (float-time) (nreverse results)))
+        (nreverse results))))
 
 ;;;###autoload
 (defun nucleus-validate-tool-signatures ()
