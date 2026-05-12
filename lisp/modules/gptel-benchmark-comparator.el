@@ -111,13 +111,13 @@ Results are cached to avoid repeated file I/O for the same benchmark."
               result)
           '())))))
 
-(defun gptel-benchmark-current-version (name)
-  "Get current version of NAME.
-Attempts to read version from VERSION file, falls back to
-scanning benchmark files, then to hardcoded default."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
-  (let ((version-file (format "./assistant/skills/%s/VERSION" name))
+(defun gptel-benchmark--read-version-file (name file-type fallback-fn default)
+  "Read version from NAME's FILE-TYPE file.
+FILE-TYPE is \"VERSION\" or \"BASELINE\".
+FALLBACK-FN is a function to call on found-versions if file read fails.
+DEFAULT is the fallback value if nothing found.
+Internal helper to centralize version file reading logic."
+  (let ((version-file (format "./assistant/skills/%s/%s" name file-type))
         (version nil))
     (when (file-exists-p version-file)
       (with-temp-buffer
@@ -128,8 +128,16 @@ scanning benchmark files, then to hardcoded default."
     (unless version
       (let ((found-versions (gptel-benchmark--scan-versions-from-dir name)))
         (when found-versions
-          (setq version (car found-versions)))))
-    (or version "v1.1")))
+          (setq version (funcall fallback-fn found-versions)))))
+    (or version default)))
+
+(defun gptel-benchmark-current-version (name)
+  "Get current version of NAME.
+Attempts to read version from VERSION file, falls back to
+scanning benchmark files, then to hardcoded default."
+  (unless (and name (stringp name) (not (string-empty-p name)))
+    (signal 'wrong-type-argument (list "stringp" name)))
+  (gptel-benchmark--read-version-file name "VERSION" #'car "v1.1"))
 
 (defun gptel-benchmark-baseline-version (name)
   "Get baseline version of NAME for comparison.
@@ -137,19 +145,7 @@ Attempts to read from BASELINE file, looks for v1.0 or earliest version,
 falls back to hardcoded default."
   (unless (and name (stringp name) (not (string-empty-p name)))
     (signal 'wrong-type-argument (list "stringp" name)))
-  (let ((baseline-file (format "./assistant/skills/%s/BASELINE" name))
-        (version nil))
-    (when (file-exists-p baseline-file)
-      (with-temp-buffer
-        (insert-file-contents baseline-file)
-        (goto-char (point-min))
-        (when (re-search-forward "^\\([0-9]+\\.[0-9]+\\.[0-9]+\\)" nil t)
-          (setq version (match-string 1)))))
-    (unless version
-      (let ((found-versions (gptel-benchmark--scan-versions-from-dir name)))
-        (when found-versions
-          (setq version (car (last found-versions))))))
-    (or version "v1.0")))
+  (gptel-benchmark--read-version-file name "BASELINE" #'cl-last "v1.0"))
 
 (defun gptel-benchmark-get-file (name version)
   "Get benchmark file path for NAME VERSION."
