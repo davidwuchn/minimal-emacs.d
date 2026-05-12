@@ -482,7 +482,7 @@ FMT-ARGS are additional format arguments for the message."
   "Validate string VAL against CONSTRAINTS.
 CONSTRAINTS may include :pattern, :minLength, :maxLength, :enum."
   (unless (stringp val)
-    (nucleus-tools--validation-error arg-name :type val "a string"))
+    (nucleus-tools--validation-error arg-name :type "a string" val))
   
   (when-let ((pattern (plist-get constraints :pattern)))
     (unless (string-match-p pattern val)
@@ -504,7 +504,7 @@ CONSTRAINTS may include :pattern, :minLength, :maxLength, :enum."
   "Validate number VAL against CONSTRAINTS.
 CONSTRAINTS may include :minimum, :maximum, :exclusiveMinimum, :exclusiveMaximum."
   (unless (numberp val)
-    (nucleus-tools--validation-error arg-name :type val "a number"))
+    (nucleus-tools--validation-error arg-name :type "a number" val))
   
   (when-let ((min (plist-get constraints :minimum)))
     (when (< val min)
@@ -526,7 +526,7 @@ CONSTRAINTS may include :minimum, :maximum, :exclusiveMinimum, :exclusiveMaximum
   "Validate array VAL against CONSTRAINTS.
 CONSTRAINTS may include :minItems, :maxItems, :items."
   (unless (or (vectorp val) (and (listp val) (proper-list-p val)))
-    (nucleus-tools--validation-error arg-name :type val "an array"))
+    (nucleus-tools--validation-error arg-name :type "an array" val))
   
   (let ((len (length val)))
     (when-let ((min-items (plist-get constraints :minItems)))
@@ -598,17 +598,17 @@ Supports JSON Schema-like validators:
                     ((or "integer" 'integer)
                      (nucleus-tools--validate-number val arg-name spec)
                      (unless (integerp val)
-                       (nucleus-tools--validation-error arg-name :type val "an integer")))
+                       (nucleus-tools--validation-error arg-name :type "an integer" val)))
                     ((or "number" 'number)
                      (nucleus-tools--validate-number val arg-name spec))
                     ((or "boolean" 'boolean)
                      (unless (memq val '(t nil :json-false))
-                       (nucleus-tools--validation-error arg-name :type val "a boolean")))
+                       (nucleus-tools--validation-error arg-name :type "a boolean" val)))
                     ((or "array" 'array)
                      (nucleus-tools--validate-array val arg-name spec))
                     ((or "object" 'object)
                      (unless (or (hash-table-p val) (listp val))
-                       (nucleus-tools--validation-error arg-name :type val "an object")))
+                       (nucleus-tools--validation-error arg-name :type "an object" val)))
                     (_ nil))))
                 (cl-incf i))))
           (if async-p
