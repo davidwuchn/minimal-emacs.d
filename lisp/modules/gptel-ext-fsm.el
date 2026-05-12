@@ -69,7 +69,7 @@ ADAPTS TO: Centralizes recovery decision logic for consistency.
 
 PROACTIVE MITIGATION: Prevents recovery attempts on invalid FSMs."
   (when (and (my/gptel--fsm-p fsm)
-             info (listp info) (plist-member info :buffer))
+             info (proper-list-p info) (plist-member info :buffer))
     (let* ((fsm-buffer (plist-get info :buffer))
            (error-msg (plist-get info :error))
            (stop-reason (plist-get info :stop-reason))

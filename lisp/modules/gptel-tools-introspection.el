@@ -34,25 +34,24 @@
 
 (defun my/gptel--get-symbol-source (name)
   "Return the source code for the given symbol NAME."
-  (let* ((sym (intern-soft name))
-         (result nil))
+  (let* ((sym (intern-soft name)))
     (unless sym
       (error "Symbol not found: %s" name))
     (condition-case err
-        (let* ((loc (or (ignore-errors (find-function-search-for-symbol sym nil (symbol-file sym 'defun)))
-                        (ignore-errors (find-function-search-for-symbol sym 'defvar (symbol-file sym 'defvar)))))
-               (buf (car loc))
-               (pos (cdr loc)))
-          (if (and buf pos)
-              (with-current-buffer buf
-                (save-excursion
-                  (goto-char pos)
-                  (let ((start (point))
-                        (end (progn (forward-sexp 1) (point))))
-                    (setq result (buffer-substring-no-properties start end)))))
-            (error "Source not found for %s" name)))
-      (error (setq result (format "Error retrieving source: %s" (error-message-string err)))))
-    result))
+        (progn
+          (let* ((loc (or (ignore-errors (find-function-search-for-symbol sym nil (symbol-file sym 'defun)))
+                          (ignore-errors (find-function-search-for-symbol sym 'defvar (symbol-file sym 'defvar)))))
+                 (buf (car-safe loc))
+                 (pos (cdr-safe loc)))
+            (if (and buf pos)
+                (with-current-buffer buf
+                  (save-excursion
+                    (goto-char pos)
+                    (let ((start (point))
+                          (end (progn (forward-sexp 1) (point))))
+                      (buffer-substring-no-properties start end))))
+              (format "Source not found for %s" name))))
+      (error (format "Error retrieving source: %s" (error-message-string err))))))
 
 (defun my/gptel--find-buffers-and-recent (pattern)
   "Find open buffers and recently opened files matching PATTERN."

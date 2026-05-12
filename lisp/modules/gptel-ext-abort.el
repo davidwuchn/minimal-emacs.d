@@ -72,12 +72,15 @@ Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running ca
   "Prompt marker inserted at end of a gptel buffer.")
 
 (defun my/gptel--prompt-marker-present-at-eob-p ()
-  "Return non-nil if the last non-blank line at EOB is a prompt marker." 
-  (save-excursion
-    (goto-char (point-max))
-    (skip-chars-backward " \t\n")
-    (beginning-of-line)
-    (looking-at-p (concat "^" (regexp-quote my/gptel-prompt-marker)))))
+  "Return non-nil if the last non-blank line at EOB is a prompt marker."
+  (when (and (boundp 'my/gptel-prompt-marker)
+             (stringp my/gptel-prompt-marker)
+             (not (string-empty-p my/gptel-prompt-marker)))
+    (save-excursion
+      (goto-char (point-max))
+      (skip-chars-backward " \t\n")
+      (beginning-of-line)
+      (looking-at-p (concat "^" (regexp-quote my/gptel-prompt-marker))))))
 
 (defun my/gptel--insert-prompt-marker-at-eob ()
   "Insert a single prompt marker at end of buffer." 

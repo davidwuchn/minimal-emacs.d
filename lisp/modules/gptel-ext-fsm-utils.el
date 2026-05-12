@@ -287,6 +287,40 @@ avoiding need for explicit parent-child tracking."
       (collect-last object)
       last-fsm)))
 
+(defun my/gptel--fsm-traverse (object seen fsm-callback)
+  "Traverse OBJECT and call FSM-CALLBACK for each FSM found.
+Returns nil. Uses SEEN hash table for cycle detection.
+
+ASSUMPTION: SEEN is a pre-allocated hash table with eq test.
+ASSUMPTION: FSM-CALLBACK is a function of one argument (the FSM).
+BEHAVIOR: Calls FSM-CALLBACK once for each unique FSM found.
+BEHAVIOR: Returns nil (callback handles results).
+EDGE CASE: Nil OBJECT returns immediately.
+EDGE CASE: Cycles detected via SEEN hash table prevent infinite loops.
+TEST: (my/gptel--fsm-traverse nil h 'ignore) => nil
+TEST: Callback called once for each unique FSM in nested structure.
+TEST: Dotted pairs fully traversed.
+
+BUILDS ON DISCOVERY: Extraction of common traversal pattern enables
+reuse across collect, count, and other traversal-based operations.
+
+ADAPTS TO: Generic callback mechanism supports various use cases
+without duplicating cycle-detection logic.
+
+PROACTIVE MITIGATION: Single traversal implementation ensures
+consistent behavior across all FSM collection operations."
+  (cond
+   ((null object) nil)
+   ((consp object)
+    (unless (gethash object seen)
+      (puthash object t seen)
+      (my/gptel--fsm-traverse (car object) seen fsm-callback)
+      (my/gptel--fsm-traverse (cdr object) seen fsm-callback)))
+   ((my/gptel--fsm-p object)
+    (unless (gethash object seen)
+      (puthash object t seen)
+      (funcall fsm-callback object)))))
+
 (defun my/gptel--collect-all-fsms (object)
   "Collect all FSMs found in OBJECT as a list.
 
@@ -311,38 +345,8 @@ ADAPTS TO: Pure functional approach eliminates mutable state,
 improving testability and reducing cognitive load."
   (let ((seen (make-hash-table :test 'eq))
         (result nil))
-    (cl-labels ((collect (obj)
-                  (cond
-                   ((null obj) nil)
-                   ((consp obj)
-                    (unless (gethash obj seen)
-                      (puthash obj t seen)
-                      (collect (car obj))
-                      (collect (cdr obj))))
-                   ((my/gptel--fsm-p obj)
-                    (puthash obj t seen)
-                    (push obj result)))))
-      (collect object)
-      (nreverse result))))
-
-(defun my/gptel--fsm-count-internal (object seen)
-  "Count FSMs in OBJECT using Seen hash table. Returns count.
-ASSUMPTION: SEEN is pre-allocated hash table with eq test.
-EDGE CASE: Nil object returns 0.
-EDGE CASE: Non-FSM atoms return 0.
-EDGE CASE: Same FSM appearing multiple times is counted once."
-  (cond
-   ((consp object)
-    (unless (gethash object seen)
-      (puthash object t seen)
-      (+ (my/gptel--fsm-count-internal (car object) seen)
-         (my/gptel--fsm-count-internal (cdr object) seen))))
-   ((null object) 0)
-   ((my/gptel--fsm-p object)
-    (unless (gethash object seen)
-      (puthash object t seen)
-      1))
-   (t 0)))
+    (my/gptel--fsm-traverse object seen (lambda (fsm) (push fsm result)))
+    (nreverse result)))
 
 (defun my/gptel--fsm-depth (object)
   "Return nesting depth of FSMs in OBJECT.
@@ -366,8 +370,11 @@ ADAPTS TO: Provides quantitative measure of nesting for decision making.
 PROACTIVE MITIGATION: Enables detection of nested scenarios before
 wrong FSM selection occurs.
 
-SIGNAL: explicit assumptions - Hash table creation in helper, not wrapper."
-  (my/gptel--fsm-count-internal object (make-hash-table :test 'eq)))
+SIGNAL: explicit assumptions - Uses shared traversal helper."
+  (let ((count 0)
+        (seen (make-hash-table :test 'eq)))
+    (my/gptel--fsm-traverse object seen (lambda (_fsm) (cl-incf count)))
+    count))
 
 ;;; Registry Validation
 
