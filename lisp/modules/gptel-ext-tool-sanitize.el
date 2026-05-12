@@ -124,8 +124,15 @@ Messages the repair and updates the :name property in place."
         (plist-put tc :name correct-name)))))
 
 (defun my/gptel--tool-dispatch-error-message (err)
-  "Return a tool-result string for dispatch error ERR."
-  (format "Error: %s" (error-message-string err)))
+  "Return a tool-result string for dispatch error ERR.
+Uses `error-message-string' when ERR is a proper list, otherwise
+returns a generic error description."
+  (condition-case nil
+      (if (proper-list-p err)
+          (format "Error: %s" (error-message-string err))
+        (format "Error: malformed error %S" err))
+    (error
+     (format "Error: %S" err))))
 
 (defun my/gptel--complete-tool-dispatch-error (fsm err)
   "Record ERR as the current unresolved tool result for FSM.
