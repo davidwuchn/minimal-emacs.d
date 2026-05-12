@@ -359,8 +359,8 @@ Returns the number of messages repaired."
   (let* ((model (plist-get info :model))
          (reasoning-key (and (fboundp 'my/gptel--reasoning-key-for-model)
                              (my/gptel--reasoning-key-for-model model)))
-         (messages (let ((data (plist-get info :data)))
-                     (and (listp data) (plist-get data :messages))))
+         (data (my/gptel--info-data info))
+         (messages (and data (plist-get data :messages)))
          (gptel-buf (plist-get info :buffer))
          (reasoning-alist
           (and gptel-buf (buffer-live-p gptel-buf)
