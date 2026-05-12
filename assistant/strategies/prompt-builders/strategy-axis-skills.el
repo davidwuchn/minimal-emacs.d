@@ -1,10 +1,10 @@
-;;; strategy-candidate-section-re-3.el --- Load skills matching dominant historical axis -*- lexical-binding: t; -*-
+;;; strategy-axis-skills.el --- Load skills matching dominant historical axis -*- lexical-binding: t; -*-
 ;; Hypothesis: Prepending skills that match the historically most successful axis focuses the model on proven reasoning patterns.
 ;; Axis: E
 
 (require 'gptel-tools-agent-prompt-build)
 
-(defun strategy-candidate-section-re-3-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-axis-skills-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt for TARGET using axis-matched skill prelude."
   (let* ((base-prompt (gptel-auto-experiment-build-prompt
                        target experiment-id max-experiments analysis baseline previous-results))
@@ -30,11 +30,11 @@
             "\n\n=== Task Prompt ===\n\n"
             base-prompt)))
 
-(defun strategy-candidate-section-re-3-get-metadata ()
-  (list :name "candidate-section-re-3"
+(defun strategy-axis-skills-get-metadata ()
+  (list :name "axis-skills"
         :version "1.0"
         :hypothesis "Prepending skills that match the historically most successful axis focuses the model on proven reasoning patterns."
         :axis "E"
         :components ["skill-loading" "axis-matching" "historical-weighting"]))
 
-(provide 'strategy-candidate-section-re-3)
+(provide 'strategy-axis-skills)

@@ -1,4 +1,4 @@
-;;; strategy-evolved-0001.el --- Branch prompt template by experiment maturity -*- lexical-binding: t; -*-
+;;; strategy-maturity-branching.el --- Branch prompt template by experiment maturity -*- lexical-binding: t; -*-
 ;; Hypothesis: Early experiments need exploratory architecture while late experiments need surgical focus.
 ;; Axis: A
 ;;
@@ -8,8 +8,8 @@
 
 (require 'gptel-tools-agent-prompt-build)
 
-(defun strategy-evolved-0001-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
-  "Build prompt for TARGET using strategy evolved-0001.
+(defun strategy-maturity-branching-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+  "Build prompt for TARGET using strategy maturity-branching.
 EXPERIMENT-ID: current experiment number.
 MAX-EXPERIMENTS: total experiments planned.
 ANALYSIS: plist with :patterns :recommendations from previous experiments.
@@ -37,12 +37,12 @@ PREVIOUS-RESULTS: list of previous experiment plists."
                             base-prompt)))
     branched-prompt))
 
-(defun strategy-evolved-0001-get-metadata ()
+(defun strategy-maturity-branching-get-metadata ()
   "Return metadata for this strategy."
-  (list :name "evolved-0001"
+  (list :name "maturity-branching"
         :version "1.0"
         :hypothesis "Early experiments need exploratory architecture while late experiments need surgical focus."
         :axis "A"
         :components ["template-branching" "maturity-ratio" "adaptive-architecture"]))
 
-(provide 'strategy-evolved-0001)
+(provide 'strategy-maturity-branching)

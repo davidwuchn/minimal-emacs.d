@@ -1,11 +1,11 @@
-;;; strategy-candidate-section-re-1.el --- Inject dependency interface context -*- lexical-binding: t; -*-
+;;; strategy-dependency-context.el --- Inject dependency interface context -*- lexical-binding: t; -*-
 ;; Hypothesis: Surfacing dependency interfaces improves cross-module reasoning and reduces incorrect assumptions.
 ;; Axis: B
 
 (require 'gptel-tools-agent-prompt-build)
 
-(defun strategy-candidate-section-re-1-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
-  "Build prompt for TARGET using strategy candidate-section-re-1.
+(defun strategy-dependency-context-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+  "Build prompt for TARGET using strategy dependency-context.
 EXPERIMENT-ID: current experiment number.
 MAX-EXPERIMENTS: total experiments planned.
 ANALYSIS: plist with :patterns :recommendations from previous experiments.
@@ -42,11 +42,11 @@ PREVIOUS-RESULTS: list of previous experiment plists."
                               ""))))))
     (concat base-prompt (or dep-context ""))))
 
-(defun strategy-candidate-section-re-1-get-metadata ()
-  (list :name "candidate-section-re-1"
+(defun strategy-dependency-context-get-metadata ()
+  (list :name "dependency-context"
         :version "1.0"
         :hypothesis "Surfacing dependency interfaces improves cross-module reasoning and reduces incorrect assumptions."
         :axis "B"
         :components ["context-retrieval" "dependencies" "cross-module"]))
 
-(provide 'strategy-candidate-section-re-1)
+(provide 'strategy-dependency-context)
