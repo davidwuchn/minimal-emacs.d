@@ -182,7 +182,7 @@ evolution_output="$(MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_D
 printf '%s\n' "$evolution_output" >> "$PIPELINE_LOG"
 if printf '%s' "$evolution_output" | grep -q "already-running"; then
     log "Self-evolution skipped (already running)"
-elif [ $? -eq 0 ] || printf '%s' "$evolution_output" | grep -q "Self-evolution cycle complete"; then
+elif printf '%s' "$evolution_output" | grep -q "Self-evolution cycle complete"; then
     log "self-evolution completed"
 else
     log "WARNING: self-evolution command failed"
