@@ -794,6 +794,9 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
                             :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
                 (message "[auto-workflow] External research raw: %d chars (hash: %s)"
                          (length raw-findings) (substring findings-hash 0 8))
+                ;; Save research trace for AutoTTS-style offline evaluation
+                (gptel-auto-workflow--save-research-trace
+                 research-prompt raw-findings strategy findings-hash)
                 ;; SEPARATION: Local/internal research goes to DIRECTIVE.md, not FINDINGS.md
                 (if research-error-p
                     ;; External failed: digest local patterns for DIRECTIVE, pass empty to FINDINGS
@@ -1390,6 +1393,40 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
           :cache-file-exists file-exists
           :cache-file-size file-size
           :cache-file-mtime file-mtime-str)))
+
+;;; ─── AutoTTS-style Trace Logging ───
+
+(defun gptel-auto-workflow--save-research-trace (prompt output strategy hash)
+  "Save a research session trace for offline AutoTTS-style evaluation.
+PROMPT is the researcher prompt, OUTPUT is the final response,
+STRATEGY is the strategy name, HASH is the research hash.
+Calls Python trace logger to save JSON trace file."
+  (let ((root (gptel-auto-workflow--worktree-base-root))
+        (script (expand-file-name "assistant/skills/researcher-prompt/scripts/log-research-trace.py" root))
+        (trace-id (format-time-string "%Y%m%d-%H%M%S")))
+    (when (file-executable-p script)
+      (let ((cmd (format "%s %s --save %s --prompt-length %d --output-length %d --strategy %s --hash %s"
+                          (shell-quote-argument (expand-file-name script))
+                          (shell-quote-argument trace-id)
+                          (length prompt)
+                          (length output)
+                          (shell-quote-argument strategy)
+                          (shell-quote-argument hash))))
+        (message "[trace] Saving research trace: %s" trace-id)
+        (start-process-shell-command "save-trace" nil cmd)))))
+
+(defun gptel-auto-workflow--run-strategy-evolution ()
+  "Run AutoTTS-style strategy evolution after pipeline completes.
+Evaluates all strategies against cached traces offline, picks best,
+and updates researcher prompt. Called from self-evolution step."
+  (let ((root (gptel-auto-workflow--worktree-base-root))
+        (script (expand-file-name "assistant/skills/researcher-prompt/scripts/evolve-loop.py" root)))
+    (when (file-executable-p script)
+      (message "[evolve] Running AutoTTS strategy evolution...")
+      (let ((output (shell-command-to-string (format "cd %s && python3 %s"
+                                                      (shell-quote-argument root)
+                                                      (shell-quote-argument script)))))
+        (message "[evolve] %s" output)))))
 
 (provide 'gptel-auto-workflow-strategic)
 
