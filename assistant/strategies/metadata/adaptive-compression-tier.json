@@ -1,0 +1,1 @@
+{"name":"adaptive-compression-tier","version":"1.0","hypothesis":"Multi-tier adaptive compression with tier-specific strategies provides optimal context preservation across diverse file sizes.","axis":"F","components":["tier-determination","tier-specific-strategy","size-thresholds"]}
