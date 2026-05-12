@@ -91,6 +91,23 @@ This skill auto-evolves every 90 days based on:
 7. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
 8. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
 
+## Output Format (STRICT - Required for validation)
+
+Your response MUST include:
+- At least one `https://` URL for each external source consulted
+- Source type label: [GitHub|arXiv|YouTube|Reddit|HuggingFace|X/Twitter|Blog]
+- Specific technique name and how to apply it
+
+Example format:
+```
+## Technique: [Name]
+**Source**: https://github.com/user/repo/pull/123 [GitHub]
+**Pattern**: [specific code pattern or architecture]
+**Application**: [how to apply to our Emacs AI agent]
+```
+
+IMPORTANT: Without URLs, your research will be discarded. Always include source links.
+
 ---
 
 *This researcher skill auto-evolves. Performance data updates every cycle.*
