@@ -85,30 +85,43 @@ Always runs git commands from the main repo root to avoid worktree issues."
                     commits))))))
     (nreverse commits)))
 
+(defun gptel-auto-workflow--git-match-patterns (text patterns)
+  "Check if TEXT matches any of the PATTERNS.
+PATTERNS is a list of regex strings to match against TEXT.
+Returns non-nil if any pattern matches."
+  (when (and text (listp patterns))
+    (cl-some (lambda (pat) (and (stringp pat) (string-match-p pat text)))
+             patterns)))
+
 (defun gptel-auto-workflow--git-categorize-commit-message (message)
   "Categorize a git commit MESSAGE into change types.
 Returns a list of category symbols."
   (let ((text (downcase (or message "")))
         (categories nil))
     ;; Bug fix patterns
-    (when (or (string-match-p "fix\\|bug\\|nil\\|guard\\|error\\|crash\\|prevent\\|validation\\|safeguard\\|boundary\\|off-by-one\\|threshold\\|inaccurate" text)
-              (string-match-p "handle.*error\\|check.*nil\\|null.*check\\|missing.*validation" text))
+    (when (gptel-auto-workflow--git-match-patterns
+           text '("fix\\|bug\\|nil\\|guard\\|error\\|crash\\|prevent\\|validation\\|safeguard\\|boundary\\|off-by-one\\|threshold\\|inaccurate"
+                  "handle.*error\\|check.*nil\\|null.*check\\|missing.*validation"))
       (push 'bug-fix categories))
     ;; Performance patterns
-    (when (or (string-match-p "perf\\|cache\\|optimize\\|speed\\|complexity\\|hot.path\\|efficient\\|faster\\|memory\\|allocation" text)
-              (string-match-p "reduce.*time\\|improve.*performance" text))
+    (when (gptel-auto-workflow--git-match-patterns
+           text '("perf\\|cache\\|optimize\\|speed\\|complexity\\|hot.path\\|efficient\\|faster\\|memory\\|allocation"
+                  "reduce.*time\\|improve.*performance"))
       (push 'performance categories))
     ;; Refactoring patterns
-    (when (or (string-match-p "refactor\\|extract\\|duplicate\\|dedup\\|helper\\|rename\\|organiz\\|cleanup\\|consolidat\\|centraliz" text)
-              (string-match-p "reus\\|maintainability\\|clarity\\|remove.*duplication" text))
+    (when (gptel-auto-workflow--git-match-patterns
+           text '("refactor\\|extract\\|duplicate\\|dedup\\|helper\\|rename\\|organiz\\|cleanup\\|consolidat\\|centraliz"
+                  "reus\\|maintainability\\|clarity\\|remove.*duplication"))
       (push 'refactoring categories))
     ;; Safety patterns
-    (when (or (string-match-p "safety\\|defensive\\|type.check\\|assert\\|sanitize\\|escape\\|validate\\|secure\\|audit\\|harden" text)
-              (string-match-p "add.*check\\|improve.*validation" text))
+    (when (gptel-auto-workflow--git-match-patterns
+           text '("safety\\|defensive\\|type.check\\|assert\\|sanitize\\|escape\\|validate\\|secure\\|audit\\|harden"
+                  "add.*check\\|improve.*validation"))
       (push 'safety categories))
     ;; Feature/enhancement patterns
-    (when (or (string-match-p "feat\\|add\\|support\\|implement\\|enable\\|new\\|enhance" text)
-              (string-match-p "introduce\\|extend\\|expand" text))
+    (when (gptel-auto-workflow--git-match-patterns
+           text '("feat\\|add\\|support\\|implement\\|enable\\|new\\|enhance"
+                  "introduce\\|extend\\|expand"))
       (push 'feature categories))
     (or categories '(other))))
 
