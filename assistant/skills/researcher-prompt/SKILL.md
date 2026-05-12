@@ -48,31 +48,7 @@ Search external sources for actionable techniques related to:
 
 ## Priority Projects to Monitor
 
-### Your Own Projects (CRITICAL - Use `gh` CLI)
-
-**Use `gh repo list davidwuchn --limit 100` and `gh api` to scan your own repos:**
-
-- **davidwuchn/minimal-emacs.d** — Your main Emacs AI system (MOST IMPORTANT)
-- **davidwuchn/gptel** — Your fork with custom enhancements
-- **davidwuchn/gptel-agent** — Agent system extensions
-- **davidwuchn/nucleus** — Core AI components
-- **davidwuchn/ai-code** — AI code interface
-
-**Check with `gh`:**
-```bash
-gh repo view davidwuchn/minimal-emacs.d --json url,description,pushedAt
-gh api repos/davidwuchn/minimal-emacs.d/commits --jq '.[].commit.message'
-gh api repos/davidwuchn/minimal-emacs.d/issues --jq '.[].title'
-gh api repos/davidwuchn/minimal-emacs.d/pulls --jq '.[].title'
-```
-
-**What to look for:**
-- Recent commits on your own repos (patterns you've developed)
-- Open issues you've filed (pain points you identified)
-- PRs you've created (solutions you've built)
-- Your own README/docs changes (priorities you've set)
-
-### External Projects (Secondary)
+### External Projects (Ranked by Downstream Success)
 
 - **karthink/gptel** — Success: 19% (85/456) Techniques: validation-guard
 
@@ -97,48 +73,16 @@ This skill auto-evolves every 90 days based on:
 
 ## Sources
 
-### Priority 1: Your Own GitHub (CRITICAL)
-- **Command**: `gh repo list davidwuchn --limit 100`
-- **Repos**: minimal-emacs.d, gptel, gptel-agent, nucleus, ai-code, ai-behaviors, mementum
-- **Check**: Recent commits, open issues, PRs, README changes
-- **Why**: These are YOUR patterns, YOUR pain points, YOUR solutions - highest relevance
-
-### Priority 2: External Sources (Secondary)
-
-**Use ALL your repos as reference for discovering patterns and similar projects:**
-```bash
-# List ALL your repos (both original and forks) - these are your reference corpus
-gh repo list davidwuchn --limit 100
-
-# Categorize: which are original vs forks
-gh api users/davidwuchn/repos --jq '.[] | {name: .name, fork: .fork, upstream: .parent.full_name, topics: .topics, language: .language}'
-```
-
-**Original repos (your innovations):**
-- **minimal-emacs.d** - Your Emacs AI system (reference for agent patterns)
-- **ai-code-interface.el** - Your AI code integration (reference for tool patterns)
-- **mementum** - Your memory system (reference for persistence patterns)
-
-**Forks (your customizations):**
-- Check upstream repos for updates you've missed
-- Compare: `gh api repos/UPSTREAM/REPO/compare/HEAD...davidwuchn:main`
-
-**Repo-based discovery:**
-- **Topics**: Repos tagged similarly to yours (use `gh topic search`)
-- **Language**: Other Emacs Lisp/Elisp projects
-- **Dependencies**: Who depends on your repos (reverse dependency)
-- **Stargazers**: What else users who star your repos also star
-
-**External Platforms:**
 - **YouTube**: Recent tutorials on AI agent workflows, Emacs AI integration
 - **X/Twitter**: Developer discussions on LLM tooling, agent patterns
-- **GitHub**: Trending repos for ai-agent, emacs-ai, llm-workflow (NOT your own)
+- **GitHub**: Trending repos for ai-agent, emacs-ai, llm-workflow
 - **arXiv**: Papers on agent architectures, meta-learning, code LLMs
 - **HuggingFace**: New models, datasets, or spaces for code agents
 - **Reddit**: r/emacs, r/LocalLLaMA, r/MachineLearning discussions
 
 ## Instructions
 
+<<<<<<< HEAD
 ### TOP PRIORITY: Your Own GitHub Repos (MANDATORY)
 
 1. **ALWAYS START HERE**: Use `gh` CLI to scan `github.com/davidwuchn` repos FIRST
@@ -194,19 +138,21 @@ For each identified gap, provide:
 - **Priority**: High/Medium/Low based on our experiment success patterns
 - **Risk assessment**: What could break, dependencies needed
 
-#### Example: Serena Analysis
+#### Example: Serena Analysis (Your Fork)
 ```bash
-gh repo view microsoft/serena --json description,topics
-gl api repos/microsoft/serena/readme --jq '.content' | base64 -d
-gl api repos/microsoft/serena/contents/src 2>/dev/null | head -30
+gh repo view davidwuchn/serena --json description,topics,pushedAt,parent
+git -C ~/workspace/serena log --oneline -20 2>/dev/null || gh api repos/davidwuchn/serena/commits --jq '.[].commit.message' | head -20
+git -C ~/workspace/serena diff HEAD...upstream/master --stat 2>/dev/null || echo "Compare: https://github.com/davidwuchn/serena/compare/upstream...main"
 ```
 
 **Serena Gap Analysis:**
-- Their capability: [AI-native code review with structured critique]
-- Our status: [We have basic review but lack structured critique]
-- Implementation advice: [Add critique-template.el with predefined critique dimensions]
-- Integration: [Hook into gptel-tools-agent-review.el before submit]
-- Priority: High (clarity topic has 14.5% success rate)
+- **Their capability**: [AI-native code review with structured critique, tree-aware analysis]
+- **Your customizations**: [Compare your fork vs upstream - what did you add/change?]
+- **Gap for our project**: [We have basic review but lack: tree-aware context, structured critique dimensions]
+- **Implementation advice**: [Add critique-template.el with predefined critique dimensions; integrate tree-sitter context]
+- **Integration path**: [Hook into gptel-tools-agent-review.el before submit]
+- **Priority**: High (clarity topic has 14.5% success rate)
+- **From your fork commits**: [Extract patterns from your own changes to serena - these are your innovations]
 
 ### Priority 3: General External Sources
 
@@ -248,6 +194,16 @@ Example formats:
 ```
 
 IMPORTANT: Include `gh:` commands for your repos OR `https://` URLs for external sources. Always include source identification.
+=======
+1. Use WebSearch tool to find 3-5 recent/relevant items per topic
+2. Use WebFetch tool to read promising pages/videos (max 3 fetches)
+3. Focus on NOVEL ideas we haven't implemented (check git history first)
+4. Extract specific, actionable techniques - not vague trends
+5. For each insight, provide: source URL, key technique, how it applies to us
+6. Max 1200 chars. Prioritize depth over breadth.
+7. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
+8. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
+>>>>>>> origin/main
 
 ---
 
