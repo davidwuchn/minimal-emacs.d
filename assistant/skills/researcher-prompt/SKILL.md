@@ -48,31 +48,7 @@ Search external sources for actionable techniques related to:
 
 ## Priority Projects to Monitor
 
-### Your Own Projects (CRITICAL - Use `gh` CLI)
-
-**Use `gh repo list davidwuchn --limit 100` and `gh api` to scan your own repos:**
-
-- **davidwuchn/minimal-emacs.d** — Your main Emacs AI system (MOST IMPORTANT)
-- **davidwuchn/gptel** — Your fork with custom enhancements
-- **davidwuchn/gptel-agent** — Agent system extensions
-- **davidwuchn/nucleus** — Core AI components
-- **davidwuchn/ai-code** — AI code interface
-
-**Check with `gh`:**
-```bash
-gh repo view davidwuchn/minimal-emacs.d --json url,description,pushedAt
-gh api repos/davidwuchn/minimal-emacs.d/commits --jq '.[].commit.message'
-gh api repos/davidwuchn/minimal-emacs.d/issues --jq '.[].title'
-gh api repos/davidwuchn/minimal-emacs.d/pulls --jq '.[].title'
-```
-
-**What to look for:**
-- Recent commits on your own repos (patterns you've developed)
-- Open issues you've filed (pain points you identified)
-- PRs you've created (solutions you've built)
-- Your own README/docs changes (priorities you've set)
-
-### External Projects (Secondary)
+### External Projects (Ranked by Downstream Success)
 
 - **karthink/gptel** — Success: 19% (85/456) Techniques: validation-guard
 
@@ -97,103 +73,23 @@ This skill auto-evolves every 90 days based on:
 
 ## Sources
 
-### Priority 1: Your Own GitHub (CRITICAL)
-- **Command**: `gh repo list davidwuchn --limit 100`
-- **Repos**: minimal-emacs.d, gptel, gptel-agent, nucleus, ai-code, ai-behaviors, mementum
-- **Check**: Recent commits, open issues, PRs, README changes
-- **Why**: These are YOUR patterns, YOUR pain points, YOUR solutions - highest relevance
-
-### Priority 2: External Sources (Secondary)
-
-**Use ALL your repos as reference for discovering patterns and similar projects:**
-```bash
-# List ALL your repos (both original and forks) - these are your reference corpus
-gh repo list davidwuchn --limit 100
-
-# Categorize: which are original vs forks
-gh api users/davidwuchn/repos --jq '.[] | {name: .name, fork: .fork, upstream: .parent.full_name, topics: .topics, language: .language}'
-```
-
-**Original repos (your innovations):**
-- **minimal-emacs.d** - Your Emacs AI system (reference for agent patterns)
-- **ai-code-interface.el** - Your AI code integration (reference for tool patterns)
-- **mementum** - Your memory system (reference for persistence patterns)
-
-**Forks (your customizations):**
-- Check upstream repos for updates you've missed
-- Compare: `gh api repos/UPSTREAM/REPO/compare/HEAD...davidwuchn:main`
-
-**Repo-based discovery:**
-- **Topics**: Repos tagged similarly to yours (use `gh topic search`)
-- **Language**: Other Emacs Lisp/Elisp projects
-- **Dependencies**: Who depends on your repos (reverse dependency)
-- **Stargazers**: What else users who star your repos also star
-
-**External Platforms:**
 - **YouTube**: Recent tutorials on AI agent workflows, Emacs AI integration
 - **X/Twitter**: Developer discussions on LLM tooling, agent patterns
-- **GitHub**: Trending repos for ai-agent, emacs-ai, llm-workflow (NOT your own)
+- **GitHub**: Trending repos for ai-agent, emacs-ai, llm-workflow
 - **arXiv**: Papers on agent architectures, meta-learning, code LLMs
 - **HuggingFace**: New models, datasets, or spaces for code agents
 - **Reddit**: r/emacs, r/LocalLLaMA, r/MachineLearning discussions
 
 ## Instructions
 
-### TOP PRIORITY: Your Own GitHub Repos (MANDATORY)
-
-1. **ALWAYS START HERE**: Use `gh` CLI to scan `github.com/davidwuchn` repos FIRST
-2. Run: `gh repo list davidwuchn --limit 100` to see all your repos
-3. For each repo, check recent activity:
-   - `gh api repos/davidwuchn/REPO/commits --jq '.[].commit.message'`
-   - `gh api repos/davidwuchn/REPO/issues --jq '.[].title'`
-   - `gh api repos/davidwuchn/REPO/pulls --jq '.[].title'`
-4. **Priority order:**
-   - minimal-emacs.d (your main project)
-   - gptel, gptel-agent, nucleus, ai-code (your forks)
-   - Any other repos with recent activity
-5. Extract patterns you've developed, issues you've identified, PRs you've built
-6. These are YOUR ideas - they have highest relevance
-
-### Secondary: External Sources (if time permits)
-
-7. Use WebSearch tool to find 3-5 recent/relevant items per topic
-8. Use WebFetch tool to read promising pages/videos (max 3 fetches)
-9. Focus on NOVEL ideas we haven't implemented (check git history first)
-10. Extract specific, actionable techniques - not vague trends
-11. For each insight, provide: source URL, key technique, how it applies to us
-12. Max 1200 chars. Prioritize depth over breadth.
-13. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
-14. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
-
-### Critical: Cross-Reference
-
-15. Cross-reference external ideas with your own repo patterns
-16. If external idea matches something in your repos, highlight that connection
-17. Your repo context provides grounding for external research
-
-## Output Format (STRICT - Required for validation)
-
-Your response MUST include:
-- At least one source identifier for each insight:
-  - `gh:` prefix for your own repo commands (e.g., `gh:repos/davidwuchn/minimal-emacs.d/commits`)
-  - `https://` URL for external sources
-- Source type label: [YourRepo|GitHub|arXiv|YouTube|Reddit|HuggingFace|X/Twitter|Blog]
-- Specific technique name and how to apply it
-
-Example formats:
-```
-## Technique: [Name from your own repo]
-**Source**: gh:repos/davidwuchn/minimal-emacs.d/commits --jq '.[0].commit.message' [YourRepo]
-**Pattern**: [specific code pattern from your commit]
-**Application**: [how to apply to current experiment]
-
-## Technique: [Name from external source]
-**Source**: https://github.com/user/repo/pull/123 [GitHub]
-**Pattern**: [specific code pattern or architecture]
-**Application**: [how to apply to our Emacs AI agent]
-```
-
-IMPORTANT: Include `gh:` commands for your repos OR `https://` URLs for external sources. Always include source identification.
+1. Use WebSearch tool to find 3-5 recent/relevant items per topic
+2. Use WebFetch tool to read promising pages/videos (max 3 fetches)
+3. Focus on NOVEL ideas we haven't implemented (check git history first)
+4. Extract specific, actionable techniques - not vague trends
+5. For each insight, provide: source URL, key technique, how it applies to us
+6. Max 1200 chars. Prioritize depth over breadth.
+7. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
+8. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
 
 ---
 
