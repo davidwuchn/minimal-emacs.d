@@ -18,6 +18,10 @@ PIPELINE_SMOKE_ONLY="${PIPELINE_SMOKE_ONLY:-no}"
 
 # Quota-aware scheduling: when MiniMax is exhausted, run less frequently
 QUOTA_RESET_FILE="$DIR/var/tmp/quota-reset-timestamp"
+
+# Research output files
+FINDINGS_FILE="$DIR/var/tmp/research-findings.md"
+INTERNAL_FILE="$DIR/var/tmp/internal-research.md"
 SKIP_IF_QUOTA_EXHAUSTED="${SKIP_IF_QUOTA_EXHAUSTED:-no}"
 
 mkdir -p "$LOG_DIR"
@@ -132,8 +136,6 @@ MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
 wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher" || true
 
 # Verify findings were produced
-FINDINGS_FILE="$DIR/var/tmp/research-findings.md"
-INTERNAL_FILE="$DIR/var/tmp/internal-research.md"
 RESEARCH_QUALITY="none"
 
 if [ -f "$FINDINGS_FILE" ]; then
