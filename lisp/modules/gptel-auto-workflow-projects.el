@@ -156,7 +156,15 @@ Each worktree gets its own isolated buffer for subagent overlays."
     (if (and existing (buffer-live-p existing))
         (progn
           (with-current-buffer existing
-            (setq-local default-directory root))
+            (setq-local default-directory root)
+            ;; Ensure dir-locals are propagated even for reused buffers
+            (dolist (sym '(gptel-auto-workflow-targets
+                           gptel-auto-experiment-max-per-target
+                           gptel-auto-experiment-time-budget
+                           gptel-auto-experiment-no-improvement-threshold
+                           gptel-model))
+              (when (local-variable-p sym)
+                (set sym (buffer-local-value sym (current-buffer))))))
           (puthash root existing gptel-auto-workflow--worktree-buffers)
           existing)
       ;; Create new buffer (or recreate if previous was killed)
