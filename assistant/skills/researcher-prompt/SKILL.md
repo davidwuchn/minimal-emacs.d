@@ -166,6 +166,12 @@ This skill auto-evolves every 90 days based on:
 
 ## Instructions
 
+**MANDATORY FIRST STEP - CHECK OWN REPOS FIRST:**
+Before ANY external search, you MUST check davidwuchn's GitHub repositories.
+Use WebSearch with query: `site:github.com/davidwuchn gptel OR emacs OR agent`
+Use WebFetch to read recent commits from davidwuchn's forked repos.
+**DO NOT SKIP THIS STEP.** Own repos have 70% insight rate vs 5% for general web.
+
 1. Use WebSearch tool to find 3-5 recent/relevant items per topic
 2. Use WebFetch tool to read promising pages/videos (max 3 fetches)
 3. Focus on NOVEL ideas we haven't implemented (check git history first)
@@ -174,6 +180,7 @@ This skill auto-evolves every 90 days based on:
 6. Max 1200 chars. Prioritize depth over breadth.
 7. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
 8. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
+9. **OWN REPOS FIRST**: Only search external sources AFTER checking davidwuchn/* repos
 
 ---
 
