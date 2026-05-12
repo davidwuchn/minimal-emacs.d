@@ -368,7 +368,9 @@ SYSTEM + Feed Forward = AI COMPLETE"
      :symptom "Workflow skipped required phases (P1→P3 without P2)"
      :detection (lambda (results)
                   (let* ((phases (plist-get results :phases))
-                         (phase-list (when (vectorp phases) (append phases nil))))
+                         (phase-list (cond ((vectorp phases) (append phases nil))
+                                           ((and (listp phases) (proper-list-p phases)) phases)
+                                           (t nil))))
                     (when (and phase-list
                                (cl-find 'P3 phase-list :key (lambda (p) (plist-get p :phase)))
                                (not (cl-find 'P1 phase-list :key (lambda (p) (plist-get p :phase)))))
