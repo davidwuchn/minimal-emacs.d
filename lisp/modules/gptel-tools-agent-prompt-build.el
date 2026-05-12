@@ -890,8 +890,9 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
       (my/gptel--sanitize-for-logging agent-output (or max-len 200))
     ""))
 
-(defvar gptel-auto-experiment-max-retries 2
-  "Maximum retries for executor on transient errors.")
+(defvar gptel-auto-experiment-max-retries 5
+  "Maximum retries for executor on transient errors.
+Set to 5 to maximize usage of monthly subscription backends (MiniMax).")
 
 (defvar gptel-auto-experiment-max-grader-retries 2
   "Maximum local retries for transient grader failures.
@@ -904,10 +905,10 @@ fallback backend before giving up on otherwise-good executor output.")
 Set to 10 to allow 2 attempts per provider across the 5-provider fallback chain.
 Fewer retries reduce quota exhaustion when providers are rate-limited.")
 
-(defvar gptel-auto-experiment-max-per-provider-attempts 2
+(defvar gptel-auto-experiment-max-per-provider-attempts 5
   "Consecutive retries on the same provider before advancing to next fallback.
-Reduced from 5 to 2 to reduce quota exhaustion.
-When a provider is rate-limited, move to next fallback quickly.")
+Set to 5 for executor to maximize usage of monthly subscription backends (MiniMax).
+Aux subagents may use lower values to reduce quota exhaustion.")
 
 (defvar gptel-auto-experiment-retry-delay 15
   "Seconds to wait between retries.")
