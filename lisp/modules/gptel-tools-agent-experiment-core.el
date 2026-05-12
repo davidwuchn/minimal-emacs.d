@@ -464,9 +464,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                            :research-strategy (or (and (boundp 'gptel-auto-workflow--current-research-context)
                                                        (plist-get gptel-auto-workflow--current-research-context :strategy))
                                                   "none")
-                           :research-hash (or (and (boundp 'gptel-auto-workflow--current-research-context)
-                                                   (plist-get gptel-auto-workflow--current-research-context :hash))
-                                              "none"))))
+                            :research-hash (or (and (boundp 'gptel-auto-workflow--current-research-context)
+                                                    (plist-get gptel-auto-workflow--current-research-context :hash))
+                                               "none")
+                            :research-quality (or (and (boundp 'gptel-auto-workflow--current-research-context)
+                                                      (plist-get gptel-auto-workflow--current-research-context :source))
+                                                 "none"))))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format

@@ -719,7 +719,7 @@ row for the same experiment and target."
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-         (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n"
+          (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                           experiment-id
                           target
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
@@ -761,9 +761,12 @@ row for the same experiment and target."
                             (or (gptel-auto-experiment--tsv-escape
                                  (gptel-auto-workflow--plist-get experiment :research-strategy "none"))
                                 "none")
-                            (or (gptel-auto-experiment--tsv-escape
-                                 (gptel-auto-workflow--plist-get experiment :research-hash "none"))
-                                "none"))))
+                             (or (gptel-auto-experiment--tsv-escape
+                                  (gptel-auto-workflow--plist-get experiment :research-hash "none"))
+                                 "none")
+                             (or (gptel-auto-experiment--tsv-escape
+                                  (gptel-auto-workflow--plist-get experiment :research-quality "none"))
+                                 "none"))))
 
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.

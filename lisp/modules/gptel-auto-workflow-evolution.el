@@ -61,20 +61,22 @@ Uses cached value from load time, or detects from current directory."
                            (decision (nth 7 fields))
                             (grader-q (string-to-number (or (nth 9 fields) "0")))
                               (prompt-chars (string-to-number (or (nth 15 fields) "0")))
-                              (research-strategy (or (nth 20 fields) "none"))
-                              (research-hash (or (nth 21 fields) "none")))
-                        (push (list :target target
-                                    :hypothesis hypothesis
-                                    :score-before score-before
-                                    :score-after score-after
-                                    :code-quality quality
-                                    :delta delta-str
-                                    :decision decision
-                                    :grader-quality grader-q
-                                    :prompt-chars prompt-chars
-                                    :research-strategy research-strategy
-                                    :research-hash research-hash)
-                              records))))
+                               (research-strategy (or (nth 20 fields) "none"))
+                               (research-hash (or (nth 21 fields) "none"))
+                               (research-quality (or (nth 22 fields) "none")))
+                         (push (list :target target
+                                     :hypothesis hypothesis
+                                     :score-before score-before
+                                     :score-after score-after
+                                     :code-quality quality
+                                     :delta delta-str
+                                     :decision decision
+                                     :grader-quality grader-q
+                                     :prompt-chars prompt-chars
+                                     :research-strategy research-strategy
+                                     :research-hash research-hash
+                                     :research-quality research-quality)
+                               records))))
                 (forward-line 1)))))))
     (nreverse records)))
 
@@ -1187,6 +1189,74 @@ Analyzes which research topics and sources produce the best downstream results."
     
     (message "[evolution] Evolved researcher skill: %s" skill-file)))
 
+(defun gptel-auto-workflow--evolve-researcher-from-feedback ()
+  "Update researcher skill based on end-to-end experiment feedback.
+Analyzes which research quality levels (external/internal/none) correlate
+with kept experiments, and updates the researcher prompt accordingly."
+  (message "[evolution] Analyzing researcher end-to-end feedback...")
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         ;; Group by research quality
+         (by-quality (make-hash-table :test 'equal))
+         (total-kept 0)
+         (total-experiments 0))
+    
+    ;; Count experiments by research quality
+    (dolist (r results)
+      (let ((quality (or (plist-get r :research-quality) "none"))
+            (decision (plist-get r :decision))
+            (hash (or (plist-get r :research-hash) "none")))
+        (when (and quality (not (string= quality "none")))
+          (let ((current (gethash quality by-quality (list 0 0))))
+            (setq total-experiments (1+ total-experiments))
+            (when (equal decision "kept")
+              (setq total-kept (1+ total-kept))
+              (setcar current (1+ (car current))))
+            (setcdr current (1+ (cdr current)))
+            (puthash quality current by-quality)))))
+    
+    ;; Calculate effectiveness per quality level
+    (let ((stats nil))
+      (maphash (lambda (quality counts)
+                 (let ((kept (car counts))
+                       (total (cdr counts)))
+                   (when (> total 0)
+                     (push (list :quality quality
+                                 :kept kept
+                                 :total total
+                                 :rate (/ (float kept) total))
+                           stats))))
+               by-quality)
+      
+      ;; Log findings
+      (if stats
+          (progn
+            (message "[evolution] Research quality effectiveness:")
+            (dolist (s (sort stats (lambda (a b) (> (plist-get a :rate) (plist-get b :rate)))))
+              (message "  %s: %.1f%% (%d/%d)"
+                       (plist-get s :quality)
+                       (* 100 (plist-get s :rate))
+                       (plist-get s :kept)
+                       (plist-get s :total)))
+            
+            ;; Update researcher skill with feedback
+            (let ((skill-file (expand-file-name "assistant/skills/researcher-prompt/SKILL.md"
+                                                (gptel-auto-workflow--worktree-base-root)))
+                  (best-quality (plist-get (car stats) :quality))
+                  (best-rate (plist-get (car stats) :rate)))
+              (when (and best-quality (> best-rate 0))
+                (message "[evolution] Best research quality: %s (%.1f%%) - updating skill guidance"
+                         best-quality (* 100 best-rate))
+                ;; Store feedback for next researcher run
+                (let ((feedback-file (expand-file-name "var/tmp/researcher-feedback.sexp"
+                                                       (gptel-auto-workflow--worktree-base-root))))
+                  (with-temp-file feedback-file
+                    (prin1 (list :best-quality best-quality
+                                 :best-rate best-rate
+                                 :stats stats
+                                 :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ"))
+                           (current-buffer)))))))
+        (message "[evolution] No research-enabled experiments to analyze yet")))))
+
 (defun gptel-auto-workflow--evolve-all-skills ()
   "Run self-evolution on ALL skills via Python scripts.
 This is the main entry point for unified skill evolution.
@@ -1204,7 +1274,10 @@ Uses agentskills.io standard scripts/ directory."
   
   ;; Also run research synthesis (still in Elisp for now)
   (gptel-auto-workflow--evolution-research-synthesize)
-  (gptel-auto-workflow--generate-research-skill))
+  (gptel-auto-workflow--generate-research-skill)
+  
+  ;; Analyze researcher end-to-end effectiveness
+  (gptel-auto-workflow--evolve-researcher-from-feedback))
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.
