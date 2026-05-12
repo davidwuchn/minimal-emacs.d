@@ -139,20 +139,122 @@ For each identified gap, provide:
 - **Risk assessment**: What could break, dependencies needed
 
 #### Example: Serena Analysis (Your Fork)
+
 ```bash
-gh repo view davidwuchn/serena --json description,topics,pushedAt,parent
-git -C ~/workspace/serena log --oneline -20 2>/dev/null || gh api repos/davidwuchn/serena/commits --jq '.[].commit.message' | head -20
-git -C ~/workspace/serena diff HEAD...upstream/master --stat 2>/dev/null || echo "Compare: https://github.com/davidwuchn/serena/compare/upstream...main"
+# Step 1: Deep dive - fetch repo metadata and structure
+git ls-remote https://github.com/davidwuchn/serena.git HEAD 2>/dev/null || echo "Check: gh repo view davidwuchn/serena"
+git -C ~/workspace/serena log --oneline -20 2>/dev/null || echo "Repo not cloned locally"
+git -C ~/workspace/serena diff HEAD...upstream/master --stat 2>/dev/null || echo "Compare with upstream"
+
+# Fetch key files from GitHub API
+gh api repos/davidwuchn/serena/contents/README.md --jq '.content' | base64 -d 2>/dev/null | head -100
+gh api repos/davidwuchn/serena/contents/src --jq '.[].name' 2>/dev/null | head -20
 ```
 
-**Serena Gap Analysis:**
-- **Their capability**: [AI-native code review with structured critique, tree-aware analysis]
-- **Your customizations**: [Compare your fork vs upstream - what did you add/change?]
-- **Gap for our project**: [We have basic review but lack: tree-aware context, structured critique dimensions]
-- **Implementation advice**: [Add critique-template.el with predefined critique dimensions; integrate tree-sitter context]
-- **Integration path**: [Hook into gptel-tools-agent-review.el before submit]
-- **Priority**: High (clarity topic has 14.5% success rate)
-- **From your fork commits**: [Extract patterns from your own changes to serena - these are your innovations]
+**Step 2: Feature Extraction (What They Have):**
+After analyzing the repo, extract these aspects:
+- **Core capabilities**: MCP-based IDE tools for AI agents (semantic code retrieval, editing, refactoring, debugging)
+- **Architecture patterns**: Tool registry → Language Server (LSP) / JetBrains Plugin → Symbol analysis
+- **Key algorithms**: Symbol-level code navigation, semantic refactoring, dependency analysis
+- **Integration patterns**: MCP protocol for tool communication, multi-backend (LSP/JetBrains)
+- **User experience**: 40+ language support, project-based workflows, memory system
+
+**Step 3: Gap Analysis (What We Lack vs Serena):**
+
+| Capability | Serena | minimal-emacs.d | Gap |
+|------------|--------|-----------------|-----|
+| Symbolic code understanding | LSP-based semantic analysis | Text-based search | **HIGH** - No symbol-level operations |
+| Refactoring tools | rename, move, inline, safe-delete | Manual editing | **HIGH** - No semantic refactoring |
+| Multi-language support | 40+ via LSP | Emacs Lisp focused | **MED** - Only Elisp |
+| MCP protocol | Native MCP server | Custom tool system | **LOW** - Our tool system works well |
+| Memory system | Built-in project memory | mementum/ git-based | **MED** - Different approaches |
+| Interactive debugging | Breakpoints, inspection | Not available | **HIGH** - No debugging tools |
+
+**Step 4: Adaptation Advice (How to Improve Our Project):**
+
+**Priority: HIGH - Symbolic Code Understanding**
+- **Gap**: We operate on text; Serena operates on symbols via LSP
+- **Implementation**: 
+  1. Integrate `eglot` or `lsp-mode` as core dependency
+  2. Create `lisp/modules/gptel-tools-semantic.el` with:
+     - `find-symbol-at-point` → LSP `textDocument/definition`
+     - `find-references` → LSP `textDocument/references`  
+     - `get-symbol-outline` → LSP `textDocument/documentSymbol`
+  3. Add semantic context to prompt building (Axis E enhancement)
+- **Integration path**: Hook into `gptel-tools-agent-prompt-build.el` for semantic context
+- **Risk**: LSP server availability varies by language; fallback to text search needed
+
+**Priority: HIGH - Semantic Refactoring**
+- **Gap**: Manual text editing vs semantic refactoring
+- **Implementation**:
+  1. Create `lisp/modules/gptel-tools-semantic-edit.el`
+  2. Tools: `semantic-rename-symbol`, `semantic-move-function`, `semantic-extract-function`
+  3. Use LSP `workspace/rename` and custom refactoring templates
+  4. Pre-validate with grader before applying
+- **Integration**: Extend `gptel-tools-agent-grader.el` to validate semantic edits
+- **Benefit**: Prevents broken references, cross-file consistency
+
+**Priority: MED - Enhanced Memory System**
+- **Gap**: Git-based mementum vs Serena's built-in workflow memory
+- **Implementation**: 
+  1. Extend `mementum/workflows/` for multi-session workflows
+  2. Add `mementum/symbols/` for cached symbol relationships per project
+  3. Cross-reference with Eight Keys diagnostic data
+- **Risk**: Complexity; current git-based system is robust
+
+**Priority: LOW - MCP Protocol**
+- **Assessment**: Our custom tool system is mature and functional
+- **Decision**: Skip unless need to integrate with external MCP clients
+- **Alternative**: Create MCP adapter if external integration needed later
+
+---
+
+#### Example: anvil.el Analysis (Your Second Project)
+
+```bash
+# Step 1: Deep dive - check if repo exists and get metadata
+git ls-remote https://github.com/davidwuchn/anvil.el.git HEAD 2>/dev/null || echo "Check: gh repo view davidwuchn/anvil.el"
+git -C ~/workspace/anvil.el log --oneline -20 2>/dev/null || echo "Not cloned"
+git -C ~/workspace/anvil.el log --all --oneline --graph -30 2>/dev/null | head -30
+
+# Check commits for patterns you've developed
+gh api repos/davidwuchn/anvil.el/commits --jq '.[] | {message: .commit.message, date: .commit.committer.date}' | head -20
+
+# Check what files exist
+gh api repos/davidwuchn/anvil.el/git/trees/main?recursive=1 --jq '.tree[].path' 2>/dev/null | grep -E '\.(el|md|json|yml|yaml)$' | head -30
+```
+
+**Step 2: Feature Extraction (What anvil.el Has):**
+[RESEARCHER: Analyze and fill in based on actual repo content]
+- **Core capabilities**: [What does anvil.el do? Build system? Testing framework?]
+- **Architecture patterns**: [How is it structured? Modules? Components?]
+- **Key algorithms**: [Any novel approaches?]
+- **Integration patterns**: [How does it hook into Emacs? Other systems?]
+- **User experience**: [What workflows does it enable?]
+
+**Step 3: Gap Analysis (anvil.el vs minimal-emacs.d):**
+
+| Aspect | anvil.el | minimal-emacs.d | Gap |
+|--------|----------|-----------------|-----|
+| [Capability 1] | [anvil has] | [we have/don't] | [Priority] |
+| [Capability 2] | [anvil has] | [we have/don't] | [Priority] |
+| [Architecture] | [anvil pattern] | [our pattern] | [Priority] |
+
+[RESEARCHER: Fill in after analyzing anvil.el commits, structure, README]
+
+**Step 4: Adaptation Advice (Cross-Pollination):**
+
+**From anvil.el → minimal-emacs.d:**
+- **Pattern**: [What technique from anvil can we adopt?]
+- **Implementation**: [How to adapt to our context?]
+- **Integration path**: [Where in our codebase?]
+- **Priority**: [High/Med/Low based on our experiment success patterns]
+
+**From minimal-emacs.d → anvil.el (if applicable):**
+- **Pattern**: [What from our project could improve anvil?]
+- **Recommendation**: [Suggest to update anvil.el]
+
+---
 
 ### Priority 3: General External Sources
 
