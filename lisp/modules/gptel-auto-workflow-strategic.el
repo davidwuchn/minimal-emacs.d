@@ -997,10 +997,14 @@ Otherwise, convert using princ representation."
 (defun gptel-auto-workflow--research-has-external-content-p (response)
   "Return non-nil when RESPONSE contains actual external research references.
 Checks for URLs, specific source types, or external project mentions.
-A response with only internal code analysis is not external research."
+A response with only internal code analysis is not external research.
+Also treats long responses (>1000 chars) as likely external research,
+since the researcher subagent digests fetched content and may not
+include raw URLs in the summary."
   (and (stringp response)
        (> (length response) 200)
-       (or (string-match-p "https?://" response)
+       (or (> (length response) 1000)  ; Long responses = digested external research
+           (string-match-p "https?://" response)
            (string-match-p "\\b\\(GitHub\\|arXiv\\|YouTube\\|Reddit\\|HuggingFace\\|X/Twitter\\)\\b" response)
            (string-match-p "\\b\\(karthink/gptel\\|hermes-agent\\|zeroclaw\\|ml-intern\\)\\b" response))))
 
