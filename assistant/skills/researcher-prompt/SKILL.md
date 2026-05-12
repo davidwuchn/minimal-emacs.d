@@ -105,10 +105,29 @@ This skill auto-evolves every 90 days based on:
 
 ### Priority 2: External Sources (Secondary)
 
-**Reference your repo ecosystem for discovering similar projects:**
-- **GitHub Profile**: https://github.com/davidwuchn?tab=repositories — Reference for finding similar projects
-- Check repos similar to yours: forks, dependencies, "used by" relationships
-- Look at repos you've starred or contributed to
+**Use ALL your repos as reference for discovering patterns and similar projects:**
+```bash
+# List ALL your repos (both original and forks) - these are your reference corpus
+gh repo list davidwuchn --limit 100
+
+# Categorize: which are original vs forks
+gh api users/davidwuchn/repos --jq '.[] | {name: .name, fork: .fork, upstream: .parent.full_name, topics: .topics, language: .language}'
+```
+
+**Original repos (your innovations):**
+- **minimal-emacs.d** - Your Emacs AI system (reference for agent patterns)
+- **ai-code-interface.el** - Your AI code integration (reference for tool patterns)
+- **mementum** - Your memory system (reference for persistence patterns)
+
+**Forks (your customizations):**
+- Check upstream repos for updates you've missed
+- Compare: `gh api repos/UPSTREAM/REPO/compare/HEAD...davidwuchn:main`
+
+**Repo-based discovery:**
+- **Topics**: Repos tagged similarly to yours (use `gh topic search`)
+- **Language**: Other Emacs Lisp/Elisp projects
+- **Dependencies**: Who depends on your repos (reverse dependency)
+- **Stargazers**: What else users who star your repos also star
 
 **External Platforms:**
 - **YouTube**: Recent tutorials on AI agent workflows, Emacs AI integration
