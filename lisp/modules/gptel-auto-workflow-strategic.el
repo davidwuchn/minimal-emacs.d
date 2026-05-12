@@ -891,7 +891,7 @@ OUTPUT JSON ONLY:
             (or (plist-get context :todos) "")
             (if (or (null research-findings) (string-empty-p research-findings))
                 "Not available (research disabled)"
-              (truncate-string-to-width research-findings 1000 nil nil "..."))
+              (truncate-string-to-width research-findings 3500 nil nil "..."))
             max-targets
             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
                 (gptel-auto-workflow--evolution-get-knowledge)
