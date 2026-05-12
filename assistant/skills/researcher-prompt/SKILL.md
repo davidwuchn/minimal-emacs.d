@@ -46,6 +46,90 @@ Search external sources for actionable techniques related to:
 - **Error handling and recovery patterns** (success: 15%) — error-handling
 - **Code clarity and self-documenting patterns** (success: 14%) — clarity
 
+## AutoTTS-Inspired Research Strategy (v2.1)
+
+Based on [AutoTTS research](https://firethering.com/autotts-ai-inference-test-time-scaling/) - AI systems can discover better strategies automatically:
+
+### 1. Confidence Momentum Controller (CMC) for Research
+
+Like AutoTTS discovered a controller that watches confidence trends, you should **adapt research depth dynamically**:
+
+**High Confidence Signals** (early stop, answer now):
+- Source is your own GitHub repo (davidwuchn/*)
+- Topic has >20% success rate in historical data
+- Finding directly addresses known pain point from your issues/PRs
+- Pattern is already validated in your codebase
+- **Action**: Stop early, return concise actionable insight
+
+**Low/Stagnant Confidence** (branch deeper):
+- External source (not your repos)
+- Topic has <10% success rate historically
+- Finding is generic advice without specific implementation
+- No clear connection to your codebase
+- **Action**: Open new branches - search alternative sources, look for contrasting patterns, validate against your context
+
+**Cut Branches That Diverge**:
+- Source producing boilerplate content (e.g., generic Medium articles)
+- Pattern conflicts with your established architecture
+- Requires heavy external dependencies (LSP servers, cloud services)
+- **Action**: Cut after confirming persistent deviation (not on single bad result)
+
+### 2. Research Replay Store Pattern
+
+**Cache successful research patterns** (like AutoTTS replay store):
+- Store: `query + context → findings → downstream experiment outcome`
+- When similar query arises, replay successful strategy
+- Evaluate new strategies against cached outcomes
+
+**Replay Store Queries** (check before external search):
+```bash
+# Check if we've researched this topic before
+grep -r "nil-safety" mementum/memories/ 2>/dev/null | head -5
+grep -r "validation-guard" assistant/skills/*/ 2>/dev/null | head -5
+
+# Check historical success rate for this topic
+cat var/tmp/experiments/*/results.tsv 2>/dev/null | awk -F'\t' '$2 ~ /nil-safety/ {print}' | wc -l
+```
+
+**Cost Optimization**: 70% token reduction by prioritizing high-signal sources
+- **Priority 1**: Your own repos (davidwuchn/*) - 70% insight rate, ~1000 tokens/source
+- **Priority 2**: Forked repos with your customizations - 40% insight rate, ~2000 tokens/source  
+- **Priority 3**: External trending repos - 15% insight rate, ~5000 tokens/source
+- **Priority 4**: General web search - 5% insight rate, ~8000 tokens/source
+
+### 3. Self-Evolving Strategy
+
+Track these metrics per research session:
+- **Tokens per actionable insight**: Target <3000 tokens per kept experiment
+- **Source effectiveness**: Which sources produce downstream kept experiments?
+- **Topic momentum**: Is confidence rising or falling for this topic?
+- **Branch efficiency**: How many branches before finding actionable insight?
+
+**Strategy Evolution** (like AutoTTS controller evolution):
+- Test different search depths for same topic
+- Compare: shallow (own repos only) vs deep (external + web)
+- Measure: relevance score → experiment keep rate
+- Evolve: Prefer strategies with high keep-rate / token-cost ratio
+
+### 4. Confidence-Based Research Depth
+
+Apply CMC to research workflow:
+
+```
+IF (source = own-repo AND topic in top-5) → STOP, return (high confidence)
+IF (source = fork AND pattern in your-commits) → STOP, return (rising confidence)
+IF (source = external AND length > 2000 AND has-urls) → CONTINUE, digest
+IF (source = external AND length < 500 AND no-urls) → BRANCH, try alternative
+IF (confidence stagnating after 3 sources) → CUT, use local patterns
+```
+
+**Implementation**: For each research query, track:
+- Source type (own/fork/external/web)
+- Content length
+- URL/external reference density
+- Historical success rate for this topic
+- **Decision**: Stop, Continue, Branch, or Cut
+
 ## Priority Projects to Monitor
 
 ### External Projects (Ranked by Downstream Success)
@@ -82,6 +166,221 @@ This skill auto-evolves every 90 days based on:
 
 ## Instructions
 
+<<<<<<< HEAD
+### TOP PRIORITY: Your Own GitHub Repos (MANDATORY)
+
+1. **ALWAYS START HERE**: Use `gh` CLI to scan `github.com/davidwuchn` repos FIRST
+2. Run: `gh repo list davidwuchn --limit 100` to see all your repos
+3. For each repo, check recent activity:
+   - `gh api repos/davidwuchn/REPO/commits --jq '.[].commit.message'`
+   - `gh api repos/davidwuchn/REPO/issues --jq '.[].title'`
+   - `gh api repos/davidwuchn/REPO/pulls --jq '.[].title'`
+4. **Priority order:**
+   - minimal-emacs.d (your main project)
+   - gptel, gptel-agent, nucleus, ai-code (your forks)
+   - Any other repos with recent activity
+5. Extract patterns you've developed, issues you've identified, PRs you've built
+6. These are YOUR ideas - they have highest relevance
+
+### Priority 2: External Reference Repos (Deep Analysis)
+
+**For EACH reference repo, perform structured comparison:**
+
+#### Step 1: Deep Dive (Per Repo)
+```bash
+# Fetch repo structure and README
+gh repo view OWNER/REPO --json name,description,topics,defaultBranch
+gh api repos/OWNER/REPO/readme --jq '.content' | base64 -d
+
+# List recent commits for pattern analysis
+gh api repos/OWNER/REPO/commits --jq '.[] | {message: .commit.message, author: .commit.author.name, date: .commit.author.date}' | head -20
+
+# Check for architectural docs
+gh api repos/OWNER/REPO/contents/docs 2>/dev/null || echo "No docs/"
+gh api repos/OWNER/REPO/contents/README.md --jq '.content' | base64 -d 2>/dev/null | head -100
+```
+
+#### Step 2: Feature Extraction (What They Have)
+For each reference repo, extract:
+- **Core capabilities**: What does this tool do that ours doesn't?
+- **Architecture patterns**: How is it structured? (modules, layers, FSMs, etc.)
+- **Key algorithms**: Any novel approaches to common problems?
+- **Integration patterns**: How does it hook into external systems?
+- **User experience**: What workflows does it enable?
+
+#### Step 3: Gap Analysis (What We Lack)
+Compare against `davidwuchn/minimal-emacs.d`:
+- **Capability gaps**: Features they have that we don't
+- **Architecture gaps**: Structural patterns we're missing
+- **Integration gaps**: External systems they connect to that we don't
+- **Quality gaps**: Robustness, error handling, observability differences
+
+#### Step 4: Adaptation Advice (How to Improve)
+For each identified gap, provide:
+- **Specific implementation**: How to build equivalent capability
+- **Integration path**: Where in our codebase it fits
+- **Priority**: High/Medium/Low based on our experiment success patterns
+- **Risk assessment**: What could break, dependencies needed
+
+#### Example: Serena Analysis (Your Fork)
+
+```bash
+# Step 1: Deep dive - fetch repo metadata and structure
+git ls-remote https://github.com/davidwuchn/serena.git HEAD 2>/dev/null || echo "Check: gh repo view davidwuchn/serena"
+git -C ~/workspace/serena log --oneline -20 2>/dev/null || echo "Repo not cloned locally"
+git -C ~/workspace/serena diff HEAD...upstream/master --stat 2>/dev/null || echo "Compare with upstream"
+
+# Fetch key files from GitHub API
+gh api repos/davidwuchn/serena/contents/README.md --jq '.content' | base64 -d 2>/dev/null | head -100
+gh api repos/davidwuchn/serena/contents/src --jq '.[].name' 2>/dev/null | head -20
+```
+
+**Step 2: Feature Extraction (What They Have):**
+After analyzing the repo, extract these aspects:
+- **Core capabilities**: MCP-based IDE tools for AI agents (semantic code retrieval, editing, refactoring, debugging)
+- **Architecture patterns**: Tool registry → Language Server (LSP) / JetBrains Plugin → Symbol analysis
+- **Key algorithms**: Symbol-level code navigation, semantic refactoring, dependency analysis
+- **Integration patterns**: MCP protocol for tool communication, multi-backend (LSP/JetBrains)
+- **User experience**: 40+ language support, project-based workflows, memory system
+
+**Step 3: Gap Analysis (What We Lack vs Serena):**
+
+| Capability | Serena | minimal-emacs.d | Gap |
+|------------|--------|-----------------|-----|
+| Symbolic code understanding | LSP-based semantic analysis | Text-based search | **HIGH** - No symbol-level operations |
+| Refactoring tools | rename, move, inline, safe-delete | Manual editing | **HIGH** - No semantic refactoring |
+| Multi-language support | 40+ via LSP | Emacs Lisp focused | **MED** - Only Elisp |
+| MCP protocol | Native MCP server | Custom tool system | **LOW** - Our tool system works well |
+| Memory system | Built-in project memory | mementum/ git-based | **MED** - Different approaches |
+| Interactive debugging | Breakpoints, inspection | Not available | **HIGH** - No debugging tools |
+
+**Step 4: Adaptation Advice (How to Improve Our Project):**
+
+**Priority: HIGH - Symbolic Code Understanding**
+- **Gap**: We operate on text; Serena operates on symbols via LSP
+- **Implementation**: 
+  1. Integrate `eglot` or `lsp-mode` as core dependency
+  2. Create `lisp/modules/gptel-tools-semantic.el` with:
+     - `find-symbol-at-point` → LSP `textDocument/definition`
+     - `find-references` → LSP `textDocument/references`  
+     - `get-symbol-outline` → LSP `textDocument/documentSymbol`
+  3. Add semantic context to prompt building (Axis E enhancement)
+- **Integration path**: Hook into `gptel-tools-agent-prompt-build.el` for semantic context
+- **Risk**: LSP server availability varies by language; fallback to text search needed
+
+**Priority: HIGH - Semantic Refactoring**
+- **Gap**: Manual text editing vs semantic refactoring
+- **Implementation**:
+  1. Create `lisp/modules/gptel-tools-semantic-edit.el`
+  2. Tools: `semantic-rename-symbol`, `semantic-move-function`, `semantic-extract-function`
+  3. Use LSP `workspace/rename` and custom refactoring templates
+  4. Pre-validate with grader before applying
+- **Integration**: Extend `gptel-tools-agent-grader.el` to validate semantic edits
+- **Benefit**: Prevents broken references, cross-file consistency
+
+**Priority: MED - Enhanced Memory System**
+- **Gap**: Git-based mementum vs Serena's built-in workflow memory
+- **Implementation**: 
+  1. Extend `mementum/workflows/` for multi-session workflows
+  2. Add `mementum/symbols/` for cached symbol relationships per project
+  3. Cross-reference with Eight Keys diagnostic data
+- **Risk**: Complexity; current git-based system is robust
+
+**Priority: LOW - MCP Protocol**
+- **Assessment**: Our custom tool system is mature and functional
+- **Decision**: Skip unless need to integrate with external MCP clients
+- **Alternative**: Create MCP adapter if external integration needed later
+
+---
+
+#### Example: anvil.el Analysis (Your Second Project)
+
+```bash
+# Step 1: Deep dive - check if repo exists and get metadata
+git ls-remote https://github.com/davidwuchn/anvil.el.git HEAD 2>/dev/null || echo "Check: gh repo view davidwuchn/anvil.el"
+git -C ~/workspace/anvil.el log --oneline -20 2>/dev/null || echo "Not cloned"
+git -C ~/workspace/anvil.el log --all --oneline --graph -30 2>/dev/null | head -30
+
+# Check commits for patterns you've developed
+gh api repos/davidwuchn/anvil.el/commits --jq '.[] | {message: .commit.message, date: .commit.committer.date}' | head -20
+
+# Check what files exist
+gh api repos/davidwuchn/anvil.el/git/trees/main?recursive=1 --jq '.tree[].path' 2>/dev/null | grep -E '\.(el|md|json|yml|yaml)$' | head -30
+```
+
+**Step 2: Feature Extraction (What anvil.el Has):**
+[RESEARCHER: Analyze and fill in based on actual repo content]
+- **Core capabilities**: [What does anvil.el do? Build system? Testing framework?]
+- **Architecture patterns**: [How is it structured? Modules? Components?]
+- **Key algorithms**: [Any novel approaches?]
+- **Integration patterns**: [How does it hook into Emacs? Other systems?]
+- **User experience**: [What workflows does it enable?]
+
+**Step 3: Gap Analysis (anvil.el vs minimal-emacs.d):**
+
+| Aspect | anvil.el | minimal-emacs.d | Gap |
+|--------|----------|-----------------|-----|
+| [Capability 1] | [anvil has] | [we have/don't] | [Priority] |
+| [Capability 2] | [anvil has] | [we have/don't] | [Priority] |
+| [Architecture] | [anvil pattern] | [our pattern] | [Priority] |
+
+[RESEARCHER: Fill in after analyzing anvil.el commits, structure, README]
+
+**Step 4: Adaptation Advice (Cross-Pollination):**
+
+**From anvil.el → minimal-emacs.d:**
+- **Pattern**: [What technique from anvil can we adopt?]
+- **Implementation**: [How to adapt to our context?]
+- **Integration path**: [Where in our codebase?]
+- **Priority**: [High/Med/Low based on our experiment success patterns]
+
+**From minimal-emacs.d → anvil.el (if applicable):**
+- **Pattern**: [What from our project could improve anvil?]
+- **Recommendation**: [Suggest to update anvil.el]
+
+---
+
+### Priority 3: General External Sources
+
+7. Use WebSearch tool to find 3-5 recent/relevant items per topic
+8. Use WebFetch tool to read promising pages/videos (max 3 fetches)
+9. Focus on NOVEL ideas we haven't implemented (check git history first)
+10. Extract specific, actionable techniques - not vague trends
+11. For each insight, provide: source URL, key technique, how it applies to us
+12. Max 1200 chars. Prioritize depth over breadth.
+13. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
+14. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
+
+### Critical: Cross-Reference
+
+15. Cross-reference external ideas with your own repo patterns
+16. If external idea matches something in your repos, highlight that connection
+17. Your repo context provides grounding for external research
+
+## Output Format (STRICT - Required for validation)
+
+Your response MUST include:
+- At least one source identifier for each insight:
+  - `gh:` prefix for your own repo commands (e.g., `gh:repos/davidwuchn/minimal-emacs.d/commits`)
+  - `https://` URL for external sources
+- Source type label: [YourRepo|GitHub|arXiv|YouTube|Reddit|HuggingFace|X/Twitter|Blog]
+- Specific technique name and how to apply it
+
+Example formats:
+```
+## Technique: [Name from your own repo]
+**Source**: gh:repos/davidwuchn/minimal-emacs.d/commits --jq '.[0].commit.message' [YourRepo]
+**Pattern**: [specific code pattern from your commit]
+**Application**: [how to apply to current experiment]
+
+## Technique: [Name from external source]
+**Source**: https://github.com/user/repo/pull/123 [GitHub]
+**Pattern**: [specific code pattern or architecture]
+**Application**: [how to apply to our Emacs AI agent]
+```
+
+IMPORTANT: Include `gh:` commands for your repos OR `https://` URLs for external sources. Always include source identification.
+=======
 1. Use WebSearch tool to find 3-5 recent/relevant items per topic
 2. Use WebFetch tool to read promising pages/videos (max 3 fetches)
 3. Focus on NOVEL ideas we haven't implemented (check git history first)
@@ -90,6 +389,7 @@ This skill auto-evolves every 90 days based on:
 6. Max 1200 chars. Prioritize depth over breadth.
 7. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
 8. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
+>>>>>>> origin/main
 
 ---
 
