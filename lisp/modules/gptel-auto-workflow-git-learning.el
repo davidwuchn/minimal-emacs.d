@@ -96,7 +96,7 @@ Returns non-nil if any pattern matches."
 (defun gptel-auto-workflow--git-categorize-commit-message (message)
   "Categorize a git commit MESSAGE into change types.
 Returns a list of category symbols."
-  (let ((text (downcase (or message "")))
+  (let ((text (when (stringp message) (downcase message)))
         (categories nil))
     ;; Bug fix patterns
     (when (gptel-auto-workflow--git-match-patterns
@@ -190,7 +190,10 @@ Returns plist with :recent-rate :older-rate :trend."
          (older-commits nil))
     (dolist (commit commits)
       (let* ((date-str (plist-get commit :date))
-             (date (when date-str (encode-time (parse-time-string date-str)))))
+             (time-list (when date-str (parse-time-string date-str)))
+             (date (when time-list (condition-case nil
+                                        (encode-time time-list)
+                                      (error nil)))))
         (when date
           (if (< (float-time (time-subtract now date)) (* 7 24 60 60))
               (push commit recent-commits)
