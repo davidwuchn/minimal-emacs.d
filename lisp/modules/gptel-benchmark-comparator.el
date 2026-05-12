@@ -16,6 +16,24 @@
 (require 'cl-lib)
 (require 'gptel-benchmark-core)
 
+;;; Memoization Cache for Performance
+
+(defvar gptel-benchmark-result-cache (make-hash-table :test 'equal)
+  "Cache for loaded benchmark results to avoid repeated file I/O.")
+
+(defun gptel-benchmark--cache-get (key)
+  "Get cached value for KEY from result cache."
+  (gethash key gptel-benchmark-result-cache))
+
+(defun gptel-benchmark--cache-put (key value)
+  "Store KEY-VALUE pair in result cache."
+  (puthash key value gptel-benchmark-result-cache))
+
+(defun gptel-benchmark--clear-result-cache ()
+  "Clear the benchmark result cache.
+Call this when benchmark files are updated."
+  (clrhash gptel-benchmark-result-cache))
+
 ;;; Version Comparison
 
 (defun gptel-benchmark-compare-file-versions (name version-a version-b)
@@ -78,13 +96,20 @@
 ;;; File/Version Helpers
 
 (defun gptel-benchmark-load-result (name version)
-  "Load benchmark result for NAME VERSION."
+  "Load benchmark result for NAME VERSION.
+Results are cached to avoid repeated file I/O for the same benchmark."
   (unless (and name (stringp name) (not (string-empty-p name)))
     (signal 'wrong-type-argument (list "stringp" name)))
-  (let ((benchmark-file (format "./benchmarks/%s-%s-benchmark.json" name version)))
-    (if (file-exists-p benchmark-file)
-        (gptel-benchmark-read-json benchmark-file)
-      '())))
+  (let* ((cache-key (cons name version))
+         (cached (gptel-benchmark--cache-get cache-key)))
+    (if cached
+        cached
+      (let ((benchmark-file (format "./benchmarks/%s-%s-benchmark.json" name version)))
+        (if (file-exists-p benchmark-file)
+            (let ((result (gptel-benchmark-read-json benchmark-file)))
+              (gptel-benchmark--cache-put cache-key result)
+              result)
+          '())))))
 
 (defun gptel-benchmark-current-version (name)
   "Get current version of NAME.
