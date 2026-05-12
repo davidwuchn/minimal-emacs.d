@@ -59,15 +59,16 @@ name strings."
 
 (defun gptel-auto-workflow--runtime-provider-failover-candidate (agent-type preset)
   "Return the active provider-wide fallback candidate for AGENT-TYPE and PRESET."
-  (let* ((current-backend
-          (gptel-auto-workflow--preset-backend-name
-           (plist-get preset :backend)))
-         (candidates
-          (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))
-    (when (gptel-auto-workflow--backend-rate-limited-p current-backend)
-      (gptel-auto-workflow--first-available-provider-candidate
-       candidates
-       gptel-auto-workflow--rate-limited-backends))))
+  (when (plistp preset)
+    (let* ((current-backend
+            (gptel-auto-workflow--preset-backend-name
+             (plist-get preset :backend)))
+           (candidates
+            (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))
+      (when (gptel-auto-workflow--backend-rate-limited-p current-backend)
+        (gptel-auto-workflow--first-available-provider-candidate
+         candidates
+         gptel-auto-workflow--rate-limited-backends)))))
 
 (defun gptel-auto-workflow--rewrite-subagent-provider (preset candidate)
   "Return PRESET rewritten to use CANDIDATE backend/model.
