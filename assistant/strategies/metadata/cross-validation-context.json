@@ -1,0 +1,1 @@
+{"name":"cross-validation-context","version":"1.0","hypothesis":"Loading companion test file context alongside the target improves code changes by surfacing potential test-breaking patterns.","axis":"B","components":["test-context","cross-validation"]}
