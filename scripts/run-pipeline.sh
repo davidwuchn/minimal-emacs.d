@@ -122,39 +122,71 @@ wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher" || true
 
 # Verify findings were produced
 FINDINGS_FILE="$DIR/var/tmp/research-findings.md"
+INTERNAL_FILE="$DIR/var/tmp/internal-research.md"
+RESEARCH_QUALITY="none"
+
 if [ -f "$FINDINGS_FILE" ]; then
     findings_size=$(wc -c < "$FINDINGS_FILE")
     log "Research findings: ${findings_size} bytes"
-    if [ "$findings_size" -lt 100 ]; then
-        log "WARNING: Findings file is very small, research may have failed"
+    
+    # Check for actual external content (URLs, techniques, not just header)
+    if grep -q "https\?://" "$FINDINGS_FILE" 2>/dev/null || \
+       grep -q "## .*Technique" "$FINDINGS_FILE" 2>/dev/null || \
+       grep -q "Source type:" "$FINDINGS_FILE" 2>/dev/null; then
+        log "  ✓ External research content detected"
+        RESEARCH_QUALITY="external"
+    elif [ "$findings_size" -gt 200 ]; then
+        log "  ⚠ Findings file present but may lack external content"
+        RESEARCH_QUALITY="unknown"
+    else
+        log "  ✗ Findings file too small, research may have failed"
+        RESEARCH_QUALITY="failed"
     fi
 else
     log "WARNING: No findings file found at $FINDINGS_FILE"
 fi
 
+# Check internal research (local code patterns)
+if [ -f "$INTERNAL_FILE" ]; then
+    internal_size=$(wc -c < "$INTERNAL_FILE")
+    log "Internal research: ${internal_size} bytes"
+    if [ "$internal_size" -gt 100 ]; then
+        log "  ✓ Internal code analysis available"
+        if [ "$RESEARCH_QUALITY" = "none" ] || [ "$RESEARCH_QUALITY" = "failed" ]; then
+            RESEARCH_QUALITY="internal"
+        fi
+    fi
+fi
+
 # ─── Step 2: Verify pipeline integration (file-based checks) ───
 log "=== Step 2: Verify Pipeline Integration ==="
-FAILED_VERIFY=0
+HAS_RESEARCH=0
 
 if [ -f "$FINDINGS_FILE" ]; then
     SIZE=$(wc -c < "$FINDINGS_FILE" 2>/dev/null || echo 0)
     if [ "$SIZE" -gt 100 ]; then
         log "  ✓ Findings file: $SIZE bytes"
+        HAS_RESEARCH=1
     else
-        log "  ✗ Findings file too small: $SIZE bytes"
-        FAILED_VERIFY=1
+        log "  ⚠ Findings file too small: $SIZE bytes"
     fi
 else
-    log "  ✗ Findings file missing"
-    FAILED_VERIFY=1
+    log "  ⚠ Findings file missing"
+fi
+
+if [ -f "$INTERNAL_FILE" ]; then
+    SIZE=$(wc -c < "$INTERNAL_FILE" 2>/dev/null || echo 0)
+    if [ "$SIZE" -gt 100 ]; then
+        log "  ✓ Internal research file: $SIZE bytes"
+        HAS_RESEARCH=1
+    fi
 fi
 
 DIRECTIVE_FILE="$DIR/assistant/skills/auto-workflow/DIRECTIVE.md"
 if [ -f "$DIRECTIVE_FILE" ]; then
     log "  ✓ Directive skill exists"
 else
-    log "  ✗ Directive skill file not found"
-    FAILED_VERIFY=1
+    log "  ⚠ Directive skill file not found"
 fi
 
 if [ -f "$FINDINGS_FILE" ]; then
@@ -169,30 +201,48 @@ if [ -f "$FINDINGS_FILE" ]; then
     if [ "$FINDINGS_AGE" -lt 86400 ]; then
         log "  ✓ Findings are recent ($(( FINDINGS_AGE / 3600 ))h old)"
     else
-        log "  ✗ Findings are stale ($(( FINDINGS_AGE / 3600 ))h old)"
-        FAILED_VERIFY=1
+        log "  ⚠ Findings are stale ($(( FINDINGS_AGE / 3600 ))h old)"
     fi
 fi
 
-if [ "$FAILED_VERIFY" -eq 0 ]; then
-    log "Pipeline integration verified: findings → directive ✓"
-else
-    log "WARNING: Pipeline integration issues detected (see above)"
-    exit 1
+# Report research quality and continue (non-fatal)
+case "$RESEARCH_QUALITY" in
+    external)
+        log "Pipeline integration: External research available ✓"
+        ;;
+    internal)
+        log "Pipeline integration: Internal research only (no external) ⚠"
+        ;;
+    unknown)
+        log "Pipeline integration: Research file present but content unclear ⚠"
+        ;;
+    failed|none)
+        log "Pipeline integration: No research available ⚠"
+        ;;
+esac
+
+# Pipeline continues regardless - self-evolution can work with local data
+if [ "$HAS_RESEARCH" -eq 0 ]; then
+    log "WARNING: No research data available. Self-evolution will use local patterns only."
 fi
 
 # ─── Step 3: Self-Evolution (digest findings/results into skills) ───
 log "=== Step 3: Self-Evolution ==="
+# Pass research quality info to evolution context
+export PIPELINE_RESEARCH_QUALITY="$RESEARCH_QUALITY"
+export PIPELINE_FINDINGS_FILE="$FINDINGS_FILE"
+export PIPELINE_INTERNAL_FILE="$INTERNAL_FILE"
+
 evolution_output="$(MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
     "$SCRIPT" evolution 2>&1)"
 printf '%s\n' "$evolution_output" >> "$PIPELINE_LOG"
 if printf '%s' "$evolution_output" | grep -q "already-running"; then
     log "Self-evolution skipped (already running)"
 elif printf '%s' "$evolution_output" | grep -q "Self-evolution cycle complete"; then
-    log "self-evolution completed"
+    log "Self-evolution completed (research: $RESEARCH_QUALITY)"
 else
-    log "WARNING: self-evolution command failed"
-    exit 1
+    log "WARNING: self-evolution command had issues, but continuing pipeline"
+    # Non-fatal: evolution failure shouldn't stop experiments
 fi
 
 # ─── Step 4: Auto-Workflow (uses digested findings via directive) ───
