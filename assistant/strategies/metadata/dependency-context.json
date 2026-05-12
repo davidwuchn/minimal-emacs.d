@@ -1,1 +1,1 @@
-{"name":"candidate-section-re-1","version":"1.0","hypothesis":"Surfacing dependency interfaces improves cross-module reasoning and reduces incorrect assumptions.","axis":"B","components":["context-retrieval","dependencies","cross-module"]}
+{"name":"dependency-context","version":"1.0","hypothesis":"Surfacing dependency interfaces improves cross-module reasoning and reduces incorrect assumptions.","axis":"B","components":["context-retrieval","dependencies","cross-module"]}
