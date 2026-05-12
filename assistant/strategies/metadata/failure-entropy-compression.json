@@ -1,0 +1,1 @@
+{"name":"failure-entropy-compression","version":"1.0","hypothesis":"Sections with higher information entropy should be preserved while low-entropy sections compress more aggressively.","axis":"F/D","components":["entropy-computation","adaptive-compression","non-uniform-compression"]}
