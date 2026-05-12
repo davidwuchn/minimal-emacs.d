@@ -56,6 +56,8 @@
 
 (defun my/gptel--find-buffers-and-recent (pattern)
   "Find open buffers and recently opened files matching PATTERN."
+  (unless (stringp pattern)
+    (error "Expected string for pattern, got: %S" pattern))
   (let* ((pattern (if (string-empty-p pattern) "." pattern))
          (bufs (delq nil (mapcar (lambda (b)
                                    (let ((name (buffer-name b)) (file (buffer-file-name b)))

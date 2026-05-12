@@ -259,6 +259,8 @@ Raises an error if PAIRS is malformed."
 When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
   (unless (proper-list-p bindings)
     (error "Programmatic let bindings must be a proper list, got: %S" bindings))
+  (unless (proper-list-p body)
+    (error "Programmatic let body must be a proper list, got: %S" body))
   (let ((child-env (gptel-sandbox--copy-env env)))
     (if sequentialp
         (dolist (binding bindings)
