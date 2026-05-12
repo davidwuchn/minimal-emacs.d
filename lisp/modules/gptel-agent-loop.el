@@ -639,7 +639,7 @@ Retries when error is transient and retry budget remains."
 REQUEST-PROMPT and USE-TOOLS are reused on retries."
   (let ((task-id (gptel-agent-loop--task-identity state)))
     (lambda (resp info)
-      (let ((info (or info (list)))
+      (let ((info (if (proper-list-p info) info (list)))
             (ov (plist-get info :context))
             (error-data (plist-get info :error)))
         (cond
