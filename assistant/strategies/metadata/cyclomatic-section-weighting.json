@@ -1,0 +1,1 @@
+{"name":"cyclomatic-section-weighting","version":"1.0","hypothesis":"Prioritizing complex code sections in prompts will lead to better handling of edge cases","axis":"D","components":["complexity-metrics","section-prioritization"]}
