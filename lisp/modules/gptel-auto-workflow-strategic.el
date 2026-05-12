@@ -620,23 +620,37 @@ Returns string of grep patterns or nil."
      nil)))
 
 (defun gptel-auto-workflow--digest-research-findings (raw-findings callback)
-  "Digest RAW-FINDINGS using LLM backend to extract actionable insights.
-CALLBACK receives digested findings string.
+  "Digest RAW-FINDINGS if needed.  Preserves external content, only digests unstructured data.
+CALLBACK receives findings string.
 
-Digestion process:
-1. Remove noise and duplicate ideas
-2. Extract specific techniques with implementation paths
-3. Rank by relevance to our project (Emacs AI agents)
-4. Format as actionable hypotheses for directive"
-  (if (or (null raw-findings) (string-empty-p raw-findings))
-      (funcall callback "")
+Heuristic: if raw findings contain URLs or structured techniques, they are already
+usable and digestion would lose 80%+ of the content.  Only digest raw HTML dumps."
+  (cond
+   ;; Empty: nothing to do
+   ((or (null raw-findings) (string-empty-p raw-findings))
+    (funcall callback ""))
+   ;; Already structured external research: pass through to avoid destruction
+   ((and (> (length raw-findings) 500)
+         (or (string-match-p "https?://" raw-findings)
+             (string-match-p "## .*Technique\|Source type:\|Impact:\|Application:" raw-findings)))
+    (message "[auto-workflow] External research already structured (%d chars), skipping digestion"
+             (length raw-findings))
+    (funcall callback raw-findings))
+   ;; Local/internal patterns: pass through (already formatted by local-research-patterns)
+   ((and (> (length raw-findings) 100)
+         (string-match-p "Pattern:" raw-findings))
+    (message "[auto-workflow] Internal patterns already formatted (%d chars), skipping digestion"
+             (length raw-findings))
+    (funcall callback raw-findings))
+   ;; Everything else: try to digest (raw HTML, unstructured text, etc.)
+   (t
     (let* ((template (when (fboundp 'gptel-auto-workflow--load-skill-content)
                        (gptel-auto-workflow--load-skill-content "research-digest")))
            (digest-prompt
             (if template
                 (gptel-auto-workflow--substitute-template
                  template
-                 `((raw-findings . ,(truncate-string-to-width raw-findings 2000 nil nil "..."))))
+                 `((raw-findings . ,(truncate-string-to-width raw-findings 4000 nil nil "..."))))
               ;; Fallback to hardcoded prompt
               (format "You are a research digest specialist. Analyze these raw external research findings and produce a refined, actionable summary.
 
@@ -671,9 +685,9 @@ OUTPUT FORMAT (strict):
 RULES:
 - Be specific. 'Use AI better' is banned.
 - Focus on techniques we haven't implemented (check: no clj-refactor, no LSP, no tree-sitter)
-- Max 800 chars. Quality over quantity."
-                      (truncate-string-to-width raw-findings 2000 nil nil "...")))))
-      (message "[auto-workflow] Digesting research findings with LLM...")
+- Quality over quantity. Include ALL novel insights found."
+                      (truncate-string-to-width raw-findings 4000 nil nil "...")))))
+      (message "[auto-workflow] Digesting unstructured research findings with LLM...")
       ;; Ensure we use an available backend for digestion
       (when (fboundp 'gptel-auto-experiment--maybe-failover-main-backend)
         (gptel-auto-experiment--maybe-failover-main-backend))
@@ -709,7 +723,7 @@ RULES:
               :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
           (progn
             (message "[auto-workflow] gptel-request unavailable, using raw findings")
-            (funcall callback raw-findings)))))))
+            (funcall callback raw-findings)))))))))
 
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
   "Hunt for external ideas from internet sources.
