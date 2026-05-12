@@ -1,0 +1,1 @@
+{"name":"contextual-skill-loading","version":"1.0","hypothesis":"Loading skill files mentioned in pattern descriptions provides targeted expertise.","axis":"E","components":["skill-loading","contextual","pattern-matching"]}
