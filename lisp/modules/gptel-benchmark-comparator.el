@@ -59,25 +59,24 @@ Call this when benchmark files are updated."
          (comparison (gptel-benchmark-compare-file-versions name current-version baseline-version)))
     comparison))
 
+(defun gptel-benchmark--get-trend-summary (name version)
+  "Get benchmark summary for NAME VERSION, or nil if file doesn't exist.
+Internal helper to centralize trend data extraction logic."
+  (let* ((benchmark-file (gptel-benchmark-get-file name version)))
+    (when (file-exists-p benchmark-file)
+      (gptel-benchmark-summarize-results
+       (gptel-benchmark-read-json benchmark-file)))))
+
 (defun gptel-benchmark-version-trend (name &optional versions)
   "Show trend for NAME across VERSIONS."
   (unless (and name (stringp name) (not (string-empty-p name)))
     (signal 'wrong-type-argument (list "stringp" name)))
-  (let ((trend-data '()))
-    (if versions
-        (dolist (version versions)
-          (let* ((benchmark-file (gptel-benchmark-get-file name version))
-                 (summary (gptel-benchmark-summarize-results
-                           (gptel-benchmark-read-json benchmark-file))))
-            (push (list :version version :summary summary) trend-data)))
-      (let ((all-versions (gptel-benchmark-get-all-versions name)))
-        (dolist (version all-versions)
-          (let* ((benchmark-file (gptel-benchmark-get-file name version))
-                 (summary (when (file-exists-p benchmark-file)
-                            (gptel-benchmark-summarize-results
-                             (gptel-benchmark-read-json benchmark-file)))))
-            (when summary
-              (push (list :version version :summary summary) trend-data))))))
+  (let ((trend-data '())
+        (versions-to-process (or versions (gptel-benchmark-get-all-versions name))))
+    (dolist (version versions-to-process)
+      (let ((summary (gptel-benchmark--get-trend-summary name version)))
+        (when summary
+          (push (list :version version :summary summary) trend-data))))
     (nreverse trend-data)))
 
 ;;; Summary Comparison
