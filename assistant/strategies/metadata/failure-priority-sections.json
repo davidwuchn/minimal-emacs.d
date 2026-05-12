@@ -1,0 +1,1 @@
+{"name":"failure-priority-sections","version":"1.0","hypothesis":"Prioritizing sections addressing recurring failure patterns leads to better fix quality","axis":"C","components":["failure-analysis","priority-guidance"]}

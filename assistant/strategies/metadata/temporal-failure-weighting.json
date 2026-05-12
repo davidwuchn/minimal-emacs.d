@@ -1,0 +1,1 @@
+{"name":"temporal-failure-weighting","version":"1.0","hypothesis":"Weighting failure patterns by recency focuses attention on currently relevant issues","axis":"D","components":["temporal-weighting","failure-patterns","recency-computation"]}
