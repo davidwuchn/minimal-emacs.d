@@ -881,9 +881,19 @@ This skill is consumed by the researcher prompt builder."
                                          (time-less-p
                                           (time-subtract (current-time) (days-to-time 7))
                                           (file-attribute-modification-time (file-attributes raw-findings-file))))
-                                (with-temp-buffer
-                                  (insert-file-contents raw-findings-file)
-                                  (buffer-string)))))))
+                                 (with-temp-buffer
+                                   (insert-file-contents raw-findings-file)
+                                   ;; Clean raw findings: strip researcher task headers and reasoning chains
+                                   (goto-char (point-min))
+                                   (while (re-search-forward "^Researcher result for task:.*$\|^I'll conduct targeted research.*$\|^Good results.*$\|^Let me fetch.*$\|^Let me search for.*$\|^Based on my research.*$" nil t)
+                                     (replace-match ""))
+                                   ;; Strip empty reasoning blocks
+                                   (goto-char (point-min))
+                                   (while (re-search-forward "\\(reasoning\\s-*\\.\\s-*<think>\\)" nil t)
+                                     (let ((start (match-beginning 0)))
+                                       (when (re-search-forward "</think>" nil t)
+                                         (delete-region start (point)))))
+                                   (buffer-string)))))))
        (when raw-findings
          (push raw-findings recent-insights)))
      
