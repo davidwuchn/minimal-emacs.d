@@ -76,6 +76,17 @@ wait_for_idle() {
                 return 0
             fi
             daemon_was_seen=1
+        elif [ "$socket_name" = "copilot-researcher" ]; then
+            # Researcher daemon is persistent; wait for findings file instead
+            if [ -f "$FINDINGS_FILE" ] && [ "$(wc -c < "$FINDINGS_FILE" 2>/dev/null || echo 0)" -gt 100 ]; then
+                log "$action completed after ${elapsed}s (findings file ready)"
+                return 0
+            fi
+            if [ "$elapsed" -ge "$min_start_wait" ] && [ "$daemon_was_seen" -eq 0 ]; then
+                log "WARNING: $action daemon was not observed within ${elapsed}s"
+                return 1
+            fi
+            daemon_was_seen=1
         elif ! emacsclient --socket-name="$socket_name" --eval 't' >/dev/null 2>&1; then
             if [ "$daemon_was_seen" -eq 1 ]; then
                 log "$action daemon stopped after ${elapsed}s (socket closed)"
