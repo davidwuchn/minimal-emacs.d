@@ -86,10 +86,16 @@ In interactive mode, uses project.el or falls back to git root."
         (locate-dominating-file command-line-default-directory ".git"))
       default-directory))
 
+(defvar gptel-benchmark-memory--cached-dir nil
+  "Cached memory directory path to avoid repeated file system lookups.")
+
 (defun gptel-benchmark-memory--resolve-dir ()
-  "Resolve gptel-benchmark-memory-dir to absolute path."
-  (let ((root (gptel-benchmark-memory--project-root)))
-    (expand-file-name "mementum/" root)))
+  "Resolve gptel-benchmark-memory-dir to absolute path.
+Cached after first call to reduce redundant file system operations."
+  (or gptel-benchmark-memory--cached-dir
+      (setq gptel-benchmark-memory--cached-dir
+            (let ((root (gptel-benchmark-memory--project-root)))
+              (expand-file-name "mementum/" root)))))
 
 ;;; Memory Operations
 
@@ -126,6 +132,8 @@ In interactive mode, uses project.el or falls back to git root."
 Memory files are <200 words and contain one insight.
 Returns nil and logs warning if content appears to be noise."
   (cl-block gptel-benchmark-memory-create
+    (when (null content)
+      (error "Memory content cannot be nil"))
     (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
            (symbol-str (alist-get symbol gptel-benchmark-memory-symbols "💡"))
            (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir))
@@ -421,7 +429,7 @@ Reads actual memory content and creates proper knowledge page."
       (let ((content (plist-get mem :content)))
         (push (format "- %s\n" 
                       (or (gptel-benchmark--extract-key-point content)
-                          (substring content 0 (min 100 (length content)))))
+                          (and content (substring content 0 (min 100 (length content))))))
               sections)))
     (push "\n## Patterns\n\nPatterns identified across memories.\n" sections)
     (push "\n## Actions\n\nRecommended actions based on synthesis.\n" sections)

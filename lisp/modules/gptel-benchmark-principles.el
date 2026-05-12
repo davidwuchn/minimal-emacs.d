@@ -129,12 +129,21 @@ See mementum/knowledge/nucleus-patterns.md for documentation.")
   "Return criteria list for KEY."
   (list (format "Check %s alignment" key)))
 
+(defvar gptel-benchmark--key-property-cache (make-hash-table :test 'equal)
+  "Cache for eight-keys property lookups.
+Maps (key . property) cons cells to cached values.")
+
 (defun gptel-benchmark--get-key-property (key property)
   "Get PROPERTY for KEY from Eight Keys definitions.
+Uses memoization cache to avoid redundant lookups.
 Helper to reduce duplication in accessor functions."
-  (let ((def (alist-get key gptel-benchmark-eight-keys-definitions)))
-    (if def (plist-get def property)
-      (error "Unknown key: %s" key))))
+  (let ((cache-key (cons key property)))
+    (or (gethash cache-key gptel-benchmark--key-property-cache)
+        (let* ((def (alist-get key gptel-benchmark-eight-keys-definitions))
+               (value (if def (plist-get def property)
+                        (error "Unknown key: %s" key))))
+          (puthash cache-key value gptel-benchmark--key-property-cache)
+          value))))
 
 (defun gptel-benchmark-eight-keys-signals (key)
   "Return positive signal patterns for KEY."
@@ -253,23 +262,29 @@ For hypothesis generation targeting weak areas."
     (nreverse result)))
 
 (defun gptel-benchmark--score-signals (output signals)
-  "Score OUTPUT based on presence of SIGNALS."
-  (let ((matches 0)
-        (total (length signals)))
-    (dolist (signal signals)
-      (when (string-match-p (regexp-quote signal) output)
-        (cl-incf matches)))
-    (if (zerop total) 0.5 (/ (float matches) (float total)))))
+  "Score OUTPUT based on presence of SIGNALS.
+Returns 0.5 if OUTPUT or SIGNALS is nil/empty."
+  (if (or (null output) (null signals) (not (listp signals)))
+      0.5
+    (let ((matches 0)
+          (total (length signals)))
+      (dolist (signal signals)
+        (when (string-match-p (regexp-quote signal) output)
+          (cl-incf matches)))
+      (if (zerop total) 0.5 (/ (float matches) (float total))))))
 
 (defun gptel-benchmark--score-anti-patterns (output anti-patterns)
-  "Score OUTPUT based on absence of ANTI-PATTERNS."
-  (let ((violations 0)
-        (total (length anti-patterns)))
-    (dolist (pattern anti-patterns)
-      (when (string-match-p (regexp-quote pattern) output)
-        (cl-incf violations)))
-    (if (zerop total) 0.5
-      (max 0.0 (- 1.0 (/ (float violations) (float total)))))))
+  "Score OUTPUT based on absence of ANTI-PATTERNS.
+Returns 0.5 if OUTPUT or ANTI-PATTERNS is nil/empty."
+  (if (or (null output) (null anti-patterns) (not (listp anti-patterns)))
+      0.5
+    (let ((violations 0)
+          (total (length anti-patterns)))
+      (dolist (pattern anti-patterns)
+        (when (string-match-p (regexp-quote pattern) output)
+          (cl-incf violations)))
+      (if (zerop total) 0.5
+        (max 0.0 (- 1.0 (/ (float violations) (float total))))))))
 
 (defun gptel-benchmark-eight-keys-violations (output)
   "Detect all Eight Keys violations in OUTPUT."

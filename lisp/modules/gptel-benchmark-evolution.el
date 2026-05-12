@@ -195,11 +195,20 @@ Choose which principle mutation to apply."
 (defun gptel-benchmark-evolution-act (decision)
   "Act phase: → 🐍 persist to system.
 Execute the mutation."
-  (let ((mutation (plist-get decision :mutation)))
+  (let ((mutation (plist-get decision :mutation))
+        (executed nil)
+        (error-msg nil))
     (when (functionp mutation)
-      (funcall mutation))
-    (list :executed t
-          :principle (plist-get decision :principle))))
+      (condition-case err
+          (progn
+            (funcall mutation)
+            (setq executed t))
+        (error
+         (setq error-msg (format "Mutation error: %s" err))
+         (message "[evolution] %s" error-msg))))
+    (list :executed executed
+          :principle (plist-get decision :principle)
+          :error error-msg)))
 
 (defun gptel-benchmark-evolution-mutate (act-result)
   "Generate mutation output from ACT-RESULT.
@@ -359,7 +368,9 @@ SYSTEM + Feed Forward = AI COMPLETE"
      :symptom "Workflow skipped required phases (P1→P3 without P2)"
      :detection (lambda (results)
                   (let* ((phases (plist-get results :phases))
-                         (phase-list (when (vectorp phases) (append phases nil))))
+                         (phase-list (cond ((vectorp phases) (append phases nil))
+                                           ((and (listp phases) (proper-list-p phases)) phases)
+                                           (t nil))))
                     (when (and phase-list
                                (cl-find 'P3 phase-list :key (lambda (p) (plist-get p :phase)))
                                (not (cl-find 'P1 phase-list :key (lambda (p) (plist-get p :phase)))))

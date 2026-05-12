@@ -292,6 +292,11 @@ When ancestry is clear: if every unmerged path is a declared submodule
 and one side's gitlink is an ancestor of the other, record the
 descendant gitlink in the index and return non-nil.
 Otherwise leave the merge unresolved and return nil."
+  (when (and worktree
+             (not (file-directory-p worktree)))
+    (message "[auto-workflow] worktree %s is not a directory, using default-directory"
+             worktree)
+    (setq worktree nil))
   (let* ((root (or worktree default-directory))
          (default-directory root)
          (submodule-paths (gptel-auto-workflow--staging-submodule-paths root))

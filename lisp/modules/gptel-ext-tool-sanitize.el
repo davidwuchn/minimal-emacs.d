@@ -184,15 +184,14 @@ RunAgent was registered, leaving it out of the buffer's tool list."
                                   (my/gptel--find-tool-fuzzy name tools)))
                (direct-tool (and (stringp name)
                                  (fboundp 'gptel-get-tool)
-                                 (ignore-errors (gptel-get-tool name)))))
+                                 (ignore-errors (gptel-get-tool name))))
+               (fuzzy-match (and (stringp name) my/gptel-tool-repair-enabled
+                                 (my/gptel--find-tool-fuzzy name all-tools))))
           (cond
            (matched-tool
             (my/gptel--repair-tool-call tc (gptel-tool-name matched-tool)))
-           ((or direct-tool
-                 (when (and (stringp name) my/gptel-tool-repair-enabled)
-                   (my/gptel--find-tool-fuzzy name all-tools)))
-            (let* ((global-tool (or direct-tool
-                                    (my/gptel--find-tool-fuzzy name all-tools)))
+           ((or direct-tool fuzzy-match)
+            (let* ((global-tool (or direct-tool fuzzy-match))
                    (correct-name (gptel-tool-name global-tool))
                    (new-tools (append tools (list global-tool))))
               (my/gptel--repair-tool-call tc correct-name)
@@ -286,7 +285,7 @@ only when both the tool name and the serialized argument plist match."
 
 (defun my/gptel--inspection-tool-target (tc)
   "Return the inspected file path for tool call TC, or nil when unavailable."
-  (when (listp tc)
+  (when (proper-list-p tc)
     (let ((name (plist-get tc :name))
           (args (plist-get tc :args)))
       (when (and (member name my/gptel--inspection-tools)
