@@ -154,7 +154,61 @@ gh api users/davidwuchn/repos --jq '.[] | {name: .name, fork: .fork, upstream: .
 5. Extract patterns you've developed, issues you've identified, PRs you've built
 6. These are YOUR ideas - they have highest relevance
 
-### Secondary: External Sources (if time permits)
+### Priority 2: External Reference Repos (Deep Analysis)
+
+**For EACH reference repo, perform structured comparison:**
+
+#### Step 1: Deep Dive (Per Repo)
+```bash
+# Fetch repo structure and README
+gh repo view OWNER/REPO --json name,description,topics,defaultBranch
+gh api repos/OWNER/REPO/readme --jq '.content' | base64 -d
+
+# List recent commits for pattern analysis
+gh api repos/OWNER/REPO/commits --jq '.[] | {message: .commit.message, author: .commit.author.name, date: .commit.author.date}' | head -20
+
+# Check for architectural docs
+gh api repos/OWNER/REPO/contents/docs 2>/dev/null || echo "No docs/"
+gh api repos/OWNER/REPO/contents/README.md --jq '.content' | base64 -d 2>/dev/null | head -100
+```
+
+#### Step 2: Feature Extraction (What They Have)
+For each reference repo, extract:
+- **Core capabilities**: What does this tool do that ours doesn't?
+- **Architecture patterns**: How is it structured? (modules, layers, FSMs, etc.)
+- **Key algorithms**: Any novel approaches to common problems?
+- **Integration patterns**: How does it hook into external systems?
+- **User experience**: What workflows does it enable?
+
+#### Step 3: Gap Analysis (What We Lack)
+Compare against `davidwuchn/minimal-emacs.d`:
+- **Capability gaps**: Features they have that we don't
+- **Architecture gaps**: Structural patterns we're missing
+- **Integration gaps**: External systems they connect to that we don't
+- **Quality gaps**: Robustness, error handling, observability differences
+
+#### Step 4: Adaptation Advice (How to Improve)
+For each identified gap, provide:
+- **Specific implementation**: How to build equivalent capability
+- **Integration path**: Where in our codebase it fits
+- **Priority**: High/Medium/Low based on our experiment success patterns
+- **Risk assessment**: What could break, dependencies needed
+
+#### Example: Serena Analysis
+```bash
+gh repo view microsoft/serena --json description,topics
+gl api repos/microsoft/serena/readme --jq '.content' | base64 -d
+gl api repos/microsoft/serena/contents/src 2>/dev/null | head -30
+```
+
+**Serena Gap Analysis:**
+- Their capability: [AI-native code review with structured critique]
+- Our status: [We have basic review but lack structured critique]
+- Implementation advice: [Add critique-template.el with predefined critique dimensions]
+- Integration: [Hook into gptel-tools-agent-review.el before submit]
+- Priority: High (clarity topic has 14.5% success rate)
+
+### Priority 3: General External Sources
 
 7. Use WebSearch tool to find 3-5 recent/relevant items per topic
 8. Use WebFetch tool to read promising pages/videos (max 3 fetches)
