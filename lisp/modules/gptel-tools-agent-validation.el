@@ -157,7 +157,8 @@ and are Emacs Lisp constants, not callable functions."
     (when (stringp line)
       (while (string-match "(\\s-*\\([^[:space:]()\"';]+\\)" line start)
         (let* ((name (match-string 1 line))
-               (sym (and (not (string-match-p "\\`[0-9:]" name))
+               (sym (and (stringp name)
+                         (not (string-match-p "\\`[0-9:]" name))
                          (not (member name '("t" "nil")))
                          (intern name))))
           (when sym
