@@ -57,7 +57,7 @@ Returns checkpoint ID."
                              :checksum checksum
                              :description (or description "Auto-checkpoint")
                              :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S"))))
-      (let ((history (gethash file gptel-benchmark-rollback-history)))
+      (let ((history (gptel-benchmark-rollback--get-history file)))
         (push checkpoint history)
         (when (> (length history) gptel-benchmark-rollback-history-size)
           (setq history (butlast history (- (length history) gptel-benchmark-rollback-history-size))))
@@ -82,7 +82,9 @@ Returns t on success, nil on failure."
 (defun gptel-benchmark-rollback-restore-latest (file)
   "Restore FILE to most recent checkpoint.
 Returns checkpoint ID on success, nil on failure."
-  (let ((history (gethash file gptel-benchmark-rollback-history)))
+  (when (null file)
+    (error "gptel-benchmark-rollback: FILE must not be nil"))
+  (let ((history (gptel-benchmark-rollback--get-history file)))
     (when (and history (> (length history) 0))
       (let ((latest (car history)))
         (gptel-benchmark-rollback-restore file (plist-get latest :id))))))
@@ -106,12 +108,12 @@ Uses latest checkpoint for each file."
 
 (defun gptel-benchmark-rollback-list-checkpoints (file)
   "List all checkpoints for FILE."
-  (gethash file gptel-benchmark-rollback-history))
+  (gptel-benchmark-rollback--get-history file))
 
 (defun gptel-benchmark-rollback-show-history (file)
   "Show rollback history for FILE."
   (interactive "fFile: ")
-  (let ((history (gethash file gptel-benchmark-rollback-history)))
+  (let ((history (gptel-benchmark-rollback--get-history file)))
     (with-output-to-temp-buffer (format "*Rollback History: %s*" file)
       (princ (format "=== Rollback History: %s ===\n\n" file))
       (if (not history)
@@ -140,9 +142,16 @@ Uses latest checkpoint for each file."
 
 ;;; Internal Functions
 
+(defun gptel-benchmark-rollback--get-history (file)
+  "Get checkpoint history for FILE.
+Returns list of checkpoints or nil if none exist."
+  (when (null file)
+    (error "gptel-benchmark-rollback: FILE must not be nil"))
+  (gethash file gptel-benchmark-rollback-history))
+
 (defun gptel-benchmark-rollback--find-checkpoint (file checkpoint-id)
   "Find checkpoint CHECKPOINT-ID for FILE in history."
-  (let ((history (gethash file gptel-benchmark-rollback-history)))
+  (let ((history (gptel-benchmark-rollback--get-history file)))
     (cl-find-if (lambda (cp) (equal (plist-get cp :id) checkpoint-id)) history)))
 
 ;;; Git Integration
