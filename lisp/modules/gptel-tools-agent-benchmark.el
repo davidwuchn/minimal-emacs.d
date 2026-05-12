@@ -439,19 +439,19 @@ resume from buffers outside the original project context."
   "Merge ANALYSIS with deterministic history from PREVIOUS-RESULTS."
   (let* ((fallback (gptel-auto-experiment--fallback-analysis previous-results))
          (patterns (if (gptel-auto-experiment--analysis-value-present-p
-                        (plist-get analysis :patterns))
-                       (plist-get analysis :patterns)
-                     (plist-get fallback :patterns)))
+                        (gptel-auto-workflow--plist-get analysis :patterns nil))
+                       (gptel-auto-workflow--plist-get analysis :patterns nil)
+                     (gptel-auto-workflow--plist-get fallback :patterns nil)))
          (issues (if (gptel-auto-experiment--analysis-value-present-p
-                      (plist-get analysis :issues))
-                     (plist-get analysis :issues)
-                   (plist-get fallback :issues)))
+                      (gptel-auto-workflow--plist-get analysis :issues nil))
+                     (gptel-auto-workflow--plist-get analysis :issues nil)
+                   (gptel-auto-workflow--plist-get fallback :issues nil)))
          (recommendations
           (delete-dups
            (append (gptel-auto-experiment--analysis-list
-                    (plist-get analysis :recommendations))
+                    (gptel-auto-workflow--plist-get analysis :recommendations nil))
                    (gptel-auto-experiment--analysis-list
-                    (plist-get fallback :recommendations))))))
+                    (gptel-auto-workflow--plist-get fallback :recommendations nil))))))
     (when (or (gptel-auto-experiment--analysis-value-present-p patterns)
               (gptel-auto-experiment--analysis-value-present-p issues)
               recommendations)
