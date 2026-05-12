@@ -834,7 +834,8 @@ Without PROJECT-ROOT, clears cache for all projects."
       (let ((root (expand-file-name project-root)))
         (remhash root gptel-auto-workflow--research-findings-cache)
         (message "[research] Cleared findings cache for %s" root))
-    (clrhash gptel-auto-workflow--research-findings-cache)
+    (when (hash-table-p gptel-auto-workflow--research-findings-cache)
+      (clrhash gptel-auto-workflow--research-findings-cache))
     (message "[research] Cleared findings cache for all projects")))
 
 (defvar gptel-auto-workflow--research-status-ttl-seconds 5
