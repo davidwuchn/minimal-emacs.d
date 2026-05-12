@@ -132,6 +132,8 @@ Cached after first call to reduce redundant file system operations."
 Memory files are <200 words and contain one insight.
 Returns nil and logs warning if content appears to be noise."
   (cl-block gptel-benchmark-memory-create
+    (when (null content)
+      (error "Memory content cannot be nil"))
     (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
            (symbol-str (alist-get symbol gptel-benchmark-memory-symbols "💡"))
            (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir))
