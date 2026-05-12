@@ -467,7 +467,9 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (base-prompt (gptel-auto-workflow--substitute-researcher-variables raw-skill))
          (skill-content (gptel-auto-workflow--load-research-skill))
          (directive-content (gptel-auto-workflow--load-directive-skill))
-         (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content)))
+         (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
+         ;; Load AutoTTS-style strategy guidance from replay store
+         (strategy-guidance (gptel-auto-workflow--load-strategy-guidance)))
     (concat (or base-prompt "")
             "\n\n"
             "## Dynamic Context\n\n"
@@ -483,11 +485,16 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                         priority-targets
                         "\n\n")
               "")
+            (if strategy-guidance
+                (concat "### Strategy Performance (AutoTTS Replay Store)\n"
+                        strategy-guidance
+                        "\n\n")
+              "")
             "### Recent Failure Patterns\n"
             (gptel-auto-workflow--research-topics-string)
             "\n\n"
             "---\n"
-            "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
+            "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp."))))
 
 ;;; Meta-Learning Researcher Triggers
 
