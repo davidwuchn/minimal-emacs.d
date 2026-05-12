@@ -166,7 +166,6 @@ This skill auto-evolves every 90 days based on:
 
 ## Instructions
 
-<<<<<<< HEAD
 ### TOP PRIORITY: Your Own GitHub Repos (MANDATORY)
 
 1. **ALWAYS START HERE**: Use `gh` CLI to scan `github.com/davidwuchn` repos FIRST
@@ -380,16 +379,6 @@ Example formats:
 ```
 
 IMPORTANT: Include `gh:` commands for your repos OR `https://` URLs for external sources. Always include source identification.
-=======
-1. Use WebSearch tool to find 3-5 recent/relevant items per topic
-2. Use WebFetch tool to read promising pages/videos (max 3 fetches)
-3. Focus on NOVEL ideas we haven't implemented (check git history first)
-4. Extract specific, actionable techniques - not vague trends
-5. For each insight, provide: source URL, key technique, how it applies to us
-6. Max 1200 chars. Prioritize depth over breadth.
-7. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
-8. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
->>>>>>> origin/main
 
 ---
 
