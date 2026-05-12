@@ -559,12 +559,13 @@ Returns list of deficient element keywords."
 (defun gptel-benchmark-evolution--find-opportunity (observation)
   "Find evolution opportunity from OBSERVATION.
 Returns element keyword if opportunity found, nil otherwise."
-  (when (proper-list-p observation)
-    (let ((deficient (plist-get observation :element-status)))
-      (when (and (listp deficient)
-                 (cl-find-if #'gptel-benchmark-evolution--deficient-p deficient))
-        (plist-get (cl-find-if #'gptel-benchmark-evolution--deficient-p deficient)
-                   :element)))))
+  (when (and (proper-list-p observation)
+             (plist-get observation :element-status))
+    (let* ((deficient (plist-get observation :element-status))
+           (found (and (listp deficient)
+                       (cl-find-if #'gptel-benchmark-evolution--deficient-p deficient))))
+      (when found
+        (plist-get found :element)))))
 
 ;;; Co-Evolution Interface
 
