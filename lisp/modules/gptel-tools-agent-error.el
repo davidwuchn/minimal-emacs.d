@@ -550,10 +550,9 @@ RETRY-COUNT tracks current retry attempt."
                   (< retries gptel-auto-experiment-max-retries)
                   retryable-failure)
              (progn
-                (when (and raw-error
-                           (gptel-auto-experiment--should-blacklist-provider-p raw-error))
+                (when raw-error
                   (condition-case nil
-                      (gptel-auto-workflow--activate-provider-failover
+                      (gptel-auto-workflow--maybe-activate-rate-limit-failover
                        "executor"
                        (gptel-auto-workflow--get-active-agent-preset "executor")
                        raw-error)
