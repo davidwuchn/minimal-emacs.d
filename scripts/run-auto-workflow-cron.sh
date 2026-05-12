@@ -963,15 +963,18 @@ workflow_action_elisp() {
         *) return 1 ;;
     esac
 
-    printf '(let ((root (file-name-as-directory "%s"))) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)) (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root)) %s)' \
+    printf '(let ((root (file-name-as-directory "%s"))) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)) (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root)) (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root)) %s)' \
            "$ROOT_LISP" "$dispatch"
 }
 
 stop_action_elisp() {
     printf '(let ((root (file-name-as-directory "%s")))
-              (let ((agent-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))
+              (let ((agent-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root))
+                    (projects-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root)))
                 (when (file-readable-p agent-file)
-                  (load-file agent-file)))
+                  (load-file agent-file))
+                (when (file-readable-p projects-file)
+                  (load-file projects-file)))
               (when (fboundp (quote gptel-auto-workflow--activate-live-root))
                 (gptel-auto-workflow--activate-live-root root))
               (when (fboundp (quote gptel-auto-workflow-force-stop))
