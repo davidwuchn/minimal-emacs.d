@@ -868,6 +868,23 @@ This skill is consumed by the researcher prompt builder."
                      (goto-char (point-max)))
                    (backward-char (length (match-string 0)))
                    (push (buffer-substring-no-properties start (point)) recent-insights))))))))
+     ;; Read raw research findings from pipeline
+     (let* ((raw-findings-file (expand-file-name "var/tmp/research-findings.md"
+                                                  (gptel-auto-workflow--worktree-base-root)))
+            (raw-findings (when (file-readable-p raw-findings-file)
+                            (let ((size (nth 7 (file-attributes raw-findings-file))))
+                              ;; Only use if >500 bytes and <7 days old
+                              (when (and size
+                                         (> size 500)
+                                         (time-less-p
+                                          (time-subtract (current-time) (days-to-time 7))
+                                          (file-attribute-modification-time (file-attributes raw-findings-file))))
+                                (with-temp-buffer
+                                  (insert-file-contents raw-findings-file)
+                                  (buffer-string)))))))
+       (when raw-findings
+         (push raw-findings recent-insights)))
+     
      ;; Generate skill file
     (make-directory skills-dir t)
     (with-temp-file skill-file
