@@ -1394,39 +1394,34 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
           :cache-file-size file-size
           :cache-file-mtime file-mtime-str)))
 
-;;; ─── AutoTTS-style Trace Logging ───
+;;; ─── AutoTTS via Benchmark System ───
 
-(defun gptel-auto-workflow--save-research-trace (prompt output strategy hash)
-  "Save a research session trace for offline AutoTTS-style evaluation.
-PROMPT is the researcher prompt, OUTPUT is the final response,
-STRATEGY is the strategy name, HASH is the research hash.
-Calls Python trace logger to save JSON trace file."
-  (let ((root (gptel-auto-workflow--worktree-base-root))
-        (script (expand-file-name "assistant/skills/researcher-prompt/scripts/log-research-trace.py" root))
-        (trace-id (format-time-string "%Y%m%d-%H%M%S")))
-    (when (file-executable-p script)
-      (let ((cmd (format "%s %s --save %s --prompt-length %d --output-length %d --strategy %s --hash %s"
-                          (shell-quote-argument (expand-file-name script))
-                          (shell-quote-argument trace-id)
-                          (length prompt)
-                          (length output)
-                          (shell-quote-argument strategy)
-                          (shell-quote-argument hash))))
-        (message "[trace] Saving research trace: %s" trace-id)
-        (start-process-shell-command "save-trace" nil cmd)))))
+;; Reuse benchmark infrastructure instead of building separate AutoTTS.
+;; gptel-auto-workflow-research-benchmark.el provides:
+;; - Strategy benchmarking using gptel-benchmark-call-subagent
+;; - Research output scoring
+;; - Automatic strategy evolution
 
 (defun gptel-auto-workflow--run-strategy-evolution ()
-  "Run AutoTTS-style strategy evolution after pipeline completes.
-Evaluates all strategies against cached traces offline, picks best,
-and updates researcher prompt. Called from self-evolution step."
-  (let ((root (gptel-auto-workflow--worktree-base-root))
-        (script (expand-file-name "assistant/skills/researcher-prompt/scripts/evolve-loop.py" root)))
-    (when (file-executable-p script)
-      (message "[evolve] Running AutoTTS strategy evolution...")
-      (let ((output (shell-command-to-string (format "cd %s && python3 %s"
-                                                      (shell-quote-argument root)
-                                                      (shell-quote-argument script)))))
-        (message "[evolve] %s" output)))))
+  "Run AutoTTS-style strategy evolution using benchmark system.
+Uses gptel-auto-workflow-research-benchmark.el to:
+1. Benchmark all strategies (if not already done)
+2. Pick best based on quality/tokens efficiency
+3. Update active strategy for next run."
+  (if (fboundp 'gptel-auto-workflow--evolve-research-strategy)
+      (progn
+        (message "[evolve] Running benchmark-based strategy evolution...")
+        (gptel-auto-workflow--evolve-research-strategy)
+        (message "[evolve] Strategy evolution complete"))
+    ;; Fallback to Python script if benchmark module not loaded
+    (let ((root (gptel-auto-workflow--worktree-base-root))
+          (script (expand-file-name "assistant/skills/researcher-prompt/scripts/unified-evolution.py" root)))
+      (when (file-executable-p script)
+        (message "[evolve] Running Python evolution fallback...")
+        (let ((output (shell-command-to-string (format "cd %s && python3 %s"
+                                                        (shell-quote-argument root)
+                                                        (shell-quote-argument script)))))
+          (message "[evolve] %s" output))))))
 
 (provide 'gptel-auto-workflow-strategic)
 
