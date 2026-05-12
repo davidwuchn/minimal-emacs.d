@@ -177,8 +177,12 @@ fi
 
 # ─── Step 3: Self-Evolution (digest findings/results into skills) ───
 log "=== Step 3: Self-Evolution ==="
-if MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-    "$SCRIPT" evolution >> "$PIPELINE_LOG" 2>&1; then
+evolution_output="$(MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+    "$SCRIPT" evolution 2>&1)"
+printf '%s\n' "$evolution_output" >> "$PIPELINE_LOG"
+if printf '%s' "$evolution_output" | grep -q "already-running"; then
+    log "Self-evolution skipped (already running)"
+elif [ $? -eq 0 ] || printf '%s' "$evolution_output" | grep -q "Self-evolution cycle complete"; then
     log "self-evolution completed"
 else
     log "WARNING: self-evolution command failed"
@@ -192,8 +196,12 @@ if [ "$PIPELINE_SMOKE_ONLY" = "yes" ]; then
     exit 0
 fi
 # Queue the workflow job (daemon will be started if not running)
-MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-    "$SCRIPT" auto-workflow >> "$PIPELINE_LOG" 2>&1 || true
+auto_workflow_output="$(MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+    "$SCRIPT" auto-workflow 2>&1)"
+printf '%s\n' "$auto_workflow_output" >> "$PIPELINE_LOG"
+if printf '%s' "$auto_workflow_output" | grep -q "already-running"; then
+    log "Auto-workflow already running, waiting for completion"
+fi
 wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "copilot-auto-workflow"
 
 # Verify auto-workflow actually completed (not timed out)
