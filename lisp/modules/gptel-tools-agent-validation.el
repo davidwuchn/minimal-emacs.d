@@ -181,7 +181,8 @@ and are Emacs Lisp constants, not callable functions."
 
 This walks code positions and skips lambda/defun argument lists, so ordinary
 variable names are not mistaken for undefined function calls."
-  (let (calls)
+  (when (proper-list-p forms)
+    (let (calls)
     (cl-labels
         ((walk (form)
            (cond
@@ -211,7 +212,7 @@ variable names are not mistaken for undefined function calls."
                  (_
                   (mapc #'walk (cdr form)))))))))
       (mapc #'walk forms))
-    (delete-dups calls)))
+    (delete-dups calls))))
 
 (defun gptel-auto-experiment--introduced-undefined-call (diff forms)
   "Return the first newly-added function call in DIFF not defined by runtime.
