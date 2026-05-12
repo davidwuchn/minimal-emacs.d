@@ -49,9 +49,12 @@ Accepts already-normalized tool structs and registry entries of the form
 COMPARISON-FN should accept two strings and return non-nil if they match.
 Defaults to `string='."
   (cl-find-if (lambda (ts)
-                (let ((tool-name (and (when (fboundp 'gptel-tool-p)
-                                        (gptel-tool-p ts))
-                                      (gptel-tool-name ts))))
+                (let ((tool-name
+                       (and (fboundp 'gptel-tool-p)
+                            (gptel-tool-p ts)
+                            (condition-case nil
+                                (gptel-tool-name ts)
+                              (error nil)))))
                   (and tool-name
                        (funcall (or comparison-fn #'string=)
                                 tool-name name))))
@@ -87,8 +90,14 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
         (when (and my/gptel-tool-repair-enabled normalized)
           (cl-find-if
            (lambda (ts)
-             (string= normalized
-                      (my/gptel--normalize-tool-name (gptel-tool-name ts))))
+             (let ((tool-name (and (fboundp 'gptel-tool-p)
+                                   (gptel-tool-p ts)
+                                   (condition-case nil
+                                       (gptel-tool-name ts)
+                                     (error nil)))))
+               (and tool-name
+                    (string= normalized
+                             (my/gptel--normalize-tool-name tool-name)))))
            tool-specs)))))))
 
 ;; Handle nil/unknown tool calls gracefully instead of hanging the FSM.
@@ -337,7 +346,7 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                  (run-counts (or (plist-get info :doom-loop-run-counts) '()))
                  (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
                  (n my/gptel-doom-loop-threshold)
-                 (fps-end (last fps))
+                 (fps-end (and (proper-list-p fps) (last fps)))
                  (prev-fp (car fps-end))
                  (aborted nil))
             (setq info (plist-put info :doom-loop-fingerprints (append fps new-fps)))

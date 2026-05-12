@@ -59,25 +59,24 @@ Call this when benchmark files are updated."
          (comparison (gptel-benchmark-compare-file-versions name current-version baseline-version)))
     comparison))
 
+(defun gptel-benchmark--get-trend-summary (name version)
+  "Get benchmark summary for NAME VERSION, or nil if file doesn't exist.
+Internal helper to centralize trend data extraction logic."
+  (let* ((benchmark-file (gptel-benchmark-get-file name version)))
+    (when (file-exists-p benchmark-file)
+      (gptel-benchmark-summarize-results
+       (gptel-benchmark-read-json benchmark-file)))))
+
 (defun gptel-benchmark-version-trend (name &optional versions)
   "Show trend for NAME across VERSIONS."
   (unless (and name (stringp name) (not (string-empty-p name)))
     (signal 'wrong-type-argument (list "stringp" name)))
-  (let ((trend-data '()))
-    (if versions
-        (dolist (version versions)
-          (let* ((benchmark-file (gptel-benchmark-get-file name version))
-                 (summary (gptel-benchmark-summarize-results
-                           (gptel-benchmark-read-json benchmark-file))))
-            (push (list :version version :summary summary) trend-data)))
-      (let ((all-versions (gptel-benchmark-get-all-versions name)))
-        (dolist (version all-versions)
-          (let* ((benchmark-file (gptel-benchmark-get-file name version))
-                 (summary (when (file-exists-p benchmark-file)
-                            (gptel-benchmark-summarize-results
-                             (gptel-benchmark-read-json benchmark-file)))))
-            (when summary
-              (push (list :version version :summary summary) trend-data))))))
+  (let ((trend-data '())
+        (versions-to-process (or versions (gptel-benchmark-get-all-versions name))))
+    (dolist (version versions-to-process)
+      (let ((summary (gptel-benchmark--get-trend-summary name version)))
+        (when summary
+          (push (list :version version :summary summary) trend-data))))
     (nreverse trend-data)))
 
 ;;; Summary Comparison
@@ -111,13 +110,13 @@ Results are cached to avoid repeated file I/O for the same benchmark."
               result)
           '())))))
 
-(defun gptel-benchmark-current-version (name)
-  "Get current version of NAME.
-Attempts to read version from VERSION file, falls back to
-scanning benchmark files, then to hardcoded default."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
-  (let ((version-file (format "./assistant/skills/%s/VERSION" name))
+(defun gptel-benchmark--read-version-file (name file-type fallback-fn default)
+  "Read version from NAME's FILE-TYPE file.
+FILE-TYPE is \"VERSION\" or \"BASELINE\".
+FALLBACK-FN is a function to call on found-versions if file read fails.
+DEFAULT is the fallback value if nothing found.
+Internal helper to centralize version file reading logic."
+  (let ((version-file (format "./assistant/skills/%s/%s" name file-type))
         (version nil))
     (when (file-exists-p version-file)
       (with-temp-buffer
@@ -126,16 +125,18 @@ scanning benchmark files, then to hardcoded default."
         (when (re-search-forward "^\\([0-9]+\\.[0-9]+\\.[0-9]+\\)" nil t)
           (setq version (match-string 1)))))
     (unless version
-      (let ((benchmark-dir "./benchmarks/")
-            (found-versions '()))
-        (when (file-exists-p benchmark-dir)
-          (let ((files (directory-files benchmark-dir nil (format "%s-.*-benchmark\\.json$" name))))
-            (dolist (file files)
-              (when (string-match (format "%s-\\(.*\\)-benchmark\\.json$" name) file)
-                (push (match-string 1 file) found-versions))))
-          (when found-versions
-            (setq version (car (sort found-versions 'string-greaterp)))))))
-    (or version "v1.1")))
+      (let ((found-versions (gptel-benchmark--scan-versions-from-dir name)))
+        (when found-versions
+          (setq version (funcall fallback-fn found-versions)))))
+    (or version default)))
+
+(defun gptel-benchmark-current-version (name)
+  "Get current version of NAME.
+Attempts to read version from VERSION file, falls back to
+scanning benchmark files, then to hardcoded default."
+  (unless (and name (stringp name) (not (string-empty-p name)))
+    (signal 'wrong-type-argument (list "stringp" name)))
+  (gptel-benchmark--read-version-file name "VERSION" #'car "v1.1"))
 
 (defun gptel-benchmark-baseline-version (name)
   "Get baseline version of NAME for comparison.
@@ -143,25 +144,7 @@ Attempts to read from BASELINE file, looks for v1.0 or earliest version,
 falls back to hardcoded default."
   (unless (and name (stringp name) (not (string-empty-p name)))
     (signal 'wrong-type-argument (list "stringp" name)))
-  (let ((baseline-file (format "./assistant/skills/%s/BASELINE" name))
-        (version nil))
-    (when (file-exists-p baseline-file)
-      (with-temp-buffer
-        (insert-file-contents baseline-file)
-        (goto-char (point-min))
-        (when (re-search-forward "^\\([0-9]+\\.[0-9]+\\.[0-9]+\\)" nil t)
-          (setq version (match-string 1)))))
-    (unless version
-      (let ((benchmark-dir "./benchmarks/")
-            (found-versions '()))
-        (when (file-exists-p benchmark-dir)
-          (let ((files (directory-files benchmark-dir nil (format "%s-.*-benchmark\\.json$" name))))
-            (dolist (file files)
-              (when (string-match (format "%s-\\(.*\\)-benchmark\\.json$" name) file)
-                (push (match-string 1 file) found-versions))))
-          (when found-versions
-            (setq version (car (sort found-versions 'string<)))))))
-    (or version "v1.0")))
+  (gptel-benchmark--read-version-file name "BASELINE" #'cl-last "v1.0"))
 
 (defun gptel-benchmark-get-file (name version)
   "Get benchmark file path for NAME VERSION."
@@ -169,22 +152,27 @@ falls back to hardcoded default."
     (signal 'wrong-type-argument (list "stringp" name)))
   (format "./benchmarks/%s-%s-benchmark.json" name version))
 
-(defun gptel-benchmark-get-all-versions (name)
-  "Get all available versions of NAME by scanning benchmark directory.
-Returns a list of version strings found in ./benchmarks/ directory."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
+(defun gptel-benchmark--scan-versions-from-dir (name)
+  "Scan benchmarks directory for NAME and return sorted version strings.
+Internal helper to avoid code duplication."
   (let ((benchmark-dir "./benchmarks/")
         (versions '()))
     (when (file-exists-p benchmark-dir)
       (let ((files (directory-files benchmark-dir nil (format "%s-.*-benchmark\\.json$" name))))
         (dolist (file files)
           (when (string-match (format "%s-\\(.*\\)-benchmark\\.json$" name) file)
-            (let ((version (match-string 1 file)))
-              (push version versions))))))
+            (push (match-string 1 file) versions)))))
     (if versions
         (sort versions 'string<)
-      (list "v1.0" "v1.1"))))
+      '())))
+
+(defun gptel-benchmark-get-all-versions (name)
+  "Get all available versions of NAME by scanning benchmark directory.
+Returns a list of version strings found in ./benchmarks/ directory."
+  (unless (and name (stringp name) (not (string-empty-p name)))
+    (signal 'wrong-type-argument (list "stringp" name)))
+  (or (gptel-benchmark--scan-versions-from-dir name)
+      (list "v1.0" "v1.1")))
 
 ;;; Provide
 

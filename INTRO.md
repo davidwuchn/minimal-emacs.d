@@ -8,25 +8,29 @@ extended with a full AI agent system built on
 
 | Metric | Value |
 |--------|-------|
-| **Code fixes** | 300+ real fixes merged |
+| **Code fixes** | 1700+ commits, 1100+ verified experiment merges |
 | **New features** | Auto-workflow, pipeline orchestrator, benchmark, retry loop, researcher, sandbox, strategic planner, skill evolution |
+| **Strategies** | 40+ prompt-building strategies (auto-evolved + hand-written) |
 | **Agents** | 10+ (MiniMax workhorse, moonshot/DashScope/DeepSeek/CF-Gateway fallbacks) |
 | **Cron jobs** | 6 scheduled jobs (auto-workflow, research, mementum, instincts) |
 
-### Latest Features (2026-05-10)
+### Latest Features (2026-05-12)
 
 | Feature | Purpose |
 |---------|---------|
-| **Pipeline Orchestrator** | `run-pipeline.sh`: Research → Digestion → Auto-Workflow in sequence |
-| **Skill Evolution** | 18 auto-evolved skills (DIRECTIVE.md, FINDINGS.md, benchmark-improver, etc.) |
+| **Pipeline Orchestrator** | `run-pipeline.sh`: Research → Self-Evolution → Auto-Workflow in sequence |
+| **Skill Evolution** | 20 auto-evolved skills (DIRECTIVE.md, FINDINGS.md, benchmark-improver, etc.) |
 | **Provider Failover** | 5x retry per provider before advancing chain; auto-switch back when quota resets |
-| **Strategy Evolution** | Meta-Harness harness search: agent-driven proposer, Pareto frontier, held-out test sets |
-| **Backend Fallback** | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway (with auto-return) |
+| **Strategy Evolution** | Meta-Harness search: 40+ strategies, agent-driven proposer, Pareto frontier, held-out test sets |
+| **Backend Fallback** | Executor: MiniMax → ... → CF-Gateway `@cf/moonshotai/kimi-k2.6`; Headless: CF-Gateway `@cf/openai/gpt-oss-120b` |
 | **Benchmark System** | Score tracking, quality metrics, evolution patterns, task-type-aware scoring |
 | **Review Retry Loop** | Executor fixes issues, reviewer validates, max 2 retries |
 | **Periodic Researcher** | Every 4h, finds anti-patterns for target selection via `FINDINGS.md` |
 | **Sandbox Execution** | Safe code evaluation with `proper-list-p` validation and arity checking |
 | **Strategic Planner** | Long-term improvement planning with hypothesis tracking + directive skill |
+| **Transient Error Handling** | Curl exit codes 35 (SSL) and 56 (recv) treated as retryable, not permanent failures |
+| **Self-Evolution Fix** | Pipeline correctly detects "already-running" vs completion status |
+| **Strategy Naming** | Auto-generated `evolved-NNNN` and `candidate-*` names rejected; descriptive names required |
 
 ## Quick Start
 
@@ -103,13 +107,17 @@ Model is configured in YAML frontmatter (single source of truth):
 
 ### Backend Fallback Chain
 
-Auto-workflow uses MiniMax as the primary workhorse with automatic provider failover:
+Auto-workflow uses MiniMax as the primary workhorse with automatic provider failover. The fallback chain differs by agent type:
 
+**Executor (code changes, needs function calling):**
 1. **MiniMax** — `minimax-m2.7-highspeed` (primary)
 2. **DashScope** — `qwen3.6-plus`
 3. **moonshot** — `kimi-k2.6`
 4. **DeepSeek** — `deepseek-v4-pro`
-5. **CF-Gateway** — `@cf/moonshotai/kimi-k2.6`
+5. **CF-Gateway** — `@cf/moonshotai/kimi-k2.6` (262k context, reasoning + function calling)
+
+**Headless subagents (analyzer, grader, etc.):**
+- **CF-Gateway** — `@cf/openai/gpt-oss-120b` (fast reasoning, 128k context)
 
 Requires `api.minimaxi.com` API key in auth-source. All alternate backends require their respective API keys configured in auth-source.
 
@@ -208,6 +216,10 @@ earlier external startup path.
 - **Payload resilience** - pre-send payload compaction, retry-time tool-result
   truncation, tool-array reduction, and reasoning repair for thinking-enabled
   models like Moonshot/Kimi.
+- **Transient error recovery** - curl exit codes 35 (SSL) and 56 (recv) trigger
+  retry + fallback instead of permanent blacklisting.
+- **Self-evolution** - Pipeline auto-digests research findings into evolving
+  skills; correctly handles "already-running" vs completion states.
 - **Tree-sitter code tooling** - structural map, inspect, replace, usages, and
   diagnostics across a multi-language workspace.
 - **Backend indirection** - one backend/model source of truth in
@@ -261,10 +273,14 @@ Phased autonomous agent for optimization experiments with auto-evolution.
 ### Pipeline
 
 ```
-worktree → analyzer → executor → grader → benchmark → code-quality → decide
+Research → Self-Evolution → Auto-Workflow
+                    ↓
+        worktree → analyzer → executor → grader → benchmark → decide
 ```
 
-Decision logic: **70% grader + 30% code quality**
+**Decision logic:** 70% grader + 30% code quality
+**Timeout:** 4 hours max for auto-workflow batch
+**Lock:** Prevents overlapping pipeline runs
 
 ### Features
 
@@ -297,8 +313,9 @@ Proposer (gptel) → 3 candidates → Validate → Prototype → Evolve → Fron
 | **Stateful interface** | `analyze-results`, `get-state`, `set-state` for learning strategies |
 | **Run isolation** | `--run-name`, `--fresh`, per-run evolution summaries |
 | **Evolution summary** | `evolution_summary.jsonl` tracking per-iteration results |
-| **Strategy discovery** | Auto-discovers strategies from `assistant/strategies/prompt-builders/*.el` |
+| **Strategy discovery** | Auto-discovers 40+ strategies from `assistant/strategies/prompt-builders/*.el` |
 | **Signal handling** | Graceful `quit` handling preserves state on interrupt |
+| **Name enforcement** | Rejects generic `evolved-NNNN` and `candidate-*` names; requires descriptive 2-4 word names |
 
 Exploitation axes: A=Template architecture, B=Context retrieval, C=Section ordering, D=Variable computation, E=Skill loading, F=Adaptive compression.
 
@@ -325,12 +342,12 @@ Exploitation axes: A=Template architecture, B=Context retrieval, C=Section order
 
 | Agent | Backend | Purpose |
 |-------|---------|---------|
-| analyzer | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Target selection |
-| comparator | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Before/after comparison |
-| executor | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Code changes |
-| grader | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Quality scoring |
-| reviewer | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Pre-merge code review |
-| researcher | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway | Code research, anti-pattern detection |
+| analyzer | MiniMax → ... → CF-Gateway `@cf/openai/gpt-oss-120b` | Target selection |
+| comparator | MiniMax → ... → CF-Gateway `@cf/openai/gpt-oss-120b` | Before/after comparison |
+| executor | MiniMax → ... → CF-Gateway `@cf/moonshotai/kimi-k2.6` | Code changes |
+| grader | MiniMax → ... → CF-Gateway `@cf/openai/gpt-oss-120b` | Quality scoring |
+| reviewer | MiniMax → ... → CF-Gateway `@cf/openai/gpt-oss-120b` | Pre-merge code review |
+| researcher | MiniMax → ... → CF-Gateway `@cf/openai/gpt-oss-120b` | Code research, anti-pattern detection |
 
 ### Cron Schedule
 
@@ -343,6 +360,12 @@ Exploitation axes: A=Template architecture, B=Context retrieval, C=Section order
 Install: `./scripts/install-cron.sh`
 
 Cron runs through `./scripts/run-auto-workflow-cron.sh`, which uses a dedicated `copilot-auto-workflow` Emacs daemon and writes a fast status snapshot to `var/tmp/cron/auto-workflow-status.sexp`.
+
+**Recent pipeline fixes:**
+- **4h timeout** — Extended from 2h to handle 25+ experiment batches
+- **.dir-locals propagation** — Project config (1200s time-budget) now inherited by all subagent buffers
+- **Self-evolution status** — Correctly detects "already-running" vs actual completion
+- **Completion verification** — Post-timeout check confirms workflow actually finished
 
 ### Usage
 

@@ -52,12 +52,15 @@ the candidate and ask the proposer for a better name."
            (not (string-empty-p proposed-name))
            ;; Reject generic auto-generated names
            (not (string-match-p "\\`evolved-?[0-9]\\{1,4\\}\\'" proposed-name))
+           (not (string-match-p "\\`candidate-" proposed-name))
            (not (file-exists-p
                  (expand-file-name
                   (format "strategy-%s.el" proposed-name)
                   (gptel-auto-workflow--strategies-directory)))))
       proposed-name
-    (when (and proposed-name (string-match-p "\\`evolved-?[0-9]\\{1,4\\}\\'" proposed-name))
+    (when (and proposed-name
+               (or (string-match-p "\\`evolved-?[0-9]\\{1,4\\}\\'" proposed-name)
+                   (string-match-p "\\`candidate-" proposed-name)))
       (message "[strategy-evolution] Rejected generic name '%s', proposer must use descriptive name"
                proposed-name))
     nil))

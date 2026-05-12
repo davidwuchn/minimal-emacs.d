@@ -591,6 +591,8 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
 
 (defun gptel-sandbox--confirm-required-p (tool-spec arg-values)
   "Return non-nil when TOOL-SPEC with ARG-VALUES requires confirmation."
+  (unless (proper-list-p tool-spec)
+    (error "Programmatic confirm-required-p requires a proper plist tool-spec, got: %S" tool-spec))
   (and (boundp 'gptel-confirm-tool-calls)
        gptel-confirm-tool-calls
        (or (eq gptel-confirm-tool-calls t)
