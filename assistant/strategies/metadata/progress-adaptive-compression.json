@@ -1,0 +1,1 @@
+{"name":"progress-adaptive-compression","version":"1.0","hypothesis":"Dynamically shortening failure logs when progress exists reduces noise and encourages exploration.","axis":"F","components":["adaptive-compression","score-tracking"]}

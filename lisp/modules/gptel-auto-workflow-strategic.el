@@ -337,10 +337,10 @@ Returns formatted string for research prompt."
             (or failure-patterns ""))))
 
 (defun gptel-auto-workflow--load-researcher-skill ()
-  "Load researcher skill from auto-workflow/researcher.
+  "Load researcher skill from researcher-prompt.
 Returns skill content or empty string if not found.
-Uses standard skill loader so humans can edit RESEARCHER.md."
-  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/researcher")))
+Uses standard skill loader so humans can edit researcher-prompt/SKILL.md."
+  (let ((content (gptel-auto-workflow--load-skill-content "researcher-prompt")))
     (if (or (null content) (string-empty-p content))
         (progn
           (message "[research] RESEARCHER.md skill not found, using default")
@@ -711,23 +711,27 @@ RULES:
             (message "[auto-workflow] gptel-request unavailable, using raw findings")
             (funcall callback raw-findings)))))))
 
-(defun gptel-auto-workflow--research-patterns (callback)
+(defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
   "Hunt for external ideas from internet sources.
 CALLBACK receives DIGESTED research findings string.
+Optional RETRY-COUNT tracks recursive retries (max 2).
 
 Pipeline: External hunt → Raw findings → LLM digestion → Actionable insights
 ASSUMPTION: Subagent may or may not be available.
 BEHAVIOR: Uses subagent with web tools if available, otherwise returns empty.
 EDGE CASE: Returns empty findings if subagent unavailable.
 META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
-  (let ((research-prompt (gptel-auto-workflow--build-research-prompt)))
+  (let ((research-prompt (gptel-auto-workflow--build-research-prompt))
+        (attempt (or retry-count 0)))
     (message "[auto-workflow] Hunting external ideas...")
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
+         ;; Researcher needs more time for web searches + page fetches (600s = 10min)
         (gptel-benchmark-call-subagent
          'researcher "External research" research-prompt
          (lambda (result)
            (let* ((raw-findings (gptel-auto-workflow--normalize-response result))
+                  (has-external (gptel-auto-workflow--research-has-external-content-p raw-findings))
                   (research-error-p (gptel-auto-workflow--research-error-p raw-findings))
                   (effective-findings (if research-error-p
                                           (gptel-auto-workflow--local-research-patterns)
@@ -737,23 +741,42 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
                   (strategy (or (and (boundp 'gptel-auto-workflow--active-strategy)
                                      gptel-auto-workflow--active-strategy)
                                 "default")))
-             (when research-error-p
-               (message "[auto-workflow] External research failed; using local research fallback (%d chars)"
-                        (length effective-findings)))
-             ;; Store raw research context
-             (setq gptel-auto-workflow--current-research-context
-                   (list :strategy strategy
-                         :hash findings-hash
-                         :findings raw-findings
-                         :source source
-                         :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
-             (message "[auto-workflow] External research raw: %d chars (hash: %s)"
-                      (length raw-findings) (substring findings-hash 0 8))
-             ;; Digest findings before passing to callback
-             (gptel-auto-workflow--digest-research-findings
-              effective-findings
-              (lambda (digested)
-                (funcall callback digested))))))
+              (cond
+               ;; If no external content, short response, and we haven't retried too much, trigger failover and retry
+               ((and (not has-external)
+                     (< (length raw-findings) 1000)
+                     (not research-error-p)
+                     (< attempt 2)
+                     (fboundp 'gptel-auto-workflow--activate-provider-failover))
+                (message "[auto-workflow] Researcher returned no external references (%d chars); retrying with next provider (attempt %d)"
+                         (length raw-findings) (1+ attempt))
+                ;; Mark current backend as failed to advance fallback chain
+                (when-let* ((preset (and (boundp 'gptel-agent-preset) gptel-agent-preset))
+                            (backend (plist-get preset :backend)))
+                  (gptel-auto-workflow--activate-provider-failover
+                   "researcher" preset "no external content in research output" t))
+                ;; Retry recursively
+                (gptel-auto-workflow--research-patterns callback (1+ attempt)))
+              ;; Normal path: success or exhausted retries
+              (t
+               (when research-error-p
+                 (message "[auto-workflow] External research failed; using local research fallback (%d chars)"
+                          (length effective-findings)))
+               ;; Store raw research context
+               (setq gptel-auto-workflow--current-research-context
+                     (list :strategy strategy
+                           :hash findings-hash
+                           :findings raw-findings
+                           :source source
+                           :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
+               (message "[auto-workflow] External research raw: %d chars (hash: %s)"
+                        (length raw-findings) (substring findings-hash 0 8))
+               ;; Digest findings before passing to callback
+               (gptel-auto-workflow--digest-research-findings
+                effective-findings
+                (lambda (digested)
+                    (funcall callback digested)))))))
+         600)
       (progn
         (message "[auto-workflow] Subagent unavailable - skipping external research")
         (funcall callback "")))))
@@ -940,12 +963,27 @@ Otherwise, convert using princ representation."
   (and (stringp response)
        (string-match-p "\\`Error:" response)))
 
+(defun gptel-auto-workflow--research-has-external-content-p (response)
+  "Return non-nil when RESPONSE contains actual external research references.
+Checks for URLs, specific source types, or external project mentions.
+A response with only internal code analysis is not external research."
+  (and (stringp response)
+       (> (length response) 200)
+       (or (string-match-p "https?://" response)
+           (string-match-p "\\b\\(GitHub\\|arXiv\\|YouTube\\|Reddit\\|HuggingFace\\|X/Twitter\\)\\b" response)
+           (string-match-p "\\b\\(karthink/gptel\\|hermes-agent\\|zeroclaw\\|ml-intern\\)\\b" response))))
+
 (defun gptel-auto-workflow--research-error-p (response)
-  "Return non-nil when RESPONSE is a researcher task failure wrapper."
+  "Return non-nil when RESPONSE is a researcher task failure wrapper.
+Treats short responses (< 500 chars) without external references as failures.
+Long responses are assumed successful even without explicit URLs."
   (and (stringp response)
        (or (string-match-p "\\`Error:" response)
            (and (fboundp 'gptel-auto-experiment--is-retryable-error-p)
-                (gptel-auto-experiment--is-retryable-error-p response)))))
+                (gptel-auto-experiment--is-retryable-error-p response))
+           ;; Only flag as missing external content if short AND no refs
+           (and (< (length response) 500)
+                (not (gptel-auto-workflow--research-has-external-content-p response))))))
 
 (defun gptel-auto-workflow--analyzer-transient-error-p (response)
   "Return non-nil when RESPONSE reflects a transient analyzer/provider failure."

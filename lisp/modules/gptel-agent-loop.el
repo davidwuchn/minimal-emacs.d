@@ -753,7 +753,8 @@ Returns non-nil if result was delivered."
 USE-TOOLS indicates whether tools were requested.
 Called only from `handle-string-response' when STATE is task-p.
 Returns non-nil if result was delivered."
-  (when (and (gptel-agent-loop--task-p state)
+  (when (and (stringp resp)
+             (gptel-agent-loop--task-p state)
              (gptel-agent-loop--task-summary-requested state)
              (not use-tools))
     (gptel-agent-loop--deliver-result
