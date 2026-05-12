@@ -8,6 +8,23 @@
 
 (require 'cl-lib)
 
+(defvar nucleus--validation-cache nil
+  "Cache for validation results: (timestamp . results).")
+
+(defconst nucleus--validation-cache-ttl 60
+  "Time-to-live in seconds for validation cache.")
+
+(defun nucleus--get-cached-validation ()
+  "Get cached validation results if fresh, else nil."
+  (when (and nucleus--validation-cache
+             (listp nucleus--validation-cache)
+             (= 2 (length nucleus--validation-cache)))
+    (pcase-let ((`(,timestamp . ,results) nucleus--validation-cache))
+      (when (and (numberp timestamp)
+                 (floatp (- (float-time) timestamp))
+                 (< (- (float-time) timestamp) nucleus--validation-cache-ttl))
+        results))))
+
 (defun nucleus--extract-prompt-signature (tool-name prompt-text)
   "Extract lambda signature for TOOL-NAME from PROMPT-TEXT.
 
@@ -58,16 +75,32 @@ Returns (status . message) where status is:
             (format "Mismatch: prompt has %s, registered has %s"
                     prompt-sig registered-args))))))
 
+(defun nucleus--count-validation-results (results)
+  "Count validation RESULTS by status.
+
+Returns (ok . (warnings . errors)) counts."
+  (let ((ok 0) (warnings 0) (errors 0))
+    (cl-loop for (_tool-name . (status . _msg)) in results
+             do (pcase status
+                  ('ok (cl-incf ok))
+                  ('warning (cl-incf warnings))
+                  ('error (cl-incf errors))))
+    (cons ok (cons warnings errors))))
+
 (defun nucleus--validate-all-tools ()
   "Validate all tool prompts match their registered signatures.
 
-Returns alist of (tool-name status . message)."
-  (let ((results '()))
-    (when (and (boundp 'nucleus-tool-prompts) nucleus-tool-prompts)
-      (cl-loop for (tool-name . prompt-text) in nucleus-tool-prompts
-               do (push (cons tool-name (nucleus--validate-tool tool-name prompt-text))
-                        results)))
-    (nreverse results)))
+Returns alist of (tool-name status . message). Results are cached
+for `nucleus--validation-cache-ttl' seconds."
+  (or (nucleus--get-cached-validation)
+      (let ((results '()))
+        (when (and (boundp 'nucleus-tool-prompts) nucleus-tool-prompts)
+          (cl-loop for (tool-name . prompt-text) in nucleus-tool-prompts
+                   do (push (cons tool-name (nucleus--validate-tool tool-name prompt-text))
+                            results)))
+        (setq nucleus--validation-cache
+              (cons (float-time) (nreverse results)))
+        (nreverse results))))
 
 ;;;###autoload
 (defun nucleus-validate-tool-signatures ()
@@ -78,15 +111,11 @@ Displays results in a buffer showing:
 - ⚠ WARNING: Minor issue (no signature, tool not registered)
 - ✗ ERROR: Major mismatch between prompt and registration"
   (interactive)
-  (let ((results (nucleus--validate-all-tools))
-        (errors 0)
-        (warnings 0)
-        (ok 0))
-    (cl-loop for (_result . (status . _msg)) in results
-             do (pcase status
-                  ('ok (cl-incf ok))
-                  ('warning (cl-incf warnings))
-                  ('error (cl-incf errors))))
+  (let* ((results (nucleus--validate-all-tools))
+         (counts (nucleus--count-validation-results results))
+         (ok (car counts))
+         (warnings (cadr counts))
+         (errors (cddr counts)))
     (with-current-buffer (get-buffer-create "*nucleus-tool-validation*")
       (erase-buffer)
       (insert "Nucleus Tool Signature Validation\n")
@@ -106,18 +135,15 @@ Displays results in a buffer showing:
 
 (defun nucleus--report-tool-signatures ()
   "Report signature validation results and warn about errors."
-  (let ((results (nucleus--validate-all-tools))
-        (errors 0)
-        (warnings 0)
-        (ok 0)
-        (error-details '()))
+  (let* ((results (nucleus--validate-all-tools))
+         (counts (nucleus--count-validation-results results))
+         (ok (car counts))
+         (warnings (cadr counts))
+         (errors (cddr counts))
+         (error-details '()))
     (cl-loop for (tool-name . (status . msg)) in results
-             do (pcase status
-                  ('ok (cl-incf ok))
-                  ('warning (cl-incf warnings))
-                  ('error
-                   (cl-incf errors)
-                   (push (format "%s (%s)" tool-name msg) error-details))))
+             when (eq status 'error)
+             do (push (format "%s (%s)" tool-name msg) error-details))
     (when (> errors 0)
       (message "[nucleus] WARNING: %d tool signature mismatches found: %s"
                errors (string-join (nreverse error-details) ", "))

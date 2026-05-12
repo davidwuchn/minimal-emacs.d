@@ -385,7 +385,7 @@ RESULTS should contain :eight-keys-scores in each entry."
                                  pi-synthesis mu-directness exists-truth forall-vigilance]))
     (dolist (r results)
       (let ((eight-keys (gptel-benchmark--get-score r :eight-keys-scores)))
-        (when eight-keys
+        (when (listp eight-keys)
           (dotimes (i 8)
             (let* ((key (aref key-names i))
                    (score (gptel-benchmark--get-field eight-keys key)))

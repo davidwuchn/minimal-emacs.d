@@ -284,13 +284,18 @@ and other conditions that cause `format' to signal errors."
 (defun my/gptel--tool-call-fingerprint (tc)
   "Return a fingerprint string for tool call TC.
 The fingerprint is \"NAME:MD5(ARGS)\" so two calls are considered identical
-only when both the tool name and the serialized argument plist match."
+only when both the tool name and the serialized argument plist match.
+When args cannot be serialized, uses a hash of the args format to ensure
+each unserializable call gets a unique fingerprint."
   (when (proper-list-p tc)
     (let* ((raw-name (plist-get tc :name))
            (name (if (and raw-name (not (equal raw-name ""))) raw-name "nil"))
            (args (plist-get tc :args))
-           (args-str (my/gptel--safe-serialize-args args)))
-      (concat name ":" (md5 args-str)))))
+           (args-str (my/gptel--safe-serialize-args args))
+           (args-hash (if (string= args-str "unserializable")
+                          (md5 (format "%S" args))
+                        (md5 args-str))))
+      (concat name ":" args-hash))))
 
 (defun my/gptel--inspection-tool-target (tc)
   "Return the inspected file path for tool call TC, or nil when unavailable."
