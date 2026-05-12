@@ -28,17 +28,19 @@ BLOCKS is the list of block names currently in scope."
     (pcase (car form)
       ((or 'quote 'quasiquote 'backquote) nil)
       ('cl-return-from
-       (let ((target (nth 1 form)))
-         (or (and (symbolp target)
-                  (not (memq target blocks))
-                  target)
-             (gptel-auto-experiment--invalid-cl-return-target-in-forms
-              (nthcdr 2 form) blocks))))
+          (let ((target (nth 1 form)))
+            (cond
+             ((null target) :missing-target)
+             ((not (symbolp target)) target)
+             ((memq target blocks)
+              (gptel-auto-experiment--invalid-cl-return-target-in-forms
+               (nthcdr 2 form) blocks))
+             (t target))))
       ('cl-block
-       (let ((name (nth 1 form)))
-         (gptel-auto-experiment--invalid-cl-return-target-in-forms
-          (nthcdr 2 form)
-          (if (symbolp name) (cons name blocks) blocks))))
+          (let ((name (nth 1 form)))
+            (gptel-auto-experiment--invalid-cl-return-target-in-forms
+             (nthcdr 2 form)
+             (if (symbolp name) (cons name blocks) blocks))))
       ((or 'cl-defun 'cl-defmacro 'cl-defsubst)
        (let ((name (nth 1 form))
              (body (nthcdr 3 form)))
@@ -130,11 +132,11 @@ regular file content."
            (when (symbolp (cadr form))
              (push (cadr form) symbols)))
           ('autoload
-           (let ((quoted (cadr form)))
-             (when (and (consp quoted)
-                        (eq (car quoted) 'quote)
-                        (symbolp (cadr quoted)))
-               (push (cadr quoted) symbols)))))))
+            (let ((quoted (cadr form)))
+              (when (and (consp quoted)
+                         (eq (car quoted) 'quote)
+                         (symbolp (cadr quoted)))
+                (push (cadr quoted) symbols)))))))
     (delete-dups symbols)))
 
 (defun gptel-auto-experiment--diff-added-lines (diff)
