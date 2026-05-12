@@ -573,6 +573,8 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
 
 (defun gptel-sandbox--collect-confirming-plan (forms)
   "Collect static summaries for confirming tool calls in FORMS."
+  (unless (proper-list-p forms)
+    (error "Programmatic collect-confirming-plan requires a proper list, got: %S" forms))
   (let (plan)
     (dolist (statement forms (nreverse plan))
       (pcase-let ((`(,tool-name ,arg-forms)
