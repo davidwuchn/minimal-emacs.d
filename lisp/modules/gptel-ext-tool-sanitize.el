@@ -285,7 +285,7 @@ only when both the tool name and the serialized argument plist match."
 
 (defun my/gptel--inspection-tool-target (tc)
   "Return the inspected file path for tool call TC, or nil when unavailable."
-  (when (listp tc)
+  (when (proper-list-p tc)
     (let ((name (plist-get tc :name))
           (args (plist-get tc :args)))
       (when (and (member name my/gptel--inspection-tools)
