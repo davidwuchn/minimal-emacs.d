@@ -31,6 +31,7 @@ extended with a full AI agent system built on
 | **Transient Error Handling** | Curl exit codes 35 (SSL) and 56 (recv) treated as retryable, not permanent failures |
 | **Self-Evolution Fix** | Pipeline correctly detects "already-running" vs completion status |
 | **Strategy Naming** | Auto-generated `evolved-NNNN` and `candidate-*` names rejected; descriptive names required |
+| **AutoTTS Controller** | Multi-turn research with real-time controller: STOP/CONTINUE/CUT/BRANCH decisions, trace collection, offline evolution |
 
 ## Quick Start
 
@@ -292,6 +293,8 @@ Research → Self-Evolution → Auto-Workflow
 | **TSV Logging** | Explainable results with code_quality column |
 | **Pre-Merge Review** | Reviewer checks for blockers before staging merge |
 | **Strategy Evolution** | Meta-Harness harness search: agent-driven proposal, Pareto frontier, anti-overfitting |
+| **AutoTTS Controller** | Test-time scaling: multi-turn research with STOP/CONTINUE/CUT/BRANCH decisions |
+| **Reward Signal Bridge** | Links research traces to experiment outcomes for controller learning |
 
 ### Strategy Evolution (Meta-Harness)
 
@@ -318,6 +321,33 @@ Proposer (gptel) → 3 candidates → Validate → Prototype → Evolve → Fron
 | **Name enforcement** | Rejects generic `evolved-NNNN` and `candidate-*` names; requires descriptive 2-4 word names |
 
 Exploitation axes: A=Template architecture, B=Context retrieval, C=Section ordering, D=Variable computation, E=Skill loading, F=Adaptive compression.
+
+### AutoTTS: Test-Time Scaling via Controller Discovery
+
+The researcher uses an AutoTTS-style controller for adaptive multi-turn research. Instead of a single long research call, the controller breaks research into shorter turns with checkpoints between them.
+
+**Controller decisions after each turn:**
+- **STOP** — High confidence output with URLs and structure; return findings
+- **CONTINUE** — Partial results; proceed to next turn
+- **CUT** — Over token budget; return accumulated findings
+- **BRANCH** — Stagnation detected; try alternate strategy (e.g., own-repos-first → deep-external)
+
+**Trace Collection & Reward Signal:**
+- Every research session saves a trace to `var/tmp/research-traces/`
+- Step-level logging captures search queries, fetched URLs, and analysis sections
+- Experiment outcomes (kept/discarded) are linked back to traces via `:outcomes` array
+- Controller evolves toward research that leads to kept experiments, not just long output
+
+**Offline Evolution (0 LLM calls):**
+- Strategies benchmarked against historical traces without calling LLMs
+- Convergence detection stops evolution when no meaningful improvement (3-gen window, 0.01 threshold)
+- Evolved controller config saved to `var/tmp/researcher-controller.json`
+- Joint optimization updates both controller parameters and SKILL.md guidance
+
+**Timeout Handling:**
+- Turn 1: 180s (search phase)
+- Turn 2+: 300s (web fetch phase needs more time)
+- On timeout: returns accumulated findings from previous turns instead of failing
 
 ### Architecture
 
