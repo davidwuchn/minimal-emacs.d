@@ -467,7 +467,9 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (base-prompt (gptel-auto-workflow--substitute-researcher-variables raw-skill))
          (skill-content (gptel-auto-workflow--load-research-skill))
          (directive-content (gptel-auto-workflow--load-directive-skill))
-         (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content)))
+         (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
+         ;; Load AutoTTS-style strategy guidance from replay store
+         (strategy-guidance (gptel-auto-workflow--load-strategy-guidance)))
     (concat (or base-prompt "")
             "\n\n"
             "## Dynamic Context\n\n"
@@ -483,10 +485,13 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                         priority-targets
                         "\n\n")
               "")
+            (if strategy-guidance
+                (concat "### Strategy Performance (AutoTTS Replay Store)\n"
+                        strategy-guidance
+                        "\n\n")
+              "")
             "### Recent Failure Patterns\n"
             (gptel-auto-workflow--research-topics-string)
-            "\n\n"
-            "---\n"
             "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
 
 ;;; Meta-Learning Researcher Triggers
@@ -725,7 +730,7 @@ RULES:
               :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
           (progn
             (message "[auto-workflow] gptel-request unavailable, using raw findings")
-              (funcall callback raw-findings))))))))
+              (funcall callback raw-findings)))))))
 
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
   "Hunt for external ideas from internet sources.
@@ -738,8 +743,14 @@ BEHAVIOR: Uses subagent with web tools if available, otherwise returns empty.
 EDGE CASE: Returns empty findings if subagent unavailable.
 META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
   (let ((research-prompt (gptel-auto-workflow--build-research-prompt))
-        (attempt (or retry-count 0)))
+        (attempt (or retry-count 0))
+        ;; Load AutoTTS controller config for this session
+        (controller-config (gptel-auto-workflow--load-autotts-controller))
+        (controller-decision 'continue))
     (message "[auto-workflow] Hunting external ideas...")
+    (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%"
+             (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
+             (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
          ;; Researcher needs more time for web searches + page fetches (600s = 10min)
@@ -756,8 +767,17 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
                   (findings-hash (sha1 raw-findings))
                   (strategy (or (and (boundp 'gptel-auto-workflow--active-strategy)
                                      gptel-auto-workflow--active-strategy)
-                                "default")))
-              (cond
+                                "default"))
+                  ;; AutoTTS: Evaluate if we should stop early
+                  (confidence (gptel-auto-workflow--estimate-confidence raw-findings))
+                  (tokens-used (/ (length raw-findings) 4)))
+             ;; Controller decision: should we stop, continue, or branch?
+             (setq controller-decision
+                   (gptel-auto-workflow--controller-decide-research-flow
+                    controller-config (length raw-findings)))
+             (message "[autotts] Research result: %d chars, confidence=%.2f, decision=%s"
+                      (length raw-findings) confidence controller-decision)
+             (cond
                ;; If no external content, short response, and we haven't retried too much, trigger failover and retry
                ((and (not has-external)
                      (< (length raw-findings) 1000)
@@ -787,28 +807,33 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
                             :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
                 (message "[auto-workflow] External research raw: %d chars (hash: %s)"
                          (length raw-findings) (substring findings-hash 0 8))
+                ;; Save research trace for AutoTTS-style offline evaluation
+                ;; Include controller decision and confidence for evolution
+                (gptel-auto-workflow--save-research-trace
+                 research-prompt raw-findings strategy findings-hash
+                 controller-decision confidence tokens-used)
+                ;; Run AutoTTS benchmark if available
+                (when (fboundp 'gptel-auto-workflow--benchmark-research-strategy)
+                  (gptel-auto-workflow--benchmark-research-strategy
+                   strategy "external-research"
+                   (lambda (result)
+                     (message "[benchmark] Research strategy '%s' scored: %.2f"
+                              strategy (or (plist-get result :quality) 0.0)))))
                 ;; SEPARATION: Local/internal research goes to DIRECTIVE.md, not FINDINGS.md
-                (if research-error-p
-                    ;; External failed: digest local patterns for DIRECTIVE, pass empty to FINDINGS
-                    (progn
-                      (gptel-auto-workflow--digest-research-findings
-                       effective-findings
-                       (lambda (digested)
-                         ;; Write internal patterns to separate file for DIRECTIVE.md
-                         (let ((internal-file (expand-file-name "var/tmp/internal-research.md"
-                                                                (gptel-auto-workflow--effective-project-root))))
-                           (make-directory (file-name-directory internal-file) t)
-                           (with-temp-file internal-file
-                             (insert (format "# Internal Code Analysis\n\n> Updated: %s\n\n%s"
-                                             (format-time-string "%Y-%m-%d %H:%M")
-                                             digested))))
-                         ;; Pass empty to external findings callback
-                         (funcall callback ""))))
-                   ;; External succeeded: digest and pass to callback normally
-                   (gptel-auto-workflow--digest-research-findings
-                    effective-findings
-                    (lambda (digested)
-                      (funcall callback digested))))))))
+                ;; Always digest findings and pass to callback, regardless of source
+                (gptel-auto-workflow--digest-research-findings
+                 effective-findings
+                 (lambda (digested)
+                   ;; Write internal patterns to separate file for DIRECTIVE.md
+                   (let ((internal-file (expand-file-name "var/tmp/internal-research.md"
+                                                          (gptel-auto-workflow--effective-project-root))))
+                     (make-directory (file-name-directory internal-file) t)
+                     (with-temp-file internal-file
+                       (insert (format "# Internal Code Analysis\n\n> Updated: %s\n\n%s"
+                                       (format-time-string "%Y-%m-%d %H:%M")
+                                       digested))))
+                   ;; Always pass findings to callback (local or external)
+                   (funcall callback digested))))))))
          600)
       (progn
         (message "[auto-workflow] Subagent unavailable - skipping external research")
@@ -1260,6 +1285,134 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
                    (length static-targets) (length final-targets))
           (funcall callback final-targets))))))
 
+;;; ─── AutoTTS Trace Collection & Controller ───
+
+(defvar gptel-auto-workflow--research-trace-dir
+  (expand-file-name "var/tmp/research-traces")
+  "Directory to save research traces for AutoTTS offline evaluation.")
+
+(defvar gptel-auto-workflow--active-strategy nil
+  "Currently active research strategy (evolved by benchmark system).")
+
+(defun gptel-auto-workflow--save-research-trace (prompt output strategy hash &optional controller-decision confidence tokens-used)
+  "Save research session trace for AutoTTS offline evaluation.
+PROMPT is the research prompt sent to subagent.
+OUTPUT is the raw response.
+STRATEGY is the strategy name used.
+HASH is the findings hash.
+CONTROLLER-DECISION is symbol: stop, continue, branch, or cut.
+CONFIDENCE is estimated confidence score (0-1).
+TOKENS-USED is estimated token count."
+  (let* ((trace-dir gptel-auto-workflow--research-trace-dir)
+         (timestamp (format-time-string "%Y%m%d-%H%M%S"))
+         (trace-file (expand-file-name (format "%s-%s.json" timestamp hash)
+                                      trace-dir)))
+    (make-directory trace-dir t)
+    (let ((trace-data
+           (list :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                 :strategy strategy
+                 :findings-hash hash
+                 :prompt-length (length prompt)
+                 :output-length (length output)
+                 :has-urls (if (string-match-p "https?://" output) t nil)
+                 :has-code (if (string-match-p "```" output) t nil)
+                 :has-structure (if (string-match-p "## .*\\n" output) t nil)
+                 :source (if (string-match-p "davidwuchn" output) "own-repo" "external")
+                 :controller-decision (symbol-name (or controller-decision 'continue))
+                 :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
+                 :tokens-used (or tokens-used (/ (length output) 4))
+                 :metadata (list :tokens-estimate (/ (length output) 4)
+                                :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))))))
+      (with-temp-file trace-file
+        (insert (json-encode trace-data)))
+      (message "[autotts] Saved research trace: %s" (file-name-nondirectory trace-file)))))
+
+(defun gptel-auto-workflow--estimate-confidence (output)
+  "Estimate confidence score (0-1) from research output.
+Heuristic based on AutoTTS confidence signals."
+  (let ((score 0.0)
+        (len (length output)))
+    ;; URLs present = credible
+    (when (string-match-p "https?://" output)
+      (setq score (+ score 0.3)))
+    ;; Structured format = organized thinking
+    (when (string-match-p "## .*\\n" output)
+      (setq score (+ score 0.2)))
+    ;; Code examples = specific
+    (when (string-match-p "```" output)
+      (setq score (+ score 0.2)))
+    ;; Length appropriate
+    (cond ((> len 3000) (setq score (+ score 0.2)))
+          ((> len 1000) (setq score (+ score 0.1)))
+          (t (setq score (+ score 0.05))))
+    ;; Actionable items
+    (when (string-match-p "\\*\\*" output)
+      (setq score (+ score 0.1)))
+    score))
+
+(defun gptel-auto-workflow--load-autotts-controller ()
+  "Load AutoTTS controller configuration.
+Returns plist with controller parameters."
+  (let ((controller-file (expand-file-name "var/tmp/researcher-controller.json"
+                                          (gptel-auto-workflow--effective-project-root))))
+    (if (file-exists-p controller-file)
+        (let ((json-object-type 'plist))
+          (with-temp-buffer
+            (insert-file-contents controller-file)
+            (json-read)))
+      ;; Default controller config
+      (list :own-repo-priority 0.7
+            :fork-priority 0.4
+            :external-priority 0.15
+            :web-priority 0.05
+            :min-confidence-stop 0.7
+            :max-tokens-budget 8000
+            :min-insights-for-stop 2
+            :stagnation-window 2))))
+
+(defun gptel-auto-workflow--controller-decide-research-flow (controller-config output-length)
+  "AutoTTS controller: decide what to do next based on state.
+CONTROLLER-CONFIG is plist with parameters.
+OUTPUT-LENGTH is current response length.
+Returns symbol: stop, continue, branch, or cut."
+  (let ((tokens-used (/ output-length 4))
+        (max-tokens (or (plist-get controller-config :max-tokens-budget) 8000))
+        (min-confidence (or (plist-get controller-config :min-confidence-stop) 0.7)))
+    (cond
+     ;; Over budget → cut
+     ((> tokens-used max-tokens)
+      (message "[autotts] Controller: CUT (budget %d/%d)" tokens-used max-tokens)
+      'cut)
+     ;; High confidence + good length → stop
+     ((and (> output-length 2000)
+           (string-match-p "https?://" output-length))
+      (message "[autotts] Controller: STOP (good output)")
+      'stop)
+     ;; Default → continue
+     (t 'continue))))
+
+(defun gptel-auto-workflow--load-strategy-guidance ()
+  "Load AutoTTS strategy guidance from controller config.
+Returns formatted string with current controller parameters."
+  (let* ((controller-config (gptel-auto-workflow--load-autotts-controller))
+         (own-priority (* 100 (or (plist-get controller-config :own-repo-priority) 0.7)))
+         (external-priority (* 100 (or (plist-get controller-config :external-priority) 0.15)))
+         (stop-threshold (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
+         (budget (or (plist-get controller-config :max-tokens-budget) 8000))
+         (based-on (or (plist-get controller-config :based-on-traces) 0))
+         (evolved-at (or (plist-get controller-config :evolved-at) "never")))
+    (concat
+     "**Current Controller Config** (evolved " evolved-at " from " (number-to-string based-on) " traces):\n\n"
+     "- Own repo priority: " (format "%.0f%%" own-priority) "\n"
+     "- External priority: " (format "%.0f%%" external-priority) "\n"
+     "- Stop threshold: " (format "%.0f%%" stop-threshold) " confidence\n"
+     "- Token budget: " (number-to-string budget) "\n\n"
+     "**Decision Rules**:\n"
+     "1. If confidence > " (format "%.0f%%" stop-threshold) " + have URLs → STOP early\n"
+     "2. If output < 1000 chars → CONTINUE searching\n"
+     "3. If > " (number-to-string budget) " tokens → CUT (return what you have)\n"
+     "4. Check own repos (davidwuchn/*) FIRST before external\n")))
+
 ;;; Periodic Research
 
 (defun gptel-auto-workflow--research-file ()
@@ -1383,6 +1536,42 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
           :cache-file-exists file-exists
           :cache-file-size file-size
           :cache-file-mtime file-mtime-str)))
+
+;;; ─── AutoTTS via Benchmark System ───
+
+;; Reuse benchmark infrastructure instead of building separate AutoTTS.
+;; gptel-auto-workflow-research-benchmark.el provides:
+;; - Strategy benchmarking using gptel-benchmark-call-subagent
+;; - Research output scoring
+;; - Automatic strategy evolution
+
+(defun gptel-auto-workflow--run-strategy-evolution ()
+  "Run AutoTTS-style strategy evolution using benchmark system.
+Uses gptel-auto-workflow-research-benchmark.el to:
+1. Load research traces
+2. Evolve controller from trace analysis
+3. Benchmark strategies offline
+4. Pick best based on quality/tokens efficiency
+5. Update active strategy and controller for next run."
+  (message "[evolve] Running AutoTTS evolution cycle...")
+  (if (fboundp 'gptel-auto-workflow--run-autotts-evolution)
+      ;; Full AutoTTS evolution (traces → controller → strategy)
+      (gptel-auto-workflow--run-autotts-evolution)
+    ;; Fallback: just evolve strategy from benchmark results
+    (if (fboundp 'gptel-auto-workflow--evolve-research-strategy)
+        (progn
+          (message "[evolve] Running benchmark-based strategy evolution...")
+          (gptel-auto-workflow--evolve-research-strategy)
+          (message "[evolve] Strategy evolution complete"))
+      ;; Fallback to Python script
+      (let* ((root (gptel-auto-workflow--worktree-base-root))
+             (script (expand-file-name "assistant/skills/researcher-prompt/scripts/unified-evolution.py" root)))
+        (when (file-executable-p script)
+          (message "[evolve] Running Python evolution fallback...")
+          (let ((output (shell-command-to-string (format "cd %s && python3 %s"
+                                                          (shell-quote-argument root)
+                                                          (shell-quote-argument script)))))
+            (message "[evolve] %s" output)))))))
 
 (provide 'gptel-auto-workflow-strategic)
 

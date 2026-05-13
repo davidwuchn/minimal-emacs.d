@@ -164,6 +164,10 @@ This skill auto-evolves every 90 days based on:
 - **HuggingFace**: New models, datasets, or spaces for code agents
 - **Reddit**: r/emacs, r/LocalLLaMA, r/MachineLearning discussions
 
+## Strategy Guidance (from Replay Store)
+
+{{strategy-guidance}}
+
 ## Instructions
 
 **MANDATORY FIRST STEP - CHECK OWN REPOS FIRST:**
@@ -172,15 +176,28 @@ Use WebSearch with query: `site:github.com/davidwuchn gptel OR emacs OR agent`
 Use WebFetch to read recent commits from davidwuchn's forked repos.
 **DO NOT SKIP THIS STEP.** Own repos have 70% insight rate vs 5% for general web.
 
-1. Use WebSearch tool to find 3-5 recent/relevant items per topic
-2. Use WebFetch tool to read promising pages/videos (max 3 fetches)
-3. Focus on NOVEL ideas we haven't implemented (check git history first)
-4. Extract specific, actionable techniques - not vague trends
-5. For each insight, provide: source URL, key technique, how it applies to us
-6. Max 1200 chars. Prioritize depth over breadth.
+1. **LOAD STRATEGY GUIDANCE** above - it tells you which strategies worked best historically
+2. Use WebSearch tool to find 3-5 recent/relevant items per topic
+3. Use WebFetch tool to read promising pages/videos (max 3 fetches)
+4. Focus on NOVEL ideas we haven't implemented (check git history first)
+5. Extract specific, actionable techniques - not vague trends
+6. For each insight, provide: source URL, key technique, how it applies to us
 7. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
 8. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
 9. **OWN REPOS FIRST**: Only search external sources AFTER checking davidwuchn/* repos
+
+**OUTPUT FORMAT (REQUIRED):**
+You MUST end your response with a JSON block like this:
+```json
+{
+  "strategy": "name-of-strategy-used",
+  "sources_checked": ["github.com/davidwuchn/gptel", "mindra.co/blog/..."],
+  "topics_covered": ["nil-safety", "validation-guard"],
+  "estimated_tokens": 3500,
+  "confidence": "high|medium|low"
+}
+```
+This metadata is used to evolve research strategies automatically.
 
 ---
 
