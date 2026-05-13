@@ -1,0 +1,1 @@
+{"name":"topic-cluster-context","version":"1.0","hypothesis":"Retrieving context from semantically similar past changes improves solution quality.","axis":"B","components":["topic-extraction","cluster-retrieval","semantic-matching"]}

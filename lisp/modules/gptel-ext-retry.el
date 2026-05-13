@@ -342,8 +342,9 @@ Returns the number of messages whose reasoning_content was stripped."
                                       (- (length reasoning-indices) keep))))
               (dolist (idx to-strip)
                 (let ((msg (aref messages idx)))
-                  (plist-put msg :reasoning_content "")
-                  (cl-incf stripped)))))))
+                  (when (proper-list-p msg)
+                    (plist-put msg :reasoning_content "")
+                    (cl-incf stripped))))))))
       stripped)))
 
 (defun my/gptel--repair-thinking-tool-call-messages (info)
