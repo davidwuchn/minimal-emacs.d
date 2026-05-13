@@ -67,7 +67,7 @@
         (let ((cache-file (expand-file-name "archive-contents" archive-dir)))
           (when (file-exists-p cache-file)
             (with-temp-buffer
-              (condition-case nil
+              (condition-case err
                   (progn
                     (insert-file-contents cache-file)
                     (let ((contents (read (current-buffer))))
@@ -78,7 +78,9 @@
                               (unless (assq pkg-name package-archive-contents)
                                 (push pkg package-archive-contents)))))
                         (setq loaded t))))
-                (error nil)))))))
+                (error
+                 (message "Bootstrap: failed to load archive cache %s: %S" cache-file err)
+                 nil)))))))
     loaded))
 
 (defun gptel-auto-workflow-bootstrap--ensure-package-installed (root package)
