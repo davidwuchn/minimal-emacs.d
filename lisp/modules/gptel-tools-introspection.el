@@ -36,6 +36,8 @@
 
 (defun my/gptel--get-symbol-source (name)
   "Return the source code for the given symbol NAME."
+  (unless (stringp name)
+    (error "Expected string for name, got: %S" name))
   (let* ((sym (intern-soft name)))
     (unless sym
       (error "Symbol not found: %s" name))
