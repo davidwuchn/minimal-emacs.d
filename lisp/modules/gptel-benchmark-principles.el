@@ -264,7 +264,7 @@ For hypothesis generation targeting weak areas."
 (defun gptel-benchmark--score-signals (output signals)
   "Score OUTPUT based on presence of SIGNALS.
 Returns 0.5 if OUTPUT or SIGNALS is nil/empty."
-  (if (or (null output) (null signals) (not (listp signals)))
+  (if (or (null signals) (not (listp signals)) (not (stringp output)))
       0.5
     (let ((matches 0)
           (total (length signals)))
@@ -276,7 +276,7 @@ Returns 0.5 if OUTPUT or SIGNALS is nil/empty."
 (defun gptel-benchmark--score-anti-patterns (output anti-patterns)
   "Score OUTPUT based on absence of ANTI-PATTERNS.
 Returns 0.5 if OUTPUT or ANTI-PATTERNS is nil/empty."
-  (if (or (null output) (null anti-patterns) (not (listp anti-patterns)))
+  (if (or (null anti-patterns) (not (listp anti-patterns)) (not (stringp output)))
       0.5
     (let ((violations 0)
           (total (length anti-patterns)))
