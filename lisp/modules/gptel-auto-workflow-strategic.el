@@ -29,6 +29,7 @@
 (require 'cl-lib)
 (require 'json)
 (require 'gptel-tools-agent)
+(require 'gptel-benchmark-subagent nil t)
 
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
@@ -95,6 +96,10 @@ timeout, so keep a dedicated budget to avoid unnecessary static fallbacks."
 
 (defvar gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)
   "Hash table mapping project roots to cached research findings.")
+
+(defvar gptel-auto-workflow--research-in-progress nil
+  "Non-nil when a research call is currently in flight.
+Prevents concurrent research-patterns calls from interleaving.")
 
 (defvar gptel-auto-workflow--context-cache nil
   "Cached context for analyzer prompt, keyed by project root.
@@ -742,6 +747,12 @@ ASSUMPTION: Subagent may or may not be available.
 BEHAVIOR: Uses subagent with web tools if available, otherwise returns empty.
 EDGE CASE: Returns empty findings if subagent unavailable.
 META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
+  ;; Guard against concurrent research calls
+  (when gptel-auto-workflow--research-in-progress
+    (message "[auto-workflow] Research already in progress, skipping concurrent call")
+    (funcall callback "")
+    (cl-return-from gptel-auto-workflow--research-patterns))
+  (setq gptel-auto-workflow--research-in-progress t)
   (let ((research-prompt (gptel-auto-workflow--build-research-prompt))
         (attempt (or retry-count 0))
         ;; Load AutoTTS controller config for this session
@@ -751,6 +762,11 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
     (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%"
              (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
              (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
+    ;; DEBUG: Log subagent availability and current state
+    (message "[debug] subagents-enabled=%s fbound=%s caller=%s"
+             gptel-auto-experiment-use-subagents
+             (fboundp 'gptel-benchmark-call-subagent)
+             (format-time-string "%H:%M:%S"))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
          ;; Researcher needs more time for web searches + page fetches (600s = 10min)
@@ -791,8 +807,10 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
                             (backend (plist-get preset :backend)))
                   (gptel-auto-workflow--activate-provider-failover
                    "researcher" preset "no external content in research output" t))
-                ;; Retry recursively
-                (gptel-auto-workflow--research-patterns callback (1+ attempt)))
+                ;; Retry recursively - flag will be reset by inner call's callback
+                (gptel-auto-workflow--research-patterns callback (1+ attempt))
+                ;; Reset flag for this (outer) call since we're delegating to retry
+                (setq gptel-auto-workflow--research-in-progress nil))
                ;; Normal path: success or exhausted retries
                (t
                 (when research-error-p
@@ -833,10 +851,14 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
                                        (format-time-string "%Y-%m-%d %H:%M")
                                        digested))))
                    ;; Always pass findings to callback (local or external)
+                   ;; Reset flag before calling callback to allow next research
+                   (setq gptel-auto-workflow--research-in-progress nil)
                    (funcall callback digested))))))))
          600)
       (progn
         (message "[auto-workflow] Subagent unavailable - skipping external research")
+        ;; Reset flag before calling callback
+        (setq gptel-auto-workflow--research-in-progress nil)
         (funcall callback ""))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
