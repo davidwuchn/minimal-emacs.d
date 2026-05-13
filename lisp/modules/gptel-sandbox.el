@@ -592,7 +592,10 @@ CALLBACK receives non-nil when approved and nil when rejected."
                         (gptel--format-tool-call tool-name arg-values)
                       (format "%s %s" tool-name (mapconcat #'prin1-to-string arg-values " ")))))
     (if (and (fboundp 'my/gptel-tool-permitted-p)
-             (ignore-errors (my/gptel-tool-permitted-p tool-name)))
+             (condition-case nil
+                 (prog1 (my/gptel-tool-permitted-p tool-name)
+                   t)
+               (error nil)))
         (funcall callback t)
       (funcall callback
                (y-or-n-p (format "Programmatic wants to run %s. Continue? " formatted))))))
