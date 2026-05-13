@@ -411,8 +411,9 @@ Returns nil if ELEMENT is not a valid element symbol."
           (let ((key (intern (format "%s-score" element))))
             (dolist (r results)
               (let ((scores (if (consp r) (cdr r) r)))
-                (when (plist-get scores key)
-                  (setq score (plist-get scores key)))))))
+                (let ((score-value (plist-get scores key)))
+                  (when (numberp score-value)
+                    (setq score score-value)))))))
         (push (list :element element
                     :vsm (gptel-benchmark-element-to-vsm element)
                     :score score
