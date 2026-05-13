@@ -280,16 +280,18 @@ This is the CENTRAL function of self-evolution.
 Writes to optimization-skills/ as skill files that the prompt builder consumes."
   (when gptel-auto-workflow-evolution-enabled
     (let* ((_git-facts (gptel-auto-workflow--git-raw-facts))
-            (skills-dir (expand-file-name "assistant/skills/auto-workflow"
-                                          (gptel-auto-workflow--worktree-base-root)))
-            (token-skill-file (expand-file-name "token-efficiency.md" skills-dir))
-            (_mutation-skill-file (expand-file-name "mutations.md" skills-dir)))
+             (knowledge-dir (expand-file-name "mementum/knowledge"
+                                              (gptel-auto-workflow--worktree-base-root)))
+             (token-skill-file (expand-file-name "token-efficiency.md" knowledge-dir))
+             (skills-dir (expand-file-name "assistant/skills/auto-workflow"
+                                           (gptel-auto-workflow--worktree-base-root)))
+             (_mutation-skill-file (expand-file-name "mutations.md" skills-dir)))
 
-      (make-directory skills-dir t)
+      (make-directory knowledge-dir t)
 
-      ;; ─── Skill 1: Token Efficiency (loaded by prompt builder) ───
-      ;; Do not overwrite auto-workflow/SKILL.md here; unified Python evolution
-      ;; owns canonical skill metadata and may aggregate data from other hosts.
+      ;; ─── Token Efficiency Data (moved from skill to mementum/knowledge) ───
+      ;; Written to mementum/knowledge/ as learned data, not a skill definition.
+      ;; Loaded directly by prompt builder without skill loader overhead.
       (with-temp-file token-skill-file
         (insert "---\n")
         (insert "name: token-efficiency\n")
@@ -1007,10 +1009,11 @@ Uses analyze_results.py + generate_directive.py pipeline."
                                 (gptel-auto-workflow--worktree-base-root))))
     output))
 
-(defun gptel-auto-workflow--evolve-token-efficiency-skill ()
-  "Update token-efficiency skill by calling Python generation script.
-Token efficiency is now part of the unified evolution pipeline."
-  (message "[evolution] Token-efficiency skill updated via unified evolution script")
+(defun gptel-auto-workflow--evolve-token-efficiency-data ()
+  "Update token-efficiency data in mementum/knowledge/.
+Token efficiency is now part of the unified evolution pipeline.
+Data is written directly to mementum/knowledge/token-efficiency.md."
+  (message "[evolution] Token-efficiency data updated in mementum/knowledge/")
   t)
 
 (defun gptel-auto-workflow--load-directive-skill ()
