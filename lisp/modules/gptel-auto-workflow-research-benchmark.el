@@ -172,6 +172,97 @@ Returns list of trace plists."
 (defun gptel-auto-workflow--evolve-controller-from-traces (traces)
   "AutoTTS-style controller evolution from research traces.
 Analyzes traces to update controller parameters.
+TRACES is list of trace plists.
+Uses statistical learning when sufficient traces with outcomes available,
+falls back to heuristic evolution otherwise."
+  ;; Try statistical learning first
+  (let ((statistical-config (gptel-auto-workflow--learn-statistical-controller)))
+    (if statistical-config
+        (progn
+          (message "[autotts] Using statistically learned controller (%d traces)"
+                   (or (plist-get statistical-config :n-traces) 0))
+          statistical-config)
+      ;; Fallback: heuristic evolution
+      (gptel-auto-workflow--evolve-controller-heuristic traces))))
+
+(defun gptel-auto-workflow--learn-statistical-controller ()
+  "Learn controller from trace outcomes using Python script.
+Returns plist with learned parameters, or nil if insufficient data.
+Uses correlation-based learning on traces with :outcomes."
+  (let* ((script (expand-file-name
+                  "assistant/skills/researcher-prompt/scripts/learn_controller.py"
+                  (gptel-auto-workflow--worktree-base-root)))
+         (trace-dir (expand-file-name "var/tmp/research-traces"
+                                      (gptel-auto-workflow--worktree-base-root))))
+    (when (and (file-executable-p script)
+               (file-directory-p trace-dir))
+      (condition-case err
+          (let* ((output (shell-command-to-string
+                          (format "cd %s && python3 %s %s 2>/dev/null"
+                                  (shell-quote-argument (gptel-auto-workflow--worktree-base-root))
+                                  (shell-quote-argument script)
+                                  (shell-quote-argument trace-dir))))
+                 (json-object-type 'plist)
+                 (result (json-read-from-string output)))
+            (if (plist-get result :error)
+                (progn
+                  (message "[autotts] Statistical learning: %s (%s)"
+                           (plist-get result :error)
+                           (plist-get result :n-traces))
+                  nil)
+              ;; Convert Python JSON to Elisp plist
+              (let* ((model (plist-get result :model))
+                     (thresholds (plist-get result :thresholds))
+                     (stats (plist-get result :stats))
+                     (weights (plist-get model :weights)))
+                (message "[autotts] Learned from %d traces (%d kept, %.0f%% base rate)"
+                         (or (plist-get model :n-traces) 0)
+                         (or (plist-get model :n-kept) 0)
+                         (* 100 (or (plist-get model :base-rate) 0)))
+                (message "[autotts] Key weights: length=%.2f urls=%.2f conf=%.2f steps=%.2f"
+                         (or (plist-get weights :output_length) 0)
+                         (or (plist-get weights :has_urls) 0)
+                         (or (plist-get weights :confidence) 0)
+                         (or (plist-get weights :step_count) 0))
+                (list
+                 ;; Strategy priorities (from stats)
+                 :own-repo-priority (min 0.95 (+ 0.7 (* 0.25
+                                                       (or (let ((kept (plist-get stats :kept-means))
+                                                                 (disc (plist-get stats :discarded-means)))
+                                                              (if (and kept disc (> (+ (or (plist-get kept :source_own) 0)
+                                                                                       (or (plist-get disc :source_own) 0)) 0))
+                                                                  (/ (float (plist-get kept :source_own))
+                                                                     (+ (plist-get kept :source_own) (plist-get disc :source_own)))
+                                                               0.5))
+                                                           0.5))))
+                 :fork-priority 0.4
+                 :external-priority 0.15
+                 :web-priority 0.05
+                 ;; Learned thresholds
+                 :min-confidence-stop (or (plist-get thresholds :stop) 0.7)
+                  :max-tokens-budget (or (plist-get thresholds :cut_tokens) 8000)
+                 :min-insights-for-stop 2
+                 :stagnation-window 2
+                 ;; Statistical model
+                 :statistical-model t
+                 :model-intercept (or (plist-get model :intercept) 0)
+                 :model-weights weights
+                  :model-n-traces (or (plist-get model :n_traces) 0)
+                  :model-n-kept (or (plist-get model :n_kept) 0)
+                  :model-base-rate (or (plist-get model :base_rate) 0.5)
+                  ;; Metadata
+                  :evolved-at (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                  :based-on-traces (or (plist-get model :n_traces) 0)
+                  :learning-method "statistical"
+                  :stats-kept-means (plist-get stats :kept_means)
+                  :stats-discarded-means (plist-get stats :discarded_means)))))
+        (error
+         (message "[autotts] Statistical learning failed: %s" err)
+         nil)))))
+
+(defun gptel-auto-workflow--evolve-controller-heuristic (traces)
+  "Heuristic controller evolution (fallback when insufficient data).
+Analyzes traces to update controller parameters using simple heuristics.
 TRACES is list of trace plists."
   (let ((own-repo-success 0)
         (own-repo-total 0)
@@ -219,11 +310,12 @@ TRACES is list of trace plists."
              :stagnation-window 2
              :evolved-at (format-time-string "%Y-%m-%dT%H:%M:%SZ")
              :based-on-traces (length traces)
+             :learning-method "heuristic"
              :own-repo-stats (list :success own-repo-success :total own-repo-total
                                   :rate own-rate)
              :external-stats (list :success external-success :total external-total
                                    :rate external-rate))))
-      (message "[autotts] Controller evolution: own-repo %.0f%% (%d/%d), external %.0f%% (%d/%d)"
+      (message "[autotts] Heuristic evolution: own-repo %.0f%% (%d/%d), external %.0f%% (%d/%d)"
                (* 100 own-rate) own-repo-success own-repo-total
                (* 100 external-rate) external-success external-total)
       new-config)))
