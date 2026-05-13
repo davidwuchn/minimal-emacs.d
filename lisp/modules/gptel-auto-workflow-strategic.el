@@ -1169,6 +1169,7 @@ Returns non-nil if error state was handled."
   "Normalize parsed target CANDIDATE to a repo-relative path when possible."
   (cond
    ((not (stringp candidate)) nil)
+   ((string-empty-p candidate) nil)
    ((or (file-name-absolute-p candidate)
         (string-match-p "/" candidate))
     candidate)
