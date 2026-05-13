@@ -287,6 +287,7 @@ ASSUMPTION: FSM-CALLBACK is a function of one argument (the FSM).
 BEHAVIOR: Calls FSM-CALLBACK once for each unique FSM found.
 BEHAVIOR: Returns nil (callback handles results).
 EDGE CASE: Nil OBJECT returns immediately.
+EDGE CASE: Nil FSM-CALLBACK is treated as no-op (ignored).
 EDGE CASE: Cycles detected via SEEN hash table prevent infinite loops.
 TEST: (my/gptel--fsm-traverse nil h 'ignore) => nil
 TEST: Callback called once for each unique FSM in nested structure.
@@ -300,6 +301,7 @@ without duplicating cycle-detection logic.
 
 PROACTIVE MITIGATION: Single traversal implementation ensures
 consistent behavior across all FSM collection operations."
+  (setq fsm-callback (or fsm-callback #'ignore))
   (cond
    ((null object) nil)
    ((consp object)
