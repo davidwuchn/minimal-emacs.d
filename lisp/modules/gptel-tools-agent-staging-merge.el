@@ -197,14 +197,12 @@ Uses the staging worktree instead of switching branches in the root repo."
                      (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
                      (if (gptel-auto-workflow--non-empty-string-p unmerged-files)
                          (progn
-                           (gptel-auto-workflow--prepare-staging-merge-base reset-target)
                            (message "[auto-workflow] Cherry-pick conflicted; refusing merge fallback. Conflicted files: %s"
                                     (my/gptel--sanitize-for-logging unmerged-files 160))
                            nil)
                        (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
                                 (my/gptel--sanitize-for-logging cherry-output 160))
-                       (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
-                                     (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
+                       (if (not (gptel-auto-workflow--ensure-staging-submodules-ready worktree))
                            nil
                          (let* ((merge-result
                                  (gptel-auto-workflow--git-result
@@ -220,7 +218,6 @@ Uses the staging worktree instead of switching branches in the root repo."
                             (t
                              (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
                              (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                             (gptel-auto-workflow--prepare-staging-merge-base reset-target)
                              (message "[auto-workflow] Merge also failed: %s"
                                       (my/gptel--sanitize-for-logging merge-output 160))
                              nil)))))))))))))))))
