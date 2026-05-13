@@ -5,9 +5,14 @@
 
 ## Current Session: AutoTTS + Self-Evolution Integration + Statistical Controller
 
-**Status:** Infrastructure complete (100%). Learning layer implemented (statistical controller). All syntax valid.
+**Status:** All 5 phases complete. AutoTTS + Self-Evolution integration finished. Adaptive prompts active.
 
 **Done (Today):**
+- **Phase 5 Complete** — Adaptive prompt integration (`db7cfae8`):
+  - `build-adaptive-followup-prompt` injects CONTINUE/BRANCH guidance into research prompts
+  - Controller decision wired through `run-research-turn` recursive calls
+  - Tested: default (179 chars), CONTINUE (435 chars), BRANCH (501 chars)
+  - Pre-existing bug found: heuristic BRANCH has mutually exclusive conditions (dead code)
 - **AutoTTS Integration Complete** — 4 critical gaps filled:
   1. **Reward signal bridge** (`research-benchmark.el:571-614`): `gptel-auto-workflow--update-trace-outcomes` links experiment outcomes to research traces. Hooked into `gptel-auto-experiment-log-tsv`.
   2. **Turn 2 timeout fix** (`strategic.el:768-857`): Returns accumulated findings on timeout instead of failing. Turn 2+ timeout 180s→300s.
@@ -36,13 +41,20 @@
   - Byte-compile: clean
 
 **Verification:**
+- ✅ Phase 5: Adaptive prompts tested (default/CONTINUE/BRANCH)
+- ✅ Phase 5: Byte-compile clean, no new warnings
+- ✅ Phase 5: Committed and pushed (`db7cfae8`)
 - ✅ Statistical learning produces valid config (6 traces, 4 kept, 67% base rate)
 - ✅ Controller switches to statistical method when data available
 - ✅ Probabilities calculated: P(kept|good) ≈ 0.99, P(kept|bad) ≈ 0.01
 - ✅ Falls back to heuristic when insufficient data
 - ✅ All syntax verified via `forward-sexp`
 
-**Pipeline Impact:**
+**Known Issues:**
+- Daemon has persistent loading issue for `strategic.el`; functions manually defined after startup
+- Heuristic BRANCH path has mutually exclusive conditions (pre-existing dead code)
+
+**Pipeline Impact:
 - Controller now LEARNS from data instead of using hardcoded guesses
 - Decisions based on P(kept | features) learned from historical outcomes
 - Traces with outcomes drive controller evolution
@@ -69,9 +81,10 @@
 - Both daemons now have all 60 defuns from strategic.el
 
 **Next Steps:**
-1. **Monitor pipeline** — verify real traces get outcomes populated (mock traces have invalid hashes)
-2. **Observe learned weights** — confirm they make sense after ~5 real traces
-3. **Measure improvement** — compare research effectiveness statistical vs heuristic
+1. **Fix daemon loading** — investigate why `strategic.el` functions aren't defined on daemon startup
+2. **Monitor pipeline** — verify adaptive prompts appear in research logs
+3. **Measure improvement** — compare research effectiveness before vs after Phase 5
+4. **Fix heuristic BRANCH** — resolve mutually exclusive conditions in dead code path
 
 **Pipeline Status:**
 - ✅ Daemons restarted and new code loaded
@@ -108,9 +121,13 @@
 - `evolve-all-skills` now calls `evolve-researcher-skill` before feedback analysis
 - Single cycle: synthesize → consolidate → evolve skills → evolve researcher → AutoTTS strategy evolution
 
-### Phase 5 🔄: Adaptive Prompts (Future)
-- Inject controller decision into research prompt per turn
-- Requires modifying `run-research-turn` to pass decision to prompt builder
+### Phase 5 ✅: Adaptive Prompts (`db7cfae8`)
+- `build-adaptive-followup-prompt` — injects CONTINUE/BRANCH guidance per turn
+- `run-research-turn` — passes controller decision between turns
+- `build-followup-prompt` — deprecated, delegates to adaptive variant
+- Tested: default (179 chars), CONTINUE (435 chars), BRANCH (501 chars)
+- Pre-existing: heuristic BRANCH dead code (mutually exclusive conditions)
+- **Note:** Daemon has persistent loading issue; functions manually defined after startup
 
 ### Test Results
 - Batch test: 2 topic models (performance: 60% base, nil-safety: 80% base)
