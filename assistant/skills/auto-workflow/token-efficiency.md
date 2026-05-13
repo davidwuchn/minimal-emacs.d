@@ -28,7 +28,7 @@ Correlation between prompt size and experiment success:
 
 Which prompt sections improve outcomes:
 
-- **all**: 16% success (118/745 experiments)
+- **all**: 18% success (147/816 experiments)
 
 **Section Inclusion Config:**
 - default: include all
