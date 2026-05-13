@@ -29,47 +29,44 @@
   "Create a fresh test context with empty error list."
   (gptel-test-context--create t nil))
 
+(defmacro gptel-test-context--ensure (ctx)
+  "Validate CTX is a non-nil gptel-test-context, signal on invalid."
+  `(progn
+     (when (null ,ctx)
+       (signal 'wrong-type-argument (list 'gptel-test-context ,ctx)))
+     (cl-check-type ,ctx gptel-test-context)))
+
 (defun gptel-test-context--clear-errors (ctx)
   "Clear all errors in test context CTX and reset passed flag."
-  (when (null ctx)
-    (signal 'wrong-type-argument (list 'gptel-test-context ctx)))
-  (cl-check-type ctx gptel-test-context)
+  (gptel-test-context--ensure ctx)
   (setf (gptel-test-context-errors ctx) nil)
   (setf (gptel-test-context-passed ctx) t)
   ctx)
 
 (defun gptel-test-context--add-error (ctx msg)
   "Record an error MSG in test context CTX and mark as failed."
-  (when (null ctx)
-    (signal 'wrong-type-argument (list 'gptel-test-context ctx)))
-  (cl-check-type ctx gptel-test-context)
+  (gptel-test-context--ensure ctx)
   (setf (gptel-test-context-errors ctx)
         (nconc (gptel-test-context-errors ctx) (list msg)))
   (setf (gptel-test-context-passed ctx) nil))
 
 (defun gptel-test-context--assert-equal (ctx expr expected)
   "Assert in CTX that EXPR equals EXPECTED, record error on mismatch."
-  (when (null ctx)
-    (signal 'wrong-type-argument (list 'gptel-test-context ctx)))
-  (cl-check-type ctx gptel-test-context)
+  (gptel-test-context--ensure ctx)
   (when (not (equal expr expected))
     (gptel-test-context--add-error
      ctx (format "expected %S, got %S" expected expr))))
 
 (defun gptel-test-context--assert-member (ctx expr item)
   "Assert in CTX that ITEM is a member of EXPR list."
-  (when (null ctx)
-    (signal 'wrong-type-argument (list 'gptel-test-context ctx)))
-  (cl-check-type ctx gptel-test-context)
+  (gptel-test-context--ensure ctx)
   (when (not (and (listp expr) (member item expr)))
     (gptel-test-context--add-error
      ctx (format "expected %S in result %S" item expr))))
 
 (defun gptel-test-context--result (ctx)
   "Return final result alist from CTX: (passed . errors)."
-  (when (null ctx)
-    (signal 'wrong-type-argument (list 'gptel-test-context ctx)))
-  (cl-check-type ctx gptel-test-context)
+  (gptel-test-context--ensure ctx)
   (cons (gptel-test-context-passed ctx)
         (or (nreverse (gptel-test-context-errors ctx)) '())))
 
