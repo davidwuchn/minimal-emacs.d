@@ -397,13 +397,13 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
       ;; Pass 1: collect all tool names referenced in tool_calls
       (dotimes (i (length messages))
         (let* ((msg (aref messages i))
-               (tool-calls (plist-get msg :tool_calls)))
+               (tool-calls (and (proper-list-p msg) (plist-get msg :tool_calls))))
           (when tool-calls
             (dotimes (j (length tool-calls))
               (let* ((tc (seq-elt tool-calls j))
-                     (func (plist-get tc :function))
-                     (name (and func (plist-get func :name))))
-                (when name
+                     (func (and (proper-list-p tc) (plist-get tc :function)))
+                     (name (and (proper-list-p func) (plist-get func :name))))
+                (when (and (stringp name) (not (string-empty-p name)))
                   (puthash name t used-names)))))))
       ;; Only filter if we found any used tools (safety: don't send empty tools)
       (when (> (hash-table-count used-names) 0)
@@ -411,8 +411,8 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
                ;; Filter serialized tools vector directly (cl-remove-if-not preserves sequence type)
                (filtered (cl-remove-if-not
                           (lambda (tool-plist)
-                            (let* ((func (plist-get tool-plist :function))
-                                   (name (and func (plist-get func :name))))
+                            (let* ((func (and (proper-list-p tool-plist) (plist-get tool-plist :function)))
+                                   (name (and (proper-list-p func) (plist-get func :name))))
                               (gethash name used-names)))
                           data-tools))
                (new-count (length filtered)))
