@@ -8,16 +8,7 @@ version: 2.0
 
 *Digested by LLM from internet sources. Avoid re-researching these topics.*
 
-## Recent Discoveries (last 14 days)
-
-# Research Findings
-
-> Project: /Users/davidwu/.emacs.d/
-> Updated: 2026-05-12 17:42
-
-()
----
-
+*No recent external research. Run researcher to discover new ideas.*
 
 ## Internal Research Strategy Performance
 
