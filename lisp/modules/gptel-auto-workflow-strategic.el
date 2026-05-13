@@ -447,7 +447,7 @@ Returns placeholder message if TOPICS is nil or empty."
                        (total (gethash "total_experiments" stats 0))
                        (kept (gethash "kept" stats 0))
                        (trend (gethash "trend" stats "stable")))
-                   (push (list topic success-rate total kept trend) topic-list)))
+                   (push (list topic success-rate total kept trend) topic-list))
                topics)
       ;; Sort by success rate descending
       (setq topic-list (sort topic-list (lambda (a b) (> (nth 1 a) (nth 1 b)))))
@@ -871,9 +871,9 @@ Saves trace, runs benchmark, and digests findings."
        (with-temp-file internal-file
          (insert (format "# Internal Code Analysis\n\n> Updated: %s\n\n%s"
                          (format-time-string "%Y-%m-%d %H:%M")
-                         digested))))
+                          digested))))
       ;; Always pass findings to callback
-      (funcall callback digested))))
+      (funcall callback digested)))))
 
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
   "Hunt for external ideas from internet sources with real-time controller.
@@ -918,7 +918,7 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
         (message "[auto-workflow] Subagent unavailable - skipping external research")
         ;; Reset flag before calling callback
         (setq gptel-auto-workflow--research-in-progress nil)
-        (funcall callback "")))))
+         (funcall callback ""))))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -1771,23 +1771,23 @@ Uses gptel-auto-workflow-research-benchmark.el to:
       ;; Full AutoTTS evolution (traces → controller → strategy)
       (gptel-auto-workflow--run-autotts-evolution)
     ;; Fallback: just evolve strategy from benchmark results
-    (if (fboundp 'gptel-auto-workflow--evolve-research-strategy)
-        (progn
-          (message "[evolve] Running benchmark-based strategy evolution...")
-          (gptel-auto-workflow--evolve-research-strategy)
-          (message "[evolve] Strategy evolution complete"))
-      ;; Fallback to Python script
-      (let* ((root (gptel-auto-workflow--worktree-base-root))
-             (script (expand-file-name "assistant/skills/researcher-prompt/scripts/unified-evolution.py" root)))
-        (when (file-executable-p script)
-          (message "[evolve] Running Python evolution fallback...")
-          (let ((output (shell-command-to-string (format "cd %s && python3 %s"
-                                                          (shell-quote-argument root)
-                                                          (shell-quote-argument script)))))
-            (message "[evolve] %s" output))))
-    (message "[evolve] Strategy evolution cycle complete"))))
+    (progn
+      (if (fboundp 'gptel-auto-workflow--evolve-research-strategy)
+          (progn
+            (message "[evolve] Running benchmark-based strategy evolution...")
+            (gptel-auto-workflow--evolve-research-strategy)
+            (message "[evolve] Strategy evolution complete"))
+        ;; Fallback to Python script
+        (let* ((root (gptel-auto-workflow--worktree-base-root))
+               (script (expand-file-name "assistant/skills/researcher-prompt/scripts/unified-evolution.py" root)))
+          (when (file-executable-p script)
+            (message "[evolve] Running Python evolution fallback...")
+            (let ((output (shell-command-to-string (format "cd %s && python3 %s"
+                                                            (shell-quote-argument root)
+                                                            (shell-quote-argument script)))))
+              (message "[evolve] %s" output)))))
+      (message "[evolve] Strategy evolution cycle complete"))))
 
 (provide 'gptel-auto-workflow-strategic)
 
 ;;; gptel-auto-workflow-strategic.el ends here
-)
