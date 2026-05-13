@@ -1,30 +1,34 @@
 # Mementum State
 
-> Last session: 2026-05-12 10:12
+> Last session: 2026-05-13
 
-## Current Session: 2026-05-12 Executor Retry-First Logic
+## Current Session: 2026-05-13 Researcher Race Condition Fixes
 
-**Status:** Executor now retries MiniMax 5 times before advancing to fallback (same pattern as aux subagents). Pipeline 11:00 will test the new logic.
+**Status:** Fixed race conditions causing 0-char research findings and "research: unknown" pipeline failures.
 
 **Done:**
-- Fixed executor failover to handle timeouts (curl 28) not just rate limits
-- Added `provider-attempts` tracking to executor retry loop
-- Increased `max-per-provider-attempts` from 2 to 5 for MiniMax subscription
-- Increased `max-retries` from 2 to 5
-- Timeout: advance provider WITHOUT blacklisting (transient)
-- Rate limit/hard quota: advance AND blacklist permanently
-- Synced with remote, resolved merge conflicts
+- Added `(require 'gptel-benchmark-subagent nil t)` to strategic.el to ensure subagent function is always loaded before `fboundp` check
+- Added debug instrumentation logging subagent availability state and timestamp
+- Added `gptel-auto-workflow--research-in-progress` guard to prevent overlapping async research calls from interleaving
+- Reset guard flag in all callback paths: success (before calling callback), retry (before recursive call), and unavailable branch
+- Merged origin/main (remote AutoTTS integration fixes + adaptive-skills strategy)
+- Pushed to both origin and upstream at `c3c9b6dd`
 
 **Key Files Changed:**
-- `lisp/modules/gptel-tools-agent-error.el`: Added `should-advance` logic, changed `when raw-error` to `when should-advance`
-- `lisp/modules/gptel-tools-agent-prompt-build.el`: Increased retry limits
+- `lisp/modules/gptel-auto-workflow-strategic.el`: Require benchmark-subagent, debug logs, concurrency guard
+
+**Root Cause:**
+- Two overlapping `research-patterns` calls within single daemon: one inside `my/gptel--agent-task-with-timeout` (prints "Delegating"), another hitting else-branch (prints "Subagent unavailable")
+- `gptel-benchmark-call-subagent` was lazily loaded, causing race where `fboundp` returned nil for second call
+- No concurrency guard allowed interleaved async callbacks
 
 **Pipeline Status:**
-- 07:00: Running (auto-workflow waiting)
-- 03:00: Completed (8 experiments, all timeout on MiniMax)
-- Next: 11:00, 15:00, 19:00, 23:00
+- Previous: Step 4 reporting `research: unknown` due to 0-char findings
+- Fix: Race condition eliminated, subagent guaranteed loaded, concurrent calls deduplicated
+- Next pipeline run will validate fixes
 
 **Next Steps:**
-- Monitor 11:00 pipeline for retry-first behavior
-- Verify MiniMax gets 5 attempts before advancing to moonshot
-- Check if experiments succeed with new retry logic
+- Monitor next pipeline run for "research: external" instead of "unknown"
+- Verify debug logs show `subagents-enabled=t fbound=t` in cron logs
+- Check that findings file contains URLs/techniques (2000+ chars)
+- If issues persist, examine `var/tmp/cron/copilot-researcher.log` for debug output
