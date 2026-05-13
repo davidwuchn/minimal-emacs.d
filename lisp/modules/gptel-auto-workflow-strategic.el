@@ -735,7 +735,7 @@ RULES:
                      (when (boundp 'gptel-auto-workflow--current-research-context)
                        (plist-put gptel-auto-workflow--current-research-context
                                   :digested digested))
-                     (funcall callback digested)))))))
+                     (funcall callback digested))))))
         (if (fboundp 'gptel-request)
             (gptel-request
                 digest-prompt
@@ -767,24 +767,35 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
      (lambda (result)
        (let* ((raw-findings (gptel-auto-workflow--normalize-response result))
               (has-external (gptel-auto-workflow--research-has-external-content-p raw-findings))
-              (research-error-p (gptel-auto-workflow--research-error-p raw-findings))
-              (effective-findings (if research-error-p
-                                      (gptel-auto-workflow--local-research-patterns)
-                                    raw-findings))
+              ;; Handle timeout/error: if result is empty and we have accumulated findings, return them
+              (timeout-p (and (not has-external) accumulated-findings (> (length accumulated-findings) 0)))
+              (research-error-p (and (not timeout-p)
+                                     (gptel-auto-workflow--research-error-p raw-findings)))
+              (effective-findings (cond
+                                   (timeout-p
+                                    (message "[autotts] Turn %d timeout, using accumulated findings" (1+ turn))
+                                    accumulated-findings)
+                                   (research-error-p
+                                    (gptel-auto-workflow--local-research-patterns))
+                                   (t raw-findings)))
               (findings-hash (sha1 raw-findings))
               (strategy (or (and (boundp 'gptel-auto-workflow--active-strategy)
                                  gptel-auto-workflow--active-strategy)
                             "default"))
-              (confidence (gptel-auto-workflow--estimate-confidence raw-findings))
-              (turn-tokens (/ (length raw-findings) 4))
+              (confidence (if timeout-p
+                              (gptel-auto-workflow--estimate-confidence accumulated-findings)
+                            (gptel-auto-workflow--estimate-confidence raw-findings)))
+              (turn-tokens (if timeout-p 0 (/ (length raw-findings) 4)))
               (cumulative-tokens (+ (or total-tokens 0) turn-tokens))
               ;; Merge with accumulated findings
               (merged-findings (if (and accumulated-findings (> (length accumulated-findings) 0))
                                    (concat accumulated-findings "\n\n---\n\n" effective-findings)
                                  effective-findings))
               ;; Controller decision based on merged state
-              (controller-decision (gptel-auto-workflow--controller-decide-research-flow
-                                    controller-config (length merged-findings))))
+              (controller-decision (if timeout-p
+                                       'timeout
+                                     (gptel-auto-workflow--controller-decide-research-flow
+                                      controller-config (length merged-findings) merged-findings)))))
          ;; Log this turn as a step
          (gptel-auto-workflow--log-research-step
           'search
@@ -796,6 +807,13 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
                   (1+ turn) (length raw-findings) confidence controller-decision cumulative-tokens)
          ;; Check controller decision
          (cond
+          ;; TIMEOUT: Return accumulated findings
+          ((eq controller-decision 'timeout)
+           (message "[autotts] Controller TIMEOUT after turn %d, returning accumulated findings"
+                    (1+ turn))
+           (gptel-auto-workflow--finalize-research
+            research-prompt merged-findings strategy findings-hash
+            controller-decision confidence cumulative-tokens callback))
           ;; STOP: We have good findings, return them
           ((eq controller-decision 'stop)
            (message "[autotts] Controller STOP after turn %d (confidence=%.2f)"
@@ -810,7 +828,18 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
            (gptel-auto-workflow--finalize-research
             research-prompt merged-findings strategy findings-hash
             controller-decision confidence cumulative-tokens callback))
-          ;; CONTINUE or BRANCH: Keep going if not at max turns
+          ;; BRANCH: Try alternate strategy in parallel
+          ((eq controller-decision 'branch)
+           (message "[autotts] Controller BRANCH after turn %d, trying alternate strategy"
+                    (1+ turn))
+           (let ((alt-strategy (if (string= strategy "own-repos-first")
+                                   "deep-external"
+                                 "own-repos-first")))
+             ;; Run alternate strategy and merge results
+             (gptel-auto-workflow--run-research-turn
+              (gptel-auto-workflow--format-research-strategy-prompt alt-strategy "branch-alternate")
+              turn callback merged-findings cumulative-tokens)))
+          ;; CONTINUE: Keep going if not at max turns
           ((< turn (1- max-turns))
            (message "[autotts] Controller %s, proceeding to turn %d"
                     controller-decision (1+ turn))
@@ -824,9 +853,8 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
            (gptel-auto-workflow--finalize-research
             research-prompt merged-findings strategy findings-hash
             'max-turns confidence cumulative-tokens callback)))))
-     ;; Shorter timeout per turn (180s) vs single long call (600s)
-     ;; Total time: max-turns * 180s = 540s (comparable to 600s single call)
-     180)))
+     ;; Timeout: 300s for turn 1+ (web fetches need more time), 180s for turn 0
+     (if (> turn 0) 300 180))))
 
 (defun gptel-auto-workflow--build-followup-prompt (base-prompt accumulated-findings turn)
   "Build follow-up prompt for turn TURN with ACCUMULATED-FINDINGS.
@@ -1583,24 +1611,38 @@ Returns plist with controller parameters."
             :min-insights-for-stop 2
             :stagnation-window 2))))
 
-(defun gptel-auto-workflow--controller-decide-research-flow (controller-config output-length)
+(defun gptel-auto-workflow--controller-decide-research-flow (controller-config output-length &optional output-text)
   "AutoTTS controller: decide what to do next based on state.
 CONTROLLER-CONFIG is plist with parameters.
 OUTPUT-LENGTH is current response length.
+Optional OUTPUT-TEXT is the actual output string for content analysis.
 Returns symbol: stop, continue, branch, or cut."
-  (let ((tokens-used (/ output-length 4))
-        (max-tokens (or (plist-get controller-config :max-tokens-budget) 8000))
-        (min-confidence (or (plist-get controller-config :min-confidence-stop) 0.7)))
+  (let* ((tokens-used (/ output-length 4))
+         (max-tokens (or (plist-get controller-config :max-tokens-budget) 8000))
+         (min-confidence (or (plist-get controller-config :min-confidence-stop) 0.7))
+         (min-insights (or (plist-get controller-config :min-insights-for-stop) 2))
+         (text (or output-text ""))
+         (has-urls (string-match-p "https?://" text))
+         (has-structure (string-match-p "## .*\n" text))
+         (insights-count (if has-urls (1+ (if has-structure 1 0)) 0)))
     (cond
      ;; Over budget → cut
      ((> tokens-used max-tokens)
       (message "[autotts] Controller: CUT (budget %d/%d)" tokens-used max-tokens)
       'cut)
-     ;; High confidence + good length → stop
+     ;; High confidence + good length + URLs → stop
      ((and (> output-length 2000)
-           (string-match-p "https?://" output-length))
-      (message "[autotts] Controller: STOP (good output)")
+           has-urls
+           (>= insights-count min-insights))
+      (message "[autotts] Controller: STOP (good output: %d chars, %d insights)"
+               output-length insights-count)
       'stop)
+     ;; Stagnation: small output, no URLs, high turn count → branch
+     ((and (< output-length 1000)
+           (not has-urls)
+           (> tokens-used 2000))
+      (message "[autotts] Controller: BRANCH (stagnation detected)")
+      'branch)
      ;; Default → continue
      (t 'continue))))
 

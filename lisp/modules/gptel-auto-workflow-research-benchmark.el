@@ -565,6 +565,51 @@ Faster than `benchmark-all-research-strategies` which calls LLMs."
              (plist-get (car results) :strategy))
     results))
 
+;;; ─── Trace Outcome Tracking (Reward Signal Bridge) ───
+
+(defun gptel-auto-workflow--update-trace-outcomes (experiment)
+  "Update trace files with experiment outcome.
+EXPERIMENT is a plist with :research-hash and :kept fields.
+Called from experiment logging to link research → experiment results."
+  (let ((research-hash (plist-get experiment :research-hash))
+        (kept (plist-get experiment :kept))
+        (target (plist-get experiment :target))
+        (score-after (plist-get experiment :score-after)))
+    (when (and research-hash (not (equal research-hash "none")))
+      (let ((trace-dir (expand-file-name "var/tmp/research-traces"
+                                          (gptel-auto-workflow--worktree-base-root)))
+            (updated nil))
+        (when (file-directory-p trace-dir)
+          (dolist (file (directory-files trace-dir t "\\.json$"))
+            (when (and (not updated)
+                       (string-match-p research-hash (file-name-nondirectory file)))
+              (condition-case err
+                  (let ((json-object-type 'plist))
+                    (with-temp-buffer
+                      (insert-file-contents file)
+                      (let* ((trace (json-read))
+                             (outcomes (plist-get trace :outcomes))
+                             (new-outcome
+                              (list :target target
+                                    :kept (if kept t nil)
+                                    :score-after (or score-after 0)
+                                    :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ"))))
+                        (setq trace (plist-put trace :outcomes
+                                               (append (or outcomes nil)
+                                                       (list new-outcome))))
+                        (erase)
+                        (insert (json-encode trace))
+                        (write-region (point-min) (point-max) file))
+                      (message "[autotts] Linked trace %s → %s (%s)"
+                               research-hash target (if kept "kept" "discarded"))
+                      (setq updated t)))
+                (error
+                 (message "[autotts] Failed to update trace outcome: %s" err))))))))))
+
+(defvar gptel-auto-workflow--trace-outcome-hooks nil
+  "List of functions to call when trace outcomes are updated.
+Each function receives the updated trace plist.")
+
 (defun gptel-auto-workflow--run-offline-evolution ()
   "Run lightweight offline evolution using trace replay.
 No LLM calls. Fast. Good for convergence testing.

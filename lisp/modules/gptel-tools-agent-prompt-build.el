@@ -798,6 +798,12 @@ row for the same experiment and target."
                  :comparator-reason (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A")))
         (error
          (message "[strategy] analyze-results error: %s" err))))
+    ;; Update research trace outcomes (AutoTTS reward signal)
+    (when (fboundp 'gptel-auto-workflow--update-trace-outcomes)
+      (condition-case err
+          (gptel-auto-workflow--update-trace-outcomes experiment)
+        (error
+         (message "[autotts] Trace outcome update error: %s" err))))
     ;; Trigger self-evolution after experiment logging
     (when (and (fboundp 'gptel-auto-workflow--experiment-complete-hook)
                (fboundp 'gptel-auto-workflow-evolution-run-cycle))
