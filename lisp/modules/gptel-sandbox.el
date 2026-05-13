@@ -697,7 +697,7 @@ like (:error \"...\") or (:violated t :reason \"...\")."
     (if (string-prefix-p "Error: " value)
         (substring value (length "Error: "))
       value))
-   ((gptel-sandbox--error-plist-p value)
+   ((and (proper-list-p value) (gptel-sandbox--error-plist-p value))
     (or (plist-get value :reason)
         (plist-get value :error)
         (format "Error: %S" value)))
