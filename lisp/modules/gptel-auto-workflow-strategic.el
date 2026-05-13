@@ -872,8 +872,8 @@ Saves trace, runs benchmark, and digests findings."
          (insert (format "# Internal Code Analysis\n\n> Updated: %s\n\n%s"
                          (format-time-string "%Y-%m-%d %H:%M")
                          digested))))
-     ;; Always pass findings to callback
-     (funcall callback digested))))
+      ;; Always pass findings to callback
+      (funcall callback digested))))
 
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
   "Hunt for external ideas from internet sources with real-time controller.
@@ -918,7 +918,7 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
         (message "[auto-workflow] Subagent unavailable - skipping external research")
         ;; Reset flag before calling callback
         (setq gptel-auto-workflow--research-in-progress nil)
-        (funcall callback ""))))))
+        (funcall callback "")))))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -1790,3 +1790,4 @@ Uses gptel-auto-workflow-research-benchmark.el to:
 (provide 'gptel-auto-workflow-strategic)
 
 ;;; gptel-auto-workflow-strategic.el ends here
+)

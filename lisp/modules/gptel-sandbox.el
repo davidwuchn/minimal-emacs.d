@@ -611,6 +611,8 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--maybe-aggregate-confirm (state callback)
   "Run aggregate mutating preview for STATE, then CALLBACK approval result."
+  (unless (proper-list-p state)
+    (error "Programmatic maybe-aggregate-confirm requires a proper plist state, got: %S" state))
   (let ((plan (plist-get state :mutating-plan)))
     (if (or (not (eq (gptel-sandbox--current-profile) 'agent))
             (plist-get state :aggregate-preview-shown)
