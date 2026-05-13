@@ -1,0 +1,1 @@
+{"name":"adaptive-skill-selection","version":"1.0","hypothesis":"Conditionally loading skills based on file characteristics (mode, complexity, tests) provides more targeted guidance than uniform skill loading","axis":"E","components":["file-analysis","adaptive-selection","skill-filtering"]}
