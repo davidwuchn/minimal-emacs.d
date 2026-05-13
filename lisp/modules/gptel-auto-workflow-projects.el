@@ -835,6 +835,7 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
 Without PROJECT-ROOT, clears cache for all projects."
   (interactive)
   (setq gptel-auto-workflow--research-status-cache nil)
+  (gptel-auto-workflow--ensure-buffer-tables)
   (if project-root
       (let ((root (expand-file-name project-root)))
         (remhash root gptel-auto-workflow--research-findings-cache)
