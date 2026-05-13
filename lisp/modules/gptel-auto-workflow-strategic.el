@@ -1616,35 +1616,93 @@ Returns plist with controller parameters."
 CONTROLLER-CONFIG is plist with parameters.
 OUTPUT-LENGTH is current response length.
 Optional OUTPUT-TEXT is the actual output string for content analysis.
-Returns symbol: stop, continue, branch, or cut."
+Returns symbol: stop, continue, branch, or cut.
+
+Uses statistical model when available (learned from trace outcomes),
+otherwise falls back to heuristic thresholds."
   (let* ((tokens-used (/ output-length 4))
          (max-tokens (or (plist-get controller-config :max-tokens-budget) 8000))
-         (min-confidence (or (plist-get controller-config :min-confidence-stop) 0.7))
-         (min-insights (or (plist-get controller-config :min-insights-for-stop) 2))
          (text (or output-text ""))
          (has-urls (string-match-p "https?://" text))
          (has-structure (string-match-p "## .*\n" text))
-         (insights-count (if has-urls (1+ (if has-structure 1 0)) 0)))
+         (has-code (string-match-p "```" text))
+         (step-count (or (plist-get controller-config :step-count) 1))
+         ;; Use statistical model if available
+         (statistical-model (plist-get controller-config :statistical-model))
+         (prob-kept (if statistical-model
+                        (gptel-auto-workflow--statistical-prob-kept
+                         controller-config output-length text)
+                      nil)))
     (cond
-     ;; Over budget → cut
+     ;; Over budget → cut (always check budget first)
      ((> tokens-used max-tokens)
       (message "[autotts] Controller: CUT (budget %d/%d)" tokens-used max-tokens)
       'cut)
-     ;; High confidence + good length + URLs → stop
-     ((and (> output-length 2000)
-           has-urls
-           (>= insights-count min-insights))
-      (message "[autotts] Controller: STOP (good output: %d chars, %d insights)"
-               output-length insights-count)
-      'stop)
-     ;; Stagnation: small output, no URLs, high turn count → branch
-     ((and (< output-length 1000)
-           (not has-urls)
-           (> tokens-used 2000))
-      (message "[autotts] Controller: BRANCH (stagnation detected)")
-      'branch)
-     ;; Default → continue
-     (t 'continue))))
+     ;; Statistical model available → use learned probability
+     (statistical-model
+      (let ((stop-threshold (or (plist-get controller-config :min-confidence-stop) 0.7))
+            (branch-threshold (or (plist-get controller-config :branch-threshold) 0.3)))
+        (cond
+         ;; High probability → stop
+         ((and prob-kept (> prob-kept stop-threshold))
+          (message "[autotts] Controller: STOP (P(kept)=%.2f > %.2f) [statistical]"
+                   prob-kept stop-threshold)
+          'stop)
+         ;; Low probability + high token usage → branch
+         ((and prob-kept (< prob-kept branch-threshold) (> tokens-used 2000))
+          (message "[autotts] Controller: BRANCH (P(kept)=%.2f < %.2f, tokens=%d) [statistical]"
+                   prob-kept branch-threshold tokens-used)
+          'branch)
+         ;; Medium probability → continue
+         (t
+          (message "[autotts] Controller: CONTINUE (P(kept)=%.2f) [statistical]"
+                   (or prob-kept 0.5))
+          'continue))))
+     ;; Fallback: heuristic rules
+     (t
+      (let ((min-insights (or (plist-get controller-config :min-insights-for-stop) 2))
+            (insights-count (if has-urls (1+ (if has-structure 1 0)) 0)))
+        (cond
+         ;; High confidence + good length + URLs → stop
+         ((and (> output-length 2000)
+               has-urls
+               (>= insights-count min-insights))
+          (message "[autotts] Controller: STOP (good output: %d chars, %d insights) [heuristic]"
+                   output-length insights-count)
+          'stop)
+         ;; Stagnation: small output, no URLs, high turn count → branch
+         ((and (< output-length 1000)
+               (not has-urls)
+               (> tokens-used 2000))
+          (message "[autotts] Controller: BRANCH (stagnation detected) [heuristic]")
+          'branch)
+         ;; Default → continue
+         (t 'continue)))))))
+
+(defun gptel-auto-workflow--statistical-prob-kept (controller-config output-length output-text)
+  "Calculate P(kept) using learned statistical model.
+CONTROLLER-CONFIG contains :model-intercept and :model-weights.
+Returns probability as float, or nil if model not available."
+  (let ((intercept (plist-get controller-config :model-intercept))
+        (weights (plist-get controller-config :model-weights)))
+    (when (and intercept weights)
+      (let* ((has-urls (if (string-match-p "https?://" (or output-text "")) 1 0))
+             (has-structure (if (string-match-p "## .*\n" (or output-text "")) 1 0))
+             (has-code (if (string-match-p "```" (or output-text "")) 1 0))
+             (source-own 1) ;; Assume own-repo for current context
+             (confidence (gptel-auto-workflow--estimate-confidence (or output-text "")))
+             (score (+ intercept
+                      (* (or (plist-get weights :output_length) 0) output-length)
+                      (* (or (plist-get weights :has_urls) 0) has-urls)
+                      (* (or (plist-get weights :has_structure) 0) has-structure)
+                      (* (or (plist-get weights :has_code) 0) has-code)
+                      (* (or (plist-get weights :source_own) 0) source-own)
+                      (* (or (plist-get weights :confidence) 0) confidence)
+                      (* (or (plist-get weights :tokens_used) 0) (/ output-length 4))
+                      (* (or (plist-get weights :step_count) 0) 1)))
+             ;; Sigmoid
+             (prob (/ 1.0 (+ 1.0 (exp (- score))))))
+        (max 0.0 (min 1.0 prob))))))
 
 (defun gptel-auto-workflow--load-strategy-guidance ()
   "Load AutoTTS strategy guidance from controller config.
