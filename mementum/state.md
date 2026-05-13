@@ -105,13 +105,14 @@
 - Race condition eliminated: subagent guaranteed loaded before fboundp check
 - Concurrent calls deduplicated with `gptel-auto-workflow--research-in-progress` guard
 
-**Next Issue:**
-- Subagent error: "unexpected response type: cons"
-- Need to investigate why researcher subagent returns this error
-- May be related to the researcher's prompt format or the way `gptel-benchmark-call-subagent` handles responses
+**Fixed:**
+- Subagent error: "unexpected response type: cons" — **FIXED**
+- Root cause: gptel library returns `(cons 'reasoning text)` for reasoning blocks (e.g., `<think>` tags)
+- Fix: Added handler in `gptel-agent-loop--handle-agent-response` to extract reasoning text and process as string
+- File: `lisp/modules/gptel-agent-loop.el`
 
 **Next Steps:**
-- Investigate subagent error: `Error: researcher task 'External research' received unexpected response type: cons`
-- Check if the error is in `gptel-tools-agent-subagent.el` or `gptel-benchmark-subagent.el`
-- Consider increasing subagent timeout or fixing the response handling
-- Pipeline will still report `research: unknown` until external research succeeds
+- Monitor next pipeline run for successful external research
+- Verify researcher produces findings with URLs (2000+ chars)
+- Check that step-level traces are collected
+- Pipeline should now report `research: external` instead of `unknown`
