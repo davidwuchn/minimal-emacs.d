@@ -179,8 +179,9 @@ Logs a message when there's a mismatch.  Use CONTEXT to identify
 the caller (e.g., \"after-preset\", \"mode-hook\").
 
 Returns non-nil if tools match, nil if mismatch or unavailable."
-  (unless nucleus-tools-sanity-check
-    (cl-return-from nucleus-tool-sanity-check nil))
+  (cl-block nucleus-tool-sanity-check
+    (unless nucleus-tools-sanity-check
+      (cl-return-from nucleus-tool-sanity-check nil))
   (unless (and (boundp 'gptel-tools) (listp gptel-tools))
     (when nucleus-tools-verbose
       (message "[nucleus-tools] gptel-tools not available"))
@@ -220,7 +221,7 @@ Returns non-nil if tools match, nil if mismatch or unavailable."
 
        (t
         ;; Same mismatch as before - don't spam
-        nil)))))
+        nil))))))
 
 ;;; Tool Profile Syncing
 
