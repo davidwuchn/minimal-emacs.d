@@ -456,8 +456,9 @@ Returns the number of messages truncated, or 0 if nothing was done."
             (let* ((msg (aref messages i))
                    (role (plist-get msg :role))
                    (content (plist-get msg :content)))
-              ;; Only truncate user and assistant messages, not system/tool
-              (when (and (member role '("user" "assistant"))
+              ;; Guard: only process proper lists (prevents plist-get/put errors on malformed data)
+              (when (and (proper-list-p msg)
+                         (member role '("user" "assistant"))
                          (stringp content)
                          (> (length content) (length truncation-text)))
                 (plist-put msg :content truncation-text)
