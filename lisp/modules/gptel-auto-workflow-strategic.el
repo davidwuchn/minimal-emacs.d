@@ -797,6 +797,13 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
                 ;; Save research trace for AutoTTS-style offline evaluation
                 (gptel-auto-workflow--save-research-trace
                  research-prompt raw-findings strategy findings-hash)
+                ;; Run AutoTTS benchmark if available
+                (when (fboundp 'gptel-auto-workflow--benchmark-research-strategy)
+                  (gptel-auto-workflow--benchmark-research-strategy
+                   strategy "external-research"
+                   (lambda (result)
+                     (message "[benchmark] Research strategy '%s' scored: %.2f"
+                              strategy (or (plist-get result :quality) 0.0)))))
                 ;; SEPARATION: Local/internal research goes to DIRECTIVE.md, not FINDINGS.md
                 (if research-error-p
                     ;; External failed: digest local patterns for DIRECTIVE, pass empty to FINDINGS
@@ -1393,6 +1400,77 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
           :cache-file-exists file-exists
           :cache-file-size file-size
           :cache-file-mtime file-mtime-str)))
+
+;;; ─── AutoTTS Trace Collection ───
+
+(defun gptel-auto-workflow--save-research-trace (prompt output strategy hash)
+  "Save research trace for AutoTTS-style offline evaluation.
+Calls Python script to save detailed trace with tool calls, timestamps, tokens."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (script (expand-file-name "assistant/skills/researcher-prompt/scripts/log-research-trace.py" root))
+         (session-id (format "research-%s-%s"
+                            (format-time-string "%Y%m%d-%H%M%S")
+                            (substring hash 0 8))))
+    (when (file-executable-p script)
+      (let ((json-data (json-encode
+                        `((session_id . ,session-id)
+                          (prompt . ,(substring prompt 0 (min 5000 (length prompt))))
+                          (final_output . ,(substring output 0 (min 10000 (length output))))
+                          (metadata . ((strategy . ,strategy)
+                                      (backend . ,(or (and (boundp 'gptel-agent-preset)
+                                                          (plist-get gptel-agent-preset :backend))
+                                                     "unknown"))
+                                      (timestamp . ,(format-time-string "%Y-%m-%dT%H:%M:%SZ"))))
+                          (tool_calls . [])))))
+        (with-temp-file (expand-file-name (format "var/tmp/research-traces/%s-input.json" session-id) root)
+          (insert json-data))
+        (message "[trace] Saved research trace: %s" session-id)))))
+
+;;; ─── AutoTTS Controller Integration ───
+
+(defun gptel-auto-workflow--load-controller-config ()
+  "Load AutoTTS controller config from JSON file.
+Returns plist with controller parameters, or nil if not found."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (config-file (expand-file-name "var/tmp/researcher-controller.json" root)))
+    (when (file-exists-p config-file)
+      (condition-case err
+          (with-temp-buffer
+            (insert-file-contents config-file)
+            (let ((data (json-read)))
+              (list :own-repo-priority (or (cdr (assoc 'own_repo_priority data)) 0.7)
+                    :min-confidence-stop (or (cdr (assoc 'min_confidence_stop data)) 0.7)
+                    :max-tokens-budget (or (cdr (assoc 'max_tokens_budget data)) 8000)
+                    :min-insights-for-stop (or (cdr (assoc 'min_insights_for_stop data)) 2))))
+        (error
+         (message "[controller] Error loading config: %s" err)
+         nil)))))
+
+(defun gptel-auto-workflow--controller-decide (state)
+  "Call Python controller to decide next action based on STATE.
+STATE is a plist with :confidence :insights-found :tokens-used :urls-found.
+Returns plist with :action and :reasoning."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (script (expand-file-name "assistant/skills/researcher-prompt/scripts/autotts-controller.py" root))
+         (state-json (json-encode state)))
+    (if (not (file-executable-p script))
+        (list :action "CONTINUE" :reasoning "Controller not available")
+      (condition-case err
+          (let* ((output (shell-command-to-string
+                         (format "cd %s && python3 %s --decide '%s'"
+                                 (shell-quote-argument root)
+                                 (shell-quote-argument script)
+                                 (shell-quote-argument state-json))))
+                 (result (condition-case nil
+                            (json-read-from-string output)
+                          (error nil))))
+            (if result
+                (list :action (cdr (assoc 'action result))
+                      :reasoning (cdr (assoc 'reasoning result)))
+              (list :action "CONTINUE" :reasoning "Controller returned invalid JSON")))
+        (error
+         (message "[controller] Error: %s" err)
+         (list :action "CONTINUE" :reasoning "Controller error"))))))
 
 ;;; ─── AutoTTS via Benchmark System ───
 

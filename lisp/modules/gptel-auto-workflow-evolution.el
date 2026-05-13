@@ -1305,6 +1305,10 @@ Skill injection happens on the next prompt."
   (gptel-auto-workflow--evolution-synthesize)
   (gptel-auto-workflow--evolution-consolidate-insights)
   (gptel-auto-workflow--evolve-all-skills)
+  ;; Run AutoTTS-style strategy evolution using benchmark results
+  (when (fboundp 'gptel-auto-workflow--run-strategy-evolution)
+    (message "[auto-workflow] Running strategy evolution...")
+    (gptel-auto-workflow--run-strategy-evolution))
   (message "[auto-workflow] Self-evolution cycle complete."))
 
 ;; ─── Init ───
