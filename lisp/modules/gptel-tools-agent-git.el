@@ -254,7 +254,7 @@ Returns nil if cache disabled, not found, or expired."
              (my/gptel--subagent-cache-allowed-p agent-type))
     (let* ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff))
            (cached (gethash key my/gptel--subagent-cache)))
-      (when (and (consp cached)
+      (when (and (proper-list-p cached)
                  (numberp (car cached)))
         (let ((timestamp (car cached))
               (result (cdr cached)))
@@ -283,7 +283,7 @@ Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
                           my/gptel-subagent-cache-max-size)))
           (maphash
            (lambda (k v)
-             (when (consp v)
+             (when (proper-list-p v)
                (push (cons (car v) k) entries)))
            my/gptel--subagent-cache)
           (setq entries (sort entries (lambda (a b) (< (car a) (car b)))))
@@ -306,7 +306,7 @@ Call periodically to prevent memory growth from unaccessed entries."
         (expired nil))
     (maphash
      (lambda (key value)
-       (when (and (consp value)
+       (when (and (proper-list-p value)
                   (> (- now (car value)) my/gptel-subagent-cache-ttl))
          (push key expired)
          (cl-incf count)))
