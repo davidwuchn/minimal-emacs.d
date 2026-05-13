@@ -751,7 +751,7 @@ RULES:
               :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
           (progn
             (message "[auto-workflow] gptel-request unavailable, using raw findings")
-              (funcall callback raw-findings))))))))
+              (funcall callback raw-findings)))))))
 
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
   "Hunt for external ideas from internet sources.
