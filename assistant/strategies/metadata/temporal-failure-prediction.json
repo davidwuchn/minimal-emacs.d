@@ -1,0 +1,1 @@
+{"name":"temporal-failure-prediction","version":"1.0","hypothesis":"Predicting which failure patterns will recur based on temporal position enables proactive avoidance","axis":"D","components":["temporal","prediction","recurrence"]}
