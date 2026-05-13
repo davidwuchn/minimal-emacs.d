@@ -233,9 +233,11 @@ Raises an error if PAIRS is malformed."
 
 (defun gptel-sandbox--eval-let-binding (binding env)
   "Evaluate a single BINDING in ENV, returning (SYMBOL . VALUE)."
-  (pcase-let ((`(,symbol ,value-form)
-               (gptel-sandbox--normalize-binding binding)))
-    (cons symbol (gptel-sandbox--eval-expr value-form env))))
+  (let ((normalized (gptel-sandbox--normalize-binding binding)))
+    (unless (proper-list-p normalized)
+      (error "Programmatic let binding normalized to non-proper-list: %S" normalized))
+    (pcase-let ((`(,symbol ,value-form) normalized))
+      (cons symbol (gptel-sandbox--eval-expr value-form env)))))
 
 (defun gptel-sandbox--eval-let (bindings body env sequentialp)
   "Evaluate let-style BINDINGS and BODY in ENV.
