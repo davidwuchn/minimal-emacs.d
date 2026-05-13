@@ -232,6 +232,9 @@ Each worktree gets its own isolated buffer for subagent overlays."
 (defun gptel-auto-workflow--get-project-buffer (project-root)
   "Get or create a gptel-agent buffer for PROJECT-ROOT.
 Legacy function - routes to worktree buffer for backward compatibility."
+  (unless (and (stringp project-root)
+               (> (length project-root) 0))
+    (error "PROJECT-ROOT must be a non-empty string, got: %S" project-root))
   (gptel-auto-workflow--get-worktree-buffer project-root))
 
 (defun gptel-auto-workflow-add-project (project-root)
