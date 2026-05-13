@@ -25,6 +25,15 @@
   - Discarded: 650 chars avg, 0% URLs, 20% confidence
   - Learned weights: length=+1.35, URLs=+2.00, confidence=+1.22, tokens=-0.70
 - **Pushed to remote** — `6d11c09c` committed, merged
+- **BUG FIX: Statistical controller paren structure** (`a1de9bd6`):
+  - Added `(require 'json)` to fix `void-function json-read-from-string`
+  - Fixed critical paren nesting: `condition-case` error handler was inside `let*` body
+  - Fixed topic detection: `downcase` text before regex matching (case-insensitive)
+  - Fixed topic model lookup: handle keyword topics (`:performance`, `:nil-safety`) from JSON plist
+  - Topic-specific thresholds now correctly drive controller decisions
+  - Batch test: SUCCESS (2 topic models: performance, nil-safety)
+  - Strategic regression tests: 12/12 pass
+  - Byte-compile: clean
 
 **Verification:**
 - ✅ Statistical learning produces valid config (6 traces, 4 kept, 67% base rate)
@@ -44,14 +53,21 @@
 - `c060583f` — ◈ Update INTRO.md: document AutoTTS integration
 - `5910a845` — ◈ Update state: AutoTTS integration complete
 
+**Verification (Today):**
+- ✅ Batch test: `gptel-auto-workflow--learn-statistical-controller` returns 2 topic models
+- ✅ Topic detection: "Performance" → "performance", "Nil safety" → "nil-safety"
+- ✅ Topic-specific controller: `[statistical topic:performance]` vs `[statistical topic:nil-safety]`
+- ✅ Strategic regression tests: 12/12 pass
+- ✅ Byte-compile: no new warnings
+
 **Next Steps:**
-1. **Monitor pipeline run** — verify traces get outcomes populated
-2. **Check controller decisions** — should use statistical model after ~5 traces
-3. **Observe learned weights** — confirm they make sense (e.g., URLs positive)
+1. **Restart daemon** — load new code for next cron run
+2. **Monitor pipeline** — verify real traces get outcomes populated (mock traces have invalid hashes)
+3. **Observe learned weights** — confirm they make sense after ~5 real traces
 4. **Measure improvement** — compare research effectiveness statistical vs heuristic
 
 **Pipeline Status:**
 - Daemons need restart to load new code
 - Cron: `0 23,3,7,11,15,19 * * *`
-- Next run: 19:00 (if daemon restarted)
-- Mock traces available in `var/tmp/research-traces/` for testing
+- Next run: 23:00 (if daemon restarted)
+- Real traces will replace mock traces once pipeline runs with outcome updates
