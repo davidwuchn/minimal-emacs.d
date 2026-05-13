@@ -901,11 +901,6 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
     (message "[auto-workflow] Hunting external ideas (multi-turn controller)...")
     ;; AutoTTS: Reset step trace accumulator for this session
     (gptel-auto-workflow--reset-research-steps)
-    (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%, max-turns=%d"
-             (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
-    (message "[auto-workflow] Hunting external ideas (multi-turn controller)...")
-    ;; AutoTTS: Reset step trace accumulator for this session
-    (gptel-auto-workflow--reset-research-steps)
     (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%"
              (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
              (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
