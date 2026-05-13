@@ -31,6 +31,15 @@
 (require 'gptel-tools-agent)
 (require 'gptel-benchmark-subagent nil t)
 
+;; Global variables to avoid closure issues in daemon environments
+;; where lexical-binding may not be properly enabled during load
+(defvar gptel-auto-workflow--research-accumulated-findings nil
+  "Temporary storage for accumulated findings during multi-turn research.")
+(defvar gptel-auto-workflow--research-total-tokens nil
+  "Temporary storage for total tokens during multi-turn research.")
+(defvar gptel-auto-workflow--research-controller-config nil
+  "Temporary storage for controller config during multi-turn research.")
+
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
 (declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
@@ -754,7 +763,12 @@ CALLBACK receives final digested findings.
 ACCUMULATED-FINDINGS is findings from previous turns.
 TOTAL-TOKENS tracks cumulative token usage across turns.
 AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH."
-  (let* ((controller-config (gptel-auto-workflow--load-autotts-controller))
+  ;; Store state in global variables to avoid closure capture issues
+  ;; in daemon environments where lexical-binding may not work properly
+  (setq gptel-auto-workflow--research-accumulated-findings accumulated-findings)
+  (setq gptel-auto-workflow--research-total-tokens total-tokens)
+  (setq gptel-auto-workflow--research-controller-config (gptel-auto-workflow--load-autotts-controller))
+  (let* ((controller-config gptel-auto-workflow--research-controller-config)
          (max-turns gptel-auto-workflow-max-research-turns)
          (current-prompt (if (and accumulated-findings (> (length accumulated-findings) 0))
                              (gptel-auto-workflow--build-followup-prompt
@@ -768,13 +782,15 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
        (let* ((raw-findings (gptel-auto-workflow--normalize-response result))
               (has-external (gptel-auto-workflow--research-has-external-content-p raw-findings))
               ;; Handle timeout/error: if result is empty and we have accumulated findings, return them
-              (timeout-p (and (not has-external) accumulated-findings (> (length accumulated-findings) 0)))
+              (timeout-p (and (not has-external) 
+                              gptel-auto-workflow--research-accumulated-findings 
+                              (> (length gptel-auto-workflow--research-accumulated-findings) 0)))
               (research-error-p (and (not timeout-p)
                                      (gptel-auto-workflow--research-error-p raw-findings)))
               (effective-findings (cond
                                    (timeout-p
                                     (message "[autotts] Turn %d timeout, using accumulated findings" (1+ turn))
-                                    accumulated-findings)
+                                    gptel-auto-workflow--research-accumulated-findings)
                                    (research-error-p
                                     (gptel-auto-workflow--local-research-patterns))
                                    (t raw-findings)))
@@ -783,19 +799,22 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
                                  gptel-auto-workflow--active-strategy)
                             "default"))
               (confidence (if timeout-p
-                              (gptel-auto-workflow--estimate-confidence accumulated-findings)
+                              (gptel-auto-workflow--estimate-confidence 
+                               gptel-auto-workflow--research-accumulated-findings)
                             (gptel-auto-workflow--estimate-confidence raw-findings)))
               (turn-tokens (if timeout-p 0 (/ (length raw-findings) 4)))
-              (cumulative-tokens (+ (or total-tokens 0) turn-tokens))
+              (cumulative-tokens (+ (or gptel-auto-workflow--research-total-tokens 0) turn-tokens))
               ;; Merge with accumulated findings
-              (merged-findings (if (and accumulated-findings (> (length accumulated-findings) 0))
-                                   (concat accumulated-findings "\n\n---\n\n" effective-findings)
+              (merged-findings (if (and gptel-auto-workflow--research-accumulated-findings 
+                                        (> (length gptel-auto-workflow--research-accumulated-findings) 0))
+                                   (concat gptel-auto-workflow--research-accumulated-findings 
+                                           "\n\n---\n\n" effective-findings)
                                  effective-findings))
               ;; Controller decision based on merged state
               (controller-decision (if timeout-p
                                        'timeout
                                      (gptel-auto-workflow--controller-decide-research-flow
-                                      controller-config (length merged-findings) merged-findings)))))
+                                      gptel-auto-workflow--research-controller-config (length merged-findings) merged-findings)))))
          ;; Log this turn as a step
          (gptel-auto-workflow--log-research-step
           'search
@@ -1644,12 +1663,17 @@ otherwise falls back to heuristic thresholds."
               (topic-model (gptel-auto-workflow--get-topic-model controller-config topic))
               (use-topic-thresholds (and topic-model
                                          (> (or (plist-get topic-model :n-traces) 0) 3)))
-              (stop-threshold (if use-topic-thresholds
-                                  (or (plist-get topic-model :stop-threshold) 0.7)
-                                (or (plist-get controller-config :min-confidence-stop) 0.7)))
-              (branch-threshold (if use-topic-thresholds
-                                    (or (plist-get topic-model :branch-threshold) 0.3)
-                                  (or (plist-get controller-config :branch-threshold) 0.3))))
+               (base-stop-threshold (if use-topic-thresholds
+                                        (or (plist-get topic-model :stop-threshold) 0.7)
+                                      (or (plist-get controller-config :min-confidence-stop) 0.7)))
+               (base-branch-threshold (if use-topic-thresholds
+                                          (or (plist-get topic-model :branch-threshold) 0.3)
+                                        (or (plist-get controller-config :branch-threshold) 0.3)))
+               ;; Adjust thresholds based on self-evolution topic performance
+               (adjusted-thresholds (gptel-auto-workflow--adjust-thresholds-for-topic
+                                     topic base-stop-threshold base-branch-threshold))
+               (stop-threshold (plist-get adjusted-thresholds :stop-threshold))
+               (branch-threshold (plist-get adjusted-thresholds :branch-threshold)))
          (cond
           ;; High probability → stop
           ((and prob-kept (> prob-kept stop-threshold))
@@ -1726,6 +1750,42 @@ Returns topic model plist, or nil if not found."
                                  model-topic)
                                topic)))
                   topic-models))))
+
+(defun gptel-auto-workflow--get-self-evolution-topic-rate (topic)
+  "Get keep rate for TOPIC from self-evolution experiment data.
+Returns float 0-1, or nil if no data."
+  (when (fboundp 'gptel-auto-workflow--parse-all-results)
+    (let* ((results (gptel-auto-workflow--parse-all-results))
+           (topic-results (cl-remove-if-not
+                          (lambda (r)
+                            (and (equal (plist-get r :decision) "kept")
+                                 (string-match-p topic
+                                                (downcase (or (plist-get r :target) "")))))
+                          results))
+           (all-topic (cl-remove-if-not
+                      (lambda (r)
+                        (string-match-p topic
+                                       (downcase (or (plist-get r :target) ""))))
+                      results)))
+      (when (> (length all-topic) 0)
+        (/ (float (length topic-results)) (length all-topic))))))
+
+(defun gptel-auto-workflow--adjust-thresholds-for-topic (topic stop-threshold branch-threshold)
+  "Adjust STOP-THRESHOLD and BRANCH-THRESHOLD based on self-evolution topic performance.
+Returns plist with :stop-threshold and :branch-threshold.
+If topic has high keep rate in experiments, lowers stop threshold (keep researching).
+If topic has low keep rate, raises stop threshold (stop early)."
+  (let ((self-evol-rate (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                          (gptel-auto-workflow--get-self-evolution-topic-rate topic))))
+    (if self-evol-rate
+        (list :stop-threshold (max 0.5 (min 0.95
+                                        (- stop-threshold
+                                           (* (- self-evol-rate 0.5) 0.3))))
+              :branch-threshold (max 0.1 (min 0.5
+                                          (- branch-threshold
+                                             (* (- self-evol-rate 0.5) 0.2)))))
+      (list :stop-threshold stop-threshold
+            :branch-threshold branch-threshold))))
 
 (defun gptel-auto-workflow--statistical-prob-kept (controller-config output-length output-text)
   "Calculate P(kept) using learned statistical model.

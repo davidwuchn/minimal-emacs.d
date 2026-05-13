@@ -3,6 +3,9 @@ name: auto-workflow
 description: Orchestrates automated code improvement through hypothesis-driven experimentation and self-evolution
 version: 1.1
 ---
+metadata:
+  evolution-stats:
+    total-experiments: 870
 
 # Auto-Workflow
 
