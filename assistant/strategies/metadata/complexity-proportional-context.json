@@ -1,0 +1,1 @@
+{"name":"complexity-proportional-context","version":"1.0","hypothesis":"All context allocation proportionally to code complexity regions improves targeted improvements","axis":"F","components":["complexity-detection","proportional-context"]}
