@@ -180,6 +180,12 @@ Returns t if all files pass syntax check, nil otherwise."
         nil)
     (let ((errors nil)
           (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
+      (when (null files)
+        (let ((msg "[auto-workflow] check-el-syntax: failed to scan directory"))
+          (push msg errors)
+          (when (buffer-live-p output-buffer)
+            (with-current-buffer output-buffer
+              (insert msg "\n")))))
       (dolist (file files (null errors))
         (when (file-readable-p file)
           (condition-case err
