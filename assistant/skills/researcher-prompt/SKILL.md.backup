@@ -46,90 +46,6 @@ Search external sources for actionable techniques related to:
 - **Error handling and recovery patterns** (success: 15%) — error-handling
 - **Code clarity and self-documenting patterns** (success: 14%) — clarity
 
-## AutoTTS-Inspired Research Strategy (v2.1)
-
-Based on [AutoTTS research](https://firethering.com/autotts-ai-inference-test-time-scaling/) - AI systems can discover better strategies automatically:
-
-### 1. Confidence Momentum Controller (CMC) for Research
-
-Like AutoTTS discovered a controller that watches confidence trends, you should **adapt research depth dynamically**:
-
-**High Confidence Signals** (early stop, answer now):
-- Source is your own GitHub repo (davidwuchn/*)
-- Topic has >20% success rate in historical data
-- Finding directly addresses known pain point from your issues/PRs
-- Pattern is already validated in your codebase
-- **Action**: Stop early, return concise actionable insight
-
-**Low/Stagnant Confidence** (branch deeper):
-- External source (not your repos)
-- Topic has <10% success rate historically
-- Finding is generic advice without specific implementation
-- No clear connection to your codebase
-- **Action**: Open new branches - search alternative sources, look for contrasting patterns, validate against your context
-
-**Cut Branches That Diverge**:
-- Source producing boilerplate content (e.g., generic Medium articles)
-- Pattern conflicts with your established architecture
-- Requires heavy external dependencies (LSP servers, cloud services)
-- **Action**: Cut after confirming persistent deviation (not on single bad result)
-
-### 2. Research Replay Store Pattern
-
-**Cache successful research patterns** (like AutoTTS replay store):
-- Store: `query + context → findings → downstream experiment outcome`
-- When similar query arises, replay successful strategy
-- Evaluate new strategies against cached outcomes
-
-**Replay Store Queries** (check before external search):
-```bash
-# Check if we've researched this topic before
-grep -r "nil-safety" mementum/memories/ 2>/dev/null | head -5
-grep -r "validation-guard" assistant/skills/*/ 2>/dev/null | head -5
-
-# Check historical success rate for this topic
-cat var/tmp/experiments/*/results.tsv 2>/dev/null | awk -F'\t' '$2 ~ /nil-safety/ {print}' | wc -l
-```
-
-**Cost Optimization**: 70% token reduction by prioritizing high-signal sources
-- **Priority 1**: Your own repos (davidwuchn/*) - 70% insight rate, ~1000 tokens/source
-- **Priority 2**: Forked repos with your customizations - 40% insight rate, ~2000 tokens/source  
-- **Priority 3**: External trending repos - 15% insight rate, ~5000 tokens/source
-- **Priority 4**: General web search - 5% insight rate, ~8000 tokens/source
-
-### 3. Self-Evolving Strategy
-
-Track these metrics per research session:
-- **Tokens per actionable insight**: Target <3000 tokens per kept experiment
-- **Source effectiveness**: Which sources produce downstream kept experiments?
-- **Topic momentum**: Is confidence rising or falling for this topic?
-- **Branch efficiency**: How many branches before finding actionable insight?
-
-**Strategy Evolution** (like AutoTTS controller evolution):
-- Test different search depths for same topic
-- Compare: shallow (own repos only) vs deep (external + web)
-- Measure: relevance score → experiment keep rate
-- Evolve: Prefer strategies with high keep-rate / token-cost ratio
-
-### 4. Confidence-Based Research Depth
-
-Apply CMC to research workflow:
-
-```
-IF (source = own-repo AND topic in top-5) → STOP, return (high confidence)
-IF (source = fork AND pattern in your-commits) → STOP, return (rising confidence)
-IF (source = external AND length > 2000 AND has-urls) → CONTINUE, digest
-IF (source = external AND length < 500 AND no-urls) → BRANCH, try alternative
-IF (confidence stagnating after 3 sources) → CUT, use local patterns
-```
-
-**Implementation**: For each research query, track:
-- Source type (own/fork/external/web)
-- Content length
-- URL/external reference density
-- Historical success rate for this topic
-- **Decision**: Stop, Continue, Branch, or Cut
-
 ## Priority Projects to Monitor
 
 ### External Projects (Ranked by Downstream Success)
@@ -164,40 +80,16 @@ This skill auto-evolves every 90 days based on:
 - **HuggingFace**: New models, datasets, or spaces for code agents
 - **Reddit**: r/emacs, r/LocalLLaMA, r/MachineLearning discussions
 
-## Strategy Guidance (from Replay Store)
-
-{{strategy-guidance}}
-
 ## Instructions
 
-**MANDATORY FIRST STEP - CHECK OWN REPOS FIRST:**
-Before ANY external search, you MUST check davidwuchn's GitHub repositories.
-Use WebSearch with query: `site:github.com/davidwuchn gptel OR emacs OR agent`
-Use WebFetch to read recent commits from davidwuchn's forked repos.
-**DO NOT SKIP THIS STEP.** Own repos have 70% insight rate vs 5% for general web.
-
-1. **LOAD STRATEGY GUIDANCE** above - it tells you which strategies worked best historically
-2. Use WebSearch tool to find 3-5 recent/relevant items per topic
-3. Use WebFetch tool to read promising pages/videos (max 3 fetches)
-4. Focus on NOVEL ideas we haven't implemented (check git history first)
-5. Extract specific, actionable techniques - not vague trends
-6. For each insight, provide: source URL, key technique, how it applies to us
+1. Use WebSearch tool to find 3-5 recent/relevant items per topic
+2. Use WebFetch tool to read promising pages/videos (max 3 fetches)
+3. Focus on NOVEL ideas we haven't implemented (check git history first)
+4. Extract specific, actionable techniques - not vague trends
+5. For each insight, provide: source URL, key technique, how it applies to us
+6. Max 1200 chars. Prioritize depth over breadth.
 7. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
 8. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
-9. **OWN REPOS FIRST**: Only search external sources AFTER checking davidwuchn/* repos
-
-**OUTPUT FORMAT (REQUIRED):**
-You MUST end your response with a JSON block like this:
-```json
-{
-  "strategy": "name-of-strategy-used",
-  "sources_checked": ["github.com/davidwuchn/gptel", "mindra.co/blog/..."],
-  "topics_covered": ["nil-safety", "validation-guard"],
-  "estimated_tokens": 3500,
-  "confidence": "high|medium|low"
-}
-```
-This metadata is used to evolve research strategies automatically.
 
 ---
 
