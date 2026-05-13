@@ -81,6 +81,44 @@
 
 ---
 
+## AutoTTS + Self-Evolution Integration (Completed `11f21b1c`)
+
+**Integration Status:** Phases 1-4 complete. Researcher and controller now share data.
+
+### Phase 1 ✅: Outcome Linking (Already Worked)
+- `update-trace-outcomes` already hooked into experiment logging
+- Traces now have `:outcomes` array with experiment results
+- 12 traces with outcomes (8 kept, 4 discarded, 66.7% base rate)
+
+### Phase 2 ✅: Dynamic Researcher Skill (`evolution.el`)
+- **Helper functions:** `generate-source-effectiveness-section`, `generate-controller-guidance-section`, `generate-dynamic-instructions`
+- **RESEARCHER.md now includes:**
+  - Source effectiveness table (own-repo vs external with keep rates)
+  - Controller guidance (thresholds, budget, priorities, topic models)
+  - Dynamic instructions that adapt based on trace outcomes
+  - Source strategy recommendations (e.g., "PRIORITY: Search davidwuchn/* repos FIRST")
+
+### Phase 3 ✅: Controller Uses Self-Evolution Data (`strategic.el`)
+- `get-self-evolution-topic-rate` — reads experiment TSVs for topic keep rate
+- `adjust-thresholds-for-topic` — adjusts stop/branch thresholds based on topic performance
+- High keep rate → lower stop threshold (keep researching)
+- Low keep rate → raise stop threshold (stop early)
+
+### Phase 4 ✅: Unified Evolution Hook (`evolution.el`)
+- `evolve-all-skills` now calls `evolve-researcher-skill` before feedback analysis
+- Single cycle: synthesize → consolidate → evolve skills → evolve researcher → AutoTTS strategy evolution
+
+### Phase 5 🔄: Adaptive Prompts (Future)
+- Inject controller decision into research prompt per turn
+- Requires modifying `run-research-turn` to pass decision to prompt builder
+
+### Test Results
+- Batch test: 2 topic models (performance: 60% base, nil-safety: 80% base)
+- Controller decision: STOP with topic-specific model for nil-safety
+- Threshold adjustment: stop=0.70, branch=0.30 (no self-evolution data yet for nil-safety)
+- Researcher evolution: generates dynamic RESEARCHER.md with source effectiveness
+
+---
 
 ## Sync Review: Remote Optimization Experiments (Merged `0e4b6f4f`)
 
