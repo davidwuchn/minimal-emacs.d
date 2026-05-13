@@ -84,6 +84,14 @@ Findings stored in var/tmp/research-findings.md for analyzer."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-max-research-turns 3
+  "Maximum turns for multi-turn research with real-time controller.
+Each turn is a separate subagent call with controller checkpoint.
+Higher values allow deeper research but cost more tokens.
+AutoTTS: Controller stops early if confidence threshold met."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
 (defcustom gptel-auto-workflow-analyzer-time-budget 120
   "Minimum timeout in seconds for analyzer target selection.
 Target selection can require more context synthesis than the default subagent
@@ -737,12 +745,146 @@ RULES:
             (message "[auto-workflow] gptel-request unavailable, using raw findings")
               (funcall callback raw-findings))))))))
 
+(defun gptel-auto-workflow--run-research-turn (research-prompt turn callback 
+                                                      &optional accumulated-findings total-tokens)
+  "Run a single research TURN with controller checkpoint.
+RESEARCH-PROMPT is the prompt for this turn.
+TURN is the turn number (0-indexed).
+CALLBACK receives final digested findings.
+ACCUMULATED-FINDINGS is findings from previous turns.
+TOTAL-TOKENS tracks cumulative token usage across turns.
+AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH."
+  (let* ((controller-config (gptel-auto-workflow--load-autotts-controller))
+         (max-turns gptel-auto-workflow-max-research-turns)
+         (current-prompt (if (and accumulated-findings (> (length accumulated-findings) 0))
+                             (gptel-auto-workflow--build-followup-prompt
+                              research-prompt accumulated-findings turn)
+                           research-prompt))
+         (turn-label (format "External research turn %d/%d" (1+ turn) max-turns)))
+    (message "[autotts] Starting %s" turn-label)
+    (gptel-benchmark-call-subagent
+     'researcher turn-label current-prompt
+     (lambda (result)
+       (let* ((raw-findings (gptel-auto-workflow--normalize-response result))
+              (has-external (gptel-auto-workflow--research-has-external-content-p raw-findings))
+              (research-error-p (gptel-auto-workflow--research-error-p raw-findings))
+              (effective-findings (if research-error-p
+                                      (gptel-auto-workflow--local-research-patterns)
+                                    raw-findings))
+              (findings-hash (sha1 raw-findings))
+              (strategy (or (and (boundp 'gptel-auto-workflow--active-strategy)
+                                 gptel-auto-workflow--active-strategy)
+                            "default"))
+              (confidence (gptel-auto-workflow--estimate-confidence raw-findings))
+              (turn-tokens (/ (length raw-findings) 4))
+              (cumulative-tokens (+ (or total-tokens 0) turn-tokens))
+              ;; Merge with accumulated findings
+              (merged-findings (if (and accumulated-findings (> (length accumulated-findings) 0))
+                                   (concat accumulated-findings "\n\n---\n\n" effective-findings)
+                                 effective-findings))
+              ;; Controller decision based on merged state
+              (controller-decision (gptel-auto-workflow--controller-decide-research-flow
+                                    controller-config (length merged-findings))))
+         ;; Log this turn as a step
+         (gptel-auto-workflow--log-research-step
+          'search
+          (list :query (format "turn-%d" turn)
+                :output-length (length raw-findings)
+                :cumulative-tokens cumulative-tokens)
+          confidence)
+         (message "[autotts] Turn %d result: %d chars, confidence=%.2f, decision=%s, cumulative-tokens=%d"
+                  (1+ turn) (length raw-findings) confidence controller-decision cumulative-tokens)
+         ;; Check controller decision
+         (cond
+          ;; STOP: We have good findings, return them
+          ((eq controller-decision 'stop)
+           (message "[autotts] Controller STOP after turn %d (confidence=%.2f)"
+                    (1+ turn) confidence)
+           (gptel-auto-workflow--finalize-research
+            research-prompt merged-findings strategy findings-hash
+            controller-decision confidence cumulative-tokens callback))
+          ;; CUT: Over budget, return what we have
+          ((eq controller-decision 'cut)
+           (message "[autotts] Controller CUT after turn %d (budget exceeded)"
+                    (1+ turn))
+           (gptel-auto-workflow--finalize-research
+            research-prompt merged-findings strategy findings-hash
+            controller-decision confidence cumulative-tokens callback))
+          ;; CONTINUE or BRANCH: Keep going if not at max turns
+          ((< turn (1- max-turns))
+           (message "[autotts] Controller %s, proceeding to turn %d"
+                    controller-decision (1+ turn))
+           (gptel-auto-workflow--run-research-turn
+            research-prompt (1+ turn) callback
+            merged-findings cumulative-tokens))
+          ;; Max turns reached
+          (t
+           (message "[autotts] Max turns (%d) reached, returning accumulated findings"
+                    max-turns)
+           (gptel-auto-workflow--finalize-research
+            research-prompt merged-findings strategy findings-hash
+            'max-turns confidence cumulative-tokens callback)))))
+     ;; Shorter timeout per turn (180s) vs single long call (600s)
+     ;; Total time: max-turns * 180s = 540s (comparable to 600s single call)
+     180)))
+
+(defun gptel-auto-workflow--build-followup-prompt (base-prompt accumulated-findings turn)
+  "Build follow-up prompt for turn TURN with ACCUMULATED-FINDINGS.
+BASE-PROMPT is the original research prompt."
+  (format "%s\n\n---\n\n**Previous findings (turn %d):**\n%s\n\n**Continue researching.** Focus on gaps or new angles not covered above. Avoid repeating what was already found."
+          base-prompt
+          turn
+          (truncate-string-to-width accumulated-findings 2000 nil nil "...")))
+
+(defun gptel-auto-workflow--finalize-research (prompt findings strategy hash 
+                                                      controller-decision confidence tokens-used callback)
+  "Finalize research session and invoke CALLBACK with digested findings.
+Saves trace, runs benchmark, and digests findings."
+  ;; Store raw research context
+  (setq gptel-auto-workflow--current-research-context
+        (list :strategy strategy
+              :hash hash
+              :findings findings
+              :source "external"
+              :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
+  (message "[auto-workflow] External research raw: %d chars (hash: %s)"
+           (length findings) (substring hash 0 8))
+  ;; Save research trace for AutoTTS-style offline evaluation
+  (gptel-auto-workflow--save-research-trace
+   prompt findings strategy hash
+   controller-decision confidence tokens-used)
+  ;; Run AutoTTS benchmark if available
+  (when (fboundp 'gptel-auto-workflow--benchmark-research-strategy)
+    (gptel-auto-workflow--benchmark-research-strategy
+     strategy "external-research"
+     (lambda (result)
+       (message "[benchmark] Research strategy '%s' scored: %.2f"
+                strategy (or (plist-get result :quality) 0.0)))))
+  ;; Digest and callback
+  (gptel-auto-workflow--digest-research-findings
+   findings
+   (lambda (digested)
+     ;; Write internal patterns to separate file for DIRECTIVE.md
+     (let ((internal-file (expand-file-name "var/tmp/internal-research.md"
+                                            (gptel-auto-workflow--effective-project-root))))
+       (make-directory (file-name-directory internal-file) t)
+       (with-temp-file internal-file
+         (insert (format "# Internal Code Analysis\n\n> Updated: %s\n\n%s"
+                         (format-time-string "%Y-%m-%d %H:%M")
+                         digested))))
+     ;; Always pass findings to callback
+     (funcall callback digested))))
+
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
-  "Hunt for external ideas from internet sources.
+  "Hunt for external ideas from internet sources with real-time controller.
 CALLBACK receives DIGESTED research findings string.
 Optional RETRY-COUNT tracks recursive retries (max 2).
 
-Pipeline: External hunt → Raw findings → LLM digestion → Actionable insights
+AutoTTS Multi-Turn: Research is broken into multiple shorter turns
+with controller checkpoints between them. Controller decides after
+each turn whether to STOP, CONTINUE, BRANCH, or CUT.
+
+Pipeline: External hunt → Controller checkpoint → [Continue/Stop] → Digest
 ASSUMPTION: Subagent may or may not be available.
 BEHAVIOR: Uses subagent with web tools if available, otherwise returns empty.
 EDGE CASE: Returns empty findings if subagent unavailable.
@@ -755,10 +897,15 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
   (setq gptel-auto-workflow--research-in-progress t)
   (let ((research-prompt (gptel-auto-workflow--build-research-prompt))
         (attempt (or retry-count 0))
-        ;; Load AutoTTS controller config for this session
-        (controller-config (gptel-auto-workflow--load-autotts-controller))
-        (controller-decision 'continue))
-    (message "[auto-workflow] Hunting external ideas...")
+        (controller-config (gptel-auto-workflow--load-autotts-controller)))
+    (message "[auto-workflow] Hunting external ideas (multi-turn controller)...")
+    ;; AutoTTS: Reset step trace accumulator for this session
+    (gptel-auto-workflow--reset-research-steps)
+    (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%, max-turns=%d"
+             (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
+    (message "[auto-workflow] Hunting external ideas (multi-turn controller)...")
+    ;; AutoTTS: Reset step trace accumulator for this session
+    (gptel-auto-workflow--reset-research-steps)
     (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%"
              (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
              (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
@@ -769,92 +916,8 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
              (format-time-string "%H:%M:%S"))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
-         ;; Researcher needs more time for web searches + page fetches (600s = 10min)
-        (gptel-benchmark-call-subagent
-         'researcher "External research" research-prompt
-         (lambda (result)
-           (let* ((raw-findings (gptel-auto-workflow--normalize-response result))
-                  (has-external (gptel-auto-workflow--research-has-external-content-p raw-findings))
-                  (research-error-p (gptel-auto-workflow--research-error-p raw-findings))
-                  (effective-findings (if research-error-p
-                                          (gptel-auto-workflow--local-research-patterns)
-                                        raw-findings))
-                  (source (if research-error-p "local-fallback" "external"))
-                  (findings-hash (sha1 raw-findings))
-                  (strategy (or (and (boundp 'gptel-auto-workflow--active-strategy)
-                                     gptel-auto-workflow--active-strategy)
-                                "default"))
-                  ;; AutoTTS: Evaluate if we should stop early
-                  (confidence (gptel-auto-workflow--estimate-confidence raw-findings))
-                  (tokens-used (/ (length raw-findings) 4)))
-             ;; Controller decision: should we stop, continue, or branch?
-             (setq controller-decision
-                   (gptel-auto-workflow--controller-decide-research-flow
-                    controller-config (length raw-findings)))
-             (message "[autotts] Research result: %d chars, confidence=%.2f, decision=%s"
-                      (length raw-findings) confidence controller-decision)
-             (cond
-               ;; If no external content, short response, and we haven't retried too much, trigger failover and retry
-               ((and (not has-external)
-                     (< (length raw-findings) 1000)
-                     (not research-error-p)
-                     (< attempt 2)
-                     (fboundp 'gptel-auto-workflow--activate-provider-failover))
-                (message "[auto-workflow] Researcher returned no external references (%d chars); retrying with next provider (attempt %d)"
-                         (length raw-findings) (1+ attempt))
-                ;; Mark current backend as failed to advance fallback chain
-                (when-let* ((preset (and (boundp 'gptel-agent-preset) gptel-agent-preset))
-                            (backend (plist-get preset :backend)))
-                  (gptel-auto-workflow--activate-provider-failover
-                   "researcher" preset "no external content in research output" t))
-                ;; Retry recursively - flag will be reset by inner call's callback
-                (gptel-auto-workflow--research-patterns callback (1+ attempt))
-                ;; Reset flag for this (outer) call since we're delegating to retry
-                (setq gptel-auto-workflow--research-in-progress nil))
-               ;; Normal path: success or exhausted retries
-               (t
-                (when research-error-p
-                  (message "[auto-workflow] External research failed; using local research fallback (%d chars)"
-                           (length effective-findings)))
-                ;; Store raw research context
-                (setq gptel-auto-workflow--current-research-context
-                      (list :strategy strategy
-                            :hash findings-hash
-                            :findings raw-findings
-                            :source source
-                            :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
-                (message "[auto-workflow] External research raw: %d chars (hash: %s)"
-                         (length raw-findings) (substring findings-hash 0 8))
-                ;; Save research trace for AutoTTS-style offline evaluation
-                ;; Include controller decision and confidence for evolution
-                (gptel-auto-workflow--save-research-trace
-                 research-prompt raw-findings strategy findings-hash
-                 controller-decision confidence tokens-used)
-                ;; Run AutoTTS benchmark if available
-                (when (fboundp 'gptel-auto-workflow--benchmark-research-strategy)
-                  (gptel-auto-workflow--benchmark-research-strategy
-                   strategy "external-research"
-                   (lambda (result)
-                     (message "[benchmark] Research strategy '%s' scored: %.2f"
-                              strategy (or (plist-get result :quality) 0.0)))))
-                ;; SEPARATION: Local/internal research goes to DIRECTIVE.md, not FINDINGS.md
-                ;; Always digest findings and pass to callback, regardless of source
-                (gptel-auto-workflow--digest-research-findings
-                 effective-findings
-                 (lambda (digested)
-                   ;; Write internal patterns to separate file for DIRECTIVE.md
-                   (let ((internal-file (expand-file-name "var/tmp/internal-research.md"
-                                                          (gptel-auto-workflow--effective-project-root))))
-                     (make-directory (file-name-directory internal-file) t)
-                     (with-temp-file internal-file
-                       (insert (format "# Internal Code Analysis\n\n> Updated: %s\n\n%s"
-                                       (format-time-string "%Y-%m-%d %H:%M")
-                                       digested))))
-                   ;; Always pass findings to callback (local or external)
-                   ;; Reset flag before calling callback to allow next research
-                   (setq gptel-auto-workflow--research-in-progress nil)
-                   (funcall callback digested))))))))
-         600)
+        ;; Multi-turn research with controller checkpoints
+        (gptel-auto-workflow--run-research-turn research-prompt 0 callback)
       (progn
         (message "[auto-workflow] Subagent unavailable - skipping external research")
         ;; Reset flag before calling callback
@@ -1317,6 +1380,123 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
 (defvar gptel-auto-workflow--active-strategy nil
   "Currently active research strategy (evolved by benchmark system).")
 
+(defvar gptel-auto-workflow--research-steps nil
+  "List of step-level traces for current research session.
+Each step is a plist with :step :type :query :url :timestamp :confidence.
+Accumulated during research and saved with session trace.
+Reset at start of each research session.
+Enables AutoTTS offline evaluation of per-step decisions.")
+
+(defun gptel-auto-workflow--reset-research-steps ()
+  "Reset the research steps accumulator for a new session."
+  (setq gptel-auto-workflow--research-steps nil))
+
+(defun gptel-auto-workflow--log-research-step (step-type data &optional confidence)
+  "Log a research step for AutoTTS trace collection.
+STEP-TYPE is symbol: search, fetch, analyze, branch, stop.
+DATA is plist with step-specific data (:query :url :output :timestamp).
+CONFIDENCE is optional confidence score (0-1) for this step.
+Call during or after research to build step-level timeline."
+  (let ((step (list :step (length gptel-auto-workflow--research-steps)
+                    :type (symbol-name step-type)
+                    :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                    :confidence (or confidence 0.0)
+                    :data data)))
+    (push step gptel-auto-workflow--research-steps)
+    (message "[autotts] Step %d: %s %s"
+             (plist-get step :step)
+             (plist-get step :type)
+             (or (plist-get data :query) (plist-get data :url) ""))))
+
+(defun gptel-auto-workflow--extract-research-steps (output)
+  "Extract inferred research steps from researcher OUTPUT.
+Parses output for evidence of tool calls (WebSearch queries, WebFetch URLs).
+Returns list of step plists.
+Since we can't instrument subagent internals, we reconstruct from output."
+  (let ((steps nil)
+        (step-idx 0))
+    ;; Extract WebSearch queries (look for search patterns)
+    (save-match-data
+      (let ((pos 0))
+        (while (string-match
+                "\\(?:WebSearch\\|Search\\|Query\\)[^:]*:?\\s-*\\(\\(?:[^\n]*\\(?:github\\|arxiv\\|reddit\\|stackoverflow\\|huggingface\\)\\|[^\n]+\\)\\)"
+                output pos)
+          (let ((query (match-string 1 output)))
+            (when (and query (> (length query) 5))
+              (push (list :step step-idx
+                          :type "search"
+                          :query (string-trim query)
+                          :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                          :confidence 0.5)
+                    steps)
+              (setq step-idx (1+ step-idx))))
+          (setq pos (match-end 0)))))
+    ;; Extract WebFetch URLs (look for fetched URLs)
+    (save-match-data
+      (let ((pos 0))
+        (while (string-match
+                "\\(?:WebFetch\\|Fetch\\|Reading\\)[^:]*:?\\s-*\\(https?://[^\s\n]+\\)"
+                output pos)
+          (let ((url (match-string 1 output)))
+            (when url
+              (push (list :step step-idx
+                          :type "fetch"
+                          :url url
+                          :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                          :confidence 0.6)
+                    steps)
+              (setq step-idx (1+ step-idx))))
+          (setq pos (match-end 0)))))
+    ;; Extract analyzed sections (headers indicate analysis steps)
+    (save-match-data
+      (let ((pos 0))
+        (while (string-match "^##\\s-+\\(.+\\)$" output pos)
+          (let ((section (match-string 1 output)))
+            (when (and section (> (length section) 3))
+              (push (list :step step-idx
+                          :type "analyze"
+                          :section (string-trim section)
+                          :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                          :confidence 0.7)
+                    steps)
+              (setq step-idx (1+ step-idx))))
+          (setq pos (match-end 0)))))
+    ;; Extract decision points from JSON metadata at end
+    (save-match-data
+      (let ((json-start (string-match "```json" output))
+            (json-end (string-match "```" output (if json-start (+ json-start 7) 0))))
+        (when (and json-start json-end (> json-end json-start))
+          (let* ((json-str (string-trim (substring output (+ json-start 7) json-end)))
+                 (json-object-type 'plist))
+            (condition-case nil
+                (let ((metadata (json-read-from-string json-str)))
+                  (push (list :step step-idx
+                              :type "decision"
+                              :strategy (plist-get metadata :strategy)
+                              :sources (plist-get metadata :sources_checked)
+                              :topics (plist-get metadata :topics_covered)
+                              :estimated-tokens (plist-get metadata :estimated_tokens)
+                              :confidence-label (plist-get metadata :confidence)
+                              :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                              :confidence (cond
+                                           ((string= (plist-get metadata :confidence) "high") 0.9)
+                                           ((string= (plist-get metadata :confidence) "medium") 0.6)
+                                           (t 0.3)))
+                        steps))
+              (error nil))))))
+    ;; If we found explicit steps, prefer those over parsed ones
+    (or (reverse steps) nil)))
+
+(defun gptel-auto-workflow--merge-steps-with-session (steps)
+  "Merge parsed STEPS into the session step accumulator.
+Called after research completes to combine explicit and parsed steps."
+  (when steps
+    (dolist (step steps)
+      (push step gptel-auto-workflow--research-steps))
+    (setq gptel-auto-workflow--research-steps
+          (sort gptel-auto-workflow--research-steps
+                (lambda (a b) (< (plist-get a :step) (plist-get b :step)))))))
+
 (defun gptel-auto-workflow--save-research-trace (prompt output strategy hash &optional controller-decision confidence tokens-used)
   "Save research session trace for AutoTTS offline evaluation.
 PROMPT is the research prompt sent to subagent.
@@ -1329,7 +1509,14 @@ TOKENS-USED is estimated token count."
   (let* ((trace-dir gptel-auto-workflow--research-trace-dir)
          (timestamp (format-time-string "%Y%m%d-%H%M%S"))
          (trace-file (expand-file-name (format "%s-%s.json" timestamp hash)
-                                      trace-dir)))
+                                      trace-dir))
+         ;; Extract step-level data from output
+         (parsed-steps (gptel-auto-workflow--extract-research-steps output))
+         ;; Merge with any explicitly logged steps
+         (all-steps (or (progn
+                          (gptel-auto-workflow--merge-steps-with-session parsed-steps)
+                          gptel-auto-workflow--research-steps)
+                        parsed-steps)))
     (make-directory trace-dir t)
     (let ((trace-data
            (list :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
@@ -1344,11 +1531,18 @@ TOKENS-USED is estimated token count."
                  :controller-decision (symbol-name (or controller-decision 'continue))
                  :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
                  :tokens-used (or tokens-used (/ (length output) 4))
+                 ;; Step-level traces for AutoTTS offline evaluation
+                 :steps all-steps
+                 :step-count (length all-steps)
                  :metadata (list :tokens-estimate (/ (length output) 4)
-                                :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))))))
+                                :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
+                                :step-count (length all-steps)
+                                :has-steps (if all-steps t nil)))))
       (with-temp-file trace-file
         (insert (json-encode trace-data)))
-      (message "[autotts] Saved research trace: %s" (file-name-nondirectory trace-file)))))
+      (message "[autotts] Saved research trace: %s (%d steps)"
+               (file-name-nondirectory trace-file)
+               (or (length all-steps) 0)))))
 
 (defun gptel-auto-workflow--estimate-confidence (output)
   "Estimate confidence score (0-1) from research output.

@@ -166,7 +166,37 @@ This skill auto-evolves every 90 days based on:
 
 ## Strategy Guidance (from Replay Store)
 
-{{strategy-guidance}}
+**Evolved Controller Config** (updated 2026-05-13T12:00:00Z from 3 traces):
+
+- Own repo priority: 95%
+- External priority: 15%
+- Stop threshold: 65% confidence
+- Token budget: 8000
+
+**Decision Rules**:
+1. If confidence > 65% + have URLs → STOP early
+2. If output < 1000 chars → CONTINUE searching
+3. If > 8000 tokens → CUT (return what you have)
+4. Check own repos (davidwuchn/*) FIRST before external
+
+*This guidance auto-evolves after each pipeline run.*
+
+## Strategy Guidance (Auto-Evolved)
+
+**Evolved Controller Config** (updated 2026-05-13T11:37:35Z from 3 traces):
+
+- Own repo priority: 95%
+- External priority: 15%
+- Stop threshold: 65% confidence
+- Token budget: 8000
+
+**Decision Rules**:
+1. If confidence > 65% + have URLs → STOP early
+2. If output < 1000 chars → CONTINUE searching
+3. If > 8000 tokens → CUT (return what you have)
+4. Check own repos (davidwuchn/*) FIRST before external
+
+*This guidance auto-evolves after each pipeline run.*
 
 ## Instructions
 
