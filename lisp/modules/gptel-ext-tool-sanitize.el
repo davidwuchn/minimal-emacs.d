@@ -300,7 +300,8 @@ each unserializable call gets a unique fingerprint."
            (args (plist-get tc :args))
            (args-str (my/gptel--safe-serialize-args args))
            (args-hash (if (string= args-str "unserializable")
-                          (md5 (format "%S" args))
+                          (or (ignore-errors (md5 (format "%S" args)))
+                              (md5 "unserializable"))
                         (md5 args-str))))
       (concat name ":" args-hash))))
 
