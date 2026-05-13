@@ -1,0 +1,1 @@
+{"name":"pattern-triggered-skills","version":"1.0","hypothesis":"Dynamically loading skills based on detected code patterns provides more relevant guidance","axis":"E","components":["pattern-detection","skill-triggering"]}
