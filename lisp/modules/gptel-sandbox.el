@@ -866,6 +866,8 @@ CALLBACK receives final outcome plist."
     (gptel-sandbox--eval-statement
      (car body) env state
      (lambda (outcome)
+       (unless (proper-list-p outcome)
+         (error "Programmatic eval-progn callback received invalid outcome, got: %S" outcome))
        (if (plist-get outcome :done)
            (funcall callback outcome)
          (gptel-sandbox--eval-progn (cdr body) env state callback))))))
@@ -887,6 +889,8 @@ CALLBACK receives final outcome plist."
     (gptel-sandbox--eval-statement
      (car forms) env state
      (lambda (outcome)
+       (unless (proper-list-p outcome)
+         (error "Programmatic run-forms callback received invalid outcome, got: %S" outcome))
        (if (plist-get outcome :done)
            (funcall callback (gptel-sandbox--truncate-result
                               (plist-get outcome :result)))

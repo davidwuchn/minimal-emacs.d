@@ -269,22 +269,13 @@ ADAPTS TO: Prefers child FSM in nested scenarios, fixing the issue
 where first FSM was always returned (potentially wrong parent FSM).
 
 PROACTIVE MITIGATION: Uses registration order as proxy for nesting level,
-avoiding need for explicit parent-child tracking."
+avoiding need for explicit parent-child tracking.
+
+CLARITY: Extracts cycle detection to shared `my/gptel--fsm-traverse` helper."
   (let ((last-fsm nil)
         (seen (make-hash-table :test 'eq)))
-    (cl-labels ((collect-last (obj)
-                  (cond
-                   ((null obj) nil)
-                   ((and (consp obj) (gethash obj seen)) nil)
-                   ((consp obj)
-                    (puthash obj t seen)
-                    (collect-last (car obj))
-                    (collect-last (cdr obj)))
-                   ((my/gptel--fsm-p obj)
-                    (unless (gethash obj seen)
-                      (puthash obj t seen)
-                      (setq last-fsm obj))))))
-      (collect-last object)
+    (cl-labels ((track-last (fsm) (setq last-fsm fsm)))
+      (my/gptel--fsm-traverse object seen #'track-last)
       last-fsm)))
 
 (defun my/gptel--fsm-traverse (object seen fsm-callback)
