@@ -117,7 +117,7 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
 (defun my/gptel--repair-tool-call (tc correct-name)
   "Repair tool call TC to use CORRECT-NAME.
 Messages the repair and updates the :name property in place."
-  (when (and (listp tc) (stringp correct-name) (> (length correct-name) 0))
+  (when (and (proper-list-p tc) (stringp correct-name) (> (length correct-name) 0))
     (let ((current-name (plist-get tc :name)))
       (when (and (stringp current-name) (not (string= current-name correct-name)))
         (message "gptel: repairing tool call %S -> %S" current-name correct-name)
