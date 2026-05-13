@@ -392,9 +392,11 @@ Returns 0.5 if OUTPUT or ANTI-PATTERNS is nil/empty."
   (plist-get (alist-get level gptel-benchmark-vsm-levels) :element))
 
 (defun gptel-benchmark-element-to-vsm (element)
-  "Convert Wu Xing ELEMENT to VSM level."
-  (car (cl-find-if (lambda (x) (eq (plist-get (cdr x) :element) element))
-                   gptel-benchmark-vsm-levels)))
+  "Convert Wu Xing ELEMENT to VSM level.
+Returns nil if ELEMENT is not a valid element symbol."
+  (when (symbolp element)
+    (car (cl-find-if (lambda (x) (eq (plist-get (cdr x) :element) element))
+                     gptel-benchmark-vsm-levels))))
 
 ;;; ============================================================================
 ;;; Wu Xing Diagnostics
