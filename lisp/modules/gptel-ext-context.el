@@ -446,13 +446,15 @@ Returns a short description of what the user was asking for."
   (cl-block my/gptel--extract-last-task-from-lines
     (when (null lines)
       (cl-return-from my/gptel--extract-last-task-from-lines "Continue the task"))
-    (let* ((lines-list (and (listp lines) lines))
+    (unless (proper-list-p lines)
+      (cl-return-from my/gptel--extract-last-task-from-lines "Continue the task"))
+    (let* ((lines-list lines)
            (user-lines (and lines-list
                             (cl-remove-if-not
                              (lambda (line)
                                (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
                              lines-list)))
-           (user-list (and (listp user-lines) user-lines))
+           (user-list user-lines)
            (last-user (and user-list (car (last user-list))))
            (task (if (and last-user (not (string-empty-p last-user)))
                      (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
