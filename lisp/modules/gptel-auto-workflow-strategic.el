@@ -1459,8 +1459,8 @@ Since we can't instrument subagent internals, we reconstruct from output."
           (setq pos (match-end 0)))))
     ;; Extract decision points from JSON metadata at end
     (save-match-data
-      (let ((json-start (string-match "```json" output))
-            (json-end (string-match "```" output (if json-start (+ json-start 7) 0))))
+      (let* ((json-start (string-match "```json" output))
+             (json-end (string-match "```" output (if json-start (+ json-start 7) 0))))
         (when (and json-start json-end (> json-end json-start))
           (let* ((json-str (string-trim (substring output (+ json-start 7) json-end)))
                  (json-object-type 'plist))
