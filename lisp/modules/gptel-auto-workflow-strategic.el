@@ -1585,8 +1585,8 @@ Uses gptel-auto-workflow-research-benchmark.el to:
           (gptel-auto-workflow--evolve-research-strategy)
           (message "[evolve] Strategy evolution complete"))
       ;; Fallback to Python script
-      (let ((root (gptel-auto-workflow--worktree-base-root))
-            (script (expand-file-name "assistant/skills/researcher-prompt/scripts/unified-evolution.py" root)))
+      (let* ((root (gptel-auto-workflow--worktree-base-root))
+             (script (expand-file-name "assistant/skills/researcher-prompt/scripts/unified-evolution.py" root)))
         (when (file-executable-p script)
           (message "[evolve] Running Python evolution fallback...")
           (let ((output (shell-command-to-string (format "cd %s && python3 %s"
