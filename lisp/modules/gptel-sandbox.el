@@ -83,23 +83,6 @@ confirmation step."
   :type '(repeat string)
   :group 'gptel-sandbox)
 
-(defcustom my/gptel-programmatic-readonly-tools
-  '("Read" "Grep" "Glob"
-    "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"
-    "describe_symbol" "get_symbol_source" "find_buffers_and_recent")
-  "Tool names allowed inside Programmatic when running in readonly mode.
-This profile is used by `gptel-plan` and excludes mutating or confirming tools."
-  :type '(repeat string)
-  :group 'gptel-sandbox)
-
-(defcustom my/gptel-programmatic-confirming-tools
-  '("Edit" "ApplyPatch" "Code_Replace")
-  "Tool names allowed to request confirmation inside Programmatic.
-These tools keep their own preview/apply flow after the initial nested
-confirmation step."
-  :type '(repeat string)
-  :group 'gptel-sandbox)
-
 (defvar gptel-sandbox-confirm-function #'gptel-sandbox--default-confirm-tool
   "Function used to confirm nested Programmatic tool calls.
 Called with TOOL-SPEC, ARG-VALUES, and CALLBACK. CALLBACK must be invoked with

@@ -663,23 +663,20 @@ Returns t for \"true\" or t, nil for \"false\", nil, or any other value."
   "Escape XML special characters in TEXT.
 Prevents XML injection when inserting file contents into context tags.
 Escapes &, <, >, \", and ' per XML spec.
-Uses chained replace-regexp-in-string for efficiency.
-Order: & first, then < > \" ', to avoid double-escaping & in other entities."
+Uses `cl-loop' with accumulation for clarity and consistent handling."
   (if (not (stringp text))
       ""
-    (replace-regexp-in-string
-     "'" "&apos;"
-     (replace-regexp-in-string
-      "\"" "&quot;"
-      (replace-regexp-in-string
-       ">" "&gt;"
-       (replace-regexp-in-string
-        "<" "&lt;"
-        (replace-regexp-in-string "&" "&amp;" text t t)
-        t t)
-       t t)
-      t t)
-     t t)))
+    (cl-loop with result = text
+             for (pattern . replacement) in
+             '(("&" . "&amp;")
+               ("<" . "&lt;")
+               (">" . "&gt;")
+               ("\"" . "&quot;")
+               ("'" . "&apos;"))
+             do (setq result
+                      (replace-regexp-in-string
+                       (regexp-quote pattern) replacement result t t))
+             finally return result)))
 
 (defun my/gptel--sanitize-for-logging (text &optional max-len)
   "Sanitize TEXT for safe logging to Messages buffer.
