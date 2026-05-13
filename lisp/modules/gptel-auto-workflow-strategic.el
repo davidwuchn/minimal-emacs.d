@@ -494,7 +494,7 @@ Results feed into directive's 'Next Hypotheses' for target selection."
             (gptel-auto-workflow--research-topics-string)
             "\n\n"
             "---\n"
-            "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp."))))
+            "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
 
 ;;; Meta-Learning Researcher Triggers
 
