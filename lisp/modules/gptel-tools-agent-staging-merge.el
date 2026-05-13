@@ -32,11 +32,10 @@ Returns nil if not in a staging worktree or if no changes."
         (when (gptel-auto-workflow--non-empty-string-p output)
           (split-string output "\n" t))))))
 
-(defun gptel-auto-workflow--empty-cherry-pick-state-p (&optional output allow-missing-head)
-  "Return non-nil when worktree reflects an already-applied cherry-pick.
-When ALLOW-MISSING-HEAD is non-nil, also treat a clean worktree plus localized
-  empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD'
-  is absent."
+(defun gptel-auto-workflow--cached-cherry-pick-state ()
+  "Return cached git state for cherry-pick detection.
+Returns a plist with :cherry-pick-head, :unmerged-files, :worktree-status.
+This fetches all state in one batch to avoid repeated git subprocess calls."
   (let ((cherry-pick-head
          (ignore-errors
            (gptel-auto-workflow--git-cmd
@@ -54,6 +53,39 @@ When ALLOW-MISSING-HEAD is non-nil, also treat a clean worktree plus localized
                 "git status --porcelain 2>/dev/null"
                 30))
              "")))
+    (list :cherry-pick-head cherry-pick-head
+          :unmerged-files unmerged-files
+          :worktree-status worktree-status)))
+
+(defun gptel-auto-workflow--empty-cherry-pick-state-p (&optional output allow-missing-head cached-state)
+  "Return non-nil when worktree reflects an already-applied cherry-pick.
+When ALLOW-MISSING-HEAD is non-nil, also treat a clean worktree plus localized
+  empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD'
+  is absent.
+When CACHED-STATE is provided, uses it instead of querying git again."
+  (let ((cherry-pick-head
+         (if (plist-member cached-state :cherry-pick-head)
+             (plist-get cached-state :cherry-pick-head)
+           (ignore-errors
+             (gptel-auto-workflow--git-cmd
+              "git rev-parse -q --verify CHERRY_PICK_HEAD 2>/dev/null"
+              30))))
+        (unmerged-files
+         (if (plist-member cached-state :unmerged-files)
+             (plist-get cached-state :unmerged-files)
+           (or (ignore-errors
+                 (gptel-auto-workflow--git-cmd
+                  "git diff --name-only --diff-filter=U 2>/dev/null"
+                  30))
+               "")))
+        (worktree-status
+         (if (plist-member cached-state :worktree-status)
+             (plist-get cached-state :worktree-status)
+           (or (ignore-errors
+                 (gptel-auto-workflow--git-cmd
+                  "git status --porcelain 2>/dev/null"
+                  30))
+               ""))))
     (and (or (gptel-auto-workflow--non-empty-string-p cherry-pick-head)
              (and allow-missing-head
                   (stringp output)
@@ -63,6 +95,12 @@ When ALLOW-MISSING-HEAD is non-nil, also treat a clean worktree plus localized
                        output))))
          (string-empty-p unmerged-files)
          (string-empty-p worktree-status))))
+
+(defun gptel-auto-workflow--cached-unmerged-files (cached-state)
+  "Return unmerged files from CACHED-STATE or query git if not cached."
+  (if (plist-member cached-state :unmerged-files)
+      (plist-get cached-state :unmerged-files)
+    (gptel-auto-workflow--unmerged-files)))
 
 (defun gptel-auto-workflow--unmerged-files ()
   "Return newline-separated unmerged files in the current git worktree."
@@ -93,24 +131,33 @@ Uses the staging worktree instead of switching branches in the root repo."
         (gptel-auto-workflow--with-staging-worktree
          (lambda ()
            (let ((reset-target staging)
-                 (worktree gptel-auto-workflow--staging-worktree-dir))
+                 (worktree gptel-auto-workflow--staging-worktree-dir)
+                 (git-state nil))
              (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
                            (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
                  nil
-               (let* ((commit-hash (string-trim
-                                    (or (car-safe
-                                         (gptel-auto-workflow--git-result
-                                          (format "git rev-parse %s"
-                                                  (shell-quote-argument optimize-ref))
-                                          60))
-                                        "")))
+               (let* ((commit-hash-raw (car-safe
+                                        (gptel-auto-workflow--git-result
+                                         (format "git rev-parse %s"
+                                                 (shell-quote-argument optimize-ref))
+                                         60)))
+                      (commit-hash (and (stringp commit-hash-raw)
+                                        (string-match-p
+                                         (rx (repeat 40 (any "0-9a-f")))
+                                         commit-hash-raw)
+                                        (string-trim commit-hash-raw)))
                       (cherry-result
-                       (gptel-auto-workflow--git-result
-                        (format "git cherry-pick --no-commit %s"
-                                (shell-quote-argument commit-hash))
-                        180))
+                       (when commit-hash
+                         (gptel-auto-workflow--git-result
+                          (format "git cherry-pick --no-commit %s"
+                                  (shell-quote-argument commit-hash))
+                          180)))
                       (cherry-output (or (car-safe cherry-result) "")))
                  (cond
+                  ((null cherry-result)
+                   (message "[auto-workflow] Failed to resolve commit hash for %s"
+                            optimize-branch)
+                   nil)
                   ((= 0 (cdr cherry-result))
                    (let ((commit-result
                           (gptel-auto-workflow--git-result
@@ -121,7 +168,10 @@ Uses the staging worktree instead of switching branches in the root repo."
                      (cond
                       ((= 0 (cdr commit-result))
                        t)
-                      ((gptel-auto-workflow--empty-cherry-pick-state-p (car commit-result) t)
+                      ((progn
+                         (unless git-state
+                           (setq git-state (gptel-auto-workflow--cached-cherry-pick-state)))
+                         (gptel-auto-workflow--empty-cherry-pick-state-p (car commit-result) t git-state))
                        (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --skip" 60))
                        (message "[auto-workflow] Cherry-pick empty after apply (already in staging)")
                        :already-integrated)
@@ -129,14 +179,21 @@ Uses the staging worktree instead of switching branches in the root repo."
                        (message "[auto-workflow] Commit failed after cherry-pick: %s"
                                 (my/gptel--sanitize-for-logging (car commit-result) 160))
                        nil))))
-                  ((or (gptel-auto-workflow--empty-cherry-pick-state-p cherry-output t)
+                  ((or (progn
+                         (unless git-state
+                           (setq git-state (gptel-auto-workflow--cached-cherry-pick-state)))
+                         (gptel-auto-workflow--empty-cherry-pick-state-p cherry-output t git-state))
                        (string-match-p gptel-auto-workflow--empty-cherry-pick-pattern
                                        cherry-output))
                    (message "[auto-workflow] Cherry-pick empty (already in staging)")
                    (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
                    :already-integrated)
                   (t
-                   (let ((unmerged-files (gptel-auto-workflow--unmerged-files)))
+                   (let ((unmerged-files
+                          (progn
+                            (unless git-state
+                              (setq git-state (gptel-auto-workflow--cached-cherry-pick-state)))
+                            (gptel-auto-workflow--cached-unmerged-files git-state))))
                      (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
                      (if (gptel-auto-workflow--non-empty-string-p unmerged-files)
                          (progn
@@ -310,8 +367,9 @@ Returns (success-p . output)."
           (gptel-auto-workflow--git-result
            (format "git ls-remote --exit-code --heads %s %s" remote branch-q)
            (or timeout 60))))
-    (and (= 0 (cdr remote-result))
-         (gptel-auto-workflow--parse-remote-head branch (car remote-result)))))
+    (and (consp remote-result)
+         (= 0 (cdr-safe remote-result))
+         (gptel-auto-workflow--parse-remote-head branch (car-safe remote-result)))))
 
 (defun gptel-auto-workflow--push-branch-with-lease (branch action &optional timeout)
   "Push BRANCH to the shared remote.
