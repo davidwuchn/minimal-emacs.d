@@ -142,7 +142,8 @@ For non-keywords, returns KEY unchanged."
   "Convert PLIST to alist format for JSON encoding.
 Validates that PLIST has even number of elements.
 Returns nil for empty or malformed input."
-  (when (and plist (zerop (mod (length plist) 2)))
+  (when (and (proper-list-p plist)
+             (zerop (mod (length plist) 2)))
     (let (alist)
       (while plist
         (let ((key (gptel-benchmark--keyword-to-alist-key (car plist)))
