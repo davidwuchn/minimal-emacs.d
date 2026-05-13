@@ -736,6 +736,9 @@ Without PROJECT-ROOT, clears overlays for all projects."
 Loads .dir-locals.el from project and runs researcher in that context.
 When COMPLETION-CALLBACK is non-nil, call it after research completes."
   (interactive "DProject root: ")
+  (unless (and (stringp project-root)
+               (> (length project-root) 0))
+    (error "PROJECT-ROOT must be a non-empty string, got: %S" project-root))
   (let* ((root (expand-file-name project-root))
          (project-buf (gptel-auto-workflow--get-project-buffer root)))
     (message "[research] Starting for project: %s" root)
