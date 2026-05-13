@@ -59,15 +59,22 @@
 - ✅ Topic-specific controller: `[statistical topic:performance]` vs `[statistical topic:nil-safety]`
 - ✅ Strategic regression tests: 12/12 pass
 - ✅ Byte-compile: no new warnings
+- ✅ **Daemon restart complete** — both daemons restarted and new code loaded
+- ✅ **Critical fix verified** — `gptel-auto-workflow--build-research-prompt` now defined in both daemons
+- ✅ **Controller bug fixed** — `string-match-p` receives text, not length (no more `stringp, 4152`)
+
+**Daemon Restart Notes:**
+- Required `unload-feature` + `load-file` to clear cached definitions
+- `build-research-prompt` was missing after initial load due to feature caching
+- Both daemons now have all 60 defuns from strategic.el
 
 **Next Steps:**
-1. **Restart daemon** — load new code for next cron run
-2. **Monitor pipeline** — verify real traces get outcomes populated (mock traces have invalid hashes)
-3. **Observe learned weights** — confirm they make sense after ~5 real traces
-4. **Measure improvement** — compare research effectiveness statistical vs heuristic
+1. **Monitor pipeline** — verify real traces get outcomes populated (mock traces have invalid hashes)
+2. **Observe learned weights** — confirm they make sense after ~5 real traces
+3. **Measure improvement** — compare research effectiveness statistical vs heuristic
 
 **Pipeline Status:**
-- Daemons need restart to load new code
+- ✅ Daemons restarted and new code loaded
 - Cron: `0 23,3,7,11,15,19 * * *`
-- Next run: 23:00 (if daemon restarted)
+- Next run: 23:00 (ready)
 - Real traces will replace mock traces once pipeline runs with outcome updates
