@@ -751,7 +751,7 @@ RULES:
               :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
           (progn
             (message "[auto-workflow] gptel-request unavailable, using raw findings")
-              (funcall callback raw-findings)))))))
+              (funcall callback raw-findings))))))))
 
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
   "Hunt for external ideas from internet sources.
@@ -858,7 +858,7 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
          600)
       (progn
         (message "[auto-workflow] Subagent unavailable - skipping external research")
-        (funcall callback "")))))
+        (funcall callback ""))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -1592,7 +1592,8 @@ Uses gptel-auto-workflow-research-benchmark.el to:
           (let ((output (shell-command-to-string (format "cd %s && python3 %s"
                                                           (shell-quote-argument root)
                                                           (shell-quote-argument script)))))
-            (message "[evolve] %s" output)))))))
+            (message "[evolve] %s" output))))
+    (message "[evolve] Strategy evolution cycle complete"))))
 
 (provide 'gptel-auto-workflow-strategic)
 
