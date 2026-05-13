@@ -17,6 +17,9 @@
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
 
+;; AutoTTS-style research evolution via benchmark system
+(declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
+
 ;; ─── Helpers ───
 
 (defvar gptel-auto-workflow--evolution-repo-root nil
@@ -1287,7 +1290,11 @@ Uses agentskills.io standard scripts/ directory."
   (gptel-auto-workflow--generate-research-skill)
   
   ;; Analyze researcher end-to-end effectiveness
-  (gptel-auto-workflow--evolve-researcher-from-feedback))
+  (gptel-auto-workflow--evolve-researcher-from-feedback)
+  
+  ;; Run AutoTTS-style strategy evolution (offline evaluation)
+  (when (fboundp 'gptel-auto-workflow--run-strategy-evolution)
+    (gptel-auto-workflow--run-strategy-evolution)))
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.

@@ -1,0 +1,1 @@
+{"name":"complexity-weighted-compression","version":"1.0","hypothesis":"Compression strategy adapts to cyclomatic complexity proxies, not just file size","axis":"D","components":["complexity-metrics","compression","adaptive"]}

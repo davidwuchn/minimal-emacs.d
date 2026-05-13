@@ -1,0 +1,1 @@
+{"name":"confidence-weighted-context","version":"1.0","hypothesis":"Higher confidence targets benefit from minimal context while lower confidence targets need expanded guidance","axis":"D","components":["confidence-scoring","adaptive-weighting","reasoning-explicit"]}

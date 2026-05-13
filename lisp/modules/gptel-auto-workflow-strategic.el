@@ -467,7 +467,9 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (base-prompt (gptel-auto-workflow--substitute-researcher-variables raw-skill))
          (skill-content (gptel-auto-workflow--load-research-skill))
          (directive-content (gptel-auto-workflow--load-directive-skill))
-         (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content)))
+         (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
+         ;; Load AutoTTS-style strategy guidance from replay store
+         (strategy-guidance (gptel-auto-workflow--load-strategy-guidance)))
     (concat (or base-prompt "")
             "\n\n"
             "## Dynamic Context\n\n"
@@ -483,11 +485,16 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                         priority-targets
                         "\n\n")
               "")
+            (if strategy-guidance
+                (concat "### Strategy Performance (AutoTTS Replay Store)\n"
+                        strategy-guidance
+                        "\n\n")
+              "")
             "### Recent Failure Patterns\n"
             (gptel-auto-workflow--research-topics-string)
             "\n\n"
             "---\n"
-            "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
+            "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp."))))
 
 ;;; Meta-Learning Researcher Triggers
 
@@ -787,6 +794,9 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
                             :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
                 (message "[auto-workflow] External research raw: %d chars (hash: %s)"
                          (length raw-findings) (substring findings-hash 0 8))
+                ;; Save research trace for AutoTTS-style offline evaluation
+                (gptel-auto-workflow--save-research-trace
+                 research-prompt raw-findings strategy findings-hash)
                 ;; SEPARATION: Local/internal research goes to DIRECTIVE.md, not FINDINGS.md
                 (if research-error-p
                     ;; External failed: digest local patterns for DIRECTIVE, pass empty to FINDINGS
@@ -1383,6 +1393,35 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
           :cache-file-exists file-exists
           :cache-file-size file-size
           :cache-file-mtime file-mtime-str)))
+
+;;; ─── AutoTTS via Benchmark System ───
+
+;; Reuse benchmark infrastructure instead of building separate AutoTTS.
+;; gptel-auto-workflow-research-benchmark.el provides:
+;; - Strategy benchmarking using gptel-benchmark-call-subagent
+;; - Research output scoring
+;; - Automatic strategy evolution
+
+(defun gptel-auto-workflow--run-strategy-evolution ()
+  "Run AutoTTS-style strategy evolution using benchmark system.
+Uses gptel-auto-workflow-research-benchmark.el to:
+1. Benchmark all strategies (if not already done)
+2. Pick best based on quality/tokens efficiency
+3. Update active strategy for next run."
+  (if (fboundp 'gptel-auto-workflow--evolve-research-strategy)
+      (progn
+        (message "[evolve] Running benchmark-based strategy evolution...")
+        (gptel-auto-workflow--evolve-research-strategy)
+        (message "[evolve] Strategy evolution complete"))
+    ;; Fallback to Python script if benchmark module not loaded
+    (let ((root (gptel-auto-workflow--worktree-base-root))
+          (script (expand-file-name "assistant/skills/researcher-prompt/scripts/unified-evolution.py" root)))
+      (when (file-executable-p script)
+        (message "[evolve] Running Python evolution fallback...")
+        (let ((output (shell-command-to-string (format "cd %s && python3 %s"
+                                                        (shell-quote-argument root)
+                                                        (shell-quote-argument script)))))
+          (message "[evolve] %s" output))))))
 
 (provide 'gptel-auto-workflow-strategic)
 
