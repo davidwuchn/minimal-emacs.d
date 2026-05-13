@@ -202,7 +202,7 @@ MAX-ARGS of nil means no upper bound.")
          (symbolp (car binding))
          (or (null (cddr binding))
              (not (consp (cddr binding)))))
-    binding)
+    (list (car binding) (cadr binding)))
    (t
     (error "Invalid binding in Programmatic sandbox: %S" binding))))
 
