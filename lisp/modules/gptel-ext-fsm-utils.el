@@ -287,6 +287,7 @@ ASSUMPTION: FSM-CALLBACK is a function of one argument (the FSM).
 BEHAVIOR: Calls FSM-CALLBACK once for each unique FSM found.
 BEHAVIOR: Returns nil (callback handles results).
 EDGE CASE: Nil OBJECT returns immediately.
+EDGE CASE: Nil FSM-CALLBACK is treated as no-op (ignored).
 EDGE CASE: Cycles detected via SEEN hash table prevent infinite loops.
 TEST: (my/gptel--fsm-traverse nil h 'ignore) => nil
 TEST: Callback called once for each unique FSM in nested structure.
@@ -300,6 +301,7 @@ without duplicating cycle-detection logic.
 
 PROACTIVE MITIGATION: Single traversal implementation ensures
 consistent behavior across all FSM collection operations."
+  (setq fsm-callback (or fsm-callback #'ignore))
   (cond
    ((null object) nil)
    ((consp object)
@@ -369,12 +371,21 @@ SIGNAL: explicit assumptions - Uses shared traversal helper."
 
 ;;; Registry Validation
 
+(defvar my/gptel--fsm-id-regexp
+  (concat "\\`fsm-" "\\([0-9]+\\)" "-[0-9]+\\.[0-9]+\\'")
+  "Compiled regex for validating FSM ID format.
+
+ASSUMPTION: Pattern matches \"fsm-N-TIMESTAMP\" format exactly.
+BEHAVIOR: Pre-compiled at load time for O(1) matching.
+TEST: (string-match my/gptel--fsm-id-regexp \"fsm-1-1234567890.123\") => t
+TEST: (string-match my/gptel--fsm-id-regexp \"invalid\") => nil")
+
 (defun my/gptel--fsm-id-valid-p (id)
   "Return t if ID matches expected FSM ID format.
 ASSUMPTION: Valid ID format is \"fsm-N-TIMESTAMP\" where N is integer.
 EDGE_CASE: Nil or non-string input returns nil."
   (and (stringp id)
-       (string-match-p "^fsm-[0-9]+-[0-9]+\\.[0-9]+$" id)))
+       (string-match-p my/gptel--fsm-id-regexp id)))
 
 (defun my/gptel--fsm-registry-validate ()
   "Validate registry integrity and return t if all invariants hold.
