@@ -13,6 +13,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'json)
 
 (defvar gptel-auto-workflow--research-strategies
   '("own-repos-first" "deep-external" "quick-own-only" "topic-specific")
@@ -196,8 +197,8 @@ Uses correlation-based learning on traces with :outcomes."
                                       (gptel-auto-workflow--worktree-base-root))))
     (when (and (file-executable-p script)
                (file-directory-p trace-dir))
-      (condition-case err
-          (let* ((output (shell-command-to-string
+       (condition-case c-err
+           (let* ((output (shell-command-to-string
                           (format "cd %s && python3 %s %s 2>/dev/null"
                                   (shell-quote-argument (gptel-auto-workflow--worktree-base-root))
                                   (shell-quote-argument script)
@@ -224,17 +225,44 @@ Uses correlation-based learning on traces with :outcomes."
                          (or (plist-get weights :has_urls) 0)
                          (or (plist-get weights :confidence) 0)
                          (or (plist-get weights :step_count) 0))
-                (list
-                 ;; Strategy priorities (from stats)
-                 :own-repo-priority (min 0.95 (+ 0.7 (* 0.25
-                                                       (or (let ((kept (plist-get stats :kept-means))
-                                                                 (disc (plist-get stats :discarded-means)))
-                                                              (if (and kept disc (> (+ (or (plist-get kept :source_own) 0)
-                                                                                       (or (plist-get disc :source_own) 0)) 0))
-                                                                  (/ (float (plist-get kept :source_own))
-                                                                     (+ (plist-get kept :source_own) (plist-get disc :source_own)))
-                                                               0.5))
-                                                           0.5))))
+                 ;; Extract topic-specific models
+                 (let* ((topics (plist-get result :topics))
+                        (topic-models nil))
+                    (when topics
+                      ;; Iterate over plist: (:topic1 data1 :topic2 data2 ...)
+                      (let ((topic-list topics))
+                        (while topic-list
+                          (let* ((topic (car topic-list))
+                                 (topic-data (cadr topic-list))
+                                 (topic-model (plist-get topic-data :model))
+                                 (topic-thresholds (plist-get topic-data :thresholds))
+                                 (topic-stats (plist-get topic-data :stats))
+                                 (topic-weights (plist-get topic-model :weights)))
+                            (push (list :topic topic
+                                        :n-traces (or (plist-get topic-model :n_traces) 0)
+                                        :n-kept (or (plist-get topic-model :n_kept) 0)
+                                        :base-rate (or (plist-get topic-model :base_rate) 0)
+                                        :intercept (or (plist-get topic-model :intercept) 0)
+                                        :weights topic-weights
+                                        :stop-threshold (or (plist-get topic-thresholds :stop) 0.7)
+                                        :branch-threshold (or (plist-get topic-thresholds :branch) 0.3)
+                                        :kept-means (plist-get topic-stats :kept_means)
+                                        :discarded-means (plist-get topic-stats :discarded_means))
+                                  topic-models)
+                            (setq topic-list (cddr topic-list)))))
+                   (message "[autotts] Learned %d topic-specific models"
+                            (length topic-models))
+                   (list
+                    ;; Strategy priorities (from stats)
+                    :own-repo-priority (min 0.95 (+ 0.7 (* 0.25
+                                                         (or (let ((kept (plist-get stats :kept_means))
+                                                                   (disc (plist-get stats :discarded_means)))
+                                                               (if (and kept disc (> (+ (or (plist-get kept :source_own) 0)
+                                                                                        (or (plist-get disc :source_own) 0)) 0))
+                                                                   (/ (float (plist-get kept :source_own))
+                                                                      (+ (plist-get kept :source_own) (plist-get disc :source_own)))
+                                                                 0.5))
+                                                             0.5))))
                  :fork-priority 0.4
                  :external-priority 0.15
                  :web-priority 0.05
@@ -254,11 +282,12 @@ Uses correlation-based learning on traces with :outcomes."
                   :evolved-at (format-time-string "%Y-%m-%dT%H:%M:%SZ")
                   :based-on-traces (or (plist-get model :n_traces) 0)
                   :learning-method "statistical"
-                  :stats-kept-means (plist-get stats :kept_means)
-                  :stats-discarded-means (plist-get stats :discarded_means)))))
-        (error
-         (message "[autotts] Statistical learning failed: %s" err)
-         nil)))))
+                   :stats-kept-means (plist-get stats :kept_means)
+                   :stats-discarded-means (plist-get stats :discarded_means)
+                      :topic-models topic-models))))))
+           (error
+            (message "[autotts] Statistical learning failed: %s" c-err)
+             nil)))))
 
 (defun gptel-auto-workflow--evolve-controller-heuristic (traces)
   "Heuristic controller evolution (fallback when insufficient data).

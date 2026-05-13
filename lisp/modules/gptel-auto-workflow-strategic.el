@@ -1638,26 +1638,37 @@ otherwise falls back to heuristic thresholds."
      ((> tokens-used max-tokens)
       (message "[autotts] Controller: CUT (budget %d/%d)" tokens-used max-tokens)
       'cut)
-     ;; Statistical model available → use learned probability
-     (statistical-model
-      (let ((stop-threshold (or (plist-get controller-config :min-confidence-stop) 0.7))
-            (branch-threshold (or (plist-get controller-config :branch-threshold) 0.3)))
-        (cond
-         ;; High probability → stop
-         ((and prob-kept (> prob-kept stop-threshold))
-          (message "[autotts] Controller: STOP (P(kept)=%.2f > %.2f) [statistical]"
-                   prob-kept stop-threshold)
-          'stop)
-         ;; Low probability + high token usage → branch
-         ((and prob-kept (< prob-kept branch-threshold) (> tokens-used 2000))
-          (message "[autotts] Controller: BRANCH (P(kept)=%.2f < %.2f, tokens=%d) [statistical]"
-                   prob-kept branch-threshold tokens-used)
-          'branch)
-         ;; Medium probability → continue
-         (t
-          (message "[autotts] Controller: CONTINUE (P(kept)=%.2f) [statistical]"
-                   (or prob-kept 0.5))
-          'continue))))
+      ;; Statistical model available → use learned probability
+      (statistical-model
+       (let* ((topic (gptel-auto-workflow--detect-research-topic text))
+              (topic-model (gptel-auto-workflow--get-topic-model controller-config topic))
+              (use-topic-thresholds (and topic-model
+                                         (> (or (plist-get topic-model :n-traces) 0) 3)))
+              (stop-threshold (if use-topic-thresholds
+                                  (or (plist-get topic-model :stop-threshold) 0.7)
+                                (or (plist-get controller-config :min-confidence-stop) 0.7)))
+              (branch-threshold (if use-topic-thresholds
+                                    (or (plist-get topic-model :branch-threshold) 0.3)
+                                  (or (plist-get controller-config :branch-threshold) 0.3))))
+         (cond
+          ;; High probability → stop
+          ((and prob-kept (> prob-kept stop-threshold))
+           (message "[autotts] Controller: STOP (P(kept)=%.2f > %.2f) [statistical %s]"
+                    prob-kept stop-threshold
+                    (if use-topic-thresholds (concat "topic:" topic) "global"))
+           'stop)
+          ;; Low probability + high token usage → branch
+          ((and prob-kept (< prob-kept branch-threshold) (> tokens-used 2000))
+           (message "[autotts] Controller: BRANCH (P(kept)=%.2f < %.2f, tokens=%d) [statistical %s]"
+                    prob-kept branch-threshold tokens-used
+                    (if use-topic-thresholds (concat "topic:" topic) "global"))
+           'branch)
+          ;; Medium probability → continue
+          (t
+           (message "[autotts] Controller: CONTINUE (P(kept)=%.2f) [statistical %s]"
+                    (or prob-kept 0.5)
+                    (if use-topic-thresholds (concat "topic:" topic) "global"))
+           'continue))))
      ;; Fallback: heuristic rules
      (t
       (let ((min-insights (or (plist-get controller-config :min-insights-for-stop) 2))
@@ -1679,12 +1690,64 @@ otherwise falls back to heuristic thresholds."
          ;; Default → continue
          (t 'continue)))))))
 
+(defun gptel-auto-workflow--detect-research-topic (output-text)
+  "Detect research topic from OUTPUT-TEXT.
+Returns topic name string, or 'general' if unknown.
+Topics: performance, nil-safety, error-handling, async, general."
+  (let ((text (downcase (or output-text ""))))
+    (cond
+     ;; Performance indicators
+     ((or (string-match-p "performance\\|benchmark\\|cache\\|speed\\|optimize\\|efficiency" text)
+          (string-match-p "gptel-ext-context-cache\\|gptel-ext-retry" text))
+      "performance")
+     ;; Nil-safety indicators
+     ((or (string-match-p "nil-safety\\|null\\|guard\\|sandbox\\|validation" text)
+          (string-match-p "gptel-sandbox\\|gptel-ext-security" text))
+      "nil-safety")
+     ;; Error-handling indicators
+     ((or (string-match-p "error-handling\\|exception\\|recover\\|retry" text)
+          (string-match-p "gptel-ext-retry\\|gptel-ext-fsm" text))
+      "error-handling")
+     ;; Async indicators
+     ((or (string-match-p "async\\|concurrent\\|parallel\\|loop" text)
+          (string-match-p "gptel-agent-loop\\|gptel-ext-fsm" text))
+      "async")
+     (t "general"))))
+
+(defun gptel-auto-workflow--get-topic-model (controller-config topic)
+  "Get topic-specific model from CONTROLLER-CONFIG.
+Returns topic model plist, or nil if not found."
+  (let ((topic-models (plist-get controller-config :topic-models)))
+    (when topic-models
+      (cl-find-if (lambda (model)
+                    (let ((model-topic (plist-get model :topic)))
+                      (string= (if (keywordp model-topic)
+                                   (substring (symbol-name model-topic) 1)
+                                 model-topic)
+                               topic)))
+                  topic-models))))
+
 (defun gptel-auto-workflow--statistical-prob-kept (controller-config output-length output-text)
   "Calculate P(kept) using learned statistical model.
 CONTROLLER-CONFIG contains :model-intercept and :model-weights.
-Returns probability as float, or nil if model not available."
-  (let ((intercept (plist-get controller-config :model-intercept))
-        (weights (plist-get controller-config :model-weights)))
+Returns probability as float, or nil if model not available.
+Uses topic-specific model if available and topic detected."
+  (let* ((topic (gptel-auto-workflow--detect-research-topic output-text))
+         (topic-model (gptel-auto-workflow--get-topic-model controller-config topic))
+         (use-topic-model (and topic-model
+                               (> (or (plist-get topic-model :n-traces) 0) 3)))
+         (intercept (if use-topic-model
+                        (plist-get topic-model :intercept)
+                      (plist-get controller-config :model-intercept)))
+         (weights (if use-topic-model
+                      (plist-get topic-model :weights)
+                    (plist-get controller-config :model-weights))))
+    (message "[autotts] Statistical model: %s (topic: %s, n=%d)"
+             (if use-topic-model "topic-specific" "global")
+             topic
+             (or (if use-topic-model
+                     (plist-get topic-model :n-traces)
+                   (plist-get controller-config :model-n-traces)) 0))
     (when (and intercept weights)
       (let* ((has-urls (if (string-match-p "https?://" (or output-text "")) 1 0))
              (has-structure (if (string-match-p "## .*\n" (or output-text "")) 1 0))
@@ -1702,7 +1765,7 @@ Returns probability as float, or nil if model not available."
                       (* (or (plist-get weights :step_count) 0) 1)))
              ;; Sigmoid
              (prob (/ 1.0 (+ 1.0 (exp (- score))))))
-        (max 0.0 (min 1.0 prob))))))
+         (max 0.0 (min 1.0 prob))))))
 
 (defun gptel-auto-workflow--load-strategy-guidance ()
   "Load AutoTTS strategy guidance from controller config.

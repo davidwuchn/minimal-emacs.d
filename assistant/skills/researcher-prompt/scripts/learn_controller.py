@@ -53,7 +53,39 @@ def get_outcome(trace):
         return None
     return 1 if any(o.get("kept") for o in outcomes) else 0
 
-def learn_controller(traces):
+def extract_topic(trace):
+    """Extract topic from trace.
+    Looks for topic in outcomes or strategy name."""
+    # Check outcomes for topic hints
+    outcomes = trace.get("outcomes", [])
+    if outcomes:
+        target = outcomes[0].get("target", "")
+        # Extract topic from filename patterns
+        if "loop" in target or "retry" in target:
+            return "async"
+        elif "sandbox" in target or "security" in target:
+            return "nil-safety"
+        elif "cache" in target or "context" in target:
+            return "performance"
+        elif "error" in target or "guard" in target:
+            return "error-handling"
+    
+    # Check strategy for topic hints
+    strategy = trace.get("strategy", "")
+    if strategy == "own-repos-first":
+        return "nil-safety"
+    elif strategy == "deep-external":
+        return "performance"
+    
+    return "general"
+
+def learn_topic_specific(traces, topic):
+    """Learn topic-specific controller from traces.
+    Returns model for this topic, or None if insufficient data."""
+    topic_traces = [t for t in traces if extract_topic(t) == topic]
+    return learn_controller_simple(topic_traces, topic)
+
+def learn_controller_simple(traces, topic_name="general"):
     """Learn controller parameters from traces with outcomes.
     
     Uses simple correlation-based approach:
@@ -61,7 +93,7 @@ def learn_controller(traces):
     2. Use difference as feature weight
     3. Fit intercept so P(kept) ≈ base rate
     """
-    if len(traces) < 5:
+    if len(traces) < 3:
         return None  # Insufficient data
     
     # Extract features and outcomes
@@ -71,7 +103,7 @@ def learn_controller(traces):
         if outcome is not None:
             data.append((extract_features(trace), outcome))
     
-    if len(data) < 5:
+    if len(data) < 3:
         return None
     
     n = len(data)
@@ -134,6 +166,7 @@ def learn_controller(traces):
     branch_threshold = sum(disc_scores) / len(disc_scores) if disc_scores else 0.3
     
     return {
+        "topic": topic_name,
         "model": {
             "intercept": intercept,
             "weights": weights,
@@ -152,6 +185,36 @@ def learn_controller(traces):
             "discarded_means": {k: round(v, 3) for k, v in disc_means.items()},
         }
     }
+
+def learn_controller(traces):
+    """Learn controller parameters from traces with outcomes.
+    
+    Learns both global model and topic-specific models.
+    Topic models allow different strategies for different research topics.
+    """
+    if len(traces) < 5:
+        return None  # Insufficient data
+    
+    # Global model (all traces)
+    global_model = learn_controller_simple(traces, "global")
+    if not global_model:
+        return None
+    
+    # Topic-specific models
+    topics = {}
+    topic_names = set(extract_topic(t) for t in traces)
+    
+    for topic in topic_names:
+        topic_model = learn_topic_specific(traces, topic)
+        if topic_model:
+            topics[topic] = topic_model
+    
+    # Merge into single result
+    result = global_model.copy()
+    result["topics"] = topics
+    result["topic_count"] = len(topics)
+    
+    return result
 
 def main():
     if len(sys.argv) < 2:
