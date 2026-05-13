@@ -24,7 +24,11 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
 ## Controller Guidance
 
-*Controller not yet evolved. Using heuristic defaults.*
+Current controller configuration (evolved from trace outcomes):
+
+- **Stop threshold**: 0.70
+- **Token budget**: 8000 tokens
+- **Own-repo priority**: 70%
 
 ## Instructions
 

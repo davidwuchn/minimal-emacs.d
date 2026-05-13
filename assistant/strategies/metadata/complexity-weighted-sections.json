@@ -1,0 +1,1 @@
+{"name":"complexity-weighted-sections","version":"1.0","hypothesis":"Complexity metrics should determine which guidance sections receive priority.","axis":"C,D","components":["complexity","section-ordering","adaptive-guidance"]}
