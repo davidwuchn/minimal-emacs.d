@@ -421,8 +421,10 @@ a RunAgent task has finished successfully.")
 
 (defun gptel-agent-loop--compile-patterns (patterns)
   "Compile PATTERNS list into a single combined regex string.
-Returns nil if patterns list is empty or contains non-string elements."
-  (when (and patterns (cl-every #'stringp patterns))
+Returns nil if patterns list is empty or contains non-string elements.
+BEHAVIOR: Validates patterns is a proper list before processing."
+  (when (and (proper-list-p patterns)
+             (cl-every #'stringp patterns))
     (mapconcat (lambda (p) (concat "\\(?:" p "\\)")) patterns "\\|")))
 
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
