@@ -820,6 +820,9 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
 (defun gptel-auto-experiment--expected-comparator-winner (combined-before combined-after &optional threshold)
   "Return the winner implied by COMBINED-BEFORE vs COMBINED-AFTER.
 THRESHOLD defaults to 0.005 and matches the comparator prompt rules."
+  (unless (and (numberp combined-before) (numberp combined-after))
+    (setq combined-before (or (and (numberp combined-before) combined-before) 0))
+    (setq combined-after (or (and (numberp combined-after) combined-after) 0)))
   (let* ((decision-threshold (or threshold 0.005))
          (combined-delta (- combined-after combined-before)))
     (cond
@@ -838,6 +841,18 @@ enough to lift the combined score above threshold.
 
 For high-baseline targets (quality >= 0.85), the quality gain requirement is
 reduced because well-written code is harder to improve measurably."
+  (unless (numberp score-before)
+    (setq score-before (or (and (numberp score-before) score-before) 0)))
+  (unless (numberp score-after)
+    (setq score-after (or (and (numberp score-after) score-after) 0)))
+  (unless (numberp quality-before)
+    (setq quality-before (or (and (numberp quality-before) quality-before) 0.5)))
+  (unless (numberp quality-after)
+    (setq quality-after (or (and (numberp quality-after) quality-after) 0.5)))
+  (unless (numberp combined-before)
+    (setq combined-before (or (and (numberp combined-before) combined-before) 0)))
+  (unless (numberp combined-after)
+    (setq combined-after (or (and (numberp combined-after) combined-after) 0)))
   (let* ((decision-threshold (or threshold 0.005))
          (score-delta (- score-after score-before))
          (quality-delta (- quality-after quality-before))
