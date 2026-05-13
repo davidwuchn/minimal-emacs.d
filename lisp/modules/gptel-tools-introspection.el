@@ -13,6 +13,8 @@
 
 (defun my/gptel--describe-symbol (name)
   "Return the documentation and current value for the given symbol NAME."
+  (unless (stringp name)
+    (error "Expected string for name, got: %S" name))
   (let* ((sym (intern-soft name))
          (out ""))
     (unless sym
