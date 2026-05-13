@@ -715,6 +715,7 @@ TEST: Verify with network failure simulation — should retry 3 times with
   (unless new-state (setq new-state (gptel--fsm-next machine)))
   (let* ((info (gptel-fsm-info machine))
          ;; Guard: ensure info is a proper list before accessing with plist-get
+         (info (and (listp info) info))
          (disable-auto-retry (my/gptel--info-get info :disable-auto-retry))
          (headless-agent-buffer-p
           (and (listp info) (my/gptel--headless-auto-workflow-agent-buffer-p info)))
