@@ -17,6 +17,9 @@
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
 
+;; AutoTTS-style research evolution via benchmark system
+(declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
+
 ;; ─── Helpers ───
 
 (defvar gptel-auto-workflow--evolution-repo-root nil
@@ -881,9 +884,19 @@ This skill is consumed by the researcher prompt builder."
                                          (time-less-p
                                           (time-subtract (current-time) (days-to-time 7))
                                           (file-attribute-modification-time (file-attributes raw-findings-file))))
-                                (with-temp-buffer
-                                  (insert-file-contents raw-findings-file)
-                                  (buffer-string)))))))
+                                 (with-temp-buffer
+                                   (insert-file-contents raw-findings-file)
+                                   ;; Clean raw findings: strip researcher task headers and reasoning chains
+                                   (goto-char (point-min))
+                                   (while (re-search-forward "^Researcher result for task:.*$\|^I'll conduct targeted research.*$\|^Good results.*$\|^Let me fetch.*$\|^Let me search for.*$\|^Based on my research.*$" nil t)
+                                     (replace-match ""))
+                                   ;; Strip empty reasoning blocks
+                                   (goto-char (point-min))
+                                   (while (re-search-forward "\\(reasoning\\s-*\\.\\s-*<think>\\)" nil t)
+                                     (let ((start (match-beginning 0)))
+                                       (when (re-search-forward "</think>" nil t)
+                                         (delete-region start (point)))))
+                                   (buffer-string)))))))
        (when raw-findings
          (push raw-findings recent-insights)))
      
@@ -1277,7 +1290,11 @@ Uses agentskills.io standard scripts/ directory."
   (gptel-auto-workflow--generate-research-skill)
   
   ;; Analyze researcher end-to-end effectiveness
-  (gptel-auto-workflow--evolve-researcher-from-feedback))
+  (gptel-auto-workflow--evolve-researcher-from-feedback)
+  
+  ;; Run AutoTTS-style strategy evolution (offline evaluation)
+  (when (fboundp 'gptel-auto-workflow--run-strategy-evolution)
+    (gptel-auto-workflow--run-strategy-evolution)))
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.

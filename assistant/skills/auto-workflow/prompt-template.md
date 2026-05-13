@@ -30,6 +30,9 @@ You are running experiment {{experiment-id}} of {{max-experiments}} to optimize 
 ## Previous Experiments
 {{topic-knowledge}}
 
+## External Research Findings
+{{research-findings}}
+
 ## Current Baseline
 Overall Eight Keys score: {{baseline}}
 
