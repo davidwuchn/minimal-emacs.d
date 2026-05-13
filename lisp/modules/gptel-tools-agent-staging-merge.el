@@ -310,8 +310,9 @@ Returns (success-p . output)."
           (gptel-auto-workflow--git-result
            (format "git ls-remote --exit-code --heads %s %s" remote branch-q)
            (or timeout 60))))
-    (and (= 0 (cdr remote-result))
-         (gptel-auto-workflow--parse-remote-head branch (car remote-result)))))
+    (and (consp remote-result)
+         (= 0 (cdr-safe remote-result))
+         (gptel-auto-workflow--parse-remote-head branch (car-safe remote-result)))))
 
 (defun gptel-auto-workflow--push-branch-with-lease (branch action &optional timeout)
   "Push BRANCH to the shared remote.
