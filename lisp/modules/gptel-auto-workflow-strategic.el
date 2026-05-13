@@ -1785,7 +1785,7 @@ Uses gptel-auto-workflow-research-benchmark.el to:
                                                           (shell-quote-argument root)
                                                           (shell-quote-argument script)))))
             (message "[evolve] %s" output))))
-    (message "[evolve] Strategy evolution cycle complete"))))
+     (message "[evolve] Strategy evolution cycle complete"))))
 
 (provide 'gptel-auto-workflow-strategic)
 
