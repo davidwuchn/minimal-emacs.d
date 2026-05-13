@@ -97,20 +97,28 @@ Uses the staging worktree instead of switching branches in the root repo."
              (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
                            (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
                  nil
-               (let* ((commit-hash (string-trim
-                                    (or (car-safe
-                                         (gptel-auto-workflow--git-result
-                                          (format "git rev-parse %s"
-                                                  (shell-quote-argument optimize-ref))
-                                          60))
-                                        "")))
+               (let* ((commit-hash-raw (car-safe
+                                        (gptel-auto-workflow--git-result
+                                         (format "git rev-parse %s"
+                                                 (shell-quote-argument optimize-ref))
+                                         60)))
+                      (commit-hash (and (stringp commit-hash-raw)
+                                        (string-match-p
+                                         (rx (repeat 40 (any "0-9a-f")))
+                                         commit-hash-raw)
+                                        (string-trim commit-hash-raw)))
                       (cherry-result
-                       (gptel-auto-workflow--git-result
-                        (format "git cherry-pick --no-commit %s"
-                                (shell-quote-argument commit-hash))
-                        180))
+                       (when commit-hash
+                         (gptel-auto-workflow--git-result
+                          (format "git cherry-pick --no-commit %s"
+                                  (shell-quote-argument commit-hash))
+                          180)))
                       (cherry-output (or (car-safe cherry-result) "")))
                  (cond
+                  ((null cherry-result)
+                   (message "[auto-workflow] Failed to resolve commit hash for %s"
+                            optimize-branch)
+                   nil)
                   ((= 0 (cdr cherry-result))
                    (let ((commit-result
                           (gptel-auto-workflow--git-result
