@@ -918,7 +918,7 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
         (message "[auto-workflow] Subagent unavailable - skipping external research")
         ;; Reset flag before calling callback
         (setq gptel-auto-workflow--research-in-progress nil)
-        (funcall callback ""))))))
+        (funcall callback "")))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.

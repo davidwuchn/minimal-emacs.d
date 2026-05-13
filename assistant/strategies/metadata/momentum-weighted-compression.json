@@ -1,0 +1,1 @@
+{"name":"momentum-weighted-compression","version":"1.0","hypothesis":"Compression strategy should shift dynamically based on experiment momentum rather than file characteristics alone.","axis":"F","components":["momentum-computation","adaptive-compression","experiment-trajectory"]}

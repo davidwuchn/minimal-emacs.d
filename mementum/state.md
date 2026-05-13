@@ -110,9 +110,22 @@
 - Root cause: gptel library returns `(cons 'reasoning text)` for reasoning blocks (e.g., `<think>` tags)
 - Fix: Added handler in `gptel-agent-loop--handle-agent-response` to extract reasoning text and process as string
 - File: `lisp/modules/gptel-agent-loop.el`
+- Syntax error: Missing cl-block wrapper + paren in strategic.el — **FIXED**
+- File: `lisp/modules/gptel-auto-workflow-strategic.el`
+- Conflict marker: Leftover `<<<<<<< HEAD` in strategic.el — **FIXED**
+- File: `lisp/modules/gptel-auto-workflow-strategic.el`
+- Submodule sync: gptel-agent out of sync — **FIXED**
+
+**Verification:**
+- ✓ strategic.el compiles clean
+- ✓ benchmark.el compiles clean
+- ✓ agent-loop.el compiles clean
+- ✓ No conflict markers in any file
+- ✓ All key functions present
 
 **Next Steps:**
-- Monitor next pipeline run for successful external research
+- Monitor 15:00 pipeline run for successful external research
 - Verify researcher produces findings with URLs (2000+ chars)
 - Check that step-level traces are collected
 - Pipeline should now report `research: external` instead of `unknown`
+- Current 11:00 run still active (will finish before 15:00)
