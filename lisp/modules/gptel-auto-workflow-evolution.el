@@ -1025,6 +1025,102 @@ Uses standard skill loader for consistency."
         ""
       content)))
 
+;;; ─── Dynamic Content Generators ───
+
+(defun gptel-auto-workflow--generate-source-effectiveness-section ()
+  "Generate markdown section showing source effectiveness from traces.
+Returns string with table of source → keep rate."
+  (let* ((traces (condition-case nil (gptel-auto-workflow--load-research-traces) (error nil)))
+         (own-repo-kept 0) (own-repo-total 0)
+         (external-kept 0) (external-total 0)
+         (content ""))
+    (dolist (trace traces)
+      (let* ((source (or (plist-get trace :source) "unknown"))
+             (outcomes (plist-get trace :outcomes)))
+        (dolist (o outcomes)
+          (cond ((string= source "own-repo")
+                 (setq own-repo-total (1+ own-repo-total))
+                 (when (plist-get o :kept) (setq own-repo-kept (1+ own-repo-kept))))
+                ((string= source "external")
+                 (setq external-total (1+ external-total))
+                 (when (plist-get o :kept) (setq external-kept (1+ external-kept))))))))
+    (setq content (concat content "## Source Effectiveness\n\n"))
+    (if (or (> own-repo-total 0) (> external-total 0))
+        (progn
+          (setq content (concat content "| Source | Kept | Total | Rate | Strategy |\n"))
+          (setq content (concat content "|--------|------|-------|------|----------|\n"))
+          (when (> own-repo-total 0)
+            (setq content (concat content (format "| own-repo | %d | %d | %.0f%% | own-repos-first |\n"
+                                                  own-repo-kept own-repo-total
+                                                  (* 100 (/ (float own-repo-kept) own-repo-total))))))
+          (when (> external-total 0)
+            (setq content (concat content (format "| external | %d | %d | %.0f%% | deep-external |\n"
+                                                  external-kept external-total
+                                                  (* 100 (/ (float external-kept) external-total)))))))
+      (setq content (concat content "*No source effectiveness data yet.*\n")))
+    content))
+
+(defun gptel-auto-workflow--generate-controller-guidance-section ()
+  "Generate markdown section with controller config and topic models.
+Returns string with controller guidance."
+  (let ((content "## Controller Guidance\n\n")
+        (controller (condition-case nil (gptel-auto-workflow--load-autotts-controller) (error nil))))
+    (if controller
+        (progn
+          (setq content (concat content "Current controller configuration (evolved from trace outcomes):\n\n"))
+          (setq content (concat content (format "- **Stop threshold**: %.2f\n"
+                                                (or (plist-get controller :min-confidence-stop) 0.7))))
+          (setq content (concat content (format "- **Token budget**: %d tokens\n"
+                                                (or (plist-get controller :max-tokens-budget) 8000))))
+          (setq content (concat content (format "- **Own-repo priority**: %.0f%%\n"
+                                                (* 100 (or (plist-get controller :own-repo-priority) 0.7)))))
+          (let ((topic-models (plist-get controller :topic-models)))
+            (when topic-models
+              (setq content (concat content "\n**Topic-specific strategies**:\n\n"))
+              (dolist (tm topic-models)
+                (let ((topic (plist-get tm :topic))
+                      (n (plist-get tm :n-traces))
+                      (base (plist-get tm :base-rate)))
+                  (setq content (concat content (format "- %s: %d traces, %.0f%% base rate\n"
+                                                        topic n (* 100 base)))))))
+            content))
+      (concat content "*Controller not yet evolved. Using heuristic defaults.*\n"))))
+
+(defun gptel-auto-workflow--generate-dynamic-instructions ()
+  "Generate markdown section with dynamic instructions based on trace outcomes.
+Returns string with source strategy and controller awareness."
+  (let* ((traces (condition-case nil (gptel-auto-workflow--load-research-traces) (error nil)))
+         (own-repo-kept 0) (own-repo-total 0)
+         (external-kept 0) (external-total 0)
+         (content "## Instructions\n\n"))
+    (dolist (trace traces)
+      (let* ((source (or (plist-get trace :source) "unknown"))
+             (outcomes (plist-get trace :outcomes)))
+        (dolist (o outcomes)
+          (cond ((string= source "own-repo")
+                 (setq own-repo-total (1+ own-repo-total))
+                 (when (plist-get o :kept) (setq own-repo-kept (1+ own-repo-kept))))
+                ((string= source "external")
+                 (setq external-total (1+ external-total))
+                 (when (plist-get o :kept) (setq external-kept (1+ external-kept))))))))
+    (setq content (concat content "### Source Strategy (learned from outcomes)\n"))
+    (cond ((and (> own-repo-total 0) (> external-total 0))
+           (let ((own-rate (/ (float own-repo-kept) own-repo-total))
+                 (ext-rate (/ (float external-kept) external-total)))
+             (cond ((> own-rate (+ ext-rate 0.2))
+                    (setq content (concat content "- **PRIORITY**: Search davidwuchn/* repos FIRST\n")))
+                   ((> ext-rate (+ own-rate 0.2))
+                    (setq content (concat content "- **PRIORITY**: Search external sources FIRST\n")))
+                   (t (setq content (concat content "- **BALANCED**: Both sources effective\n"))))))
+          ((> own-repo-total 0)
+           (setq content (concat content "- **OWN REPOS**: Check davidwuchn/* repos first\n")))
+          (t (setq content (concat content "- **DEFAULT**: Use own-repos-first strategy\n"))))
+    (setq content (concat content "\n### Controller Awareness\n"))
+    (setq content (concat content "- STOP early if you have 2+ insights with URLs\n"))
+    (setq content (concat content "- CONTINUE if you found URLs but need more depth\n"))
+    (setq content (concat content "- BRANCH if no new insights after 2 turns\n"))
+    content))
+
 ;;; ─── Unified Skill Evolution ───
 
 (defun gptel-auto-workflow--evolve-researcher-skill ()
@@ -1101,7 +1197,16 @@ Analyzes which research topics and sources produce the best downstream results."
                               (plist-get topic :total))))
           (insert "  - No statistically significant data yet (need ≥3 experiments per topic)\n")))
       
-      (insert "\n## Mission\n\n")
+      ;; Dynamic sections
+      (insert "\n")
+      (insert (gptel-auto-workflow--generate-source-effectiveness-section))
+      (insert "\n")
+      (insert (gptel-auto-workflow--generate-controller-guidance-section))
+      (insert "\n")
+      (insert (gptel-auto-workflow--generate-dynamic-instructions))
+      (insert "\n")
+      
+      (insert "## Mission\n\n")
       (insert "Search external sources for actionable techniques related to:\n")
       (insert "- AI agent architectures and workflows\n")
       (insert "- Emacs Lisp AI integration patterns\n")
@@ -1292,12 +1397,19 @@ Uses agentskills.io standard scripts/ directory."
   (gptel-auto-workflow--evolution-research-synthesize)
   (gptel-auto-workflow--generate-research-skill)
   
+  ;; Evolve researcher skill with dynamic content (source effectiveness + controller guidance)
+  (gptel-auto-workflow--evolve-researcher-skill)
+  
   ;; Analyze researcher end-to-end effectiveness
   (gptel-auto-workflow--evolve-researcher-from-feedback)
   
   ;; Run AutoTTS-style strategy evolution (offline evaluation)
   (when (fboundp 'gptel-auto-workflow--run-strategy-evolution)
-    (gptel-auto-workflow--run-strategy-evolution)))
+    (gptel-auto-workflow--run-strategy-evolution))
+  
+  ;; Cross-layer feedback: inject controller config into researcher skill
+  (when (fboundp 'gptel-auto-workflow--update-skill-with-controller)
+    (gptel-auto-workflow--update-skill-with-controller)))
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.

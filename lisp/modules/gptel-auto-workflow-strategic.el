@@ -1663,12 +1663,17 @@ otherwise falls back to heuristic thresholds."
               (topic-model (gptel-auto-workflow--get-topic-model controller-config topic))
               (use-topic-thresholds (and topic-model
                                          (> (or (plist-get topic-model :n-traces) 0) 3)))
-              (stop-threshold (if use-topic-thresholds
-                                  (or (plist-get topic-model :stop-threshold) 0.7)
-                                (or (plist-get controller-config :min-confidence-stop) 0.7)))
-              (branch-threshold (if use-topic-thresholds
-                                    (or (plist-get topic-model :branch-threshold) 0.3)
-                                  (or (plist-get controller-config :branch-threshold) 0.3))))
+               (base-stop-threshold (if use-topic-thresholds
+                                        (or (plist-get topic-model :stop-threshold) 0.7)
+                                      (or (plist-get controller-config :min-confidence-stop) 0.7)))
+               (base-branch-threshold (if use-topic-thresholds
+                                          (or (plist-get topic-model :branch-threshold) 0.3)
+                                        (or (plist-get controller-config :branch-threshold) 0.3)))
+               ;; Adjust thresholds based on self-evolution topic performance
+               (adjusted-thresholds (gptel-auto-workflow--adjust-thresholds-for-topic
+                                     topic base-stop-threshold base-branch-threshold))
+               (stop-threshold (plist-get adjusted-thresholds :stop-threshold))
+               (branch-threshold (plist-get adjusted-thresholds :branch-threshold)))
          (cond
           ;; High probability → stop
           ((and prob-kept (> prob-kept stop-threshold))
@@ -1745,6 +1750,42 @@ Returns topic model plist, or nil if not found."
                                  model-topic)
                                topic)))
                   topic-models))))
+
+(defun gptel-auto-workflow--get-self-evolution-topic-rate (topic)
+  "Get keep rate for TOPIC from self-evolution experiment data.
+Returns float 0-1, or nil if no data."
+  (when (fboundp 'gptel-auto-workflow--parse-all-results)
+    (let* ((results (gptel-auto-workflow--parse-all-results))
+           (topic-results (cl-remove-if-not
+                          (lambda (r)
+                            (and (equal (plist-get r :decision) "kept")
+                                 (string-match-p topic
+                                                (downcase (or (plist-get r :target) "")))))
+                          results))
+           (all-topic (cl-remove-if-not
+                      (lambda (r)
+                        (string-match-p topic
+                                       (downcase (or (plist-get r :target) ""))))
+                      results)))
+      (when (> (length all-topic) 0)
+        (/ (float (length topic-results)) (length all-topic))))))
+
+(defun gptel-auto-workflow--adjust-thresholds-for-topic (topic stop-threshold branch-threshold)
+  "Adjust STOP-THRESHOLD and BRANCH-THRESHOLD based on self-evolution topic performance.
+Returns plist with :stop-threshold and :branch-threshold.
+If topic has high keep rate in experiments, lowers stop threshold (keep researching).
+If topic has low keep rate, raises stop threshold (stop early)."
+  (let ((self-evol-rate (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                          (gptel-auto-workflow--get-self-evolution-topic-rate topic))))
+    (if self-evol-rate
+        (list :stop-threshold (max 0.5 (min 0.95
+                                        (- stop-threshold
+                                           (* (- self-evol-rate 0.5) 0.3))))
+              :branch-threshold (max 0.1 (min 0.5
+                                          (- branch-threshold
+                                             (* (- self-evol-rate 0.5) 0.2)))))
+      (list :stop-threshold stop-threshold
+            :branch-threshold branch-threshold))))
 
 (defun gptel-auto-workflow--statistical-prob-kept (controller-config output-length output-text)
   "Calculate P(kept) using learned statistical model.
