@@ -841,27 +841,20 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
                      (message "[benchmark] Research strategy '%s' scored: %.2f"
                               strategy (or (plist-get result :quality) 0.0)))))
                 ;; SEPARATION: Local/internal research goes to DIRECTIVE.md, not FINDINGS.md
-                (if research-error-p
-                    ;; External failed: digest local patterns for DIRECTIVE, pass empty to FINDINGS
-                    (progn
-                      (gptel-auto-workflow--digest-research-findings
-                       effective-findings
-                       (lambda (digested)
-                         ;; Write internal patterns to separate file for DIRECTIVE.md
-                         (let ((internal-file (expand-file-name "var/tmp/internal-research.md"
-                                                                (gptel-auto-workflow--effective-project-root))))
-                           (make-directory (file-name-directory internal-file) t)
-                           (with-temp-file internal-file
-                             (insert (format "# Internal Code Analysis\n\n> Updated: %s\n\n%s"
-                                             (format-time-string "%Y-%m-%d %H:%M")
-                                             digested))))
-                         ;; Pass empty to external findings callback
-                         (funcall callback ""))))
-                   ;; External succeeded: digest and pass to callback normally
-                   (gptel-auto-workflow--digest-research-findings
-                    effective-findings
-                    (lambda (digested)
-                      (funcall callback digested))))))))
+                ;; Always digest findings and pass to callback, regardless of source
+                (gptel-auto-workflow--digest-research-findings
+                 effective-findings
+                 (lambda (digested)
+                   ;; Write internal patterns to separate file for DIRECTIVE.md
+                   (let ((internal-file (expand-file-name "var/tmp/internal-research.md"
+                                                          (gptel-auto-workflow--effective-project-root))))
+                     (make-directory (file-name-directory internal-file) t)
+                     (with-temp-file internal-file
+                       (insert (format "# Internal Code Analysis\n\n> Updated: %s\n\n%s"
+                                       (format-time-string "%Y-%m-%d %H:%M")
+                                       digested))))
+                   ;; Always pass findings to callback (local or external)
+                   (funcall callback digested))))))))
          600)
       (progn
         (message "[auto-workflow] Subagent unavailable - skipping external research")
