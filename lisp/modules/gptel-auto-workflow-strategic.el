@@ -918,7 +918,7 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
         (message "[auto-workflow] Subagent unavailable - skipping external research")
         ;; Reset flag before calling callback
         (setq gptel-auto-workflow--research-in-progress nil)
-        (funcall callback "")))))))
+        (funcall callback ""))))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -1785,9 +1785,8 @@ Uses gptel-auto-workflow-research-benchmark.el to:
                                                           (shell-quote-argument root)
                                                           (shell-quote-argument script)))))
             (message "[evolve] %s" output))))
-    (message "[evolve] Strategy evolution cycle complete"))))
+     (message "[evolve] Strategy evolution cycle complete"))))
 
 (provide 'gptel-auto-workflow-strategic)
 
 ;;; gptel-auto-workflow-strategic.el ends here
-)
