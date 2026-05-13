@@ -616,6 +616,8 @@ CALLBACK receives non-nil when approved and nil when rejected."
   (unless (proper-list-p state)
     (error "Programmatic maybe-aggregate-confirm requires a proper plist state, got: %S" state))
   (let ((plan (plist-get state :mutating-plan)))
+    (unless (or (null plan) (proper-list-p plan))
+      (error "Programmatic aggregate-confirm plan must be a proper list, got: %S" plan))
     (if (or (not (eq (gptel-sandbox--current-profile) 'agent))
             (plist-get state :aggregate-preview-shown)
             (null plan)
