@@ -311,9 +311,11 @@ Returns nil if PROMPT is not a non-empty string (defensive guard)."
 
 (defun gptel-agent-loop--maybe-cache-put (state result)
   "Cache RESULT for STATE if the helper exists.
-Returns nil if STATE is not a valid task structure or RESULT is not a string."
+Returns nil if STATE is not a valid task structure, RESULT is not a string,
+or agent-type is nil (defensive guard for consistency with maybe-cache-get)."
   (when (and (gptel-agent-loop--task-p state)
              (stringp result)
+             (gptel-agent-loop--task-agent-type state)
              (fboundp 'my/gptel--subagent-cache-put))
     (my/gptel--subagent-cache-put
      (gptel-agent-loop--task-agent-type state)
