@@ -78,3 +78,39 @@
 - Cron: `0 23,3,7,11,15,19 * * *`
 - Next run: 23:00 (ready)
 - Real traces will replace mock traces once pipeline runs with outcome updates
+
+---
+
+
+## Sync Review: Remote Optimization Experiments (Merged `0e4b6f4f`)
+
+**Resolved:** Conflict in `token-efficiency.md` — took newest data (18544 chars, 119/748 experiments)
+**Migrated:** `token-efficiency.md` moved from `assistant/skills/auto-workflow/` to `mementum/knowledge/` (learned data, not a skill)
+
+**Incoming Changes (from remote optimize/* branches):**
+
+1. **New strategy:** `strategy-semantic-compression.el` (62 lines)
+   - Compresses function bodies to `...` while preserving signatures
+   - Targets: `defun`, `defmacro`, `cl-defun`, `defadvice`
+   - Hypothesis: Preserve interfaces, reduce tokens
+
+2. **`gptel-agent-loop.el`** — Defensive guards
+   - `continuation-prompt-for`: Validates task structure before processing
+   - `compile-patterns`: Uses `proper-list-p` instead of `listp`
+
+3. **`gptel-ext-context.el`** — Proper list validation
+   - `extract-last-task`: Guards against non-list input
+
+4. **`gptel-ext-fsm-utils.el`** — FSM robustness
+   - Nil callback defaults to `#'ignore`
+   - Pre-compiled FSM ID regex for O(1) matching
+
+5. **`gptel-ext-retry.el`** — Message validation
+   - Truncation: Checks `proper-list-p msg` before `plist-get`
+
+6. **`gptel-benchmark-core.el`** — plist validation
+   - `plist-to-alist`: Uses `proper-list-p` guard
+
+**Pattern:** Remote experiments focused on **nil-safety hardening** — adding `proper-list-p` guards across multiple modules. This aligns with our nil-safety topic model (weight +2.0 for `source_own`).
+
+**Sync Status:** ✅ Local + remote merged, pushed to `4cc93e30`

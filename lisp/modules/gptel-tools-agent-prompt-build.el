@@ -67,16 +67,22 @@ Returns cached content or nil if missing/stale."
     (format "[knowledge-cache] %d entries, avg age %.0fs"
             count (if (> count 0) (/ total-age count) 0))))
 
-(defun gptel-auto-workflow--load-token-efficiency-skill ()
-  "Load token efficiency skill and return parsed config.
+(defun gptel-auto-workflow--load-token-efficiency-data ()
+  "Load token efficiency data from mementum/knowledge/.
 Returns plist with :compression :section-stats or nil.
-Uses standard skill loader for file loading."
-  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/token-efficiency")))
+Reads from mementum/knowledge/token-efficiency.md directly."
+  (let* ((file (expand-file-name "mementum/knowledge/token-efficiency.md"
+                                 (or (gptel-auto-workflow--worktree-base-root)
+                                     default-directory)))
+         (content (when (file-exists-p file)
+                    (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string)))))
     (when (and content (not (string-empty-p content)))
       (with-temp-buffer
         (insert content)
         (goto-char (point-min))
-        (let ((config (list :source "skill")))
+        (let ((config (list :source "mementum")))
           ;; Parse compression config
           (when (re-search-forward "topic-knowledge-max-chars: \\([0-9]+\\)" nil t)
             (plist-put config :compression (string-to-number (match-string 1))))
@@ -96,7 +102,7 @@ Uses standard skill loader for file loading."
   "Adapt topic knowledge compression based on token efficiency skill.
 Reads optimization-skills/token-efficiency.md and adjusts max chars.
 Returns the adjusted max chars value."
-  (let* ((skill (gptel-auto-workflow--load-token-efficiency-skill))
+  (let* ((skill (gptel-auto-workflow--load-token-efficiency-data))
          (compression (when skill (plist-get skill :compression))))
     (when (and compression (> compression 0))
       (setq gptel-auto-workflow--topic-knowledge-max-chars compression)

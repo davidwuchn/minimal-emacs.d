@@ -1,40 +1,47 @@
 ---
-name: token-efficiency
-description: Controls prompt compression and section inclusion based on experiment results
-version: 1.0
+name: auto-workflow
+description: Orchestrates automated code improvement through hypothesis-driven experimentation and self-evolution
+version: 1.1
 ---
-metadata:
-  evolution-stats:
-    total-experiments: 870
 
-# Token Efficiency
+# Auto-Workflow
 
-This skill auto-evolves based on experiment results.
-It controls prompt compression and section inclusion.
+This skill suite orchestrates automated code improvement through systematic experimentation and self-evolution.
 
-## Token Efficiency Analysis
+## Skill Architecture
 
-Correlation between prompt size and experiment success:
+The auto-workflow system consists of coordinated sub-skills:
 
-- **Average prompt size (kept):** 20945 chars
-- **Average prompt size (discarded):** 21265 chars
-- **Success rate per 1000 chars (kept):** 0.69%
-- **Discarded rate per 1000 chars:** 2.12%
-- **Optimal prompt range:** Shorter prompts work better (20945 vs 21265 chars)
+### Core Pipeline
+- **RESEARCHER** — Analyzes targets, proposes hypotheses, checks repositories
+- **DIRECTIVE** — Strategic planning, target selection, resource allocation
+- **prompt-template** — Structured experiment prompt construction
 
-**Prompt Compression Config:**
-- topic-knowledge-max-chars: 800
-- compress-behavior: auto
-- compress-trigger: prompt exceeds optimal size
+### Quality Control
+- **validation-pipeline** — Validates experiment outcomes against quality gates
+- **agent-behavior** — Defines agent behavior patterns for experiment execution
 
-## Section A/B Test Results
+### Evolution
+- **token-efficiency** — *(Moved to mementum/knowledge/)* Learned compression settings from experiment outcomes
 
-Which prompt sections improve outcomes:
+## Activation
 
-- **all**: 18% success (145/788 experiments)
+Auto-workflow is triggered by the cron pipeline or manual invocation:
 
-**Section Inclusion Config:**
-- default: include all
-- a-b-test-enabled: t
-- omit-rate: 0.2
-- min-samples: 10
+```
+(auto-workflow bootstrap [target-path])
+```
+
+## Self-Evolution
+
+This skill auto-improves through:
+1. **Experiment logging** — Each run generates trace data
+2. **Outcome analysis** — Statistical controller learns from kept vs discarded results
+3. **Skill refinement** — Sub-skills updated based on performance data
+
+## Configuration
+
+- Cron schedule: `0 23,3,7,11,15,19 * * *`
+- Pipeline lock: `var/tmp/cron/pipeline.lock`
+- Trace storage: `var/tmp/research-traces/`
+- Controller config: `var/tmp/researcher-controller.json`
