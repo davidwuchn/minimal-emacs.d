@@ -1,0 +1,1 @@
+{"name":"failure-weighted-skills","version":"1.0","hypothesis":"Prioritizing skills that address patterns that failed in previous experiments improves success rates.","axis":"E","components":["skill-weighting","failure-analysis"]}

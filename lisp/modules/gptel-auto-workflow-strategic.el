@@ -492,28 +492,7 @@ Results feed into directive's 'Next Hypotheses' for target selection."
               "")
             "### Recent Failure Patterns\n"
             (gptel-auto-workflow--research-topics-string)
-            "\n\n"
-            "---\n"
             "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
-
-(defun gptel-auto-workflow--load-strategy-guidance ()
-  "Load strategy guidance from replay store for researcher prompts.
-Returns string with strategy performance summary, or nil if not available."
-  (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (guidance-file (expand-file-name "var/tmp/researcher-strategy-guidance.json" root)))
-    (when (file-exists-p guidance-file)
-      (condition-case err
-          (with-temp-buffer
-            (insert-file-contents guidance-file)
-            (let ((data (json-read)))
-              (format "- Active strategy: %s\n- Quality score: %.2f\n- Efficiency: %.4f tokens/insight\n- Last evolved: %s"
-                      (or (cdr (assoc 'strategy data)) "default")
-                      (or (cdr (assoc 'quality data)) 0.0)
-                      (or (cdr (assoc 'efficiency data)) 0.0)
-                      (or (cdr (assoc 'timestamp data)) "unknown"))))
-        (error
-         (message "[strategy] Error loading guidance: %s" err)
-         nil)))))
 
 ;;; Meta-Learning Researcher Triggers
 
@@ -858,7 +837,7 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
          600)
       (progn
         (message "[auto-workflow] Subagent unavailable - skipping external research")
-        (funcall callback "")))))
+        (funcall callback ""))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -1592,7 +1571,8 @@ Uses gptel-auto-workflow-research-benchmark.el to:
           (let ((output (shell-command-to-string (format "cd %s && python3 %s"
                                                           (shell-quote-argument root)
                                                           (shell-quote-argument script)))))
-            (message "[evolve] %s" output)))))))
+            (message "[evolve] %s" output))))
+    (message "[evolve] Strategy evolution cycle complete"))))
 
 (provide 'gptel-auto-workflow-strategic)
 
