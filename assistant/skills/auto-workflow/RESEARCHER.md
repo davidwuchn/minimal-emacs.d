@@ -1,8 +1,7 @@
 ---
 name: auto-workflow-researcher
 description: External idea hunter for auto-workflow. Searches internet for novel AI agent techniques and digests them for directive skill evolution.
-version: 2026.05.08
-updated: 2026-05-08 18:41
+version: 2026.05.13
 research-effectiveness: 0.0%
 total-research-experiments: 0
 ---
@@ -19,6 +18,24 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
   - No statistically significant data yet (need ≥3 experiments per topic)
 
+## Source Effectiveness
+
+*No source effectiveness data yet.*
+
+## Controller Guidance
+
+*Controller not yet evolved. Using heuristic defaults.*
+
+## Instructions
+
+### Source Strategy (learned from outcomes)
+- **DEFAULT**: Use own-repos-first strategy
+
+### Controller Awareness
+- STOP early if you have 2+ insights with URLs
+- CONTINUE if you found URLs but need more depth
+- BRANCH if no new insights after 2 turns
+
 ## Mission
 
 Search external sources for actionable techniques related to:
@@ -31,10 +48,67 @@ Search external sources for actionable techniques related to:
 
 ## Priority Projects to Monitor
 
-Watch these specific GitHub projects for novel patterns:
+### External Projects (Novel Patterns)
 - **hermes-agent** — Agent orchestration and delegation patterns
 - **zeroclaw** — Lightweight agent framework design
 - **ml-intern** — ML-powered coding assistant techniques
+
+### davidwuchn Repos (Upstream Improvements to Cherry-Pick)
+
+**Core AI/LLM Infrastructure:**
+- **https://github.com/davidwuchn/gptel** — LLM client for Emacs; watch for new backends, tool APIs, context management
+- **https://github.com/davidwuchn/gptel-agent** — Agent mode for gptel; watch for subagent improvements, preset system changes
+- **https://github.com/davidwuchn/nucleus** — AI prompting framework; watch for benchmark, evaluation, or agent loop changes
+- **https://github.com/davidwuchn/mementum** — Git as AI Memory; watch for knowledge synthesis improvements
+- **https://github.com/davidwuchn/ai-behaviors** — Behavior system for LLMs
+- **https://github.com/davidwuchn/ai-code-interface.el** — Unified Emacs interface for OpenAI Codex, GitHub Copilot CLI, Claude Code, Gemini CLI, Opencode
+
+**Agent Frameworks:**
+- **https://github.com/davidwuchn/gastown** — Multi-agent workspace manager
+- **https://github.com/davidwuchn/gbrain** — Garry's Opinionated OpenClaw/Hermes Agent Brain
+- **https://github.com/davidwuchn/nullclaw** — Fastest, smallest, fully autonomous AI assistant infrastructure (Zig)
+- **https://github.com/davidwuchn/zeroclaw** — Fast, small, fully autonomous AI personal assistant (Rust, cross-platform)
+- **https://github.com/davidwuchn/genesis-agent** — Self-aware cognitive AI agent that reads, modifies & verifies its own code
+- **https://github.com/davidwuchn/efrit** — Native elisp coding agent running in Emacs
+- **https://github.com/davidwuchn/symphony** — Turns project work into isolated, autonomous implementation runs
+- **https://github.com/davidwuchn/agency-agents** — Complete AI agency with specialized expert agents
+- **https://github.com/davidwuchn/sem-assistant-el** — Vibecoded Personal Autonomous Assistant
+
+**Context & Memory:**
+- **https://github.com/davidwuchn/context-mode** — Context window optimization, sandboxes tool output, 98% reduction, 14 platforms
+- **https://github.com/davidwuchn/Ori-Mnemos** — Local-first persistent agentic memory with Recursive Memory Harness
+- **https://github.com/davidwuchn/verbum** — LLM attention and model architecture exploration
+
+**Testing & Evaluation:**
+- **https://github.com/davidwuchn/promptfoo** — Test prompts, agents, RAGs; AI red teaming and pentesting
+- **https://github.com/davidwuchn/baml** — AI framework adding engineering to prompt engineering
+- **https://github.com/davidwuchn/ATLAS** — Adaptive Test-time Learning and Autonomous Specialization
+
+**Browser & Tool Integration:**
+- **https://github.com/davidwuchn/browser** — Lightpanda headless browser for AI/automation
+- **https://github.com/davidwuchn/browser-harness** — Self-healing harness enabling LLMs to complete any task
+
+**Code Intelligence:**
+- **https://github.com/davidwuchn/GitNexus** — Zero-Server Code Intelligence Engine, client-side knowledge graph
+- **https://github.com/davidwuchn/graphify** — Turn any folder into a queryable knowledge graph
+- **https://github.com/davidwuchn/LLMLingua** — Compress prompt and KV-Cache up to 20x
+
+**Emacs & Lisp:**
+- **https://github.com/davidwuchn/minimal-emacs.d** — Better Emacs defaults and optimized startup
+- **https://github.com/davidwuchn/nelisp** — Emacs Lisp VM in pure Elisp + Rust syscall stub
+- **https://github.com/davidwuchn/anvil.el** — (description TBD)
+- **https://github.com/davidwuchn/skewed-emacs** — Setup for GNU Emacs, Gendl, and AI
+
+**Other Languages & Platforms:**
+- **https://github.com/davidwuchn/psi** — Extensible AI Agent in Clojure
+- **https://github.com/davidwuchn/mycelium** — Maestro state machines + Malli contracts for AI graph workflows
+- **https://github.com/davidwuchn/Aether** — Artificial Ecology For Thought and Emergent Reasoning
+- **https://github.com/davidwuchn/tinygrad** — Deep learning framework
+- **https://github.com/davidwuchn/electrobun** — Ultra fast, tiny, cross-platform desktop apps with TypeScript
+- **https://github.com/davidwuchn/mmllm** — hey-china-hold-my-beer-llm
+- **https://github.com/davidwuchn/clojure-skills** — Skills and Prompts for Clojure
+- **https://github.com/davidwuchn/defold** — Free game engine (watch for agent-config patterns)
+- **https://github.com/davidwuchn/defold-agent-config** — AI-assisted game dev with AGENTS.md and skills
 
 Check their: recent commits, open issues, closed PRs, architecture decisions
 
@@ -55,28 +129,12 @@ Check their: recent commits, open issues, closed PRs, architecture decisions
 4. Extract specific, actionable techniques - not vague trends
 5. For each insight, provide: source URL, key technique, how it applies to us
 6. Max 1200 chars. Prioritize depth over breadth.
-7. **MONITOR SPECIFIC PROJECTS**: Check hermes-agent, zeroclaw, ml-intern on GitHub
+7. **MONITOR SPECIFIC PROJECTS**:
+   - Check hermes-agent, zeroclaw, ml-intern for novel AI agent patterns
+   - Check ALL https://github.com/davidwuchn repos for upstream improvements we should cherry-pick
+   - Prioritize: gptel, gptel-agent, nucleus, mementum, ai-behaviors, ai-code-interface.el, context-mode, gastown, gbrain, nullclaw, genesis-agent, promptfoo, GitNexus, LLMLingua
    Look at: recent commits, open issues, closed PRs, architecture decisions
    Focus on: patterns we can adapt to our Emacs AI agent system
-
-## Output Format
-
-```
-## Digest: External Research Insights
-
-### Technique 1: [Name]
-- **Source type**: [YouTube|GitHub|arXiv|X|HuggingFace|Reddit]
-- **Impact**: [high|medium|low]
-- **Difficulty**: [easy|medium|hard]
-- **Description**: [2-3 sentences on what it is]
-- **Application**: [Specific module or pattern in our project it could improve]
-- **Implementation sketch**: [Concrete first step, 1-2 sentences]
-
-### Summary for Directive
-- **Top hypothesis**: [Best technique to try next]
-- **Target modules**: [Which files to experiment on]
-- **Expected improvement**: [What metric or capability would improve]
-```
 
 ## Anti-patterns (avoid)
 
