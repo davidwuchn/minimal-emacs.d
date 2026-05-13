@@ -86,7 +86,7 @@ TEST: Second call with same FSM returns same ID.
 BUILDS ON DISCOVERY: Idempotent registration prevents duplicate IDs
 in scenarios where FSM may be registered multiple times during
 nested agent calls."
-  (when fsm
+  (when (and fsm (my/gptel--fsm-p fsm))
     (let ((existing-id (gethash fsm my/gptel--fsm-registry)))
       (or existing-id
           (let ((id (my/gptel--fsm-generate-id)))
@@ -148,6 +148,7 @@ BEHAVIOR: Returns ID string if FSM exists in registry.
 BEHAVIOR: Returns nil for unregistered FSMs (no error).
 EDGE CASE: Nil FSM returns nil.
 EDGE CASE: Unregistered FSM returns nil (safe lookup).
+EDGE CASE: Invalid FSM struct returns nil (validated via my/gptel--fsm-p).
 TEST: (my/gptel--fsm-get-id fsm) => ID string or nil
 TEST: (my/gptel--fsm-get-id nil) => nil
 TEST: (my/gptel--fsm-get-id unregistered-fsm) => nil
@@ -157,7 +158,7 @@ duplication across coerce-fsm and other functions.
 
 PROACTIVE MITIGATION: Centralizes FSM→ID lookup logic, preventing
 inconsistent lookups if registry structure changes."
-  (and fsm
+  (and (my/gptel--fsm-p fsm)
        (gethash fsm my/gptel--fsm-registry)))
 
 ;;; FSM Predicates and Coercion

@@ -1,0 +1,1 @@
+{"name":"skill-cascade-loading","version":"1.0","hypothesis":"Cascading skill load from primary failures reveals related systemic issues","axis":"E","components":["skill-cascade","failure-typing"]}

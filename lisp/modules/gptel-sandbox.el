@@ -202,7 +202,7 @@ MAX-ARGS of nil means no upper bound.")
          (symbolp (car binding))
          (or (null (cddr binding))
              (not (consp (cddr binding)))))
-    binding)
+    (list (car binding) (cadr binding)))
    (t
     (error "Invalid binding in Programmatic sandbox: %S" binding))))
 
@@ -233,9 +233,11 @@ Raises an error if PAIRS is malformed."
 
 (defun gptel-sandbox--eval-let-binding (binding env)
   "Evaluate a single BINDING in ENV, returning (SYMBOL . VALUE)."
-  (pcase-let ((`(,symbol ,value-form)
-               (gptel-sandbox--normalize-binding binding)))
-    (cons symbol (gptel-sandbox--eval-expr value-form env))))
+  (let ((normalized (gptel-sandbox--normalize-binding binding)))
+    (unless (proper-list-p normalized)
+      (error "Programmatic let binding normalized to non-proper-list: %S" normalized))
+    (pcase-let ((`(,symbol ,value-form) normalized))
+      (cons symbol (gptel-sandbox--eval-expr value-form env)))))
 
 (defun gptel-sandbox--eval-let (bindings body env sequentialp)
   "Evaluate let-style BINDINGS and BODY in ENV.
@@ -590,7 +592,10 @@ CALLBACK receives non-nil when approved and nil when rejected."
                         (gptel--format-tool-call tool-name arg-values)
                       (format "%s %s" tool-name (mapconcat #'prin1-to-string arg-values " ")))))
     (if (and (fboundp 'my/gptel-tool-permitted-p)
-             (ignore-errors (my/gptel-tool-permitted-p tool-name)))
+             (condition-case nil
+                 (prog1 (my/gptel-tool-permitted-p tool-name)
+                   t)
+               (error nil)))
         (funcall callback t)
       (funcall callback
                (y-or-n-p (format "Programmatic wants to run %s. Continue? " formatted))))))
@@ -614,6 +619,8 @@ CALLBACK receives non-nil when approved and nil when rejected."
   (unless (proper-list-p state)
     (error "Programmatic maybe-aggregate-confirm requires a proper plist state, got: %S" state))
   (let ((plan (plist-get state :mutating-plan)))
+    (unless (or (null plan) (proper-list-p plan))
+      (error "Programmatic aggregate-confirm plan must be a proper list, got: %S" plan))
     (if (or (not (eq (gptel-sandbox--current-profile) 'agent))
             (plist-get state :aggregate-preview-shown)
             (null plan)
@@ -697,7 +704,7 @@ like (:error \"...\") or (:violated t :reason \"...\")."
     (if (string-prefix-p "Error: " value)
         (substring value (length "Error: "))
       value))
-   ((gptel-sandbox--error-plist-p value)
+   ((and (proper-list-p value) (gptel-sandbox--error-plist-p value))
     (or (plist-get value :reason)
         (plist-get value :error)
         (format "Error: %S" value)))
@@ -752,7 +759,7 @@ can consume lists, vectors, plists, and alists as readable data."
       (error "Unknown tool %s requested by Programmatic" tool-name))
     (let ((arg-values (gptel-sandbox--resolve-tool-args tool-spec arg-forms env)))
       (gptel-sandbox--check-tool tool-name tool-spec arg-values)
-      (cl-incf (plist-get state :tool-count))
+      (cl-incf (or (plist-get state :tool-count) 0))
       (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
         (error "Programmatic exceeded max nested tool calls (%d)"
                my/gptel-programmatic-max-tool-calls))

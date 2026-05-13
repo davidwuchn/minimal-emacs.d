@@ -264,7 +264,7 @@ For hypothesis generation targeting weak areas."
 (defun gptel-benchmark--score-signals (output signals)
   "Score OUTPUT based on presence of SIGNALS.
 Returns 0.5 if OUTPUT or SIGNALS is nil/empty."
-  (if (or (null output) (null signals) (not (listp signals)))
+  (if (or (null signals) (not (listp signals)) (not (stringp output)))
       0.5
     (let ((matches 0)
           (total (length signals)))
@@ -276,7 +276,7 @@ Returns 0.5 if OUTPUT or SIGNALS is nil/empty."
 (defun gptel-benchmark--score-anti-patterns (output anti-patterns)
   "Score OUTPUT based on absence of ANTI-PATTERNS.
 Returns 0.5 if OUTPUT or ANTI-PATTERNS is nil/empty."
-  (if (or (null output) (null anti-patterns) (not (listp anti-patterns)))
+  (if (or (null anti-patterns) (not (listp anti-patterns)) (not (stringp output)))
       0.5
     (let ((violations 0)
           (total (length anti-patterns)))
@@ -392,9 +392,11 @@ Returns 0.5 if OUTPUT or ANTI-PATTERNS is nil/empty."
   (plist-get (alist-get level gptel-benchmark-vsm-levels) :element))
 
 (defun gptel-benchmark-element-to-vsm (element)
-  "Convert Wu Xing ELEMENT to VSM level."
-  (car (cl-find-if (lambda (x) (eq (plist-get (cdr x) :element) element))
-                   gptel-benchmark-vsm-levels)))
+  "Convert Wu Xing ELEMENT to VSM level.
+Returns nil if ELEMENT is not a valid element symbol."
+  (when (symbolp element)
+    (car (cl-find-if (lambda (x) (eq (plist-get (cdr x) :element) element))
+                     gptel-benchmark-vsm-levels))))
 
 ;;; ============================================================================
 ;;; Wu Xing Diagnostics
@@ -409,8 +411,9 @@ Returns 0.5 if OUTPUT or ANTI-PATTERNS is nil/empty."
           (let ((key (intern (format "%s-score" element))))
             (dolist (r results)
               (let ((scores (if (consp r) (cdr r) r)))
-                (when (plist-get scores key)
-                  (setq score (plist-get scores key)))))))
+                (let ((score-value (plist-get scores key)))
+                  (when (numberp score-value)
+                    (setq score score-value)))))))
         (push (list :element element
                     :vsm (gptel-benchmark-element-to-vsm element)
                     :score score

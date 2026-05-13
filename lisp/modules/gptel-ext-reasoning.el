@@ -88,7 +88,8 @@ message, even when the model produced no visible reasoning for that turn.
 
 (defun my/gptel--valid-reasoning-value-p (value)
   "Return non-nil when VALUE is an API-valid reasoning payload."
-  (stringp value))
+  (or (stringp value)
+      (eq value :null)))
 
 (defun my/gptel--fallback-reasoning-value (tool-calls reasoning-alist)
   "Return stored reasoning for TOOL-CALLS from REASONING-ALIST, or empty string."

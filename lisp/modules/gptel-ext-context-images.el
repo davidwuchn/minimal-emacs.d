@@ -122,13 +122,20 @@ Uses simple heuristic unless dimensions are available."
           (* tiles tiles tokens-per-tile))
       my/gptel-image-token-estimate)))
 
+;;; Entry Parsing Helper
+
+(defun my/gptel--parse-context-entry (entry)
+  "Parse a context ENTRY into (path . props) form.
+ENTRY can be a string (path only) or a cons cell (path . props)."
+  (if (consp entry) entry (list entry)))
+
 ;;; Token Counting
 
 (defun my/gptel--count-context-image-tokens ()
   "Count total image tokens in current `gptel-context'.
 Iterates media entries, estimates per-image token cost."
   (cl-loop for entry in gptel-context
-           for (path . props) = (if (consp entry) entry (list entry))
+           for (path . props) = (my/gptel--parse-context-entry entry)
            when (and (stringp path) (plist-get props :mime))
            sum (or (plist-get props :tokens)
                    my/gptel-image-token-estimate)))
@@ -136,7 +143,7 @@ Iterates media entries, estimates per-image token cost."
 (defun my/gptel--context-image-count ()
   "Return the number of images in current `gptel-context'."
   (cl-loop for entry in gptel-context
-           for (path . props) = (if (consp entry) entry (list entry))
+           for (path . props) = (my/gptel--parse-context-entry entry)
            when (and (stringp path) (plist-get props :mime))
            count t))
 
@@ -184,7 +191,7 @@ Adds metadata for image context entries."
   "Sort gptel-context images by relevance (most recent first).
 Returns list of (path . props) for images only."
   (let ((images (cl-loop for entry in gptel-context
-                         for (path . props) = (if (consp entry) entry (list entry))
+                         for (path . props) = (my/gptel--parse-context-entry entry)
                          when (and (stringp path) (plist-get props :mime))
                          collect (cons path props))))
     (sort images
@@ -210,7 +217,7 @@ Returns number of images removed."
         (dolist (img to-remove)
           (setq gptel-context
                 (cl-remove-if (lambda (e)
-                                (equal (if (consp e) (car e) e) (car img)))
+                                (equal (car (my/gptel--parse-context-entry e)) (car img)))
                               gptel-context))
           (cl-incf removed))
         (when (> removed 0)
@@ -232,7 +239,7 @@ Returns actual bytes saved."
                  (size (file-attribute-size (file-attributes path))))
             (setq gptel-context
                   (cl-remove-if (lambda (e)
-                                   (equal (if (consp e) (car e) e) path))
+                                   (equal (car (my/gptel--parse-context-entry e)) path))
                                  gptel-context))
             (cl-incf bytes-saved (or size 0))
             (cl-incf trimmed))))

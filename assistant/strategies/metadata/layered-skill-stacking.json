@@ -1,0 +1,1 @@
+{"name":"layered-skill-stacking","version":"1.0","hypothesis":"Layering skills from general to specific contexts improves AI alignment with code improvement goals","axis":"E","components":["skill-layering","relevance-ordering","context-stacking"]}

@@ -1,7 +1,7 @@
 ---
 name: auto-workflow-researcher
 description: External idea hunter for auto-workflow. Searches internet for novel AI agent techniques and digests them for directive skill evolution.
-version: 2026.05.13
+version: 2026.05.14
 research-effectiveness: 0.0%
 total-research-experiments: 0
 ---
@@ -24,7 +24,11 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
 ## Controller Guidance
 
-*Controller not yet evolved. Using heuristic defaults.*
+Current controller configuration (evolved from trace outcomes):
+
+- **Stop threshold**: 0.70
+- **Token budget**: 8000 tokens
+- **Own-repo priority**: 70%
 
 ## Instructions
 

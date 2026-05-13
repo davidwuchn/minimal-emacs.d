@@ -1,0 +1,1 @@
+{"name":"failure-pattern-entropy","version":"1.0","hypothesis":"High-entropy failure patterns require different guidance than concentrated patterns","axis":"D","components":["entropy-computation","adaptive-guidance"]}

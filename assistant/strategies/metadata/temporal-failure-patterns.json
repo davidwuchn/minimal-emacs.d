@@ -1,0 +1,1 @@
+{"name":"temporal-failure-patterns-patterns","version":"1.0","hypothesis":"Analyzing where in file structure failures occur enables targeted guidance weighting","axis":"D/C","components":["temporal-analysis","failure-position-tracking","weighted-guidance"]}

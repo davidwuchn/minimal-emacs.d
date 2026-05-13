@@ -37,6 +37,8 @@
   "Temporary storage for accumulated findings during multi-turn research.")
 (defvar gptel-auto-workflow--research-total-tokens nil
   "Temporary storage for total tokens during multi-turn research.")
+(defvar gptel-auto-workflow--research-controller-config nil
+  "Temporary storage for controller config during multi-turn research.")
 
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
@@ -766,7 +768,8 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
   ;; in daemon environments where lexical-binding may not work properly
   (setq gptel-auto-workflow--research-accumulated-findings accumulated-findings)
   (setq gptel-auto-workflow--research-total-tokens total-tokens)
-  (let* ((controller-config (gptel-auto-workflow--load-autotts-controller))
+  (setq gptel-auto-workflow--research-controller-config (gptel-auto-workflow--load-autotts-controller))
+  (let* ((controller-config gptel-auto-workflow--research-controller-config)
          (max-turns gptel-auto-workflow-max-research-turns)
          (current-prompt (if (and accumulated-findings (> (length accumulated-findings) 0))
                              (gptel-auto-workflow--build-adaptive-followup-prompt
@@ -812,7 +815,7 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
               (controller-decision (if timeout-p
                                        'timeout
                                      (gptel-auto-workflow--controller-decide-research-flow
-                                      controller-config (length merged-findings) merged-findings)))))
+                                      gptel-auto-workflow--research-controller-config (length merged-findings) merged-findings)))))
          ;; Log this turn as a step
          (gptel-auto-workflow--log-research-step
           'search

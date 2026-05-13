@@ -1,0 +1,1 @@
+{"name":"hierarchical-skills","version":"1.0","hypothesis":"Organizing skills in a hierarchical precedence system allows higher-priority skills to override lower-priority guidance","axis":"E","components":["skill-hierarchy","layered-loading","precedence-composition"]}

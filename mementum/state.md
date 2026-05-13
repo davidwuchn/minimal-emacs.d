@@ -169,3 +169,28 @@
 **Pattern:** Remote experiments focused on **nil-safety hardening** — adding `proper-list-p` guards across multiple modules. This aligns with our nil-safety topic model (weight +2.0 for `source_own`).
 
 **Sync Status:** ✅ Local + remote merged, pushed to `4cc93e30`
+
+---
+
+## Closure Fix for Multi-Turn Research (`217a5aea`)
+
+**Problem:** `strategic.el` loads partially in daemon — only ~51 of ~60 functions defined. Critical functions (`run-research-turn`, `build-research-prompt`) missing.
+
+**Root Cause:** Daemon loads file without lexical-binding, causing closure variables (`accumulated-findings`, `controller-config`) to fail in lambda callbacks.
+
+**Fix:** Added global variables to avoid closure capture:
+- `gptel-auto-workflow--research-accumulated-findings`
+- `gptel-auto-workflow--research-total-tokens`
+- `gptel-auto-workflow--research-controller-config`
+
+**Status:** 
+- ✅ Fix committed and pushed (`217a5aea`)
+- ✅ Syntax validated
+- ⚠️ Daemons need manual function eval after restart (file still loads partially)
+- ⚠️ Researcher daemon down — needs restart
+
+**Next Steps:**
+1. Restart researcher daemon with fresh load
+2. Manually eval missing functions if needed
+3. Verify research produces findings > 0 chars
+4. Check `var/tmp/research-findings.md` gets populated

@@ -1,0 +1,1 @@
+{"name":"failure-pattern-sections","version":"1.0","hypothesis":"Placing failure pattern guidance earlier in prompt improves pattern avoidance","axis":"C","components":["failure-extraction","section-reordering"]}

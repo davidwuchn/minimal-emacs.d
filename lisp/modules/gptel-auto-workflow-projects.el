@@ -232,6 +232,9 @@ Each worktree gets its own isolated buffer for subagent overlays."
 (defun gptel-auto-workflow--get-project-buffer (project-root)
   "Get or create a gptel-agent buffer for PROJECT-ROOT.
 Legacy function - routes to worktree buffer for backward compatibility."
+  (unless (and (stringp project-root)
+               (> (length project-root) 0))
+    (error "PROJECT-ROOT must be a non-empty string, got: %S" project-root))
   (gptel-auto-workflow--get-worktree-buffer project-root))
 
 (defun gptel-auto-workflow-add-project (project-root)
@@ -736,6 +739,9 @@ Without PROJECT-ROOT, clears overlays for all projects."
 Loads .dir-locals.el from project and runs researcher in that context.
 When COMPLETION-CALLBACK is non-nil, call it after research completes."
   (interactive "DProject root: ")
+  (unless (and (stringp project-root)
+               (> (length project-root) 0))
+    (error "PROJECT-ROOT must be a non-empty string, got: %S" project-root))
   (let* ((root (expand-file-name project-root))
          (project-buf (gptel-auto-workflow--get-project-buffer root)))
     (message "[research] Starting for project: %s" root)
@@ -832,6 +838,7 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
 Without PROJECT-ROOT, clears cache for all projects."
   (interactive)
   (setq gptel-auto-workflow--research-status-cache nil)
+  (gptel-auto-workflow--ensure-buffer-tables)
   (if project-root
       (let ((root (expand-file-name project-root)))
         (remhash root gptel-auto-workflow--research-findings-cache)
