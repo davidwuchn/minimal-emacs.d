@@ -648,8 +648,8 @@ usable and digestion would lose 80%+ of the content.  Only digest raw HTML dumps
    ((or (null raw-findings) (string-empty-p raw-findings))
     (funcall callback ""))
     ;; Already structured external research: pass through to avoid destruction
-    ((and (> (length raw-findings) 500)
-          (or (> (length raw-findings) 2000)  ; Very long = likely already structured research
+    ((and (> (length raw-findings) 300)
+          (or (> (length raw-findings) 500)  ; Medium+ = likely structured research
               (string-match-p "https?://" raw-findings)
               (string-match-p "## .*Technique\|Source type:\|Impact:\|Application:" raw-findings)
               (string-match-p "\b\(GitHub\|arXiv\|YouTube\|Reddit\|HuggingFace\|X/Twitter\)\b" raw-findings)))
@@ -1110,11 +1110,11 @@ Also treats long responses (>1000 chars) as likely external research,
 since the researcher subagent digests fetched content and may not
 include raw URLs in the summary."
   (and (stringp response)
-       (> (length response) 200)
-       (or (> (length response) 1000)  ; Long responses = digested external research
-           (string-match-p "https?://" response)
-           (string-match-p "\\b\\(GitHub\\|arXiv\\|YouTube\\|Reddit\\|HuggingFace\\|X/Twitter\\)\\b" response)
-           (string-match-p "\\b\\(karthink/gptel\\|hermes-agent\\|zeroclaw\\|ml-intern\\)\\b" response))))
+        (> (length response) 200)
+        (or (> (length response) 400)  ; Medium+ responses = digested external research
+            (string-match-p "https?://" response)
+            (string-match-p "\\b\\(GitHub\\|arXiv\\|YouTube\\|Reddit\\|HuggingFace\\|X/Twitter\\)\\b" response)
+            (string-match-p "\\b\\(karthink/gptel\\|hermes-agent\\|zeroclaw\\|ml-intern\\)\\b" response))))
 
 (defun gptel-auto-workflow--research-error-p (response)
   "Return non-nil when RESPONSE is a researcher task failure wrapper.
