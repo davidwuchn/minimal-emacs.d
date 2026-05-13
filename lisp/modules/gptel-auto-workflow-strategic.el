@@ -31,6 +31,13 @@
 (require 'gptel-tools-agent)
 (require 'gptel-benchmark-subagent nil t)
 
+;; Global variables to avoid closure issues in daemon environments
+;; where lexical-binding may not be properly enabled during load
+(defvar gptel-auto-workflow--research-accumulated-findings nil
+  "Temporary storage for accumulated findings during multi-turn research.")
+(defvar gptel-auto-workflow--research-total-tokens nil
+  "Temporary storage for total tokens during multi-turn research.")
+
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
 (declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
@@ -754,6 +761,10 @@ CALLBACK receives final digested findings.
 ACCUMULATED-FINDINGS is findings from previous turns.
 TOTAL-TOKENS tracks cumulative token usage across turns.
 AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH."
+  ;; Store state in global variables to avoid closure capture issues
+  ;; in daemon environments where lexical-binding may not work properly
+  (setq gptel-auto-workflow--research-accumulated-findings accumulated-findings)
+  (setq gptel-auto-workflow--research-total-tokens total-tokens)
   (let* ((controller-config (gptel-auto-workflow--load-autotts-controller))
          (max-turns gptel-auto-workflow-max-research-turns)
          (current-prompt (if (and accumulated-findings (> (length accumulated-findings) 0))
@@ -768,13 +779,15 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
        (let* ((raw-findings (gptel-auto-workflow--normalize-response result))
               (has-external (gptel-auto-workflow--research-has-external-content-p raw-findings))
               ;; Handle timeout/error: if result is empty and we have accumulated findings, return them
-              (timeout-p (and (not has-external) accumulated-findings (> (length accumulated-findings) 0)))
+              (timeout-p (and (not has-external) 
+                              gptel-auto-workflow--research-accumulated-findings 
+                              (> (length gptel-auto-workflow--research-accumulated-findings) 0)))
               (research-error-p (and (not timeout-p)
                                      (gptel-auto-workflow--research-error-p raw-findings)))
               (effective-findings (cond
                                    (timeout-p
                                     (message "[autotts] Turn %d timeout, using accumulated findings" (1+ turn))
-                                    accumulated-findings)
+                                    gptel-auto-workflow--research-accumulated-findings)
                                    (research-error-p
                                     (gptel-auto-workflow--local-research-patterns))
                                    (t raw-findings)))
@@ -783,13 +796,16 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
                                  gptel-auto-workflow--active-strategy)
                             "default"))
               (confidence (if timeout-p
-                              (gptel-auto-workflow--estimate-confidence accumulated-findings)
+                              (gptel-auto-workflow--estimate-confidence 
+                               gptel-auto-workflow--research-accumulated-findings)
                             (gptel-auto-workflow--estimate-confidence raw-findings)))
               (turn-tokens (if timeout-p 0 (/ (length raw-findings) 4)))
-              (cumulative-tokens (+ (or total-tokens 0) turn-tokens))
+              (cumulative-tokens (+ (or gptel-auto-workflow--research-total-tokens 0) turn-tokens))
               ;; Merge with accumulated findings
-              (merged-findings (if (and accumulated-findings (> (length accumulated-findings) 0))
-                                   (concat accumulated-findings "\n\n---\n\n" effective-findings)
+              (merged-findings (if (and gptel-auto-workflow--research-accumulated-findings 
+                                        (> (length gptel-auto-workflow--research-accumulated-findings) 0))
+                                   (concat gptel-auto-workflow--research-accumulated-findings 
+                                           "\n\n---\n\n" effective-findings)
                                  effective-findings))
               ;; Controller decision based on merged state
               (controller-decision (if timeout-p
