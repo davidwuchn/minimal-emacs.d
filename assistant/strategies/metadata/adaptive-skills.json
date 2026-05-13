@@ -1,0 +1,1 @@
+{"name":"adaptive-skills","version":"1.0","hypothesis":"Dynamically loading domain-relevant skills based on feature detection improves context relevance","axis":"E","components":["feature-detection","dynamic-skill-selection"]}
