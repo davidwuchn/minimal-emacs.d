@@ -152,6 +152,155 @@ Runs after pipeline completes to pick best strategy for next run."
           (message "[research-evolve] Evolved to strategy: %s" best)
           (setq gptel-auto-workflow--active-strategy best))))))
 
+(defun gptel-auto-workflow--load-research-traces ()
+  "Load all research traces from trace directory.
+Returns list of trace plists."
+  (let ((trace-dir (expand-file-name "var/tmp/research-traces"
+                                     (gptel-auto-workflow--worktree-base-root)))
+        (traces nil))
+    (when (file-directory-p trace-dir)
+      (dolist (file (directory-files trace-dir t "\\.json$"))
+        (condition-case err
+            (let ((json-object-type 'plist))
+              (with-temp-buffer
+                (insert-file-contents file)
+                (push (json-read) traces)))
+          (error (message "[autotts] Failed to load trace %s: %s"
+                         (file-name-nondirectory file) err)))))
+    traces))
+
+(defun gptel-auto-workflow--evolve-controller-from-traces (traces)
+  "AutoTTS-style controller evolution from research traces.
+Analyzes traces to update controller parameters.
+TRACES is list of trace plists."
+  (let ((own-repo-success 0)
+        (own-repo-total 0)
+        (external-success 0)
+        (external-total 0)
+        (total-tokens 0)
+        (total-output 0))
+    (dolist (trace traces)
+      (let ((source (plist-get trace :source))
+            (output-length (or (plist-get trace :output-length) 0))
+            (tokens-used (or (plist-get trace :tokens-used) 0))
+            (has-urls (plist-get trace :has-urls))
+            (confidence (or (plist-get trace :confidence) 0)))
+        (setq total-tokens (+ total-tokens tokens-used))
+        (setq total-output (+ total-output output-length))
+        (cond
+         ((string= source "own-repo")
+          (setq own-repo-total (1+ own-repo-total))
+          (when (and has-urls (> output-length 1000))
+            (setq own-repo-success (1+ own-repo-success))))
+         (t
+          (setq external-total (1+ external-total))
+          (when (and has-urls (> output-length 1000))
+            (setq external-success (1+ external-success)))))))
+    ;; Calculate new priorities based on success rates
+    (let* ((own-rate (if (> own-repo-total 0)
+                        (/ (float own-repo-success) own-repo-total)
+                      0.5))
+           (external-rate (if (> external-total 0)
+                             (/ (float external-success) external-total)
+                           0.3))
+           (avg-output (if (> (length traces) 0)
+                          (/ (float total-output) (length traces))
+                        2000))
+           ;; Evolve controller config
+           (new-config
+            (list
+             :own-repo-priority (min 0.95 (+ 0.7 (* 0.25 own-rate)))
+             :fork-priority 0.4
+             :external-priority (max 0.05 (+ 0.15 (* 0.15 external-rate)))
+             :web-priority 0.05
+             :min-confidence-stop (if (> avg-output 2500) 0.65 0.75)
+             :max-tokens-budget 8000
+             :min-insights-for-stop 2
+             :stagnation-window 2
+             :evolved-at (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+             :based-on-traces (length traces)
+             :own-repo-stats (list :success own-repo-success :total own-repo-total
+                                  :rate own-rate)
+             :external-stats (list :success external-success :total external-total
+                                   :rate external-rate))))
+      (message "[autotts] Controller evolution: own-repo %.0f%% (%d/%d), external %.0f%% (%d/%d)"
+               (* 100 own-rate) own-repo-success own-repo-total
+               (* 100 external-rate) external-success external-total)
+      new-config)))
+
+(defun gptel-auto-workflow--save-evolved-controller (controller-config)
+  "Save evolved controller configuration to disk.
+CONTROLLER-CONFIG is a plist with controller parameters."
+  (let ((controller-file (expand-file-name "var/tmp/researcher-controller.json"
+                                          (gptel-auto-workflow--worktree-base-root))))
+    (make-directory (file-name-directory controller-file) t)
+    (with-temp-file controller-file
+      (insert (json-encode controller-config)))
+    (message "[autotts] Saved evolved controller: %s" controller-file)))
+
+(defun gptel-auto-workflow--run-autotts-evolution ()
+  "Run full AutoTTS-style evolution cycle.
+1. Load traces
+2. Evolve controller from traces
+3. Save evolved controller
+4. Update active strategy from benchmark results."
+  (message "[autotts] Starting evolution cycle...")
+  ;; Step 1: Load traces
+  (let ((traces (gptel-auto-workflow--load-research-traces)))
+    (message "[autotts] Loaded %d traces" (length traces))
+    (when traces
+      ;; Step 2: Evolve controller
+      (let ((new-config (gptel-auto-workflow--evolve-controller-from-traces traces)))
+        ;; Step 3: Save controller
+        (gptel-auto-workflow--save-evolved-controller new-config)
+        ;; Step 4: Update active strategy from benchmark
+        (gptel-auto-workflow--evolve-research-strategy))
+      ;; Step 5: Generate knowledge synthesis
+      (gptel-auto-workflow--synthesize-research-knowledge traces))))
+
+(defun gptel-auto-workflow--synthesize-research-knowledge (traces)
+  "Self-evolution layer: synthesize knowledge from traces.
+Extract topic performance and source effectiveness."
+  (let ((topic-perf (make-hash-table :test 'equal))
+        (source-perf (make-hash-table :test 'equal)))
+    (dolist (trace traces)
+      (let ((strategy (plist-get trace :strategy))
+            (source (plist-get trace :source))
+            (output-length (or (plist-get trace :output-length) 0))
+            (confidence (or (plist-get trace :confidence) 0)))
+        ;; Track strategy performance
+        (let ((existing (gethash strategy topic-perf '(0 0 0))))
+          (puthash strategy
+                   (list (+ (nth 0 existing) (if (> output-length 1000) 1 0))
+                         (+ (nth 1 existing) 1)
+                         (+ (nth 2 existing) confidence))
+                   topic-perf))
+        ;; Track source performance
+        (let ((existing (gethash source source-perf '(0 0 0))))
+          (puthash source
+                   (list (+ (nth 0 existing) (if (> output-length 1000) 1 0))
+                         (+ (nth 1 existing) 1)
+                         (+ (nth 2 existing) confidence))
+                   source-perf))))
+    ;; Log synthesis
+    (message "[autotts] Knowledge synthesis:")
+    (message "[autotts]  Strategies:")
+    (maphash (lambda (name stats)
+               (let ((rate (if (> (nth 1 stats) 0)
+                              (/ (float (nth 0 stats)) (nth 1 stats))
+                            0)))
+                 (message "[autotts]    %s: %.0f%% success (%d/%d)"
+                          name (* 100 rate) (nth 0 stats) (nth 1 stats))))
+             topic-perf)
+    (message "[autotts]  Sources:")
+    (maphash (lambda (name stats)
+               (let ((rate (if (> (nth 1 stats) 0)
+                              (/ (float (nth 0 stats)) (nth 1 stats))
+                            0)))
+                 (message "[autotts]    %s: %.0f%% success (%d/%d)"
+                          name (* 100 rate) (nth 0 stats) (nth 1 stats))))
+             source-perf)))
+
 (provide 'gptel-auto-workflow-research-benchmark)
 
 ;;; gptel-auto-workflow-research-benchmark.el ends here
