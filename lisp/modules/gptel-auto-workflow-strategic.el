@@ -496,6 +496,25 @@ Results feed into directive's 'Next Hypotheses' for target selection."
             "---\n"
             "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
 
+(defun gptel-auto-workflow--load-strategy-guidance ()
+  "Load strategy guidance from replay store for researcher prompts.
+Returns string with strategy performance summary, or nil if not available."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (guidance-file (expand-file-name "var/tmp/researcher-strategy-guidance.json" root)))
+    (when (file-exists-p guidance-file)
+      (condition-case err
+          (with-temp-buffer
+            (insert-file-contents guidance-file)
+            (let ((data (json-read)))
+              (format "- Active strategy: %s\n- Quality score: %.2f\n- Efficiency: %.4f tokens/insight\n- Last evolved: %s"
+                      (or (cdr (assoc 'strategy data)) "default")
+                      (or (cdr (assoc 'quality data)) 0.0)
+                      (or (cdr (assoc 'efficiency data)) 0.0)
+                      (or (cdr (assoc 'timestamp data)) "unknown"))))
+        (error
+         (message "[strategy] Error loading guidance: %s" err)
+         nil)))))
+
 ;;; Meta-Learning Researcher Triggers
 
 (defun gptel-auto-workflow--trigger-researcher-meta-learning (trigger-type)
