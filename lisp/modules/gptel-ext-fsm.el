@@ -57,6 +57,7 @@ EDGE CASE: Missing error message returns nil.
 EDGE CASE: STOP reason not 'STOP returns nil.
 EDGE CASE: FSM already in DONE state returns nil.
 EDGE CASE: Non-FSM object passed returns nil (safety check).
+EDGE CASE: Malformed FSM struct returns nil (ignore-errors protection).
 TEST: (my/gptel--fsm-needs-recovery-p nil nil) => nil
 TEST: (my/gptel--fsm-needs-recovery-p fsm info-with-error+stop+not-done) => t
 TEST: (my/gptel--fsm-needs-recovery-p fsm info-without-error) => nil
@@ -73,7 +74,7 @@ PROACTIVE MITIGATION: Prevents recovery attempts on invalid FSMs."
     (let* ((fsm-buffer (plist-get info :buffer))
            (error-msg (plist-get info :error))
            (stop-reason (plist-get info :stop-reason))
-           (fsm-state (gptel-fsm-state fsm)))
+           (fsm-state (ignore-errors (gptel-fsm-state fsm))))
       (and fsm-buffer
            (buffer-live-p fsm-buffer)
            (stringp error-msg)
