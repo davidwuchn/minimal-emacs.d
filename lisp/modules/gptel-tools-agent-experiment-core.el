@@ -51,7 +51,8 @@ BASELINE-CODE-QUALITY is the initial code quality score.
 LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
   ;; Clear per-experiment provider overrides so MiniMax gets first crack
   ;; at each new experiment. Rate-limited backends still stay blacklisted.
-  (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+  (when (fboundp 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+    (gptel-auto-workflow--clear-runtime-subagent-provider-overrides))
   ;; Switch main backend if it's been rate-limited, or switch BACK if quota
   ;; reset window has elapsed while this daemon was running.
   (gptel-auto-experiment--maybe-failover-main-backend)
