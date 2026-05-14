@@ -1473,10 +1473,11 @@ Used by skill-governance to select candidates for A/B testing."
     (when (file-directory-p skills-dir)
       (dolist (skill-dir (directory-files skills-dir t "^[^._]"))
         (when (file-directory-p skill-dir)
-          (let ((skill-file (expand-file-name "SKILL.md" skill-dir)))
+          (let ((skill-file (expand-file-name "SKILL.md" skill-dir))
+                (mtime (nth 5 (file-attributes skill-file))))
             (when (and (file-exists-p skill-file)
-                       (> (float-time (nth 5 (file-attributes skill-file)))
-                          cutoff))
+                       mtime
+                       (> (float-time mtime) cutoff))
               (push (file-name-nondirectory skill-dir) recent))))))
     (delete-dups recent)))
 
