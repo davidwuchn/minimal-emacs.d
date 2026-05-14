@@ -360,12 +360,6 @@ def main():
         print("="*60)
         print(evolved_content)
     else:
-        # Backup existing skill
-        if skill_path.exists():
-            backup_path = skill_path.with_suffix('.md.backup')
-            skill_path.rename(backup_path)
-            print(f"Backed up existing skill to {backup_path}")
-        
         # Write new skill
         skill_path.parent.mkdir(parents=True, exist_ok=True)
         with open(skill_path, 'w') as f:
