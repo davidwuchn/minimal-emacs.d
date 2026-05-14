@@ -852,6 +852,8 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
                         (process-pair)))))))
            (process-pair)))))
     (`(tool-call ,tool-name . ,arg-forms)
+     (unless (proper-list-p arg-forms)
+       (error "Programmatic tool-call requires a proper list of arguments, got: %S" arg-forms))
      (gptel-sandbox--execute-tool
       (lambda (value)
         (if (gptel-sandbox--error-result-p value)
