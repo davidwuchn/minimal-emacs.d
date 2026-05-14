@@ -79,3 +79,25 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
 ;; Load theme initially for non-daemon mode
 (unless (daemonp)
   (load-file "~/.emacs.d/lisp/theme-setting.el"))
+
+;; ─── Workflow Daemon: Use standalone research to avoid load-file corruption ───
+;; load-file corrupts complex defuns with nested lambdas (specifically maphash).
+;; We load a simple standalone research module and override run-research to use it.
+;; An after-load-functions hook persists the override when strategic files are reloaded.
+(when (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
+  (message "[daemon-fix] Setting up standalone research (avoids load-file corruption)")
+  (let ((standalone-file (expand-file-name "lisp/modules/standalone-research.el"
+                                           minimal-emacs-user-directory)))
+    (when (file-exists-p standalone-file)
+      (load-file standalone-file)
+      (when (fboundp 'slr-run-research)
+        (message "[daemon-fix] Loaded standalone research, overriding run-research")
+        (defalias 'gptel-auto-workflow-run-research 'slr-run-research))))
+  ;; Re-apply override after strategic files are (re)loaded by cron
+  (defun my/daemon--reapply-run-research-override (loaded-file)
+    (when (or (string-suffix-p "gptel-auto-workflow-strategic.el" loaded-file)
+              (string-suffix-p "strategic-daemon-functions.el" loaded-file))
+      (when (fboundp 'slr-run-research)
+        (defalias 'gptel-auto-workflow-run-research 'slr-run-research)
+        (message "[daemon-fix] Re-applied run-research override after %s" loaded-file))))
+  (add-hook 'after-load-functions 'my/daemon--reapply-run-research-override))

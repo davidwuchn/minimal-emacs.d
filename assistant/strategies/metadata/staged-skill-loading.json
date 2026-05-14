@@ -1,0 +1,1 @@
+{"name":"staged-skill-loading","version":"1.0","hypothesis":"Staging skill loading by detected complexity tier improves focus and reduces noise.","axis":"E","components":["skill-staging","complexity-detection"]}
