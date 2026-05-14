@@ -30,6 +30,8 @@
 (require 'json)
 (require 'gptel-tools-agent)
 (require 'gptel-benchmark-subagent nil t)
+(require 'gptel-auto-workflow-research-cache nil t)
+(require 'gptel-auto-workflow-research-benchmark nil t)
 
 ;; Global variables to avoid closure issues in daemon environments
 ;; where lexical-binding may not be properly enabled during load
@@ -491,7 +493,9 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (directive-content (gptel-auto-workflow--load-directive-skill))
          (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
          ;; Load AutoTTS-style strategy guidance from replay store
-         (strategy-guidance (gptel-auto-workflow--load-strategy-guidance)))
+         (strategy-guidance (gptel-auto-workflow--load-strategy-guidance))
+         (source-guidance (when (fboundp 'gptel-auto-workflow--apply-source-priority-to-prompt)
+                            (gptel-auto-workflow--apply-source-priority-to-prompt ""))))
     (concat (or base-prompt "")
             "\n\n"
             "## Dynamic Context\n\n"
@@ -507,14 +511,19 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                         priority-targets
                         "\n\n")
               "")
-            (if strategy-guidance
-                (concat "### Strategy Performance (AutoTTS Replay Store)\n"
-                        strategy-guidance
-                        "\n\n")
-              "")
-            "### Recent Failure Patterns\n"
-            (gptel-auto-workflow--research-topics-string)
-            "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
+             (if strategy-guidance
+                 (concat "### Strategy Performance (AutoTTS Replay Store)\n"
+                         strategy-guidance
+                         "\n\n")
+               "")
+             (if (and source-guidance (not (string-empty-p source-guidance)))
+                 (concat "### Source Scheduling (AutoTTS)\n"
+                         source-guidance
+                         "\n\n")
+               "")
+             "### Recent Failure Patterns\n"
+             (gptel-auto-workflow--research-topics-string)
+             "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
 
 ;;; Meta-Learning Researcher Triggers
 
@@ -1589,21 +1598,34 @@ TOKENS-USED is estimated token count."
                         parsed-steps)))
     (make-directory trace-dir t)
     (let ((trace-data
-           (list :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
-                 :strategy strategy
-                 :findings-hash hash
-                 :prompt-length (length prompt)
+            (list :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                  :strategy strategy
+                  :findings-hash hash
+                  :findings output
+                  :output output
+                  :prompt-length (length prompt)
                  :output-length (length output)
                  :has-urls (if (string-match-p "https?://" output) t nil)
                  :has-code (if (string-match-p "```" output) t nil)
                  :has-structure (if (string-match-p "## .*\\n" output) t nil)
                  :source (if (string-match-p "davidwuchn" output) "own-repo" "external")
-                 :controller-decision (symbol-name (or controller-decision 'continue))
-                 :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
-                 :tokens-used (or tokens-used (/ (length output) 4))
+                  :controller-decision (symbol-name (or controller-decision 'continue))
+                  :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
+                  :ema-conf (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
+                                     gptel-auto-workflow--research-ema-conf)
+                                0.0)
+                  :ema-delta (or (and (fboundp 'gptel-auto-workflow--research-ema-delta)
+                                      (gptel-auto-workflow--research-ema-delta))
+                                 0.0)
+                  :tokens-used (or tokens-used (/ (length output) 4))
                  ;; Step-level traces for AutoTTS offline evaluation
-                 :steps all-steps
-                 :step-count (length all-steps)
+                  :steps all-steps
+                  :step-count (length all-steps)
+                  :turn-count (or (and (boundp 'gptel-auto-workflow--research-trace-log)
+                                       (length gptel-auto-workflow--research-trace-log))
+                                  1)
+                  :trace-log (and (boundp 'gptel-auto-workflow--research-trace-log)
+                                  gptel-auto-workflow--research-trace-log)
                  :metadata (list :tokens-estimate (/ (length output) 4)
                                 :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
                                 :step-count (length all-steps)
@@ -2037,6 +2059,13 @@ Uses gptel-auto-workflow-research-benchmark.el to:
                                                             (shell-quote-argument script)))))
               (message "[evolve] %s" output)))))
       (message "[evolve] Strategy evolution cycle complete"))))
+
+;; Keep the AutoTTS-enhanced controller authoritative for interactive loads too.
+;; The bootstrap already loads this after strategic.el; normal `require' needs the
+;; same override path so runtime and cron use one controller implementation.
+(let ((autotts-file (locate-library "strategic-daemon-functions")))
+  (when autotts-file
+    (load autotts-file nil 'nomessage)))
 
 (provide 'gptel-auto-workflow-strategic)
 

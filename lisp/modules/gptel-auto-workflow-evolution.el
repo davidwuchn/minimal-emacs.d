@@ -1040,10 +1040,12 @@ Returns string with table of source → keep rate."
         (dolist (o outcomes)
           (cond ((string= source "own-repo")
                  (setq own-repo-total (1+ own-repo-total))
-                 (when (plist-get o :kept) (setq own-repo-kept (1+ own-repo-kept))))
+                  (when (eq (plist-get o :kept) t)
+                    (setq own-repo-kept (1+ own-repo-kept))))
                 ((string= source "external")
                  (setq external-total (1+ external-total))
-                 (when (plist-get o :kept) (setq external-kept (1+ external-kept))))))))
+                 (when (eq (plist-get o :kept) t)
+                   (setq external-kept (1+ external-kept))))))))
     (setq content (concat content "## Source Effectiveness\n\n"))
     (if (or (> own-repo-total 0) (> external-total 0))
         (progn
@@ -1099,10 +1101,12 @@ Returns string with source strategy and controller awareness."
         (dolist (o outcomes)
           (cond ((string= source "own-repo")
                  (setq own-repo-total (1+ own-repo-total))
-                 (when (plist-get o :kept) (setq own-repo-kept (1+ own-repo-kept))))
+                  (when (eq (plist-get o :kept) t)
+                    (setq own-repo-kept (1+ own-repo-kept))))
                 ((string= source "external")
                  (setq external-total (1+ external-total))
-                 (when (plist-get o :kept) (setq external-kept (1+ external-kept))))))))
+                 (when (eq (plist-get o :kept) t)
+                   (setq external-kept (1+ external-kept))))))))
     (setq content (concat content "### Source Strategy (learned from outcomes)\n"))
     (cond ((and (> own-repo-total 0) (> external-total 0))
            (let ((own-rate (/ (float own-repo-kept) own-repo-total))
@@ -1279,7 +1283,19 @@ Analyzes which research topics and sources produce the best downstream results."
       (insert "- **arXiv**: Papers on agent architectures, meta-learning, code LLMs\n")
       (insert "- **HuggingFace**: New models, datasets, or spaces for code agents\n")
       (insert "- **Reddit**: r/emacs, r/LocalLLaMA, r/MachineLearning discussions\n\n")
-      
+      (insert "## Output Format\n\n")
+      (insert "Return a compact structured digest. End with JSON metadata so AutoTTS can replay decisions offline:\n\n")
+      (insert "```json\n")
+      (insert "{\n")
+      (insert "  \"strategy_used\": \"own-repos-first\",\n")
+      (insert "  \"sources_checked\": [\"davidwuchn/gptel\"],\n")
+      (insert "  \"topics_covered\": [\"nil-safety\"],\n")
+      (insert "  \"confidence_final\": 0.75,\n")
+      (insert "  \"insights_count\": 2,\n")
+      (insert "  \"tokens_estimate\": 2500\n")
+      (insert "}\n")
+      (insert "```\n\n")
+       
       ;; Instructions
       (insert "## Instructions\n\n")
       (insert "1. Use WebSearch tool to find 3-5 recent/relevant items per topic\n")
@@ -1407,9 +1423,13 @@ Uses agentskills.io standard scripts/ directory."
   (when (fboundp 'gptel-auto-workflow--run-strategy-evolution)
     (gptel-auto-workflow--run-strategy-evolution))
   
-  ;; Cross-layer feedback: inject controller config into researcher skill
+  ;; Cross-layer feedback: inject the latest controller config into researcher skill.
   (when (fboundp 'gptel-auto-workflow--update-skill-with-controller)
-    (gptel-auto-workflow--update-skill-with-controller)))
+    (let ((controller-config
+           (when (fboundp 'gptel-auto-workflow--load-autotts-controller)
+             (gptel-auto-workflow--load-autotts-controller))))
+      (when controller-config
+        (gptel-auto-workflow--update-skill-with-controller controller-config)))))
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.

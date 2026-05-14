@@ -5,7 +5,27 @@
 
 ## Current Session: AutoTTS + Self-Evolution Integration + Statistical Controller
 
-**Status:** All 6 gap fixes complete. Function collision resolved, statistical model loading implemented, feedback loop closed.
+**Status:** Deep integration pass complete. AutoTTS controller, researcher prompt, replay cache, and self-evolution feedback now share one live path.
+
+**Deep Integration Pass (2026-05-14):**
+- Unified runtime controller loading: `gptel-auto-workflow-strategic.el` now loads `strategic-daemon-functions.el`, replay cache, and benchmark module so cron and interactive paths use the same AutoTTS controller.
+- Controller config merge fixed: beta schedule, evolved `researcher-controller.json`, statistical model, and `researcher-feedback.sexp` now combine into one normalized plist with `:stop-threshold`, `:token-budget`, `:beta`, and source priorities.
+- Replay cache made production-aware: `gptel-auto-workflow-research-cache.el` now indexes existing `var/tmp/research-traces/*.json`, detects topics from outcomes/strategy/prompt, loads trace files by ID, and replays with stored EMA/turn state.
+- Research trace schema enriched: new traces now save raw `:findings`/`:output`, `:ema-conf`, `:ema-delta`, `:turn-count`, and `:trace-log` for offline replay.
+- Source scheduling now reaches the live researcher prompt via `gptel-auto-workflow--build-research-prompt`, not just a side skill file.
+- Researcher prompt now requires JSON metadata (`strategy_used`, `sources_checked`, `topics_covered`, `confidence_final`, `insights_count`, `tokens_estimate`) so future traces are replay-complete.
+- Outcome synthesis now uses actual downstream kept/discarded outcomes before falling back to output length.
+- Fixed `:json-false` truthiness bug: JSON false is no longer counted as kept in trace success, source effectiveness, or research batch summaries.
+- Fixed reward bridge write bug: `gptel-auto-workflow--update-trace-outcomes` now uses `erase-buffer` instead of undefined `erase`.
+- Self-evolution cross-layer hook fixed: `gptel-auto-workflow--evolve-all-skills` now passes the loaded controller config to `gptel-auto-workflow--update-skill-with-controller`.
+
+**Verification (Deep Pass):**
+- Full AutoTTS modules loaded in batch.
+- Full strategic stack loaded with `strategic-daemon-functions`, replay cache, and benchmark module active.
+- Byte-compiled changed AutoTTS/evolution modules; only existing cross-module/free-variable warnings remain.
+- Replay index verified: 15 traces indexed across `nil-safety`, `performance`, `general`, `error-handling`, and `async`.
+- Offline eval verified: `nil-safety` replay evaluated 4 cached traces with 0 LLM calls.
+- Trace synthesis verified: 15 traces loaded, 12 with known downstream outcomes, 10 successful after fixing JSON false handling.
 
 **Done (Today):**
 - **Phase 5 Complete** — Adaptive prompt integration (`db7cfae8`):
