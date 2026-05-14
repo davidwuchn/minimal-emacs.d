@@ -611,7 +611,13 @@ CALLBACK receives non-nil when approved and nil when rejected."
   (let ((summary (mapconcat (lambda (step)
                               (unless (proper-list-p step)
                                 (error "Programmatic aggregate-confirm requires proper plist steps, got: %S" step))
-                              (concat "- " (or (plist-get step :summary) "")))
+                              (let ((step-summary (plist-get step :summary)))
+                                (if (and step-summary (stringp step-summary) (not (string-empty-p step-summary)))
+                                    (concat "- " step-summary)
+                                  (let ((tool-name (plist-get step :tool-name)))
+                                    (if tool-name
+                                        (format "- %s" tool-name)
+                                      "- <unnamed step>")))))
                             plan "\n")))
     (funcall callback
              (y-or-n-p (format "Programmatic wants to run this mutating plan:\n%s\nApprove aggregate preview? "
