@@ -97,9 +97,7 @@ Each worktree gets its own isolated buffer for subagent overlays.")
   "Return configured project roots as unique expanded directory names.
 Results are cached until `gptel-auto-workflow-projects' changes."
   (gptel-auto-workflow--ensure-buffer-tables)
-  (let* ((projects-hash gptel-auto-workflow--normalized-projects-hash)
-         (projects-list-hash (gethash 'projects-list projects-hash))
-         (cached (and (consp gptel-auto-workflow--normalized-projects-cache)
+  (let ((cached (and (consp gptel-auto-workflow--normalized-projects-cache)
                      (eq (car gptel-auto-workflow--normalized-projects-cache)
                          gptel-auto-workflow-projects)
                      (cdr gptel-auto-workflow--normalized-projects-cache))))
