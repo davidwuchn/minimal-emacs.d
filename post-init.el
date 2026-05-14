@@ -100,4 +100,14 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
       (when (fboundp 'slr-run-research)
         (defalias 'gptel-auto-workflow-run-research 'slr-run-research)
         (message "[daemon-fix] Re-applied run-research override after %s" loaded-file))))
-  (add-hook 'after-load-functions 'my/daemon--reapply-run-research-override))
+  (add-hook 'after-load-functions 'my/daemon--reapply-run-research-override)
+  ;; Start periodic research timer once strategic module is loaded
+  (defun my/daemon--start-periodic-research (loaded-file)
+    (when (string-suffix-p "gptel-auto-workflow-strategic.el" loaded-file)
+      (when (and (fboundp 'gptel-auto-workflow-start-periodic-research)
+                 (not gptel-auto-workflow--research-timer))
+        (gptel-auto-workflow-start-periodic-research)
+        (message "[daemon] Auto-started periodic research timer (%ds)"
+                 gptel-auto-workflow-research-interval))
+      (remove-hook 'after-load-functions 'my/daemon--start-periodic-research)))
+  (add-hook 'after-load-functions 'my/daemon--start-periodic-research))
