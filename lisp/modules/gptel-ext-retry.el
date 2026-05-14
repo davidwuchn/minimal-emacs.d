@@ -336,7 +336,8 @@ Returns the number of messages whose reasoning_content was stripped."
                (my/gptel--collect-message-indices
                 messages
                 (lambda (msg)
-                  (and (my/gptel--message-role-p msg "assistant")
+                  (and (proper-list-p msg)
+                       (my/gptel--message-role-p msg "assistant")
                        (not (plist-get msg :tool_calls))
                        (plist-get msg :reasoning_content)
                        (not (equal "" (plist-get msg :reasoning_content))))))))
