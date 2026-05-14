@@ -1918,4 +1918,31 @@ Uses gptel-auto-workflow-research-benchmark.el to:
 
 (provide 'gptel-auto-workflow-strategic)
 
+;; ─── Trace Synthesizer ───
+
+(defun gptel-auto-workflow--bootstrap-traces ()
+  "Create synthetic traces from experiment results for controller learning."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (dir gptel-auto-workflow--research-trace-dir)
+         (n 0))
+    (make-directory dir t)
+    (dolist (r (seq-take results 20))
+      (let* ((kept (equal (plist-get r :decision) "kept"))
+             (h (sha1 (format "%s" (plist-get r :target))))
+             (f (expand-file-name (format "bs-%s.json" h) dir)))
+        (unless (file-exists-p f)
+          (with-temp-file f
+            (insert (json-encode
+                     (list :strategy "bootstrap"
+                           :confidence (if kept 0.8 0.3)
+                           :ema-conf (if kept 0.75 0.35)
+                           :ema-delta (if kept 0.06 -0.03)
+                           :output-length (if kept 1800 350)
+                           :has-urls nil :has-code t :has-structure t
+                           :source "own-repo" :turn-count 1
+                           :controller-decision (if kept "stop" "branch")
+                           :success-p kept :synthesized t))))
+          (cl-incf n))))
+    (message "[autotts] Bootstrapped %d traces" n) n))
+
 ;;; gptel-auto-workflow-strategic.el ends here
