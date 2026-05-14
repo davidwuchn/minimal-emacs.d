@@ -75,37 +75,40 @@ name strings."
 Returns PRESET unchanged if CANDIDATE is nil or malformed."
   (if (or (null candidate) (not (consp candidate)))
       preset
-    (let* ((override (copy-sequence preset))
-           (backend-name (car candidate))
-           (model-name (cdr candidate))
-           (backend-object (when (stringp backend-name)
-                             (gptel-auto-workflow--backend-object backend-name)))
-           (model-symbol
-            (gptel-auto-workflow--backend-model-symbol
-             backend-object model-name))
-           (max-output
-            (gptel-auto-workflow--model-max-output-tokens
-             (or model-symbol model-name)))
-           (existing-max-tokens
-            (let ((value (plist-get override :max-tokens)))
-              (cond
-               ((integerp value) value)
-               ((and (stringp value)
-                     (string-match-p "^[0-9]+$" value))
-                (string-to-number value))
-               (t nil)))))
-      (setq override (plist-put override :backend
-                                (or backend-object backend-name)))
-      (setq override (plist-put override :model
-                                (or model-symbol model-name)))
-      (when (and (integerp max-output) (> max-output 0))
-        (setq override
-              (plist-put override :max-tokens
-                         (if (and (integerp existing-max-tokens)
-                                  (> existing-max-tokens 0))
-                             (min existing-max-tokens max-output)
-                           max-output))))
-      override)))
+    (let ((effective-preset (or preset nil)))
+      (unless (or (null effective-preset) (plistp effective-preset))
+        (error "gptel-auto-workflow--rewrite-subagent-provider: preset must be a plist or nil, got: %S" effective-preset))
+      (let* ((override (copy-sequence effective-preset))
+             (backend-name (car candidate))
+             (model-name (cdr candidate))
+             (backend-object (when (stringp backend-name)
+                               (gptel-auto-workflow--backend-object backend-name)))
+             (model-symbol
+              (gptel-auto-workflow--backend-model-symbol
+               backend-object model-name))
+             (max-output
+              (gptel-auto-workflow--model-max-output-tokens
+               (or model-symbol model-name)))
+             (existing-max-tokens
+              (let ((value (plist-get override :max-tokens)))
+                (cond
+                 ((integerp value) value)
+                 ((and (stringp value)
+                       (string-match-p "^[0-9]+$" value))
+                  (string-to-number value))
+                 (t nil)))))
+        (setq override (plist-put override :backend
+                                  (or backend-object backend-name)))
+        (setq override (plist-put override :model
+                                  (or model-symbol model-name)))
+        (when (and (integerp max-output) (> max-output 0))
+          (setq override
+                (plist-put override :max-tokens
+                           (if (and (integerp existing-max-tokens)
+                                    (> existing-max-tokens 0))
+                               (min existing-max-tokens max-output)
+                             max-output))))
+        override))))
 
 (defun gptel-auto-workflow--activate-provider-failover (agent-type preset &optional reason skip-blacklist)
   "Mark PRESET's backend unavailable for this run and fail AGENT-TYPE over.
