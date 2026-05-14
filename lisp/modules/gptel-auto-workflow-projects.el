@@ -674,7 +674,8 @@ ORIG-FUN is the original function. WHERE is position/marker.
 Gets target buffer from gptel-fsm-info and creates overlay there."
   (let* ((fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
          (info (and fsm (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
-         (target-buf (and info (plist-get info :buffer))))
+         (valid-info (and (proper-list-p info) info))
+         (target-buf (and valid-info (plist-get valid-info :buffer))))
     (if (and target-buf (buffer-live-p target-buf))
         (with-current-buffer target-buf
           (funcall orig-fun where agent-type description))
