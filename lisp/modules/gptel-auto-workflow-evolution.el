@@ -1453,6 +1453,11 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (when (fboundp 'gptel-auto-workflow--run-autotts-evolution)
     (message "[auto-workflow] Running controller evolution from traces...")
     (gptel-auto-workflow--run-autotts-evolution))
+  ;; Step A.5: Controller code generation agent (AutoTTS-defining feature)
+  ;; Runs LLM-driven controller design: agent writes code, tests against replay store, iterates
+  (when (fboundp 'gptel-auto-workflow--run-controller-design-agent)
+    (message "[auto-workflow] Running controller design agent...")
+    (gptel-auto-workflow--run-controller-design-agent 3))
   ;; Step B: Skill evolution (TSV data → SKILL.md, uses {{strategy-guidance}} from step A)
   (gptel-auto-workflow--evolve-all-skills)
   ;; Run AutoTTS-style strategy evolution using benchmark results

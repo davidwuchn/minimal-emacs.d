@@ -173,6 +173,62 @@ Returns list of trace plists."
                          (file-name-nondirectory file) err)))))
     traces))
 
+(defun gptel-auto-workflow--split-traces (traces &optional train-ratio)
+  "Split TRACES into train and held-out validation sets by timestamp.
+TRAIN-RATIO defaults to 0.7 (70% train, 30% test).
+Returns plist (:train TRAIN-TRACES :test TEST-TRACES).
+Older traces go to train, newer to test (temporal split avoids data leakage).
+When fewer than 10 traces, all go to train (not enough for meaningful split)."
+  (let* ((ratio (or train-ratio 0.7))
+         (sorted (sort (copy-sequence traces)
+                      (lambda (a b)
+                        (let ((ta (plist-get a :timestamp))
+                              (tb (plist-get b :timestamp)))
+                          (if (and ta tb)
+                              (string< ta tb)
+                            t)))))
+         (n (length sorted))
+         (split-idx (floor (* n ratio))))
+    (if (< n 10)
+        (list :train sorted :test nil)
+      (list :train (seq-take sorted split-idx)
+            :test (seq-drop sorted split-idx)))))
+
+(defun gptel-auto-workflow--validate-on-held-out (controller-config test-traces)
+  "Evaluate CONTROLLER-CONFIG on held-out TEST-TRACES.
+Returns plist with (:test-accuracy :test-tokens :overfit-score).
+Compares train vs test performance to detect overfitting."
+  (when test-traces
+    (let* ((train-obj (gptel-auto-workflow--calculate-evolution-objective
+                       (gptel-auto-workflow--controller-evolution-results nil)
+                       controller-config))
+           (test-results
+            (mapcar (lambda (trace)
+                      (let* ((output-length (or (plist-get trace :output-length) 0))
+                             (has-urls (plist-get trace :has-urls))
+                             (source (plist-get trace :source))
+                             (own-repo (string= source "own-repo"))
+                             (success (if own-repo
+                                          (and has-urls (> output-length 1000))
+                                        (and has-urls (> output-length 2000)))))
+                        (list :output-length output-length
+                              :has-urls has-urls
+                              :source source
+                              :success success)))
+                    test-traces))
+           (test-successes (cl-count-if (lambda (r) (plist-get r :success)) test-results))
+           (test-rate (/ (float test-successes) (float (length test-results))))
+           (total-tokens (/ (apply '+ (mapcar (lambda (r) (plist-get r :output-length))
+                                             test-results))
+                          4.0))
+           ;; Overfit score: ratio of test/train performance (1.0 = no overfit, <0.7 = overfit)
+           (overfit-score (if (> train-obj 0) (- 1.0 (abs (- test-rate (/ train-obj 10.0)))) 1.0)))
+      (list :test-accuracy test-rate
+            :test-tokens total-tokens
+            :test-count (length test-traces)
+            :overfit-score (max 0.0 (min 1.0 overfit-score))
+            :overfit-warning (if (< overfit-score 0.3) t nil)))))
+
 (defun gptel-auto-workflow--evolve-controller-from-traces (traces)
   "AutoTTS-style controller evolution from research traces.
 Analyzes traces to update controller parameters.
@@ -612,6 +668,215 @@ Extract topic performance, source effectiveness, and EMA-outcome correlation."
               ema-decision-perf)
     ;; Persist synthesis so evolve_researcher.py can consume trace-level analysis
     (gptel-auto-workflow--save-trace-synthesis topic-perf source-perf)))
+
+;; ─── AutoTTS-Defining Feature: Controller Code Generation Agent ───
+
+(defun gptel-auto-workflow--run-controller-design-agent (&optional max-iterations)
+  "Run controller code generation agent — the AutoTTS-defining feature.
+An LLM agent designs controller code, tests against replay store (0 LLM calls),
+gets accuracy + token cost feedback, and rewrites the controller iteratively.
+MAX-ITERATIONS defaults to 5.
+This is how AutoTTS discovers strategies: the agent WRITES the controller,
+not just tunes parameters. The search space is the code itself."
+  (interactive)
+  (let* ((max-iters (or max-iterations 5))
+         (traces (gptel-auto-workflow--load-research-traces))
+         (split (gptel-auto-workflow--split-traces traces 0.8))
+         (train-traces (plist-get split :train))
+         (test-traces (plist-get split :test))
+         (current-controller (gptel-auto-workflow--load-autotts-controller))
+         (best-controller current-controller)
+         (best-objective 0.0)
+         (history nil))
+    (unless (and traces (> (length traces) 5))
+      (message "[controller-agent] Not enough traces (%d) for controller design"
+               (length traces))
+      (cl-return-from gptel-auto-workflow--run-controller-design-agent nil))
+    (message "[controller-agent] Starting controller design agent with %d traces (%d train, %d test)"
+             (length traces) (length train-traces) (or (length test-traces) 0))
+    (dotimes (iter max-iters)
+      (let* ((prompt (gptel-auto-workflow--controller-design-prompt
+                      current-controller best-controller best-objective
+                      train-traces iter max-iters))
+             (proposal (gptel-auto-workflow--call-controller-design-subagent prompt)))
+        ;; Evaluate proposed controller against train traces (0 LLM calls!)
+        (let* ((eval-result (gptel-auto-workflow--evaluate-controller-config
+                             proposal train-traces))
+               (new-objective (plist-get eval-result :objective))
+               (train-accuracy (plist-get eval-result :accuracy)))
+          ;; Validate on held-out test traces
+          (let ((test-result (when test-traces
+                               (gptel-auto-workflow--validate-on-held-out
+                                proposal test-traces)))
+                (test-accuracy (plist-get test-result :test-accuracy))
+                (overfit-score (plist-get test-result :overfit-score)))
+            (push (list :iteration iter :objective new-objective
+                       :train-accuracy train-accuracy
+                       :test-accuracy test-accuracy
+                       :overfit-score overfit-score
+                       :config proposal)
+                  history)
+            (message "[controller-agent] Iter %d: objective=%.4f (train=%.2f test=%.2f overfit=%.2f)"
+                     iter new-objective train-accuracy
+                     (or test-accuracy 0.0) (or overfit-score 1.0))
+            ;; Keep best (penalized by overfit)
+            (let ((penalized-obj (if (and overfit-score (< overfit-score 0.7))
+                                     (* new-objective overfit-score)
+                                   new-objective)))
+              (when (or (> penalized-obj best-objective) (= iter 0))
+                (setq best-objective penalized-obj
+                      best-controller proposal)
+                (message "[controller-agent] New best controller (objective=%.4f)" penalized-obj)))
+            ;; Update current controller for next iteration
+            (setq current-controller proposal)))))
+    ;; Save best controller
+    (when best-controller
+      (gptel-auto-workflow--save-evolved-controller best-controller)
+      (gptel-auto-workflow--update-skill-with-controller best-controller)
+      (message "[controller-agent] Design complete. Best objective=%.4f over %d iterations"
+               best-objective max-iters))
+    (list :best-controller best-controller :best-objective best-objective :history history)))
+
+(defun gptel-auto-workflow--controller-design-prompt (current-controller best-controller 
+                                                       best-objective train-traces iter max-iters)
+  "Generate prompt for controller design agent."
+  (let* ((trace-summary (gptel-auto-workflow--summarize-traces-for-prompt train-traces))
+         (current-params (format "own-repo-priority=%.2f ext-priority=%.2f stop-threshold=%.2f branch-threshold=%.2f beta=%.2f"
+                                (or (plist-get current-controller :own-repo-priority) 0.85)
+                                (or (plist-get current-controller :external-priority) 0.15)
+                                (or (plist-get current-controller :min-confidence-stop) 0.7)
+                                (or (plist-get current-controller :branch-threshold) 0.3)
+                                (or (plist-get current-controller :beta) 0.5))))
+    (format
+     "You are a controller design agent implementing the AutoTTS (Automated Test-Time Scaling) architecture.
+
+Your job: Design a controller configuration (plist) that decides for each research turn:
+- STOP when: confidence is high and rising
+- CONTINUE when: confidence is promising but not yet high enough
+- BRANCH when: confidence stagnates or drops (explore alternate direction)
+- CUT when: exceeded budget or quality is poor
+
+Current controller: %s
+Best controller so far: objective=%.4f
+Iteration: %d/%d
+
+Training traces summary (%d traces):
+%s
+
+Design an IMPROVED controller plist with these keys:
+- :own-repo-priority (0.0-1.0): weight for own GitHub repos
+- :external-priority (0.0-1.0): weight for external sources
+- :min-confidence-stop (0.0-1.0): threshold to STOP early
+- :branch-threshold (0.0-1.0): EMA delta below which to BRANCH
+- :max-tokens-budget (4000-16000): max tokens per turn
+- :min-insights-for-stop (1-8): minimum insights before stopping
+- :ema-alpha (0.1-0.9): smoothing factor for EMA
+- :beta (0.0-1.0): 0=conservative 1=aggressive
+- :max-turns (2-8): maximum research turns
+- :abandon-patience (1-5): turns of poor perf before abandoning branch
+
+Rules:
+1. Be specific with numbers — no ranges, no explanations
+2. Consider the trace patterns: what thresholds would have caught failures?
+3. Higher own-repo-priority correlates with better results (70%% insight rate vs 5%% for web)
+4. The goal: maximize objective = own-repo-success-rate × 0.6 + external-success-rate × 0.15 + avg-confidence × 0.15 + token-efficiency × 0.1
+5. Output ONLY a valid Elisp plist, no markdown, no commentary
+
+Output format exactly:
+(:own-repo-priority 0.85 :external-priority 0.15 :min-confidence-stop 0.72 :branch-threshold 0.25 :max-tokens-budget 8000 :min-insights-for-stop 3 :ema-alpha 0.5 :beta 0.6 :max-turns 4 :abandon-patience 2)"
+     current-params
+     best-objective
+     (1+ iter) max-iters
+     (length train-traces)
+     (truncate-string-to-width trace-summary 1500 nil nil "..."))))
+
+(defun gptel-auto-workflow--summarize-traces-for-prompt (traces)
+  "Create compact summary of TRACES for controller design prompt."
+  (let ((own-success 0) (own-total 0)
+        (ext-success 0) (ext-total 0)
+        (confidences nil)
+        (decisions (make-hash-table :test 'equal)))
+    (dolist (trace (seq-take traces 50))
+      (let ((source (plist-get trace :source))
+            (confidence (or (plist-get trace :confidence) 0))
+            (decision (or (plist-get trace :controller-decision) "continue"))
+            (success (gptel-auto-workflow--trace-success-p trace)))
+        (push confidence confidences)
+        (puthash decision (1+ (gethash decision decisions 0)) decisions)
+        (if (string= source "own-repo")
+            (progn (cl-incf own-total) (when success (cl-incf own-success)))
+          (progn (cl-incf ext-total) (when success (cl-incf ext-success))))))
+    (let ((avg-conf (if confidences (/ (apply '+ confidences) (float (length confidences))) 0.0)))
+      (format "Own-repo: %d/%d (%.0f%%) External: %d/%d (%.0f%%) Avg confidence: %.2f Decisions: %s"
+              own-success own-total (if (> own-total 0) (* 100 (/ (float own-success) own-total)) 0)
+              ext-success ext-total (if (> ext-total 0) (* 100 (/ (float ext-success) ext-total)) 0)
+              avg-conf
+              (mapconcat (lambda (k) (format "%s=%d" k (gethash k decisions)))
+                         (hash-table-keys decisions) " ")))))
+
+(defun gptel-auto-workflow--call-controller-design-subagent (prompt)
+  "Call subagent to design controller based on PROMPT.
+Parses the response as an Elisp plist and returns it."
+  (let ((response (condition-case nil
+                      (gptel-benchmark-call-subagent
+                       'analyzer "Controller Design" prompt
+                       (lambda (result)
+                         (let ((text (gptel-auto-workflow--normalize-response result)))
+                           text))
+                       120)
+                    (error nil))))
+    (if (and response (stringp response) (not (string-empty-p response)))
+        (condition-case nil
+            (let ((plist (read (concat "(" response ")"))))
+              (if (plistp plist) plist
+                (message "[controller-agent] Response not a valid plist: %s"
+                         (truncate-string-to-width response 100))
+                nil))
+          (error
+           (message "[controller-agent] Failed to parse controller response")
+           nil))
+      (message "[controller-agent] No response from controller design subagent")
+      nil)))
+
+(defun gptel-auto-workflow--evaluate-controller-config (config traces)
+  "Evaluate CONTROLLER-CONFIG against TRACES.
+Returns plist (:objective :accuracy :token-efficiency).
+This is an OFFLINE evaluation — 0 LLM calls."
+  (let ((success-count 0)
+        (total-tokens 0)
+        (total-confidence 0.0)
+        (n (length traces)))
+    (dolist (trace traces)
+      (let ((source (plist-get trace :source))
+            (output-length (or (plist-get trace :output-length) 0))
+            (confidence (or (plist-get trace :confidence) 0.0))
+            (success (gptel-auto-workflow--trace-success-p trace)))
+        (when success (cl-incf success-count))
+        (setq total-tokens (+ total-tokens (/ output-length 4)))
+        (setq total-confidence (+ total-confidence confidence))))
+    (let* ((accuracy (/ (float success-count) (float n)))
+           (avg-confidence (/ total-confidence (float n)))
+           (token-efficiency (if (> total-tokens 0)
+                                 (/ (float success-count) total-tokens)
+                               0.0))
+           (objective (+ (* accuracy 0.5)
+                        (* avg-confidence 0.3)
+                        (* token-efficiency 0.2))))
+      (list :objective objective
+            :accuracy accuracy
+            :token-efficiency token-efficiency
+            :success-count success-count
+            :total n))))
+
+(defun gptel-auto-workflow--trace-success-p (trace)
+  "Return non-nil if TRACE represents a successful research session."
+  (let ((has-urls (plist-get trace :has-urls))
+        (has-structure (plist-get trace :has-structure))
+        (output-length (or (plist-get trace :output-length) 0))
+        (source (plist-get trace :source)))
+    (or (and has-urls (> output-length 1000))
+        (and (string= source "own-repo") (> output-length 500) has-structure)
+        (> output-length 3000))))
 
 (defun gptel-auto-workflow--save-trace-synthesis (topic-perf source-perf)
   "Merge trace synthesis into existing evolve pipeline data files.
