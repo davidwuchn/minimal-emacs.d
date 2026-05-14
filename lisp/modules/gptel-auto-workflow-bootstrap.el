@@ -181,8 +181,8 @@
   ;; Phase 5 patch: daemon has persistent loading issue with strategic.el
   ;; where some functions aren't defined after load. Workaround until root
   ;; cause is identified.
-  (when (file-exists-p (expand-file-name "lisp/modules/phase5-patch.el" root))
-    (load-file (expand-file-name "lisp/modules/phase5-patch.el" root)))
+  (when (file-exists-p (expand-file-name "lisp/modules/strategic-daemon-functions.el" root))
+    (load-file (expand-file-name "lisp/modules/strategic-daemon-functions.el" root)))
   (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root))
   (cond
    ((string= action "auto-workflow")
