@@ -538,6 +538,8 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
 
 (defun gptel-sandbox--summarize-tool-call-plan (tool-name arg-forms)
   "Build a human-readable summary for TOOL-NAME with ARG-FORMS."
+  (when (null tool-name)
+    (error "Programmatic summarize-tool-call-plan requires a non-nil tool-name, got: nil"))
   (unless (proper-list-p arg-forms)
     (error "Programmatic tool-call requires a proper list of arguments, got: %S" arg-forms))
   (unless (cl-evenp (length arg-forms))
