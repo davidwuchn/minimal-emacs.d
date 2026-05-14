@@ -137,6 +137,8 @@ Maps (key . property) cons cells to cached values.")
   "Get PROPERTY for KEY from Eight Keys definitions.
 Uses memoization cache to avoid redundant lookups.
 Helper to reduce duplication in accessor functions."
+  (unless (symbolp key)
+    (error "Expected symbol for key, got: %s" (type-of key)))
   (let ((cache-key (cons key property)))
     (or (gethash cache-key gptel-benchmark--key-property-cache)
         (let* ((def (alist-get key gptel-benchmark-eight-keys-definitions))
