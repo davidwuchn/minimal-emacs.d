@@ -126,8 +126,12 @@ Uses simple heuristic unless dimensions are available."
 
 (defun my/gptel--parse-context-entry (entry)
   "Parse a context ENTRY into (path . props) form.
-ENTRY can be a string (path only) or a cons cell (path . props)."
-  (if (consp entry) entry (list entry)))
+ENTRY can be a string (path only) or a cons cell (path . props).
+Returns (list entry) for strings, or entry as-is for cons cells."
+  (cond
+   ((consp entry) entry)
+   ((stringp entry) (list entry))
+   (t (list entry))))
 
 ;;; Token Counting
 
