@@ -977,8 +977,9 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
     (let* ((raw-info (gptel-fsm-info fsm))
            ;; Guard: ensure info is a proper list before accessing with plist-get
            (info (and (listp raw-info) raw-info))
-           (retries (or (plist-get info :retries) 0)))
-      (when (= retries 0)
+           ;; Guard: protect plist-get from nil info
+           (retries (if info (or (plist-get info :retries) 0) 0)))
+      (when (and info (= retries 0)
         (let ((limit (my/gptel--effective-byte-limit info))
               (repaired (my/gptel--repair-thinking-tool-call-messages info)))
           (when (> repaired 0)
@@ -1002,7 +1003,7 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                   (message "gptel: WARNING: Payload still %dKB after %d passes of compaction (limit %dKB)"
                            (/ bytes 1024) pass (/ limit 1024))
                 (message "gptel: Compaction complete: %d items trimmed across %d pass(es), payload now %dKB"
-                         trimmed-total pass (/ bytes 1024))))))))))
+                         trimmed-total pass (/ bytes 1024)))))))))))
 
 (advice-add 'gptel-curl-get-response :before #'my/gptel--compact-payload)
 
