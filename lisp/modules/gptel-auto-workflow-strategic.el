@@ -311,14 +311,18 @@ EDGE CASE: Returns empty string if no patterns found or git unavailable."
       "")))
 
 (defun gptel-auto-workflow--load-research-skill ()
-  "Load evolved research skill from FINDINGS.md.
-Returns skill content or empty string if not found.
-Uses standard skill loader for consistency."
-  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/FINDINGS")))
+  "Load evolved research findings from var/tmp/evolution/findings.md.
+Returns findings content or empty string if not found."
+  (let* ((file (expand-file-name "var/tmp/evolution/findings.md"
+                                 (gptel-auto-workflow--effective-project-root)))
+         (content (when (file-exists-p file)
+                    (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string)))))
     (if (or (null content) (string-empty-p content))
         ""
       (progn
-        (message "[research] Loaded evolved skill (%d chars)" (length content))
+        (message "[research] Loaded evolved findings (%d chars)" (length content))
         content))))
 
 (defun gptel-auto-workflow--load-directive-skill ()

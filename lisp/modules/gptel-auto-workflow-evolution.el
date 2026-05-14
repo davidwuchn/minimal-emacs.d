@@ -282,12 +282,15 @@ Writes to optimization-skills/ as skill files that the prompt builder consumes."
     (let* ((_git-facts (gptel-auto-workflow--git-raw-facts))
              (knowledge-dir (expand-file-name "mementum/knowledge"
                                               (gptel-auto-workflow--worktree-base-root)))
-             (token-skill-file (expand-file-name "token-efficiency.md" knowledge-dir))
+             (token-skill-file (expand-file-name "var/tmp/evolution/token-efficiency.md"
+                                                 (gptel-auto-workflow--worktree-base-root)))
              (skills-dir (expand-file-name "assistant/skills/auto-workflow"
                                            (gptel-auto-workflow--worktree-base-root)))
              (_mutation-skill-file (expand-file-name "mutations.md" skills-dir)))
 
       (make-directory knowledge-dir t)
+      (make-directory (expand-file-name "var/tmp/evolution"
+                                        (gptel-auto-workflow--worktree-base-root)) t)
 
       ;; ─── Token Efficiency Data (moved from skill to mementum/knowledge) ───
       ;; Written to mementum/knowledge/ as learned data, not a skill definition.
@@ -829,13 +832,13 @@ Creates/updates knowledge pages per research strategy."
     synthesized))
 
 (defun gptel-auto-workflow--generate-research-skill ()
-  "Generate FINDINGS.md skill file from research knowledge.
-This skill is consumed by the researcher prompt builder."
-  (let* ((skills-dir (expand-file-name "assistant/skills/auto-workflow"
-                                       (gptel-auto-workflow--worktree-base-root)))
-         (knowledge-dir (expand-file-name "mementum/knowledge"
+  "Generate findings file from research knowledge consumed by prompt builder.
+Writes to var/tmp/evolution/findings.md."
+  (let* ((evolution-dir (expand-file-name "var/tmp/evolution"
                                           (gptel-auto-workflow--worktree-base-root)))
-         (skill-file (expand-file-name "FINDINGS.md" skills-dir))
+         (knowledge-dir (expand-file-name "mementum/knowledge"
+                                         (gptel-auto-workflow--worktree-base-root)))
+         (skill-file (expand-file-name "findings.md" evolution-dir))
          (knowledge-files (when (file-directory-p knowledge-dir)
                             (directory-files knowledge-dir t "research-insights-.+\\.md$")))
          (best-strategy nil)
@@ -902,8 +905,8 @@ This skill is consumed by the researcher prompt builder."
        (when raw-findings
          (push raw-findings recent-insights)))
      
-     ;; Generate skill file
-    (make-directory skills-dir t)
+      ;; Generate skill file
+    (make-directory evolution-dir t)
     (with-temp-file skill-file
       (insert "---\n")
       (insert "name: research-strategies\n")
@@ -1137,7 +1140,7 @@ Analyzes which research topics and sources produce the best downstream results."
                              (and (plist-get r :research-hash)
                                   (not (equal (plist-get r :research-hash) "none"))))
                            results))
-         (skill-file (expand-file-name "assistant/skills/auto-workflow/RESEARCHER.md"
+         (skill-file (expand-file-name "var/tmp/evolution/researcher.md"
                                        (gptel-auto-workflow--worktree-base-root)))
          (total-research (length research-results))
          (kept-research (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept"))

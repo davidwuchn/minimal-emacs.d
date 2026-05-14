@@ -71,7 +71,7 @@ Returns cached content or nil if missing/stale."
   "Load token efficiency data from mementum/knowledge/.
 Returns plist with :compression :section-stats or nil.
 Reads from mementum/knowledge/token-efficiency.md directly."
-  (let* ((file (expand-file-name "mementum/knowledge/token-efficiency.md"
+  (let* ((file (expand-file-name "var/tmp/evolution/token-efficiency.md"
                                  (or (gptel-auto-workflow--worktree-base-root)
                                      default-directory)))
          (content (when (file-exists-p file)
