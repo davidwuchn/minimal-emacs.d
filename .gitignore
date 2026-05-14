@@ -37,6 +37,7 @@ lisp/modules/*.elc
 !lisp/modules/gptel-workflow-*.el
 !lisp/modules/gptel-auto-workflow*.el
 !lisp/modules/strategic-daemon-functions.el
+!lisp/modules/gptel-auto-workflow-research-cache.el
 !lisp/modules/gptel-tools-agent*.el
 !eca/
 !eca/AGENTS.md

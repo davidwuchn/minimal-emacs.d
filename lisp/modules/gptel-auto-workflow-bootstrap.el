@@ -183,6 +183,9 @@
   ;; cause is identified.
   (when (file-exists-p (expand-file-name "lisp/modules/strategic-daemon-functions.el" root))
     (load-file (expand-file-name "lisp/modules/strategic-daemon-functions.el" root)))
+  ;; Research trace replay cache for AutoTTS-style offline evaluation
+  (when (file-exists-p (expand-file-name "lisp/modules/gptel-auto-workflow-research-cache.el" root))
+    (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-research-cache.el" root)))
   (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root))
   (cond
    ((string= action "auto-workflow")
