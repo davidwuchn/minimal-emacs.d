@@ -716,11 +716,12 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
          ((and (consp resp) (eq (car resp) 'reasoning))
           ;; Handle reasoning blocks (e.g., <think> tags) by extracting the text
           (let ((reasoning-text (cdr resp)))
-            (unless (gptel-agent-loop--check-aborted state ov)
-              (let ((final-turn (not (plist-get info :tool-use))))
-                (when final-turn
-                  (gptel-agent-loop--cleanup-overlay ov)
-                  (gptel-agent-loop--handle-string-response state reasoning-text use-tools))))))
+            (when (stringp reasoning-text)
+              (unless (gptel-agent-loop--check-aborted state ov)
+                (let ((final-turn (not (plist-get info :tool-use))))
+                  (when final-turn
+                    (gptel-agent-loop--cleanup-overlay ov)
+                    (gptel-agent-loop--handle-string-response state reasoning-text use-tools)))))))
 
          ((eq resp 'abort)
           (gptel-agent-loop--handle-aborted-state state ov t))
