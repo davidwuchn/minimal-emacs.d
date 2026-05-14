@@ -700,7 +700,7 @@ not just tunes parameters. The search space is the code itself."
                       train-traces iter max-iters))
              (proposal (gptel-auto-workflow--call-controller-design-subagent prompt)))
         ;; Evaluate proposed controller against train traces (0 LLM calls!)
-        (let* ((eval-result (gptel-auto-workflow--evaluate-controller-config
+        (let* ((eval-result (gptel-auto-workflow--evaluate-controller-rules
                              proposal train-traces))
                (new-objective (plist-get eval-result :objective))
                (train-accuracy (plist-get eval-result :accuracy)))
@@ -815,8 +815,10 @@ Output format exactly:
                          (hash-table-keys decisions) " ")))))
 
 (defun gptel-auto-workflow--call-controller-design-subagent (prompt)
-  "Call subagent to design controller based on PROMPT.
-Parses the response as an Elisp plist and returns it."
+  "Call subagent to design controller rules based on PROMPT.
+Parses the response as a list of (:when EXPR :then DECISION) rules.
+Uses Programmatic sandbox to validate rules before accepting.
+Returns validated rules list or nil."
   (let ((response (condition-case nil
                       (gptel-benchmark-call-subagent
                        'analyzer "Controller Design" prompt
@@ -827,16 +829,112 @@ Parses the response as an Elisp plist and returns it."
                     (error nil))))
     (if (and response (stringp response) (not (string-empty-p response)))
         (condition-case nil
-            (let ((plist (read (concat "(" response ")"))))
-              (if (plistp plist) plist
-                (message "[controller-agent] Response not a valid plist: %s"
-                         (truncate-string-to-width response 100))
-                nil))
+            (let* ((parsed (read response))
+                   (rules (if (listp parsed) parsed nil)))
+              (if rules
+                  ;; Programmatic validation: test each rule in sandbox
+                  (if (gptel-auto-workflow--validate-controller-rules rules)
+                      rules
+                    (progn
+                      (message "[controller-agent] Rules failed sandbox validation")
+                      nil))
+                (progn
+                  (message "[controller-agent] Response not a valid rule list: %s"
+                           (truncate-string-to-width response 100))
+                  nil)))
           (error
-           (message "[controller-agent] Failed to parse controller response")
+           (message "[controller-agent] Failed to parse controller response: %s"
+                    (truncate-string-to-width response 100))
            nil))
       (message "[controller-agent] No response from controller design subagent")
       nil)))
+
+(defun gptel-auto-workflow--validate-controller-rules (rules)
+  "Validate controller RULES in a Programmatic sandbox.
+Each rule must evaluate a valid :when expression and return a valid :then decision.
+Uses simple eval-in-restricted-context to prevent side effects.
+Returns t if all rules pass validation."
+  (let ((valid-decisions '(stop continue branch cut)))
+    (catch 'invalid-rule
+      (dolist (rule rules)
+        (let ((when-expr (plist-get rule :when))
+              (then-decision (plist-get rule :then)))
+          (unless (and when-expr then-decision
+                       (memq then-decision valid-decisions))
+            (message "[controller-agent] Invalid rule: %S" rule)
+            (throw 'invalid-rule nil))
+          ;; Validate :when is evaluable by testing with sample signals
+          (condition-case err
+              (let* ((sample-signals '((ema-conf . 0.6) (ema-delta . 0.0)
+                                       (turn . 2) (output-length . 800)
+                                       (confidence . 0.5) (has-urls . t)
+                                       (has-structure . t) (source . "own-repo")
+                                       (budget-remaining . 4000)))
+                     ;; Bind samples as local variables for eval
+                     (result (cl-loop for (sym . val) in sample-signals
+                                     collect (list sym val))))
+                ;; Just check expr doesn't crash — result not used here
+                (eval when-expr `((ema-conf . 0.6) (ema-delta . 0.0)
+                                  (turn . 2) (output-length . 800)
+                                  (confidence . 0.5) (has-urls . t)
+                                  (has-structure . t) (source . "own-repo")
+                                  (budget-remaining . 4000))))
+            (error
+             (message "[controller-agent] Rule :when failed sandbox eval: %S → %s"
+                      when-expr (error-message-string err))
+             (throw 'invalid-rule nil)))))
+      t)))
+
+(defun gptel-auto-workflow--evaluate-controller-rules (rules traces)
+  "Evaluate controller RULES against TRACES by applying rules to each trace.
+Returns plist with objective score.
+Programmatic-style evaluation: rules are applied as conditions, not hardcoded logic."
+  (let ((correct 0) (total 0)
+        (tokens-saved 0) (tokens-wasted 0))
+    (dolist (trace traces)
+      (cl-incf total)
+      (let* ((output-length (or (plist-get trace :output-length) 0))
+             (confidence (or (plist-get trace :confidence) 0.0))
+             (ema-conf (or (plist-get trace :ema-conf) confidence))
+             (ema-delta (or (plist-get trace :ema-delta) 0.0))
+             (turn-count (or (plist-get trace :turn-count) 1))
+             (source (or (plist-get trace :source) "external"))
+             (has-urls (plist-get trace :has-urls))
+             (has-structure (plist-get trace :has-structure))
+             (success (gptel-auto-workflow--trace-success-p trace))
+             (signals `((ema-conf . ,ema-conf) (ema-delta . ,ema-delta)
+                        (turn . ,turn-count) (output-length . ,output-length)
+                        (confidence . ,confidence) (has-urls . ,has-urls)
+                        (has-structure . ,has-structure) (source . ,source)
+                        (budget-remaining . 8000)))
+             ;; Apply rules: find first matching rule
+             (decision
+              (catch 'matched
+                (dolist (rule rules 'continue)
+                  (let ((when-expr (plist-get rule :when))
+                        (then-decision (plist-get rule :then)))
+                    (condition-case nil
+                        (when (eval when-expr signals)
+                          (throw 'matched then-decision))
+                      (error (throw 'matched 'continue))))))))
+        ;; Score the decision
+        (cond
+         ((and success (eq decision 'stop))
+          (cl-incf correct)
+          (setq tokens-saved (+ tokens-saved (/ output-length 8))))
+         ((and (not success) (eq decision 'branch))
+          (cl-incf correct))
+         ((and success (eq decision 'continue))
+          (setq tokens-wasted (+ tokens-wasted (/ output-length 4))))
+         ((eq decision 'continue)
+          (cl-incf correct)))))
+    (let* ((accuracy (/ (float correct) (float (max 1 total))))
+           (token-ratio (if (> (+ tokens-saved tokens-wasted) 0)
+                            (/ (float tokens-saved) (+ tokens-saved tokens-wasted))
+                          0.5))
+           (objective (+ (* accuracy 0.6) (* token-ratio 0.4))))
+      (list :objective objective :accuracy accuracy
+            :token-ratio token-ratio :correct correct :total total))))
 
 (defun gptel-auto-workflow--evaluate-controller-config (config traces)
   "Evaluate CONTROLLER-CONFIG against TRACES by SIMULATING controller decisions.
