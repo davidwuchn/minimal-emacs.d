@@ -540,6 +540,9 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
   "Build a human-readable summary for TOOL-NAME with ARG-FORMS."
   (unless (proper-list-p arg-forms)
     (error "Programmatic tool-call requires a proper list of arguments, got: %S" arg-forms))
+  (unless (cl-evenp (length arg-forms))
+    (error "Programmatic tool-call requires keyword/value pairs, got odd length: %d"
+           (length arg-forms)))
   (let (parts)
     (while arg-forms
       (let ((key (pop arg-forms))
