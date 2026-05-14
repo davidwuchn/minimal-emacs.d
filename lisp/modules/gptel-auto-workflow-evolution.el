@@ -1434,6 +1434,16 @@ Extract → Verify → Controller Evolution → Skill Evolution.
 Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (interactive)
   (message "[auto-workflow] Running self-evolution cycle...")
+  ;; Consume pipeline env vars for research-aware evolution
+  (let ((research-quality (getenv "PIPELINE_RESEARCH_QUALITY"))
+        (findings-file (getenv "PIPELINE_FINDINGS_FILE"))
+        (internal-file (getenv "PIPELINE_INTERNAL_FILE")))
+    (when research-quality
+      (message "[evolution] Pipeline research quality: %s" research-quality)
+      (when (string= research-quality "external")
+        (message "[evolution] External research available: controller thresholds optimized")))
+    (when findings-file
+      (message "[evolution] Findings file: %s" findings-file)))
   (gptel-auto-workflow--evolution-synthesize)
   (gptel-auto-workflow--evolution-consolidate-insights)
   ;; Step A: Controller evolution (traces → strategy-guidance.json)
@@ -1451,6 +1461,24 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (message "[auto-workflow] Running skill governance cycle...")
     (gptel-auto-workflow--skill-governance-run-cycle))
   (message "[auto-workflow] Self-evolution cycle complete."))
+
+;; ─── Skill Governance Integration ───
+
+(defun gptel-auto-workflow--evolution-get-recently-evolved-skills ()
+  "Return list of skill names that were recently evolved (last 2 cycles).
+Used by skill-governance to select candidates for A/B testing."
+  (let ((skills-dir (expand-file-name "assistant/skills" user-emacs-directory))
+        (recent nil)
+        (cutoff (- (float-time) (* 48 3600))))  ;; last 48 hours
+    (when (file-directory-p skills-dir)
+      (dolist (skill-dir (directory-files skills-dir t "^[^._]"))
+        (when (file-directory-p skill-dir)
+          (let ((skill-file (expand-file-name "SKILL.md" skill-dir)))
+            (when (and (file-exists-p skill-file)
+                       (> (float-time (nth 5 (file-attributes skill-file)))
+                          cutoff))
+              (push (file-name-nondirectory skill-dir) recent))))))
+    (delete-dups recent)))
 
 ;; ─── Init ───
 

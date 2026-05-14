@@ -201,8 +201,8 @@ If branch exists locally, deletes it first to avoid conflicts."
   "Delete worktree for TARGET from hash table.
 Also deletes the associated branch.
 Uses git CLI directly to avoid magit issues."
-  (let* ((state (or (gethash target gptel-auto-workflow--worktree-state)
-                    (list)))
+  (let* ((raw-state (gethash target gptel-auto-workflow--worktree-state))
+         (state (if (proper-list-p raw-state) raw-state (list)))
          (worktree-dir (plist-get state :worktree-dir))
          (branch (plist-get state :current-branch)))
     (when worktree-dir

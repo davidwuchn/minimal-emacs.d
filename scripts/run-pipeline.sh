@@ -126,6 +126,10 @@ log "Stopping any existing daemons to load latest code..."
 AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
 sleep 2
 
+# ─── Clear stale findings to ensure fresh research ───
+rm -f "$FINDINGS_FILE" "$INTERNAL_FILE"
+log "Cleared stale findings files"
+
 # ─── Step 1: Research ───
 log "=== Step 1: Research ==="
 # The cron script's research action starts daemon, queues job, and returns.
