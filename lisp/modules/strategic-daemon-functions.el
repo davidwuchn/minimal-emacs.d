@@ -463,5 +463,102 @@ Saves trace, logs results, and digests findings."
      ;; Always pass findings to callback
      (funcall callback digested))))
 
+;; Source classification (aligned / neutral / deviant)
+(defvar gptel-auto-workflow--source-effectiveness-table (make-hash-table :test 'equal)
+  "Table tracking source effectiveness scores.")
+
+(defun gptel-auto-workflow--extract-consensus (findings)
+  "Extract consensus topics/techniques from FINDINGS.
+Returns list of normalized keywords representing the main findings."
+  (let ((text (downcase (or findings "")))
+        (keywords '()))
+    ;; Extract technique names (lines starting with ## or containing technique)
+    (with-temp-buffer
+      (insert text)
+      (goto-char (point-min))
+      (while (re-search-forward "## \\([^\n]+\\)" nil t)
+        (push (downcase (string-trim (match-string 1))) keywords)))
+    ;; Extract module names
+    (when (string-match-p "gptel-" text)
+      (push "gptel" keywords))
+    (when (string-match-p "nucleus" text)
+      (push "nucleus" keywords))
+    (when (string-match-p "mementum" text)
+      (push "mementum" keywords))
+    ;; Deduplicate and return
+    (delete-dups (nreverse keywords))))
+
+(defun gptel-auto-workflow--source-agrees-p (source findings)
+  "Check if SOURCE content agrees with FINDINGS consensus.
+Returns non-nil if source mentions similar topics/techniques."
+  (let ((source-text (downcase (or source "")))
+        (consensus (gptel-auto-workflow--extract-consensus findings)))
+    (and consensus
+         (> (length consensus) 0)
+         (cl-some (lambda (topic)
+                   (string-match-p (regexp-quote topic) source-text))
+                 consensus))))
+
+(defun gptel-auto-workflow--source-deviant-p (source findings)
+  "Check if SOURCE contradicts FINDINGS or produces low-quality output.
+Returns non-nil if source is empty, error-like, or contradicts consensus."
+  (let ((source-text (or source ""))
+        (consensus (gptel-auto-workflow--extract-consensus findings)))
+    (or (string-empty-p source-text)
+        (< (length source-text) 200)
+        (string-match-p "error\\|failed\\|timeout\\|unavailable" (downcase source-text))
+        ;; Source mentions topics but none match consensus
+        (and consensus
+             (> (length consensus) 0)
+             (not (cl-some (lambda (topic)
+                            (string-match-p (regexp-quote topic) (downcase source-text)))
+                          consensus))))))
+
+(defun gptel-auto-workflow--classify-source (source findings)
+  "Classify SOURCE based on agreement with FINDINGS consensus.
+Returns symbol: aligned, neutral, or deviant."
+  (cond
+   ;; Empty or error → deviant
+   ((or (null source) (string-empty-p (or source "")))
+    'deviant)
+   ;; Agrees with consensus → aligned
+   ((gptel-auto-workflow--source-agrees-p source findings)
+    'aligned)
+   ;; Contradicts or low quality → deviant
+   ((gptel-auto-workflow--source-deviant-p source findings)
+    'deviant)
+   ;; No clear signal → neutral
+   (t 'neutral)))
+
+(defun gptel-auto-workflow--update-source-effectiveness (source classification quality)
+  "Update effectiveness score for SOURCE based on CLASSIFICATION and QUALITY."
+  (let* ((current (gethash source gptel-auto-workflow--source-effectiveness-table
+                          (list :aligned 0 :neutral 0 :deviant 0 :total-quality 0.0 :count 0)))
+         (new-count (1+ (plist-get current :count)))
+         (new-quality (+ (plist-get current :total-quality) quality)))
+    (plist-put current classification (1+ (plist-get current classification)))
+    (plist-put current :total-quality new-quality)
+    (plist-put current :count new-count)
+    (plist-put current :avg-quality (/ new-quality new-count))
+    (puthash source current gptel-auto-workflow--source-effectiveness-table)))
+
+(defun gptel-auto-workflow--get-source-effectiveness (source)
+  "Get effectiveness data for SOURCE.
+Returns plist with :aligned :neutral :deviant :avg-quality."
+  (or (gethash source gptel-auto-workflow--source-effectiveness-table)
+      (list :aligned 0 :neutral 0 :deviant 0 :avg-quality 0.0)))
+
+(defun gptel-auto-workflow--source-priority-score (source)
+  "Calculate priority score for SOURCE based on effectiveness.
+Higher score = more aligned and higher quality."
+  (let ((stats (gptel-auto-workflow--get-source-effectiveness source)))
+    (if (> (plist-get stats :count) 0)
+        (let ((aligned-ratio (/ (float (plist-get stats :aligned))
+                               (plist-get stats :count)))
+              (quality (or (plist-get stats :avg-quality) 0.0)))
+          (+ (* aligned-ratio 0.7)    ;; 70% weight on alignment
+             (* quality 0.3)))        ;; 30% weight on quality
+      0.5)))                           ;; Default: neutral
+
 (provide 'strategic-daemon-functions)
 ;;; strategic-daemon-functions.el ends here
