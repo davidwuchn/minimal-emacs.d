@@ -837,7 +837,8 @@ not just tunes parameters. The search space is the code itself."
         (gptel-auto-workflow--update-skill-with-controller best-controller)
         (message "[controller-agent] Design complete. Best objective=%.4f over %d iterations"
                  best-objective max-iters))
-      (list :best-controller best-controller :best-objective best-objective :history history))))
+       (list :best-controller best-controller :best-objective best-objective :history history))))
+
 
 (defun gptel-auto-workflow--controller-design-prompt (current-controller best-controller 
                                                        best-objective train-traces iter max-iters)
@@ -1119,31 +1120,35 @@ This is an OFFLINE evaluation — 0 LLM calls."
 Reads RESULTS-TSV-PATH, finds the research trace that led to each experiment,
 and updates trace metadata with actual experiment outcomes.
 Closes the loop: research strategy → experiment → outcome → controller learning."
-  (let* ((traces (gptel-auto-workflow--load-research-traces))
-         (updated 0)
-         (results (gptel-auto-workflow--parse-tsv-results results-tsv-path)))
-    (when traces
-      (dolist (result results)
-        (let* ((target (plist-get result :target))
-               (decision (plist-get result :decision))
-               (score (or (plist-get result :score) 0.0))
-               (success-p (equal decision "kept")))
-          (when (and target success-p)
-            (catch 'trace-linked
-              (dolist (trace traces)
-                (let ((trace-strategy (plist-get trace :strategy)))
-                  (when (and trace-strategy
-                             (not (plist-get trace :outcome-linked)))
-                    (plist-put trace :experiment-target target)
-                    (plist-put trace :experiment-decision decision)
-                    (plist-put trace :experiment-score score)
-                    (plist-put trace :experiment-success t)
-                    (plist-put trace :outcome-linked t)
-                    (cl-incf updated)
-                    (throw 'trace-linked t)))))))))
+  (cl-block gptel-auto-workflow--bridge-trace-outcomes
+   (let* ((traces (gptel-auto-workflow--load-research-traces))
+          (updated 0)
+          (results (gptel-auto-workflow--parse-tsv-results results-tsv-path)))
+    (unless traces
+      (cl-return-from gptel-auto-workflow--bridge-trace-outcomes 0))
+    (dolist (result results)
+      (let* ((target (plist-get result :target))
+             (decision (plist-get result :decision))
+             (score (or (plist-get result :score) 0.0))
+             (success-p (equal decision "kept")))
+        (when (and target success-p)
+          (dolist (trace traces)
+            (let ((trace-strategy (plist-get trace :strategy)))
+              (when (and trace-strategy
+                         (not (plist-get trace :outcome-linked)))
+                (plist-put trace :experiment-target target)
+                (plist-put trace :experiment-decision decision)
+                (plist-put trace :experiment-score score)
+                (plist-put trace :experiment-success t)
+                (plist-put trace :outcome-linked t)
+                (cl-incf updated)
+                (cl-return)))))))
     (message "[trace-bridge] Bridged %d traces to experiment outcomes (%d results)"
              updated (length results))
-    updated))
+    updated)))
+    (message "[trace-bridge] Bridged %d traces to experiment outcomes (%d results)"
+             updated (length results))
+    updated)))
 
 (defun gptel-auto-workflow--parse-tsv-results (tsv-path)
   "Parse TSV experiment results file into list of plists.

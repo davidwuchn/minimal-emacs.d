@@ -97,7 +97,9 @@ Each worktree gets its own isolated buffer for subagent overlays.")
   "Return configured project roots as unique expanded directory names.
 Results are cached until `gptel-auto-workflow-projects' changes."
   (gptel-auto-workflow--ensure-buffer-tables)
-  (let ((cached (and (consp gptel-auto-workflow--normalized-projects-cache)
+  (let* ((projects-hash gptel-auto-workflow--normalized-projects-hash)
+         (projects-list-hash (gethash 'projects-list projects-hash))
+         (cached (and (consp gptel-auto-workflow--normalized-projects-cache)
                      (eq (car gptel-auto-workflow--normalized-projects-cache)
                          gptel-auto-workflow-projects)
                      (cdr gptel-auto-workflow--normalized-projects-cache))))
@@ -443,17 +445,17 @@ and invoke it when the queued job actually finishes."
                                (plist-put gptel-auto-workflow--stats :phase label))
                          (when (fboundp 'gptel-auto-workflow--persist-status)
                            (gptel-auto-workflow--persist-status))
-                         (condition-case err
-                             (if use-async
-                                 (funcall fn finish-job)
-                               (progn
-                                 (funcall fn)
-                                 (funcall finish-job)))
-                           (error
-                            (setq gptel-auto-workflow--stats
-                                  (plist-put gptel-auto-workflow--stats :phase "error"))
-                            (message "[%s] Job failed: %s" label err)
-                            (funcall finish-job err)))))))))
+                          (condition-case err
+                              (if use-async
+                                  (funcall fn finish-job)
+                                (progn
+                                  (funcall fn)
+                                  (funcall finish-job)))
+                            (error
+                             (setq gptel-auto-workflow--stats
+                                   (plist-put gptel-auto-workflow--stats :phase "error"))
+                             (message "[%s] Job failed: %s" label err)
+                             (funcall finish-job err)))))))))
       'queued)))
 
 (defun gptel-auto-workflow-queue-all-projects ()

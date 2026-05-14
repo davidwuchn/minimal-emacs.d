@@ -454,9 +454,9 @@ Returns nil if data not available."
               (let ((total-exp (gethash "total_experiments" data 0))
                     (total-kept 0))
                 ;; Calculate total kept across all topics
-                (maphash (lambda (topic stats)
-                           (setq total-kept (+ total-kept (gethash "kept" stats 0))))
-                         topics)
+                (cl-flet ((sum-kept (_topic stats)
+                            (setq total-kept (+ total-kept (gethash "kept" stats 0)))))
+                  (maphash #'sum-kept topics))
                 (list :effectiveness (if (> total-exp 0)
                                          (round (/ (* 100.0 total-kept) total-exp))
                                        0)
@@ -529,15 +529,13 @@ Returns placeholder message if TOPICS is nil or empty."
           (zerop (hash-table-count topics)))
       "*No topic performance data available.*"
     (let ((topic-list nil))
-      ;; Convert hash table to list for sorting
-      (maphash (lambda (topic stats)
-                 (let ((success-rate (gethash "success_rate" stats 0))
-                       (total (gethash "total_experiments" stats 0))
-                       (kept (gethash "kept" stats 0))
-                       (trend (gethash "trend" stats "stable")))
-                   (push (list topic success-rate total kept trend) topic-list))
-               topics)
-      ;; Sort by success rate descending
+      (cl-flet ((collect-topics (topic stats)
+                  (let ((success-rate (gethash "success_rate" stats 0))
+                        (total (gethash "total_experiments" stats 0))
+                        (kept (gethash "kept" stats 0))
+                        (trend (gethash "trend" stats "stable")))
+                    (push (list topic success-rate total kept trend) topic-list))))
+        (maphash #'collect-topics topics))
       (setq topic-list (sort topic-list (lambda (a b) (> (nth 1 a) (nth 1 b)))))
       ;; Format as markdown
       (concat "| Topic | Success Rate | Kept/Total | Trend |\n"
@@ -627,18 +625,18 @@ Returns empty string when no trace data is available."
                                 (1+ (nth 1 stats)))
                        source-stats)))))
       ;; Format outcome summary
-      (maphash (lambda (key stats)
-                 (let ((kept (nth 0 stats))
-                       (total (nth 1 stats)))
-                   (when (> total 0)
-                     (push (format "- **%s**: %d/%d kept (%.0f%%)"
-                                   key kept total
-                                   (* 100 (/ (float kept) total)))
-                           lines))))
-               source-stats)
-      (if lines
-          (string-join (sort lines #'string<) "\n")
-        ""))))
+      (cl-flet ((format-outcome (key stats)
+                  (let ((kept (nth 0 stats))
+                        (total (nth 1 stats)))
+                    (when (> total 0)
+                      (push (format "- **%s**: %d/%d kept (%.0f%%)"
+                                    key kept total
+                                    (* 100 (/ (float kept) total)))
+                           lines))))))
+         (maphash #'format-outcome source-stats))
+       (if lines
+           (string-join (sort lines #'string<) "\n")
+         "")))
 
 (defun gptel-auto-workflow--load-strategy-guidance-json ()
   "Load strategy guidance JSON from data/ directory.
@@ -927,9 +925,8 @@ RULES:
               :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
           (progn
             (message "[auto-workflow] gptel-request unavailable, using raw findings")
-              (funcall callback raw-findings))))))))
+               (funcall callback raw-findings)))))))))
 
-))
 
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
   "Hunt for external ideas from internet sources with real-time controller.
@@ -953,28 +950,24 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
     (cl-return-from gptel-auto-workflow--research-patterns))
   (setq gptel-auto-workflow--research-in-progress t)
   (let ((research-prompt (gptel-auto-workflow--build-research-prompt))
-        (attempt (or retry-count 0))
-        (controller-config (gptel-auto-workflow--load-autotts-controller)))
-    (message "[auto-workflow] Hunting external ideas (multi-turn controller)...")
-    ;; AutoTTS: Reset step trace accumulator for this session
-    (gptel-auto-workflow--reset-research-steps)
-    (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%"
-             (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
-             (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
-    ;; DEBUG: Log subagent availability and current state
-    (message "[debug] subagents-enabled=%s fbound=%s caller=%s"
-             gptel-auto-experiment-use-subagents
-             (fboundp 'gptel-benchmark-call-subagent)
-             (format-time-string "%H:%M:%S"))
-    (if (and gptel-auto-experiment-use-subagents
-             (fboundp 'gptel-benchmark-call-subagent))
-        ;; Multi-turn research with controller checkpoints
-        (gptel-auto-workflow--run-research-turn research-prompt 0 callback)
-      (progn
-        (message "[auto-workflow] Subagent unavailable - skipping external research")
-        ;; Reset flag before calling callback
-        (setq gptel-auto-workflow--research-in-progress nil)
-         (funcall callback ""))))))
+        (attempt (or retry-count 0)))
+    (let ((controller-config (gptel-auto-workflow--load-autotts-controller)))
+      (message "[auto-workflow] Hunting external ideas (multi-turn controller)...")
+      (gptel-auto-workflow--reset-research-steps)
+      (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%"
+               (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
+               (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
+      (message "[debug] subagents-enabled=%s fbound=%s caller=%s"
+               gptel-auto-experiment-use-subagents
+               (fboundp 'gptel-benchmark-call-subagent)
+               (format-time-string "%H:%M:%S"))
+      (if (and gptel-auto-experiment-use-subagents
+               (fboundp 'gptel-benchmark-call-subagent))
+          (gptel-auto-workflow--run-research-turn research-prompt 0 callback)
+        (progn
+          (message "[auto-workflow] Subagent unavailable - skipping external research")
+          (setq gptel-auto-workflow--research-in-progress nil)
+          (funcall callback "")))))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -1927,8 +1920,6 @@ Uses gptel-auto-workflow-research-benchmark.el to:
   (when autotts-file
     (load autotts-file nil 'nomessage)))
 
-(provide 'gptel-auto-workflow-strategic)
-
 ;; ─── Trace Synthesizer ───
 
 (defun gptel-auto-workflow--bootstrap-traces ()
@@ -1955,5 +1946,7 @@ Uses gptel-auto-workflow-research-benchmark.el to:
                            :success-p kept :synthesized t))))
           (cl-incf n))))
     (message "[autotts] Bootstrapped %d traces" n) n))
+
+(provide 'gptel-auto-workflow-strategic)
 
 ;;; gptel-auto-workflow-strategic.el ends here

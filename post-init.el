@@ -80,22 +80,18 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
 (unless (daemonp)
   (load-file "~/.emacs.d/lisp/theme-setting.el"))
 
-;; ─── Workflow Daemon: Use standalone research to avoid load-file corruption ───
-;; load-file corrupts complex defuns with nested lambdas (specifically maphash).
-;; We load a simple standalone research module and override run-research to use it.
-;; An after-load-functions hook persists the override when strategic files are reloaded.
+;; ─── Workflow Daemon: Use standalone research for clean execution ───
+;; Override run-research with standalone module that bypasses complex
+;; strategic.el code paths. Re-apply override when strategic files reload.
 (when (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
-  (message "[daemon-fix] Setting up standalone research (avoids load-file corruption)")
-  (defvar my/daemon--reload-in-progress nil
-    "Files currently being reloaded from `after-load-functions'.")
+  (message "[daemon-fix] Setting up standalone research override")
   (let ((standalone-file (expand-file-name "lisp/modules/standalone-research.el"
-                                           minimal-emacs-user-directory)))
+                                            minimal-emacs-user-directory)))
     (when (file-exists-p standalone-file)
-      (load-file standalone-file)
+      (load standalone-file nil 'nomessage)
       (when (fboundp 'slr-run-research)
         (message "[daemon-fix] Loaded standalone research, overriding run-research")
         (defalias 'gptel-auto-workflow-run-research 'slr-run-research))))
-  ;; Re-apply override after strategic files are (re)loaded by cron
   (defun my/daemon--reapply-run-research-override (loaded-file)
     (when (or (string-suffix-p "gptel-auto-workflow-strategic.el" loaded-file)
               (string-suffix-p "strategic-daemon-functions.el" loaded-file))
@@ -103,33 +99,6 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
         (defalias 'gptel-auto-workflow-run-research 'slr-run-research)
         (message "[daemon-fix] Re-applied run-research override after %s" loaded-file))))
   (add-hook 'after-load-functions 'my/daemon--reapply-run-research-override)
-  ;; Reload compiled .elc after corrupt source loads (fixes load-file reader bug)
-  (defun my/daemon--reload-compiled-after-source (loaded-file)
-    (when (or (string-suffix-p "gptel-auto-workflow-research-benchmark.el" loaded-file)
-              (string-suffix-p "strategic-daemon-functions.el" loaded-file)
-              (string-suffix-p "gptel-auto-workflow-strategic.el" loaded-file))
-      (let ((stem (replace-regexp-in-string "\\.el$" "" loaded-file))
-            (elc (concat (replace-regexp-in-string "\\.el$" "" loaded-file) ".elc")))
-        (unless (member loaded-file my/daemon--reload-in-progress)
-          (push loaded-file my/daemon--reload-in-progress)
-          (unwind-protect
-         (cond
-          ((and (file-exists-p elc)
-                (file-newer-than-file-p elc loaded-file))
-           (condition-case nil
-              (progn (load stem nil t)
-                     (message "[daemon-fix] Reloaded compiled %s after corrupt source" elc))
-            (error nil)))
-         ;; No .elc: reload source via load to fix load-file corruption
-         ((not (file-exists-p elc))
-          (condition-case err
-              (progn (load stem nil t)
-                     (message "[daemon-fix] Reloaded %s via load (no .elc)" loaded-file))
-            (error
-             (message "[daemon-fix] Failed to reload %s: %s" loaded-file err)))))
-            (setq my/daemon--reload-in-progress
-                  (delete loaded-file my/daemon--reload-in-progress)))))))
-  (add-hook 'after-load-functions 'my/daemon--reload-compiled-after-source)
   ;; Start periodic research timer once strategic module is loaded
   (defun my/daemon--start-periodic-research (loaded-file)
     (when (string-suffix-p "gptel-auto-workflow-strategic.el" loaded-file)

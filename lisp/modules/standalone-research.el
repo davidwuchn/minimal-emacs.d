@@ -166,10 +166,12 @@ Tries multi-turn EMA controller first, falls back to single-turn.
 COMPLETION-CALLBACK receives the saved findings when provided."
   (interactive)
   ;; Try the full multi-turn research path first (with EMA momentum controller)
-  (if (fboundp 'gptel-auto-workflow--research-patterns)
+  (if (and (fboundp 'gptel-auto-workflow--research-patterns)
+           (fboundp 'gptel-auto-workflow--build-research-prompt))
       (condition-case err
           (progn
             (message "[slr] Multi-turn EMA research path available, delegating...")
+            (setq gptel-auto-workflow--research-in-progress nil)
             (gptel-auto-workflow--research-patterns
              (lambda (findings)
                (if (slr--usable-findings-p findings)
@@ -182,6 +184,7 @@ COMPLETION-CALLBACK receives the saved findings when provided."
                  (slr--run-single-turn (slr--build-prompt) completion-callback)))))
         (error
          (message "[slr] Multi-turn failed (%s), falling back to single-turn" err)
+         (message "[slr] Backtrace: %s" (with-output-to-string (backtrace)))
          (slr--run-single-turn (slr--build-prompt) completion-callback)))
     ;; Fallback: single-turn research (raw SKILL.md, no controller)
     (slr--run-single-turn (slr--build-prompt) completion-callback)))

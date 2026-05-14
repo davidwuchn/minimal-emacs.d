@@ -360,21 +360,21 @@ Evaluates (:when EXPR :then DECISION) rules against current signals.
 Returns the decision from the first matching rule, or nil if no rules exist."
   (let ((rules (plist-get controller-config :rules)))
     (when (and rules (listp rules))
-      (let* ((signals `((ema-conf . ,gptel-auto-workflow--research-ema-conf)
-                        (ema-delta . ,(gptel-auto-workflow--research-ema-delta))
-                        (turn . ,(or (plist-get controller-config :turn-count) 0))
-                        (output-length . ,(length (or output-text "")))
-                        (confidence . ,(or (gptel-auto-workflow--estimate-confidence output-text) 0.0))
-                        (has-urls . ,(and output-text (string-match-p "https?://" output-text) t))
-                        (has-structure . ,(and output-text (string-match-p "## .*\\n" output-text) t))
-                        (source . ,(if (string-match-p "davidwuchn\\|own.repo" (or output-text ""))
-                                       "own-repo" "external"))
-                        (budget-remaining . ,(- (or (plist-get controller-config :token-budget) 8000)
-                                               (/ (length (or output-text "")) 4))))))
+      (let* ((ema-conf gptel-auto-workflow--research-ema-conf)
+             (ema-delta (gptel-auto-workflow--research-ema-delta))
+             (turn (or (plist-get controller-config :turn-count) 0))
+             (output-length (length (or output-text "")))
+             (confidence (or (gptel-auto-workflow--estimate-confidence output-text) 0.0))
+             (has-urls (and output-text (string-match-p "https?://" output-text) t))
+             (has-structure (and output-text (string-match-p "## .*\\n" output-text) t))
+             (source (if (string-match-p "davidwuchn\\|own.repo" (or output-text ""))
+                         "own-repo" "external"))
+             (budget-remaining (- (or (plist-get controller-config :token-budget) 8000)
+                                  (/ (length (or output-text "")) 4))))
         (catch 'rule-matched
           (dolist (rule rules nil)
             (condition-case nil
-                (when (eval (plist-get rule :when) signals)
+                (when (eval (plist-get rule :when) t)
                   (throw 'rule-matched (plist-get rule :then)))
               (error nil))))))))
 
@@ -411,10 +411,10 @@ Uses EMA trend analysis for momentum-aware stopping."
      ;; Evaluate rules discovered by the controller design agent.
      ;; Agent writes decision rules, sandbox validates, controller applies them.
      ;; Rules are evaluated before hardcoded logic — agent can override defaults.
-     ((gptel-auto-workflow--apply-controller-rules controller-config text)
-      (let ((result (gptel-auto-workflow--apply-controller-rules controller-config text)))
-        (message "[autotts] Agent rule: %s" result)
-        result))
+     ((let ((rule-result (gptel-auto-workflow--apply-controller-rules controller-config text)))
+        (when rule-result
+          (message "[autotts] Agent rule: %s" rule-result)
+          rule-result)))
      
      ;; Over budget → cut (always check first)
      ((> tokens-used max-tokens)
@@ -551,18 +551,17 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
   (setq gptel-auto-workflow--research-ema-window
         (or (plist-get gptel-auto-workflow--research-controller-config :ema-window) 6))
   
-  (let* ((controller-config gptel-auto-workflow--research-controller-config)
-         (max-turns (plist-get controller-config :max-turns))
-         ;; Add turn count to controller config for decision function
-         (controller-config-with-turn (plist-put controller-config :turn-count turn))
-          (current-prompt (let ((base (if (and accumulated-findings (> (length accumulated-findings) 0))
-                                       (gptel-auto-workflow--build-adaptive-followup-prompt
-                                        research-prompt accumulated-findings turn previous-decision)
-                                     research-prompt)))
-                            ;; Inject programmatic source directive
-                            (gptel-auto-workflow--inject-source-directive
-                             base controller-config turn accumulated-findings)))
-         (turn-label (format "External research turn %d/%d" (1+ turn) max-turns)))
+   (let* ((controller-config gptel-auto-workflow--research-controller-config)
+          (max-turns (or (plist-get controller-config :max-turns) 3))
+          ;; Add turn count to controller config for decision function
+          (controller-config-with-turn (plist-put controller-config :turn-count turn))
+          (base-prompt (if (and accumulated-findings (> (length accumulated-findings) 0))
+                           (gptel-auto-workflow--build-adaptive-followup-prompt
+                            research-prompt accumulated-findings turn previous-decision)
+                         research-prompt))
+          (current-prompt (gptel-auto-workflow--inject-source-directive
+                           base-prompt controller-config turn accumulated-findings))
+           (turn-label (format "External research turn %d/%d" (1+ turn) max-turns)))
     (message "[autotts] Starting %s (beta=%.1f)" turn-label (or gptel-auto-workflow--research-beta 0.5))
     (gptel-benchmark-call-subagent
      'researcher turn-label current-prompt
@@ -593,26 +592,26 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
                   'no-external-content)
                  (t 'success)))
                ;; ─── End Failure Classification ───
-              (effective-findings (cond
-                                   (timeout-p
-                                    (message "[autotts] Turn %d timeout, using accumulated findings" (1+ turn))
-                                    gptel-auto-workflow--research-accumulated-findings)
-                                   (research-error-p
-                                    (gptel-auto-workflow--local-research-patterns))
-                                   (t raw-findings)))
-              (findings-hash (sha1 raw-findings))
+               (effective-findings (cond
+                                    (timeout-p
+                                     (message "[autotts] Turn %d timeout, using accumulated findings" (1+ turn))
+                                     (or gptel-auto-workflow--research-accumulated-findings ""))
+                                    (research-error-p
+                                     (gptel-auto-workflow--local-research-patterns))
+                                    (t (or raw-findings ""))))
+               (findings-hash (sha1 (or raw-findings "")))
               (strategy (or (and (boundp 'gptel-auto-workflow--active-strategy)
                                  gptel-auto-workflow--active-strategy)
                             "default"))
               ;; Calculate confidence and update EMA
-              (turn-confidence (if timeout-p
-                                  (gptel-auto-workflow--estimate-confidence 
-                                   gptel-auto-workflow--research-accumulated-findings)
-                                (gptel-auto-workflow--estimate-confidence raw-findings)))
+               (turn-confidence (if timeout-p
+                                   (gptel-auto-workflow--estimate-confidence 
+                                    (or gptel-auto-workflow--research-accumulated-findings ""))
+                                 (gptel-auto-workflow--estimate-confidence (or raw-findings ""))))
               (ema-conf (gptel-auto-workflow--update-research-ema turn-confidence))
               (ema-delta (gptel-auto-workflow--research-ema-delta))
               ;; Token tracking
-              (turn-tokens (if timeout-p 0 (/ (length raw-findings) 4)))
+               (turn-tokens (if timeout-p 0 (/ (length (or raw-findings "")) 4)))
               (cumulative-tokens (+ (or gptel-auto-workflow--research-total-tokens 0) turn-tokens))
               ;; Merge findings
               (merged-findings (if (and gptel-auto-workflow--research-accumulated-findings 
@@ -632,7 +631,7 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
                  :confidence turn-confidence
                  :ema-conf ema-conf
                  :ema-delta ema-delta
-                 :output-length (length raw-findings)
+                  :output-length (length (or raw-findings ""))
                  :tokens-used turn-tokens
                  :findings-quality (if timeout-p 0.0 turn-confidence)
                  :failure-reason failure-reason))
@@ -640,13 +639,13 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
          (gptel-auto-workflow--log-research-step
           'search
           (list :query (format "turn-%d" turn)
-                :output-length (length raw-findings)
+                :output-length (length (or raw-findings ""))
                 :cumulative-tokens cumulative-tokens
                 :ema-conf ema-conf
                 :ema-delta ema-delta)
           turn-confidence)
          (message "[autotts] Turn %d result: %d chars, conf=%.2f, EMA=%.2f, delta=%.2f, decision=%s"
-                  (1+ turn) (length raw-findings) turn-confidence ema-conf ema-delta controller-decision)
+                   (1+ turn) (length (or raw-findings "")) turn-confidence ema-conf ema-delta controller-decision)
          
          ;; Check controller decision
          (cond
@@ -953,13 +952,13 @@ Returns symbol: aligned, neutral, or deviant."
   "Get effectiveness data for SOURCE.
 Returns plist with :aligned :neutral :deviant :avg-quality."
   (or (gethash source gptel-auto-workflow--source-effectiveness-table)
-      (list :aligned 0 :neutral 0 :deviant 0 :avg-quality 0.0)))
+      (list :aligned 0 :neutral 0 :deviant 0 :total-quality 0.0 :count 0)))
 
 (defun gptel-auto-workflow--source-priority-score (source)
   "Calculate priority score for SOURCE based on effectiveness.
 Higher score = more aligned and higher quality."
   (let ((stats (gptel-auto-workflow--get-source-effectiveness source)))
-    (if (> (plist-get stats :count) 0)
+    (if (> (or (plist-get stats :count) 0) 0)
         (let ((aligned-ratio (/ (float (plist-get stats :aligned))
                                (plist-get stats :count)))
               (quality (or (plist-get stats :avg-quality) 0.0)))
