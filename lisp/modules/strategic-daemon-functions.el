@@ -385,6 +385,8 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
   ;; Store state in global variables to avoid closure capture issues
   (setq gptel-auto-workflow--research-accumulated-findings accumulated-findings)
   (setq gptel-auto-workflow--research-total-tokens total-tokens)
+  (setq gptel-auto-workflow--research-current-turn turn)
+  (setq gptel-auto-workflow--research-prompt research-prompt)
   
   ;; Load controller with beta parameterization
   (setq gptel-auto-workflow--research-controller-config (gptel-auto-workflow--load-autotts-controller))

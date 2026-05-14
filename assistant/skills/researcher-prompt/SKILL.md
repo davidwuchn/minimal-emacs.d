@@ -95,6 +95,8 @@ Return a compact structured digest. End with JSON metadata so AutoTTS can replay
 }
 ```
 
+{{strategy-guidance}}
+
 ## Instructions
 
 1. Use WebSearch tool to find 3-5 recent/relevant items per topic
@@ -112,7 +114,8 @@ Return a compact structured digest. End with JSON metadata so AutoTTS can replay
 
 ## Variables
 
-- `{research-effectiveness}`: Percentage of research-enabled experiments that were kept
-- `{kept-research}`: Number of kept experiments with research-enabled target selection
-- `{total-research}`: Total number of research-enabled experiments
-- `{topic-performance}`: Formatted list of topics ranked by keep rate
+- `{{research-effectiveness}}`: Percentage of research-enabled experiments that were kept
+- `{{kept-research}}`: Number of kept experiments with research-enabled target selection
+- `{{total-research}}`: Total number of research-enabled experiments
+- `{{topic-performance}}`: Formatted list of topics ranked by keep rate
+- `{{strategy-guidance}}`: AutoTTS controller guidance (source priority, stop threshold, beta)

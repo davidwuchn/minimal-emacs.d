@@ -409,5 +409,11 @@ BETA-VALUES is list of beta values to test (default: 0.0 to 1.0 step 0.25)."
           (delete-file file))))
     (message "[research-cache] Cache cleared")))
 
+;; Initialize replay index from existing traces on module load
+(ignore-errors
+  (gptel-auto-workflow--load-research-cache-index)
+  (message "[research-cache] Index initialized with %d entries"
+           (length gptel-auto-workflow--research-cache-index)))
+
 (provide 'gptel-auto-workflow-research-cache)
 ;;; gptel-auto-workflow-research-cache.el ends here

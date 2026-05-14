@@ -1415,15 +1415,12 @@ Uses agentskills.io standard scripts/ directory."
   
   ;; Evolve researcher skill with dynamic content (source effectiveness + controller guidance)
   (gptel-auto-workflow--evolve-researcher-skill)
-  
+
   ;; Analyze researcher end-to-end effectiveness
   (gptel-auto-workflow--evolve-researcher-from-feedback)
-  
-  ;; Run AutoTTS-style strategy evolution (offline evaluation)
-  (when (fboundp 'gptel-auto-workflow--run-strategy-evolution)
-    (gptel-auto-workflow--run-strategy-evolution))
-  
+
   ;; Cross-layer feedback: inject the latest controller config into researcher skill.
+  ;; (Controller evolution runs before this via evolution-run-cycle → run-autotts-evolution)
   (when (fboundp 'gptel-auto-workflow--update-skill-with-controller)
     (let ((controller-config
            (when (fboundp 'gptel-auto-workflow--load-autotts-controller)
@@ -1433,12 +1430,17 @@ Uses agentskills.io standard scripts/ directory."
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.
-Extract → Verify → Synthesize → Evolve All Skills.
-Skill injection happens on the next prompt."
+Extract → Verify → Controller Evolution → Skill Evolution.
+Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (interactive)
   (message "[auto-workflow] Running self-evolution cycle...")
   (gptel-auto-workflow--evolution-synthesize)
   (gptel-auto-workflow--evolution-consolidate-insights)
+  ;; Step A: Controller evolution (traces → strategy-guidance.json)
+  (when (fboundp 'gptel-auto-workflow--run-autotts-evolution)
+    (message "[auto-workflow] Running controller evolution from traces...")
+    (gptel-auto-workflow--run-autotts-evolution))
+  ;; Step B: Skill evolution (TSV data → SKILL.md, uses {{strategy-guidance}} from step A)
   (gptel-auto-workflow--evolve-all-skills)
   ;; Run AutoTTS-style strategy evolution using benchmark results
   (when (fboundp 'gptel-auto-workflow--run-strategy-evolution)
