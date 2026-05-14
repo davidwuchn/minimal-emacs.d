@@ -108,12 +108,20 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
               (string-suffix-p "gptel-auto-workflow-strategic.el" loaded-file))
       (let ((stem (replace-regexp-in-string "\\.el$" "" loaded-file))
             (elc (concat (replace-regexp-in-string "\\.el$" "" loaded-file) ".elc")))
-        (when (and (file-exists-p elc)
-                   (file-newer-than-file-p elc loaded-file))
+        (cond
+         ((and (file-exists-p elc)
+               (file-newer-than-file-p elc loaded-file))
           (condition-case nil
               (progn (load stem nil t)
                      (message "[daemon-fix] Reloaded compiled %s after corrupt source" elc))
-            (error nil))))))
+            (error nil)))
+         ;; No .elc: reload source via load to fix load-file corruption
+         ((not (file-exists-p elc))
+          (condition-case err
+              (progn (load stem nil t)
+                     (message "[daemon-fix] Reloaded %s via load (no .elc)" loaded-file))
+            (error
+             (message "[daemon-fix] Failed to reload %s: %s" loaded-file err))))))))
   (add-hook 'after-load-functions 'my/daemon--reload-compiled-after-source)
   ;; Start periodic research timer once strategic module is loaded
   (defun my/daemon--start-periodic-research (loaded-file)
