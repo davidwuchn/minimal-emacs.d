@@ -1,0 +1,1 @@
+{"name":"sibling-context","version":"1.0","hypothesis":"Exposing headers from sibling files in the same directory improves cross-file consistency of generated improvements.","axis":"B","components":["context-retrieval","sibling-files","module-consistency"]}
