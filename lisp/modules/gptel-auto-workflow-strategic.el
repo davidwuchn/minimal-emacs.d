@@ -1687,29 +1687,7 @@ Uses topic-specific model if available and topic detected."
                       (* (or (plist-get weights :step_count) 0) 1)))
              ;; Sigmoid
              (prob (/ 1.0 (+ 1.0 (exp (- score))))))
-         (max 0.0 (min 1.0 prob))))))
-
-(defun gptel-auto-workflow--load-strategy-guidance ()
-  "Load AutoTTS strategy guidance from controller config.
-Returns formatted string with current controller parameters."
-  (let* ((controller-config (gptel-auto-workflow--load-autotts-controller))
-         (own-priority (* 100 (or (plist-get controller-config :own-repo-priority) 0.7)))
-         (external-priority (* 100 (or (plist-get controller-config :external-priority) 0.15)))
-         (stop-threshold (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
-         (budget (or (plist-get controller-config :max-tokens-budget) 8000))
-         (based-on (or (plist-get controller-config :based-on-traces) 0))
-         (evolved-at (or (plist-get controller-config :evolved-at) "never")))
-    (concat
-     "**Current Controller Config** (evolved " evolved-at " from " (number-to-string based-on) " traces):\n\n"
-     "- Own repo priority: " (format "%.0f%%" own-priority) "\n"
-     "- External priority: " (format "%.0f%%" external-priority) "\n"
-     "- Stop threshold: " (format "%.0f%%" stop-threshold) " confidence\n"
-     "- Token budget: " (number-to-string budget) "\n\n"
-     "**Decision Rules**:\n"
-     "1. If confidence > " (format "%.0f%%" stop-threshold) " + have URLs → STOP early\n"
-     "2. If output < 1000 chars → CONTINUE searching\n"
-     "3. If > " (number-to-string budget) " tokens → CUT (return what you have)\n"
-     "4. Check own repos (davidwuchn/*) FIRST before external\n")))
+          (max 0.0 (min 1.0 prob))))))
 
 ;;; Periodic Research
 

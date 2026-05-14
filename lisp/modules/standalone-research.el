@@ -106,39 +106,49 @@
                       findings)))
     (message "[slr] Saved %d chars to %s" (length findings) file)))
 
+(defun slr--run-single-turn (prompt completion-callback)
+  "Run a single-turn research subagent call with PROMPT.
+Used as fallback when multi-turn controller is unavailable."
+  (let ((timeout 300))
+    (message "[slr] Calling subagent with %ds timeout (single-turn fallback)..." timeout)
+    (gptel-benchmark-call-subagent
+     'researcher "External research" prompt
+     (lambda (result)
+       (let ((findings (or result "")))
+         (message "[slr] Subagent returned %d chars" (length findings))
+         (slr--record-context prompt findings)
+         (slr--save-findings findings)
+         (when (functionp completion-callback)
+           (funcall completion-callback findings))))
+     timeout)))
+
 (defun slr-run-research (&optional completion-callback)
   "Run external research using subagent and save results.
-This is a standalone function that does NOT call strategic.el functions.
+Tries multi-turn EMA controller first, falls back to single-turn.
 COMPLETION-CALLBACK receives the saved findings when provided."
   (interactive)
-  (let ((prompt (slr--load-skill "researcher-prompt")))
-    ;; Substitute AutoTTS template variables if the strategic module is loaded
-    (when (fboundp 'gptel-auto-workflow--substitute-researcher-variables)
-      (setq prompt (gptel-auto-workflow--substitute-researcher-variables prompt)))
-    (message "[slr] Prompt: %d chars, subagents=%s, subagent-fbound=%s"
-             (length prompt)
-             (and (boundp 'gptel-auto-experiment-use-subagents)
-                  gptel-auto-experiment-use-subagents)
-             (fboundp 'gptel-benchmark-call-subagent))
-    (if (and (boundp 'gptel-auto-experiment-use-subagents)
-             gptel-auto-experiment-use-subagents
-             (fboundp 'gptel-benchmark-call-subagent))
-        (let ((timeout 300))
-          (message "[slr] Calling subagent with %ds timeout..." timeout)
-          (gptel-benchmark-call-subagent
-           'researcher "External research" prompt
-           (lambda (result)
-             (let ((findings (or result "")))
-               (message "[slr] Subagent returned %d chars" (length findings))
-               (slr--record-context prompt findings)
+  ;; Try the full multi-turn research path first (with EMA momentum controller)
+  (if (fboundp 'gptel-auto-workflow--research-patterns)
+      (condition-case err
+          (progn
+            (message "[slr] Multi-turn EMA research path available, delegating...")
+            (gptel-auto-workflow--research-patterns
+             (lambda (findings)
                (slr--save-findings findings)
                (when (functionp completion-callback)
-                 (funcall completion-callback findings))))
-           timeout))
-      (message "[slr] Subagents unavailable, saving empty findings")
-      (slr--record-context prompt "")
-      (slr--save-findings "")
-      (when (functionp completion-callback)
-        (funcall completion-callback "")))))
+                 (funcall completion-callback findings)))))
+        (error
+         (message "[slr] Multi-turn failed (%s), falling back to single-turn" err)
+         (slr--run-single-turn (slr--build-prompt) completion-callback)))
+    ;; Fallback: single-turn research (raw SKILL.md, no controller)
+    (slr--run-single-turn (slr--build-prompt) completion-callback)))
+
+(defun slr--build-prompt ()
+  "Build research prompt with template variable substitution."
+  (let ((prompt (slr--load-skill "researcher-prompt")))
+    (when (fboundp 'gptel-auto-workflow--substitute-researcher-variables)
+      (setq prompt (gptel-auto-workflow--substitute-researcher-variables prompt)))
+    (message "[slr] Prompt: %d chars" (length prompt))
+    prompt))
 
 (provide 'standalone-research)
