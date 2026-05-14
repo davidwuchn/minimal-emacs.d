@@ -65,6 +65,33 @@
              (lambda () nil)))
     (should-not (gptel-auto-workflow--run-controller-design-agent 1))))
 
+(ert-deftest regression/research-benchmark/controller-design-validates-held-out-rules ()
+  "Controller design should bind held-out validation results before reading them."
+  (let ((traces (list '(:output-length 1000 :confidence 0.8 :ema-conf 0.8 :ema-delta 0.1
+                        :turn-count 1 :source "own-repo" :success-p t)
+                      '(:output-length 300 :confidence 0.2 :ema-conf 0.2 :ema-delta -0.1
+                        :turn-count 1 :source "external" :success-p nil)
+                      '(:output-length 900 :confidence 0.7 :ema-conf 0.7 :ema-delta 0.0
+                        :turn-count 1 :source "own-repo" :success-p t)
+                      '(:output-length 250 :confidence 0.1 :ema-conf 0.1 :ema-delta -0.2
+                        :turn-count 1 :source "external" :success-p nil))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--load-research-traces)
+               (lambda () traces))
+              ((symbol-function 'gptel-auto-workflow--load-autotts-controller)
+               (lambda () '(:min-confidence-stop 0.7 :branch-threshold 0.3)))
+              ((symbol-function 'gptel-auto-workflow--call-controller-design-subagent)
+               (lambda (_prompt)
+                 '((:when (> ema-conf 0.7) :then stop)
+                   (:when (< ema-conf 0.3) :then branch)
+                   (:when t :then continue))))
+              ((symbol-function 'gptel-auto-workflow--save-evolved-controller)
+               (lambda (_controller) t))
+              ((symbol-function 'gptel-auto-workflow--update-skill-with-controller)
+               (lambda (_controller) t)))
+      (let ((result (gptel-auto-workflow--run-controller-design-agent 1)))
+        (should (plist-get result :best-controller))
+        (should (numberp (plist-get result :best-objective)))))))
+
 (ert-deftest regression/research-benchmark/held-out-validation-does-not-require-training-results ()
   "Held-out validation should not call undefined training-result helpers."
   (let ((result (gptel-auto-workflow--validate-on-held-out

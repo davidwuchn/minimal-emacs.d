@@ -250,11 +250,14 @@ export PIPELINE_RESEARCH_QUALITY="$RESEARCH_QUALITY"
 export PIPELINE_FINDINGS_FILE="$FINDINGS_FILE"
 export PIPELINE_INTERNAL_FILE="$INTERNAL_FILE"
 
-evolution_output="$(MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+evolution_output="$(AUTO_WORKFLOW_ACTION_TIMEOUT="$MAX_WAIT_EVOLUTION" \
+    MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
     "$SCRIPT" evolution 2>&1)"
 printf '%s\n' "$evolution_output" >> "$PIPELINE_LOG"
 if printf '%s' "$evolution_output" | grep -q "already-running"; then
     log "Self-evolution skipped (already running)"
+elif printf '%s' "$evolution_output" | grep -q "Insufficient new data"; then
+    log "Self-evolution skipped (insufficient new data)"
 elif printf '%s' "$evolution_output" | grep -q "Self-evolution cycle complete"; then
     log "Self-evolution completed (research: $RESEARCH_QUALITY)"
 else

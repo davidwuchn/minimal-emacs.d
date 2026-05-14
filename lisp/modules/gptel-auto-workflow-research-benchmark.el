@@ -807,11 +807,11 @@ not just tunes parameters. The search space is the code itself."
                  (new-objective (plist-get eval-result :objective))
                  (train-accuracy (plist-get eval-result :accuracy)))
             ;; Validate on held-out test traces
-            (let ((test-result (when test-traces
-                                 (gptel-auto-workflow--validate-on-held-out
-                                  proposal test-traces)))
-                  (test-accuracy (plist-get test-result :test-accuracy))
-                  (overfit-score (plist-get test-result :overfit-score)))
+            (let* ((test-result (when test-traces
+                                  (gptel-auto-workflow--validate-on-held-out
+                                   proposal test-traces)))
+                   (test-accuracy (plist-get test-result :test-accuracy))
+                   (overfit-score (plist-get test-result :overfit-score)))
               (push (list :iteration iter :objective new-objective
                           :train-accuracy train-accuracy
                           :test-accuracy test-accuracy

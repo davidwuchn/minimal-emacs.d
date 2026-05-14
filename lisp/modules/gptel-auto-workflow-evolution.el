@@ -11,6 +11,7 @@
 ;; Both feed into mementum. Prompts read from mementum only.
 
 (require 'cl-lib)
+(require 'json)
 (require 'subr-x)
 
 ;; External functions from other modules
@@ -34,6 +35,34 @@ Uses cached value from load time, or detects from current directory."
             (string-trim
              (shell-command-to-string
               "git rev-parse --show-toplevel 2>/dev/null || echo ''")))))
+
+(defun gptel-auto-workflow--evolution-normalize-history (history)
+  "Return HISTORY as a plist, accepting legacy alist JSON shapes."
+  (cond
+   ((not (listp history))
+    (list :scores nil :best 0.0))
+   ((keywordp (car history))
+    history)
+   (t
+    (let (plist)
+      (dolist (entry history)
+        (when (consp entry)
+          (setq plist (plist-put plist
+                                 (intern (format ":%s" (car entry)))
+                                 (cdr entry)))))
+      plist))))
+
+(defun gptel-auto-workflow--evolution-score-list (scores)
+  "Return SCORES as a list of score plists."
+  (cond
+   ((null scores) nil)
+   ((and (listp scores) (keywordp (car scores)))
+    (list scores))
+   ((and (listp scores)
+         (listp (car scores))
+         (keywordp (caar scores)))
+    scores)
+   (t nil)))
 
 ;; ─── Benchmark Parsing ───
 
@@ -1440,8 +1469,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (message "[auto-workflow] Running self-evolution cycle...")
   (let ((new-experiments (gptel-auto-workflow--evolution-count-new)))
     (when (< new-experiments 3)
-      (message "[evolution] Insufficient new data (%d experiments). Skipping." new-experiments)
-      (cl-return-from gptel-auto-workflow-evolution-run-cycle nil)))
+      (let ((message (format "[evolution] Insufficient new data (%d experiments). Skipping."
+                             new-experiments)))
+        (message "%s" message)
+        (cl-return-from gptel-auto-workflow-evolution-run-cycle message))))
   ;; Consume pipeline env vars for research-aware evolution
   (let ((research-quality (getenv "PIPELINE_RESEARCH_QUALITY"))
         (findings-file (getenv "PIPELINE_FINDINGS_FILE"))
@@ -1487,16 +1518,18 @@ Saves to var/tmp/evolution-scores.json."
          (score (if (> total 0) (/ (float kept) (float total)) 0.0))
          (score-file (expand-file-name "var/tmp/evolution-scores.json"
                                        (or (gptel-auto-workflow--worktree-base-root) "~")))
-         (history (condition-case nil
-                      (let ((json-object-type 'plist)
-                            (json-array-type 'list))
-                        (with-temp-buffer
-                          (insert-file-contents score-file)
-                          (goto-char (point-min))
-                          (json-read)))
-                    (error (list :scores nil :best 0.0))))
-         (scores (or (plist-get history :scores) nil))
-         (best (plist-get history :best)))
+          (history (gptel-auto-workflow--evolution-normalize-history
+                    (condition-case nil
+                        (let ((json-object-type 'plist)
+                              (json-array-type 'list))
+                          (with-temp-buffer
+                            (insert-file-contents score-file)
+                            (goto-char (point-min))
+                            (json-read)))
+                      (error (list :scores nil :best 0.0)))))
+          (scores (gptel-auto-workflow--evolution-score-list
+                   (plist-get history :scores)))
+          (best (plist-get history :best)))
     (plist-put history :last-score score)
     (plist-put history :last-total total)
     (plist-put history :scores
@@ -1525,13 +1558,15 @@ Higher is better. Based on keep rate and average score improvement."
   "Count new experiments since last recorded score."
   (let* ((score-file (expand-file-name "var/tmp/evolution-scores.json"
                                        (or (gptel-auto-workflow--worktree-base-root) "~")))
-         (last-total (condition-case nil
-                         (let ((json-object-type 'plist))
-                           (with-temp-buffer
-                             (insert-file-contents score-file)
-                             (goto-char (point-min))
-                             (plist-get (json-read) :last-total)))
-                       (error 0)))
+          (last-total (condition-case nil
+                          (let ((json-object-type 'plist))
+                            (with-temp-buffer
+                              (insert-file-contents score-file)
+                              (goto-char (point-min))
+                              (plist-get (gptel-auto-workflow--evolution-normalize-history
+                                          (json-read))
+                                         :last-total)))
+                        (error 0)))
          (results (gptel-auto-workflow--parse-all-results))
          (current (length results)))
     (- current (or last-total 0))))

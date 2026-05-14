@@ -1301,9 +1301,13 @@ fi
 MAX_RESTARTS=3
 RESTART_COUNT=0
 WORKFLOW_COMPLETED=0
+ACTION_TIMEOUT="${AUTO_WORKFLOW_ACTION_TIMEOUT:-10}"
+if [ "$ACTION" = "evolution" ]; then
+    ACTION_TIMEOUT="${AUTO_WORKFLOW_ACTION_TIMEOUT:-900}"
+fi
 
 while [ "$WORKFLOW_COMPLETED" -eq 0 ] && [ "$RESTART_COUNT" -lt "$MAX_RESTARTS" ]; do
-    if run_emacsclient_eval "$EVAL_ELISP" 10; then
+    if run_emacsclient_eval "$EVAL_ELISP" "$ACTION_TIMEOUT"; then
         WORKFLOW_COMPLETED=1
         exit 0
     fi

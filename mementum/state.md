@@ -1,6 +1,32 @@
 # Mementum State
 
-> Last session: 2026-05-14
+> Last session: 2026-05-15
+
+## Current Session: Origin Merge + Pipeline Verification
+
+**Status:** Merge `b4670f5` pushed to `origin/main` and `upstream/main`; follow-up pipeline hardening implemented and smoke-verified.
+
+**Completed:**
+- Resolved and committed the `origin/main` merge (`b4670f5 Merge remote-tracking branch 'origin/main'`), then pushed it to both remotes.
+- Verified targeted suites after the merge: research benchmark, standalone research, project regressions, strategic regressions, and whitespace checks.
+- Ran `scripts/run-pipeline.sh`; found follow-up issues in self-evolution/pipeline verification.
+- Fixed controller design held-out validation binding (`let*` for `test-result`) and added regression coverage.
+- Fixed self-evolution insufficient-data skip to return a textual skip reason instead of bare `nil`.
+- Fixed pipeline/cron evolution timeout mismatch by passing `MAX_WAIT_EVOLUTION` through `AUTO_WORKFLOW_ACTION_TIMEOUT`.
+- Fixed `evolution-scores.json` legacy alist/plist handling and required `json` explicitly.
+
+**Verification:**
+- `tests/test-gptel-auto-workflow-evolution-regressions.el`: 2/2 passed.
+- `tests/test-gptel-auto-workflow-research-benchmark-regressions.el`: 11/11 passed.
+- `tests/test-standalone-research.el`: 3/3 passed.
+- `tests/test-gptel-auto-workflow-projects-regressions.el`: 13 expected, 2 skipped.
+- `tests/test-gptel-auto-workflow-strategic-regressions.el`: 14/14 passed.
+- `bash -n scripts/run-auto-workflow-cron.sh` and `bash -n scripts/run-pipeline.sh` passed.
+- `PIPELINE_SMOKE_ONLY=yes scripts/run-pipeline.sh` now reaches self-evolution and reports `Self-evolution skipped (insufficient new data)` cleanly.
+
+**Remaining:**
+- Generated skill/stat churn from smoke/full pipeline runs remains uncommitted by policy unless explicitly wanted.
+- Full non-smoke `scripts/run-pipeline.sh` auto-workflow batch was not rerun after the follow-up fixes because it can take hours.
 
 ## Current Session: AutoTTS integration + research daemon fix
 
