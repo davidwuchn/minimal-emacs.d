@@ -256,6 +256,13 @@ and description defaults to \"unknown\" if not set or STATE is invalid."
     (cons (or (and task-p (gptel-agent-loop--task-agent-type task-p)) "agent")
           (or (and task-p (gptel-agent-loop--task-description task-p)) "unknown"))))
 
+(defun gptel-agent-loop--fsm-info-get (fsm-info key)
+  "Safely get KEY from FSM-INFO plist if it is a proper list.
+Returns (plist-get fsm-info key) when fsm-info is a proper list,
+otherwise returns nil. This avoids silent failures with dotted pairs."
+  (and (proper-list-p fsm-info)
+       (plist-get fsm-info key)))
+
 (defun gptel-agent-loop--append-output (state text)
   "Append TEXT to STATE's accumulated output.
 Returns nil if TEXT is not a string (defensive guard)."
@@ -384,17 +391,17 @@ Returns empty string if STATE is not a valid task structure (defensive guard)."
     (unless (gptel-agent-loop--task-p state)
       (cl-return-from gptel-agent-loop--continuation-prompt-for ""))
     (let* ((output (gptel-agent-loop--safe-accumulated-output state))
-         (limit gptel-agent-loop-continuation-context-limit)
-         (context (if (and (integerp limit) (> limit 0)
-                           (> (length output) limit))
-                      (concat "...[earlier output truncated]\n"
-                              (substring output (max 0 (- (length output) limit))))
-                    output)))
-    (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
-            (if (stringp gptel-agent-loop-continuation-prompt)
-                gptel-agent-loop-continuation-prompt
-              "")
-            context))))
+           (limit gptel-agent-loop-continuation-context-limit)
+           (context (if (and (integerp limit) (> limit 0)
+                             (> (length output) limit))
+                        (concat "...[earlier output truncated]\n"
+                                (substring output (max 0 (- (length output) limit))))
+                      output)))
+      (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
+              (if (stringp gptel-agent-loop-continuation-prompt)
+                  gptel-agent-loop-continuation-prompt
+                "")
+              context))))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
   "Build max-steps summary prompt for STATE.
@@ -863,18 +870,15 @@ Cache behavior:
                                (and parent-fsm (gptel-fsm-info parent-fsm))))
                    (parent-buf (or (let ((buf (gptel-agent-loop--task-parent-buffer state)))
                                      (and (buffer-live-p buf) buf))
-                                   (let ((buf (and (proper-list-p fsm-info)
-                                                   (plist-get fsm-info :buffer))))
+                                   (let ((buf (gptel-agent-loop--fsm-info-get fsm-info :buffer)))
                                      (and (buffer-live-p buf) buf))
                                    (current-buffer)))
                    (where (or
                            (let ((tm (gptel-agent-loop--task-tracking-marker state)))
                              (when (and (markerp tm) (numberp (marker-position tm))) tm))
-                           (let ((tm (and (proper-list-p fsm-info)
-                                          (plist-get fsm-info :tracking-marker))))
+                           (let ((tm (gptel-agent-loop--fsm-info-get fsm-info :tracking-marker)))
                              (and (markerp tm) (numberp (marker-position tm)) tm))
-                           (let ((pos (and (proper-list-p fsm-info)
-                                           (plist-get fsm-info :position))))
+                           (let ((pos (gptel-agent-loop--fsm-info-get fsm-info :position)))
                              (and (markerp pos) (numberp (marker-position pos)) pos))
                            (with-current-buffer parent-buf (point-marker))))
                    (tracking-marker
