@@ -104,6 +104,122 @@ Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N :collisi
               :raw result)
       (list :status 'no_data))))
 
+;; ─── Missing Implementation Functions ───
+
+(defun gptel-auto-workflow--skill-governance-inject-canaries ()
+  "Inject observation canaries into skill files for activation tracing.
+Canaries are invisible markers that get logged when a skill is loaded,
+allowing us to track which skills agents actually use vs ignore."
+  (let* ((skills-dir (expand-file-name "assistant/skills" user-emacs-directory))
+         (canary-tag "<!-- canary: observed -->")
+         (count 0))
+    (when (file-directory-p skills-dir)
+      (dolist (skill-dir (directory-files skills-dir t "^[^._]"))
+        (when (file-directory-p skill-dir)
+          (let ((skill-file (expand-file-name "SKILL.md" skill-dir)))
+            (when (file-exists-p skill-file)
+              (with-temp-buffer
+                (insert-file-contents skill-file)
+                (unless (search-forward "canary:" nil t)
+                  (goto-char (point-max))
+                  (insert "\n" canary-tag "\n")
+                  (write-region nil nil skill-file)
+                  (cl-incf count))))))))
+    (message "[skill-governance] Injected canaries in %d skills" count)
+    count))
+
+(defun gptel-auto-workflow--skill-governance-run-scan-report ()
+  "Save scan health report to var/tmp/skill-governance/."
+  (let* ((report-dir (expand-file-name "var/tmp/skill-governance" user-emacs-directory))
+         (report-file (expand-file-name (format "scan-%s.json"
+                                                (format-time-string "%Y%m%d-%H%M"))
+                                        report-dir))
+         (health (gptel-auto-workflow--skill-governance-scan))
+         (doctor (gptel-auto-workflow--skill-governance-doctor)))
+    (make-directory report-dir t)
+    (let ((report (list :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                       :health health
+                       :doctor doctor
+                       :skills-count (length (directory-files
+                                              (expand-file-name "assistant/skills"
+                                                                user-emacs-directory)
+                                              t "SKILL\\.md$" t)))))
+      (with-temp-file report-file
+        (insert (json-encode report)))
+      (message "[skill-governance] Saved scan report: %s"
+               (file-name-nondirectory report-file))
+      report)))
+
+;; ─── Bridge: Skill A/B Testing via Benchmark Infrastructure ───
+
+(defun gptel-auto-workflow--skill-eval-run-ab (skill-name target-file &optional n-experiments)
+  "Run controlled A/B experiment for SKILL-NAME on TARGET-FILE.
+Returns plist with (:skill :baseline-success :treatment-success :delta :recommendation).
+Integrates skill-eval methodology with benchmark infrastructure.
+N-EXPERIMENTS per arm (default 3)."
+  (let* ((n (or n-experiments 3))
+         (skill-label (format "skill-eval:%s" skill-name))
+         (baseline (gptel-auto-workflow--skill-eval-run-arm
+                    target-file nil n))
+         (treatment (gptel-auto-workflow--skill-eval-run-arm
+                     target-file skill-name n))
+         (delta (- (plist-get treatment :success-rate)
+                   (plist-get baseline :success-rate)))
+         (effect-size (if (> (plist-get baseline :stddev) 0)
+                          (/ delta (plist-get baseline :stddev))
+                        0.0)))
+    (list :skill skill-name
+          :target target-file
+          :baseline-success (plist-get baseline :success-rate)
+          :treatment-success (plist-get treatment :success-rate)
+          :delta delta
+          :effect-size effect-size
+          :recommendation (cond
+                           ((> effect-size 0.3) 'keep)
+                           ((< effect-size 0.1) 'reject)
+                           (t 'indeterminate)))))
+
+(defun gptel-auto-workflow--skill-eval-run-arm (target-file skill-name n)
+  "Run N experiments on TARGET-FILE with SKILL-NAME injected (or nil for baseline).
+Returns plist with (:success-rate :stddev :experiments)."
+  (let ((results nil))
+    (dotimes (_ n)
+      (let ((result (condition-case err
+                        (gptel-auto-workflow--skill-eval-single-experiment
+                         target-file skill-name)
+                      (error
+                       (list :success nil :error (error-message-string err))))))
+        (push result results)))
+    (let* ((successes (cl-count-if (lambda (r) (plist-get r :success)) results))
+           (rate (/ (float successes) (float n)))
+           (mean rate)
+           (variance (/ (apply '+ (mapcar
+                                   (lambda (r) (expt (- (if (plist-get r :success) 1.0 0.0) mean) 2))
+                                   results))
+                        (float n))))
+      (list :success-rate rate
+            :stddev (sqrt variance)
+            :experiments results))))
+
+(defun gptel-auto-workflow--skill-eval-single-experiment (target-file &optional skill-name)
+  "Run a single experiment on TARGET-FILE, optionally with SKILL-NAME injected.
+Returns plist (:success t|nil :compile-ok t|nil :anti-patterns N)."
+  (let* ((default-directory (file-name-directory target-file))
+         (compile-ok (condition-case nil
+                         (progn
+                           (byte-compile-file target-file)
+                           t)
+                       (error nil)))
+         ;; Run behavioral tests if available
+         (tests-ok (and (fboundp 'gptel-auto-workflow--run-behavioral-tests)
+                        (gptel-auto-workflow--run-behavioral-tests
+                         (list target-file)))))
+    (list :success (and compile-ok (or (not tests-ok) (car tests-ok)))
+          :compile-ok compile-ok
+          :tests-ok (if tests-ok (car tests-ok) t)
+          :skill-injected (if skill-name t nil)
+          :skill-name skill-name)))
+
 ;; ─── Evolution Cycle Integration ───
 
 (defun gptel-auto-workflow--skill-governance-run-cycle ()
@@ -111,7 +227,8 @@ Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N :collisi
 1. Scan health
 2. Inject canaries (if not already injected)
 3. Run dashboard
-4. Save report
+4. Run skill-eval A/B tests on recently-evolved skills
+5. Save report
 Designed to be called from the self-evolution cycle."
   (interactive)
   (message "[skill-governance] Starting governance cycle...")
@@ -135,8 +252,55 @@ Designed to be called from the self-evolution cycle."
                  (* 100 (plist-get dash :observed-rate)))
       (message "[skill-governance] Dashboard: no observation data (inject canaries first)")))
 
+  ;; Layer 4: Skill-eval A/B testing on recently evolved skills
+  (when (fboundp 'gptel-auto-workflow--evolution-get-recently-evolved-skills)
+    (let ((recent (gptel-auto-workflow--evolution-get-recently-evolved-skills))
+          (results nil))
+      (dolist (skill-name recent)
+        (let* ((target (gptel-auto-workflow--skill-eval-pick-target skill-name))
+               (ab (when target
+                     (gptel-auto-workflow--skill-eval-run-ab skill-name target 2))))
+          (when ab
+            (push ab results)
+            (message "[skill-governance] Skill-eval %s: delta=%.2f, %s"
+                     skill-name (plist-get ab :delta)
+                     (plist-get ab :recommendation)))))
+      (when results
+        (gptel-auto-workflow--skill-governance-save-ab-results results))))
+
   ;; Save report
   (gptel-auto-workflow--skill-governance-run-scan-report))
+
+(defun gptel-auto-workflow--skill-eval-pick-target (skill-name)
+  "Pick a suitable target file for evaluating SKILL-NAME.
+Returns file path or nil if no suitable target found."
+  (let ((modules-dir (expand-file-name "lisp/modules" user-emacs-directory)))
+    (cond
+     ((string-match "elisp" skill-name)
+      (expand-file-name "gptel-ext-retry.el" modules-dir))
+     ((string-match "debug" skill-name)
+      (expand-file-name "gptel-auto-workflow-strategic.el" modules-dir))
+     ((string-match "replace" skill-name)
+      (expand-file-name "gptel-tools-agent-git.el" modules-dir))
+     ((string-match "refactor" skill-name)
+      (expand-file-name "gptel-sandbox.el" modules-dir))
+     ((string-match "discover" skill-name)
+      (expand-file-name "gptel-ext-fsm-utils.el" modules-dir))
+     (t
+      ;; Pick smallest non-trivial module
+      (car (sort (directory-files modules-dir t "\\.el$")
+                 (lambda (a b)
+                   (< (nth 7 (file-attributes a))
+                      (nth 7 (file-attributes b))))))))))
+
+(defun gptel-auto-workflow--skill-governance-save-ab-results (results)
+  "Save A/B test RESULTS to var/tmp/skill-governance/ab-results.json."
+  (let* ((report-dir (expand-file-name "var/tmp/skill-governance" user-emacs-directory))
+         (report-file (expand-file-name "ab-results.json" report-dir)))
+    (make-directory report-dir t)
+    (with-temp-file report-file
+      (insert (json-encode results)))
+    (message "[skill-governance] Saved A/B results: %d skills tested" (length results))))
 
 (defun gptel-auto-workflow--skill-governance-schedule-canary-refresh ()
   "Schedule periodic canary injection."

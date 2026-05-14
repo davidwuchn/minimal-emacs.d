@@ -125,6 +125,23 @@ if indeterminate:
 
 ## Integration with Self-Evolution
 
+### Governance Module Bridge
+
+The `gptel-auto-workflow-skill-governance.el` module provides the implementation
+backbone:
+
+```
+skill-eval (SKILL.md)  ← directs AI methodology
+        │
+        ▼
+skill-governance.el    ← implements it in Elisp
+  ├── skill-eval-run-ab          — controlled A/B experiment runner
+  ├── skill-eval-run-arm         — N-experiment arm (baseline/treatment)
+  ├── skill-eval-single-experiment — single compile+test check
+  ├── skill-eval-pick-target     — selects target file for a skill
+  └── run-cycle (Layer 4)        — calls A/B tests for evolved skills
+```
+
 ### Benchmark Pipeline Integration
 
 ```
