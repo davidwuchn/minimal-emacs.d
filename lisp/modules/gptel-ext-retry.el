@@ -156,8 +156,8 @@ BEHAVIOR: keep count decreases with each retry:
 (defun my/gptel--info-data (info)
   "Safely extract :data from INFO plist.
 Returns the :data value if INFO is a proper list, nil otherwise.
-Guards against malformed info that is truthy but not a list."
-  (and (listp info) (plist-get info :data)))
+Guards against malformed info that is truthy but not a proper list."
+  (and (proper-list-p info) (plist-get info :data)))
 
 (defun my/gptel--info-get (info key &optional default)
   "Safely extract KEY from INFO plist, returning DEFAULT if unavailable.
