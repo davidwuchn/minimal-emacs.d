@@ -18,11 +18,10 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
   - No statistically significant data yet (need ≥3 experiments per topic)
 
-## Source Effectiveness (AutoTTS Tracking)
 
-Sources are classified as **aligned** (produces good results), **neutral** (unclear), or **deviant** (low quality/contradictory).
+## Source Effectiveness
 
-*No source effectiveness data yet. Data updates automatically after each research cycle.*
+*No source effectiveness data yet.*
 
 ## Controller Guidance
 
@@ -34,13 +33,22 @@ Current controller configuration (evolved from trace outcomes):
 
 ## Instructions
 
-### Source Strategy (AutoTTS-optimized)
+1. Use WebSearch tool to find 3-5 recent/relevant items per topic
+2. Use WebFetch tool to read promising pages/videos (max 3 fetches)
+3. Focus on NOVEL ideas we haven't implemented (check git history first)
+4. Extract specific, actionable techniques - not vague trends
+5. For each insight, provide: source URL, key technique, how it applies to us
+6. Max 1200 chars. Prioritize depth over breadth.
+7. **MONITOR SPECIFIC PROJECTS**:
+   - Check hermes-agent, zeroclaw, ml-intern for novel AI agent patterns
+   - Check ALL https://github.com/davidwuchn repos for upstream improvements we should cherry-pick
+   - Prioritize: gptel, gptel-agent, nucleus, mementum, ai-behaviors, ai-code-interface.el, context-mode, gastown, gbrain, nullclaw, genesis-agent, promptfoo, GitNexus, LLMLingua
+   Look at: recent commits, open issues, closed PRs, architecture decisions
+   Focus on: patterns we can adapt to our Emacs AI agent system
+
+
+### Source Strategy (learned from outcomes)
 - **DEFAULT**: Use own-repos-first strategy
-- **Source Scheduling**: Prioritize sources by effectiveness score
-  - Focus on **aligned** sources (high score > 0.7)
-  - Check **neutral** sources occasionally (score 0.3-0.7)
-  - Skip **deviant** sources unless specifically relevant (score < 0.3)
-- **Dynamic adaptation**: Source priorities update after each research cycle based on outcome quality
 
 ### Controller Awareness
 - STOP early if you have 2+ insights with URLs
