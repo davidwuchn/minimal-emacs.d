@@ -96,9 +96,9 @@
 6. ✅ **Read researcher-feedback.sexp** into controller config (beta adjustment)
 
 **Next Steps:**
-1. **Monitor pipeline** — verify adaptive prompts appear in research logs
-2. **Measure improvement** — compare research effectiveness before vs after Phase 5
-3. **Fix heuristic BRANCH** — resolve mutually exclusive conditions in dead code path
+1. **Monitor pipeline** — verify adaptive prompts appear in research logs (requires pipeline run)
+2. **Measure improvement** — compare research effectiveness before vs after Phase 5 (requires data collection)
+3. ✅ **Fix heuristic BRANCH** — resolved (mutually exclusive conditions removed in `strategic-daemon-functions.el`)
 
 **Pipeline Status:**
 - ✅ Daemons restarted and new code loaded
