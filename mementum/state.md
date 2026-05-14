@@ -5,7 +5,7 @@
 
 ## Current Session: AutoTTS + Self-Evolution Integration + Statistical Controller
 
-**Status:** All 5 phases complete. AutoTTS + Self-Evolution integration finished. Adaptive prompts active.
+**Status:** All 6 gap fixes complete. Function collision resolved, statistical model loading implemented, feedback loop closed.
 
 **Done (Today):**
 - **Phase 5 Complete** — Adaptive prompt integration (`db7cfae8`):
@@ -49,6 +49,13 @@
 - ✅ Probabilities calculated: P(kept|good) ≈ 0.99, P(kept|bad) ≈ 0.01
 - ✅ Falls back to heuristic when insufficient data
 - ✅ All syntax verified via `forward-sexp`
+- ✅ **Gap fixes committed** (`8b524f79`): 6 critical issues resolved
+  - Function collision fixed
+  - Statistical model loading implemented
+  - Controller decision logged in TSV
+  - EMA-outcome correlation tracked
+  - Source table auto-populated from traces
+  - Feedback loop reads researcher-feedback.sexp
 
 **Known Issues:**
 - Daemon has persistent loading issue for `strategic.el`; functions manually defined after startup
@@ -80,11 +87,18 @@
 - `build-research-prompt` was missing after initial load due to feature caching
 - Both daemons now have all 60 defuns from strategic.el
 
+**Next Steps (Completed):**
+1. ✅ **Fix function collision** — renamed `synthesize-research-knowledge` → `synthesize-research-knowledge-from-traces` in `research-benchmark.el`
+2. ✅ **Implement `load-statistical-model`** — loads from `researcher-controller.json`
+3. ✅ **Add controller_decision column** to `results.tsv`
+4. ✅ **Add EMA-outcome correlation** to self-evolution synthesis
+5. ✅ **Populate source table from traces** on startup
+6. ✅ **Read researcher-feedback.sexp** into controller config (beta adjustment)
+
 **Next Steps:**
-1. **Fix daemon loading** — investigate why `strategic.el` functions aren't defined on daemon startup
-2. **Monitor pipeline** — verify adaptive prompts appear in research logs
-3. **Measure improvement** — compare research effectiveness before vs after Phase 5
-4. **Fix heuristic BRANCH** — resolve mutually exclusive conditions in dead code path
+1. **Monitor pipeline** — verify adaptive prompts appear in research logs
+2. **Measure improvement** — compare research effectiveness before vs after Phase 5
+3. **Fix heuristic BRANCH** — resolve mutually exclusive conditions in dead code path
 
 **Pipeline Status:**
 - ✅ Daemons restarted and new code loaded
