@@ -830,6 +830,12 @@ THRESHOLD defaults to 0.005 and matches the comparator prompt rules."
      ((<= combined-delta (- decision-threshold)) "A")
      (t "tie"))))
 
+(defun gptel-auto-experiment--coerce-number (value default)
+  "Return VALUE as a number, or DEFAULT if conversion fails."
+  (if (numberp value)
+      value
+    (or default 0)))
+
 (defun gptel-auto-experiment--decision-gate
     (winner score-before score-after quality-before quality-after combined-before combined-after
             &optional threshold)
@@ -841,19 +847,13 @@ enough to lift the combined score above threshold.
 
 For high-baseline targets (quality >= 0.85), the quality gain requirement is
 reduced because well-written code is harder to improve measurably."
-  (unless (numberp score-before)
-    (setq score-before (or (and (numberp score-before) score-before) 0)))
-  (unless (numberp score-after)
-    (setq score-after (or (and (numberp score-after) score-after) 0)))
-  (unless (numberp quality-before)
-    (setq quality-before (or (and (numberp quality-before) quality-before) 0.5)))
-  (unless (numberp quality-after)
-    (setq quality-after (or (and (numberp quality-after) quality-after) 0.5)))
-  (unless (numberp combined-before)
-    (setq combined-before (or (and (numberp combined-before) combined-before) 0)))
-  (unless (numberp combined-after)
-    (setq combined-after (or (and (numberp combined-after) combined-after) 0)))
-  (let* ((decision-threshold (or threshold 0.005))
+  (let* ((score-before (gptel-auto-experiment--coerce-number score-before 0))
+        (score-after (gptel-auto-experiment--coerce-number score-after 0))
+        (quality-before (gptel-auto-experiment--coerce-number quality-before 0.5))
+        (quality-after (gptel-auto-experiment--coerce-number quality-after 0.5))
+        (combined-before (gptel-auto-experiment--coerce-number combined-before 0))
+        (combined-after (gptel-auto-experiment--coerce-number combined-after 0))
+        (decision-threshold (or threshold 0.005))
          (score-delta (- score-after score-before))
          (quality-delta (- quality-after quality-before))
          (combined-delta (- combined-after combined-before))
