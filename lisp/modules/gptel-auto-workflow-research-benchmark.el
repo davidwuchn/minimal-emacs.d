@@ -839,34 +839,75 @@ Parses the response as an Elisp plist and returns it."
       nil)))
 
 (defun gptel-auto-workflow--evaluate-controller-config (config traces)
-  "Evaluate CONTROLLER-CONFIG against TRACES.
-Returns plist (:objective :accuracy :token-efficiency).
+  "Evaluate CONTROLLER-CONFIG against TRACES by SIMULATING controller decisions.
+For each trace, simulate what the CMC controller would have decided at each
+turn point, comparing against actual outcomes. Returns plist with objective score.
 This is an OFFLINE evaluation — 0 LLM calls."
-  (let ((success-count 0)
-        (total-tokens 0)
-        (total-confidence 0.0)
+  (let ((simulated-stops 0)      ; correct STOP decisions (trace was successful, controller would STOP)
+        (simulated-continues 0)   ; correct CONTINUE decisions (trace needed more turns)
+        (simulated-branches 0)    ; correct BRANCH decisions (trace was poor, controller would BRANCH)
+        (false-stops 0)           ; wrong STOP decisions (trace was poor, controller would STOP too early)
+        (false-continues 0)       ; wrong CONTINUE decisions (trace was good, controller kept going)
+        (total-tokens-saved 0)    ; tokens saved by early STOP decisions
+        (total-tokens-wasted 0)   ; tokens wasted on unnecessary CONTINUE decisions
         (n (length traces)))
     (dolist (trace traces)
-      (let ((source (plist-get trace :source))
-            (output-length (or (plist-get trace :output-length) 0))
-            (confidence (or (plist-get trace :confidence) 0.0))
-            (success (gptel-auto-workflow--trace-success-p trace)))
-        (when success (cl-incf success-count))
-        (setq total-tokens (+ total-tokens (/ output-length 4)))
-        (setq total-confidence (+ total-confidence confidence))))
-    (let* ((accuracy (/ (float success-count) (float n)))
-           (avg-confidence (/ total-confidence (float n)))
-           (token-efficiency (if (> total-tokens 0)
-                                 (/ (float success-count) total-tokens)
-                               0.0))
-           (objective (+ (* accuracy 0.5)
-                        (* avg-confidence 0.3)
-                        (* token-efficiency 0.2))))
+      (let* ((output-length (or (plist-get trace :output-length) 0))
+             (confidence (or (plist-get trace :confidence) 0.0))
+             (ema-conf (or (plist-get trace :ema-conf) confidence))
+             (ema-delta (or (plist-get trace :ema-delta) 0.0))
+             (turn-count (or (plist-get trace :turn-count) 1))
+             (success (gptel-auto-workflow--trace-success-p trace))
+             (stop-threshold (plist-get config :min-confidence-stop))
+             (branch-threshold (plist-get config :branch-threshold))
+             (delta-slack 0.01)
+             (trend-threshold (plist-get config :branch-threshold))
+             ;; Simulate CMC decision for this trace
+             (would-stop (and (>= ema-conf (or stop-threshold 0.7))
+                              (>= ema-delta (- (or delta-slack 0.02)))))
+             (would-branch (and (< ema-conf (or stop-threshold 0.7))
+                                (<= ema-delta (or trend-threshold 0.05))
+                                (>= turn-count 1))))
+        ;; Score the simulated decision against actual outcome
+        (cond
+         ;; Trace was successful → STOP would have been right, CONTINUE wasted tokens
+         (success
+          (if would-stop
+              (progn (cl-incf simulated-stops)
+                     ;; Token savings: if we stopped at turn N instead of continuing
+                     (setq total-tokens-saved (+ total-tokens-saved (/ output-length 8))))
+            (cl-incf false-continues)
+            (setq total-tokens-wasted (+ total-tokens-wasted (/ output-length 4)))))
+         ;; Trace was poor → BRANCH or CUT would have been right
+         (t
+          (if would-branch
+              (cl-incf simulated-branches)
+            (if would-stop
+                (cl-incf false-stops)
+              (cl-incf false-continues)
+              (setq total-tokens-wasted (+ total-tokens-wasted (/ output-length 4)))))))))
+    (let* ((total-decisions (+ simulated-stops simulated-continues simulated-branches
+                              false-stops false-continues))
+           (correct-decisions (+ simulated-stops simulated-branches))
+           (decision-accuracy (if (> total-decisions 0)
+                                  (/ (float correct-decisions) (float total-decisions))
+                                0.5))
+           (token-savings-ratio (if (> (+ total-tokens-saved total-tokens-wasted) 0)
+                                    (/ (float total-tokens-saved)
+                                       (+ total-tokens-saved total-tokens-wasted))
+                                  0.5))
+           (objective (+ (* decision-accuracy 0.6)
+                        (* token-savings-ratio 0.4))))
       (list :objective objective
-            :accuracy accuracy
-            :token-efficiency token-efficiency
-            :success-count success-count
-            :total n))))
+            :decision-accuracy decision-accuracy
+            :token-savings-ratio token-savings-ratio
+            :simulated-stops simulated-stops
+            :simulated-branches simulated-branches
+            :false-stops false-stops
+            :false-continues false-continues
+            :total n
+            :tokens-saved total-tokens-saved
+            :tokens-wasted total-tokens-wasted))))
 
 (defun gptel-auto-workflow--trace-success-p (trace)
   "Return non-nil if TRACE represents a successful research session."
@@ -877,6 +918,59 @@ This is an OFFLINE evaluation — 0 LLM calls."
     (or (and has-urls (> output-length 1000))
         (and (string= source "own-repo") (> output-length 500) has-structure)
         (> output-length 3000))))
+
+;; ─── Trace-Outcome Bridge: Experiment Results → Trace Learning ───
+
+(defun gptel-auto-workflow--bridge-trace-outcomes (results-tsv-path)
+  "Bridge experiment results back to research traces.
+Reads RESULTS-TSV-PATH, finds the research trace that led to each experiment,
+and updates trace metadata with actual experiment outcomes.
+Closes the loop: research strategy → experiment → outcome → controller learning."
+  (let* ((traces (gptel-auto-workflow--load-research-traces))
+         (updated 0)
+         (results (gptel-auto-workflow--parse-tsv-results results-tsv-path)))
+    (unless traces
+      (cl-return-from gptel-auto-workflow--bridge-trace-outcomes 0))
+    (dolist (result results)
+      (let* ((target (plist-get result :target))
+             (decision (plist-get result :decision))
+             (score (or (plist-get result :score) 0.0))
+             (success-p (equal decision "kept")))
+        (when (and target success-p)
+          (dolist (trace traces)
+            (let ((trace-strategy (plist-get trace :strategy)))
+              (when (and trace-strategy
+                         (not (plist-get trace :outcome-linked)))
+                (plist-put trace :experiment-target target)
+                (plist-put trace :experiment-decision decision)
+                (plist-put trace :experiment-score score)
+                (plist-put trace :experiment-success t)
+                (plist-put trace :outcome-linked t)
+                (cl-incf updated)
+                (cl-return)))))))
+    (message "[trace-bridge] Bridged %d traces to experiment outcomes (%d results)"
+             updated (length results))
+    updated))
+
+(defun gptel-auto-workflow--parse-tsv-results (tsv-path)
+  "Parse TSV experiment results file into list of plists.
+Each plist: (:target :decision :score :timestamp)."
+  (when (and tsv-path (file-exists-p tsv-path))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents tsv-path)
+          (let ((lines (split-string (buffer-string) "\n" t))
+                (results nil))
+            (dolist (line (cdr lines))
+              (let ((fields (split-string line "\t")))
+                (when (>= (length fields) 4)
+                  (push (list :target (nth 0 fields)
+                              :decision (nth 1 fields)
+                              :score (string-to-number (or (nth 2 fields) "0"))
+                              :timestamp (nth 3 fields))
+                        results))))
+            results))
+      (error nil))))
 
 (defun gptel-auto-workflow--save-trace-synthesis (topic-perf source-perf)
   "Merge trace synthesis into existing evolve pipeline data files.

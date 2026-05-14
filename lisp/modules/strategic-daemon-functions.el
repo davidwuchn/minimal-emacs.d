@@ -59,6 +59,98 @@
 (defvar gptel-auto-workflow--research-trace-log nil
   "Log of detailed execution traces for each research turn.")
 
+;; ─── Multi-Branch Pool (CMC Coupled Width-Depth Control) ───
+
+(defvar gptel-auto-workflow--branch-pool nil
+  "List of active research branches (plists).
+Each branch plist: (:id :strategy :findings :tokens :turn :alignment :ema :alive-since).")
+
+(defvar gptel-auto-workflow--branch-pool-max 6
+  "Maximum number of concurrent branches in the pool.")
+
+(defvar gptel-auto-workflow--branch-id-counter 0
+  "Counter for generating unique branch IDs.")
+
+(defun gptel-auto-workflow--branch-pool-init ()
+  "Initialize or clear the branch pool."
+  (setq gptel-auto-workflow--branch-pool nil
+        gptel-auto-workflow--branch-id-counter 0))
+
+(defun gptel-auto-workflow--branch-pool-active-count ()
+  "Return number of alive branches in the pool."
+  (length gptel-auto-workflow--branch-pool))
+
+(defun gptel-auto-workflow--branch-pool-add (strategy findings tokens)
+  "Add a new branch to the pool with STRATEGY, initial FINDINGS, and TOKENS.
+Returns the branch plist."
+  (when (< (gptel-auto-workflow--branch-pool-active-count)
+           gptel-auto-workflow--branch-pool-max)
+    (setq gptel-auto-workflow--branch-id-counter
+          (1+ gptel-auto-workflow--branch-id-counter))
+    (let ((branch (list :id gptel-auto-workflow--branch-id-counter
+                        :strategy (or strategy "default")
+                        :findings (or findings "")
+                        :tokens (or tokens 0)
+                        :turn 0
+                        :alignment 'neutral
+                        :ema 0.0
+                        :alive-since (float-time))))
+      (push branch gptel-auto-workflow--branch-pool)
+      (message "[autotts] Branch pool: added branch %d (%s), %d active"
+               gptel-auto-workflow--branch-id-counter strategy
+               (gptel-auto-workflow--branch-pool-active-count))
+      branch)))
+
+(defun gptel-auto-workflow--branch-pool-remove (branch-id)
+  "Remove branch BRANCH-ID from the pool."
+  (setq gptel-auto-workflow--branch-pool
+        (cl-remove-if (lambda (b) (= (plist-get b :id) branch-id))
+                      gptel-auto-workflow--branch-pool)))
+
+(defun gptel-auto-workflow--branch-pool-get-best ()
+  "Return the branch with highest alignment and findings length."
+  (car (sort (copy-sequence gptel-auto-workflow--branch-pool)
+             (lambda (a b)
+               (> (+ (* 10 (if (eq (plist-get a :alignment) 'aligned) 1 0))
+                     (length (plist-get a :findings)))
+                  (+ (* 10 (if (eq (plist-get b :alignment) 'aligned) 1 0))
+                     (length (plist-get b :findings))))))))
+
+(defun gptel-auto-workflow--branch-pool-get-deviant (patience)
+  "Return the branch that has been deviant for PATIENCE+ turns, or nil."
+  (car (cl-remove-if-not
+        (lambda (b)
+          (and (eq (plist-get b :alignment) 'deviant)
+               (>= (plist-get b :turn) patience)))
+        gptel-auto-workflow--branch-pool)))
+
+(defun gptel-auto-workflow--branch-pool-stagnation-p (controller-config)
+  "Return non-nil if the branch pool is stagnant (EMA delta below threshold)."
+  (let ((ema-delta (gptel-auto-workflow--research-ema-delta))
+        (trend-threshold (plist-get controller-config :trend-threshold)))
+    (and ema-delta (< ema-delta trend-threshold))))
+
+(defun gptel-auto-workflow--branch-pool-widen (controller-config prompt callback)
+  "WIDEN: open a new branch with alternative strategy.
+Returns non-nil if a new branch was opened."
+  (let* ((widen-burst (plist-get controller-config :widen-burst))
+         (active-count (gptel-auto-workflow--branch-pool-active-count))
+         (can-open (- (or widen-burst 2) active-count)))
+    (when (and (> can-open 0)
+               (< active-count gptel-auto-workflow--branch-pool-max))
+      (let ((alt-strategies '("deep-external" "cross-reference" "implementation-focused"
+                              "error-patterns" "code-clarity")))
+        (dotimes (i (min can-open 2))
+          (let ((strat (nth i alt-strategies)))
+            (gptel-auto-workflow--branch-pool-add
+             strat "" 0)
+            ;; Start a lightweight research turn for this branch
+            (gptel-auto-workflow--run-research-turn
+             (or prompt "") 0 callback "" 0 'branch)))))
+      t))
+
+;; ─── End Multi-Branch Pool ───
+
 (defun gptel-auto-workflow--research-beta-schedule (beta)
   "Return parameter plist for research controller based on BETA.
 BETA is in [0,1]: 0 = conservative (few turns, easy to stop),
@@ -290,7 +382,30 @@ Uses EMA trend analysis for momentum-aware stopping."
       (message "[autotts] Controller: CUT (budget %d/%d)" tokens-used max-tokens)
       'cut)
      
-     ;; EMA Momentum Gate: Stop when confidence is high AND trend is non-negative
+      ;; ─── Multi-Branch Pool: Widen/Abandon/Narrow ───
+      ;; Check if branch pool stagnation warrants widening
+      ((and (>= turn-count 1)
+            (gptel-auto-workflow--branch-pool-stagnation-p controller-config)
+            (< (gptel-auto-workflow--branch-pool-active-count)
+               (or (plist-get controller-config :widen-burst) 2)))
+       (message "[autotts] Controller: WIDEN (branch pool stagnant, %d active, widen-burst=%d)"
+                (gptel-auto-workflow--branch-pool-active-count)
+                (or (plist-get controller-config :widen-burst) 2))
+       'widen)
+      
+      ;; Check if any branch has been deviant too long → abandon
+      ((let ((deviant (gptel-auto-workflow--branch-pool-get-deviant
+                       (plist-get controller-config :abandon-patience))))
+         (when deviant
+           (gptel-auto-workflow--branch-pool-remove (plist-get deviant :id))
+           (message "[autotts] Controller: ABANDON branch %d (deviant for %d turns, patience=%d)"
+                    (plist-get deviant :id) (plist-get deviant :turn)
+                    (plist-get controller-config :abandon-patience))
+           t))
+       ;; After abandoning, re-evaluate: continue if aligned branches exist
+       (if (> (gptel-auto-workflow--branch-pool-active-count) 0) 'continue 'stop))
+      
+      ;; EMA Momentum Gate: Stop when confidence is high AND trend is non-negative
      ;; Only after warm-up and minimum completion
      ((and (>= turn-count warm-up)
            (>= turn-count min-complete)
@@ -401,10 +516,13 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
          (max-turns (plist-get controller-config :max-turns))
          ;; Add turn count to controller config for decision function
          (controller-config-with-turn (plist-put controller-config :turn-count turn))
-         (current-prompt (if (and accumulated-findings (> (length accumulated-findings) 0))
-                             (gptel-auto-workflow--build-adaptive-followup-prompt
-                              research-prompt accumulated-findings turn previous-decision)
-                           research-prompt))
+          (current-prompt (let ((base (if (and accumulated-findings (> (length accumulated-findings) 0))
+                                       (gptel-auto-workflow--build-adaptive-followup-prompt
+                                        research-prompt accumulated-findings turn previous-decision)
+                                     research-prompt)))
+                            ;; Inject programmatic source directive
+                            (gptel-auto-workflow--inject-source-directive
+                             base controller-config turn accumulated-findings)))
          (turn-label (format "External research turn %d/%d" (1+ turn) max-turns)))
     (message "[autotts] Starting %s (beta=%.1f)" turn-label (or gptel-auto-workflow--research-beta 0.5))
     (gptel-benchmark-call-subagent
@@ -416,8 +534,26 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
               (timeout-p (and (not has-external) 
                               gptel-auto-workflow--research-accumulated-findings 
                               (> (length gptel-auto-workflow--research-accumulated-findings) 0)))
-              (research-error-p (and (not timeout-p)
-                                     (gptel-auto-workflow--research-error-p raw-findings)))
+               (research-error-p (and (not timeout-p)
+                                      (gptel-auto-workflow--research-error-p raw-findings)))
+               ;; ─── Failure Classification ───
+               ;; Classify WHY research failed so controller can adapt
+               ;; Returns symbol: timeout, no-external-content, quota-exhausted, error-response, empty-response, success
+               (failure-reason
+                (cond
+                 (timeout-p 'timeout)
+                 ((and raw-findings (string-match-p "\\`Error:.*timed out" raw-findings))
+                  'timeout)
+                 ((and raw-findings (string-match-p "quota\\|rate.?limit\\|429\\|exhausted" raw-findings))
+                  'quota-exhausted)
+                 ((and raw-findings (string-match-p "\\`Error:" raw-findings))
+                  'error-response)
+                 ((or (null raw-findings) (string-empty-p raw-findings) (< (length raw-findings) 50))
+                  'empty-response)
+                 ((not has-external)
+                  'no-external-content)
+                 (t 'success)))
+               ;; ─── End Failure Classification ───
               (effective-findings (cond
                                    (timeout-p
                                     (message "[autotts] Turn %d timeout, using accumulated findings" (1+ turn))
@@ -450,16 +586,17 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
                                        'timeout
                                      (gptel-auto-workflow--controller-decide-research-flow
                                       controller-config-with-turn (length merged-findings) merged-findings))))
-         ;; Record execution trace
-         (gptel-auto-workflow--record-research-trace
-          turn
-          (list :decision controller-decision
-                :confidence turn-confidence
-                :ema-conf ema-conf
-                :ema-delta ema-delta
-                :output-length (length raw-findings)
-                :tokens-used turn-tokens
-                :findings-quality (if timeout-p 0.0 turn-confidence)))
+          ;; Record execution trace with failure classification
+          (gptel-auto-workflow--record-research-trace
+           turn
+           (list :decision controller-decision
+                 :confidence turn-confidence
+                 :ema-conf ema-conf
+                 :ema-delta ema-delta
+                 :output-length (length raw-findings)
+                 :tokens-used turn-tokens
+                 :findings-quality (if timeout-p 0.0 turn-confidence)
+                 :failure-reason failure-reason))
          ;; Log turn
          (gptel-auto-workflow--log-research-step
           'search
@@ -495,7 +632,24 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
            (gptel-auto-workflow--finalize-research
             research-prompt merged-findings strategy findings-hash
             controller-decision turn-confidence cumulative-tokens callback))
-          ;; BRANCH: Try alternate strategy
+          ;; WIDEN: Open parallel branches (multi-branch pool)
+          ((eq controller-decision 'widen)
+           (message "[autotts] Controller WIDEN after turn %d (opening parallel branches)"
+                    (1+ turn))
+           (gptel-auto-workflow--branch-pool-add
+            (or strategy "default") merged-findings cumulative-tokens)
+           (gptel-auto-workflow--branch-pool-widen
+            gptel-auto-workflow--research-controller-config
+            research-prompt callback)
+           ;; Continue current branch too if not at max turns
+           (if (< turn (1- max-turns))
+               (gptel-auto-workflow--run-research-turn
+                research-prompt (1+ turn) callback
+                merged-findings cumulative-tokens 'widen)
+             (gptel-auto-workflow--finalize-research
+              research-prompt merged-findings strategy findings-hash
+              controller-decision turn-confidence cumulative-tokens callback)))
+          ;; BRANCH: Try alternate strategy (simple single-branch switch)
           ((eq controller-decision 'branch)
            (message "[autotts] Controller BRANCH after turn %d, trying alternate strategy"
                     (1+ turn))
@@ -540,6 +694,63 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
              timeout)
          ;; Turn 0: shorter initial search to test direction
          (max 120 (* base-timeout own-priority)))))))
+
+;; ─── Programmatic Source Scheduling ───
+
+(defun gptel-auto-workflow--inject-source-directive (prompt controller-config turn accumulated-findings)
+  "Inject PROGRAMMATIC source selection directive into PROMPT.
+The controller actively selects which sources to search next, not just advisory text.
+Based on source classification and effectiveness data.
+Returns modified prompt with source directive appended."
+  (let* ((own-priority (or (plist-get controller-config :own-repo-priority) 0.85))
+         (external-priority (or (plist-get controller-config :external-priority) 0.15))
+         (classification (when accumulated-findings
+                           (gptel-auto-workflow--classify-source
+                            "own-research" accumulated-findings)))
+         ;; Get source effectiveness data for informed scheduling
+         (own-effectiveness (gptel-auto-workflow--get-source-effectiveness "own-repo"))
+         (ext-effectiveness (gptel-auto-workflow--get-source-effectiveness "external"))
+         (own-score (gptel-auto-workflow--source-priority-score "own-repo"))
+         (ext-score (gptel-auto-workflow--source-priority-score "external"))
+         ;; Build directive based on controller state
+         (directive
+          (cond
+           ;; Aligned + own repos effective → deep dive own repos
+           ((and (eq classification 'aligned)
+                 (> own-score 0.5))
+            (format "SOURCE DIRECTIVE (controller-enforced):
+MUST search your own GitHub repos FIRST: %s/%s/*
+Then IF findings are insufficient, search 1-2 external sources.
+Budget: %.0f%% own repos, %.0f%% external."
+                    (or (getenv "GITHUB_USER") "davidwuchn")
+                    (or (getenv "GITHUB_USER") "davidwuchn")
+                    (* 100 own-priority) (* 100 external-priority)))
+           ;; Deviant → switch sources aggressively
+           ((eq classification 'deviant)
+            (format "SOURCE DIRECTIVE (controller-enforced):
+Previous sources DEVIANT — switch to NEW sources.
+PROBE FIRST: Skim source titles/abstracts before deep-reading.
+Search: external trending repos, arxiv, github explore.
+Avoid: sources previously searched (they produced deviant results).
+Priority: 100%% external. Budget: 60s per source probe, 120s for deep read if probe passes."))
+           ;; Neutral → balanced approach
+           ((>= turn 2)
+            (format "SOURCE DIRECTIVE (controller-enforced):
+Cross-reference: search complementary sources to earlier findings.
+Own repos score: %.1f, External score: %.1f
+Prioritize: %s"
+                    own-score ext-score
+                    (if (> own-score ext-score) "own repos" "external")))
+           ;; Default first turn
+           (t
+            (format "SOURCE DIRECTIVE (controller-enforced):
+Start with own repos: gh search repos davidwuchn
+Followed by: 1-2 external references.
+Budget: %.0f%% own repos, %.0f%% external."
+                    (* 100 own-priority) (* 100 external-priority))))))
+    (concat prompt "\n\n" directive)))
+
+;; ─── End Programmatic Source Scheduling ───
 
 (defun gptel-auto-workflow--build-adaptive-followup-prompt (base-prompt accumulated-findings turn 
                                                                &optional previous-decision)
