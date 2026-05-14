@@ -194,7 +194,7 @@ RunAgent was registered, leaving it out of the buffer's tool list."
         (setq info (plist-put info :tools tools))
         (setf (gptel-fsm-info fsm) info))
       (dolist (tc tool-use)
-        (when (listp tc)
+        (when (proper-list-p tc)
           (let* ((name (plist-get tc :name))
                (matched-tool (and (stringp name)
                                   (my/gptel--find-tool-fuzzy name tools)))
