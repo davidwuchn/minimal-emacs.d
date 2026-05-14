@@ -285,29 +285,83 @@ EDGE CASE: Only caches context when shell commands produce non-empty output."
             (list :git-history "" :file-sizes "" :todos "" :file-list "")))))))
 
 (defun gptel-auto-workflow--local-research-patterns ()
-  "Perform local grep-based pattern analysis when subagents unavailable.
-Returns a string with findings about common code issues.
-ASSUMPTION: Project root has lisp/modules/ directory with git history.
-BEHAVIOR: Scans for dangerous patterns (cl-return-from, ignore-errors, etc.)
-EDGE CASE: Returns empty string if no patterns found or git unavailable."
+  "Perform local analysis when external research is unavailable.
+Returns structured findings from codebase analysis, recent experiment results,
+and git history — providing actionable self-evolution data without internet.
+MULTI-LAYER ANALYSIS: code patterns + experiment failures + git trends."
   (let ((proj-root (gptel-auto-workflow--effective-project-root))
-        (patterns '(("cl-return-from" . "Potential missing cl-block wrapper")
-                    ("ignore-errors" . "Swallows errors silently")
-                    ("set-buffer" . "May affect global buffer state")
-                    ("goto-char" . "May move cursor unexpectedly")))
-        (results '()))
-    (dolist (pattern patterns)
-      (let* ((grep-cmd (format "cd %s && git grep -n '%s' -- lisp/modules/ 2>/dev/null | head -5"
-                               (shell-quote-argument proj-root)
-                               (car pattern)))
-             (output (shell-command-to-string grep-cmd)))
-        (when (and output (not (string-empty-p (string-trim output))))
-          (push (format "Pattern: %s (%s)\n%s"
-                        (car pattern) (cdr pattern)
-                        (string-trim-right output))
-                results))))
-    (if results
-        (mapconcat #'identity (nreverse results) "\n\n")
+        (sections nil))
+    ;; Layer 1: Codebase anti-pattern scan
+    (let ((patterns '(("cl-return-from" . "Missing cl-block wrapper")
+                      ("ignore-errors" . "Swallows errors silently")
+                      ("with-temp-buffer" . "May leak buffer state in async")
+                      ("set-buffer" . "May affect global buffer state")
+                      ("condition-case nil" . "Swallows all errors including quit"))))
+      (dolist (pattern patterns)
+        (let* ((cmd (format "cd %s && git grep -nc '%s' -- lisp/modules/ 2>/dev/null"
+                            (shell-quote-argument proj-root)
+                            (car pattern)))
+               (output (string-trim (shell-command-to-string cmd))))
+          (when (and output (not (string-empty-p output)))
+            (let ((count (string-to-number output)))
+              (when (> count 0)
+                (push (format "- `%s`: **%d** occurrences — %s"
+                              (car pattern) count (cdr pattern))
+                      sections)))))))
+    ;; Layer 2: Recent experiment failure patterns
+    (let* ((experiments-dir (expand-file-name "var/tmp/experiments" proj-root))
+           (recent-failures nil))
+      (when (file-directory-p experiments-dir)
+        (dolist (tsv-file (directory-files experiments-dir t "results\\.tsv\\'" t))
+          (condition-case nil
+              (with-temp-buffer
+                (insert-file-contents tsv-file)
+                (dolist (line (cdr (split-string (buffer-string) "\n" t)))
+                  (let ((fields (split-string line "\t")))
+                    (when (and (>= (length fields) 2)
+                               (member (nth 1 fields) '("validation-failed" "discarded" "timeout")))
+                      (push (nth 0 fields) recent-failures)))))
+            (error nil))))
+      (when recent-failures
+        (let ((top-failures (seq-take (sort (cl-remove-duplicates recent-failures :test #'string=)
+                                            (lambda (a b)
+                                              (> (cl-count a recent-failures :test #'string=)
+                                                 (cl-count b recent-failures :test #'string=))))
+                                      5)))
+          (push (format "## Recent Experiment Failures (%d total)\n\n%s"
+                        (length recent-failures)
+                        (mapconcat (lambda (f)
+                                     (format "- `%s`: failed **%d** times" f
+                                             (cl-count f recent-failures :test #'string=)))
+                                   top-failures "\n"))
+                sections))))
+    ;; Layer 3: Git commit trend analysis
+    (let* ((cmd (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
+                        (shell-quote-argument proj-root)))
+           (output (string-trim (shell-command-to-string cmd))))
+      (when (and output (not (string-empty-p output)))
+        (let ((fix-count (cl-count-if (lambda (line) (string-match-p "^[a-f0-9]+ ⊘" line))
+                                      (split-string output "\n" t)))
+              (feature-count (cl-count-if (lambda (line) (string-match-p "^[a-f0-9]+ λ\\|🔁" line))
+                                         (split-string output "\n" t))))
+          (push (format "## Git Activity (last 30 commits to lisp/modules/)\n\n- **%d** bug fixes\n- **%d** feature/evolution commits\n- Focus: %s"
+                        fix-count feature-count
+                        (if (> fix-count feature-count) "stabilization" "feature development"))
+                sections))))
+    ;; Layer 4: Module complexity hotspots
+    (let* ((cmd (format "cd %s && find lisp/modules -name '*.el' -exec wc -l {} + 2>/dev/null | sort -rn | head -5"
+                        (shell-quote-argument proj-root)))
+           (output (string-trim (shell-command-to-string cmd))))
+      (when (and output (not (string-empty-p output)))
+        (push (format "## Module Complexity (top 5 by lines)\n\n```\n%s\n```" output)
+              sections)))
+    ;; Compose final report
+    (if sections
+        (concat "## Local Codebase Analysis (fallback — external research unavailable)\n\n"
+                "> Auto-generated from local git history, experiment results, and codebase scan.\n\n"
+                (mapconcat #'identity (nreverse sections) "\n\n")
+                "\n\n**Self-Evolution Directive:** Focus on the highest-failure modules above. "
+                "Apply nil-safety patterns and validation guards to reduce failure rates.")
       "")))
 
 (defun gptel-auto-workflow--load-research-skill ()
