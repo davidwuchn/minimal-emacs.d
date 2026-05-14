@@ -1,0 +1,1 @@
+{"name":"failure-mode-skills","version":"1.0","hypothesis":"Loading skills weighted by failure mode frequency improves guidance relevance","axis":"E,D","components":["skill-weighting","failure-frequency","adaptive-skill-selection"]}

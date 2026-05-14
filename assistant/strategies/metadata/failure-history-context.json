@@ -1,0 +1,1 @@
+{"name":"failure-history-context","version":"1.0","hypothesis":"Retrieving context from modules involved in past failures produces more targeted guidance","axis":"B","components":["failure-analysis","context-retrieval"]}

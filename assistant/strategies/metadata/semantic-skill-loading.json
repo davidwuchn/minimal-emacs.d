@@ -1,0 +1,1 @@
+{"name":"semantic-skill-loading","version":"1.0","hypothesis":"Detecting code constructs and loading corresponding skills provides more targeted guidance than static pattern matching.","axis":"E","components":["construct-detection","dynamic-skill-mapping"]}
