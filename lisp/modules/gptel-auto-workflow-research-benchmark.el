@@ -634,7 +634,8 @@ sees a unified view of both TSV and trace analysis."
                              (json-key-type 'keyword))
                          (json-read-file topic-file))
                      (error (make-hash-table :test 'equal))))
-         (topics (gethash "topics" existing)))
+         (topics-raw (or (gethash :topics existing) (gethash "topics" existing)))
+         (topics (if (hash-table-p topics-raw) topics-raw (make-hash-table :test 'equal))))
     ;; Merge trace topic data into existing hash
     (maphash (lambda (strategy stats)
                (let* ((kept (nth 0 stats))
@@ -689,10 +690,9 @@ sees a unified view of both TSV and trace analysis."
                              (json-key-type 'keyword))
                          (json-read-file source-file))
                      (error (make-hash-table :test 'equal))))
-         (sources (gethash "sources" existing)))
-    (unless sources
-      (setq sources (make-hash-table :test 'equal))
-      (puthash "sources" sources existing))
+         (sources-raw (or (gethash :sources existing) (gethash "sources" existing)))
+         (sources (if (hash-table-p sources-raw) sources-raw (make-hash-table :test 'equal))))
+    (puthash :sources sources existing)
     (maphash (lambda (source stats)
                (let* ((kept (nth 0 stats))
                       (total (nth 1 stats))
