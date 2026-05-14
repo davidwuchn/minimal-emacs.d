@@ -757,6 +757,8 @@ can consume lists, vectors, plists, and alists as readable data."
                       nil)))
     (unless tool-spec
       (error "Unknown tool %s requested by Programmatic" tool-name))
+    (unless (proper-list-p tool-spec)
+      (error "Programmatic tool spec must be a proper list, got: %S" tool-spec))
     (let ((arg-values (gptel-sandbox--resolve-tool-args tool-spec arg-forms env)))
       (gptel-sandbox--check-tool tool-name tool-spec arg-values)
       (setf (plist-get state :tool-count) (1+ (or (plist-get state :tool-count) 0)))
