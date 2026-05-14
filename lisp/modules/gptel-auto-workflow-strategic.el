@@ -511,9 +511,8 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (skill-content (gptel-auto-workflow--load-research-skill))
          (directive-content (gptel-auto-workflow--load-directive-skill))
          (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
-         ;; Load AutoTTS-style strategy guidance from replay store
-         (strategy-guidance (gptel-auto-workflow--load-strategy-guidance))
-         (source-guidance (when (fboundp 'gptel-auto-workflow--apply-source-priority-to-prompt)
+          ;; Load AutoTTS-style strategy guidance via {{strategy-guidance}} template injection only
+          (source-guidance (when (fboundp 'gptel-auto-workflow--apply-source-priority-to-prompt)
                             (gptel-auto-workflow--apply-source-priority-to-prompt "")))
          (recent-outcomes (gptel-auto-workflow--build-recent-trace-outcomes-string)))
     (concat (or base-prompt "")
@@ -536,13 +535,8 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                         "*Research ideas that could improve these specific modules:*\n"
                         priority-targets
                         "\n\n")
-              "")
-             (if strategy-guidance
-                 (concat "### Strategy Performance (AutoTTS Replay Store)\n"
-                         strategy-guidance
-                         "\n\n")
                "")
-             (if (and source-guidance (not (string-empty-p source-guidance)))
+              (if (and source-guidance (not (string-empty-p source-guidance)))
                  (concat "### Source Scheduling (AutoTTS)\n"
                          source-guidance
                          "\n\n")
