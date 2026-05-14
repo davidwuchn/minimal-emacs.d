@@ -112,6 +112,9 @@ This is a standalone function that does NOT call strategic.el functions.
 COMPLETION-CALLBACK receives the saved findings when provided."
   (interactive)
   (let ((prompt (slr--load-skill "researcher-prompt")))
+    ;; Substitute AutoTTS template variables if the strategic module is loaded
+    (when (fboundp 'gptel-auto-workflow--substitute-researcher-variables)
+      (setq prompt (gptel-auto-workflow--substitute-researcher-variables prompt)))
     (message "[slr] Prompt: %d chars, subagents=%s, subagent-fbound=%s"
              (length prompt)
              (and (boundp 'gptel-auto-experiment-use-subagents)

@@ -185,7 +185,7 @@ Returns plist with :topic-rates alist and :best-topic for warm-starting decision
     (when (file-exists-p topic-file)
       (condition-case err
           (let* ((json-object-type 'hash-table)
-                 (json-key-type 'keyword)
+                 (json-key-type 'string)
                  (data (json-read-file topic-file))
                  (topics (gethash "topics" data))
                  (rates nil)
@@ -878,7 +878,6 @@ Also populates source effectiveness table from historical traces if empty."
 
 ;; Initialize on load
 (gptel-auto-workflow--load-research-params)
-(gptel-auto-workflow--bootstrap-strategy-guidance)
 
 (provide 'strategic-daemon-functions)
 ;;; strategic-daemon-functions.el ends here
