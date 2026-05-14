@@ -877,6 +877,8 @@ RULES:
             (message "[auto-workflow] gptel-request unavailable, using raw findings")
               (funcall callback raw-findings))))))))
 
+))
+
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
   "Hunt for external ideas from internet sources with real-time controller.
 CALLBACK receives DIGESTED research findings string.
