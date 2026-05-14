@@ -1,0 +1,1 @@
+{"name":"feature-based-skills","version":"1.0","hypothesis":"Detecting code features and dynamically loading relevant skills improves prompt specificity","axis":"E","components":["feature-detection","dynamic-skill-selection"]}
