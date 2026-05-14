@@ -723,8 +723,19 @@ row for the same experiment and target."
          (target (gptel-auto-workflow--plist-get experiment :target "?"))
          (decision (gptel-auto-experiment--tsv-decision-label experiment))
          (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
-         (truncated-output (gptel-auto-experiment--tsv-escape
-                             (truncate-string-to-width agent-output 500 nil nil "..."))))
+          (truncated-output (gptel-auto-experiment--tsv-escape
+                              (truncate-string-to-width agent-output 500 nil nil "..."))))
+    ;; Inject research metadata from global context into experiment record
+    ;; This closes the feedback loop: experiments carry the research strategy that produced them
+    (when (and (boundp 'gptel-auto-workflow--active-strategy)
+               gptel-auto-workflow--active-strategy)
+      (plist-put experiment :research-strategy gptel-auto-workflow--active-strategy))
+    (when (and (boundp 'gptel-auto-workflow--current-research-context)
+               gptel-auto-workflow--current-research-context)
+      (let ((ctx gptel-auto-workflow--current-research-context))
+        (plist-put experiment :research-hash (or (plist-get ctx :hash) "none"))
+        (plist-put experiment :research-quality (if (plist-get ctx :strategy) "external" "none"))
+        (plist-put experiment :controller-decision "unknown")))
     (with-temp-buffer
       (insert-file-contents file)
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
