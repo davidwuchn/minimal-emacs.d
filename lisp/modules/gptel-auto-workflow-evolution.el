@@ -1512,6 +1512,15 @@ Saves to var/tmp/evolution-scores.json."
     (message "[evolution] Recorded score: %.4f (best: %.4f, total: %d)" score (plist-get history :best) total)
     score))
 
+(defun gptel-auto-workflow--evolution-calculate-score ()
+  "Calculate current evolution quality score from experiment results.
+Higher is better. Based on keep rate and average score improvement."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
+         (total (length results))
+         (keep-rate (if (> total 0) (/ (float kept) (float total)) 0.0)))
+    keep-rate))
+
 (defun gptel-auto-workflow--evolution-count-new ()
   "Count new experiments since last recorded score."
   (let* ((score-file (expand-file-name "var/tmp/evolution-scores.json"
