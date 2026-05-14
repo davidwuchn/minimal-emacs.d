@@ -516,10 +516,13 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
          (max-turns (plist-get controller-config :max-turns))
          ;; Add turn count to controller config for decision function
          (controller-config-with-turn (plist-put controller-config :turn-count turn))
-         (current-prompt (if (and accumulated-findings (> (length accumulated-findings) 0))
-                             (gptel-auto-workflow--build-adaptive-followup-prompt
-                              research-prompt accumulated-findings turn previous-decision)
-                           research-prompt))
+          (current-prompt (let ((base (if (and accumulated-findings (> (length accumulated-findings) 0))
+                                       (gptel-auto-workflow--build-adaptive-followup-prompt
+                                        research-prompt accumulated-findings turn previous-decision)
+                                     research-prompt)))
+                            ;; Inject programmatic source directive
+                            (gptel-auto-workflow--inject-source-directive
+                             base controller-config turn accumulated-findings)))
          (turn-label (format "External research turn %d/%d" (1+ turn) max-turns)))
     (message "[autotts] Starting %s (beta=%.1f)" turn-label (or gptel-auto-workflow--research-beta 0.5))
     (gptel-benchmark-call-subagent
@@ -672,6 +675,62 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
              timeout)
          ;; Turn 0: shorter initial search to test direction
          (max 120 (* base-timeout own-priority)))))))
+
+;; ─── Programmatic Source Scheduling ───
+
+(defun gptel-auto-workflow--inject-source-directive (prompt controller-config turn accumulated-findings)
+  "Inject PROGRAMMATIC source selection directive into PROMPT.
+The controller actively selects which sources to search next, not just advisory text.
+Based on source classification and effectiveness data.
+Returns modified prompt with source directive appended."
+  (let* ((own-priority (or (plist-get controller-config :own-repo-priority) 0.85))
+         (external-priority (or (plist-get controller-config :external-priority) 0.15))
+         (classification (when accumulated-findings
+                           (gptel-auto-workflow--classify-source
+                            "own-research" accumulated-findings)))
+         ;; Get source effectiveness data for informed scheduling
+         (own-effectiveness (gptel-auto-workflow--get-source-effectiveness "own-repo"))
+         (ext-effectiveness (gptel-auto-workflow--get-source-effectiveness "external"))
+         (own-score (gptel-auto-workflow--source-priority-score "own-repo"))
+         (ext-score (gptel-auto-workflow--source-priority-score "external"))
+         ;; Build directive based on controller state
+         (directive
+          (cond
+           ;; Aligned + own repos effective → deep dive own repos
+           ((and (eq classification 'aligned)
+                 (> own-score 0.5))
+            (format "SOURCE DIRECTIVE (controller-enforced):
+MUST search your own GitHub repos FIRST: %s/%s/*
+Then IF findings are insufficient, search 1-2 external sources.
+Budget: %.0f%% own repos, %.0f%% external."
+                    (or (getenv "GITHUB_USER") "davidwuchn")
+                    (or (getenv "GITHUB_USER") "davidwuchn")
+                    (* 100 own-priority) (* 100 external-priority)))
+           ;; Deviant → switch sources aggressively
+           ((eq classification 'deviant)
+            (format "SOURCE DIRECTIVE (controller-enforced):
+Previous sources DEVIANT — switch to NEW sources.
+Search: external trending repos, arxiv, github explore.
+Avoid: sources previously searched (they produced deviant results).
+Priority: 100%% external."))
+           ;; Neutral → balanced approach
+           ((>= turn 2)
+            (format "SOURCE DIRECTIVE (controller-enforced):
+Cross-reference: search complementary sources to earlier findings.
+Own repos score: %.1f, External score: %.1f
+Prioritize: %s"
+                    own-score ext-score
+                    (if (> own-score ext-score) "own repos" "external")))
+           ;; Default first turn
+           (t
+            (format "SOURCE DIRECTIVE (controller-enforced):
+Start with own repos: gh search repos davidwuchn
+Followed by: 1-2 external references.
+Budget: %.0f%% own repos, %.0f%% external."
+                    (* 100 own-priority) (* 100 external-priority))))))
+    (concat prompt "\n\n" directive)))
+
+;; ─── End Programmatic Source Scheduling ───
 
 (defun gptel-auto-workflow--build-adaptive-followup-prompt (base-prompt accumulated-findings turn 
                                                                &optional previous-decision)
