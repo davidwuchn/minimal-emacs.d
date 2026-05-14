@@ -1446,6 +1446,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (when (fboundp 'gptel-auto-workflow--run-strategy-evolution)
     (message "[auto-workflow] Running strategy evolution...")
     (gptel-auto-workflow--run-strategy-evolution))
+  ;; Step C: Skill governance (scan health, inject canaries, dashboard)
+  (when (fboundp 'gptel-auto-workflow--skill-governance-run-cycle)
+    (message "[auto-workflow] Running skill governance cycle...")
+    (gptel-auto-workflow--skill-governance-run-cycle))
   (message "[auto-workflow] Self-evolution cycle complete."))
 
 ;; ─── Init ───
