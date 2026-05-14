@@ -461,7 +461,7 @@ remote staging branch."
             (gptel-auto-workflow--git-result
              (format "git merge --ff-only %s" main-q)
              180))
-           (ff-output (car ff-result)))
+           (ff-output (or (car ff-result) "")))
       (cond
        ((= 0 (cdr ff-result))
         (gptel-auto-workflow--finalize-refreshed-staging-submodules worktree main-ref))
@@ -475,7 +475,7 @@ remote staging branch."
                          (shell-quote-argument
                           (format "Sync staging with %s" main-ref)))
                  180))
-               (merge-output (car merge-result)))
+               (merge-output (or (car merge-result) "")))
           (cond
            ((= 0 (cdr merge-result))
             (gptel-auto-workflow--finalize-refreshed-staging-submodules worktree main-ref))
