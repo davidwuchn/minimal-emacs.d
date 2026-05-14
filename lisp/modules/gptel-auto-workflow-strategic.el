@@ -30,6 +30,8 @@
 (require 'json)
 (require 'gptel-tools-agent)
 (require 'gptel-benchmark-subagent nil t)
+(require 'gptel-auto-workflow-research-cache nil t)
+(require 'gptel-auto-workflow-research-benchmark nil t)
 
 ;; Global variables to avoid closure issues in daemon environments
 ;; where lexical-binding may not be properly enabled during load
@@ -497,7 +499,10 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (directive-content (gptel-auto-workflow--load-directive-skill))
          (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
          ;; Load AutoTTS-style strategy guidance from replay store
-         (strategy-guidance (gptel-auto-workflow--load-strategy-guidance)))
+         (strategy-guidance (gptel-auto-workflow--load-strategy-guidance))
+         (source-guidance (when (fboundp 'gptel-auto-workflow--apply-source-priority-to-prompt)
+                            (gptel-auto-workflow--apply-source-priority-to-prompt "")))
+         (recent-outcomes (gptel-auto-workflow--build-recent-trace-outcomes-string)))
     (concat (or base-prompt "")
             "\n\n"
             "## Dynamic Context\n\n"
@@ -507,20 +512,68 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                       "*Avoid re-reporting these. Build upon or contradict them.*\n\n"
                       skill-content
                       "\n\n"))
+            (if (and recent-outcomes (not (string-empty-p recent-outcomes)))
+                (concat "### Previous Research Outcomes (Last 14 Days)\n"
+                        "*How recent research runs performed downstream. Prioritize what worked, avoid what failed.*\n\n"
+                        recent-outcomes
+                        "\n\n")
+              "")
             (if priority-targets
                 (concat "### Current Project Targets (from directive)\n"
                         "*Research ideas that could improve these specific modules:*\n"
                         priority-targets
                         "\n\n")
               "")
-            (if strategy-guidance
-                (concat "### Strategy Performance (AutoTTS Replay Store)\n"
-                        strategy-guidance
-                        "\n\n")
-              "")
-            "### Recent Failure Patterns\n"
-            (gptel-auto-workflow--research-topics-string)
-            "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
+             (if strategy-guidance
+                 (concat "### Strategy Performance (AutoTTS Replay Store)\n"
+                         strategy-guidance
+                         "\n\n")
+               "")
+             (if (and source-guidance (not (string-empty-p source-guidance)))
+                 (concat "### Source Scheduling (AutoTTS)\n"
+                         source-guidance
+                         "\n\n")
+               "")
+             "### Recent Failure Patterns\n"
+             (gptel-auto-workflow--research-topics-string)
+             "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
+
+(defun gptel-auto-workflow--build-recent-trace-outcomes-string ()
+  "Build a compact summary of recent research trace outcomes.
+Shows which strategies/sources produced kept vs discarded downstream experiments.
+Returns empty string when no trace data is available."
+  (let* ((traces (condition-case nil
+                     (gptel-auto-workflow--load-research-traces)
+                   (error nil)))
+         (recent (and traces
+                      (seq-take traces (min 20 (length traces)))))
+         (source-stats (make-hash-table :test 'equal))
+         (lines nil))
+    (when recent
+      (dolist (trace recent)
+        (let ((source (or (plist-get trace :source) "unknown"))
+              (strategy (or (plist-get trace :strategy) "unknown"))
+              (success (gptel-auto-workflow--trace-success-p trace))
+              (known (gptel-auto-workflow--trace-outcome-known-p trace)))
+          (when known
+            (let ((key (format "%s via %s" source strategy))
+                  (stats (gethash key source-stats '(0 0))))
+              (puthash key (list (+ (nth 0 stats) (if success 1 0))
+                                (1+ (nth 1 stats)))
+                       source-stats)))))
+      ;; Format outcome summary
+      (maphash (lambda (key stats)
+                 (let ((kept (nth 0 stats))
+                       (total (nth 1 stats)))
+                   (when (> total 0)
+                     (push (format "- **%s**: %d/%d kept (%.0f%%)"
+                                   key kept total
+                                   (* 100 (/ (float kept) total)))
+                           lines))))
+               source-stats)
+      (if lines
+          (string-join (sort lines #'string<) "\n")
+        ""))))
 
 ;;; Meta-Learning Researcher Triggers
 
@@ -884,15 +937,32 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
   "Build adaptive follow-up prompt for turn TURN with ACCUMULATED-FINDINGS.
 BASE-PROMPT is the original research prompt.
 PREVIOUS-DECISION is the controller decision from the previous turn.
-Injects controller guidance to adapt researcher's strategy based on what happened."
-  (let* ((controller-guidance 
+Injects EMA state so the researcher understands WHY the controller chose this path."
+  (let* ((ema-conf (and (boundp 'gptel-auto-workflow--research-ema-conf)
+                        gptel-auto-workflow--research-ema-conf))
+         (ema-delta (and (fboundp 'gptel-auto-workflow--research-ema-delta)
+                         (gptel-auto-workflow--research-ema-delta)))
+         (stop-threshold (* 100 (or (and (boundp 'gptel-auto-workflow--research-controller-config)
+                                         (plist-get gptel-auto-workflow--research-controller-config :min-confidence-stop))
+                                    0.65)))
+         (ema-summary (format "**Controller State:** EMA confidence %.2f (delta %+.2f), stop threshold %.0f%% | Turn %d/%d"
+                              (or ema-conf 0.0)
+                              (or ema-delta 0.0)
+                              stop-threshold
+                              (1+ turn)
+                              (or (and (boundp 'gptel-auto-workflow--research-max-turns)
+                                       gptel-auto-workflow--research-max-turns)
+                                  5)))
+         (controller-guidance
           (cond
-           ;; BRANCH: Previous approach was stagnant, try different angle
+           ;; BRANCH: Confidence stagnated or declined below threshold — try different angle
            ((eq previous-decision 'branch)
-            "**Controller Decision: BRANCH**\nPrevious approach produced limited results. Try a DIFFERENT angle:\n- Search different sources (if you searched own repos, try external)\n- Look for alternative techniques or implementations\n- Explore a related but different topic\n- Focus on a specific sub-problem not yet covered")
-           ;; CONTINUE: Previous findings were promising, dig deeper
+            (format "**Controller Decision: BRANCH** (EMA %.2f stagnated, delta %+.2f below threshold)\n\nPrevious approach produced limited results. Try a DIFFERENT angle:\n- Search different sources (if you searched own repos, try external)\n- Look for alternative techniques or implementations\n- Explore a related but different topic\n- Focus on a specific sub-problem not yet covered"
+                    (or ema-conf 0.0) (or ema-delta 0.0)))
+           ;; CONTINUE: Confidence is rising or stable — dig deeper
            ((eq previous-decision 'continue)
-            "**Controller Decision: CONTINUE**\nPrevious findings show promise but need more depth. Focus on:\n- Implementation details and concrete code examples\n- How techniques apply to our specific modules\n- Specific modules or functions that could be improved\n- Integration steps and potential pitfalls")
+            (format "**Controller Decision: CONTINUE** (EMA %.2f, delta %+.2f — still rising/stable)\n\nPrevious findings show promise but need more depth. Focus on:\n- Implementation details and concrete code examples\n- How techniques apply to our specific modules\n- Specific modules or functions that could be improved\n- Integration steps and potential pitfalls"
+                    (or ema-conf 0.0) (or ema-delta 0.0)))
            ;; Default / first turn
            (t
             "**Continue researching.** Focus on gaps or new angles not covered above. Avoid repeating what was already found.")))
@@ -900,8 +970,9 @@ Injects controller guidance to adapt researcher's strategy based on what happene
           (if (> turn 1)
               "\n\n**Budget Note:** This is turn 3+. Be concise. Focus on highest-impact insights only."
             "")))
-    (format "%s\n\n---\n\n**Previous findings (turn %d):**\n%s\n\n%s%s"
+    (format "%s\n\n---\n\n%s\n\n**Previous findings (turn %d):**\n%s\n\n%s%s"
             base-prompt
+            ema-summary
             turn
             (truncate-string-to-width accumulated-findings 2000 nil nil "...")
             controller-guidance
@@ -1592,27 +1663,42 @@ TOKENS-USED is estimated token count."
                         parsed-steps)))
     (make-directory trace-dir t)
     (let ((trace-data
-           (list :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
-                 :strategy strategy
-                 :findings-hash hash
-                 :prompt-length (length prompt)
+            (list :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                  :strategy strategy
+                  :findings-hash hash
+                  :findings output
+                  :output output
+                  :prompt-length (length prompt)
                  :output-length (length output)
                  :has-urls (if (string-match-p "https?://" output) t nil)
                  :has-code (if (string-match-p "```" output) t nil)
                  :has-structure (if (string-match-p "## .*\\n" output) t nil)
                  :source (if (string-match-p "davidwuchn" output) "own-repo" "external")
-                 :controller-decision (symbol-name (or controller-decision 'continue))
-                 :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
-                 :tokens-used (or tokens-used (/ (length output) 4))
+                  :controller-decision (symbol-name (or controller-decision 'continue))
+                  :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
+                  :ema-conf (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
+                                     gptel-auto-workflow--research-ema-conf)
+                                0.0)
+                  :ema-delta (or (and (fboundp 'gptel-auto-workflow--research-ema-delta)
+                                      (gptel-auto-workflow--research-ema-delta))
+                                 0.0)
+                  :tokens-used (or tokens-used (/ (length output) 4))
                  ;; Step-level traces for AutoTTS offline evaluation
-                 :steps all-steps
-                 :step-count (length all-steps)
+                  :steps all-steps
+                  :step-count (length all-steps)
+                  :turn-count (or (and (boundp 'gptel-auto-workflow--research-trace-log)
+                                       (length gptel-auto-workflow--research-trace-log))
+                                  1)
+                  :trace-log (and (boundp 'gptel-auto-workflow--research-trace-log)
+                                  gptel-auto-workflow--research-trace-log)
                  :metadata (list :tokens-estimate (/ (length output) 4)
                                 :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
                                 :step-count (length all-steps)
                                 :has-steps (if all-steps t nil)))))
       (with-temp-file trace-file
         (insert (json-encode trace-data)))
+      (when (fboundp 'gptel-auto-workflow--research-cache-index-trace-file)
+        (gptel-auto-workflow--research-cache-index-trace-file trace-file))
       (message "[autotts] Saved research trace: %s (%d steps)"
                (file-name-nondirectory trace-file)
                (or (length all-steps) 0)))))
@@ -2040,6 +2126,13 @@ Uses gptel-auto-workflow-research-benchmark.el to:
                                                             (shell-quote-argument script)))))
               (message "[evolve] %s" output)))))
       (message "[evolve] Strategy evolution cycle complete"))))
+
+;; Keep the AutoTTS-enhanced controller authoritative for interactive loads too.
+;; The bootstrap already loads this after strategic.el; normal `require' needs the
+;; same override path so runtime and cron use one controller implementation.
+(let ((autotts-file (locate-library "strategic-daemon-functions")))
+  (when autotts-file
+    (load autotts-file nil 'nomessage)))
 
 (provide 'gptel-auto-workflow-strategic)
 

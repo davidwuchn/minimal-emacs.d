@@ -96,9 +96,9 @@ Called when research context changes or run completes."
            (targets (delete-dups
                      (mapcar (lambda (r) (plist-get r :target))
                              gptel-auto-workflow--research-batch-results)))
-           (kept-count (cl-count-if
-                        (lambda (r) (plist-get r :kept))
-                        gptel-auto-workflow--research-batch-results))
+            (kept-count (cl-count-if
+                         (lambda (r) (eq (plist-get r :kept) t))
+                         gptel-auto-workflow--research-batch-results))
            (total-count (length gptel-auto-workflow--research-batch-results)))
        (condition-case err
            (gptel-auto-workflow--mementum-record-research

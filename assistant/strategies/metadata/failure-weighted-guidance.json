@@ -1,0 +1,1 @@
+{"name":"failure-weighted-guidance","version":"1.0","hypothesis":"Emphasizing guidance sections based on historical failure frequencies produces more targeted improvements","axis":"D","components":["failure-analysis","category-weighting","adaptive-guidance"]}

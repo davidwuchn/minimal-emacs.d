@@ -73,6 +73,17 @@ depends-on: []
 
 ## Integration Points
 
+### Deep Integration Pass (2026-05-14)
+
+- **Single live controller path:** `gptel-auto-workflow-strategic.el` loads `strategic-daemon-functions.el`, replay cache, and benchmark module so cron and interactive paths use the same AutoTTS controller.
+- **Replay uses production traces:** `gptel-auto-workflow-research-cache.el` indexes existing `var/tmp/research-traces/*.json`, detects topics from outcome targets/strategy/prompt, and replays with stored EMA/turn state.
+- **Trace schema is replay-complete:** new traces save raw findings/output plus EMA confidence, EMA delta, turn count, and per-turn trace log.
+- **Researcher prompt feeds AutoTTS:** `assistant/skills/researcher-prompt/SKILL.md` now requires JSON metadata for strategy, sources, topics, confidence, insight count, and token estimate.
+- **Self-evolution uses real outcomes:** trace synthesis and source effectiveness count actual downstream kept/discarded outcomes before falling back to output length.
+- **JSON false fixed:** Emacs reads JSON false as `:json-false`; kept checks now require `(eq value t)` so discarded traces are not counted as wins.
+- **Reward bridge fixed:** `update-trace-outcomes` now uses `erase-buffer`, so it can actually persist experiment outcomes back into trace files.
+- **Cross-layer skill update fixed:** `evolve-all-skills` passes loaded controller config into `update-skill-with-controller` instead of calling it with no argument.
+
 ### Bootstrap Loading
 `lisp/modules/gptel-auto-workflow-bootstrap.el` now loads:
 1. `strategic-daemon-functions.el` (EMA + beta + classification)
@@ -105,6 +116,15 @@ After 5 updates with α=0.5:
 Source (matches consensus)     → aligned
 Source (unrelated content)     → deviant
 Source (empty/error)           → deviant
+```
+
+### Replay Verification
+```
+Cached traces indexed: 15
+Topics detected: nil-safety, performance, general, error-handling, async
+Downstream outcomes known: 12
+Outcome successes after JSON false fix: 10
+nil-safety offline eval: 4 traces, 0 LLM calls
 ```
 
 ---
@@ -154,10 +174,9 @@ Source (empty/error)           → deviant
 
 1. **Controller as skill**: Make controller programmable from skill file
 2. **Held-out validation**: Split experiments into train/validation sets
-3. **Cross-run learning**: Persist learned parameters across daemon restarts
-4. **Probe definition**: Define what "probing" means for research (partial fetch?)
-5. **Beta auto-tuning**: Run sweep automatically when cache has enough traces
-6. **Source scheduling**: Implement probe-age priority in researcher prompt
+3. **Probe definition**: Define what "probing" means for research (partial fetch?)
+4. **Beta auto-tuning threshold:** collect enough real traces for automatic beta sweep
+5. **Pipeline measurement:** compare research effectiveness before/after deep integration
 
 ---
 

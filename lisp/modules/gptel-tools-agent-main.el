@@ -317,6 +317,9 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/gptel-ext-tool-sanitize.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root))
+    (load-file (expand-file-name "lisp/modules/strategic-daemon-functions.el" root))
+    (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-research-cache.el" root))
+    (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-research-benchmark.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root))
     (if (fboundp 'nucleus-presets-setup-agents)
         (progn

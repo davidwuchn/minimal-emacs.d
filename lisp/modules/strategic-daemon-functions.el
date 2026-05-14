@@ -5,6 +5,42 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+(require 'json)
+(require 'subr-x)
+
+(defun gptel-auto-workflow--autotts-root ()
+  "Return project root used for AutoTTS state files."
+  (file-name-as-directory
+   (or (ignore-errors
+         (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+              (gptel-auto-workflow--worktree-base-root)))
+       (ignore-errors
+         (and (fboundp 'gptel-auto-workflow--effective-project-root)
+              (gptel-auto-workflow--effective-project-root)))
+       user-emacs-directory
+       default-directory)))
+
+(defun gptel-auto-workflow--autotts-file (relative-path)
+  "Return absolute AutoTTS state path for RELATIVE-PATH."
+  (expand-file-name relative-path (gptel-auto-workflow--autotts-root)))
+
+(defun gptel-auto-workflow--load-evolved-controller-config ()
+  "Load raw evolved controller JSON from disk, or nil."
+  (let ((controller-file (gptel-auto-workflow--autotts-file
+                          "var/tmp/researcher-controller.json")))
+    (when (file-exists-p controller-file)
+      (condition-case err
+          (let ((json-object-type 'plist)
+                (json-array-type 'list)
+                (json-key-type 'keyword))
+            (with-temp-buffer
+              (insert-file-contents controller-file)
+              (json-read)))
+        (error
+         (message "[autotts] Failed to load controller config: %s" err)
+         nil)))))
+
 ;; Beta parameterization: single scalar controls all research thresholds
 (defvar gptel-auto-workflow--research-beta 0.5
   "Beta parameter for research controller (0.0 = conservative, 1.0 = aggressive).")
@@ -107,16 +143,83 @@ DATA is a plist with turn metadata."
   (setq gptel-auto-workflow--research-ema-history nil)
   (setq gptel-auto-workflow--research-trace-log nil))
 
+(defun gptel-auto-workflow--load-statistical-model ()
+  "Load statistical model from evolved controller JSON.
+Returns plist with :model-intercept, :model-weights, etc., or nil."
+  (let ((config (gptel-auto-workflow--load-evolved-controller-config)))
+    (when (plist-get config :statistical-model)
+      (list :statistical-model t
+            :model-intercept (plist-get config :model-intercept)
+            :model-weights (plist-get config :model-weights)
+            :model-n-traces (plist-get config :model-n-traces)
+            :model-n-kept (plist-get config :model-n-kept)
+            :model-base-rate (plist-get config :model-base-rate)
+            :topic-models (plist-get config :topic-models)))))
+
+(defun gptel-auto-workflow--load-researcher-feedback ()
+  "Load researcher feedback from disk and return adjustment plist.
+Reads var/tmp/researcher-feedback.sexp and suggests beta/threshold tweaks."
+  (let ((feedback-file (gptel-auto-workflow--autotts-file
+                        "var/tmp/researcher-feedback.sexp")))
+    (when (file-exists-p feedback-file)
+      (condition-case err
+          (let ((feedback (with-temp-buffer
+                           (insert-file-contents feedback-file)
+                           (read (current-buffer)))))
+            (let ((best-rate (or (plist-get feedback :best-rate) 0.5)))
+              ;; Adjust beta based on success rate: higher rate = higher beta (more exploration)
+              (list :feedback-beta-offset (- best-rate 0.5)
+                    :feedback-best-quality (plist-get feedback :best-quality)
+                    :feedback-timestamp (plist-get feedback :timestamp))))
+        (error
+         (let ((msg (format "[autotts] Failed to load researcher feedback: %s" err)))
+           (message "%s" msg)
+           nil))))))
+
 (defun gptel-auto-workflow--load-autotts-controller ()
   "Load AutoTTS controller config with beta parameterization.
 Returns plist with controller parameters."
-  (let* ((beta (or gptel-auto-workflow--research-beta 0.5))
-         (params (gptel-auto-workflow--research-beta-schedule beta))
-         ;; Load statistical model if available
-         (statistical-model (when (fboundp 'gptel-auto-workflow--load-statistical-model)
-                             (gptel-auto-workflow--load-statistical-model))))
-    (append params (list :statistical-model statistical-model
-                         :beta beta))))
+  (let* ((base-beta (or gptel-auto-workflow--research-beta 0.5))
+         ;; Load researcher feedback before scheduling so beta affects thresholds.
+         (feedback (gptel-auto-workflow--load-researcher-feedback))
+         (adjusted-beta (if feedback
+                            (max 0.0 (min 1.0 (+ base-beta (or (plist-get feedback :feedback-beta-offset) 0))))
+                          base-beta))
+         (params (gptel-auto-workflow--research-beta-schedule adjusted-beta))
+         (evolved (gptel-auto-workflow--load-evolved-controller-config))
+         (statistical-model (gptel-auto-workflow--load-statistical-model))
+         (stop-threshold (or (plist-get evolved :min-confidence-stop)
+                             (plist-get evolved :stop-threshold)
+                             (plist-get params :stop-threshold)))
+         (branch-threshold (or (plist-get evolved :branch-threshold)
+                               (plist-get params :branch-threshold)))
+         (token-budget (or (plist-get evolved :max-tokens-budget)
+                           (plist-get evolved :token-budget)
+                           (plist-get params :token-budget)))
+         (own-priority (or (plist-get evolved :own-repo-priority)
+                           (plist-get params :own-repo-priority))))
+    (append (list :beta adjusted-beta
+                  :stop-threshold stop-threshold
+                  :min-confidence-stop stop-threshold
+                  :branch-threshold branch-threshold
+                  :token-budget token-budget
+                  :max-tokens-budget token-budget
+                  :own-repo-priority own-priority
+                  :external-priority (or (plist-get evolved :external-priority) 0.15)
+                  :fork-priority (or (plist-get evolved :fork-priority) 0.4)
+                  :web-priority (or (plist-get evolved :web-priority) 0.05)
+                  :min-insights-for-stop (or (plist-get evolved :min-insights-for-stop) 2)
+                  :based-on-traces (or (plist-get evolved :based-on-traces)
+                                       (plist-get statistical-model :model-n-traces)
+                                       0)
+                  :learning-method (or (plist-get evolved :learning-method)
+                                       (and statistical-model "statistical")
+                                       "beta-schedule")
+                  :evolved-at (or (plist-get evolved :evolved-at) "not-yet"))
+            statistical-model
+            evolved
+            params
+            feedback)))
 
 (defun gptel-auto-workflow--controller-decide-research-flow (controller-config output-length &optional output-text)
   "AutoTTS controller with EMA momentum gate.
@@ -162,10 +265,10 @@ Uses EMA trend analysis for momentum-aware stopping."
      
      ;; Trend-based widening: Branch when confidence stagnates or declines
      ;; AND we're past warm-up AND confidence is below stop threshold
-     ((and (>= turn-count (max 1 (/ warm-up 2)))
-           (< ema-conf stop-threshold)
-           (<= ema-delta trend-threshold)
-           (< turn-count (or (plist-get controller-config :max-turns) 3)))
+      ((and (>= turn-count (max 1 (/ warm-up 2)))
+            (< ema-conf stop-threshold)
+            (<= ema-delta trend-threshold)
+            (< turn-count (1- (or (plist-get controller-config :max-turns) 3))))
       (message "[autotts] Controller: BRANCH (EMA conf=%.2f < %.2f, delta=%.2f <= %.2f) [trend-based]"
                ema-conf stop-threshold ema-delta trend-threshold)
       'branch)
@@ -360,9 +463,9 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
            (let ((alt-strategy (if (string= strategy "own-repos-first")
                                    "deep-external"
                                  "own-repos-first")))
-             (gptel-auto-workflow--run-research-turn
-              (gptel-auto-workflow--format-research-strategy-prompt alt-strategy "branch-alternate")
-              turn callback merged-findings cumulative-tokens)))
+              (gptel-auto-workflow--run-research-turn
+               (gptel-auto-workflow--format-research-strategy-prompt alt-strategy "branch-alternate")
+               (1+ turn) callback merged-findings cumulative-tokens 'branch)))
           ;; CONTINUE: Keep going if not at max turns
           ((< turn (1- max-turns))
            (message "[autotts] Controller %s, proceeding to turn %d"
@@ -686,7 +789,7 @@ If FINDINGS provided, classifies sources and adds scheduling guidance."
 ;; Persist learned parameters across runs
 
 (defvar gptel-auto-workflow--research-params-file
-  (expand-file-name "var/tmp/research-params.el")
+  (gptel-auto-workflow--autotts-file "var/tmp/research-params.el")
   "File to persist learned research parameters.")
 
 (defun gptel-auto-workflow--save-research-params ()
@@ -702,7 +805,8 @@ If FINDINGS provided, classifies sources and adds scheduling guidance."
     (message "[autotts] Saved research params (beta=%.2f)" gptel-auto-workflow--research-beta)))
 
 (defun gptel-auto-workflow--load-research-params ()
-  "Load research parameters from disk."
+  "Load research parameters from disk.
+Also populates source effectiveness table from historical traces if empty."
   (when (file-exists-p gptel-auto-workflow--research-params-file)
     (condition-case err
         (let ((params (with-temp-buffer
@@ -717,7 +821,21 @@ If FINDINGS provided, classifies sources and adds scheduling guidance."
                    gptel-auto-workflow--research-beta
                    (hash-table-count gptel-auto-workflow--source-effectiveness-table)))
       (error
-       (message "[autotts] Failed to load research params: %s" err)))))
+       (message "[autotts] Failed to load research params: %s" err))))
+  ;; Populate from historical traces even when params file does not exist yet.
+  (when (and (= (hash-table-count gptel-auto-workflow--source-effectiveness-table) 0)
+             (fboundp 'gptel-auto-workflow--load-research-traces))
+    (let ((traces (gptel-auto-workflow--load-research-traces)))
+      (dolist (trace traces)
+        (let* ((source (or (plist-get trace :source) "unknown"))
+               (quality (or (plist-get trace :quality)
+                            (plist-get trace :confidence)
+                            0.5))
+               (classification (cond ((> quality 0.6) 'aligned)
+                                     ((< quality 0.3) 'deviant)
+                                     (t 'neutral))))
+          (gptel-auto-workflow--update-source-effectiveness
+           source classification quality))))))
 
 ;; Initialize on load
 (gptel-auto-workflow--load-research-params)

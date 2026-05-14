@@ -6,6 +6,7 @@
 !.github/**
 !.LICENSE
 *.elc
+*.md.backup
 !lisp/
 !lisp/modules/
 lisp/*.elc

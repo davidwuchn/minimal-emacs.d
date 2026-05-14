@@ -286,6 +286,21 @@ This skill auto-evolves every {topic_data.get('lookback_days', 30)} days based o
 - **HuggingFace**: New models, datasets, or spaces for code agents
 - **Reddit**: r/emacs, r/LocalLLaMA, r/MachineLearning discussions
 
+## Output Format
+
+Return a compact structured digest. End with JSON metadata so AutoTTS can replay decisions offline:
+
+```json
+{{
+  "strategy_used": "own-repos-first",
+  "sources_checked": ["davidwuchn/gptel"],
+  "topics_covered": ["nil-safety"],
+  "confidence_final": 0.75,
+  "insights_count": 2,
+  "tokens_estimate": 2500
+}}
+```
+
 ## Instructions
 
 1. Use WebSearch tool to find 3-5 recent/relevant items per topic
@@ -345,12 +360,6 @@ def main():
         print("="*60)
         print(evolved_content)
     else:
-        # Backup existing skill
-        if skill_path.exists():
-            backup_path = skill_path.with_suffix('.md.backup')
-            skill_path.rename(backup_path)
-            print(f"Backed up existing skill to {backup_path}")
-        
         # Write new skill
         skill_path.parent.mkdir(parents=True, exist_ok=True)
         with open(skill_path, 'w') as f:
