@@ -554,11 +554,6 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
             controller-guidance
             budget-guidance)))
 
-(defun gptel-auto-workflow--build-followup-prompt (base-prompt accumulated-findings turn)
-  "Build follow-up prompt for turn TURN.
-DEPRECATED: Use `gptel-auto-workflow--build-adaptive-followup-prompt' instead."
-  (gptel-auto-workflow--build-adaptive-followup-prompt base-prompt accumulated-findings turn))
-
 (defun gptel-auto-workflow--finalize-research (prompt findings strategy hash 
                                                       controller-decision confidence tokens-used callback)
   "Finalize research session and invoke CALLBACK.
@@ -743,38 +738,6 @@ Returns formatted string with source effectiveness data."
           (setq guidance (concat guidance "\n**Strategy**: Start with highest-scoring sources, allocate more turns to aligned sources.\n")))
       (setq guidance (concat guidance "*No source effectiveness data yet. Using default priorities.*\n")))
     guidance))
-
-(defun gptel-auto-workflow--update-researcher-skill-with-sources ()
-  "Update RESEARCHER.md with current source effectiveness data.
-Injects source priority guidance into the skill."
-  (let* ((skill-file (expand-file-name "assistant/skills/auto-workflow/RESEARCHER.md"
-                                       (or (when (fboundp 'gptel-auto-workflow--effective-project-root)
-                                            (gptel-auto-workflow--effective-project-root))
-                                           "/tmp")))
-         (source-guidance (gptel-auto-workflow--generate-source-priority-guidance))
-         (existing-content (when (file-exists-p skill-file)
-                            (with-temp-buffer
-                              (insert-file-contents skill-file)
-                              (buffer-string)))))
-    (when existing-content
-      ;; Remove old source effectiveness section if present
-      (setq existing-content
-            (replace-regexp-in-string
-             "## Source Effectiveness (AutoTTS Tracking).*\\(##\\|$\\)"
-             "\\1"
-             existing-content
-             nil nil 1))
-      ;; Insert new section after "## Controller Guidance"
-      (setq existing-content
-            (replace-regexp-in-string
-             "\\(## Controller Guidance\\n\\n.*?\\n\\)\\(## Mission\\)"
-             (concat "\\1" source-guidance "\n\\2")
-             existing-content))
-      ;; Write updated skill
-      (with-temp-file skill-file
-        (insert existing-content))
-      (message "[autotts] Updated researcher skill with %d source effectiveness entries"
-               (hash-table-count gptel-auto-workflow--source-effectiveness-table)))))
 
 ;; Beta auto-tuning
 
