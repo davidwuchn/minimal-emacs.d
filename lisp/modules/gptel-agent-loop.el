@@ -265,10 +265,12 @@ otherwise returns nil. This avoids silent failures with dotted pairs."
 
 (defun gptel-agent-loop--append-output (state text)
   "Append TEXT to STATE's accumulated output.
-Returns nil if TEXT is not a string (defensive guard)."
+Returns nil if TEXT is not a string (defensive guard).
+ASSUMPTION: STATE is already validated by caller (task-p check done once).
+BEHAVIOR: Uses direct slot access to avoid redundant task-p check on hot path."
   (when (and (gptel-agent-loop--task-p state) (stringp text))
     (setf (gptel-agent-loop--task-accumulated-output state)
-          (concat (gptel-agent-loop--safe-accumulated-output state)
+          (concat (or (gptel-agent-loop--task-accumulated-output state) "")
                   text
                   (unless (string-suffix-p "\n" text) "\n")))))
 
