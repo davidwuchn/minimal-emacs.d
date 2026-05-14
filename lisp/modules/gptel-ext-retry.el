@@ -326,7 +326,10 @@ Returns the number of messages whose reasoning_content was stripped."
       0
     (let* ((data (my/gptel--info-data info))
            (messages (and (listp data) (plist-get data :messages)))
-           (keep my/gptel-reasoning-keep-turns)
+           (raw-keep my/gptel-reasoning-keep-turns)
+           (keep (if (and (numberp raw-keep) (>= raw-keep 0))
+                     (truncate raw-keep)
+                   0))
            (stripped 0))
       (when (and messages (> (length messages) 0))
         (let ((reasoning-indices
