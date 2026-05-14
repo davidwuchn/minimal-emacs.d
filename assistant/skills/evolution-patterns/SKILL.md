@@ -112,7 +112,7 @@ Based on analysis of experiment errors.
 - `reporting`: 100% (5/5)
 - ``id``: 100% (5/5)
 - `cases.let`: 100% (5/5)
-- `about`: 84% (16/19)
+- `about`: 85% (17/20)
 - ``my/gptel--sanitize-multimodal-content``: 83% (5/6)
 - `gptel-ext-core.el`: 83% (5/6)
 - ``fsm``: 83% (5/6)

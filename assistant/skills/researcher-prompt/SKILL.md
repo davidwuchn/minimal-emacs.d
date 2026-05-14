@@ -6,7 +6,7 @@ evolve-script: evolve_researcher.py
 ---
 metadata:
   evolution-stats:
-    total-experiments: 870
+    total-experiments: 1836
 
 ---
 
@@ -19,38 +19,44 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
 ## Current Research Performance
 
-- Overall research effectiveness: 15.4% (280/1822 research-correlated experiments kept)
+- Overall research effectiveness: 15.6% (286/1836 research-correlated experiments kept)
 - Analysis window: last 90 days
 - Topics ranked by downstream success:
 
 | Rank | Topic | Success Rate | Experiments | Trend | Top Targets |
 |------|-------|--------------|-------------|-------|-------------|
-| 1 | nil-safety | 28.3% | 15/53 | ➡️ stable | lisp/modules/gptel-agent-loop.el, lisp/modules/gptel-sandbox.el |
-| 2 | validation-guard | 18.6% | 85/456 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
-| 3 | performance | 17.8% | 24/135 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-tools-agent-git.el |
-| 4 | type-validation | 15.9% | 10/63 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
-| 5 | clarity | 14.5% | 54/372 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
-| 6 | error-handling | 15.4% | 63/409 | ➡️ stable | lisp/modules/gptel-sandbox.el, lisp/modules/gptel-tools-agent.el |
-| 7 | buffer | 12.2% | 10/82 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-tools-agent.el |
-| 8 | helper-extraction | 9.3% | 7/75 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
-| 9 | async | 7.1% | 9/126 | ➡️ stable | lisp/modules/gptel-tools-agent.el, lisp/modules/gptel-agent-loop.el |
-| 10 | cleanup | 5.9% | 3/51 | ➡️ stable | lisp/modules/gptel-tools-agent.el, lisp/modules/gptel-ext-context-cache.el |
+| 1 | standalone-research | 100.0% | 6/6 | ➡️ stable |  |
+| 2 | nil-safety | 28.3% | 15/53 | ➡️ stable | lisp/modules/gptel-agent-loop.el, lisp/modules/gptel-sandbox.el |
+| 3 | validation-guard | 18.6% | 85/456 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
+| 4 | performance | 17.8% | 24/135 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-tools-agent-git.el |
+| 5 | type-validation | 15.9% | 10/63 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
+| 6 | clarity | 14.5% | 54/372 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
+| 7 | error-handling | 15.4% | 63/409 | ➡️ stable | lisp/modules/gptel-sandbox.el, lisp/modules/gptel-tools-agent.el |
+| 8 | buffer | 12.2% | 10/82 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-tools-agent.el |
+| 9 | helper-extraction | 9.3% | 7/75 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
+| 10 | async | 7.1% | 9/126 | ➡️ stable | lisp/modules/gptel-tools-agent.el, lisp/modules/gptel-agent-loop.el |
 
 ## Mission
 
 Search external sources for actionable techniques related to:
 - **Nil safety and null pointer prevention** (success: 28%) — nil-safety
 - **Defensive validation and guard patterns** (success: 19%) — validation-guard
+- **Standalone Research** (success: 100%) — standalone-research
 - **Performance optimization and caching** (success: 18%) — performance
 - **Type validation and predicate patterns** (success: 16%) — type-validation
 - **Error handling and recovery patterns** (success: 15%) — error-handling
-- **Code clarity and self-documenting patterns** (success: 14%) — clarity
 
 ## Priority Projects to Monitor
 
 ### External Projects (Ranked by Downstream Success)
 
+- **own-repo** — Success: 100% (1/1) Techniques: various
 - **karthink/gptel** — Success: 19% (85/456) Techniques: validation-guard
+
+### Other Sources
+
+- **external** — Success: 42%
+- **external** — Success: 0%
 
 Check their: recent commits, open issues, closed PRs, architecture decisions
 Focus on: patterns we can adapt to our Emacs AI agent system
@@ -59,6 +65,7 @@ Focus on: patterns we can adapt to our Emacs AI agent system
 
 - Generic advice ('use AI', 'improve code')
 - Ideas already in our codebase
+- **Template Default** — Only 0% success (0/7 experiments kept)
 - **Cleanup** — Only 6% success (3/51 experiments kept)
 - **Async** — Only 7% success (9/126 experiments kept)
 - **Helper Extraction** — Only 9% success (7/75 experiments kept)
@@ -94,6 +101,7 @@ Return a compact structured digest. End with JSON metadata so AutoTTS can replay
   "tokens_estimate": 2500
 }
 ```
+
 {{strategy-guidance}}
 
 ## Instructions
