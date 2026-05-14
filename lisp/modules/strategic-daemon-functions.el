@@ -107,6 +107,44 @@ DATA is a plist with turn metadata."
   (setq gptel-auto-workflow--research-ema-history nil)
   (setq gptel-auto-workflow--research-trace-log nil))
 
+(defun gptel-auto-workflow--load-statistical-model ()
+  "Load statistical model from evolved controller JSON.
+Returns plist with :model-intercept, :model-weights, etc., or nil."
+  (let ((controller-file (expand-file-name "var/tmp/researcher-controller.json"
+                                           (gptel-auto-workflow--worktree-base-root))))
+    (when (file-exists-p controller-file)
+      (let ((json-object-type 'plist))
+        (with-temp-buffer
+          (insert-file-contents controller-file)
+          (let ((config (json-read)))
+            (when (plist-get config :statistical-model)
+              (list :model-intercept (plist-get config :model-intercept)
+                    :model-weights (plist-get config :model-weights)
+                    :model-n-traces (plist-get config :model-n-traces)
+                    :model-n-kept (plist-get config :model-n-kept)
+                    :model-base-rate (plist-get config :model-base-rate)
+                    :topic-models (plist-get config :topic-models)))))))))
+
+(defun gptel-auto-workflow--load-researcher-feedback ()
+  "Load researcher feedback from disk and return adjustment plist.
+Reads var/tmp/researcher-feedback.sexp and suggests beta/threshold tweaks."
+  (let ((feedback-file (expand-file-name "var/tmp/researcher-feedback.sexp"
+                                         (gptel-auto-workflow--worktree-base-root))))
+    (when (file-exists-p feedback-file)
+      (condition-case err
+          (let ((feedback (with-temp-buffer
+                           (insert-file-contents feedback-file)
+                           (read (current-buffer)))))
+            (let ((best-rate (or (plist-get feedback :best-rate) 0.5)))
+              ;; Adjust beta based on success rate: higher rate = higher beta (more exploration)
+              (list :feedback-beta-offset (- best-rate 0.5)
+                    :feedback-best-quality (plist-get feedback :best-quality)
+                    :feedback-timestamp (plist-get feedback :timestamp))))
+        (error
+         (let ((msg (format "[autotts] Failed to load researcher feedback: %s" err)))
+           (message "%s" msg)
+           nil))))))
+
 (defun gptel-auto-workflow--load-autotts-controller ()
   "Load AutoTTS controller config with beta parameterization.
 Returns plist with controller parameters."
@@ -114,9 +152,13 @@ Returns plist with controller parameters."
          (params (gptel-auto-workflow--research-beta-schedule beta))
          ;; Load statistical model if available
          (statistical-model (when (fboundp 'gptel-auto-workflow--load-statistical-model)
-                             (gptel-auto-workflow--load-statistical-model))))
-    (append params (list :statistical-model statistical-model
-                         :beta beta))))
+                             (gptel-auto-workflow--load-statistical-model)))
+         ;; Load researcher feedback adjustments
+         (feedback (gptel-auto-workflow--load-researcher-feedback))
+         (adjusted-beta (if feedback
+                           (max 0.0 (min 1.0 (+ beta (or (plist-get feedback :feedback-beta-offset) 0))))
+                         beta)))
+    (append params statistical-model (list :beta adjusted-beta))))
 
 (defun gptel-auto-workflow--controller-decide-research-flow (controller-config output-length &optional output-text)
   "AutoTTS controller with EMA momentum gate.
@@ -702,7 +744,8 @@ If FINDINGS provided, classifies sources and adds scheduling guidance."
     (message "[autotts] Saved research params (beta=%.2f)" gptel-auto-workflow--research-beta)))
 
 (defun gptel-auto-workflow--load-research-params ()
-  "Load research parameters from disk."
+  "Load research parameters from disk.
+Also populates source effectiveness table from historical traces if empty."
   (when (file-exists-p gptel-auto-workflow--research-params-file)
     (condition-case err
         (let ((params (with-temp-buffer
@@ -713,6 +756,18 @@ If FINDINGS provided, classifies sources and adds scheduling guidance."
           (setq gptel-auto-workflow--research-ema-window (or (plist-get params :ema-window) 6))
           (when (plist-get params :source-table)
             (setq gptel-auto-workflow--source-effectiveness-table (plist-get params :source-table)))
+          ;; Populate from historical traces if table is empty
+          (when (and (= (hash-table-count gptel-auto-workflow--source-effectiveness-table) 0)
+                     (fboundp 'gptel-auto-workflow--load-research-traces))
+            (let ((traces (gptel-auto-workflow--load-research-traces)))
+              (dolist (trace traces)
+                (let* ((source (or (plist-get trace :source) "unknown"))
+                       (quality (or (plist-get trace :quality) 0.5))
+                       (classification (cond ((> quality 0.6) 'aligned)
+                                             ((< quality 0.3) 'deviant)
+                                             (t 'neutral))))
+                  (gptel-auto-workflow--update-source-effectiveness
+                   source classification quality)))))
           (message "[autotts] Loaded research params (beta=%.2f, %d sources)"
                    gptel-auto-workflow--research-beta
                    (hash-table-count gptel-auto-workflow--source-effectiveness-table)))

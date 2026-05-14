@@ -528,18 +528,22 @@ Returns updated history list."
               ;; Uses trace replay instead of expensive LLM-based benchmark
               (gptel-auto-workflow--run-offline-evolution)
               ;; Step 9: Generate knowledge synthesis
-              (gptel-auto-workflow--synthesize-research-knowledge traces))))))))
+              (gptel-auto-workflow--synthesize-research-knowledge-from-traces traces))))))))
 
-(defun gptel-auto-workflow--synthesize-research-knowledge (traces)
+(defun gptel-auto-workflow--synthesize-research-knowledge-from-traces (traces)
   "Self-evolution layer: synthesize knowledge from traces.
-Extract topic performance and source effectiveness."
+Extract topic performance, source effectiveness, and EMA-outcome correlation."
   (let ((topic-perf (make-hash-table :test 'equal))
-        (source-perf (make-hash-table :test 'equal)))
+        (source-perf (make-hash-table :test 'equal))
+        (ema-decision-perf (make-hash-table :test 'equal)))
     (dolist (trace traces)
       (let ((strategy (plist-get trace :strategy))
             (source (plist-get trace :source))
             (output-length (or (plist-get trace :output-length) 0))
-            (confidence (or (plist-get trace :confidence) 0)))
+            (confidence (or (plist-get trace :confidence) 0))
+            (ema-conf (or (plist-get trace :ema-conf) 0.0))
+            (ema-delta (or (plist-get trace :ema-delta) 0.0))
+            (controller-decision (or (plist-get trace :controller-decision) "UNKNOWN")))
         ;; Track strategy performance
         (let ((existing (gethash strategy topic-perf '(0 0 0))))
           (puthash strategy
@@ -553,7 +557,20 @@ Extract topic performance and source effectiveness."
                    (list (+ (nth 0 existing) (if (> output-length 1000) 1 0))
                          (+ (nth 1 existing) 1)
                          (+ (nth 2 existing) confidence))
-                   source-perf))))
+                   source-perf))
+        ;; Track EMA-decision correlation
+        (let* ((ema-range (cond ((< ema-conf 0.4) "low")
+                                ((< ema-conf 0.7) "med")
+                                (t "high")))
+               (delta-sign (cond ((< ema-delta -0.05) "falling")
+                                 ((> ema-delta 0.05) "rising")
+                                 (t "flat")))
+               (key (format "%s-%s-%s" controller-decision ema-range delta-sign))
+               (existing (gethash key ema-decision-perf '(0 0))))
+          (puthash key
+                   (list (+ (nth 0 existing) (if (> output-length 1000) 1 0))
+                         (+ (nth 1 existing) 1))
+                   ema-decision-perf))))
     ;; Log synthesis
     (message "[autotts] Knowledge synthesis:")
     (message "[autotts]  Strategies:")
@@ -571,7 +588,16 @@ Extract topic performance and source effectiveness."
                             0)))
                  (message "[autotts]    %s: %.0f%% success (%d/%d)"
                           name (* 100 rate) (nth 0 stats) (nth 1 stats))))
-              source-perf)))
+              source-perf)
+    ;; EMA-outcome correlation
+    (message "[autotts]  EMA-outcome correlation:")
+    (maphash (lambda (key stats)
+               (let ((rate (if (> (nth 1 stats) 0)
+                              (/ (float (nth 0 stats)) (nth 1 stats))
+                            0)))
+                 (message "[autotts]    %s: %.0f%% success (%d/%d)"
+                          key (* 100 rate) (nth 0 stats) (nth 1 stats))))
+             ema-decision-perf)))
 
 (defun gptel-auto-workflow--update-skill-with-controller (controller-config)
   "Update researcher SKILL.md with evolved CONTROLLER-CONFIG.
