@@ -1,0 +1,1 @@
+{"name":"complexity-weighted","version":"1.0","hypothesis":"Dynamically weighting prompt sections based on code complexity produces better-tailored recommendations.","axis":"D","components":["variable-computation","complexity-analysis"]}
