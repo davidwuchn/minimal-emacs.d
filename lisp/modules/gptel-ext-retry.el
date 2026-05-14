@@ -569,7 +569,7 @@ Returns the message string if found, nil otherwise.
 ASSUMPTION: Error messages can be in :message (plist) or 'message (alist) keys."
   (cond
     ((stringp error-data) error-data)
-    ((listp error-data)
+    ((proper-list-p error-data)
      (or (plist-get error-data :message)
          (cdr (assq 'message error-data))))
     (t nil)))
@@ -625,11 +625,11 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
         (and (numberp status) (memq status my/gptel--transient-http-statuses))
         (and (numberp status)
              (= status 400)
-             (listp error-data)
+             (proper-list-p error-data)
              (stringp error-msg)
              http-400-pattern
              (string-match-p http-400-pattern error-msg))
-        (and (listp error-data)
+        (and (proper-list-p error-data)
              (stringp error-msg)
              (or (null status) (not (memq status my/gptel--auth-failure-statuses)))
              msg-pattern
