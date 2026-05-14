@@ -26,9 +26,9 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
 Current controller configuration (evolved from trace outcomes):
 
-- **Stop threshold**: 0.70
+- **Stop threshold**: 0.65
 - **Token budget**: 8000 tokens
-- **Own-repo priority**: 70%
+- **Own-repo priority**: 95%
 
 ## Instructions
 

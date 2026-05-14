@@ -1,0 +1,1 @@
+{"name":"adaptive-compression-depth","version":"1.0","hypothesis":"Hierarchical depth-based compression preserves critical content layers at each level.","axis":"F","components":["depth-compression","file-complexity","adaptive-leveling"]}

@@ -178,6 +178,11 @@
     (when (fboundp 'nucleus--override-gptel-agent-presets)
       (nucleus--override-gptel-agent-presets)))
   (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root))
+  ;; Phase 5 patch: daemon has persistent loading issue with strategic.el
+  ;; where some functions aren't defined after load. Workaround until root
+  ;; cause is identified.
+  (when (file-exists-p (expand-file-name "lisp/modules/phase5-patch.el" root))
+    (load-file (expand-file-name "lisp/modules/phase5-patch.el" root)))
   (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root))
   (cond
    ((string= action "auto-workflow")
