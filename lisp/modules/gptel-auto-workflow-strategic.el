@@ -922,7 +922,8 @@ RULES:
             (gptel-request
                 digest-prompt
               :callback digest-callback
-              :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights.")
+              :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights."
+              :timeout 60)
           (progn
             (message "[auto-workflow] gptel-request unavailable, using raw findings")
                (funcall callback raw-findings)))))))))

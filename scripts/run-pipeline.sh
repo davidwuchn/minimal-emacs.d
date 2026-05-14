@@ -83,8 +83,11 @@ wait_for_idle() {
         elif [ "$socket_name" = "copilot-researcher" ]; then
             # Researcher daemon is persistent; wait for findings file instead
             if [ -f "$FINDINGS_FILE" ] && [ "$(wc -c < "$FINDINGS_FILE" 2>/dev/null || echo 0)" -gt 100 ]; then
-                log "$action completed after ${elapsed}s (findings file ready)"
-                return 0
+                findings_mtime="$(stat -f %m "$FINDINGS_FILE" 2>/dev/null || stat -c %Y "$FINDINGS_FILE" 2>/dev/null || echo 0)"
+                if [ "$findings_mtime" -ge "$PIPELINE_START_TIME" ]; then
+                    log "$action completed after ${elapsed}s (findings file ready)"
+                    return 0
+                fi
             fi
             if [ "$elapsed" -ge "$min_start_wait" ] && [ "$daemon_was_seen" -eq 0 ]; then
                 log "WARNING: $action daemon was not observed within ${elapsed}s"
@@ -119,6 +122,8 @@ wait_for_idle() {
     log "WARNING: $action did not complete within ${max_wait}s, proceeding anyway"
     return 0
 }
+
+PIPELINE_START_TIME="$(date +%s)"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."

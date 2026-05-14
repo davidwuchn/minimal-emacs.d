@@ -857,10 +857,10 @@ Saves trace, logs results, and digests findings."
    findings
    (lambda (digested)
      ;; Write internal patterns to separate file
-     (let ((internal-file (expand-file-name "var/tmp/internal-research.md"
-                                            (when (fboundp 'gptel-auto-workflow--effective-project-root)
-                                              (gptel-auto-workflow--effective-project-root)
-                                              "/tmp"))))
+      (let ((internal-file (expand-file-name "var/tmp/internal-research.md"
+                                             (or (when (fboundp 'gptel-auto-workflow--effective-project-root)
+                                                   (gptel-auto-workflow--effective-project-root))
+                                                 default-directory))))
        (make-directory (file-name-directory internal-file) t)
        (with-temp-file internal-file
          (insert (format "# Internal Code Analysis\n\n> Updated: %s\n> EMA Confidence: %.2f\n> Final Decision: %s\n\n%s"
