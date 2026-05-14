@@ -39,6 +39,12 @@
   "Temporary storage for total tokens during multi-turn research.")
 (defvar gptel-auto-workflow--research-controller-config nil
   "Temporary storage for controller config during multi-turn research.")
+(defvar gptel-auto-workflow--research-current-turn nil
+  "Temporary storage for current turn number during multi-turn research.")
+(defvar gptel-auto-workflow--research-max-turns nil
+  "Temporary storage for max turns during multi-turn research.")
+(defvar gptel-auto-workflow--research-prompt nil
+  "Temporary storage for research prompt during multi-turn research.")
 
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
@@ -769,6 +775,9 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
   (setq gptel-auto-workflow--research-accumulated-findings accumulated-findings)
   (setq gptel-auto-workflow--research-total-tokens total-tokens)
   (setq gptel-auto-workflow--research-controller-config (gptel-auto-workflow--load-autotts-controller))
+  (setq gptel-auto-workflow--research-current-turn turn)
+  (setq gptel-auto-workflow--research-max-turns gptel-auto-workflow-max-research-turns)
+  (setq gptel-auto-workflow--research-prompt research-prompt)
   (let* ((controller-config gptel-auto-workflow--research-controller-config)
          (max-turns gptel-auto-workflow-max-research-turns)
          (current-prompt (if (and accumulated-findings (> (length accumulated-findings) 0))
@@ -790,7 +799,7 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
                                      (gptel-auto-workflow--research-error-p raw-findings)))
               (effective-findings (cond
                                    (timeout-p
-                                    (message "[autotts] Turn %d timeout, using accumulated findings" (1+ turn))
+                                     (message "[autotts] Turn %d timeout, using accumulated findings" (1+ gptel-auto-workflow--research-current-turn))
                                     gptel-auto-workflow--research-accumulated-findings)
                                    (research-error-p
                                     (gptel-auto-workflow--local-research-patterns))
@@ -817,64 +826,58 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
                                      (gptel-auto-workflow--controller-decide-research-flow
                                       gptel-auto-workflow--research-controller-config (length merged-findings) merged-findings)))))
          ;; Log this turn as a step
-         (gptel-auto-workflow--log-research-step
-          'search
-          (list :query (format "turn-%d" turn)
-                :output-length (length raw-findings)
-                :cumulative-tokens cumulative-tokens)
-          confidence)
-         (message "[autotts] Turn %d result: %d chars, confidence=%.2f, decision=%s, cumulative-tokens=%d"
-                  (1+ turn) (length raw-findings) confidence controller-decision cumulative-tokens)
-         ;; Check controller decision
-         (cond
-          ;; TIMEOUT: Return accumulated findings
-          ((eq controller-decision 'timeout)
-           (message "[autotts] Controller TIMEOUT after turn %d, returning accumulated findings"
-                    (1+ turn))
-           (gptel-auto-workflow--finalize-research
-            research-prompt merged-findings strategy findings-hash
-            controller-decision confidence cumulative-tokens callback))
-          ;; STOP: We have good findings, return them
-          ((eq controller-decision 'stop)
-           (message "[autotts] Controller STOP after turn %d (confidence=%.2f)"
-                    (1+ turn) confidence)
-           (gptel-auto-workflow--finalize-research
-            research-prompt merged-findings strategy findings-hash
-            controller-decision confidence cumulative-tokens callback))
-          ;; CUT: Over budget, return what we have
-          ((eq controller-decision 'cut)
-           (message "[autotts] Controller CUT after turn %d (budget exceeded)"
-                    (1+ turn))
-           (gptel-auto-workflow--finalize-research
-            research-prompt merged-findings strategy findings-hash
-            controller-decision confidence cumulative-tokens callback))
-          ;; BRANCH: Try alternate strategy in parallel
-          ((eq controller-decision 'branch)
-           (message "[autotts] Controller BRANCH after turn %d, trying alternate strategy"
-                    (1+ turn))
-           (let ((alt-strategy (if (string= strategy "own-repos-first")
-                                   "deep-external"
-                                 "own-repos-first")))
-             ;; Run alternate strategy and merge results
-             (gptel-auto-workflow--run-research-turn
-              (gptel-auto-workflow--format-research-strategy-prompt alt-strategy "branch-alternate")
-              turn callback merged-findings cumulative-tokens)))
-          ;; CONTINUE: Keep going if not at max turns
-           ((< turn (1- max-turns))
+          (gptel-auto-workflow--log-research-step
+           'search
+           (list :query (format "turn-%d" gptel-auto-workflow--research-current-turn)
+                 :output-length (length raw-findings)
+                 :cumulative-tokens cumulative-tokens)
+           confidence)
+          (message "[autotts] Turn %d result: %d chars, confidence=%.2f, decision=%s, cumulative-tokens=%d"
+                   (1+ gptel-auto-workflow--research-current-turn) (length raw-findings) confidence controller-decision cumulative-tokens)
+          ;; Check controller decision
+          (cond
+           ;; TIMEOUT: Return accumulated findings
+           ((eq controller-decision 'timeout)
+            (message "[autotts] Controller TIMEOUT after turn %d, returning accumulated findings"
+                     (1+ gptel-auto-workflow--research-current-turn))
+            (gptel-auto-workflow--finalize-research
+             gptel-auto-workflow--research-prompt merged-findings strategy findings-hash
+             controller-decision confidence cumulative-tokens callback))
+           ;; STOP: We have good findings, return them
+           ((eq controller-decision 'stop)
+            (message "[autotts] Controller STOP after turn %d (confidence=%.2f)"
+                     (1+ gptel-auto-workflow--research-current-turn) confidence)
+            (gptel-auto-workflow--finalize-research
+             gptel-auto-workflow--research-prompt merged-findings strategy findings-hash
+             controller-decision confidence cumulative-tokens callback))
+           ((eq controller-decision 'cut)
+            (message "[autotts] Controller CUT after turn %d (budget exceeded)"
+                     (1+ gptel-auto-workflow--research-current-turn))
+            (gptel-auto-workflow--finalize-research
+             gptel-auto-workflow--research-prompt merged-findings strategy findings-hash
+             controller-decision confidence cumulative-tokens callback))
+           ((eq controller-decision 'branch)
+            (message "[autotts] Controller BRANCH after turn %d, trying alternate strategy"
+                     (1+ gptel-auto-workflow--research-current-turn))
+            (let ((alt-strategy (if (string= strategy "own-repos-first")
+                                    "deep-external"
+                                  "own-repos-first")))
+              (gptel-auto-workflow--run-research-turn
+               (gptel-auto-workflow--format-research-strategy-prompt alt-strategy "branch-alternate")
+               gptel-auto-workflow--research-current-turn callback merged-findings cumulative-tokens)))
+           ((< gptel-auto-workflow--research-current-turn (1- gptel-auto-workflow--research-max-turns))
             (message "[autotts] Controller %s, proceeding to turn %d"
-                     controller-decision (1+ turn))
+                     controller-decision (1+ gptel-auto-workflow--research-current-turn))
             (gptel-auto-workflow--run-research-turn
-             research-prompt (1+ turn) callback
-             merged-findings cumulative-tokens controller-decision))
-          ;; Max turns reached
-          (t
-           (message "[autotts] Max turns (%d) reached, returning accumulated findings"
-                    max-turns)
-           (gptel-auto-workflow--finalize-research
-            research-prompt merged-findings strategy findings-hash
-            'max-turns confidence cumulative-tokens callback)))))
-     ;; Timeout: 300s for turn 1+ (web fetches need more time), 180s for turn 0
-     (if (> turn 0) 300 180))))
+             gptel-auto-workflow--research-prompt (1+ gptel-auto-workflow--research-current-turn) callback
+             merged-findings cumulative-tokens))
+           (t
+            (message "[autotts] Max turns (%d) reached, returning accumulated findings"
+                     gptel-auto-workflow--research-max-turns)
+            (gptel-auto-workflow--finalize-research
+             gptel-auto-workflow--research-prompt merged-findings strategy findings-hash
+             'max-turns confidence cumulative-tokens callback)))))
+      (if (> gptel-auto-workflow--research-current-turn 0) 300 180))))
 
 (defun gptel-auto-workflow--build-adaptive-followup-prompt (base-prompt accumulated-findings turn 
                                                                &optional previous-decision)
