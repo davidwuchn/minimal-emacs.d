@@ -359,6 +359,8 @@ Returns 0.5 if OUTPUT or ANTI-PATTERNS is nil/empty."
 
 (defun gptel-benchmark-element-info (element)
   "Get info plist for ELEMENT."
+  (unless (symbolp element)
+    (error "Expected symbol for element, got: %s" (type-of element)))
   (alist-get element gptel-benchmark-five-elements))
 
 (defun gptel-benchmark-element-generates (element)
