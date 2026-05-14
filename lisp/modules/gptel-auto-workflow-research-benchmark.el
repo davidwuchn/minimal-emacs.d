@@ -194,6 +194,12 @@ When fewer than 10 traces, all go to train (not enough for meaningful split)."
       (list :train (seq-take sorted split-idx)
             :test (seq-drop sorted split-idx)))))
 
+(defun gptel-auto-workflow--controller-evolution-results (_mode)
+  "Return trace results for controller evolution.
+MODE is reserved for future use (e.g., :train :val :test).
+Currently returns all loaded research traces."
+  (gptel-auto-workflow--load-research-traces))
+
 (defun gptel-auto-workflow--validate-on-held-out (controller-config test-traces)
   "Evaluate CONTROLLER-CONFIG on held-out TEST-TRACES.
 Returns plist with (:test-accuracy :test-tokens :overfit-score).
