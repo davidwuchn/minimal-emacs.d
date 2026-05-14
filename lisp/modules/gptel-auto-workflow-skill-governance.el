@@ -1,49 +1,82 @@
 ;;; gptel-auto-workflow-skill-governance.el --- Skill governance integration for self-evolution -*- lexical-binding: t; -*-
 ;; Integrates yknothing/skills-refiner toolkit into our self-evolution pipeline.
-;; Three layers:
+;; Four layers:
 ;;   1. Governance gate — run skill-scan.sh after evolution, report health
-;;   2. Skills-refiner reviewer — audit skills using refiner's design framework
-;;   3. Activation tracing — inject canaries, observe which skills agents use
+;;   2. Semia security audit — static analysis for shell commands, network access, secrets
+;;   3. Dashboard — observe which skills agents actually use
+;;   4. Activation tracing — inject canaries, observe which skills agents use
+;;   5. Skill-eval A/B testing — measure skill effectiveness
 
 ;;; Code:
 
 (require 'json)
 
-(defvar gptel-auto-workflow--skill-governance-tools-root nil
-  "Path to skills-refiner toolkit installation.")
+;; ─── Semia Security Audit (Layer 2) ───
 
-(defun gptel-auto-workflow--skill-governance-tools-root ()
-  "Return the skills-refiner toolkit root directory."
-  (or gptel-auto-workflow--skill-governance-tools-root
-      (let ((root (expand-file-name ".agents/skills"
-                                     (gptel-auto-workflow--worktree-base-root))))
-        (if (file-exists-p (expand-file-name "skill-hygiene/bin/skill-scan.sh" root))
-            root
-          (expand-file-name ".agents/skills" "~")))))
+(defvar gptel-auto-workflow--semia-bin "semia"
+  "Path or name of the Semia CLI binary.")
 
-(defun gptel-auto-workflow--skill-governance-shell (command &rest args)
-  "Run a skills-refiner shell COMMAND with ARGS, return stdout or nil on error."
+(defvar gptel-auto-workflow--semia-report-dir nil
+  "Directory for Semia scan reports (set at first use).")
+
+(defun gptel-auto-workflow--semia-report-dir ()
+  "Return the Semia report directory."
+  (or gptel-auto-workflow--semia-report-dir
+      (setq gptel-auto-workflow--semia-report-dir
+            (expand-file-name "var/tmp/skill-governance/semia"
+                              user-emacs-directory))))
+
+(defun gptel-auto-workflow--semia-available-p ()
+  "Return non-nil when Semia CLI is available."
   (condition-case nil
-      (let ((cmd (mapconcat #'identity
-                            (cons command args) " ")))
-        (with-temp-buffer
-          (if (= 0 (call-process "bash" nil t nil "-c" cmd))
-              (string-trim (buffer-string))
-            (progn
-              (message "[skill-governance] Shell command failed: %s" cmd)
-              nil))))
+      (= 0 (call-process gptel-auto-workflow--semia-bin nil nil nil "--version"))
     (error nil)))
 
-(defun gptel-auto-workflow--skill-governance-json (cmd)
-  "Run shell CMD, parse JSON output, return parsed object or nil."
-  (let ((json (gptel-auto-workflow--skill-governance-shell cmd)))
-    (when (and json (not (string-empty-p json)))
-      (condition-case nil
-          (let ((json-object-type 'hash-table)
-                (json-array-type 'list)
-                (json-key-type 'keyword))
-            (json-read-from-string json))
-        (error nil)))))
+(defun gptel-auto-workflow--semia-scan-skill (skill-dir)
+  "Run Semia security audit on SKILL-DIR.
+Returns plist with :skill :findings :errors :warnings :status, or nil on failure.
+Uses offline baseline (no LLM calls) for fast static analysis."
+  (let* ((slug (file-name-nondirectory (directory-file-name skill-dir)))
+         (run-dir (expand-file-name slug (gptel-auto-workflow--semia-report-dir)))
+         (result-file (expand-file-name "detection_result.json" run-dir))
+         (report-file (expand-file-name "report.md" run-dir)))
+    (make-directory run-dir t)
+    (condition-case err
+        (progn
+          (call-process gptel-auto-workflow--semia-bin nil nil nil
+                        "scan" (expand-file-name skill-dir)
+                        "--offline-baseline" "--out" run-dir)
+          (if (file-exists-p result-file)
+              (let* ((json-object-type 'plist)
+                     (json-key-type 'keyword)
+                     (result (json-read-file result-file)))
+                (list :skill slug
+                      :findings (or (plist-get result :findings) 0)
+                      :status (plist-get result :status)
+                      :report report-file
+                      :result-file result-file))
+            (list :skill slug :findings -1 :status "no_result" :error "detection_result.json missing")))
+      (error
+       (message "[semia] Scan failed for %s: %s" slug err)
+       nil))))
+
+(defun gptel-auto-workflow--semia-scan-all-skills ()
+  "Run Semia security audit on all skill directories.
+Returns list of result plists."
+  (unless (gptel-auto-workflow--semia-available-p)
+    (message "[semia] CLI not available (install: uv tool install semia-audit)")
+    (list (list :status 'unavailable :message "semia CLI not found")))
+  (let* ((skills-root (expand-file-name "assistant/skills" user-emacs-directory))
+         (results nil))
+    (if (file-directory-p skills-root)
+        (dolist (skill-dir (directory-files skills-root t "^[^._]"))
+          (when (and (file-directory-p skill-dir)
+                     (file-exists-p (expand-file-name "SKILL.md" skill-dir)))
+            (message "[semia] Scanning %s..." (file-name-nondirectory skill-dir))
+            (when-let ((result (gptel-auto-workflow--semia-scan-skill skill-dir)))
+              (push result results))))
+      (message "[semia] No skills directory found"))
+    (nreverse results)))
 
 ;; ─── Layer 1: Governance Gate ───
 
@@ -239,12 +272,11 @@ Returns plist (:success t|nil :compile-ok t|nil :anti-patterns N)."
 
 (defun gptel-auto-workflow--skill-governance-run-cycle ()
   "Run a complete skill governance cycle.
-1. Scan health
-2. Inject canaries (if not already injected)
-3. Run dashboard
-4. Run skill-eval A/B tests on recently-evolved skills
-5. Save report
-Designed to be called from the self-evolution cycle."
+1. Health scan (skills-refiner)
+2. Semia security audit (static analysis)
+3. Inject canaries / Dashboard
+4. Skill-eval A/B tests
+5. Save report"
   (interactive)
   (message "[skill-governance] Starting governance cycle...")
 
@@ -254,11 +286,25 @@ Designed to be called from the self-evolution cycle."
              (plist-get scan :skills)
              (plist-get scan :broken-symlinks)
              (plist-get scan :load-blockers))
-    ;; Block evolution if load blockers found
     (when (and (plist-get scan :load-blockers)
                (> (plist-get scan :load-blockers) 0))
       (message "[skill-governance] WARNING: %d runtime load blockers detected"
                (plist-get scan :load-blockers))))
+
+  ;; Layer 2: Semia security audit
+  (when (gptel-auto-workflow--semia-available-p)
+    (let ((semia-results (gptel-auto-workflow--semia-scan-all-skills))
+          (findings 0) (errors 0))
+      (dolist (r semia-results)
+        (when (plist-get r :findings)
+          (cl-incf findings (plist-get r :findings)))
+        (unless (equal (plist-get r :status) "ok")
+          (cl-incf errors)))
+      (if (> findings 0)
+          (message "[skill-governance] Semia: %d findings across %d skills (%d errors)"
+                   findings (length semia-results) errors)
+        (message "[skill-governance] Semia: %d skills scanned, 0 findings"
+                 (length semia-results)))))
 
   ;; Layer 3: Dashboard
   (let ((dash (gptel-auto-workflow--skill-governance-dashboard)))
