@@ -69,3 +69,4 @@ lisp/modules/*.elc
 !packages/
 !packages/**
 assistant/strategies/evaluations.jsonl
+mementum/knowledge/token-efficiency.md
