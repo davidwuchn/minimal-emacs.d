@@ -38,6 +38,18 @@ Returns alist of (category . pattern) or nil."
   "Regex pattern matching hard quota exhaustion errors.
 Loaded from provider-error-analyzer skill if available.")
 
+(defconst gptel-auto-experiment--shared-retryable-error-patterns
+  (cons
+   (cons
+    (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON") t)
+    7) ;; 7 matches in first group
+   (cons
+    (regexp-opt '("WebClientRequestException" "server_error" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "Malformed JSON") t)
+    7)) ;; 7 matches in second group
+  "Pre-compiled shared retryable error patterns.
+CAR: General retryable patterns (used in is-retryable-error-p).
+CDR: Transient pressure patterns (used in provider-pressure-error-p).")
+
 (defun gptel-auto-workflow--first-available-provider-candidate (candidates &optional excluded-backends)
   "Return the first available entry from CANDIDATES, skipping EXCLUDED-BACKENDS.
 
@@ -210,9 +222,7 @@ Returns the message string or nil."
              (gptel-auto-experiment--rate-limit-error-p msg)
              (gptel-auto-experiment--provider-usage-limit-error-p msg)
              (let ((case-fold-search t))
-               (string-match-p
-                "timeout\\|timed out\\|temporary\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\"\\|Malformed JSON"
-                msg))))))
+               (string-match-p (car gptel-auto-experiment--shared-retryable-error-patterns) msg))))))
 
 (defvar gptel-auto-experiment--quota-reset-timestamp nil
   "Parsed timestamp (seconds since epoch) when quota resets.
@@ -270,9 +280,7 @@ This is used for retry logic and includes transient errors."
       (let ((msg (gptel-auto-experiment--error-message error-output)))
         (and (stringp msg)
              (let ((case-fold-search t))
-               (string-match-p
-                "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 35\\|curl failed with exit code 56\\|operation timed out\\|Malformed JSON"
-                msg))))))
+               (string-match-p (cdr gptel-auto-experiment--shared-retryable-error-patterns) msg))))))
 
 (defun gptel-auto-experiment--should-blacklist-provider-p (error-output)
   "Return non-nil only when ERROR-OUTPUT shows a real rate limit or hard quota.
