@@ -176,6 +176,41 @@ Reads var/tmp/researcher-feedback.sexp and suggests beta/threshold tweaks."
            (message "%s" msg)
            nil))))))
 
+(defun gptel-auto-workflow--load-skill-topic-priors ()
+  "Load topic success rates from data/topic-performance.json as controller priors.
+Returns plist with :topic-rates alist and :best-topic for warm-starting decisions."
+  (let* ((data-dir (gptel-auto-workflow--autotts-file
+                    "assistant/skills/researcher-prompt/data"))
+         (topic-file (expand-file-name "topic-performance.json" data-dir)))
+    (when (file-exists-p topic-file)
+      (condition-case err
+          (let* ((json-object-type 'hash-table)
+                 (json-key-type 'keyword)
+                 (data (json-read-file topic-file))
+                 (topics (gethash "topics" data))
+                 (rates nil)
+                 (best-topic nil)
+                 (best-rate 0.0))
+            (when (hash-table-p topics)
+              (maphash (lambda (topic stats)
+                         (let ((rate (gethash "success_rate" stats 0.0))
+                               (kept (gethash "kept" stats 0))
+                               (total (gethash "total_experiments" stats 0)))
+                           (push (cons topic rate) rates)
+                           (when (and (> total 4) (> rate best-rate))
+                             (setq best-rate rate
+                                   best-topic topic))))
+                       topics)
+              (message "[autotts] Loaded %d topic priors from skill data (best: %s %.0f%%)"
+                       (length rates) (or best-topic "none") (* 100 best-rate))
+              (list :topic-rates rates
+                    :best-topic best-topic
+                    :best-topic-rate best-rate
+                    :n-topics (length rates))))
+        (error
+         (message "[autotts] Failed to load topic priors: %s" err)
+         nil)))))
+
 (defun gptel-auto-workflow--load-autotts-controller ()
   "Load AutoTTS controller config with beta parameterization.
 Returns plist with controller parameters."
@@ -188,6 +223,7 @@ Returns plist with controller parameters."
          (params (gptel-auto-workflow--research-beta-schedule adjusted-beta))
          (evolved (gptel-auto-workflow--load-evolved-controller-config))
          (statistical-model (gptel-auto-workflow--load-statistical-model))
+         (topic-priors (gptel-auto-workflow--load-skill-topic-priors))
          (stop-threshold (or (plist-get evolved :min-confidence-stop)
                              (plist-get evolved :stop-threshold)
                              (plist-get params :stop-threshold)))
@@ -216,10 +252,11 @@ Returns plist with controller parameters."
                                        (and statistical-model "statistical")
                                        "beta-schedule")
                   :evolved-at (or (plist-get evolved :evolved-at) "not-yet"))
-            statistical-model
-            evolved
-            params
-            feedback)))
+             statistical-model
+             evolved
+             params
+             feedback
+             topic-priors)))
 
 (defun gptel-auto-workflow--controller-decide-research-flow (controller-config output-length &optional output-text)
   "AutoTTS controller with EMA momentum gate.

@@ -614,126 +614,151 @@ Extract topic performance, source effectiveness, and EMA-outcome correlation."
     (gptel-auto-workflow--save-trace-synthesis topic-perf source-perf)))
 
 (defun gptel-auto-workflow--save-trace-synthesis (topic-perf source-perf)
-  "Write trace synthesis to JSON for evolve_researcher.py consumption."
+  "Merge trace synthesis into existing evolve pipeline data files.
+Reads current topic-performance.json and source-effectiveness.json,
+merges trace-level data, and writes back so evolve_researcher.py
+sees a unified view of both TSV and trace analysis."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (data-dir (expand-file-name "assistant/skills/researcher-prompt/data" root)))
     (make-directory data-dir t)
-    ;; Topic performance from traces: topics-by-strategy → topic-performance format
-    (let ((topics (make-hash-table :test 'equal))
-          (total-kept 0)
-          (total-exp 0))
-      (maphash (lambda (strategy stats)
-                 (let ((kept (nth 0 stats))
-                       (total (nth 1 stats))
-                       (avg-conf (/ (nth 2 stats) (max total 1)))
-                       (topic (if (string-match-p "nil-safety\\|null\\|guard" strategy) "nil-safety"
-                                (if (string-match-p "performance\\|cache\\|speed" strategy) "performance"
-                                  (if (string-match-p "error" strategy) "error-handling"
-                                    (if (string-match-p "async" strategy) "async"
-                                      strategy))))))
-                   (setq total-kept (+ total-kept kept))
-                   (setq total-exp (+ total-exp total))
+    ;; Load existing topic-performance.json (from TSV analysis)
+    (gptel-auto-workflow--merge-trace-topics-into-data topic-perf data-dir)
+    ;; Load existing source-effectiveness.json (from TSV analysis)
+    (gptel-auto-workflow--merge-trace-sources-into-data source-perf data-dir)))
+
+(defun gptel-auto-workflow--merge-trace-topics-into-data (topic-perf data-dir)
+  "Merge trace TOPIC-PERF into the TSV-based topic-performance.json."
+  (let* ((topic-file (expand-file-name "topic-performance.json" data-dir))
+         (existing (condition-case nil
+                       (let ((json-object-type 'hash-table)
+                             (json-key-type 'keyword))
+                         (json-read-file topic-file))
+                     (error (make-hash-table :test 'equal))))
+         (topics (gethash "topics" existing)))
+    ;; Merge trace topic data into existing hash
+    (maphash (lambda (strategy stats)
+               (let* ((kept (nth 0 stats))
+                      (total (nth 1 stats))
+                      (topic (if (string-match-p "nil-safety\\|null\\|guard" strategy) "nil-safety"
+                               (if (string-match-p "performance\\|cache\\|speed" strategy) "performance"
+                                 (if (string-match-p "error" strategy) "error-handling"
+                                   (if (string-match-p "async" strategy) "async"
+                                     strategy)))))
+                      (existing-topic (gethash topic topics)))
+                 (if existing-topic
+                     (let ((old-kept (gethash "kept" existing-topic 0))
+                           (old-total (gethash "total_experiments" existing-topic 0)))
+                       (puthash "kept" (+ old-kept kept) existing-topic)
+                       (puthash "total_experiments" (+ old-total total) existing-topic)
+                       (puthash "success_rate" (/ (float (+ old-kept kept))
+                                                  (max 1 (+ old-total total)))
+                                existing-topic))
                    (puthash topic
-                            (list :kept kept :total total :rate (/ (float kept) (max total 1))
-                                  :avg-confidence avg-conf :trend "stable")
-                            (gethash topic topics (make-hash-table :test 'equal)))))
-               topic-perf)
-      (let ((topics-out (make-hash-table :test 'equal)))
-        (maphash (lambda (topic data)
-                   (puthash topic
-                            (list :kept (plist-get data :kept)
-                                  :total_experiments (plist-get data :total)
-                                  :success_rate (plist-get data :rate)
-                                  :avg_quality_score (plist-get data :avg-confidence)
-                                  :trend (plist-get data :trend)
-                                  :top_targets nil)
-                            topics-out))
-                 topics)
-        (with-temp-file (expand-file-name "topic-performance-traces.json" data-dir)
-          (insert (json-encode `(:topics ,topics-out
-                                 :total_experiments ,total-exp
-                                 :lookback_days 14)))))
-      ;; Source effectiveness from traces
-      (let ((sources-out (make-hash-table :test 'equal)))
-        (maphash (lambda (source stats)
-                   (let ((kept (nth 0 stats))
-                         (total (nth 1 stats)))
-                     (puthash source
-                              (list :experiments_kept kept
-                                    :experiments_enabled total
-                                    :success_rate (/ (float kept) (max total 1))
-                                    :source_type (if (string= source "own-repo") "github" "external")
-                                    :identifier source
-                                    :techniques_suggested nil)
-                              sources-out)))
-                 source-perf)
-        (with-temp-file (expand-file-name "source-effectiveness-traces.json" data-dir)
-          (insert (json-encode `(:sources ,sources-out)))))
-      (message "[autotts] Saved trace synthesis to %s" data-dir))))
+                            (let ((h (make-hash-table :test 'equal)))
+                              (puthash "kept" kept h)
+                              (puthash "total_experiments" total h)
+                              (puthash "discarded" (- total kept) h)
+                              (puthash "success_rate" (/ (float kept) (max total 1)) h)
+                              (puthash "avg_quality_score" 0.5 h)
+                              (puthash "avg_score_improvement" 0.0 h)
+                              (puthash "trend" "stable" h)
+                              (puthash "top_targets" (vector) h)
+                              (puthash "first_seen" :null h)
+                              (puthash "last_seen" :null h)
+                              h)
+                            topics))))
+             topic-perf)
+    ;; Update total experiments
+    (let ((new-total 0) (new-kept 0))
+      (maphash (lambda (_ stats)
+                 (setq new-total (+ new-total (gethash "total_experiments" stats 0)))
+                 (setq new-kept (+ new-kept (gethash "kept" stats 0))))
+               topics)
+      (puthash "total_experiments" new-total existing))
+    (puthash "version" (format-time-string "%Y-%m-%dT%H:%M:%SZ") existing)
+    (with-temp-file topic-file
+      (insert (json-encode existing)))
+    (message "[autotts] Merged trace topic data into %s (%d topics)"
+             topic-file (hash-table-count topics))))
+
+(defun gptel-auto-workflow--merge-trace-sources-into-data (source-perf data-dir)
+  "Merge trace SOURCE-PERF into the TSV-based source-effectiveness.json."
+  (let* ((source-file (expand-file-name "source-effectiveness.json" data-dir))
+         (existing (condition-case nil
+                       (let ((json-object-type 'hash-table)
+                             (json-key-type 'keyword))
+                         (json-read-file source-file))
+                     (error (make-hash-table :test 'equal))))
+         (sources (gethash "sources" existing)))
+    (unless sources
+      (setq sources (make-hash-table :test 'equal))
+      (puthash "sources" sources existing))
+    (maphash (lambda (source stats)
+               (let* ((kept (nth 0 stats))
+                      (total (nth 1 stats))
+                      (existing-source (gethash source sources)))
+                 (if existing-source
+                     (let ((old-kept (gethash "experiments_kept" existing-source 0))
+                           (old-total (gethash "experiments_enabled" existing-source 0)))
+                       (puthash "experiments_kept" (+ old-kept kept) existing-source)
+                       (puthash "experiments_enabled" (+ old-total total) existing-source)
+                       (puthash "success_rate" (/ (float (+ old-kept kept))
+                                                  (max 1 (+ old-total total)))
+                                existing-source))
+                   (puthash source
+                            (let ((h (make-hash-table :test 'equal)))
+                              (puthash "experiments_kept" kept h)
+                              (puthash "experiments_enabled" total h)
+                              (puthash "success_rate" (/ (float kept) (max total 1)) h)
+                              (puthash "source_type" (if (string= source "own-repo") "github" "external") h)
+                              (puthash "identifier" source h)
+                              (puthash "techniques_suggested" (vector) h)
+                              h)
+                            sources))))
+             source-perf)
+    (with-temp-file source-file
+      (insert (json-encode existing)))
+    (message "[autotts] Merged trace source data into %s (%d sources)"
+             source-file (hash-table-count sources))))
 
 (defun gptel-auto-workflow--update-skill-with-controller (controller-config)
-  "Update researcher SKILL.md with evolved CONTROLLER-CONFIG.
-Joint optimization: merge controller priorities into skill prompt
-so researcher sees evolved guidance in real-time.
-Called after controller evolution to keep skill + controller in sync."
-  (let ((skill-file (expand-file-name
-                     "assistant/skills/researcher-prompt/SKILL.md"
-                     (gptel-auto-workflow--worktree-base-root))))
-    (when (file-exists-p skill-file)
-      (condition-case err
-          (let* ((skill-content (with-temp-buffer
-                                  (insert-file-contents skill-file)
-                                  (buffer-string)))
-                 ;; Build updated strategy guidance from controller config
-                 (own-priority (* 100 (or (plist-get controller-config :own-repo-priority) 0.7)))
-                 (ext-priority (* 100 (or (plist-get controller-config :external-priority) 0.15)))
-                  (stop-threshold (* 100 (or (plist-get controller-config :min-confidence-stop)
-                                             (plist-get controller-config :stop-threshold)
-                                             0.7)))
-                  (budget (or (plist-get controller-config :max-tokens-budget)
-                              (plist-get controller-config :token-budget)
-                              8000))
-                  (beta (or (plist-get controller-config :beta) 0.5))
-                  (method (or (plist-get controller-config :learning-method) "unknown"))
-                  (evolved-at (or (plist-get controller-config :evolved-at) "unknown"))
-                  (based-on (or (plist-get controller-config :based-on-traces) 0))
-                  (new-guidance
-                   (format "**Evolved Controller Config** (updated %s from %d traces, %s):\n\n- Beta: %.2f (0 conservative, 1 exploratory)\n- Own repo priority: %.0f%%\n- External priority: %.0f%%\n- Stop threshold: %.0f%% confidence\n- Token budget: %d\n\n**Decision Rules**:\n1. If EMA confidence stabilizes above %.0f%% + have URLs → STOP early\n2. If confidence is rising → CONTINUE current source type\n3. If EMA confidence stagnates → BRANCH to a different source/angle\n4. If > %d tokens → CUT (return what you have)\n5. Check own repos (davidwuchn/*) FIRST before external\n\n*This guidance auto-evolves after each pipeline run.*"
-                           evolved-at based-on
-                           method
-                           beta
-                           own-priority ext-priority
-                           stop-threshold budget
-                           stop-threshold budget)))
-            ;; Replace strategy guidance idempotently; repeated evolution cycles
-            ;; should update the section, not append duplicates.
-            (let ((updated-content
-                   (if (string-match "{{strategy-guidance}}" skill-content)
-                       (replace-match new-guidance t t skill-content)
-                     (with-temp-buffer
-                       (insert skill-content)
-                       (goto-char (point-min))
-                       (let ((section (concat "## Strategy Guidance (Auto-Evolved)\n\n"
-                                              new-guidance "\n\n")))
-                         (cond
-                          ((re-search-forward "^## Strategy Guidance (Auto-Evolved)$" nil t)
-                           (let ((start (line-beginning-position)))
-                             (forward-line 1)
-                             (if (re-search-forward "^## " nil t)
-                                 (beginning-of-line)
-                               (goto-char (point-max)))
-                             (delete-region start (point))
-                             (insert section)))
-                          ((re-search-forward "^## Instructions$" nil t)
-                           (beginning-of-line)
-                           (insert section))))
-                       (buffer-string)))))
-              (with-temp-file skill-file
-                (insert updated-content))
-              (message "[autotts] Updated SKILL.md with evolved controller (own=%.0f%% ext=%.0f%%)"
-                       own-priority ext-priority)))
-        (error
-         (message "[autotts] Failed to update SKILL.md: %s" err))))))
+  "Write evolved CONTROLLER-CONFIG as strategy guidance JSON for SKILL.md injection.
+Stores to data/strategy-guidance.json so evolve_researcher.py won't overwrite it.
+The researcher-prompt/SKILL.md uses {{strategy-guidance}} template variable."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (data-dir (expand-file-name "assistant/skills/researcher-prompt/data" root))
+         (guidance-file (expand-file-name "strategy-guidance.json" data-dir))
+         (own-priority (* 100 (or (plist-get controller-config :own-repo-priority) 0.7)))
+         (ext-priority (* 100 (or (plist-get controller-config :external-priority) 0.15)))
+         (stop-threshold (* 100 (or (plist-get controller-config :min-confidence-stop)
+                                    (plist-get controller-config :stop-threshold)
+                                    0.7)))
+         (budget (or (plist-get controller-config :max-tokens-budget)
+                     (plist-get controller-config :token-budget)
+                     8000))
+         (beta (or (plist-get controller-config :beta) 0.5))
+         (method (or (plist-get controller-config :learning-method) "unknown"))
+         (evolved-at (or (plist-get controller-config :evolved-at) "unknown"))
+         (based-on (or (plist-get controller-config :based-on-traces) 0))
+         (topic-priors (plist-get controller-config :topic-priors))
+         (best-topic (plist-get topic-priors :best-topic))
+         (best-topic-rate (plist-get topic-priors :best-topic-rate))
+         (guidance-json
+          `(:beta ,beta
+            :own-priority ,own-priority
+            :ext-priority ,ext-priority
+            :stop-threshold ,stop-threshold
+            :token-budget ,budget
+            :learning-method ,method
+            :evolved-at ,evolved-at
+            :based-on-traces ,based-on
+            :best-topic ,(or best-topic :json-null)
+            :best-topic-rate ,(or best-topic-rate 0.0))))
+    (make-directory data-dir t)
+    (with-temp-file guidance-file
+      (insert (json-encode guidance-json)))
+    (message "[autotts] Saved strategy guidance to %s (own=%.0f%% ext=%.0f%% beta=%.2f)"
+             guidance-file own-priority ext-priority beta)))
 
 ;;; ─── Offline Trace Replay Benchmark (0 LLM calls) ───
 
@@ -845,15 +870,28 @@ Called from experiment logging to link research → experiment results."
                         (erase-buffer)
                         (insert (json-encode trace))
                         (write-region (point-min) (point-max) file))
-                      (message "[autotts] Linked trace %s → %s (%s)"
-                               research-hash target (if kept "kept" "discarded"))
-                      (setq updated t)))
+                       (message "[autotts] Linked trace %s → %s (%s)"
+                                research-hash target (if kept "kept" "discarded"))
+                       (setq updated t)
+                       ;; Schedule trace synthesis refresh after outcome update
+                       (run-with-idle-timer 10 nil
+                        (lambda ()
+                          (condition-case nil
+                              (gptel-auto-workflow--refresh-synthesis-from-traces)
+                            (error nil))))))
                 (error
                  (message "[autotts] Failed to update trace outcome: %s" err))))))))))
 
 (defvar gptel-auto-workflow--trace-outcome-hooks nil
   "List of functions to call when trace outcomes are updated.
 Each function receives the updated trace plist.")
+
+(defun gptel-auto-workflow--refresh-synthesis-from-traces ()
+  "Load all traces, synthesize, and persist to data/ directory.
+Lightweight: reuses existing synthesis logic without LLM calls."
+  (let ((traces (gptel-auto-workflow--load-research-traces)))
+    (when traces
+      (gptel-auto-workflow--synthesize-research-knowledge-from-traces traces))))
 
 (defun gptel-auto-workflow--experiment-kept-p (experiment)
   "Return non-nil when EXPERIMENT represents a kept result."

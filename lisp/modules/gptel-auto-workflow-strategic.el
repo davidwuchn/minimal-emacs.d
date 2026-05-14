@@ -448,6 +448,19 @@ and {{topic-performance}} with live data."
                "{{topic-performance}}" 
                "*No topic data available yet.*"
                skill-content t t)))
+      ;; Inject AutoTTS strategy guidance from data/strategy-guidance.json
+      (let ((guidance-json (gptel-auto-workflow--load-strategy-guidance-json)))
+        (if guidance-json
+            (let ((guidance-md (gptel-auto-workflow--format-strategy-guidance-json guidance-json)))
+              (setq skill-content
+                    (replace-regexp-in-string
+                     "{{strategy-guidance}}" guidance-md
+                     skill-content t t)))
+          (setq skill-content
+                (replace-regexp-in-string
+                 "{{strategy-guidance}}"
+                 "*Controller not yet evolved.*"
+                 skill-content t t))))
       skill-content)))
 
 (defun gptel-auto-workflow--format-topic-performance (topics)
@@ -574,6 +587,57 @@ Returns empty string when no trace data is available."
       (if lines
           (string-join (sort lines #'string<) "\n")
         ""))))
+
+(defun gptel-auto-workflow--load-strategy-guidance-json ()
+  "Load strategy guidance JSON from data/ directory.
+Returns plist with beta, own-priority, etc, or nil if not found."
+  (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data"
+                                     (gptel-auto-workflow--effective-project-root)))
+         (file (expand-file-name "strategy-guidance.json" data-dir)))
+    (when (file-exists-p file)
+      (condition-case err
+          (let ((json-object-type 'plist)
+                (json-key-type 'keyword))
+            (json-read-file file))
+        (error
+         (message "[research] Failed to load strategy guidance: %s" err)
+         nil)))))
+
+(defun gptel-auto-workflow--format-strategy-guidance-json (guidance)
+  "Format strategy GUIDANCE plist as markdown.
+GUIDANCE is a plist from strategy-guidance.json."
+  (let ((beta (or (plist-get guidance :beta) 0.5))
+        (own-prio (or (plist-get guidance :own-priority) 70))
+        (ext-prio (or (plist-get guidance :ext-priority) 15))
+        (stop (or (plist-get guidance :stop-threshold) 70))
+        (budget (or (plist-get guidance :token-budget) 8000))
+        (method (or (plist-get guidance :learning-method) "unknown"))
+        (evolved-at (or (plist-get guidance :evolved-at) "unknown"))
+        (based-on (or (plist-get guidance :based-on-traces) 0))
+        (best-topic (plist-get guidance :best-topic))
+        (best-rate (or (plist-get guidance :best-topic-rate) 0.0)))
+    (format
+     (concat "**Evolved Controller Config** (updated %s from %d traces, %s):\n\n"
+             "- Beta: %.2f (0 conservative, 1 exploratory)\n"
+             "- Own repo priority: %.0f%%\n"
+             "- External priority: %.0f%%\n"
+             "- Stop threshold: %.0f%% confidence\n"
+             "- Token budget: %d\n"
+             "%s"
+             "\n**Decision Rules**:\n"
+             "1. If EMA confidence stabilizes above %.0f%% + have URLs → STOP early\n"
+             "2. If confidence is rising → CONTINUE current source type\n"
+             "3. If EMA confidence stagnates → BRANCH to a different source/angle\n"
+             "4. If > %d tokens → CUT (return what you have)\n"
+             "5. Check own repos (davidwuchn/*) FIRST before external\n\n"
+             "*This guidance auto-evolves after each pipeline run.*")
+     evolved-at based-on method beta own-prio ext-prio stop budget
+     (if (and best-topic (> best-rate 0))
+         (format "- Best topic: **%s** (%.0f%% keeper rate from %d+ skill experiments)\n"
+                 best-topic (* 100 best-rate)
+                 (or based-on 0))
+       "")
+     stop budget)))
 
 ;;; Meta-Learning Researcher Triggers
 
