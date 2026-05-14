@@ -974,7 +974,9 @@ WISDOM: 9-pass progressive approach minimizes context loss:
 TEST: Create payload >200KB, verify compaction runs and reduces size.
   Check message log for pass-by-pass progress reports."
   (when my/gptel-payload-byte-limit
-    (let* ((info (gptel-fsm-info fsm))
+    (let* ((raw-info (gptel-fsm-info fsm))
+           ;; Guard: ensure info is a proper list before accessing with plist-get
+           (info (and (listp raw-info) raw-info))
            (retries (or (plist-get info :retries) 0)))
       (when (= retries 0)
         (let ((limit (my/gptel--effective-byte-limit info))
