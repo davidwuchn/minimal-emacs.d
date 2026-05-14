@@ -755,6 +755,8 @@ can consume lists, vectors, plists, and alists as readable data."
 
 (defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
+  (when (null callback)
+    (error "Programmatic sandbox execute-tool requires a non-nil callback"))
   (unless (functionp callback)
     (error "Programmatic sandbox execute-tool requires a function callback, got: %S" callback))
   (unless (proper-list-p state)
