@@ -534,8 +534,26 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
               (timeout-p (and (not has-external) 
                               gptel-auto-workflow--research-accumulated-findings 
                               (> (length gptel-auto-workflow--research-accumulated-findings) 0)))
-              (research-error-p (and (not timeout-p)
-                                     (gptel-auto-workflow--research-error-p raw-findings)))
+               (research-error-p (and (not timeout-p)
+                                      (gptel-auto-workflow--research-error-p raw-findings)))
+               ;; ─── Failure Classification ───
+               ;; Classify WHY research failed so controller can adapt
+               ;; Returns symbol: timeout, no-external-content, quota-exhausted, error-response, empty-response, success
+               (failure-reason
+                (cond
+                 (timeout-p 'timeout)
+                 ((and raw-findings (string-match-p "\\`Error:.*timed out" raw-findings))
+                  'timeout)
+                 ((and raw-findings (string-match-p "quota\\|rate.?limit\\|429\\|exhausted" raw-findings))
+                  'quota-exhausted)
+                 ((and raw-findings (string-match-p "\\`Error:" raw-findings))
+                  'error-response)
+                 ((or (null raw-findings) (string-empty-p raw-findings) (< (length raw-findings) 50))
+                  'empty-response)
+                 ((not has-external)
+                  'no-external-content)
+                 (t 'success)))
+               ;; ─── End Failure Classification ───
               (effective-findings (cond
                                    (timeout-p
                                     (message "[autotts] Turn %d timeout, using accumulated findings" (1+ turn))
@@ -568,16 +586,17 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
                                        'timeout
                                      (gptel-auto-workflow--controller-decide-research-flow
                                       controller-config-with-turn (length merged-findings) merged-findings))))
-         ;; Record execution trace
-         (gptel-auto-workflow--record-research-trace
-          turn
-          (list :decision controller-decision
-                :confidence turn-confidence
-                :ema-conf ema-conf
-                :ema-delta ema-delta
-                :output-length (length raw-findings)
-                :tokens-used turn-tokens
-                :findings-quality (if timeout-p 0.0 turn-confidence)))
+          ;; Record execution trace with failure classification
+          (gptel-auto-workflow--record-research-trace
+           turn
+           (list :decision controller-decision
+                 :confidence turn-confidence
+                 :ema-conf ema-conf
+                 :ema-delta ema-delta
+                 :output-length (length raw-findings)
+                 :tokens-used turn-tokens
+                 :findings-quality (if timeout-p 0.0 turn-confidence)
+                 :failure-reason failure-reason))
          ;; Log turn
          (gptel-auto-workflow--log-research-step
           'search
@@ -710,9 +729,10 @@ Budget: %.0f%% own repos, %.0f%% external."
            ((eq classification 'deviant)
             (format "SOURCE DIRECTIVE (controller-enforced):
 Previous sources DEVIANT — switch to NEW sources.
+PROBE FIRST: Skim source titles/abstracts before deep-reading.
 Search: external trending repos, arxiv, github explore.
 Avoid: sources previously searched (they produced deviant results).
-Priority: 100%% external."))
+Priority: 100%% external. Budget: 60s per source probe, 120s for deep read if probe passes."))
            ;; Neutral → balanced approach
            ((>= turn 2)
             (format "SOURCE DIRECTIVE (controller-enforced):
