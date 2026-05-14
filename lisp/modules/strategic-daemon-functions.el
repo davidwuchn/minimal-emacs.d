@@ -59,6 +59,98 @@
 (defvar gptel-auto-workflow--research-trace-log nil
   "Log of detailed execution traces for each research turn.")
 
+;; ─── Multi-Branch Pool (CMC Coupled Width-Depth Control) ───
+
+(defvar gptel-auto-workflow--branch-pool nil
+  "List of active research branches (plists).
+Each branch plist: (:id :strategy :findings :tokens :turn :alignment :ema :alive-since).")
+
+(defvar gptel-auto-workflow--branch-pool-max 6
+  "Maximum number of concurrent branches in the pool.")
+
+(defvar gptel-auto-workflow--branch-id-counter 0
+  "Counter for generating unique branch IDs.")
+
+(defun gptel-auto-workflow--branch-pool-init ()
+  "Initialize or clear the branch pool."
+  (setq gptel-auto-workflow--branch-pool nil
+        gptel-auto-workflow--branch-id-counter 0))
+
+(defun gptel-auto-workflow--branch-pool-active-count ()
+  "Return number of alive branches in the pool."
+  (length gptel-auto-workflow--branch-pool))
+
+(defun gptel-auto-workflow--branch-pool-add (strategy findings tokens)
+  "Add a new branch to the pool with STRATEGY, initial FINDINGS, and TOKENS.
+Returns the branch plist."
+  (when (< (gptel-auto-workflow--branch-pool-active-count)
+           gptel-auto-workflow--branch-pool-max)
+    (setq gptel-auto-workflow--branch-id-counter
+          (1+ gptel-auto-workflow--branch-id-counter))
+    (let ((branch (list :id gptel-auto-workflow--branch-id-counter
+                        :strategy (or strategy "default")
+                        :findings (or findings "")
+                        :tokens (or tokens 0)
+                        :turn 0
+                        :alignment 'neutral
+                        :ema 0.0
+                        :alive-since (float-time))))
+      (push branch gptel-auto-workflow--branch-pool)
+      (message "[autotts] Branch pool: added branch %d (%s), %d active"
+               gptel-auto-workflow--branch-id-counter strategy
+               (gptel-auto-workflow--branch-pool-active-count))
+      branch)))
+
+(defun gptel-auto-workflow--branch-pool-remove (branch-id)
+  "Remove branch BRANCH-ID from the pool."
+  (setq gptel-auto-workflow--branch-pool
+        (cl-remove-if (lambda (b) (= (plist-get b :id) branch-id))
+                      gptel-auto-workflow--branch-pool)))
+
+(defun gptel-auto-workflow--branch-pool-get-best ()
+  "Return the branch with highest alignment and findings length."
+  (car (sort (copy-sequence gptel-auto-workflow--branch-pool)
+             (lambda (a b)
+               (> (+ (* 10 (if (eq (plist-get a :alignment) 'aligned) 1 0))
+                     (length (plist-get a :findings)))
+                  (+ (* 10 (if (eq (plist-get b :alignment) 'aligned) 1 0))
+                     (length (plist-get b :findings))))))))
+
+(defun gptel-auto-workflow--branch-pool-get-deviant (patience)
+  "Return the branch that has been deviant for PATIENCE+ turns, or nil."
+  (car (cl-remove-if-not
+        (lambda (b)
+          (and (eq (plist-get b :alignment) 'deviant)
+               (>= (plist-get b :turn) patience)))
+        gptel-auto-workflow--branch-pool)))
+
+(defun gptel-auto-workflow--branch-pool-stagnation-p (controller-config)
+  "Return non-nil if the branch pool is stagnant (EMA delta below threshold)."
+  (let ((ema-delta (gptel-auto-workflow--research-ema-delta))
+        (trend-threshold (plist-get controller-config :trend-threshold)))
+    (and ema-delta (< ema-delta trend-threshold))))
+
+(defun gptel-auto-workflow--branch-pool-widen (controller-config prompt callback)
+  "WIDEN: open a new branch with alternative strategy.
+Returns non-nil if a new branch was opened."
+  (let* ((widen-burst (plist-get controller-config :widen-burst))
+         (active-count (gptel-auto-workflow--branch-pool-active-count))
+         (can-open (- (or widen-burst 2) active-count)))
+    (when (and (> can-open 0)
+               (< active-count gptel-auto-workflow--branch-pool-max))
+      (let ((alt-strategies '("deep-external" "cross-reference" "implementation-focused"
+                              "error-patterns" "code-clarity")))
+        (dotimes (i (min can-open 2))
+          (let ((strat (nth i alt-strategies)))
+            (gptel-auto-workflow--branch-pool-add
+             strat "" 0)
+            ;; Start a lightweight research turn for this branch
+            (gptel-auto-workflow--run-research-turn
+             (or prompt "") 0 callback "" 0 'branch)))))
+      t))
+
+;; ─── End Multi-Branch Pool ───
+
 (defun gptel-auto-workflow--research-beta-schedule (beta)
   "Return parameter plist for research controller based on BETA.
 BETA is in [0,1]: 0 = conservative (few turns, easy to stop),
@@ -290,7 +382,30 @@ Uses EMA trend analysis for momentum-aware stopping."
       (message "[autotts] Controller: CUT (budget %d/%d)" tokens-used max-tokens)
       'cut)
      
-     ;; EMA Momentum Gate: Stop when confidence is high AND trend is non-negative
+      ;; ─── Multi-Branch Pool: Widen/Abandon/Narrow ───
+      ;; Check if branch pool stagnation warrants widening
+      ((and (>= turn-count 1)
+            (gptel-auto-workflow--branch-pool-stagnation-p controller-config)
+            (< (gptel-auto-workflow--branch-pool-active-count)
+               (or (plist-get controller-config :widen-burst) 2)))
+       (message "[autotts] Controller: WIDEN (branch pool stagnant, %d active, widen-burst=%d)"
+                (gptel-auto-workflow--branch-pool-active-count)
+                (or (plist-get controller-config :widen-burst) 2))
+       'widen)
+      
+      ;; Check if any branch has been deviant too long → abandon
+      ((let ((deviant (gptel-auto-workflow--branch-pool-get-deviant
+                       (plist-get controller-config :abandon-patience))))
+         (when deviant
+           (gptel-auto-workflow--branch-pool-remove (plist-get deviant :id))
+           (message "[autotts] Controller: ABANDON branch %d (deviant for %d turns, patience=%d)"
+                    (plist-get deviant :id) (plist-get deviant :turn)
+                    (plist-get controller-config :abandon-patience))
+           t))
+       ;; After abandoning, re-evaluate: continue if aligned branches exist
+       (if (> (gptel-auto-workflow--branch-pool-active-count) 0) 'continue 'stop))
+      
+      ;; EMA Momentum Gate: Stop when confidence is high AND trend is non-negative
      ;; Only after warm-up and minimum completion
      ((and (>= turn-count warm-up)
            (>= turn-count min-complete)
@@ -495,7 +610,24 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
            (gptel-auto-workflow--finalize-research
             research-prompt merged-findings strategy findings-hash
             controller-decision turn-confidence cumulative-tokens callback))
-          ;; BRANCH: Try alternate strategy
+          ;; WIDEN: Open parallel branches (multi-branch pool)
+          ((eq controller-decision 'widen)
+           (message "[autotts] Controller WIDEN after turn %d (opening parallel branches)"
+                    (1+ turn))
+           (gptel-auto-workflow--branch-pool-add
+            (or strategy "default") merged-findings cumulative-tokens)
+           (gptel-auto-workflow--branch-pool-widen
+            gptel-auto-workflow--research-controller-config
+            research-prompt callback)
+           ;; Continue current branch too if not at max turns
+           (if (< turn (1- max-turns))
+               (gptel-auto-workflow--run-research-turn
+                research-prompt (1+ turn) callback
+                merged-findings cumulative-tokens 'widen)
+             (gptel-auto-workflow--finalize-research
+              research-prompt merged-findings strategy findings-hash
+              controller-decision turn-confidence cumulative-tokens callback)))
+          ;; BRANCH: Try alternate strategy (simple single-branch switch)
           ((eq controller-decision 'branch)
            (message "[autotts] Controller BRANCH after turn %d, trying alternate strategy"
                     (1+ turn))
