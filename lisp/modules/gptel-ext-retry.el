@@ -304,9 +304,10 @@ done."
                        (part (elt parts part-index))
                        (function-response (plist-get part :functionResponse))
                        (response (plist-get function-response :response)))
-                  (plist-put response :content replacement)
-                  (cl-incf truncated)))))))
-      truncated)))
+                  (when (and (consp response) (proper-list-p response))
+                    (plist-put response :content replacement)
+                    (cl-incf truncated)))))))
+      truncated))))
 
 (defun my/gptel--trim-reasoning-content (info)
   "Strip reasoning_content from older assistant messages in INFO to reduce payload.
