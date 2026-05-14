@@ -173,12 +173,18 @@ INPUT from previous cycle feeds forward."
 (defun gptel-benchmark-evolution-orient (observation)
   "Orient phase: ψ processes OBSERVATION.
 Map to elements, detect imbalances, identify evolution opportunity."
-  (when (and (proper-list-p observation)
-             (plist-get observation :element-status))
+  (cond
+   ((null observation)
+    (list :imbalances nil :focus-element nil :evolution-opportunity nil))
+   ((not (proper-list-p observation))
+    (list :imbalances nil :focus-element nil :evolution-opportunity nil))
+   ((plist-get observation :element-status)
     (let ((deficient-elements (gptel-benchmark-evolution--extract-deficient-elements observation)))
       (list :imbalances deficient-elements
             :focus-element (car deficient-elements)
-            :evolution-opportunity (gptel-benchmark-evolution--find-opportunity observation)))))
+            :evolution-opportunity (gptel-benchmark-evolution--find-opportunity observation))))
+   (t
+    (list :imbalances nil :focus-element nil :evolution-opportunity nil))))
 
 (defun gptel-benchmark-evolution-decide (orientation)
   "Decide phase: 刀 ⊣ ψ collapse together.
