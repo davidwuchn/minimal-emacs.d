@@ -873,11 +873,23 @@ Called from experiment logging to link research → experiment results."
                        (message "[autotts] Linked trace %s → %s (%s)"
                                 research-hash target (if kept "kept" "discarded"))
                        (setq updated t)
-                       ;; Schedule trace synthesis refresh after outcome update
+                       ;; Schedule trace synthesis + maybe controller evolution
                        (run-with-idle-timer 10 nil
                         (lambda ()
                           (condition-case nil
-                              (gptel-auto-workflow--refresh-synthesis-from-traces)
+                              (progn
+                                (gptel-auto-workflow--refresh-synthesis-from-traces)
+                                (setq gptel-auto-workflow--pending-outcome-updates
+                                      (1+ gptel-auto-workflow--pending-outcome-updates))
+                                (when (>= gptel-auto-workflow--pending-outcome-updates
+                                          gptel-auto-workflow--outcome-evolution-threshold)
+                                  (message "[autotts] %d new outcomes → triggering controller evolution"
+                                           gptel-auto-workflow--pending-outcome-updates)
+                                  (setq gptel-auto-workflow--pending-outcome-updates 0)
+                                  (when (fboundp 'gptel-auto-workflow--run-autotts-evolution)
+                                    (gptel-auto-workflow--run-autotts-evolution))
+                                  (when (fboundp 'gptel-auto-workflow--evolve-all-skills)
+                                    (gptel-auto-workflow--evolve-all-skills))))
                             (error nil))))))
                 (error
                  (message "[autotts] Failed to update trace outcome: %s" err))))))))))
@@ -885,6 +897,16 @@ Called from experiment logging to link research → experiment results."
 (defvar gptel-auto-workflow--trace-outcome-hooks nil
   "List of functions to call when trace outcomes are updated.
 Each function receives the updated trace plist.")
+
+(defvar gptel-auto-workflow--pending-outcome-updates 0
+  "Counter of trace outcome updates since last controller evolution.
+Triggers evolution when >= gptel-auto-workflow--outcome-evolution-threshold.")
+
+(defcustom gptel-auto-workflow--outcome-evolution-threshold 10
+  "Number of new trace outcomes before triggering controller evolution.
+AutoTTS: Higher values batch more data before re-evolving."
+  :type 'integer
+  :group 'gptel-tools-agent)
 
 (defun gptel-auto-workflow--refresh-synthesis-from-traces ()
   "Load all traces, synthesize, and persist to data/ directory.
@@ -928,6 +950,22 @@ Updates active strategy from offline benchmark results."
         ;; Store results for joint optimization
         (setq gptel-auto-workflow--research-benchmark-results results)
         best))))
+
+(defun gptel-auto-workflow--bootstrap-strategy-guidance ()
+  "Create data/strategy-guidance.json from existing controller if missing.
+Ensures {{strategy-guidance}} template var has data on first load."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (guidance-file (expand-file-name
+                         "assistant/skills/researcher-prompt/data/strategy-guidance.json"
+                         root)))
+    (unless (file-exists-p guidance-file)
+      (condition-case err
+          (let ((controller-config (gptel-auto-workflow--load-autotts-controller)))
+            (when controller-config
+              (gptel-auto-workflow--update-skill-with-controller controller-config)
+              (message "[autotts] Bootstrapped strategy-guidance.json from controller")))
+        (error
+         (message "[autotts] Strategy guidance bootstrap deferred: %s" err))))))
 
 (provide 'gptel-auto-workflow-research-benchmark)
 

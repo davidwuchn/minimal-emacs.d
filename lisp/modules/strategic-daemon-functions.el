@@ -878,6 +878,7 @@ Also populates source effectiveness table from historical traces if empty."
 
 ;; Initialize on load
 (gptel-auto-workflow--load-research-params)
+(gptel-auto-workflow--bootstrap-strategy-guidance)
 
 (provide 'strategic-daemon-functions)
 ;;; strategic-daemon-functions.el ends here
