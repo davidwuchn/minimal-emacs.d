@@ -350,6 +350,36 @@ Returns plist with controller parameters."
              feedback
              topic-priors)))
 
+
+
+;; ─── Agent-Generated Rule Evaluation ───
+
+(defun gptel-auto-workflow--apply-controller-rules (controller-config output-text)
+  "Apply agent-generated decision rules from CONTROLLER-CONFIG.
+Evaluates (:when EXPR :then DECISION) rules against current signals.
+Returns the decision from the first matching rule, or nil if no rules exist."
+  (let ((rules (plist-get controller-config :rules)))
+    (when (and rules (listp rules))
+      (let* ((signals `((ema-conf . ,gptel-auto-workflow--research-ema-conf)
+                        (ema-delta . ,(gptel-auto-workflow--research-ema-delta))
+                        (turn . ,(or (plist-get controller-config :turn-count) 0))
+                        (output-length . ,(length (or output-text "")))
+                        (confidence . ,(or (gptel-auto-workflow--estimate-confidence output-text) 0.0))
+                        (has-urls . ,(and output-text (string-match-p "https?://" output-text) t))
+                        (has-structure . ,(and output-text (string-match-p "## .*\\n" output-text) t))
+                        (source . ,(if (string-match-p "davidwuchn\\|own.repo" (or output-text ""))
+                                       "own-repo" "external"))
+                        (budget-remaining . ,(- (or (plist-get controller-config :token-budget) 8000)
+                                               (/ (length (or output-text "")) 4))))))
+        (catch 'rule-matched
+          (dolist (rule rules nil)
+            (condition-case nil
+                (when (eval (plist-get rule :when) signals)
+                  (throw 'rule-matched (plist-get rule :then)))
+              (error nil))))))))
+
+;; ─── End Agent-Generated Rule Evaluation ───
+
 (defun gptel-auto-workflow--controller-decide-research-flow (controller-config output-length &optional output-text)
   "AutoTTS controller with EMA momentum gate.
 Decides: stop, continue, branch, or cut.
@@ -377,6 +407,15 @@ Uses EMA trend analysis for momentum-aware stopping."
                      (gptel-auto-workflow--statistical-prob-kept
                       controller-config output-length text))))
     (cond
+     ;; ─── Agent-Generated Rules (AutoTTS-defining feature) ───
+     ;; Evaluate rules discovered by the controller design agent.
+     ;; Agent writes decision rules, sandbox validates, controller applies them.
+     ;; Rules are evaluated before hardcoded logic — agent can override defaults.
+     ((gptel-auto-workflow--apply-controller-rules controller-config text)
+      (let ((result (gptel-auto-workflow--apply-controller-rules controller-config text)))
+        (message "[autotts] Agent rule: %s" result)
+        result))
+     
      ;; Over budget → cut (always check first)
      ((> tokens-used max-tokens)
       (message "[autotts] Controller: CUT (budget %d/%d)" tokens-used max-tokens)

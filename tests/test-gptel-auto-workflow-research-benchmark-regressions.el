@@ -22,17 +22,26 @@
   (should
    (equal
     (gptel-auto-workflow--parse-controller-design-response
-     "Analyzer result for task: Controller Design\n\n```elisp\n(:own-repo-priority 0.88 :external-priority 0.12 :min-confidence-stop 0.72)\n```")
-    '(:own-repo-priority 0.88 :external-priority 0.12 :min-confidence-stop 0.72))))
+      "Analyzer result for task: Controller Design\n\n```elisp\n(:own-repo-priority 0.88 :external-priority 0.12 :min-confidence-stop 0.72)\n```")
+     '(:own-repo-priority 0.88 :external-priority 0.12 :min-confidence-stop 0.72))))
+
+(ert-deftest regression/research-benchmark/controller-design-parses-rule-list ()
+  "Controller agent should accept rule-list responses."
+  (should
+   (equal
+    (gptel-auto-workflow--parse-controller-design-rules
+     "((:when (> ema-conf 0.7) :then stop) (:when (< ema-conf 0.3) :then branch))")
+    '((:when (> ema-conf 0.7) :then stop)
+      (:when (< ema-conf 0.3) :then branch)))))
 
 (ert-deftest regression/research-benchmark/controller-design-uses-sync-subagent-result ()
-  "Controller design should consume the subagent's returned plist string."
+  "Controller design should consume the subagent's returned rule list."
   (cl-letf (((symbol-function 'gptel-benchmark-call-subagent-sync)
-             (lambda (&rest _)
-               "(:own-repo-priority 0.9 :external-priority 0.1)")))
+              (lambda (&rest _)
+                "((:when (> ema-conf 0.7) :then stop))")))
     (should
       (equal (gptel-auto-workflow--call-controller-design-subagent "prompt")
-             '(:own-repo-priority 0.9 :external-priority 0.1)))))
+             '((:when (> ema-conf 0.7) :then stop))))))
 
 (ert-deftest regression/research-benchmark/controller-design-async-fallback-is-bounded ()
   "Controller design should not wait forever when async subagent never calls back."
