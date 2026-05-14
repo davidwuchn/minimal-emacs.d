@@ -26,9 +26,9 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
 Current controller configuration (evolved from trace outcomes):
 
-- **Stop threshold**: 0.75
+- **Stop threshold**: 0.70
 - **Token budget**: 8000 tokens
-- **Own-repo priority**: 82%
+- **Own-repo priority**: 70%
 
 ## Instructions
 
@@ -124,21 +124,6 @@ Check their: recent commits, open issues, closed PRs, architecture decisions
 - **arXiv**: Papers on agent architectures, meta-learning, code LLMs
 - **HuggingFace**: New models, datasets, or spaces for code agents
 - **Reddit**: r/emacs, r/LocalLLaMA, r/MachineLearning discussions
-
-## Output Format
-
-Return a compact structured digest. End with JSON metadata so AutoTTS can replay decisions offline:
-
-```json
-{
-  "strategy_used": "own-repos-first",
-  "sources_checked": ["davidwuchn/gptel"],
-  "topics_covered": ["nil-safety"],
-  "confidence_final": 0.75,
-  "insights_count": 2,
-  "tokens_estimate": 2500
-}
-```
 
 ## Instructions
 
