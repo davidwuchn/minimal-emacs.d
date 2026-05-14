@@ -874,13 +874,16 @@ Without PROJECT-ROOT, clears cache for all projects."
   "Time-to-live in seconds for the research status cache.")
 
 (defun gptel-auto-workflow--research-cache-get (project-root)
-  "Return cached research findings for PROJECT-ROOT."
-  (or (gethash project-root gptel-auto-workflow--research-findings-cache)
-      (gethash (directory-file-name project-root)
-               gptel-auto-workflow--research-findings-cache)
-      (gethash (file-name-as-directory project-root)
-               gptel-auto-workflow--research-findings-cache)
-      ""))
+  "Return cached research findings for PROJECT-ROOT.
+Returns nil if PROJECT-ROOT is nil or not found in cache."
+  (when (and project-root
+             (stringp project-root)
+             (> (length project-root) 0))
+    (or (gethash project-root gptel-auto-workflow--research-findings-cache)
+        (gethash (directory-file-name project-root)
+                 gptel-auto-workflow--research-findings-cache)
+        (gethash (file-name-as-directory project-root)
+                 gptel-auto-workflow--research-findings-cache))))
 
 (defun gptel-auto-workflow-research-status-all ()
   "Show research status for all configured projects."
