@@ -86,6 +86,8 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
 ;; An after-load-functions hook persists the override when strategic files are reloaded.
 (when (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
   (message "[daemon-fix] Setting up standalone research (avoids load-file corruption)")
+  (defvar my/daemon--reload-in-progress nil
+    "Files currently being reloaded from `after-load-functions'.")
   (let ((standalone-file (expand-file-name "lisp/modules/standalone-research.el"
                                            minimal-emacs-user-directory)))
     (when (file-exists-p standalone-file)
@@ -108,10 +110,13 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
               (string-suffix-p "gptel-auto-workflow-strategic.el" loaded-file))
       (let ((stem (replace-regexp-in-string "\\.el$" "" loaded-file))
             (elc (concat (replace-regexp-in-string "\\.el$" "" loaded-file) ".elc")))
-        (cond
-         ((and (file-exists-p elc)
-               (file-newer-than-file-p elc loaded-file))
-          (condition-case nil
+        (unless (member loaded-file my/daemon--reload-in-progress)
+          (push loaded-file my/daemon--reload-in-progress)
+          (unwind-protect
+         (cond
+          ((and (file-exists-p elc)
+                (file-newer-than-file-p elc loaded-file))
+           (condition-case nil
               (progn (load stem nil t)
                      (message "[daemon-fix] Reloaded compiled %s after corrupt source" elc))
             (error nil)))
@@ -121,7 +126,9 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
               (progn (load stem nil t)
                      (message "[daemon-fix] Reloaded %s via load (no .elc)" loaded-file))
             (error
-             (message "[daemon-fix] Failed to reload %s: %s" loaded-file err))))))))
+             (message "[daemon-fix] Failed to reload %s: %s" loaded-file err)))))
+            (setq my/daemon--reload-in-progress
+                  (delete loaded-file my/daemon--reload-in-progress)))))))
   (add-hook 'after-load-functions 'my/daemon--reload-compiled-after-source)
   ;; Start periodic research timer once strategic module is loaded
   (defun my/daemon--start-periodic-research (loaded-file)

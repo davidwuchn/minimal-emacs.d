@@ -1781,8 +1781,19 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
                           gptel-auto-workflow-research-interval
                           #'gptel-auto-workflow-run-research))
     (message "[research] Periodic research started (interval: %ds)"
-             gptel-auto-workflow-research-interval)
-    (gptel-auto-workflow-run-research)))
+               gptel-auto-workflow-research-interval)
+    ;; The one-shot cron researcher queues an explicit job immediately after
+    ;; loading this file. Avoid starting a competing implicit run first.
+    (unless (gptel-auto-workflow--researcher-daemon-p)
+      (gptel-auto-workflow-run-research))))
+
+(defun gptel-auto-workflow--researcher-daemon-p ()
+  "Return non-nil when running inside the dedicated researcher daemon."
+  (or (equal (getenv "MINIMAL_EMACS_WORKFLOW_ROLE") "research")
+      (equal (getenv "AUTO_WORKFLOW_EMACS_SERVER") "copilot-researcher")
+      (equal (or (daemonp) "") "copilot-researcher")
+      (and (boundp 'server-name)
+           (equal server-name "copilot-researcher"))))
 
 (defun gptel-auto-workflow-stop-periodic-research ()
   "Stop periodic researcher runs."

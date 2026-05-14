@@ -98,7 +98,7 @@
   "Save findings to file."
   (let ((file (or file-path
                   (expand-file-name "var/tmp/research-findings.md"
-                                    (slr--root)))))
+                                     (slr--root)))))
     (make-directory (file-name-directory file) t)
     (with-temp-file file
       (insert (format "# Research Findings\n\n> Updated: %s\n\n%s"
@@ -106,21 +106,59 @@
                       findings)))
     (message "[slr] Saved %d chars to %s" (length findings) file)))
 
+(defun slr--usable-findings-p (findings)
+  "Return non-nil when FINDINGS has enough content for pipeline use."
+  (and (stringp findings)
+       (> (length findings) 100)
+       (string-match-p "\\S-" findings)))
+
+(defun slr--local-fallback-findings (&optional reason)
+  "Return local fallback findings when external research fails for REASON."
+  (format "## Local Research Fallback
+
+Research subagent did not return usable external findings%s.
+
+Use this local context for the pipeline instead of treating research as absent:
+
+- Prioritize daemon-loading safety: avoid `load-file` paths that can corrupt nested `lambda` or `maphash` forms in the workflow daemon.
+- Prefer nil-safety and proper-list guards around warm daemon state, cache lookups, and parsed subagent output.
+- Keep analyzer/controller outputs machine-parseable; when wrappers or code fences appear, scan for the first valid plist instead of parsing the whole response.
+- Treat timeout-sized or header-only research output as failed and fall back to local repository patterns.
+
+This fallback is intentionally local-only and should be replaced by fresh external research when the provider is healthy."
+          (if (and (stringp reason) (string-match-p "\\S-" reason))
+              (format " (%s)" (truncate-string-to-width reason 120 nil nil "..."))
+            "")))
+
+(defun slr--finish-single-turn (prompt findings completion-callback)
+  "Persist FINDINGS for PROMPT and invoke COMPLETION-CALLBACK."
+  (let ((final-findings
+         (if (slr--usable-findings-p findings)
+             findings
+           (message "[slr] Single-turn returned unusable findings (%d chars), using local fallback"
+                    (length (or findings "")))
+           (slr--local-fallback-findings findings))))
+    (slr--record-context prompt final-findings)
+    (slr--save-findings final-findings)
+    (when (functionp completion-callback)
+      (funcall completion-callback final-findings))))
+
 (defun slr--run-single-turn (prompt completion-callback)
   "Run a single-turn research subagent call with PROMPT.
 Used as fallback when multi-turn controller is unavailable."
   (let ((timeout 300))
     (message "[slr] Calling subagent with %ds timeout (single-turn fallback)..." timeout)
-    (gptel-benchmark-call-subagent
-     'researcher "External research" prompt
-     (lambda (result)
-       (let ((findings (or result "")))
-         (message "[slr] Subagent returned %d chars" (length findings))
-         (slr--record-context prompt findings)
-         (slr--save-findings findings)
-         (when (functionp completion-callback)
-           (funcall completion-callback findings))))
-     timeout)))
+    (condition-case err
+        (gptel-benchmark-call-subagent
+         'researcher "External research" prompt
+         (lambda (result)
+           (let ((findings (or result "")))
+             (message "[slr] Subagent returned %d chars" (length findings))
+             (slr--finish-single-turn prompt findings completion-callback)))
+         timeout)
+      (error
+       (message "[slr] Single-turn subagent failed (%s), using local fallback" err)
+       (slr--finish-single-turn prompt (format "%s" err) completion-callback)))))
 
 (defun slr-run-research (&optional completion-callback)
   "Run external research using subagent and save results.
@@ -134,9 +172,14 @@ COMPLETION-CALLBACK receives the saved findings when provided."
             (message "[slr] Multi-turn EMA research path available, delegating...")
             (gptel-auto-workflow--research-patterns
              (lambda (findings)
-               (slr--save-findings findings)
-               (when (functionp completion-callback)
-                 (funcall completion-callback findings)))))
+               (if (slr--usable-findings-p findings)
+                   (progn
+                     (slr--save-findings findings)
+                     (when (functionp completion-callback)
+                       (funcall completion-callback findings)))
+                 (message "[slr] Multi-turn returned unusable findings (%d chars), falling back to single-turn"
+                          (length (or findings "")))
+                 (slr--run-single-turn (slr--build-prompt) completion-callback)))))
         (error
          (message "[slr] Multi-turn failed (%s), falling back to single-turn" err)
          (slr--run-single-turn (slr--build-prompt) completion-callback)))
@@ -147,7 +190,10 @@ COMPLETION-CALLBACK receives the saved findings when provided."
   "Build research prompt with template variable substitution."
   (let ((prompt (slr--load-skill "researcher-prompt")))
     (when (fboundp 'gptel-auto-workflow--substitute-researcher-variables)
-      (setq prompt (gptel-auto-workflow--substitute-researcher-variables prompt)))
+      (condition-case err
+          (setq prompt (gptel-auto-workflow--substitute-researcher-variables prompt))
+        (error
+         (message "[slr] Researcher variable substitution failed (%s), using raw prompt" err))))
     (message "[slr] Prompt: %d chars" (length prompt))
     prompt))
 

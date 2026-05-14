@@ -200,8 +200,45 @@
        (member
         "[auto-workflow] Retrying analyzer target selection with DashScope/qwen3.6-plus"
         messages))
-      (should (member "[auto-workflow] Analyzer quota exhausted; using static targets"
-                      messages)))))
+       (should (member "[auto-workflow] Analyzer quota exhausted; using static targets"
+                       messages)))))
+
+(ert-deftest regression/auto-workflow-strategic/researcher-daemon-periodic-start-does-not-run-immediately ()
+  "One-shot researcher cron jobs should not race an implicit periodic run."
+  (let ((gptel-auto-workflow-research-interval 60)
+        (gptel-auto-workflow--research-timer nil)
+        (timer-scheduled nil)
+        (ran-immediately nil))
+    (cl-letf (((symbol-function 'daemonp)
+               (lambda (&rest _) "copilot-researcher"))
+              ((symbol-function 'run-with-timer)
+               (lambda (&rest args)
+                 (setq timer-scheduled args)
+                 'test-timer))
+              ((symbol-function 'gptel-auto-workflow-run-research)
+               (lambda (&rest _)
+                 (setq ran-immediately t))))
+      (gptel-auto-workflow-start-periodic-research)
+      (should (equal gptel-auto-workflow--research-timer 'test-timer))
+      (should timer-scheduled)
+      (should-not ran-immediately))))
+
+(ert-deftest regression/auto-workflow-strategic/researcher-daemon-role-env-prevents-immediate-run ()
+  "The researcher daemon role env should prevent an implicit periodic run."
+  (let ((gptel-auto-workflow-research-interval 60)
+        (gptel-auto-workflow--research-timer nil)
+        (process-environment (cons "MINIMAL_EMACS_WORKFLOW_ROLE=research" process-environment))
+        (ran-immediately nil))
+    (cl-letf (((symbol-function 'daemonp)
+               (lambda (&rest _) t))
+              ((symbol-function 'run-with-timer)
+               (lambda (&rest _args) 'test-timer))
+              ((symbol-function 'gptel-auto-workflow-run-research)
+               (lambda (&rest _)
+                 (setq ran-immediately t))))
+      (gptel-auto-workflow-start-periodic-research)
+      (should (equal gptel-auto-workflow--research-timer 'test-timer))
+      (should-not ran-immediately))))
 
 (ert-deftest regression/auto-workflow-strategic/filter-valid-targets-rejects-nested-repos ()
   "Nested git repos should not be selected by the root workflow."

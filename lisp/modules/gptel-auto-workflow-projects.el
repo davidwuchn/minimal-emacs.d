@@ -96,9 +96,8 @@ Each worktree gets its own isolated buffer for subagent overlays.")
 (defun gptel-auto-workflow--normalized-projects ()
   "Return configured project roots as unique expanded directory names.
 Results are cached until `gptel-auto-workflow-projects' changes."
-  (let* ((projects-hash gptel-auto-workflow--normalized-projects-hash)
-         (projects-list-hash (gethash 'projects-list projects-hash))
-         (cached (and (consp gptel-auto-workflow--normalized-projects-cache)
+  (gptel-auto-workflow--ensure-buffer-tables)
+  (let ((cached (and (consp gptel-auto-workflow--normalized-projects-cache)
                      (eq (car gptel-auto-workflow--normalized-projects-cache)
                          gptel-auto-workflow-projects)
                      (cdr gptel-auto-workflow--normalized-projects-cache))))
@@ -400,7 +399,7 @@ When ERRORED is non-nil, preserve the existing error phase."
   (when (fboundp 'gptel-auto-workflow--persist-status)
     (gptel-auto-workflow--persist-status)))
 
-(defun gptel-auto-workflow--queue-cron-job (label fn use-async)
+(defun gptel-auto-workflow--queue-cron-job (label fn &optional use-async)
   "Queue FN for LABEL and return immediately.
 This keeps `emacsclient --eval' callers from monopolizing the daemon.
 When USE-ASYNC is non-nil, FN must accept a completion callback
@@ -872,6 +871,15 @@ Without PROJECT-ROOT, clears cache for all projects."
 (defvar gptel-auto-workflow--research-status-ttl-seconds 5
   "Time-to-live in seconds for the research status cache.")
 
+(defun gptel-auto-workflow--research-cache-get (project-root)
+  "Return cached research findings for PROJECT-ROOT."
+  (or (gethash project-root gptel-auto-workflow--research-findings-cache)
+      (gethash (directory-file-name project-root)
+               gptel-auto-workflow--research-findings-cache)
+      (gethash (file-name-as-directory project-root)
+               gptel-auto-workflow--research-findings-cache)
+      ""))
+
 (defun gptel-auto-workflow-research-status-all ()
   "Show research status for all configured projects."
   (interactive)
@@ -891,7 +899,7 @@ Without PROJECT-ROOT, clears cache for all projects."
                  cached-result)
       (let ((status-lines '()))
         (dolist (project-root (gptel-auto-workflow--normalized-projects))
-          (let* ((findings (gethash project-root gptel-auto-workflow--research-findings-cache ""))
+          (let* ((findings (gptel-auto-workflow--research-cache-get project-root))
                  (cache-file (expand-file-name "var/tmp/research-findings.md" project-root))
                  (attrs (file-attributes cache-file))
                  (file-size (or (nth 7 attrs) 0)))

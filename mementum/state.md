@@ -4,7 +4,14 @@
 
 ## Current Session: AutoTTS integration + research daemon fix
 
-**Status:** Deep integration pass complete, and remote standalone research fix keeps daemon findings populated.
+**Status:** Deep integration pass complete; standalone research remains active; auto-workflow queue nil-hash crash fixed and live run has reached experiments.
+
+**Auto-Workflow Queue Fix (2026-05-14):**
+- Root cause of `[auto-workflow] Job failed: (wrong-type-argument hash-table-p nil)` was `gptel-auto-workflow--normalized-projects` calling `gethash` on `gptel-auto-workflow--normalized-projects-hash` before shared buffer/hash tables were initialized.
+- Fixed by calling `gptel-auto-workflow--ensure-buffer-tables` at the start of `gptel-auto-workflow--normalized-projects`.
+- Added regression `regression/auto-workflow-projects/normalized-projects-recovers-nil-hash`.
+- Verification: `check-parens` passed; focused regression passed; live `copilot-auto-workflow` run moved from immediate error to `:phase "running"`, selected 5 targets, and started experiment 1.
+- Remaining live-run behavior is experiment-level executor retry/inspection-thrash, not the original daemon queue crash.
 
 **Deep Integration Pass (2026-05-14):**
 - Unified runtime controller loading: `gptel-auto-workflow-strategic.el` now loads `strategic-daemon-functions.el`, replay cache, and benchmark module so cron and interactive paths use the same AutoTTS controller.

@@ -277,7 +277,7 @@ Returns alist of target → (category success-rate count)."
 (defun gptel-auto-workflow--evolution-synthesize ()
   "Synthesize git facts and benchmark verification into skill files.
 This is the CENTRAL function of self-evolution.
-Writes to optimization-skills/ as skill files that the prompt builder consumes."
+Writes runtime evolution data under var/tmp/evolution/."
   (when gptel-auto-workflow-evolution-enabled
     (let* ((_git-facts (gptel-auto-workflow--git-raw-facts))
              (knowledge-dir (expand-file-name "mementum/knowledge"
@@ -292,8 +292,8 @@ Writes to optimization-skills/ as skill files that the prompt builder consumes."
       (make-directory (expand-file-name "var/tmp/evolution"
                                         (gptel-auto-workflow--worktree-base-root)) t)
 
-      ;; ─── Token Efficiency Data (moved from skill to mementum/knowledge) ───
-      ;; Written to mementum/knowledge/ as learned data, not a skill definition.
+      ;; ─── Token Efficiency Data (runtime generated) ───
+      ;; Written to var/tmp/evolution/ as learned data, not a skill definition.
       ;; Loaded directly by prompt builder without skill loader overhead.
       (with-temp-file token-skill-file
         (insert "---\n")
@@ -1013,10 +1013,10 @@ Uses analyze_results.py + generate_directive.py pipeline."
     output))
 
 (defun gptel-auto-workflow--evolve-token-efficiency-data ()
-  "Update token-efficiency data in mementum/knowledge/.
+  "Update token-efficiency data in var/tmp/evolution/.
 Token efficiency is now part of the unified evolution pipeline.
-Data is written directly to mementum/knowledge/token-efficiency.md."
-  (message "[evolution] Token-efficiency data updated in mementum/knowledge/")
+Data is written directly to var/tmp/evolution/token-efficiency.md."
+  (message "[evolution] Token-efficiency data updated in var/tmp/evolution/")
   t)
 
 (defun gptel-auto-workflow--load-directive-skill ()
