@@ -320,11 +320,10 @@ Return a compact structured digest. End with JSON metadata so AutoTTS can replay
 
 ## Variables
 
-- `{{{{research-effectiveness}}}}`: Percentage of research-enabled experiments that were kept
-- `{{{{kept-research}}}}`: Number of kept experiments with research-enabled target selection
-- `{{{{total-research}}}}`: Total number of research-enabled experiments
-- `{{{{topic-performance}}}}`: Formatted list of topics ranked by keep rate
-- `{{{{strategy-guidance}}}}`: AutoTTS controller guidance (source priority, stop threshold, beta)
+The following are substituted at prompt-build time from live data:
+- `strategy-guidance`: AutoTTS controller guidance (source priority, stop threshold, beta)
+- `topic-performance`: Formatted list of topics ranked by keep rate
+- `research-effectiveness`, `kept-research`, `total-research`: Experiment outcome statistics
 """
     
     return evolved_content
