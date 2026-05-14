@@ -326,7 +326,10 @@ Returns the number of messages whose reasoning_content was stripped."
       0
     (let* ((data (my/gptel--info-data info))
            (messages (and (listp data) (plist-get data :messages)))
-           (keep my/gptel-reasoning-keep-turns)
+           (raw-keep my/gptel-reasoning-keep-turns)
+           (keep (if (and (numberp raw-keep) (>= raw-keep 0))
+                     (truncate raw-keep)
+                   0))
            (stripped 0))
       (when (and messages (> (length messages) 0))
         (let ((reasoning-indices
@@ -715,6 +718,7 @@ TEST: Verify with network failure simulation — should retry 3 times with
   (unless new-state (setq new-state (gptel--fsm-next machine)))
   (let* ((info (gptel-fsm-info machine))
          ;; Guard: ensure info is a proper list before accessing with plist-get
+         (info (and (listp info) info))
          (disable-auto-retry (my/gptel--info-get info :disable-auto-retry))
          (headless-agent-buffer-p
           (and (listp info) (my/gptel--headless-auto-workflow-agent-buffer-p info)))

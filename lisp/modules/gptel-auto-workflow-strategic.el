@@ -761,13 +761,14 @@ RULES:
               (funcall callback raw-findings))))))))
 
 (defun gptel-auto-workflow--run-research-turn (research-prompt turn callback 
-                                                      &optional accumulated-findings total-tokens)
+                                                       &optional accumulated-findings total-tokens previous-decision)
   "Run a single research TURN with controller checkpoint.
 RESEARCH-PROMPT is the prompt for this turn.
 TURN is the turn number (0-indexed).
 CALLBACK receives final digested findings.
 ACCUMULATED-FINDINGS is findings from previous turns.
 TOTAL-TOKENS tracks cumulative token usage across turns.
+PREVIOUS-DECISION is the controller decision from the previous turn (for adaptive prompts).
 AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH."
   ;; Store state in global variables to avoid closure capture issues
   ;; in daemon environments where lexical-binding may not work properly
@@ -780,8 +781,8 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
   (let* ((controller-config gptel-auto-workflow--research-controller-config)
          (max-turns gptel-auto-workflow-max-research-turns)
          (current-prompt (if (and accumulated-findings (> (length accumulated-findings) 0))
-                             (gptel-auto-workflow--build-followup-prompt
-                              research-prompt accumulated-findings turn)
+                             (gptel-auto-workflow--build-adaptive-followup-prompt
+                              research-prompt accumulated-findings turn previous-decision)
                            research-prompt))
          (turn-label (format "External research turn %d/%d" (1+ turn) max-turns)))
     (message "[autotts] Starting %s" turn-label)
@@ -833,9 +834,9 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
            confidence)
           (message "[autotts] Turn %d result: %d chars, confidence=%.2f, decision=%s, cumulative-tokens=%d"
                    (1+ gptel-auto-workflow--research-current-turn) (length raw-findings) confidence controller-decision cumulative-tokens)
-         ;; Check controller decision
-         (cond
-          ;; TIMEOUT: Return accumulated findings
+          ;; Check controller decision
+          (cond
+           ;; TIMEOUT: Return accumulated findings
            ((eq controller-decision 'timeout)
             (message "[autotts] Controller TIMEOUT after turn %d, returning accumulated findings"
                      (1+ gptel-auto-workflow--research-current-turn))
@@ -876,15 +877,41 @@ AutoTTS: Controller decides after each turn whether to STOP, CONTINUE, or BRANCH
             (gptel-auto-workflow--finalize-research
              gptel-auto-workflow--research-prompt merged-findings strategy findings-hash
              'max-turns confidence cumulative-tokens callback)))))
-     (if (> gptel-auto-workflow--research-current-turn 0) 300 180))))
+      (if (> gptel-auto-workflow--research-current-turn 0) 300 180))))
+
+(defun gptel-auto-workflow--build-adaptive-followup-prompt (base-prompt accumulated-findings turn 
+                                                               &optional previous-decision)
+  "Build adaptive follow-up prompt for turn TURN with ACCUMULATED-FINDINGS.
+BASE-PROMPT is the original research prompt.
+PREVIOUS-DECISION is the controller decision from the previous turn.
+Injects controller guidance to adapt researcher's strategy based on what happened."
+  (let* ((controller-guidance 
+          (cond
+           ;; BRANCH: Previous approach was stagnant, try different angle
+           ((eq previous-decision 'branch)
+            "**Controller Decision: BRANCH**\nPrevious approach produced limited results. Try a DIFFERENT angle:\n- Search different sources (if you searched own repos, try external)\n- Look for alternative techniques or implementations\n- Explore a related but different topic\n- Focus on a specific sub-problem not yet covered")
+           ;; CONTINUE: Previous findings were promising, dig deeper
+           ((eq previous-decision 'continue)
+            "**Controller Decision: CONTINUE**\nPrevious findings show promise but need more depth. Focus on:\n- Implementation details and concrete code examples\n- How techniques apply to our specific modules\n- Specific modules or functions that could be improved\n- Integration steps and potential pitfalls")
+           ;; Default / first turn
+           (t
+            "**Continue researching.** Focus on gaps or new angles not covered above. Avoid repeating what was already found.")))
+         (budget-guidance 
+          (if (> turn 1)
+              "\n\n**Budget Note:** This is turn 3+. Be concise. Focus on highest-impact insights only."
+            "")))
+    (format "%s\n\n---\n\n**Previous findings (turn %d):**\n%s\n\n%s%s"
+            base-prompt
+            turn
+            (truncate-string-to-width accumulated-findings 2000 nil nil "...")
+            controller-guidance
+            budget-guidance)))
 
 (defun gptel-auto-workflow--build-followup-prompt (base-prompt accumulated-findings turn)
   "Build follow-up prompt for turn TURN with ACCUMULATED-FINDINGS.
-BASE-PROMPT is the original research prompt."
-  (format "%s\n\n---\n\n**Previous findings (turn %d):**\n%s\n\n**Continue researching.** Focus on gaps or new angles not covered above. Avoid repeating what was already found."
-          base-prompt
-          turn
-          (truncate-string-to-width accumulated-findings 2000 nil nil "...")))
+BASE-PROMPT is the original research prompt.
+DEPRECATED: Use `gptel-auto-workflow--build-adaptive-followup-prompt' instead."
+  (gptel-auto-workflow--build-adaptive-followup-prompt base-prompt accumulated-findings turn))
 
 (defun gptel-auto-workflow--finalize-research (prompt findings strategy hash 
                                                       controller-decision confidence tokens-used callback)

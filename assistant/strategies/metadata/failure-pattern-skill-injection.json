@@ -1,0 +1,1 @@
+{"name":"failure-pattern-skill-injection","version":"1.0","hypothesis":"Pattern-triggered skill injection targets domain knowledge where it matters most","axis":"E","components":["pattern-detection","skill-selection","context-injection"]}

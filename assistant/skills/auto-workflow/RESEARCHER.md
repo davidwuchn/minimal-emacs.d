@@ -18,22 +18,39 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
   - No statistically significant data yet (need ≥3 experiments per topic)
 
-## Source Effectiveness
+## Source Effectiveness (AutoTTS Tracking)
 
-*No source effectiveness data yet.*
+Sources are classified as **aligned** (produces good results), **neutral** (unclear), or **deviant** (low quality/contradictory).
+
+*No source effectiveness data yet. Data updates automatically after each research cycle.*
 
 ## Controller Guidance
 
-Current controller configuration (evolved from trace outcomes):
+Current controller uses AutoTTS-style EMA momentum tracking:
 
-- **Stop threshold**: 0.70
+- **Beta parameter**: 0.5 (balanced exploration/exploitation)
+  - β=0: Conservative (2 turns, easy to stop)
+  - β=1: Aggressive (8 turns, hard to stop)
+- **EMA confidence**: Tracks confidence trends across turns
+- **Stop threshold**: 0.71 (at β=0.5)
 - **Token budget**: 8000 tokens
-- **Own-repo priority**: 70%
+- **Own-repo priority**: 95%
+
+### Controller Decisions
+- **STOP**: EMA confidence high AND trend non-negative
+- **BRANCH**: Confidence stagnating (delta below threshold)
+- **CONTINUE**: Making progress but not yet confident
+- **CUT**: Token budget exceeded
 
 ## Instructions
 
-### Source Strategy (learned from outcomes)
+### Source Strategy (AutoTTS-optimized)
 - **DEFAULT**: Use own-repos-first strategy
+- **Source Scheduling**: Prioritize sources by effectiveness score
+  - Focus on **aligned** sources (high score > 0.7)
+  - Check **neutral** sources occasionally (score 0.3-0.7)
+  - Skip **deviant** sources unless specifically relevant (score < 0.3)
+- **Dynamic adaptation**: Source priorities update after each research cycle based on outcome quality
 
 ### Controller Awareness
 - STOP early if you have 2+ insights with URLs
