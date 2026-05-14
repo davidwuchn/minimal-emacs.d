@@ -816,6 +816,10 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
     (error "Programmatic eval-statement requires a hash table environment, got: %S" env))
   (unless (proper-list-p state)
     (error "Programmatic eval-statement requires a proper plist state, got: %S" state))
+  (when (null statement)
+    (error "Programmatic eval-statement requires a non-nil statement, got: nil"))
+  (unless (consp statement)
+    (error "Programmatic eval-statement requires a proper list statement, got: %S" statement))
   (pcase statement
     (`(progn . ,body)
      (gptel-sandbox--eval-progn body env state callback))
