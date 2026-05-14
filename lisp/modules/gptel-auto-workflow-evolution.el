@@ -1436,7 +1436,12 @@ Uses agentskills.io standard scripts/ directory."
 Extract → Verify → Controller Evolution → Skill Evolution.
 Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (interactive)
+  (cl-block gptel-auto-workflow-evolution-run-cycle
   (message "[auto-workflow] Running self-evolution cycle...")
+  (let ((new-experiments (gptel-auto-workflow--evolution-count-new)))
+    (when (< new-experiments 3)
+      (message "[evolution] Insufficient new data (%d experiments). Skipping." new-experiments)
+      (cl-return-from gptel-auto-workflow-evolution-run-cycle nil)))
   ;; Consume pipeline env vars for research-aware evolution
   (let ((research-quality (getenv "PIPELINE_RESEARCH_QUALITY"))
         (findings-file (getenv "PIPELINE_FINDINGS_FILE"))
@@ -1468,7 +1473,59 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (when (fboundp 'gptel-auto-workflow--skill-governance-run-cycle)
     (message "[auto-workflow] Running skill governance cycle...")
     (gptel-auto-workflow--skill-governance-run-cycle))
-  (message "[auto-workflow] Self-evolution cycle complete."))
+  (gptel-auto-workflow--evolution-record-score)
+  (message "[auto-workflow] Self-evolution cycle complete.")))
+
+;; ─── Evolution Quality Gates ───
+
+(defun gptel-auto-workflow--evolution-record-score ()
+  "Record current evolution quality score for trend tracking.
+Saves to var/tmp/evolution-scores.json."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
+         (total (length results))
+         (score (if (> total 0) (/ (float kept) (float total)) 0.0))
+         (score-file (expand-file-name "var/tmp/evolution-scores.json"
+                                       (or (gptel-auto-workflow--worktree-base-root) "~")))
+         (history (condition-case nil
+                      (let ((json-object-type 'plist)
+                            (json-array-type 'list))
+                        (with-temp-buffer
+                          (insert-file-contents score-file)
+                          (goto-char (point-min))
+                          (json-read)))
+                    (error (list :scores nil :best 0.0))))
+         (scores (or (plist-get history :scores) nil))
+         (best (plist-get history :best)))
+    (plist-put history :last-score score)
+    (plist-put history :last-total total)
+    (plist-put history :scores
+               (cons (list :timestamp (format-time-string "%Y-%m-%dT%H:%M")
+                          :score score :total total)
+                     (seq-take (or scores nil) 20)))
+    (when (> score (or best 0.0))
+      (plist-put history :best score)
+      (plist-put history :best-at (format-time-string "%Y-%m-%dT%H:%M")))
+    (make-directory (file-name-directory score-file) t)
+    (with-temp-file score-file
+      (insert (json-encode history)))
+    (message "[evolution] Recorded score: %.4f (best: %.4f, total: %d)" score (plist-get history :best) total)
+    score))
+
+(defun gptel-auto-workflow--evolution-count-new ()
+  "Count new experiments since last recorded score."
+  (let* ((score-file (expand-file-name "var/tmp/evolution-scores.json"
+                                       (or (gptel-auto-workflow--worktree-base-root) "~")))
+         (last-total (condition-case nil
+                         (let ((json-object-type 'plist))
+                           (with-temp-buffer
+                             (insert-file-contents score-file)
+                             (goto-char (point-min))
+                             (plist-get (json-read) :last-total)))
+                       (error 0)))
+         (results (gptel-auto-workflow--parse-all-results))
+         (current (length results)))
+    (- current (or last-total 0))))
 
 ;; ─── Skill Governance Integration ───
 
