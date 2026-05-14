@@ -226,13 +226,13 @@ This becomes input for next cycle."
 Implements: output → input transformation."
   (let* ((status (gptel-benchmark-evolution-status-report))
          (metadata (format "## Evolution State\n\n- **Cycle**: %d\n- **Principle**: %s\n- **Capabilities**: %d/5\n- **Emergence Rate**: %.2f (%s)\n- **Corrections**: %d | **Emergences**: %d\n"
-                          (plist-get status :cycle)
-                          (plist-get gptel-benchmark-evolution-state :last-mutation)
-                          (length (plist-get status :capabilities))
-                          (plist-get status :emergence-rate)
-                          (plist-get status :growth-mode)
-                          (plist-get status :corrections)
-                          (plist-get status :emergences))))
+                           (plist-get status :cycle)
+                           (plist-get gptel-benchmark-evolution-state :last-mutation)
+                           (length (plist-get status :capabilities))
+                           (plist-get status :emergence-rate)
+                           (plist-get status :growth-mode)
+                           (plist-get status :corrections)
+                           (plist-get status :emergences))))
     (gptel-benchmark-memory-update-state
      (format "%s\n\n## Last Mutation\n\n%s\n\n## Timestamp\n\n%s"
              metadata
@@ -418,34 +418,34 @@ SYSTEM + Feed Forward = AI COMPLETE"
                       'no-verification)))
      :remedy "Apply Fire: add verification step after edits")
     (feedback-loop-stagnation
-      :element fire
-      :controlled-by water
-      :symptom "No improvement despite repeated corrections - system not learning"
-      :detection (lambda (results)
-                   (let ((corrections (or (plist-get results :correction-count) 0))
-                         (improvements (or (plist-get results :improvement-count) 0)))
-                     (when (and (> corrections 3) (= improvements 0))
-                       'feedback-loop-stagnation)))
-      :remedy "Apply Water: review learning protocol, check pattern storage")
+     :element fire
+     :controlled-by water
+     :symptom "No improvement despite repeated corrections - system not learning"
+     :detection (lambda (results)
+                  (let ((corrections (or (plist-get results :correction-count) 0))
+                        (improvements (or (plist-get results :improvement-count) 0)))
+                    (when (and (> corrections 3) (= improvements 0))
+                      'feedback-loop-stagnation)))
+     :remedy "Apply Water: review learning protocol, check pattern storage")
     (memory-pollution
-      :element earth
-      :controlled-by wood
-      :symptom "Low-quality memories accumulating, φ scores declining"
-      :detection (lambda (results)
-                   (let ((avg-phi (or (plist-get results :avg-phi) 0.5)))
-                     (when (< avg-phi 0.3)
-                       'memory-pollution)))
-      :remedy "Apply Wood: prune low-φ memories, raise quality threshold")
+     :element earth
+     :controlled-by wood
+     :symptom "Low-quality memories accumulating, φ scores declining"
+     :detection (lambda (results)
+                  (let ((avg-phi (or (plist-get results :avg-phi) 0.5)))
+                    (when (< avg-phi 0.3)
+                      'memory-pollution)))
+     :remedy "Apply Wood: prune low-φ memories, raise quality threshold")
     (capability-regression
-      :element water
-      :controlled-by earth
-      :symptom "Previously emerged capabilities lost after updates"
-      :detection (lambda (results)
-                   (let ((prev-caps (or (plist-get results :previous-capabilities) 0))
-                         (curr-caps (or (plist-get results :current-capabilities) 0)))
-                     (when (< curr-caps prev-caps)
-                       'capability-regression)))
-      :remedy "Apply Earth: add capability persistence tests, version migrations"))
+     :element water
+     :controlled-by earth
+     :symptom "Previously emerged capabilities lost after updates"
+     :detection (lambda (results)
+                  (let ((prev-caps (or (plist-get results :previous-capabilities) 0))
+                        (curr-caps (or (plist-get results :current-capabilities) 0)))
+                    (when (< curr-caps prev-caps)
+                      'capability-regression)))
+     :remedy "Apply Earth: add capability persistence tests, version migrations"))
   "Anti-patterns mapped to 相克 (controlling cycle).
 Each anti-pattern is detected when an element is excessive.
 The controlling element provides the remedy.")
@@ -553,7 +553,7 @@ Returns list of deficient element keywords."
   (when (and (proper-list-p observation)
              (plist-get observation :element-status))
     (let ((diagnosis (plist-get observation :element-status)))
-      (when (listp diagnosis)
+      (when (proper-list-p diagnosis)
         (cl-loop for d in diagnosis
                  when (gptel-benchmark-evolution--deficient-p d)
                  collect (plist-get d :element))))))
@@ -564,7 +564,7 @@ Returns element keyword if opportunity found, nil otherwise."
   (when (and (proper-list-p observation)
              (plist-get observation :element-status))
     (let* ((deficient (plist-get observation :element-status))
-           (found (and (listp deficient)
+           (found (and (proper-list-p deficient)
                        (cl-find-if #'gptel-benchmark-evolution--deficient-p deficient))))
       (when found
         (plist-get found :element)))))

@@ -103,7 +103,7 @@ Results are cached to avoid repeated file I/O for the same benchmark."
          (cached (gptel-benchmark--cache-get cache-key)))
     (if cached
         cached
-      (let ((benchmark-file (format "./benchmarks/%s-%s-benchmark.json" name version)))
+      (let ((benchmark-file (gptel-benchmark-get-file name version)))
         (if (file-exists-p benchmark-file)
             (let ((result (gptel-benchmark-read-json benchmark-file)))
               (gptel-benchmark--cache-put cache-key result)
@@ -150,6 +150,8 @@ falls back to hardcoded default."
   "Get benchmark file path for NAME VERSION."
   (unless (and name (stringp name) (not (string-empty-p name)))
     (signal 'wrong-type-argument (list "stringp" name)))
+  (unless (and version (stringp version) (not (string-empty-p version)))
+    (signal 'wrong-type-argument (list "stringp" version)))
   (format "./benchmarks/%s-%s-benchmark.json" name version))
 
 (defun gptel-benchmark--scan-versions-from-dir (name)

@@ -822,7 +822,8 @@ TARGETS defaults to `gptel-auto-workflow-targets'."
   "Get suggested hypothesis from SKILLS."
   (let* ((target-skill (plist-get skills :target-skill))
          (content (when target-skill (plist-get target-skill :content))))
-    (when (and content (string-match "^## Next Hypothesis\n\n\\(.+\\)" content))
+    (when (and (stringp content)
+               (string-match "^## Next Hypothesis\n\n\\(.+\\)" content))
       (match-string 1 content))))
 
 (defun gptel-auto-workflow--extract-mutation-templates (skills)

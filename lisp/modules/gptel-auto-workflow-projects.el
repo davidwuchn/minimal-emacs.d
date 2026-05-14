@@ -77,6 +77,11 @@ Customize this variable to add more projects.")
 Key: worktree directory, Value: buffer.
 Each worktree gets its own isolated buffer for subagent overlays.")
 
+(defvar gptel-auto-workflow--normalized-projects-cache nil
+  "Cached normalized projects list with timestamp for invalidation.")
+(defvar gptel-auto-workflow--normalized-projects-hash nil
+  "Hash table mapping current-dir prefixes to project roots for O(1) lookup.")
+
 (defun gptel-auto-workflow--ensure-buffer-tables ()
   "Ensure shared project/worktree buffer tables are initialized."
   (unless (hash-table-p gptel-auto-workflow--project-buffers)
@@ -84,17 +89,30 @@ Each worktree gets its own isolated buffer for subagent overlays.")
   (unless (hash-table-p gptel-auto-workflow--worktree-buffers)
     (setq gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal)))
   (unless (hash-table-p gptel-auto-workflow--research-findings-cache)
-    (setq gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal))))
+    (setq gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)))
+  (unless (hash-table-p gptel-auto-workflow--normalized-projects-hash)
+    (setq gptel-auto-workflow--normalized-projects-hash (make-hash-table :test 'equal))))
 
 (defun gptel-auto-workflow--normalized-projects ()
-  "Return configured project roots as unique expanded directory names."
-  (delq nil
-        (delete-dups
-         (mapcar (lambda (project-root)
-                   (and (stringp project-root)
-                        (> (length project-root) 0)
-                        (file-name-as-directory (expand-file-name project-root))))
-                 gptel-auto-workflow-projects))))
+  "Return configured project roots as unique expanded directory names.
+Results are cached until `gptel-auto-workflow-projects' changes."
+  (let* ((projects-hash gptel-auto-workflow--normalized-projects-hash)
+         (projects-list-hash (gethash 'projects-list projects-hash))
+         (cached (and (consp gptel-auto-workflow--normalized-projects-cache)
+                     (eq (car gptel-auto-workflow--normalized-projects-cache)
+                         gptel-auto-workflow-projects)
+                     (cdr gptel-auto-workflow--normalized-projects-cache))))
+    (or cached
+        (let ((normalized (delq nil
+                               (delete-dups
+                                (mapcar (lambda (project-root)
+                                          (and (stringp project-root)
+                                               (> (length project-root) 0)
+                                               (file-name-as-directory (expand-file-name project-root))))
+                                        gptel-auto-workflow-projects)))))
+          (setq gptel-auto-workflow--normalized-projects-cache
+                (cons gptel-auto-workflow-projects normalized))
+          normalized))))
 
 (defun gptel-auto-workflow--normalize-worktree-dir (worktree-dir &optional project-root)
   "Return WORKTREE-DIR as an absolute directory name.
@@ -251,7 +269,9 @@ Interactively prompts for directory."
       (gptel-auto-workflow--ensure-buffer-tables)
       (remhash root gptel-auto-workflow--project-buffers)
       (remhash root gptel-auto-workflow--worktree-buffers)
-      (remhash root gptel-auto-workflow--research-findings-cache))
+      (remhash root gptel-auto-workflow--research-findings-cache)
+      (setq gptel-auto-workflow--normalized-projects-cache nil)
+      (clrhash gptel-auto-workflow--normalized-projects-hash))
     (message "Added project: %s" root)))
 
 (defun gptel-auto-workflow-remove-project (project-root)
@@ -271,7 +291,9 @@ Interactively prompts for directory."
       (gptel-auto-workflow--ensure-buffer-tables)
       (remhash root gptel-auto-workflow--project-buffers)
       (remhash root gptel-auto-workflow--worktree-buffers)
-      (remhash root gptel-auto-workflow--research-findings-cache))
+      (remhash root gptel-auto-workflow--research-findings-cache)
+      (setq gptel-auto-workflow--normalized-projects-cache nil)
+      (clrhash gptel-auto-workflow--normalized-projects-hash))
     (message "Removed project: %s" root)))
 
 (defun gptel-auto-workflow-list-projects ()
@@ -471,10 +493,9 @@ Returns (project-root . project-buffer) or nil if can't determine."
                             (file-name-as-directory (expand-file-name default-directory))))
           proj)
       (when current-dir
-        (setq proj (cl-loop for p in gptel-auto-workflow-projects
+        (setq proj (cl-loop for p in (gptel-auto-workflow--normalized-projects)
                             when (and (stringp p)
-                                      (> (length p) 0)
-                                      (string-prefix-p (file-name-as-directory (expand-file-name p)) current-dir))
+                                      (string-prefix-p p current-dir))
                             return p)))
       (when (and proj (stringp proj))
         (cons proj (gptel-auto-workflow--get-project-buffer proj)))))
@@ -674,7 +695,8 @@ ORIG-FUN is the original function. WHERE is position/marker.
 Gets target buffer from gptel-fsm-info and creates overlay there."
   (let* ((fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
          (info (and fsm (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
-         (target-buf (and info (plist-get info :buffer))))
+         (valid-info (and (proper-list-p info) info))
+         (target-buf (and valid-info (plist-get valid-info :buffer))))
     (if (and target-buf (buffer-live-p target-buf))
         (with-current-buffer target-buf
           (funcall orig-fun where agent-type description))

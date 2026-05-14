@@ -278,12 +278,12 @@ Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
       (when (and (> my/gptel-subagent-cache-max-size 0)
                  (> (hash-table-count my/gptel--subagent-cache)
                     my/gptel-subagent-cache-max-size))
-        (let* ((entries nil)
-               (excess (- (hash-table-count my/gptel--subagent-cache)
-                          my/gptel-subagent-cache-max-size)))
+        (let* ((cache-size (hash-table-count my/gptel--subagent-cache))
+               (excess (- cache-size my/gptel-subagent-cache-max-size))
+               (entries nil))
           (maphash
            (lambda (k v)
-             (when (consp v)
+             (when (and (consp v) (numberp (car v)))
                (push (cons (car v) k) entries)))
            my/gptel--subagent-cache)
           (setq entries (sort entries (lambda (a b) (< (car a) (car b)))))
@@ -990,12 +990,11 @@ TIMESTAMP defaults to `current-time'."
 
 (defun my/gptel--agent-task-note-message-activity (format-string &rest args)
   "Treat worktree-context messages as executor activity."
-  (let ((text (and (stringp format-string)
-                   (condition-case nil
-                       (apply #'format format-string args)
-                     (error format-string))))
-        (activity-path nil))
-    (setq activity-path (my/gptel--agent-task-message-activity-path text))
+  (let* ((text (and (stringp format-string)
+                    (condition-case nil
+                        (apply #'format format-string args)
+                      (error format-string))))
+         (activity-path (my/gptel--agent-task-message-activity-path text)))
     (unless (my/gptel--ignore-agent-activity-message-p text)
       (if activity-path
           (my/gptel--agent-task-note-context-activity activity-path nil)
