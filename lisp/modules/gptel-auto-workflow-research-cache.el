@@ -95,16 +95,43 @@
   "Load cache index from disk."
   (let ((index-file (gptel-auto-workflow--research-cache-index-file)))
     (setq gptel-auto-workflow--research-cache-index
-          (if (file-exists-p index-file)
-              (condition-case err
-                  (let ((json-object-type 'plist)
-                        (json-array-type 'list)
-                        (json-key-type 'keyword))
-                    (json-read-file index-file))
-                (error
-                 (message "[research-cache] Failed to load index: %s" err)
-                 (gptel-auto-workflow--build-research-cache-index-from-traces)))
-            (gptel-auto-workflow--build-research-cache-index-from-traces)))))
+          (gptel-auto-workflow--merge-research-cache-index
+           (if (file-exists-p index-file)
+               (condition-case err
+                   (let ((json-object-type 'plist)
+                         (json-array-type 'list)
+                         (json-key-type 'keyword))
+                     (json-read-file index-file))
+                 (error
+                  (message "[research-cache] Failed to load index: %s" err)
+                  nil))
+             nil)
+           (gptel-auto-workflow--build-research-cache-index-from-traces)))))
+
+(defun gptel-auto-workflow--merge-research-cache-index (cached traced)
+  "Return CACHED and TRACED replay index entries merged by trace id."
+  (let ((seen (make-hash-table :test 'equal))
+        (merged nil))
+    (dolist (entry (append traced cached))
+      (let ((id (plist-get entry :id)))
+        (when (and id (not (gethash id seen)))
+          (puthash id t seen)
+          (push entry merged))))
+    (sort merged
+          (lambda (a b)
+            (string> (or (plist-get a :timestamp) "")
+                     (or (plist-get b :timestamp) ""))))))
+
+(defun gptel-auto-workflow--research-cache-index-trace-file (trace-file)
+  "Add TRACE-FILE to replay index if the research cache module is loaded."
+  (when (and (stringp trace-file) (file-exists-p trace-file))
+    (gptel-auto-workflow--load-research-cache-index)
+    (when-let ((entry (gptel-auto-workflow--trace-entry-from-file trace-file)))
+      (setq gptel-auto-workflow--research-cache-index
+            (gptel-auto-workflow--merge-research-cache-index
+             (list entry)
+             gptel-auto-workflow--research-cache-index))
+      (gptel-auto-workflow--save-research-cache-index))))
 
 (defun gptel-auto-workflow--trace-entry-from-file (file)
   "Return replay index entry for trace FILE, or nil on parse failure."

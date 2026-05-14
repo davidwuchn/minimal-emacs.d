@@ -1635,6 +1635,8 @@ TOKENS-USED is estimated token count."
                                 :has-steps (if all-steps t nil)))))
       (with-temp-file trace-file
         (insert (json-encode trace-data)))
+      (when (fboundp 'gptel-auto-workflow--research-cache-index-trace-file)
+        (gptel-auto-workflow--research-cache-index-trace-file trace-file))
       (message "[autotts] Saved research trace: %s (%d steps)"
                (file-name-nondirectory trace-file)
                (or (length all-steps) 0)))))

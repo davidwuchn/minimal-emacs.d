@@ -745,10 +745,10 @@ Faster than `benchmark-all-research-strategies` which calls LLMs."
   "Update trace files with experiment outcome.
 EXPERIMENT is a plist with :research-hash and :kept fields.
 Called from experiment logging to link research → experiment results."
-  (let ((research-hash (plist-get experiment :research-hash))
-        (kept (plist-get experiment :kept))
-        (target (plist-get experiment :target))
-        (score-after (plist-get experiment :score-after)))
+  (let* ((research-hash (plist-get experiment :research-hash))
+         (kept (gptel-auto-workflow--experiment-kept-p experiment))
+         (target (plist-get experiment :target))
+         (score-after (plist-get experiment :score-after)))
     (when (and research-hash (not (equal research-hash "none")))
       (let ((trace-dir (expand-file-name "var/tmp/research-traces"
                                           (gptel-auto-workflow--worktree-base-root)))
@@ -785,6 +785,13 @@ Called from experiment logging to link research → experiment results."
 (defvar gptel-auto-workflow--trace-outcome-hooks nil
   "List of functions to call when trace outcomes are updated.
 Each function receives the updated trace plist.")
+
+(defun gptel-auto-workflow--experiment-kept-p (experiment)
+  "Return non-nil when EXPERIMENT represents a kept result."
+  (or (eq (plist-get experiment :kept) t)
+      (equal (plist-get experiment :decision) "kept")
+      (equal (plist-get experiment :comparator-reason) "kept")
+      (equal (plist-get experiment :grader-reason) "kept")))
 
 (defun gptel-auto-workflow--trace-success-p (trace)
   "Return non-nil when TRACE has a kept downstream outcome.
