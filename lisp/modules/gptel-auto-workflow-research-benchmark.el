@@ -409,48 +409,57 @@ Returns list of evolution records."
 
 (defun gptel-auto-workflow--calculate-evolution-objective (traces config)
   "Calculate objective value for evolution from TRACES and CONFIG.
-Higher is better. Combines:
-- Source success rates (weighted by priorities)
-- Average confidence
-- Token efficiency (output per token)
-- Trace diversity (own-repo vs external balance)"
+Higher is better. Combines downstream outcome success rates,
+average confidence, token efficiency, and source diversity.
+Uses actual downstream experiment outcomes when available (via trace-success-p),
+falling back to output quality heuristics for traces without outcomes."
   (let ((own-success 0)
         (own-total 0)
         (ext-success 0)
         (ext-total 0)
         (total-confidence 0)
         (total-tokens 0)
-        (total-output 0))
+        (total-output 0)
+        (outcome-known-count 0)
+        (outcome-success-count 0))
     (dolist (trace traces)
       (let ((source (plist-get trace :source))
             (output-length (or (plist-get trace :output-length) 0))
             (tokens (or (plist-get trace :tokens-used) 1))
             (confidence (or (plist-get trace :confidence) 0))
-            (has-urls (plist-get trace :has-urls)))
+            (outcome-known (gptel-auto-workflow--trace-outcome-known-p trace))
+            (trace-success (gptel-auto-workflow--trace-success-p trace)))
         (setq total-confidence (+ total-confidence confidence))
         (setq total-tokens (+ total-tokens tokens))
         (setq total-output (+ total-output output-length))
+        (when outcome-known
+          (setq outcome-known-count (1+ outcome-known-count))
+          (when trace-success
+            (setq outcome-success-count (1+ outcome-success-count))))
         (if (string= source "own-repo")
             (progn
               (setq own-total (1+ own-total))
-              (when (and has-urls (> output-length 1000))
+              (when trace-success
                 (setq own-success (1+ own-success))))
           (setq ext-total (1+ ext-total))
-          (when (and has-urls (> output-length 1000))
+          (when trace-success
             (setq ext-success (1+ ext-success))))))
     (let* ((own-rate (if (> own-total 0) (/ (float own-success) own-total) 0))
            (ext-rate (if (> ext-total 0) (/ (float ext-success) ext-total) 0))
            (avg-confidence (if (> (length traces) 0) (/ (float total-confidence) (length traces)) 0))
            (token-efficiency (if (> total-tokens 0) (/ (float total-output) total-tokens) 0))
+           (outcome-rate (if (> outcome-known-count 0) (/ (float outcome-success-count) outcome-known-count) 0))
            (own-priority (or (plist-get config :own-repo-priority) 0.7))
            (ext-priority (or (plist-get config :external-priority) 0.15))
-           ;; Weighted objective: prioritize high success rate on high-priority sources
+           ;; Weighted objective: prioritize downstream outcomes on high-priority sources
            (objective (+ (* own-rate own-priority 2.0)
                         (* ext-rate ext-priority 1.0)
+                        (* outcome-rate 1.5)
                         (* avg-confidence 0.5)
                         (* (min token-efficiency 2.0) 0.25))))
-      (message "[autotts] Objective: own=%.2f ext=%.2f conf=%.2f eff=%.2f → %.3f"
-               own-rate ext-rate avg-confidence token-efficiency objective)
+      (message "[autotts] Objective: own=%.2f ext=%.2f outcomes=%.2f(%d) conf=%.2f eff=%.2f → %.3f"
+               own-rate ext-rate outcome-rate outcome-known-count
+               avg-confidence token-efficiency objective)
       objective)))
 
 (defun gptel-auto-workflow--detect-convergence (history new-objective)
@@ -592,15 +601,75 @@ Extract topic performance, source effectiveness, and EMA-outcome correlation."
                  (message "[autotts]    %s: %.0f%% success (%d/%d)"
                           name (* 100 rate) (nth 0 stats) (nth 1 stats))))
               source-perf)
-    ;; EMA-outcome correlation
-    (message "[autotts]  EMA-outcome correlation:")
-    (maphash (lambda (key stats)
-               (let ((rate (if (> (nth 1 stats) 0)
-                              (/ (float (nth 0 stats)) (nth 1 stats))
-                            0)))
-                 (message "[autotts]    %s: %.0f%% success (%d/%d)"
-                          key (* 100 rate) (nth 0 stats) (nth 1 stats))))
-             ema-decision-perf)))
+     ;; EMA-outcome correlation
+     (message "[autotts]  EMA-outcome correlation:")
+     (maphash (lambda (key stats)
+                (let ((rate (if (> (nth 1 stats) 0)
+                               (/ (float (nth 0 stats)) (nth 1 stats))
+                             0)))
+                  (message "[autotts]    %s: %.0f%% success (%d/%d)"
+                           key (* 100 rate) (nth 0 stats) (nth 1 stats))))
+              ema-decision-perf)
+    ;; Persist synthesis so evolve_researcher.py can consume trace-level analysis
+    (gptel-auto-workflow--save-trace-synthesis topic-perf source-perf)))
+
+(defun gptel-auto-workflow--save-trace-synthesis (topic-perf source-perf)
+  "Write trace synthesis to JSON for evolve_researcher.py consumption."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (data-dir (expand-file-name "assistant/skills/researcher-prompt/data" root)))
+    (make-directory data-dir t)
+    ;; Topic performance from traces: topics-by-strategy → topic-performance format
+    (let ((topics (make-hash-table :test 'equal))
+          (total-kept 0)
+          (total-exp 0))
+      (maphash (lambda (strategy stats)
+                 (let ((kept (nth 0 stats))
+                       (total (nth 1 stats))
+                       (avg-conf (/ (nth 2 stats) (max total 1)))
+                       (topic (if (string-match-p "nil-safety\\|null\\|guard" strategy) "nil-safety"
+                                (if (string-match-p "performance\\|cache\\|speed" strategy) "performance"
+                                  (if (string-match-p "error" strategy) "error-handling"
+                                    (if (string-match-p "async" strategy) "async"
+                                      strategy))))))
+                   (setq total-kept (+ total-kept kept))
+                   (setq total-exp (+ total-exp total))
+                   (puthash topic
+                            (list :kept kept :total total :rate (/ (float kept) (max total 1))
+                                  :avg-confidence avg-conf :trend "stable")
+                            (gethash topic topics (make-hash-table :test 'equal)))))
+               topic-perf)
+      (let ((topics-out (make-hash-table :test 'equal)))
+        (maphash (lambda (topic data)
+                   (puthash topic
+                            (list :kept (plist-get data :kept)
+                                  :total_experiments (plist-get data :total)
+                                  :success_rate (plist-get data :rate)
+                                  :avg_quality_score (plist-get data :avg-confidence)
+                                  :trend (plist-get data :trend)
+                                  :top_targets nil)
+                            topics-out))
+                 topics)
+        (with-temp-file (expand-file-name "topic-performance-traces.json" data-dir)
+          (insert (json-encode `(:topics ,topics-out
+                                 :total_experiments ,total-exp
+                                 :lookback_days 14)))))
+      ;; Source effectiveness from traces
+      (let ((sources-out (make-hash-table :test 'equal)))
+        (maphash (lambda (source stats)
+                   (let ((kept (nth 0 stats))
+                         (total (nth 1 stats)))
+                     (puthash source
+                              (list :experiments_kept kept
+                                    :experiments_enabled total
+                                    :success_rate (/ (float kept) (max total 1))
+                                    :source_type (if (string= source "own-repo") "github" "external")
+                                    :identifier source
+                                    :techniques_suggested nil)
+                              sources-out)))
+                 source-perf)
+        (with-temp-file (expand-file-name "source-effectiveness-traces.json" data-dir)
+          (insert (json-encode `(:sources ,sources-out)))))
+      (message "[autotts] Saved trace synthesis to %s" data-dir))))
 
 (defun gptel-auto-workflow--update-skill-with-controller (controller-config)
   "Update researcher SKILL.md with evolved CONTROLLER-CONFIG.
