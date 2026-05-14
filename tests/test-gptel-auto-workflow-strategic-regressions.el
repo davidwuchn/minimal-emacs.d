@@ -240,6 +240,37 @@
       (should (equal gptel-auto-workflow--research-timer 'test-timer))
       (should-not ran-immediately))))
 
+(ert-deftest regression/auto-workflow-strategic/controller-rules-see-signal-bindings ()
+  "Agent-generated controller rules should evaluate against signal bindings."
+  (let ((gptel-auto-workflow--research-ema-conf 0.8))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--research-ema-delta)
+               (lambda () 0.1))
+              ((symbol-function 'gptel-auto-workflow--estimate-confidence)
+               (lambda (_output) 0.8)))
+      (should
+       (eq (gptel-auto-workflow--apply-controller-rules
+            (list :turn-count 1
+                  :token-budget 8000
+                  :rules (list (list :when '(and (> ema-conf 0.7)
+                                                  (> confidence 0.7)
+                                                  has-urls)
+                                      :then 'stop)))
+            "https://example.com")
+           'stop)))))
+
+(ert-deftest regression/auto-workflow-strategic/controller-rules-survive-missing-confidence-estimator ()
+  "Rule evaluation should not require the optional confidence estimator."
+  (let ((gptel-auto-workflow--research-ema-conf 0.8))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--research-ema-delta)
+               (lambda () 0.1))
+              ((symbol-function 'gptel-auto-workflow--estimate-confidence)
+               nil))
+      (should
+       (eq (gptel-auto-workflow--apply-controller-rules
+            (list :rules (list (list :when '(> ema-conf 0.7) :then 'stop)))
+            "")
+           'stop)))))
+
 (ert-deftest regression/auto-workflow-strategic/filter-valid-targets-rejects-nested-repos ()
   "Nested git repos should not be selected by the root workflow."
   (let* ((proj-root (make-temp-file "aw-strategic" t))

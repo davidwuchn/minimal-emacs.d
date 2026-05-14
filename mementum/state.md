@@ -28,6 +28,12 @@
 - Generated skill/stat churn from smoke/full pipeline runs remains uncommitted by policy unless explicitly wanted.
 - Full non-smoke `scripts/run-pipeline.sh` auto-workflow batch was not rerun after the follow-up fixes because it can take hours.
 
+**Remote Sync Fix (2026-05-15):**
+- Fast-forwarded local `main` to `origin/main` commit `2fb9f0e0`.
+- Review found two regressions: stray top-level `updated`/`results` references in `gptel-auto-workflow--bridge-trace-outcomes`, and controller rules losing signal bindings under lexical `eval`.
+- Fixed trace bridge paren/tail issue, restored rule evaluation with explicit signal alist, guarded missing confidence estimator, and added strategic regressions for rule signal visibility.
+- Verification: research benchmark regressions 11/11, strategic regressions 16/16, standalone research 3/3, project regressions 13 expected/2 skipped, evolution regressions 2/2; byte-compile of touched modules passed with warnings only.
+
 ## Current Session: AutoTTS integration + research daemon fix
 
 **Status:** Deep integration pass complete; standalone research remains active; auto-workflow queue nil-hash crash fixed and live run has reached experiments.

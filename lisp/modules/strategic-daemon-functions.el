@@ -360,21 +360,24 @@ Evaluates (:when EXPR :then DECISION) rules against current signals.
 Returns the decision from the first matching rule, or nil if no rules exist."
   (let ((rules (plist-get controller-config :rules)))
     (when (and rules (listp rules))
-      (let* ((ema-conf gptel-auto-workflow--research-ema-conf)
-             (ema-delta (gptel-auto-workflow--research-ema-delta))
-             (turn (or (plist-get controller-config :turn-count) 0))
-             (output-length (length (or output-text "")))
-             (confidence (or (gptel-auto-workflow--estimate-confidence output-text) 0.0))
-             (has-urls (and output-text (string-match-p "https?://" output-text) t))
-             (has-structure (and output-text (string-match-p "## .*\\n" output-text) t))
-             (source (if (string-match-p "davidwuchn\\|own.repo" (or output-text ""))
-                         "own-repo" "external"))
-             (budget-remaining (- (or (plist-get controller-config :token-budget) 8000)
-                                  (/ (length (or output-text "")) 4))))
+      (let ((signals `((ema-conf . ,gptel-auto-workflow--research-ema-conf)
+                       (ema-delta . ,(gptel-auto-workflow--research-ema-delta))
+                       (turn . ,(or (plist-get controller-config :turn-count) 0))
+                       (output-length . ,(length (or output-text "")))
+                       (confidence . ,(if (and (fboundp 'gptel-auto-workflow--estimate-confidence)
+                                               (functionp (symbol-function 'gptel-auto-workflow--estimate-confidence)))
+                                          (or (gptel-auto-workflow--estimate-confidence output-text) 0.0)
+                                        0.0))
+                       (has-urls . ,(and output-text (string-match-p "https?://" output-text) t))
+                       (has-structure . ,(and output-text (string-match-p "## .*\\n" output-text) t))
+                       (source . ,(if (string-match-p "davidwuchn\\|own.repo" (or output-text ""))
+                                      "own-repo" "external"))
+                       (budget-remaining . ,(- (or (plist-get controller-config :token-budget) 8000)
+                                               (/ (length (or output-text "")) 4))))))
         (catch 'rule-matched
           (dolist (rule rules nil)
             (condition-case nil
-                (when (eval (plist-get rule :when) t)
+                (when (eval (plist-get rule :when) signals)
                   (throw 'rule-matched (plist-get rule :then)))
               (error nil))))))))
 
@@ -605,7 +608,7 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
                             "default"))
               ;; Calculate confidence and update EMA
                (turn-confidence (if timeout-p
-                                   (gptel-auto-workflow--estimate-confidence 
+                                   (gptel-auto-workflow--estimate-confidence
                                     (or gptel-auto-workflow--research-accumulated-findings ""))
                                  (gptel-auto-workflow--estimate-confidence (or raw-findings ""))))
               (ema-conf (gptel-auto-workflow--update-research-ema turn-confidence))

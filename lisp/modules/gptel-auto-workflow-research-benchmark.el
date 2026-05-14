@@ -1146,9 +1146,6 @@ Closes the loop: research strategy → experiment → outcome → controller lea
     (message "[trace-bridge] Bridged %d traces to experiment outcomes (%d results)"
              updated (length results))
     updated)))
-    (message "[trace-bridge] Bridged %d traces to experiment outcomes (%d results)"
-             updated (length results))
-    updated)))
 
 (defun gptel-auto-workflow--parse-tsv-results (tsv-path)
   "Parse TSV experiment results file into list of plists.
