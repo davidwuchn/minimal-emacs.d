@@ -78,6 +78,44 @@ Returns list of result plists."
       (message "[semia] No skills directory found"))
     (nreverse results)))
 
+;; ─── Skills-Refiner Helpers ───
+
+(defvar gptel-auto-workflow--skill-governance-tools-root nil
+  "Path to skills-refiner toolkit installation.")
+
+(defun gptel-auto-workflow--skill-governance-tools-root ()
+  "Return the skills-refiner toolkit root directory."
+  (or gptel-auto-workflow--skill-governance-tools-root
+      (let ((root (expand-file-name ".agents/skills"
+                                     (gptel-auto-workflow--worktree-base-root))))
+        (if (file-exists-p (expand-file-name "skill-hygiene/bin/skill-scan.sh" root))
+            root
+          (expand-file-name ".agents/skills" "~")))))
+
+(defun gptel-auto-workflow--skill-governance-shell (command &rest args)
+  "Run a skills-refiner shell COMMAND with ARGS, return stdout or nil on error."
+  (condition-case nil
+      (let ((cmd (mapconcat #'identity
+                            (cons command args) " ")))
+        (with-temp-buffer
+          (if (= 0 (call-process "bash" nil t nil "-c" cmd))
+              (string-trim (buffer-string))
+            (progn
+              (message "[skill-governance] Shell command failed: %s" cmd)
+              nil))))
+    (error nil)))
+
+(defun gptel-auto-workflow--skill-governance-json (cmd)
+  "Run shell CMD, parse JSON output, return parsed object or nil."
+  (let ((json (gptel-auto-workflow--skill-governance-shell cmd)))
+    (when (and json (not (string-empty-p json)))
+      (condition-case nil
+          (let ((json-object-type 'hash-table)
+                (json-array-type 'list)
+                (json-key-type 'keyword))
+            (json-read-from-string json))
+        (error nil)))))
+
 ;; ─── Layer 1: Governance Gate ───
 
 (defun gptel-auto-workflow--skill-governance-scan ()
