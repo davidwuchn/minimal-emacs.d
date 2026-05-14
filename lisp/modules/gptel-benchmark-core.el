@@ -262,6 +262,7 @@ Returns nil for nil or malformed input."
    ((consp r)
     (let ((scores (cdr r)))
       (when (and (proper-list-p scores)
+                 (not (null scores))
                  (or (and (keywordp (car scores))
                           (zerop (mod (length scores) 2)))
                      (and (cl-every #'consp scores)
