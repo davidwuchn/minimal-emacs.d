@@ -630,9 +630,9 @@ sees a unified view of both TSV and trace analysis."
   "Merge trace TOPIC-PERF into the TSV-based topic-performance.json."
   (let* ((topic-file (expand-file-name "topic-performance.json" data-dir))
          (existing (condition-case nil
-                       (let ((json-object-type 'hash-table)
-                             (json-key-type 'keyword))
-                         (json-read-file topic-file))
+                        (let ((json-object-type 'hash-table)
+                              (json-key-type 'string))
+                          (json-read-file topic-file))
                      (error (make-hash-table :test 'equal))))
          (topics-raw (or (gethash :topics existing) (gethash "topics" existing)))
          (topics (if (hash-table-p topics-raw) topics-raw (make-hash-table :test 'equal))))
@@ -685,10 +685,10 @@ sees a unified view of both TSV and trace analysis."
 (defun gptel-auto-workflow--merge-trace-sources-into-data (source-perf data-dir)
   "Merge trace SOURCE-PERF into the TSV-based source-effectiveness.json."
   (let* ((source-file (expand-file-name "source-effectiveness.json" data-dir))
-         (existing (condition-case nil
-                       (let ((json-object-type 'hash-table)
-                             (json-key-type 'keyword))
-                         (json-read-file source-file))
+          (existing (condition-case nil
+                        (let ((json-object-type 'hash-table)
+                              (json-key-type 'string))
+                          (json-read-file source-file))
                      (error (make-hash-table :test 'equal))))
          (sources-raw (or (gethash :sources existing) (gethash "sources" existing)))
          (sources (if (hash-table-p sources-raw) sources-raw (make-hash-table :test 'equal))))
@@ -968,5 +968,9 @@ Ensures {{strategy-guidance}} template var has data on first load."
          (message "[autotts] Strategy guidance bootstrap deferred: %s" err))))))
 
 (provide 'gptel-auto-workflow-research-benchmark)
+
+;; Bootstrap strategy-guidance.json on first load (after daemon controller is configured)
+(ignore-errors
+  (gptel-auto-workflow--bootstrap-strategy-guidance))
 
 ;;; gptel-auto-workflow-research-benchmark.el ends here

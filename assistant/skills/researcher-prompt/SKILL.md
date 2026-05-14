@@ -112,6 +112,25 @@ Return a compact structured digest. End with JSON metadata so AutoTTS can replay
 
 *This guidance auto-evolves after each pipeline run.*
 
+## Strategy Guidance (Auto-Evolved)
+
+**Evolved Controller Config** (updated 2026-05-14T15:06:42Z from 2 traces, heuristic):
+
+- Beta: 0.50 (0 conservative, 1 exploratory)
+- Own repo priority: 82%
+- External priority: 15%
+- Stop threshold: 75% confidence
+- Token budget: 8000
+
+**Decision Rules**:
+1. If EMA confidence stabilizes above 75% + have URLs → STOP early
+2. If confidence is rising → CONTINUE current source type
+3. If EMA confidence stagnates → BRANCH to a different source/angle
+4. If > 8000 tokens → CUT (return what you have)
+5. Check own repos (davidwuchn/*) FIRST before external
+
+*This guidance auto-evolves after each pipeline run.*
+
 ## Instructions
 
 1. Use WebSearch tool to find 3-5 recent/relevant items per topic
@@ -133,4 +152,19 @@ Return a compact structured digest. End with JSON metadata so AutoTTS can replay
 - `{{kept-research}}`: Number of kept experiments with research-enabled target selection
 - `{{total-research}}`: Total number of research-enabled experiments
 - `{{topic-performance}}`: Formatted list of topics ranked by keep rate
-- `{{strategy-guidance}}`: AutoTTS controller guidance (source priority, stop threshold, beta)
+- `**Evolved Controller Config** (updated 2026-05-14T15:06:42Z from 2 traces, heuristic):
+
+- Beta: 0.50 (0 conservative, 1 exploratory)
+- Own repo priority: 82%
+- External priority: 15%
+- Stop threshold: 75% confidence
+- Token budget: 8000
+
+**Decision Rules**:
+1. If EMA confidence stabilizes above 75% + have URLs → STOP early
+2. If confidence is rising → CONTINUE current source type
+3. If EMA confidence stagnates → BRANCH to a different source/angle
+4. If > 8000 tokens → CUT (return what you have)
+5. Check own repos (davidwuchn/*) FIRST before external
+
+*This guidance auto-evolves after each pipeline run.*`: AutoTTS controller guidance (source priority, stop threshold, beta)

@@ -54,7 +54,9 @@ Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N :collisi
          (scan (expand-file-name "skill-hygiene/bin/skill-scan.sh" root))
          (cmd (format "cd %s && SKILLS_REFINER_TOOLS_ROOT=%s bash %s --json"
                       root root scan))
-         (result (gptel-auto-workflow--skill-governance-json cmd)))
+         (result (if (file-exists-p scan)
+                      (gptel-auto-workflow--skill-governance-json cmd)
+                    nil)))
     (if result
         (list :status 'ok
               :skills (length (or (gethash :skills result) nil))
@@ -74,7 +76,9 @@ Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N :collisi
          (doctor (expand-file-name "skill-debug/bin/skills-refiner-doctor.sh" root))
          (cmd (format "cd %s && SKILLS_REFINER_TOOLS_ROOT=%s bash %s --json"
                       root root doctor))
-         (result (gptel-auto-workflow--skill-governance-json cmd)))
+         (result (if (file-exists-p doctor)
+                      (gptel-auto-workflow--skill-governance-json cmd)
+                    nil)))
     (if result
         (let ((probe (gethash :probe result))
               (dash (gethash :dashboard result))
@@ -95,7 +99,9 @@ Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N :collisi
          (dash (expand-file-name "skill-debug/bin/skill-dashboard.sh" root))
          (window (or days 30))
          (cmd (format "cd %s && bash %s --days %d" root dash window))
-         (result (gptel-auto-workflow--skill-governance-json cmd)))
+         (result (if (file-exists-p dash)
+                      (gptel-auto-workflow--skill-governance-json cmd)
+                    nil)))
     (if result
         (list :status 'ok
               :observed (or (gethash :observed_count result) 0)
@@ -110,7 +116,9 @@ Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N :collisi
   "Inject observation canaries into skill files for activation tracing.
 Canaries are invisible markers that get logged when a skill is loaded,
 allowing us to track which skills agents actually use vs ignore."
-  (let* ((skills-dir (expand-file-name "assistant/skills" user-emacs-directory))
+  (let* ((skills-dir (expand-file-name "assistant/skills"
+                                        (or (gptel-auto-workflow--worktree-base-root)
+                                            "~")))
          (canary-tag "<!-- canary: observed -->")
          (count 0))
     (when (file-directory-p skills-dir)
@@ -130,20 +138,27 @@ allowing us to track which skills agents actually use vs ignore."
 
 (defun gptel-auto-workflow--skill-governance-run-scan-report ()
   "Save scan health report to var/tmp/skill-governance/."
-  (let* ((report-dir (expand-file-name "var/tmp/skill-governance" user-emacs-directory))
+  (let* ((report-dir (expand-file-name "var/tmp/skill-governance"
+                                        (or (gptel-auto-workflow--worktree-base-root)
+                                            "~")))
          (report-file (expand-file-name (format "scan-%s.json"
                                                 (format-time-string "%Y%m%d-%H%M"))
                                         report-dir))
+         (skills-dir (expand-file-name "assistant/skills"
+                                        (or (gptel-auto-workflow--worktree-base-root)
+                                            "~")))
          (health (gptel-auto-workflow--skill-governance-scan))
          (doctor (gptel-auto-workflow--skill-governance-doctor)))
     (make-directory report-dir t)
     (let ((report (list :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
                        :health health
                        :doctor doctor
-                       :skills-count (length (directory-files
-                                              (expand-file-name "assistant/skills"
-                                                                user-emacs-directory)
-                                              t "SKILL\\.md$" t)))))
+                        :skills-count (let ((cnt 0))
+                                        (dolist (dir (directory-files skills-dir t "^[^._]"))
+                                          (when (and (file-directory-p dir)
+                                                     (file-exists-p (expand-file-name "SKILL.md" dir)))
+                                            (cl-incf cnt)))
+                                         cnt))))
       (with-temp-file report-file
         (insert (json-encode report)))
       (message "[skill-governance] Saved scan report: %s"
@@ -240,7 +255,8 @@ Designed to be called from the self-evolution cycle."
              (plist-get scan :broken-symlinks)
              (plist-get scan :load-blockers))
     ;; Block evolution if load blockers found
-    (when (> (plist-get scan :load-blockers) 0)
+    (when (and (plist-get scan :load-blockers)
+               (> (plist-get scan :load-blockers) 0))
       (message "[skill-governance] WARNING: %d runtime load blockers detected"
                (plist-get scan :load-blockers))))
 
@@ -274,7 +290,9 @@ Designed to be called from the self-evolution cycle."
 (defun gptel-auto-workflow--skill-eval-pick-target (skill-name)
   "Pick a suitable target file for evaluating SKILL-NAME.
 Returns file path or nil if no suitable target found."
-  (let ((modules-dir (expand-file-name "lisp/modules" user-emacs-directory)))
+  (let ((modules-dir (expand-file-name "lisp/modules"
+                                        (or (gptel-auto-workflow--worktree-base-root)
+                                            "~"))))
     (cond
      ((string-match "elisp" skill-name)
       (expand-file-name "gptel-ext-retry.el" modules-dir))
@@ -290,8 +308,8 @@ Returns file path or nil if no suitable target found."
       ;; Pick smallest non-trivial module
       (car (sort (directory-files modules-dir t "\\.el$")
                  (lambda (a b)
-                   (< (nth 7 (file-attributes a))
-                      (nth 7 (file-attributes b))))))))))
+                   (< (or (nth 7 (file-attributes a)) 0)
+                      (or (nth 7 (file-attributes b)) 0)))))))))
 
 (defun gptel-auto-workflow--skill-governance-save-ab-results (results)
   "Save A/B test RESULTS to var/tmp/skill-governance/ab-results.json."

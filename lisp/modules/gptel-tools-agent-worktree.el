@@ -201,8 +201,8 @@ If branch exists locally, deletes it first to avoid conflicts."
   "Delete worktree for TARGET from hash table.
 Also deletes the associated branch.
 Uses git CLI directly to avoid magit issues."
-  (let* ((state (or (gethash target gptel-auto-workflow--worktree-state)
-                    (list)))
+  (let* ((raw-state (gethash target gptel-auto-workflow--worktree-state))
+         (state (if (proper-list-p raw-state) raw-state (list)))
          (worktree-dir (plist-get state :worktree-dir))
          (branch (plist-get state :current-branch)))
     (when worktree-dir
@@ -461,7 +461,7 @@ remote staging branch."
             (gptel-auto-workflow--git-result
              (format "git merge --ff-only %s" main-q)
              180))
-           (ff-output (car ff-result)))
+           (ff-output (or (car ff-result) "")))
       (cond
        ((= 0 (cdr ff-result))
         (gptel-auto-workflow--finalize-refreshed-staging-submodules worktree main-ref))
@@ -475,7 +475,7 @@ remote staging branch."
                          (shell-quote-argument
                           (format "Sync staging with %s" main-ref)))
                  180))
-               (merge-output (car merge-result)))
+               (merge-output (or (car merge-result) "")))
           (cond
            ((= 0 (cdr merge-result))
             (gptel-auto-workflow--finalize-refreshed-staging-submodules worktree main-ref))
