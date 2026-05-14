@@ -757,10 +757,10 @@ row for the same experiment and target."
                                 "?")
                            (or (gptel-auto-experiment--tsv-escape
                                 (let ((candidates (gptel-auto-workflow--plist-get experiment :candidate-validation)))
-                                  (if candidates
+                                  (if (and (listp candidates) (proper-list-p candidates))
                                        (mapconcat (lambda (c)
                                                     (format "%s:%.1f:%s"
-                                                            (substring (car c) 0 (min 20 (length (car c))))
+                                                            (substring (or (car c) "") 0 (min 20 (length (or (car c) ""))))
                                                             (or (plist-get (cdr c) :score) 0.0)
                                                             (if (plist-get (cdr c) :valid) "V" "X")))
                                                    candidates ";")
