@@ -685,6 +685,7 @@ MAX-ITERATIONS defaults to 5.
 This is how AutoTTS discovers strategies: the agent WRITES the controller,
 not just tunes parameters. The search space is the code itself."
   (interactive)
+  (cl-block gptel-auto-workflow--run-controller-design-agent
   (let* ((max-iters (or max-iterations 5))
          (traces (gptel-auto-workflow--load-research-traces))
          (split (gptel-auto-workflow--split-traces traces 0.8))
@@ -694,7 +695,7 @@ not just tunes parameters. The search space is the code itself."
          (best-controller current-controller)
          (best-objective 0.0)
          (history nil))
-    (unless (and traces (> (length traces) 5))
+    (unless (and traces (> (length traces) 3))
       (message "[controller-agent] Not enough traces (%d) for controller design"
                (length traces))
       (cl-return-from gptel-auto-workflow--run-controller-design-agent nil))
@@ -741,7 +742,7 @@ not just tunes parameters. The search space is the code itself."
       (gptel-auto-workflow--update-skill-with-controller best-controller)
       (message "[controller-agent] Design complete. Best objective=%.4f over %d iterations"
                best-objective max-iters))
-    (list :best-controller best-controller :best-objective best-objective :history history)))
+    (list :best-controller best-controller :best-objective best-objective :history history))))
 
 (defun gptel-auto-workflow--controller-design-prompt (current-controller best-controller 
                                                        best-objective train-traces iter max-iters)
