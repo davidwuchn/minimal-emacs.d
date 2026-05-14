@@ -206,11 +206,11 @@ Based on analysis of which improvement types led to score increases.
 - Operations (Wood) (8% success rate, 9 worsened)
 ## Evolved Recommendations
 
-Based on analysis of 721 experiments.
+Based on analysis of 725 experiments.
 
 ### Wood (Operations)
 
-- **Success rate:** 14% (38/263 experiments)
+- **Success rate:** 15% (39/266 experiments)
 - **Priority:** MEDIUM - moderate success with this element
 
 ### Fire (Intelligence)
@@ -220,7 +220,7 @@ Based on analysis of 721 experiments.
 
 ### Earth (Control)
 
-- **Success rate:** 23% (70/298 experiments)
+- **Success rate:** 23% (70/299 experiments)
 - **Priority:** HIGH - prioritize improvements targeting this element
 
 ### Metal (Coordination)

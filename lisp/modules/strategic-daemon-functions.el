@@ -536,7 +536,8 @@ Returns symbol: aligned, neutral, or deviant."
                           (list :aligned 0 :neutral 0 :deviant 0 :total-quality 0.0 :count 0)))
          (new-count (1+ (plist-get current :count)))
          (new-quality (+ (plist-get current :total-quality) quality)))
-    (plist-put current classification (1+ (plist-get current classification)))
+     (plist-put current (intern (concat ":" (symbol-name classification)))
+                (1+ (or (plist-get current (intern (concat ":" (symbol-name classification)))) 0)))
     (plist-put current :total-quality new-quality)
     (plist-put current :count new-count)
     (plist-put current :avg-quality (/ new-quality new-count))
@@ -559,6 +560,167 @@ Higher score = more aligned and higher quality."
           (+ (* aligned-ratio 0.7)    ;; 70% weight on alignment
              (* quality 0.3)))        ;; 30% weight on quality
       0.5)))                           ;; Default: neutral
+
+;; Source scheduling and researcher skill integration
+
+(defun gptel-auto-workflow--generate-source-priority-guidance ()
+  "Generate source priority section for researcher skill.
+Returns formatted string with source effectiveness data."
+  (let ((sources '())
+        (guidance "## Source Effectiveness (AutoTTS Tracking)\n\n"))
+    ;; Collect all tracked sources
+    (maphash (lambda (source stats)
+               (push (cons source stats) sources))
+             gptel-auto-workflow--source-effectiveness-table)
+    ;; Sort by priority score
+    (setq sources (sort sources
+                       (lambda (a b)
+                         (> (gptel-auto-workflow--source-priority-score (car a))
+                            (gptel-auto-workflow--source-priority-score (car b))))))
+    ;; Format top sources
+    (if sources
+        (progn
+          (setq guidance (concat guidance "Sources ranked by effectiveness (aligned ratio + quality):\n\n"))
+          (dolist (entry (cl-subseq sources 0 (min 10 (length sources))))
+            (let* ((source (car entry))
+                   (stats (cdr entry))
+                   (score (gptel-auto-workflow--source-priority-score source))
+                   (aligned (plist-get stats :aligned))
+                   (neutral (plist-get stats :neutral))
+                   (deviant (plist-get stats :deviant))
+                   (total (+ aligned neutral deviant))
+                   (quality (or (plist-get stats :avg-quality) 0.0)))
+              (setq guidance
+                    (concat guidance
+                            (format "- **%s**: score=%.2f (aligned:%d/%d, quality:%.2f)\n"
+                                    source score aligned total quality)))))
+          (setq guidance (concat guidance "\n### Source Scheduling Guidance\n\n"))
+          (setq guidance (concat guidance "- **HIGH PRIORITY** (score > 0.7): Focus research here first\n"))
+          (setq guidance (concat guidance "- **MEDIUM PRIORITY** (score 0.3-0.7): Check if new content available\n"))
+          (setq guidance (concat guidance "- **LOW PRIORITY** (score < 0.3): Skip unless specifically relevant\n"))
+          (setq guidance (concat guidance "\n**Strategy**: Start with highest-scoring sources, allocate more turns to aligned sources.\n")))
+      (setq guidance (concat guidance "*No source effectiveness data yet. Using default priorities.*\n")))
+    guidance))
+
+(defun gptel-auto-workflow--update-researcher-skill-with-sources ()
+  "Update RESEARCHER.md with current source effectiveness data.
+Injects source priority guidance into the skill."
+  (let* ((skill-file (expand-file-name "assistant/skills/auto-workflow/RESEARCHER.md"
+                                       (or (when (fboundp 'gptel-auto-workflow--effective-project-root)
+                                            (gptel-auto-workflow--effective-project-root))
+                                           "/tmp")))
+         (source-guidance (gptel-auto-workflow--generate-source-priority-guidance))
+         (existing-content (when (file-exists-p skill-file)
+                            (with-temp-buffer
+                              (insert-file-contents skill-file)
+                              (buffer-string)))))
+    (when existing-content
+      ;; Remove old source effectiveness section if present
+      (setq existing-content
+            (replace-regexp-in-string
+             "## Source Effectiveness (AutoTTS Tracking).*\\(##\\|$\\)"
+             "\\1"
+             existing-content
+             nil nil 1))
+      ;; Insert new section after "## Controller Guidance"
+      (setq existing-content
+            (replace-regexp-in-string
+             "\\(## Controller Guidance\\n\\n.*?\\n\\)\\(## Mission\\)"
+             (concat "\\1" source-guidance "\n\\2")
+             existing-content))
+      ;; Write updated skill
+      (with-temp-file skill-file
+        (insert existing-content))
+      (message "[autotts] Updated researcher skill with %d source effectiveness entries"
+               (hash-table-count gptel-auto-workflow--source-effectiveness-table)))))
+
+;; Beta auto-tuning
+
+(defun gptel-auto-workflow--auto-tune-beta (topic &optional min-traces)
+  "Automatically tune beta for TOPIC based on cached traces.
+Requires at least MIN-TRACES (default: 20) cached traces."
+  (let* ((min-required (or min-traces 20))
+         (traces (when (fboundp 'gptel-auto-workflow--get-cached-traces)
+                  (gptel-auto-workflow--get-cached-traces topic))))
+    (if (and traces (>= (length traces) min-required))
+        (progn
+          (message "[autotts] Auto-tuning beta for '%s' (%d traces)..." topic (length traces))
+          (let* ((result (when (fboundp 'gptel-auto-workflow--sweep-beta-offline)
+                          (gptel-auto-workflow--sweep-beta-offline topic '(0.0 0.25 0.5 0.75 1.0))))
+                 (best-beta (when result (plist-get result :best-beta))))
+            (when best-beta
+              (setq gptel-auto-workflow--research-beta best-beta)
+              (message "[autotts] Auto-tuned beta for '%s' to %.2f" topic best-beta)
+              best-beta)))
+      (message "[autotts] Not enough traces for '%s' (%d/%d), using default beta=%.2f"
+               topic (or (length traces) 0) min-required gptel-auto-workflow--research-beta)
+      nil)))
+
+(defun gptel-auto-workflow--maybe-auto-tune-beta (topic)
+  "Auto-tune beta if conditions are met.
+Conditions: enough traces, significant performance variance."
+  (let ((traces (when (fboundp 'gptel-auto-workflow--get-cached-traces)
+                 (gptel-auto-workflow--get-cached-traces topic))))
+    (when (and traces (>= (length traces) 20))
+      ;; Check if current beta is underperforming
+      (let* ((current-beta gptel-auto-workflow--research-beta)
+             (current-params (gptel-auto-workflow--research-beta-schedule current-beta))
+             (current-result (when (fboundp 'gptel-auto-workflow--evaluate-controller-offline)
+                              (gptel-auto-workflow--evaluate-controller-offline current-params topic 20)))
+             (current-confidence (or (plist-get current-result :avg-confidence) 0.5)))
+        ;; If confidence is low, try auto-tuning
+        (when (< current-confidence 0.4)
+          (message "[autotts] Low confidence (%.2f) for '%s', triggering auto-tune..." current-confidence topic)
+          (gptel-auto-workflow--auto-tune-beta topic))))))
+
+;; Source scheduling in controller
+
+(defun gptel-auto-workflow--apply-source-priority-to-prompt (prompt &optional findings)
+  "Enhance PROMPT with source priority scheduling.
+If FINDINGS provided, classifies sources and adds scheduling guidance."
+  (let ((source-guidance (gptel-auto-workflow--generate-source-priority-guidance)))
+    (if (> (hash-table-count gptel-auto-workflow--source-effectiveness-table) 0)
+        (format "%s\n\n%s" prompt source-guidance)
+      prompt)))
+
+;; Persist learned parameters across runs
+
+(defvar gptel-auto-workflow--research-params-file
+  (expand-file-name "var/tmp/research-params.el")
+  "File to persist learned research parameters.")
+
+(defun gptel-auto-workflow--save-research-params ()
+  "Save current research parameters to disk."
+  (let ((params (list :beta gptel-auto-workflow--research-beta
+                     :ema-alpha gptel-auto-workflow--research-ema-alpha
+                     :ema-window gptel-auto-workflow--research-ema-window
+                     :source-table gptel-auto-workflow--source-effectiveness-table
+                     :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S"))))
+    (make-directory (file-name-directory gptel-auto-workflow--research-params-file) t)
+    (with-temp-file gptel-auto-workflow--research-params-file
+      (prin1 params (current-buffer)))
+    (message "[autotts] Saved research params (beta=%.2f)" gptel-auto-workflow--research-beta)))
+
+(defun gptel-auto-workflow--load-research-params ()
+  "Load research parameters from disk."
+  (when (file-exists-p gptel-auto-workflow--research-params-file)
+    (condition-case err
+        (let ((params (with-temp-buffer
+                       (insert-file-contents gptel-auto-workflow--research-params-file)
+                       (read (current-buffer)))))
+          (setq gptel-auto-workflow--research-beta (or (plist-get params :beta) 0.5))
+          (setq gptel-auto-workflow--research-ema-alpha (or (plist-get params :ema-alpha) 0.5))
+          (setq gptel-auto-workflow--research-ema-window (or (plist-get params :ema-window) 6))
+          (when (plist-get params :source-table)
+            (setq gptel-auto-workflow--source-effectiveness-table (plist-get params :source-table)))
+          (message "[autotts] Loaded research params (beta=%.2f, %d sources)"
+                   gptel-auto-workflow--research-beta
+                   (hash-table-count gptel-auto-workflow--source-effectiveness-table)))
+      (error
+       (message "[autotts] Failed to load research params: %s" err)))))
+
+;; Initialize on load
+(gptel-auto-workflow--load-research-params)
 
 (provide 'strategic-daemon-functions)
 ;;; strategic-daemon-functions.el ends here
