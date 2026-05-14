@@ -13,6 +13,7 @@ It controls prompt compression and section inclusion.
 
 Correlation between prompt size and experiment success:
 
+<<<<<<< HEAD
 - **Average prompt size (kept):** 19452 chars
 - **Average prompt size (discarded):** 20503 chars
 - **Success rate per 1000 chars (kept):** 0.69%
@@ -28,6 +29,7 @@ Correlation between prompt size and experiment success:
 
 Which prompt sections improve outcomes:
 
+<<<<<<< HEAD
 - **all**: 17% success (134/807 experiments)
 
 **Section Inclusion Config:**

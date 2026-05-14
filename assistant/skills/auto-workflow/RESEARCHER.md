@@ -18,9 +18,11 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
   - No statistically significant data yet (need ≥3 experiments per topic)
 
-## Source Effectiveness
+## Source Effectiveness (AutoTTS Tracking)
 
-*No source effectiveness data yet.*
+Sources are classified as **aligned** (produces good results), **neutral** (unclear), or **deviant** (low quality/contradictory).
+
+*No source effectiveness data yet. Data updates automatically after each research cycle.*
 
 ## Controller Guidance
 
@@ -42,8 +44,13 @@ Current controller uses AutoTTS-style EMA momentum tracking:
 
 ## Instructions
 
-### Source Strategy (learned from outcomes)
+### Source Strategy (AutoTTS-optimized)
 - **DEFAULT**: Use own-repos-first strategy
+- **Source Scheduling**: Prioritize sources by effectiveness score
+  - Focus on **aligned** sources (high score > 0.7)
+  - Check **neutral** sources occasionally (score 0.3-0.7)
+  - Skip **deviant** sources unless specifically relevant (score < 0.3)
+- **Dynamic adaptation**: Source priorities update after each research cycle based on outcome quality
 
 ### Controller Awareness
 - STOP early if you have 2+ insights with URLs
