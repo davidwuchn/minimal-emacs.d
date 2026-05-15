@@ -83,6 +83,7 @@ Call this after gptel-agent-tools loads."
   ;; (gptel-tools-lsp-register)  ; Deprecated by gptel-tools-code
   ;; (gptel-tools-ast-register)  ; Deprecated by gptel-tools-code
   (gptel-tools-agent-register)
+  (gptel-tools-memory-register)
 
   ;; Register standard gptel-agent tools
   (when (fboundp 'gptel-make-tool)

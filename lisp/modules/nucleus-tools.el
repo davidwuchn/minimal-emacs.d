@@ -39,6 +39,172 @@ When enabled, validates:
   :type 'boolean
   :group 'nucleus-tools)
 
+;;; Tool Markers (Traits)
+
+;; Inspired by Serena's ToolMarker system. Each tool can carry multiple markers
+;; that declare its capabilities, enabling trait-based toolset derivation instead
+;; of hardcoded name lists.
+
+(defconst nucleus-tool-markers
+  '((:can-edit . ("ApplyPatch" "Edit" "Insert" "Mkdir" "Move" "Write"
+                    "Code_Replace" "create_skill" "write_memory"))
+    (:can-read . ("Bash" "Eval" "Glob" "Grep" "Read" "Programmatic"
+                   "WebFetch" "WebSearch" "YouTube"
+                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                   "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"
+                   "Skill" "TodoWrite" "RunAgent" "Preview"
+                   "read_memory" "list_memories"))
+    (:symbolic . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
+                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"))
+    (:web . ("WebFetch" "WebSearch" "YouTube"))
+    (:memory . ("read_memory" "write_memory" "list_memories"))
+    (:delegates . ("RunAgent"))
+    (:requires-project . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
+                           "Diagnostics" "find_buffers_and_recent"
+                           "describe_symbol" "get_symbol_source"
+                           "read_memory" "write_memory" "list_memories"))
+    (:plan-excluded . ("YouTube" "Preview" "write_memory")))
+  "Marker traits for each registered tool.
+
+:can-edit      — Tool modifies files or system state (requires confirmation)
+:can-read      — Tool reads/queries without side effects
+:symbolic      — Tool operates at symbol/code-structure level
+:web           — Tool accesses external web resources
+:memory        — Tool reads/writes persistent memory (mementum)
+:delegates     — Tool delegates to sub-agents
+:requires-project — Tool needs an active project context
+:plan-excluded — Tool excluded from plan/readonly mode even though read-only
+
+A tool may carry multiple markers. Markers enable:
+  - Deriving toolsets by marker inclusion/exclusion
+  - Unified classification replacing scattered lists
+  - Conditional prompt generation based on available markers")
+
+(defun nucleus-tools-with-marker (marker)
+  "Return list of tool names carrying MARKER."
+  (or (alist-get marker nucleus-tool-markers) '()))
+
+(defun nucleus-tool-has-marker-p (tool-name marker)
+  "Return non-nil if TOOL-NAME carries MARKER."
+  (member tool-name (nucleus-tools-with-marker marker)))
+
+(defun nucleus-tools-with-any-marker (&rest markers)
+  "Return tools carrying any of MARKERS (union)."
+  (seq-uniq (apply #'append (mapcar #'nucleus-tools-with-marker markers))))
+
+(defun nucleus-tools-with-all-markers (&rest markers)
+  "Return tools carrying all of MARKERS (intersection)."
+  (when markers
+    (let ((result (nucleus-tools-with-marker (car markers))))
+      (dolist (m (cdr markers) (delete-dups result))
+        (setq result (seq-intersection result (nucleus-tools-with-marker m) #'equal))))))
+
+(defun nucleus-toolset-from-markers (include exclude)
+  "Derive a toolset from marker specifications.
+
+INCLUDE is a list of markers — tools carrying ANY included marker are candidates.
+EXCLUDE is a list of markers — tools carrying ANY excluded marker are removed.
+Either may be nil.
+
+Returns a list of tool name strings."
+  (let* ((candidates (if include
+                         (apply #'nucleus-tools-with-any-marker include)
+                       (apply #'nucleus-tools-with-any-marker :can-read :can-edit)))
+         (excluded (when exclude
+                     (apply #'nucleus-tools-with-any-marker exclude))))
+     (seq-difference candidates excluded #'equal)))
+
+;;; Progressive Tool Shortening
+
+;; Inspired by Serena's _limit_length with shortened_result_factories.
+;; When a tool's output exceeds a character budget, progressively shorter
+;; summaries are tried until one fits.
+
+(defcustom nucleus-tool-max-answer-chars 4000
+  "Default maximum characters for tool results before truncation.
+Tools can override this per-call via `max_answer_chars' parameter."
+  :type 'integer
+  :group 'nucleus-tools)
+
+(defun nucleus-limit-result-length (result max-chars &optional shortened-factories)
+  "Limit RESULT to MAX-CHARS, trying SHORTENED-FACTORIES progressively.
+
+If RESULT fits within MAX-CHARS, return it unchanged.
+If too long and SHORTENED-FACTORIES is provided, try each closure
+(a zero-arg function returning a shorter string) in order until one fits.
+If none fit or no factories given, return a truncation notice."
+  (when (stringp result)
+    (let ((n-chars (length result)))
+      (if (<= n-chars max-chars)
+          result
+        (let ((too-long-msg (format "Result too long (%d chars). Refine query or adjust max_answer_chars."
+                                    n-chars)))
+          (if shortened-factories
+              (catch 'found
+                (dolist (factory shortened-factories)
+                  (let ((candidate (funcall factory)))
+                    (when (and (stringp candidate)
+                               (<= (length (concat too-long-msg "\n" candidate)) max-chars))
+                      (throw 'found (concat too-long-msg "\n" candidate)))))
+                too-long-msg)
+            too-long-msg))))))
+
+;;; Project-Level Tool Configuration
+
+;; Inspired by Serena's project.yml excluded_tools/included_optional_tools.
+;; Per-project tool exclusion that applies on top of the base toolset.
+
+(defcustom nucleus-project-excluded-tools nil
+  "List of tool names to exclude from all toolsets for this project.
+Applied after toolset selection but before `gptel-tools' is set.
+
+Can be set via .dir-locals.el or (setq-local nucleus-project-excluded-tools ...).
+Example: (setq-local nucleus-project-excluded-tools '(\"YouTube\" \"WebSearch\"))"
+  :type '(repeat string)
+  :group 'nucleus-tools)
+
+(defcustom nucleus-project-readonly-override nil
+  "When non-nil, override the plan-mode toolset with this list of tool names.
+Useful for projects that need custom readonly tool availability.
+When nil (default), the standard :readonly toolset is used."
+  :type '(choice (const nil) (repeat string))
+  :group 'nucleus-tools)
+
+(defun nucleus--apply-project-exclusions (tools)
+  "Remove project-excluded tools from TOOLS list.
+Uses `nucleus-project-excluded-tools' as the exclusion set."
+  (if nucleus-project-excluded-tools
+      (seq-difference tools nucleus-project-excluded-tools #'equal)
+    tools))
+
+;;; Marker-Conditional Prompt Support
+
+;; Inspired by Serena's Jinja2 prompt templates that conditionally include
+;; instructions based on available markers. Provides Elisp equivalents.
+
+(defun nucleus-active-markers ()
+  "Return list of markers that have at least one active tool.
+Active tools = current `gptel-tools' in buffer."
+  (let ((active-tool-names (when (boundp 'gptel-tools)
+                             (delq nil (mapcar #'nucleus--tool-name gptel-tools)))))
+    (delq nil
+          (mapcar (lambda (entry)
+                    (let ((marker (car entry))
+                          (tools (cdr entry)))
+                      (when (seq-some (lambda (t) (member t active-tool-names)) tools)
+                        marker)))
+                  nucleus-tool-markers))))
+
+(defun nucleus-marker-available-p (marker)
+  "Return non-nil if MARKER has at least one active tool in current buffer."
+  (memq marker (nucleus-active-markers)))
+
+(defun nucleus-prompt-when-marker (marker text)
+  "Return TEXT if MARKER has active tools, else empty string.
+For use in prompt templates to conditionally include instructions."
+  (if (nucleus-marker-available-p marker) text ""))
+
+
 ;;; Toolset Definitions
 
 (defconst nucleus-toolsets
@@ -46,17 +212,20 @@ When enabled, validates:
                   "Programmatic"
                   "WebFetch" "WebSearch"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                  "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
+                  "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"
+                  "read_memory" "list_memories"))
     (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill" "Programmatic"
                     "WebFetch" "WebSearch" "YouTube"
                     "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                    "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"))
+                    "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"
+                    "read_memory" "list_memories"))
     (:nucleus . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
                  "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
                  "RunAgent"
                  "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                  "Preview"
+                 "read_memory" "write_memory" "list_memories"
                  "create_skill"
                  "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
     (:executor . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
@@ -64,6 +233,7 @@ When enabled, validates:
                   "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                   "Preview"
+                  "read_memory" "write_memory" "list_memories"
                   "create_skill"
                   "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
     (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
@@ -74,10 +244,10 @@ When enabled, validates:
     (:grader . ("Read" "Glob" "Grep" "Bash" "Eval")))
   "Canonical toolset definitions for nucleus.
 
-:readonly — Emacs introspection (18 tools): Eval, RunAgent, web search
-:researcher — Codebase + web research (17 tools): Full analysis capability
-:nucleus — Top-level action tools (28 tools): Includes RunAgent for orchestration
-:executor — Subagent execution tools (27 tools): No RunAgent (prevent recursive delegation)
+:readonly — Plan mode tools (20 tools): Eval, RunAgent, web search, memory read
+:researcher — Codebase + web research (19 tools): Full analysis + memory read
+:nucleus — Top-level action tools (31 tools): Includes RunAgent, memory read/write
+:executor — Subagent execution tools (30 tools): No RunAgent (prevent recursive delegation)
 :explorer — Codebase exploration (5 tools): Glob, Grep, Read, Code_Map, Code_Inspect
 :reviewer — Code review (4 tools): Read-only + Diagnostics
 :analyzer — Benchmark analysis (7 tools): Live runtime analyzer tools
@@ -87,9 +257,9 @@ When enabled, validates:
 :snippets is derived from :nucleus at runtime (see `nucleus-get-tools').
 
 Tool contracts enforced in `nucleus--override-gptel-agent-presets':
-  executor     → :executor    (27 tools) - code changes & execution (no RunAgent)
-  researcher   → :researcher  (17 tools) - web + codebase + Eval
-  introspector → :readonly    (18 tools) - Emacs introspection + web search
+   executor     → :executor    (30 tools) - code changes & execution (no RunAgent)
+   researcher   → :researcher  (19 tools) - web + codebase + Eval + memory
+   introspector → :readonly    (20 tools) - Emacs introspection + web + memory read
   explorer     → :explorer     (5 tools) - codebase exploration + Code tools
   reviewer     → :reviewer     (4 tools) - code review + Diagnostics
   analyzer     → :analyzer     (7 tools) - benchmark result analysis
@@ -249,10 +419,12 @@ defers sync via idle timer to allow tool registration to complete."
                              ('gptel-agent :nucleus))))
           (if (nucleus--tools-ready-p toolset-key)
               (progn
-                (setq-local gptel-tools (nucleus-get-tools toolset-key))
-                (when nucleus-tools-verbose
-                  (message "[nucleus-tools] Tool profile synced to %s (%d tools)"
-                           active-preset (length gptel-tools))))
+                 (setq-local gptel-tools (nucleus--apply-project-exclusions
+                                          (nucleus-get-tools toolset-key)))
+                 (when nucleus-tools-verbose
+                   (message "[nucleus-tools] Tool profile synced to %s (%d tools, %d excluded by project)"
+                            active-preset (length gptel-tools)
+                            (- (length (nucleus-get-tools toolset-key)) (length gptel-tools)))))
             (progn
               (when nucleus-tools-verbose
                 (message "[nucleus-tools] Tools not ready, deferring sync for %s" active-preset))
