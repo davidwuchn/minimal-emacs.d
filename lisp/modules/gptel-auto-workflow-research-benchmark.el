@@ -1,5 +1,7 @@
 ;;; gptel-auto-workflow-research-benchmark.el --- Benchmark research strategies -*- lexical-binding: t; -*-
 
+(require 'strategic-daemon-functions)
+
 ;; Reuse benchmark infrastructure for AutoTTS-style research evolution.
 ;; Treats research sessions as benchmark experiments with strategy comparison.
 
@@ -77,38 +79,6 @@ on shared plists where `copy-sequence' preserves old keys."
       (warm-up . ,(or (plist-get controller-config :warm-up) 2))
       (min-complete . ,(or (plist-get controller-config :min-complete) 2))
       (turn-count . ,(or (plist-get controller-config :turn-count) 0)))))
-
-(defun gptel-auto-workflow--controller-source-literal-string (value)
-  "Return VALUE as a source string literal, or nil when VALUE is not a literal."
-  (cond
-   ((and (consp value) (eq (car value) 'quote))
-    (gptel-auto-workflow--controller-source-literal-string (cadr value)))
-   ((stringp value)
-    (let ((cleaned (replace-regexp-in-string "\\\\\"" "\"" value)))
-      (string-trim cleaned "[\\\"']+" "[\\\"']+")))
-   ((and (symbolp value) (not (eq value 'source)))
-    (let ((cleaned (replace-regexp-in-string
-                    "\\\\\"" "\"" (symbol-name value))))
-      (string-trim cleaned "[\\\"']+" "[\\\"']+")))
-   (t nil)))
-
-(defun gptel-auto-workflow--normalize-controller-rule-expr (expr)
-  "Normalize common generated controller rule variants in EXPR."
-  (if (consp expr)
-      (let* ((op (car expr))
-             (args (mapcar #'gptel-auto-workflow--normalize-controller-rule-expr
-                           (cdr expr))))
-        (if (and (memq op '(= equal eq eql string=))
-                 (= (length args) 2)
-                 (or (eq (car args) 'source) (eq (cadr args) 'source)))
-            (let* ((literal (if (eq (car args) 'source) (cadr args) (car args)))
-                   (source-value
-                    (gptel-auto-workflow--controller-source-literal-string literal)))
-              (if (and source-value (not (string-empty-p source-value)))
-                  `(equal source ,source-value)
-                (cons op args)))
-          (cons op args)))
-    expr))
 
 (defun gptel-auto-workflow--normalize-controller-rules (rules)
   "Normalize generated controller RULES for validation and evaluation."
