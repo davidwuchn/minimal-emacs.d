@@ -339,7 +339,8 @@ ADAPTS TO: Pure functional approach eliminates mutable state,
 improving testability and reducing cognitive load."
   (let ((seen (make-hash-table :test 'eq))
         (result nil))
-    (my/gptel--fsm-traverse object seen (lambda (fsm) (push fsm result)))
+    (cl-labels ((collect-fsm (fsm) (push fsm result)))
+      (my/gptel--fsm-traverse object seen #'collect-fsm))
     (nreverse result)))
 
 (defun my/gptel--fsm-depth (object)
@@ -367,7 +368,8 @@ wrong FSM selection occurs.
 SIGNAL: explicit assumptions - Uses shared traversal helper."
   (let ((count 0)
         (seen (make-hash-table :test 'eq)))
-    (my/gptel--fsm-traverse object seen (lambda (_fsm) (cl-incf count)))
+    (cl-labels ((inc-count (_fsm) (cl-incf count)))
+      (my/gptel--fsm-traverse object seen #'inc-count))
     count))
 
 ;;; Registry Validation
