@@ -67,7 +67,7 @@ When enabled, validates:
      (:sandbox-excluded . ("Programmatic" "Bash" "Eval" "Skill" "TodoWrite"))
      (:file-inspector . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
                           "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                          "Read" "Grep")))
+                          "Read" "Grep" "Glob" "Preview" "Diagnostics")))
   "Marker traits for each registered tool.
 
 :can-edit      — Tool modifies files or system state (requires confirmation)

@@ -3,6 +3,7 @@
 (require 'subr-x)
 (require 'project)
 (require 'gptel)
+(require 'nucleus-tools)
 
 ;; ==============================================================================
 ;; TOOL SECURITY & ROUTING (NUCLEUS HYBRID SANDBOX)
@@ -15,7 +16,8 @@
     (string-prefix-p workspace target)))
 
 (defun my/gptel-tool-get-target-path (tool-name args)
-  "Extract the target file path from a tool call's ARGS based on TOOL-NAME."
+  "Extract the target file path from a tool call's ARGS based on TOOL-NAME.
+Only meaningful for tools carrying :file-inspector or :can-edit markers."
   (pcase tool-name
     ("Read" (nth 0 args))
     ("Edit" (nth 0 args))
@@ -27,8 +29,10 @@
     ("Preview" (nth 0 args))
     ("Code_Map" (nth 0 args))
     ("Code_Inspect" (nth 0 args))
+    ("Code_Replace" (nth 0 args))
     ("Diagnostics" (nth 0 args))
     ("ApplyPatch" (nth 0 args))
+    ("Move" (nth 0 args))
     (_ nil)))
 
 (defun my/gptel-tool-acl-check (tool-name args)
@@ -55,10 +59,13 @@
       (t nil))))
 
 (defun my/gptel-tool-acl-needs-confirm (tool-name args)
-  "Return t if the tool call should force a user confirmation."
-  (let ((target-path (my/gptel-tool-get-target-path tool-name args)))
+  "Return t if the tool call should force a user confirmation.
+Tools are checked if they carry :file-inspector or :can-edit markers."
+  (let ((target-path (and (or (nucleus-tool-has-marker-p tool-name :file-inspector)
+                               (nucleus-tool-has-marker-p tool-name :can-edit))
+                          (my/gptel-tool-get-target-path tool-name args))))
     (if (and target-path (not (my/is-inside-workspace target-path)))
-        t ;; Force confirmation for out-of-workspace changes
+        t
       nil)))
 
 (defun my/gptel-tool-router-advice (orig-fn &rest slots)
