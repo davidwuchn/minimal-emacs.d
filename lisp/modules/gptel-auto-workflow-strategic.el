@@ -932,7 +932,7 @@ RULES:
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
   "Hunt for external ideas from internet sources with real-time controller.
 CALLBACK receives DIGESTED research findings string.
-Optional RETRY-COUNT tracks recursive retries (max 2).
+Optional RETRY-COUNT tracks recursive retries (max 3, with provider failover).
 
 AutoTTS Multi-Turn: Research is broken into multiple shorter turns
 with controller checkpoints between them. Controller decides after
@@ -941,6 +941,7 @@ each turn whether to STOP, CONTINUE, BRANCH, or CUT.
 Pipeline: External hunt → Controller checkpoint → [Continue/Stop] → Digest
 ASSUMPTION: Subagent may or may not be available.
 BEHAVIOR: Uses subagent with web tools if available, otherwise returns empty.
+BEHAVIOR: On failure, activates provider failover and retries (max 3).
 EDGE CASE: Returns empty findings if subagent unavailable.
 META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
   (cl-block gptel-auto-workflow--research-patterns
@@ -958,13 +959,34 @@ META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
       (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%"
                (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
                (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
-      (message "[debug] subagents-enabled=%s fbound=%s caller=%s"
+      (message "[debug] subagents-enabled=%s fbound=%s caller=%s attempt=%d"
                gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-call-subagent)
-               (format-time-string "%H:%M:%S"))
+               (format-time-string "%H:%M:%S") attempt)
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-call-subagent))
-          (gptel-auto-workflow--run-research-turn research-prompt 0 callback)
+          ;; Wrap callback with retry-on-failure logic
+          (gptel-auto-workflow--run-research-turn
+           research-prompt 0
+           (lambda (findings)
+             ;; If findings are empty or too short, activate failover and retry
+             (if (and (or (null findings) (string-empty-p findings)
+                         (< (length findings) 100))
+                      (< attempt 3)
+                      (fboundp 'gptel-auto-workflow--activate-provider-failover))
+                 (progn
+                   (message "[auto-workflow] Research produced empty/short findings (%d chars, attempt %d); failover and retry"
+                            (if findings (length findings) 0) (1+ attempt))
+                   (when-let* ((preset (and (boundp 'gptel-agent-preset) gptel-agent-preset))
+                               (backend (plist-get preset :backend)))
+                     (gptel-auto-workflow--activate-provider-failover
+                      "researcher" preset "empty research output" t))
+                   (setq gptel-auto-workflow--research-in-progress nil)
+                   (gptel-auto-workflow--research-patterns callback (1+ attempt)))
+               ;; Findings are good enough or retries exhausted
+               (progn
+                 (setq gptel-auto-workflow--research-in-progress nil)
+                 (funcall callback (or findings ""))))))
         (progn
           (message "[auto-workflow] Subagent unavailable - skipping external research")
           (setq gptel-auto-workflow--research-in-progress nil)
