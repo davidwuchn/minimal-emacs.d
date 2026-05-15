@@ -20,6 +20,8 @@
 
 ;; AutoTTS-style research evolution via benchmark system
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
+(declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions" ())
+(declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
 
 ;; ─── Helpers ───
 
@@ -1385,7 +1387,7 @@ with kept experiments, and updates the researcher prompt accordingly."
                        (plist-get s :total)))
             
             ;; Update researcher skill with feedback
-            (let ((skill-file (expand-file-name "assistant/skills/researcher-prompt/SKILL.md"
+            (let ((_skill-file (expand-file-name "assistant/skills/researcher-prompt/SKILL.md"
                                                 (gptel-auto-workflow--worktree-base-root)))
                   (best-quality (plist-get (car stats) :quality))
                   (best-rate (plist-get (car stats) :rate)))
@@ -1455,7 +1457,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Consume pipeline env vars for research-aware evolution
   (let ((research-quality (getenv "PIPELINE_RESEARCH_QUALITY"))
         (findings-file (getenv "PIPELINE_FINDINGS_FILE"))
-        (internal-file (getenv "PIPELINE_INTERNAL_FILE")))
+        (_internal-file (getenv "PIPELINE_INTERNAL_FILE")))
     (when research-quality
       (message "[evolution] Pipeline research quality: %s" research-quality)
       (when (string= research-quality "external")
@@ -1561,11 +1563,10 @@ Used by skill-governance to select candidates for A/B testing."
     (when (file-directory-p skills-dir)
       (dolist (skill-dir (directory-files skills-dir t "^[^._]"))
         (when (file-directory-p skill-dir)
-          (let ((skill-file (expand-file-name "SKILL.md" skill-dir))
-                (mtime (nth 5 (file-attributes skill-file))))
+          (let ((skill-file (expand-file-name "SKILL.md" skill-dir)))
             (when (and (file-exists-p skill-file)
-                       mtime
-                       (> (float-time mtime) cutoff))
+                       (let ((mtime (nth 5 (file-attributes skill-file))))
+                         (and mtime (> (float-time mtime) cutoff))))
               (push (file-name-nondirectory skill-dir) recent))))))
     (delete-dups recent)))
 
