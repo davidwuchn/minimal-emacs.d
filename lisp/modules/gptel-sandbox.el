@@ -130,6 +130,11 @@ MAX-ARGS of nil means no upper bound.")
 (defvar gptel-sandbox--missing-marker (make-symbol "gptel-sandbox-missing")
   "Sentinel value for detecting missing symbol lookups in sandbox env.")
 
+(defvar gptel-sandbox--whitespace-comment-regexp
+  (concat "\\`[ \t\n\r]*\\(?:;[^\n]*\n?[ \t\n\r]*\\)*\\'")
+  "Pre-compiled regex matching whitespace and line comments.
+Used in `gptel-sandbox--parse-forms' to detect trailing garbage.")
+
 (defun gptel-sandbox--parse-forms (code)
   "Parse CODE into a list of Lisp forms."
   (unless (stringp code)
@@ -145,7 +150,7 @@ MAX-ARGS of nil means no upper bound.")
             (push form forms)
             (setq pos next-pos))
         (end-of-file
-         (if (string-match-p "\\`[ \t\n\r]*\\(?:;[^\n]*\n?[ \t\n\r]*\\)*\\'"
+         (if (string-match-p gptel-sandbox--whitespace-comment-regexp
                              (substring code pos))
              (setq pos len)
            (error "Invalid program syntax near offset %d: %s"
