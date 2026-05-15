@@ -342,13 +342,15 @@ Ensures that setting a plist key replaces existing value rather than appending."
                    (sort (copy-sequence '("Programmatic" "Bash" "Eval" "Skill" "TodoWrite" "RunAgent")) #'string<)))))
 
 (ert-deftest regression-file-inspector-marker-matches-old-inspection-tools ()
-  ":file-inspector marker replaces old (append (nucleus-tools-with-marker :symbolic) '(\"Read\" \"Grep\"))."
+  ":file-inspector marker extends old (append (nucleus-tools-with-marker :symbolic) '(\"Read\" \"Grep\")) with Glob, Preview, Diagnostics."
   (let ((from-marker (sort (copy-sequence (nucleus-tools-with-marker :file-inspector)) #'string<))
-        (old-way (sort (copy-sequence (append (nucleus-tools-with-marker :symbolic) '("Read" "Grep"))) #'string<)))
+        (old-way (sort (copy-sequence (append (nucleus-tools-with-marker :symbolic) '("Read" "Grep" "Glob" "Preview" "Diagnostics"))) #'string<)))
     (should (equal from-marker old-way))
     (should (member "Read" from-marker))
     (should (member "Grep" from-marker))
-    (should (member "Code_Map" from-marker))))
+    (should (member "Code_Map" from-marker))
+    (should (member "Glob" from-marker))
+    (should (member "Diagnostics" from-marker))))
 
 ;;; Provide
 

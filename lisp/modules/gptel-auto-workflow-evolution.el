@@ -114,38 +114,74 @@ Uses cached value from load time, or detects from current directory."
                 (forward-line 1)))))))
     (nreverse records)))
 
+(defvar gptel-auto-workflow--evolution-patterns-cache nil
+  "Cached evolution patterns from skill. Reset on skill reload.")
+
 (defun gptel-auto-workflow--load-evolution-patterns ()
   "Load evolution patterns from skill.
-Returns plist with :categories and :predictor, or nil."
+Returns plist with :high-signal-keywords (alist of keyword . success-rate)
+and :anti-patterns (list of strings), or nil."
   (when (fboundp 'gptel-auto-workflow--load-skill-content)
     (let ((skill (gptel-auto-workflow--load-skill-content "evolution-patterns")))
-      (when skill
-        (list :categories nil  ; Would parse from skill
-              :predictor nil)))))
+      (when (and skill (> (length skill) 0))
+        (let ((keywords nil)
+              (anti-patterns nil))
+          (with-temp-buffer
+            (insert skill)
+            (goto-char (point-min))
+            (when (re-search-forward "^### High-Signal Keywords$" nil t)
+              (forward-line 1)
+              (while (looking-at "^- `\\([^`]+\\)`: \\([0-9]+\\)%")
+                (push (cons (match-string 1)
+                            (/ (string-to-number (match-string 2)) 100.0))
+                      keywords)
+                (forward-line 1)))
+            (goto-char (point-min))
+            (when (re-search-forward "^## Failure Patterns" nil t)
+              (forward-line 1)
+              (while (looking-at "^- \\(.*\\)$")
+                (push (match-string 1) anti-patterns)
+                (forward-line 1))))
+          (list :high-signal-keywords (nreverse keywords)
+                :anti-patterns (nreverse anti-patterns)))))))
+
+(defun gptel-auto-workflow--get-evolution-patterns ()
+  "Return cached evolution patterns, loading if needed."
+  (or gptel-auto-workflow--evolution-patterns-cache
+      (setq gptel-auto-workflow--evolution-patterns-cache
+            (gptel-auto-workflow--load-evolution-patterns))))
 
 (defun gptel-auto-workflow--categorize-hypothesis (hypothesis)
   "Categorize HYPOTHESIS into a change type based on keyword matching.
-Uses skill patterns if available, otherwise falls back to hardcoded rules."
-  (let ((text (downcase (or hypothesis ""))))
-    ;; TODO: Use (gptel-auto-workflow--load-evolution-patterns) to extend categories
+Uses evolved skill patterns when available, with hardcoded fallback."
+  (let ((text (downcase (or hypothesis "")))
+        (patterns (gptel-auto-workflow--get-evolution-patterns)))
     (cond
-     ;; Safety patterns - check first (more specific)
-     ((or (string-match-p "safety\\|defensive\\|type.*check\\|assert\\|sanitize\\|escape\\|validate" text)
-          (string-match-p "secure\\|audit\\|harden" text))
+     ((and patterns
+           (cl-some (lambda (kw)
+                      (and (>= (cdr kw) 0.6)
+                           (string-match-p (regexp-quote (car kw)) text)
+                           (member (car kw) '("defensive" "validate" "sanitize"
+                                              "secure" "audit" "harden" "robustness"))
+                           t))
+                    (plist-get patterns :high-signal-keywords)))
       'safety)
-     ;; Bug fix patterns
-     ((or (string-match-p "bug\\|fix\\|nil\\|error\\|runtime\\|crash\\|prevent\\|guard\\|off-by-one\\|boundary\\|threshold\\|inaccurate" text)
-          (string-match-p "safeguard\\|protect\\|check.*nil\\|null\\|missing.*check" text))
+     ((string-match-p "safety\\|defensive\\|type.*check\\|assert\\|sanitize\\|escape\\|validate" text)
+      'safety)
+     ((string-match-p "secure\\|audit\\|harden" text)
+      'safety)
+     ((string-match-p "bug\\|fix\\|nil\\|error\\|runtime\\|crash\\|prevent\\|guard\\|off-by-one\\|boundary\\|threshold\\|inaccurate" text)
       'bug-fix)
-     ;; Performance patterns
-     ((or (string-match-p "performance\\|cache\\|optimize\\|speed\\|slow\\|complexity\\|hot path\\|efficient" text)
-          (string-match-p "reduce.*time\\|faster\\|memory\\|allocation\\|gc" text))
+     ((string-match-p "safeguard\\|protect\\|check.*nil\\|null\\|missing.*check" text)
+      'bug-fix)
+     ((string-match-p "performance\\|cache\\|optimize\\|speed\\|slow\\|complexity\\|hot path\\|efficient" text)
       'performance)
-     ;; Refactoring patterns
-     ((or (string-match-p "extract\\|duplicate\\|dedup\\|refactor\\|helper\\|rename\\|organiz\\|cleanup" text)
-          (string-match-p "consolidat\\|centraliz\\|reus\\|maintainability\\|clarity" text))
+     ((string-match-p "reduce.*time\\|faster\\|memory\\|allocation\\|gc" text)
+      'performance)
+     ((string-match-p "extract\\|duplicate\\|dedup\\|refactor\\|helper\\|rename\\|organiz\\|cleanup" text)
       'refactoring)
-     ;; Default
+     ((string-match-p "consolidat\\|centraliz\\|reus\\|maintainability\\|clarity" text)
+      'refactoring)
      (t 'other))))
 
 ;; ─── Configuration ───
