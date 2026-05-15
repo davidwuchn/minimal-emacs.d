@@ -13,6 +13,7 @@
 (require 'subr-x)
 
 (require 'gptel nil t)
+(require 'nucleus-tools)
 
 ;;; Customization
 
@@ -37,6 +38,32 @@ file."
   :type 'integer
   :group 'gptel-sandbox)
 
+(defconst gptel-sandbox--excluded-tools
+  '("Programmatic" "Bash" "Eval" "Skill" "TodoWrite" "RunAgent")
+  "Tools excluded from all sandbox profiles regardless of markers.
+These tools escape the sandbox, don't make sense in Programmatic context,
+or require user interaction that can't be handled inside sandbox execution.")
+
+(defun gptel-sandbox--default-allowed-tools ()
+  "Compute default allowed tools for Programmatic agent profile from markers.
+Includes read+edit tools, excludes delegates, web, and sandbox-external tools."
+  (seq-difference
+   (nucleus-tools-with-any-marker :can-read :can-edit)
+   (append (nucleus-tools-with-any-marker :delegates :web)
+           gptel-sandbox--excluded-tools)
+   #'equal))
+
+(defun gptel-sandbox--default-readonly-tools ()
+  "Compute default readonly tools for Programmatic readonly profile from markers."
+  (seq-difference
+   (nucleus-toolset-from-markers '(:can-read) '(:can-edit :plan-excluded :web))
+   gptel-sandbox--excluded-tools
+   #'equal))
+
+(defun gptel-sandbox--default-confirming-tools ()
+  "Compute default confirming tools from markers."
+  (nucleus-toolset-from-markers '(:can-edit) '(:delegates)))
+
 (defun gptel-sandbox--load-profile-from-skill (profile-name)
   "Load tool profile PROFILE-NAME from sandbox-profiles skill.
 Returns list of tool names or nil if skill not found."
@@ -53,31 +80,28 @@ Returns list of tool names or nil if skill not found."
 
 (defcustom my/gptel-programmatic-allowed-tools
   (or (gptel-sandbox--load-profile-from-skill "emacs-lisp")
-      '("Read" "Grep" "Glob"
-        "Edit" "ApplyPatch"
-        "Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages" "Diagnostics"
-        "describe_symbol" "get_symbol_source" "find_buffers_and_recent"))
+      (gptel-sandbox--default-allowed-tools))
   "Tool names allowed inside Programmatic execution.
-Loaded from sandbox-profiles skill if available, otherwise uses defaults.
-The initial v1 slice focuses on read-mostly tools plus preview-backed patch
-editors (`Edit', `ApplyPatch', `Code_Replace')."
+Loaded from sandbox-profiles skill if available, otherwise derived from
+`nucleus-tool-markers' (all read+edit tools minus delegates, web, and
+sandbox-external tools)."
   :type '(repeat string)
   :group 'gptel-sandbox)
 
 (defcustom my/gptel-programmatic-readonly-tools
   (or (gptel-sandbox--load-profile-from-skill "readonly-audit")
-      '("Read" "Grep" "Glob"
-        "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"
-        "describe_symbol" "get_symbol_source" "find_buffers_and_recent"))
+      (gptel-sandbox--default-readonly-tools))
   "Tool names allowed inside Programmatic when running in readonly mode.
-Loaded from sandbox-profiles skill if available, otherwise uses defaults.
-This profile is used by `gptel-plan' and excludes mutating or confirming tools."
+Loaded from sandbox-profiles skill if available, otherwise derived from
+`nucleus-tool-markers' (can-read minus can-edit, plan-excluded, web,
+and sandbox-external tools)."
   :type '(repeat string)
   :group 'gptel-sandbox)
 
 (defcustom my/gptel-programmatic-confirming-tools
-  '("Edit" "ApplyPatch" "Code_Replace")
+  (gptel-sandbox--default-confirming-tools)
   "Tool names allowed to request confirmation inside Programmatic.
+Derived from `nucleus-tool-markers' (can-edit tools minus delegates).
 These tools keep their own preview/apply flow after the initial nested
 confirmation step."
   :type '(repeat string)
@@ -556,12 +580,17 @@ Signals an error if TOOL-NAME is nil or neither a symbol nor string."
 
 (defun gptel-sandbox--current-profile ()
   "Return the active Programmatic capability profile.
-`readonly' is used for `gptel-plan`; `agent' is the default everywhere else."
+Uses marker availability when possible: if no :can-edit tools are active,
+returns `readonly'. Falls back to preset check, then `agent'."
   (or gptel-sandbox-profile
-      (if (and (boundp 'gptel--preset)
-               (eq gptel--preset 'gptel-plan))
-          'readonly
-        'agent)))
+      (cond
+       ((and (boundp 'gptel--preset)
+             (eq gptel--preset 'gptel-plan))
+        'readonly)
+       ((and (fboundp 'nucleus-marker-available-p)
+             (not (nucleus-marker-available-p :can-edit)))
+        'readonly)
+       (t 'agent))))
 
 (defun gptel-sandbox--truncate-summary (value &optional width)
   "Return a compact printable summary of VALUE up to WIDTH chars."
