@@ -48,22 +48,26 @@ When enabled, validates:
 (defconst nucleus-tool-markers
   '((:can-edit . ("ApplyPatch" "Edit" "Insert" "Mkdir" "Move" "Write"
                     "Code_Replace" "create_skill" "write_memory"))
-    (:can-read . ("Bash" "Eval" "Glob" "Grep" "Read" "Programmatic"
-                   "WebFetch" "WebSearch" "YouTube"
-                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                   "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"
-                   "Skill" "TodoWrite" "RunAgent" "Preview"
-                   "read_memory" "list_memories"))
-    (:symbolic . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
-                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"))
-    (:web . ("WebFetch" "WebSearch" "YouTube"))
-    (:memory . ("read_memory" "write_memory" "list_memories"))
-    (:delegates . ("RunAgent"))
-    (:requires-project . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
-                           "Diagnostics" "find_buffers_and_recent"
-                           "describe_symbol" "get_symbol_source"
-                           "read_memory" "write_memory" "list_memories"))
-    (:plan-excluded . ("YouTube" "Preview" "write_memory")))
+     (:can-read . ("Bash" "Eval" "Glob" "Grep" "Read" "Programmatic"
+                    "WebFetch" "WebSearch" "YouTube"
+                    "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                    "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"
+                    "Skill" "TodoWrite" "RunAgent" "Preview"
+                    "read_memory" "list_memories"))
+     (:symbolic . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
+                    "find_buffers_and_recent" "describe_symbol" "get_symbol_source"))
+     (:web . ("WebFetch" "WebSearch" "YouTube"))
+     (:memory . ("read_memory" "write_memory" "list_memories"))
+     (:delegates . ("RunAgent"))
+     (:requires-project . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
+                            "Diagnostics" "find_buffers_and_recent"
+                            "describe_symbol" "get_symbol_source"
+                            "read_memory" "write_memory" "list_memories"))
+     (:plan-excluded . ("YouTube" "Preview" "write_memory"))
+     (:sandbox-excluded . ("Programmatic" "Bash" "Eval" "Skill" "TodoWrite"))
+     (:file-inspector . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
+                          "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                          "Read" "Grep")))
   "Marker traits for each registered tool.
 
 :can-edit      — Tool modifies files or system state (requires confirmation)
@@ -74,6 +78,10 @@ When enabled, validates:
 :delegates     — Tool delegates to sub-agents
 :requires-project — Tool needs an active project context
 :plan-excluded — Tool excluded from plan/readonly mode even though read-only
+:sandbox-excluded — Tool excluded from all sandbox profiles (escapes sandbox or
+                    requires user interaction incompatible with Programmatic)
+:file-inspector  — Tool inspects file content at granularity that can cause
+                    same-file inspection thrash
 
 A tool may carry multiple markers. Markers enable:
   - Deriving toolsets by marker inclusion/exclusion

@@ -337,7 +337,18 @@ Ensures that setting a plist key replaces existing value rather than appending."
     (should-not (member "RunAgent" allowed))
     (should-not (member "WebSearch" allowed))
     (should-not (member "Programmatic" allowed))
-    (should-not (member "Bash" allowed))))
+    (should-not (member "Bash" allowed))
+    (should (equal (sort (copy-sequence gptel-sandbox--excluded-tools) #'string<)
+                   (sort (copy-sequence '("Programmatic" "Bash" "Eval" "Skill" "TodoWrite" "RunAgent")) #'string<)))))
+
+(ert-deftest regression-file-inspector-marker-matches-old-inspection-tools ()
+  ":file-inspector marker replaces old (append (nucleus-tools-with-marker :symbolic) '(\"Read\" \"Grep\"))."
+  (let ((from-marker (sort (copy-sequence (nucleus-tools-with-marker :file-inspector)) #'string<))
+        (old-way (sort (copy-sequence (append (nucleus-tools-with-marker :symbolic) '("Read" "Grep"))) #'string<)))
+    (should (equal from-marker old-way))
+    (should (member "Read" from-marker))
+    (should (member "Grep" from-marker))
+    (should (member "Code_Map" from-marker))))
 
 ;;; Provide
 

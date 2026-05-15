@@ -274,8 +274,8 @@ streak should be treated as a stuck turn."
 
 (defsubst my/gptel--inspection-tools ()
   "Read-only tools that contribute to same-file inspection thrash.
-Derived from nucleus-tool-markers :symbolic plus Read and Grep."
-  (append (nucleus-tools-with-marker :symbolic) '("Read" "Grep")))
+Derived from nucleus-tool-markers :file-inspector."
+  (nucleus-tools-with-marker :file-inspector))
 
 (defsubst my/gptel--write-tools ()
   "Tools that reset inspection-thrash tracking because they can change files.

@@ -39,8 +39,10 @@ file."
   :group 'gptel-sandbox)
 
 (defconst gptel-sandbox--excluded-tools
-  '("Programmatic" "Bash" "Eval" "Skill" "TodoWrite" "RunAgent")
+  (append (nucleus-tools-with-marker :sandbox-excluded)
+          (nucleus-tools-with-marker :delegates))
   "Tools excluded from all sandbox profiles regardless of markers.
+Derived from :sandbox-excluded and :delegates markers.
 These tools escape the sandbox, don't make sense in Programmatic context,
 or require user interaction that can't be handled inside sandbox execution.")
 
