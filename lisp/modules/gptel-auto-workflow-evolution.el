@@ -345,8 +345,8 @@ Writes runtime evolution data under var/tmp/evolution/."
                (with-prompt-data (cl-remove-if (lambda (r) (= 0 (plist-get r :prompt-chars))) all-results))
                (kept-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "kept")) with-prompt-data))
                (discarded-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "discarded")) with-prompt-data)))
-          (if (null with-prompt-data)
-              (insert "*Insufficient data for token efficiency analysis (need prompt_chars in results).*\n")
+          (if (or (null with-prompt-data) (null kept-results))
+              (insert "*Insufficient data for token efficiency analysis (need kept experiments with prompt_chars).*\n")
             (let* ((avg-kept-prompt (/ (apply #'+ (mapcar (lambda (r) (plist-get r :prompt-chars)) kept-results))
                                        (max 1 (length kept-results))))
                    (avg-discarded-prompt (/ (apply #'+ (mapcar (lambda (r) (plist-get r :prompt-chars)) discarded-results))
@@ -1014,16 +1014,31 @@ Returns output string or nil on failure."
         output))))
 
 (defun gptel-auto-workflow--update-directive-skill ()
-  "Update DIRECTIVE.md by calling Python generation script.
-Uses analyze_results.py + generate_directive.py pipeline."
+  "Update DIRECTIVE.md by calling analyze_results.py + generate_directive.py pipeline.
+Runs analysis and directive generation directly instead of through evolve_skills.py
+to ensure DIRECTIVE.md is always regenerated when experiments exist."
   (message "[evolution] Updating directive skill via script...")
-  (let ((output (gptel-auto-workflow--run-evolution-script
-                 "evolve_skills.py" "--root" ".")))
-    (when output
-      (message "[evolution] Directive updated: %s"
-               (expand-file-name "assistant/skills/auto-workflow/DIRECTIVE.md"
-                                (gptel-auto-workflow--worktree-base-root))))
-    output))
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (output-dir (expand-file-name "var/tmp/skill-evolution" root))
+         (analysis-file (expand-file-name "analysis.json" output-dir))
+         (directive-file (expand-file-name "assistant/skills/auto-workflow/DIRECTIVE.md" root))
+         (analysis-output nil)
+         (directive-output nil))
+    (make-directory output-dir t)
+    (setq analysis-output
+          (gptel-auto-workflow--run-evolution-script
+           "analyze_results.py" "--root" root
+           "--output" analysis-file))
+    (when (and analysis-output (file-exists-p analysis-file))
+      (setq directive-output
+            (gptel-auto-workflow--run-evolution-script
+             "generate_directive.py"
+             "--analysis" analysis-file
+             "--output" directive-file
+             "--root" root))
+      (when directive-output
+        (message "[evolution] Directive updated: %s" directive-file)))
+    directive-output))
 
 (defun gptel-auto-workflow--evolve-token-efficiency-data ()
   "Update token-efficiency data in var/tmp/evolution/.

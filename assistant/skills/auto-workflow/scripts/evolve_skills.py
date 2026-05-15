@@ -153,10 +153,11 @@ def generate_skill(skill_name, skill_info, analysis_path, root_dir, patterns_pat
 
     with open(analysis_path, 'r') as f:
         analysis = json.load(f)
-    local_total = analysis.get('local_experiments', analysis.get('total_experiments', 0))
+    total_experiments = analysis.get('total_experiments', 0)
+    local_total = analysis.get('local_experiments', 0)
     existing_total = skill_total_experiments(skills_dir)
-    if existing_total > local_total:
-        print(f"    Preserving existing aggregate stats ({existing_total} > local {local_total})")
+    if existing_total >= total_experiments and local_total == 0:
+        print(f"    No new experiments ({existing_total} existing, {local_total} local)")
         return True
     
     # Run each script for this skill

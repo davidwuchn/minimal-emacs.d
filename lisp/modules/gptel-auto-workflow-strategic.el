@@ -1448,6 +1448,27 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
 (defvar gptel-auto-workflow--active-strategy nil
   "Currently active research strategy (evolved by benchmark system).")
 
+(defun gptel-auto-workflow--load-active-strategy ()
+  "Load persisted active strategy from var/tmp/researcher-strategy.json.
+Called during research initialization to restore evolved strategy after daemon restart."
+  (when (and (null gptel-auto-workflow--active-strategy)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let ((strategy-file (expand-file-name "var/tmp/researcher-strategy.json"
+                                            (gptel-auto-workflow--worktree-base-root))))
+      (when (file-exists-p strategy-file)
+        (condition-case nil
+            (let* ((json-object-type 'plist)
+                   (data (with-temp-buffer
+                           (insert-file-contents strategy-file)
+                           (goto-char (point-min))
+                           (json-read))))
+              (when (plist-get data :active-strategy)
+                (setq gptel-auto-workflow--active-strategy
+                      (plist-get data :active-strategy))
+                (message "[autotts] Restored active strategy: %s"
+                         gptel-auto-workflow--active-strategy)))
+          (error nil))))))
+
 (defvar gptel-auto-workflow--research-steps nil
   "List of step-level traces for current research session.
 Each step is a plist with :step :type :query :url :timestamp :confidence.

@@ -229,9 +229,18 @@ def main():
                        help='Path to analysis JSON from analyze_results.py')
     parser.add_argument('--patterns', '-p', default=None,
                        help='Path to pattern analysis JSON from analyze_patterns.py')
-    parser.add_argument('--output', '-o', required=True,
+    parser.add_argument('--output', '-o', default=None,
                        help='Path to output DIRECTIVE.md')
+    parser.add_argument('--output-dir', default=None,
+                       help='Directory for DIRECTIVE.md (alternative to --output)')
+    parser.add_argument('--root', default='.',
+                       help='Project root directory')
     args = parser.parse_args()
+
+    output_path = args.output
+    if not output_path:
+        output_dir = args.output_dir or args.root
+        output_path = str(Path(output_dir) / "DIRECTIVE.md")
     
     # Load analysis
     with open(args.analysis, 'r') as f:
@@ -245,16 +254,16 @@ def main():
         print(f"Loaded pattern analysis: {args.patterns}")
     
     # Generate directive
-    skill_dir = Path(args.output).parent
+    skill_dir = Path(output_path).parent
     content = generate_directive(analysis, skill_dir, patterns)
     
     # Write output
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, 'w') as f:
+    resolved = Path(output_path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    with open(resolved, 'w') as f:
         f.write(content)
     
-    print(f"DIRECTIVE.md generated: {output_path}")
+    print(f"DIRECTIVE.md generated: {resolved}")
     print(f"  Total experiments: {analysis['total_experiments']}")
     print(f"  Targets tracked: {len(analysis['target_stats'])}")
     if patterns:

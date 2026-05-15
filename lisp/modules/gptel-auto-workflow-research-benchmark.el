@@ -1544,7 +1544,8 @@ Falls back to output length only when no outcome data exists yet."
 (defun gptel-auto-workflow--run-offline-evolution ()
   "Run lightweight offline evolution using trace replay.
 No LLM calls. Fast. Good for convergence testing.
-Updates active strategy from offline benchmark results."
+Updates active strategy from offline benchmark results.
+Persists evolved strategy for daemon restarts."
   (message "[autotts] Running offline evolution (no LLM calls)...")
   (let ((results (gptel-auto-workflow--offline-benchmark-strategies)))
     (when results
@@ -1554,8 +1555,14 @@ Updates active strategy from offline benchmark results."
         (message "[autotts] Offline evolved to strategy: %s (eff=%.4f)"
                  (plist-get best :strategy)
                  (plist-get best :efficiency))
-        ;; Store results for joint optimization
         (setq gptel-auto-workflow--research-benchmark-results results)
+        (let ((strategy-file (expand-file-name "var/tmp/researcher-strategy.json"
+                                                (gptel-auto-workflow--worktree-base-root))))
+          (make-directory (file-name-directory strategy-file) t)
+          (with-temp-file strategy-file
+            (insert (json-encode `(:active-strategy ,gptel-auto-workflow--active-strategy
+                                   :efficiency ,(plist-get best :efficiency)
+                                   :evolved-at ,(format-time-string "%Y-%m-%dT%H:%M:%SZ"))))))
         best))))
 
 (defun gptel-auto-workflow--bootstrap-strategy-guidance ()

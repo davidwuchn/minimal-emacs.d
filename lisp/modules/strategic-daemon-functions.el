@@ -762,7 +762,9 @@ TOTAL-TOKENS tracks cumulative token usage across turns.
 PREVIOUS-DECISION is the controller decision from the previous turn."
   ;; Reset EMA on first turn
   (when (= turn 0)
-    (gptel-auto-workflow--reset-research-ema))
+    (gptel-auto-workflow--reset-research-ema)
+    (when (fboundp 'gptel-auto-workflow--load-active-strategy)
+      (gptel-auto-workflow--load-active-strategy)))
   
   ;; Store state in global variables to avoid closure capture issues
   (setq gptel-auto-workflow--research-accumulated-findings accumulated-findings)
@@ -944,7 +946,6 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
      (let* ((source-classification (when accumulated-findings
                                      (gptel-auto-workflow--classify-source
                                       "own-research" accumulated-findings)))
-             (own-priority (or (plist-get controller-config :own-repo-priority) 0.7))
             (base-timeout 180)
             ;; Alignment multiplier: aligned=1.5x, neutral=1.0x, deviant=0.7x
             (alignment-factor (cond
@@ -952,14 +953,15 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
                                ((eq source-classification 'deviant) 0.7)
                                (t 1.0))))
        (if (> turn 0)
-           ;; Turn 1+: timeout scales with alignment × source priority
-           (let ((timeout (max 120 (min 420 (* base-timeout alignment-factor own-priority)))))
+           ;; Turn 1+: timeout scales with alignment only
+           ;; (own-priority is <1 and would always reduce timeout if multiplied)
+           (let ((timeout (max 120 (min 420 (* base-timeout alignment-factor)))))
              (when source-classification
-               (message "[autotts] Source classification: %s → timeout=%ds (factor=%.1f)"
+               (message "[autotts] Source classification: %s -> timeout=%ds (factor=%.1f)"
                         source-classification timeout alignment-factor))
              timeout)
-         ;; Turn 0: shorter initial search to test direction
-         (max 120 (* base-timeout own-priority)))))))
+         ;; Turn 0: standard initial search timeout
+          base-timeout)))))
 
 ;; ─── Programmatic Source Scheduling ───
 

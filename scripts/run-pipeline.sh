@@ -89,11 +89,14 @@ wait_for_idle() {
                     return 0
                 fi
             fi
+            # Actually check if researcher daemon is alive
+            if emacsclient --socket-name="copilot-researcher" --eval 't' >/dev/null 2>&1; then
+                daemon_was_seen=1
+            fi
             if [ "$elapsed" -ge "$min_start_wait" ] && [ "$daemon_was_seen" -eq 0 ]; then
                 log "WARNING: $action daemon was not observed within ${elapsed}s"
                 return 1
             fi
-            daemon_was_seen=1
         elif ! emacsclient --socket-name="$socket_name" --eval 't' >/dev/null 2>&1; then
             if [ "$daemon_was_seen" -eq 1 ]; then
                 log "$action daemon stopped after ${elapsed}s (socket closed)"
@@ -145,8 +148,6 @@ run_self_evolution() {
     fi
 }
 
-PIPELINE_START_TIME="$(date +%s)"
-
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
 "$SCRIPT" stop >/dev/null 2>&1 || true
@@ -156,6 +157,9 @@ sleep 2
 # ─── Clear stale findings to ensure fresh research ───
 rm -f "$FINDINGS_FILE" "$INTERNAL_FILE"
 log "Cleared stale findings files"
+
+# Capture start time AFTER clearing stale files so mtime check is reliable
+PIPELINE_START_TIME="$(date +%s)"
 
 # ─── Step 1: Research ───
 log "=== Step 1: Research ==="
