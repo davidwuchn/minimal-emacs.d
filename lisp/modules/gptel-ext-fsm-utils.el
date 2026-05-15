@@ -279,12 +279,8 @@ where first FSM was always returned (potentially wrong parent FSM).
 PROACTIVE MITIGATION: Uses registration order as proxy for nesting level,
 avoiding need for explicit parent-child tracking.
 
-CLARITY: Extracts cycle detection to shared `my/gptel--fsm-traverse` helper."
-  (let ((last-fsm nil)
-        (seen (make-hash-table :test 'eq)))
-    (cl-labels ((track-last (fsm) (setq last-fsm fsm)))
-      (my/gptel--fsm-traverse object seen #'track-last)
-      last-fsm)))
+CLARITY: Uses shared `my/gptel--fsm-collect-list` helper."
+  (cdr (my/gptel--fsm-collect-list object)))
 
 (defun my/gptel--fsm-traverse (object seen fsm-callback)
   "Traverse OBJECT and call FSM-CALLBACK for each FSM found.
@@ -322,6 +318,23 @@ consistent behavior across all FSM collection operations."
       (puthash object t seen)
       (funcall fsm-callback object)))))
 
+(defun my/gptel--fsm-collect-list (object)
+  "Collect all FSMs from OBJECT into a list.
+Returns (LIST . MOST-RECENT) dotted pair where MOST-RECENT is the last FSM found.
+Uses single traversal pass for performance optimization.
+
+ASSUMPTION: OBJECT may be atom, cons cell, or nested structure.
+BEHAVIOR: Returns (FSMS . LAST-FSM) dotted pair.
+EDGE CASE: No FSMs returns (nil . nil)."
+  (let ((seen (make-hash-table :test 'eq))
+        (result nil)
+        (last-fsm nil))
+    (cl-labels ((collect-and-track (fsm)
+                  (push fsm result)
+                  (setq last-fsm fsm)))
+      (my/gptel--fsm-traverse object seen #'collect-and-track))
+    (cons (nreverse result) last-fsm)))
+
 (defun my/gptel--collect-all-fsms (object)
   "Collect all FSMs found in OBJECT as a list.
 
@@ -344,11 +357,7 @@ nested subagent scenarios and select appropriate FSM.
 
 ADAPTS TO: Pure functional approach eliminates mutable state,
 improving testability and reducing cognitive load."
-  (let ((seen (make-hash-table :test 'eq))
-        (result nil))
-    (cl-labels ((collect-fsm (fsm) (push fsm result)))
-      (my/gptel--fsm-traverse object seen #'collect-fsm))
-    (nreverse result)))
+  (car (my/gptel--fsm-collect-list object)))
 
 (defun my/gptel--fsm-depth (object)
   "Return nesting depth of FSMs in OBJECT.
@@ -373,11 +382,7 @@ PROACTIVE MITIGATION: Enables detection of nested scenarios before
 wrong FSM selection occurs.
 
 SIGNAL: explicit assumptions - Uses shared traversal helper."
-  (let ((count 0)
-        (seen (make-hash-table :test 'eq)))
-    (cl-labels ((inc-count (_fsm) (cl-incf count)))
-      (my/gptel--fsm-traverse object seen #'inc-count))
-    count))
+  (length (car (my/gptel--fsm-collect-list object))))
 
 ;;; Registry Validation
 
