@@ -163,11 +163,23 @@ inconsistent lookups if registry structure changes."
 
 ;;; FSM Predicates and Coercion
 
+(defvar my/gptel--fsm-predicate-fn
+  (if (fboundp 'gptel-fsm-p)
+      #'gptel-fsm-p
+    (lambda (obj) (ignore-errors (gptel-fsm-state obj) t)))
+  "Cached FSM predicate function for performance.
+
+ASSUMPTION: gptel-fsm-p is available when loaded.
+BEHAVIOR: Uses built-in predicate if available.
+BEHAVIOR: Falls back to safe state access otherwise.
+TEST: (funcall my/gptel--fsm-predicate-fn some-fsm) => t or nil
+BUILDS ON DISCOVERY: Caching at load time eliminates per-call fboundp
+overhead, improving Vitality (performance).")
+
 (defun my/gptel--fsm-p (object)
   "Return non-nil when OBJECT behaves like a `gptel-fsm'.
 
 ASSUMPTION: Valid FSM has accessible `gptel-fsm-state' slot.
-ASSUMPTION: Accessing state on non-FSM signals error.
 BEHAVIOR: Returns t if object has valid FSM structure.
 BEHAVIOR: Returns nil if object is not FSM or access fails.
 EDGE CASE: Nil object returns nil.
@@ -178,14 +190,9 @@ TEST: (my/gptel--fsm-p nil) => nil
 TEST: (my/gptel--fsm-p \"not-fsm\") => nil
 TEST: (my/gptel--fsm-p 42) => nil
 
-PROACTIVE MITIGATION: Uses ignore-errors to safely handle
-any object type without signaling errors to caller."
+SIGNAL: explicit assumptions - Uses cached predicate function."
   (and object
-       (if (fboundp 'gptel-fsm-p)
-           (gptel-fsm-p object)
-         (ignore-errors
-           (gptel-fsm-state object)
-           t))))
+       (funcall my/gptel--fsm-predicate-fn object)))
 
 (defun my/gptel--coerce-fsm (object &optional context-id)
   "Return the FSM matching CONTEXT-ID from OBJECT, or first FSM if no match.
