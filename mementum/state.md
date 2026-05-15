@@ -2,6 +2,33 @@
 
 > Last session: 2026-05-15
 
+## Current Session: Pipeline 15:03 Completion + Status Fix
+
+**Status:** Pipeline 15:03 completed successfully after 4.5 hours with 23 experiments and 1 target improved. Status file was stale due to compiled function error; manually fixed.
+
+**Completed:**
+- Pipeline run-id `2026-05-15T150326Z-022f` completed with 23 experiments (9 for `gptel-tools-agent-error.el`)
+- Best score achieved: 0.43 (nil guard added to `gptel-error--match-ignore-case`)
+- Strategy evolution triggered: new strategy `dynamic-skill-composition` created (iteration 1)
+- Evolution scores: 904 total experiments, last 0.1726, best 0.1731 at 14:16
+
+**Bug Found:**
+- Status file stuck at `:running t` after workflow completion
+- Error: "Wrong number of arguments: #[(status) ...], 0" in `gptel-auto-workflow--status-active-p`
+- Likely stale compiled function issue (Pi5 native-comp closure bug)
+- Fixed manually by updating status to `:running nil :phase "complete"`
+
+**Verification:**
+- Daemon log shows: `[auto-workflow] All projects processed: /home/davidwu/.emacs.d/:success`
+- Status file now correctly shows completion state
+
+**Remaining:**
+- Investigate compiled function error for permanent fix
+- Monitor 23:00 pipeline (next scheduled run)
+- Uncommitted memory file: `mementum/memories/research-research-skill-chain-loading-c1fe804b.md`
+
+---
+
 ## Current Session: Programmatic Sandbox for Controller Rules
 
 **Status:** Sandboxed controller rule evaluation implemented and verified. Both runtime decision and offline replay evaluation now use Programmatic sandbox instead of raw `eval`.
