@@ -658,7 +658,7 @@ Syncs buffer with disk, validates parser, guards against truncation."
                     (line-number-at-pos)
                     type text line-text)))))))
 
-(defun gptel-tools-code--diagnostics (&optional all file_path max_answer_chars)
+(defun gptel-tools-code--diagnostics (&optional all file-path max-answer-chars)
   "Collect diagnostics via LSP/Flymake or CLI linters.
 
 If FILE-PATH is provided, check only that file.
@@ -694,13 +694,13 @@ For .el files, uses checkdoc/byte-compile/package-lint instead of LSP."
                  (errors-only (seq-filter
                                (lambda (d) (eq (flymake-diagnostic-type d) :error))
                                filtered))
-                 (full-result (format "Found %d diagnostic(s)%s:\n\n%s"
-                                      (length formatted)
-                                      (if all " (including notes)" "")
-                                      (string-join formatted "\n\n")))
-                 (max-chars (or max_answer_chars
-                                (bound-and-true-p nucleus-tool-max-answer-chars)
-                                4000)))
+                  (full-result (format "Found %d diagnostic(s)%s:\n\n%s"
+                                       (length formatted)
+                                       (if all " (including notes)" "")
+                                       (string-join formatted "\n\n")))
+                  (max-chars (or max-answer-chars
+                                 (bound-and-true-p nucleus-tool-max-answer-chars)
+                                 4000)))
             (if (fboundp 'nucleus-limit-result-length)
                 (nucleus-limit-result-length
                  full-result max-chars
@@ -713,10 +713,10 @@ For .el files, uses checkdoc/byte-compile/package-lint instead of LSP."
                        (lambda ()
                          (format "Found %d diagnostic(s): %d error(s), %d warning(s)%s"
                                  (length formatted)
-                                 (length errors-only)
-                                 (- (length filtered) (length errors-only))
-                                 (if all " (including notes)" ""))))))
-              full-result)))))))
+                                  (length errors-only)
+                                  (- (length filtered) (length errors-only))
+                                  (if all " (including notes)" "")))))
+                full-result)))))))
 
 (defun gptel-tools-code-register ()
   "Register the unified Code tools with gptel."

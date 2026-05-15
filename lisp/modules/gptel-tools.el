@@ -31,6 +31,7 @@ Use this to refresh presets or update buffers that depend on tool availability."
 (require 'gptel-tools-introspection)
 (require 'gptel-tools-code)
 (require 'gptel-tools-agent)
+(require 'gptel-tools-memory)
 ;; (require 'gptel-tools-lsp)  ; Deprecated, functionality merged into gptel-tools-code
 ;; (require 'gptel-tools-ast)  ; Deprecated, functionality merged into gptel-tools-code
 

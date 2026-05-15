@@ -100,12 +100,12 @@ Use this to recall project-specific insights, patterns, or architecture notes \
 that were stored in previous sessions. You can infer relevance from the memory name."
      :function #'gptel-tools-memory--read
      :args (list '(:name "slug"
-                        :type string
-                        :description "Memory name/slug (e.g., 'serena-architecture-lessons' or 'project-facts'). Add 'knowledge/' prefix for knowledge pages."))
-                '(:name "knowledge"
-                        :type boolean
-                        :optional t
-                        :description "Set true to read from knowledge pages instead of memories."))
+                          :type string
+                          :description "Memory name/slug (e.g., 'serena-architecture-lessons' or 'project-facts'). Add 'knowledge/' prefix for knowledge pages.")
+                 '(:name "knowledge"
+                          :type boolean
+                          :optional t
+                          :description "Set true to read from knowledge pages instead of memories."))
      :category "gptel-agent"
      :include t)
 
@@ -135,9 +135,9 @@ a future AI session working on this project. Keep memories atomic (<200 words)."
 Use this to discover what project knowledge has been captured from previous sessions."
      :function #'gptel-tools-memory--list
      :args (list '(:name "topic"
-                        :type string
-                        :optional t
-                        :description "Filter memories by topic substring."))
+                          :type string
+                          :optional t
+                          :description "Filter memories by topic substring."))
      :category "gptel-agent"
      :include t)))
 
