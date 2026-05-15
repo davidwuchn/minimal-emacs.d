@@ -129,6 +129,7 @@ Uses simple heuristic unless dimensions are available."
 ENTRY can be a string (path only) or a cons cell (path . props).
 Returns (list entry) for strings, or entry as-is for cons cells."
   (cond
+   ((null entry) (error "Invalid nil entry in gptel-context"))
    ((consp entry) entry)
    ((stringp entry) (list entry))
    (t (list entry))))
