@@ -579,7 +579,7 @@ RETRY-COUNT tracks current retry attempt."
                    (condition-case nil
                        (gptel-auto-workflow--maybe-activate-rate-limit-failover
                         "executor"
-                        (gptel-auto-workflow--get-active-agent-preset "executor")
+                        (gptel-auto-workflow--agent-base-preset "executor")
                         raw-error)
                      (error nil)))
                (setq attempt-logs nil)
