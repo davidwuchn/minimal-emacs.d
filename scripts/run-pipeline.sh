@@ -301,7 +301,7 @@ elif printf '%s' "$workflow_status" | grep -Eq ':phase "running"'; then
 fi
 
 # ─── Step 5: Self-Evolution (digest fresh workflow results) ───
-if printf '%s' "$workflow_status" | grep -Eq ':phase "(idle|complete)"'; then
+if printf '%s' "$workflow_status" | grep -Eq ':phase "(idle|complete|skipped|quota-exhausted)"'; then
     run_self_evolution "Step 5: Self-Evolution (post-workflow)"
 else
     log "Skipping post-workflow self-evolution because auto-workflow did not complete"
