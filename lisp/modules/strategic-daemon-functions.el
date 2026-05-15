@@ -473,15 +473,61 @@ Returns the decision from the first matching rule, or nil if no rules exist."
         (puthash (car entry) (cdr entry) env)))
     env))
 
+(defun gptel-auto-workflow--eval-rule-expr-fallback (expr env)
+  "Evaluate simple rule EXPR against hash-table ENV without the full sandbox.
+Handles numbers, strings, symbol lookup, comparisons, boolean logic, and arithmetic.
+Used when gptel-sandbox is not loaded."
+  (cond
+   ((numberp expr) expr)
+   ((stringp expr) expr)
+   ((eq expr t) t)
+   ((null expr) nil)
+   ((symbolp expr)
+    (if (hash-table-p env)
+        (gethash expr env nil)
+      (alist-get expr env nil)))
+   ((not (consp expr)) nil)
+   (t
+    (let ((op (car expr))
+          (args (cdr expr)))
+      (pcase op
+        ('quote (car args))
+        ('and (cl-every
+               (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env))
+               args))
+        ('or (cl-some
+              (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env))
+              args))
+        ('not (not (gptel-auto-workflow--eval-rule-expr-fallback (car args) env)))
+        ('null (null (gptel-auto-workflow--eval-rule-expr-fallback (car args) env)))
+        ('> (apply #'> (mapcar (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env)) args)))
+        ('< (apply #'< (mapcar (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env)) args)))
+        ('>= (apply #'>= (mapcar (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env)) args)))
+        ('<= (apply #'<= (mapcar (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env)) args)))
+        ('= (apply #'= (mapcar (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env)) args)))
+        ('eq (eq (gptel-auto-workflow--eval-rule-expr-fallback (car args) env)
+                 (gptel-auto-workflow--eval-rule-expr-fallback (cadr args) env)))
+        ('eql (eql (gptel-auto-workflow--eval-rule-expr-fallback (car args) env)
+                   (gptel-auto-workflow--eval-rule-expr-fallback (cadr args) env)))
+        ('equal (equal (gptel-auto-workflow--eval-rule-expr-fallback (car args) env)
+                       (gptel-auto-workflow--eval-rule-expr-fallback (cadr args) env)))
+        ('string= (string= (gptel-auto-workflow--eval-rule-expr-fallback (car args) env)
+                           (gptel-auto-workflow--eval-rule-expr-fallback (cadr args) env)))
+        ('+ (apply #'+ (mapcar (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env)) args)))
+        ('- (apply #'- (mapcar (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env)) args)))
+        ('* (apply #'* (mapcar (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env)) args)))
+        ('/ (apply #'/ (mapcar (lambda (a) (gptel-auto-workflow--eval-rule-expr-fallback a env)) args)))
+        (_ nil))))))
+
 (defun gptel-auto-workflow--eval-rule-sandbox (expr env)
   "Evaluate rule EXPR in Programmatic sandbox ENV.
 Returns non-nil if expression is truthy, nil otherwise.
-Handles comparisons and arithmetic that Programmatic supports."
+Falls back to a simple expression evaluator when sandbox is unavailable."
   (condition-case err
       (if (and (fboundp 'gptel-sandbox--eval-expr)
                (hash-table-p env))
           (gptel-sandbox--eval-expr expr env)
-        nil)
+        (gptel-auto-workflow--eval-rule-expr-fallback expr env))
     (error
      (message "[autotts] Rule eval error: %s" (error-message-string err))
      nil)))

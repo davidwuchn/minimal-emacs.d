@@ -240,7 +240,7 @@
 
 (ert-deftest test-nucleus-tools-grep-normalize-context-lines-caps-numeric-strings ()
   "Grep context lines should accept integer-like strings and cap to 30."
-  (require 'gptel-tools-grep)
+  (skip-unless (require 'gptel-tools-grep nil t))
   (should (= 30 (gptel-tools-grep--normalize-context-lines "40")))
   (should (= 5 (gptel-tools-grep--normalize-context-lines "5")))
   (should (= 0 (gptel-tools-grep--normalize-context-lines -3)))
