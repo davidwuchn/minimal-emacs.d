@@ -158,6 +158,8 @@ Returns nil if there's a genuine new mechanism."
 
 (defun gptel-auto-workflow--normalize-code (code)
   "Normalize code for comparison by removing whitespace and comments."
+  (when (null code)
+    (setq code ""))
   (with-temp-buffer
     (insert code)
     ;; Remove comments
