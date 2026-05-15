@@ -9,6 +9,7 @@
 (require 'subr-x)
 (require 'seq)
 (require 'gptel-ext-abort)
+(require 'nucleus-tools)
 
 ;;; Customization
 
@@ -42,42 +43,46 @@ them."
     (max 0 (min 30 (string-to-number (string-trim value)))))
    (t value)))
 
-(defun my/gptel--agent-grep-async (callback regex path &optional glob context-lines)
+(defun my/gptel--agent-grep-async (callback regex path &optional glob context-lines max_answer_chars)
   "Async replacement for gptel-agent's `Grep' tool.
 
 Searches for REGEX in PATH using ripgrep (preferred) or grep.
 GLOB pattern and CONTEXT-LINES are optional.
+MAX_ANSWER_CHARS limits output length with progressive shortening.
 
 CALLBACK is called exactly once with the result. Even if aborted, callback
 receives an error message to prevent callers from hanging."
   (let* ((origin (current-buffer))
-         (gen my/gptel--abort-generation))
+         (gen my/gptel--abort-generation)
+         (max-chars (or max_answer_chars
+                        (bound-and-true-p nucleus-tool-max-answer-chars)
+                        4000)))
     (condition-case err
         (progn
           (unless (and (stringp regex) (not (string-empty-p (string-trim regex))))
             (error "regex is empty"))
           (unless (and (stringp path) (file-readable-p path))
             (error "File or directory %s is not readable" path))
-           (let* ((grepper (or (executable-find "rg") (executable-find "grep")))
-                  (_ (unless grepper (error "ripgrep/grep not available")))
-                  (cmd (file-name-sans-extension (file-name-nondirectory grepper)))
-                  (context-lines (if (natnump context-lines) context-lines 0))
-                  (expanded-path (expand-file-name (substitute-in-file-name path)))
+          (let* ((grepper (or (executable-find "rg") (executable-find "grep")))
+                 (_ (unless grepper (error "ripgrep/grep not available")))
+                 (cmd (file-name-sans-extension (file-name-nondirectory grepper)))
+                 (context-lines (if (natnump context-lines) context-lines 0))
+                 (expanded-path (expand-file-name (substitute-in-file-name path)))
                  (args
                   (cond
                    ((string= "rg" cmd)
-                     (delq nil (list "--sort=modified"
-                                     (format "--context=%d" context-lines)
-                                     (and glob (format "--glob=%s" glob))
-                                     (format "--max-count=%d" my/gptel-grep-max-count)
-                                     "--heading" "--line-number"
-                                     "-e" regex
-                                     expanded-path)))
-                    ((string= "grep" cmd)
-                     (delq nil (list "--recursive"
-                                     (format "--context=%d" context-lines)
-                                     (and glob (format "--include=%s" glob))
-                                     (format "--max-count=%d" my/gptel-grep-max-count)
+                    (delq nil (list "--sort=modified"
+                                    (format "--context=%d" context-lines)
+                                    (and glob (format "--glob=%s" glob))
+                                    (format "--max-count=%d" my/gptel-grep-max-count)
+                                    "--heading" "--line-number"
+                                    "-e" regex
+                                    expanded-path)))
+                   ((string= "grep" cmd)
+                    (delq nil (list "--recursive"
+                                    (format "--context=%d" context-lines)
+                                    (and glob (format "--include=%s" glob))
+                                    (format "--max-count=%d" my/gptel-grep-max-count)
                                     "--line-number" "--regexp" regex
                                     expanded-path)))
                    (t (error "failed to identify grepper"))))
@@ -88,17 +93,34 @@ receives an error message to prevent callers from hanging."
                     (unless done
                       (setq done t)
                       (when (buffer-live-p buf) (kill-buffer buf))
-                      (cond
-                       ((and (buffer-live-p origin)
-                             (with-current-buffer origin
-                               (= gen my/gptel--abort-generation)))
-                        (funcall callback result))
-                       ((not (buffer-live-p origin))
-                        (funcall callback result))
-                       (t
-                        (funcall callback (format "Error: Request aborted\n%s"
-                                                  (if (string-prefix-p "Error:" result) result
-                                                    (concat "Partial output:\n" result))))))))))
+                      (let ((shortened
+                             (if (and (stringp result)
+                                      (not (string-prefix-p "Error:" result))
+                                      (fboundp 'nucleus-limit-result-length)
+                                      (> (length result) max-chars))
+                                 (let ((lines (split-string result "\n")))
+                                   (nucleus-limit-result-length
+                                    result max-chars
+                                    (list
+                                     (lambda ()
+                                       (format "%s\n...[%d more matches truncated]"
+                                               (string-join (seq-take lines (max 1 (/ (length lines) 2))) "\n")
+                                               (- (length lines) (/ (length lines) 2))))
+                                     (lambda ()
+                                       (format "Found %d matches for '%s' (refine query or increase max_answer_chars)"
+                                               (length lines) regex)))))
+                               result)))
+                        (cond
+                         ((and (buffer-live-p origin)
+                               (with-current-buffer origin
+                                 (= gen my/gptel--abort-generation)))
+                          (funcall callback shortened))
+                         ((not (buffer-live-p origin))
+                          (funcall callback shortened))
+                         (t
+                          (funcall callback (format "Error: Request aborted\n%s"
+                                                    (if (string-prefix-p "Error:" shortened) shortened
+                                                      (concat "Partial output:\n" shortened)))))))))))
             (let ((proc
                    (make-process
                     :name "gptel-grep"
@@ -138,25 +160,29 @@ receives an error message to prevent callers from hanging."
       (when (fboundp 'display-warning)
         (display-warning 'gptel-tools "Executables `rg' and `grep' not found. Grep tool will not be registered." :warning))
     (when (fboundp 'gptel-make-tool)
-      (gptel-make-tool
-       :name "Grep"
-       :description "Search file contents under a path (async)."
-       :function #'my/gptel--agent-grep-async
-       :async t
-       :args '((:name "regex"
-                :type string)
-              (:name "path"
-                :type string)
-              (:name "glob"
-                :type string
-                :optional t)
-              (:name "context_lines"
-                 :optional t
-                 :normalize gptel-tools-grep--normalize-context-lines
+       (gptel-make-tool
+        :name "Grep"
+        :description "Search file contents under a path (async)."
+        :function #'my/gptel--agent-grep-async
+        :async t
+        :args '((:name "regex"
+                 :type string)
+               (:name "path"
+                 :type string)
+               (:name "glob"
+                 :type string
+                 :optional t)
+               (:name "context_lines"
+                  :optional t
+                  :normalize gptel-tools-grep--normalize-context-lines
+                  :type integer
+                  :maximum 30)
+               (:name "max_answer_chars"
                  :type integer
-                 :maximum 30))
-       :category "gptel-agent"
-       :include t))))
+                 :optional t
+                 :description "Max output chars (default 4000). Large results are progressively shortened."))
+        :category "gptel-agent"
+        :include t))))
 
 ;;; Footer
 
