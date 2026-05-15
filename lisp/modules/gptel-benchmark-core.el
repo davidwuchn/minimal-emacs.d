@@ -106,11 +106,7 @@ Returns t on success, nil if writing fails."
 Handles plists by converting to alists."
   (cond
    ((null data) nil)
-   ((and (listp data)
-         (consp data)
-         (keywordp (car data))
-         (proper-list-p data)
-         (zerop (mod (length data) 2)))
+   ((gptel-benchmark--plist-p data)
     (gptel-benchmark--plist-to-alist data))
    ((and (consp data) (not (proper-list-p data)))
     (cons (car data) (gptel-benchmark--to-json-format (cdr data))))
@@ -138,12 +134,21 @@ For non-keywords, returns KEY unchanged."
       (intern (substring (symbol-name key) 1))
     key))
 
+(defun gptel-benchmark--plist-p (obj)
+  "Check if OBJ is a valid plist (keyword-keyed proper list with even length).
+Returns t if OBJ is a non-empty proper list starting with a keyword
+and having an even number of elements.
+This consolidates the common plist detection pattern used across the module."
+  (and (proper-list-p obj)
+       (not (null obj))
+       (keywordp (car obj))
+       (zerop (mod (length obj) 2))))
+
 (defun gptel-benchmark--plist-to-alist (plist)
   "Convert PLIST to alist format for JSON encoding.
 Validates that PLIST has even number of elements.
 Returns nil for empty or malformed input."
-  (when (and (proper-list-p plist)
-             (zerop (mod (length plist) 2)))
+  (when (gptel-benchmark--plist-p plist)
     (let (alist)
       (while plist
         (let ((key (gptel-benchmark--keyword-to-alist-key (car plist)))
@@ -256,15 +261,14 @@ Handles both (run . scores) cons cells and plists with :scores key.
 Returns nil for nil or malformed input."
   (cond
    ((null r) nil)
-   ((and (proper-list-p r) (keywordp (car r)) (zerop (mod (length r) 2)))
+   ((gptel-benchmark--plist-p r)
     (let ((scores (plist-get r :scores)))
       (when (proper-list-p scores) scores)))
    ((consp r)
     (let ((scores (cdr r)))
       (when (and (proper-list-p scores)
                  (not (null scores))
-                 (or (and (keywordp (car scores))
-                          (zerop (mod (length scores) 2)))
+                 (or (gptel-benchmark--plist-p scores)
                      (and (cl-every #'consp scores)
                           (not (keywordp (car scores)))
                           (not (and (proper-list-p (car scores))
@@ -328,7 +332,7 @@ Returns nil if SCORES is not a list."
    ((null scores) nil)
    ((not (listp scores)) nil)
    ((proper-list-p scores)
-    (let ((is-plist (and (keywordp (car scores)) (zerop (mod (length scores) 2)))))
+    (let ((is-plist (gptel-benchmark--plist-p scores)))
       (mapcar (lambda (score-type)
                 (cons score-type
                       (gptel-benchmark--normalize-score
