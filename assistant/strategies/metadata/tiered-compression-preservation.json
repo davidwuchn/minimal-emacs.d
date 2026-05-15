@@ -1,0 +1,1 @@
+{"name":"tiered-compression-preservation","version":"1.0","hypothesis":"Tiered compression preserving high-impact sections improves code improvement quality","axis":"F","components":["compression-tiers","impact-prioritization"]}
