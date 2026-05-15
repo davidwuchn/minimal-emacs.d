@@ -17,13 +17,25 @@
   :type 'directory
   :group 'gptel-tools-agent)
 
+(defvar gptel-tools-memory--cached-root nil
+  "Cached project root to avoid repeated lookups.")
+
 (defun gptel-tools-memory--project-root ()
-  "Return project root or default-directory."
-  (or (and (fboundp 'gptel-auto-workflow--project-root)
-           (gptel-auto-workflow--project-root))
-      (and (fboundp 'project-root)
-           (project-root (project-current)))
-      default-directory))
+  "Return project root or default-directory.
+Uses caching to avoid repeated filesystem lookups."
+  (if (and gptel-tools-memory--cached-root
+           (stringp gptel-tools-memory--cached-root))
+      gptel-tools-memory--cached-root
+    (setq gptel-tools-memory--cached-root
+          (or (and (fboundp 'gptel-auto-workflow--project-root)
+                   (gptel-auto-workflow--project-root))
+              (and (fboundp 'project-root)
+                   (project-root (project-current)))
+              default-directory))))
+
+(defun gptel-tools-memory--invalidate-cache ()
+  "Invalidate cached project root. Call when project changes."
+  (setq gptel-tools-memory--cached-root nil))
 
 (defun gptel-tools-memory--resolve-path (slug &optional knowledge-p)
   "Resolve SLUG to an absolute file path.
@@ -69,23 +81,20 @@ Returns success message or error."
   (let* ((root (gptel-tools-memory--project-root))
          (mem-dir (expand-file-name gptel-tools-memory-dir root))
          (know-dir (expand-file-name gptel-tools-memory-knowledge-dir root))
-         (results '()))
-    (dolist (dir (list mem-dir know-dir))
-      (when (file-directory-p dir)
-        (let ((files (directory-files-recursively dir "\\.md$")))
-          (dolist (f files)
-            (let* ((rel (file-relative-name f root))
-                   (name (file-name-sans-extension
-                          (file-relative-name f dir))))
-              (when (or (not topic)
-                        (string-match-p (regexp-quote topic) name))
-                (push (format "%s (%s)"
-                              name
-                              (if (string-prefix-p "mementum/knowledge" rel)
-                                  "knowledge" "memory"))
-                      results)))))))
+         (results (cl-loop for dir in (list mem-dir know-dir)
+                          when (file-directory-p dir)
+                          append (cl-loop for f in (directory-files-recursively dir "\\.md$")
+                                         for rel = (file-relative-name f root)
+                                         for name = (file-name-sans-extension (file-relative-name f dir))
+                                         when (or (not topic)
+                                                  (string-match-p (regexp-quote topic) name))
+                                         collect (format "%s (%s)"
+                                                        name
+                                                        (if (string-prefix-p "mementum/knowledge" rel)
+                                                            "knowledge" "memory"))))))
     (if results
-        (format "Available memories (%d):\n%s" (length results)
+        (format "Available memories (%d):\n%s"
+                (length results)
                 (string-join (sort results #'string<) "\n"))
       "No memories found.")))
 
