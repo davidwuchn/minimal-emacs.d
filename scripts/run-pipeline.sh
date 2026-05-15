@@ -83,7 +83,7 @@ wait_for_idle() {
         elif [ "$socket_name" = "copilot-researcher" ]; then
             # Researcher daemon is persistent; wait for findings file instead
             if [ -f "$FINDINGS_FILE" ] && [ "$(wc -c < "$FINDINGS_FILE" 2>/dev/null || echo 0)" -gt 100 ]; then
-                findings_mtime="$(stat -f %m "$FINDINGS_FILE" 2>/dev/null || stat -c %Y "$FINDINGS_FILE" 2>/dev/null || echo 0)"
+                findings_mtime="$(stat -c %Y "$FINDINGS_FILE" 2>/dev/null || stat -f %m "$FINDINGS_FILE" 2>/dev/null || echo 0)"
                 if [ "$findings_mtime" -ge "$PIPELINE_START_TIME" ]; then
                     log "$action completed after ${elapsed}s (findings file ready)"
                     return 0
