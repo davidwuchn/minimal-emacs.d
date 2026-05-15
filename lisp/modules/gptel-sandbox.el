@@ -763,6 +763,8 @@ can consume lists, vectors, plists, and alists as readable data."
     (error "Programmatic sandbox execute-tool requires a function callback, got: %S" callback))
   (unless (proper-list-p state)
     (error "Programmatic sandbox execute-tool requires a proper plist state, got: %S" state))
+  (unless (hash-table-p env)
+    (error "Programmatic sandbox execute-tool requires a hash table env, got: %S" env))
   (unless (or (symbolp tool-name) (stringp tool-name))
     (error "Programmatic tool name must be a symbol or string, got: %S" tool-name))
   (let* ((tool-spec (if (fboundp 'gptel-get-tool)
