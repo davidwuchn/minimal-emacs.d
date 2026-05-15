@@ -126,6 +126,43 @@
     (should (= (plist-get result :correct) 1))
     (should (= (plist-get result :total) 1))))
 
+(ert-deftest regression/research-benchmark/controller-rules-normalize-generated-aliases ()
+  "Generated rules should accept prompt aliases and source comparisons."
+  (let ((rules '((:when (and own-priority ext-priority (< ema-conf 0.55))
+                  :then continue)
+                 (:when (and (= source 'external) (< ema-conf 0.45))
+                  :then branch)
+                 (:when (and (= source "own-repo") (> ema-conf 0.55))
+                  :then stop))))
+    (should
+     (gptel-auto-workflow--validate-controller-rules
+      rules
+      '(:own-repo-priority 0.85
+        :external-priority 0.15
+        :token-budget 8000)))
+    (should
+     (equal (plist-get (cadr (gptel-auto-workflow--normalize-controller-rules rules))
+                       :when)
+            '(and (equal source "external") (< ema-conf 0.45))))))
+
+(ert-deftest regression/research-benchmark/controller-rules-evaluate-source-equality ()
+  "Offline rule evaluation should not reject numeric source equality variants."
+  (let ((result (gptel-auto-workflow--evaluate-controller-rules
+                 '((:when (and (= source 'external) (< ema-conf 0.45)) :then branch)
+                   (:when t :then continue))
+                 (list '(:output-length 1200
+                         :confidence 0.3
+                         :ema-conf 0.3
+                         :ema-delta -0.1
+                         :turn-count 1
+                         :source "external"
+                         :outcomes ((:kept :json-false))
+                         :success-p nil))
+                 '(:external-priority 0.15
+                   :token-budget 8000))))
+    (should (= (plist-get result :correct) 1))
+    (should (= (plist-get result :total) 1))))
+
 (ert-deftest regression/research-benchmark/held-out-validation-does-not-require-training-results ()
   "Held-out validation should not call undefined training-result helpers."
   (let ((result (gptel-auto-workflow--validate-on-held-out
