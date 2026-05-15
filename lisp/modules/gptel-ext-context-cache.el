@@ -99,17 +99,6 @@ Used to prevent cache from exceeding max-size by checking count before insertion
   "Atomic counter tracking `my/gptel--token-estimate-cache' entry count.
 Used to prevent cache from exceeding max-size by checking count before insertion.")
 
-(defun my/gptel--cache-maybe-evict (cache-sym count-sym max-size)
-  "Evict CACHE-SYM if (symbol-value COUNT-SYM) >= MAX-SIZE.
-COUNT-SYM is a symbol whose value is the current cache size.
-Returns t if evicted, nil otherwise.
-BEHAVIOR: Clears the entire cache when capacity is reached.
-EDGE CASE: Uses actual hash-table-count for accurate size tracking."
-  (when (>= (symbol-value count-sym) max-size)
-    (clrhash (symbol-value cache-sym))
-    (set count-sym 0)
-    t))
-
 (defvar my/gptel--context-window-cache-last-refresh nil
   "Time (as a float) when the cache was last refreshed.")
 
