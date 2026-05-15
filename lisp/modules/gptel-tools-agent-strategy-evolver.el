@@ -734,12 +734,17 @@ Returns new strategy name or nil if rejected."
                                (format "%s" new-name)
                                (mapconcat #'identity (plist-get final-prototype :errors) ", "))
                       nil)
-              (gptel-auto-workflow--load-strategy new-name)
-              (message "[strategy-evolution] ACCEPTED %s (axis %s) from %d candidates"
-                       (format "%s" new-name)
-                       (format "%s" axis)
-                       (length valid-candidates))
-              new-name)))))))))
+                  (if (gptel-auto-workflow--load-strategy new-name)
+                      (progn
+                        (message "[strategy-evolution] ACCEPTED %s (axis %s) from %d candidates"
+                                 (format "%s" new-name)
+                                 (format "%s" axis)
+                                 (length valid-candidates))
+                        new-name)
+                    (progn
+                      (message "[strategy-evolution] REJECTED %s: Load failed after file write"
+                               (format "%s" new-name))
+                      nil))))))))))
 
 ;;; Periodic Strategy Evolution
 
