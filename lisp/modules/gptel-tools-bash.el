@@ -151,23 +151,6 @@ Returns t if safe, or a string explaining why it was rejected."
 
 ;;; Internal Helpers
 
-(defun my/gptel--bash-context-signature (&optional buffer)
-  "Return the persistent bash context signature for BUFFER."
-  (let ((context-env (my/gptel--bash-context-environment buffer)))
-    (list :directory (my/gptel--bash-context-directory buffer)
-          :env (seq-filter #'my/gptel--bash-context-entry-p context-env))))
-
-(defun my/gptel--reset-persistent-bash ()
-  "Terminate the current persistent bash process, if any."
-  (when (process-live-p my/gptel--persistent-bash-process)
-    (ignore-errors
-      (set-process-filter my/gptel--persistent-bash-process #'ignore))
-    (ignore-errors
-      (set-process-sentinel my/gptel--persistent-bash-process #'ignore))
-    (ignore-errors
-      (delete-process my/gptel--persistent-bash-process)))
-  (setq my/gptel--persistent-bash-process nil))
-
 (defun my/gptel--ensure-persistent-bash ()
   "Create a persistent background bash process if one doesn't exist or died.
 Sets `my/gptel--persistent-bash-process' to a live process with TERM=dumb.

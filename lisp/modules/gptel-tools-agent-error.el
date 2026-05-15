@@ -94,7 +94,7 @@ name strings."
 Returns PRESET unchanged if CANDIDATE is nil or malformed."
   (if (or (null candidate) (not (consp candidate)))
       preset
-    (let ((effective-preset (or preset nil)))
+    (let ((effective-preset preset))
       (unless (or (null effective-preset) (plistp effective-preset))
         (error "gptel-auto-workflow--rewrite-subagent-provider: preset must be a plist or nil, got: %S" effective-preset))
       (let* ((override (copy-sequence effective-preset))
