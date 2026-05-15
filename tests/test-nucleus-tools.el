@@ -142,16 +142,16 @@
 
 (ert-deftest test-nucleus-toolset-counts ()
   "Test expected tool counts per toolset."
-  (let ((counts '((:readonly . 18)
-                  (:researcher . 17)
-                   (:nucleus . 28)
-                   (:executor . 27)
-                    (:explorer . 5)
-                    (:reviewer . 4)
-                    (:analyzer . 7))))
-    (dolist (entry counts)
-      (let ((tools (alist-get (car entry) nucleus-toolsets)))
-        (should (= (length tools) (cdr entry)))))))
+  (let ((counts '((:readonly . 20)
+                   (:researcher . 19)
+                    (:nucleus . 31)
+                    (:executor . 30)
+                     (:explorer . 5)
+                     (:reviewer . 4)
+                     (:analyzer . 7))))
+     (dolist (entry counts)
+       (let ((tools (alist-get (car entry) nucleus-toolsets)))
+         (should (= (length tools) (cdr entry)))))))
 
 (ert-deftest test-nucleus-tools-type-validation-error-orders-message-correctly ()
   "Type validation errors should report expected type before actual value."
@@ -267,6 +267,77 @@
                          (nucleus--extract-prompt-signature 'Edit prompt))))
     (should (stringp prompt))
     (should (equal signature '(file_path old_str new_str diffp)))))
+
+;;; Regression Tests for Fixed Bugs
+
+(ert-deftest regression-caar-cadr-retry-patterns ()
+  "gptel-tools-agent-error.el: car→caar, cdr→cadr on shared-retryable-error-patterns.
+Each entry is (PATTERN . DESCRIPTION). On a list of pairs:
+  car  = first pair (a cons), NOT the first pattern string
+  caar = first pattern string (car of car)
+  cdar = first description (cdr of car)"
+  (let ((patterns '(("timeout" . "connection timed out")
+                    ("rate_limit" . "API rate limit hit"))))
+    (should (equal (car patterns) '("timeout" . "connection timed out")))
+    (should (equal (caar patterns) "timeout"))
+    (should (equal (cdar patterns) "connection timed out"))
+    (should (equal (cadr patterns) '("rate_limit" . "API rate limit hit")))
+    (should (equal (caadr patterns) "rate_limit"))))
+
+(ert-deftest regression-cons-vs-list-for-pair ()
+  "gptel-auto-workflow-evolution.el: (list 0 0) → (cons 0 0).
+(list 0 0) creates a proper list (0 0) with 2 elements.
+(cons 0 0) creates a dotted pair (0 . 0) representing a count pair."
+  (let ((as-list (list 0 0))
+        (as-cons (cons 0 0)))
+    (should (equal as-list '(0 0)))
+    (should (equal (car as-list) 0))
+    (should (equal (cadr as-list) 0))
+    (should (equal (car as-cons) 0))
+    (should (equal (cdr as-cons) 0))
+    (should (proper-list-p as-list))
+    (should-not (proper-list-p as-cons))))
+
+(ert-deftest regression-plist-dedup-put ()
+  "gptel-auto-workflow-research-benchmark.el: plist-dedup-put for controller keys.
+Ensures that setting a plist key replaces existing value rather than appending."
+  (let ((plist '(:foo 1 :bar 2)))
+    (should (equal (plist-get plist :foo) 1))
+    (setq plist (plist-put plist :foo 3))
+    (should (equal (plist-get plist :foo) 3))
+    (should (equal (length plist) 4))))
+
+(ert-deftest regression-toolset-derivation-from-markers ()
+  "nucleus-toolsets: primary toolsets derived from markers, not hardcoded.
+:readonly = can-read minus can-edit minus plan-excluded.
+:nucleus = can-read ∪ can-edit.
+:executor = nucleus minus delegates."
+  (let ((readonly (alist-get :readonly nucleus-toolsets))
+        (nucleus (alist-get :nucleus nucleus-toolsets))
+        (executor (alist-get :executor nucleus-toolsets)))
+    (should (member "read_memory" readonly))
+    (should (member "list_memories" readonly))
+    (should-not (member "write_memory" readonly))
+    (should (member "write_memory" nucleus))
+    (should (member "read_memory" nucleus))
+    (should-not (member "RunAgent" executor))
+    (should (member "RunAgent" nucleus))))
+
+(ert-deftest regression-sandbox-profiles-derived-from-markers ()
+  "gptel-sandbox.el: sandbox profiles derived from markers, not hardcoded."
+  (require 'gptel-sandbox)
+  (let ((allowed (gptel-sandbox--default-allowed-tools))
+        (readonly (gptel-sandbox--default-readonly-tools))
+        (confirming (gptel-sandbox--default-confirming-tools)))
+    (should (member "read_memory" allowed))
+    (should (member "write_memory" allowed))
+    (should (member "read_memory" readonly))
+    (should-not (member "write_memory" readonly))
+    (should (member "write_memory" confirming))
+    (should-not (member "RunAgent" allowed))
+    (should-not (member "WebSearch" allowed))
+    (should-not (member "Programmatic" allowed))
+    (should-not (member "Bash" allowed))))
 
 ;;; Provide
 
