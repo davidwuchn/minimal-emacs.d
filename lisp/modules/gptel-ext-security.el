@@ -25,6 +25,10 @@
     ("Grep" (nth 1 args))
     ("Glob" (if (> (length args) 1) (nth 1 args) default-directory))
     ("Preview" (nth 0 args))
+    ("Code_Map" (nth 0 args))
+    ("Code_Inspect" (nth 0 args))
+    ("Diagnostics" (nth 0 args))
+    ("ApplyPatch" (nth 0 args))
     (_ nil)))
 
 (defun my/gptel-tool-acl-check (tool-name args)

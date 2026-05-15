@@ -1030,14 +1030,7 @@ Data is written directly to var/tmp/evolution/token-efficiency.md."
   (message "[evolution] Token-efficiency data updated in var/tmp/evolution/")
   t)
 
-(defun gptel-auto-workflow--load-directive-skill ()
-  "Load evolved directive skill content.
-Returns string or empty string if not found.
-Uses standard skill loader for consistency."
-  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/DIRECTIVE")))
-    (if (string-empty-p content)
-        ""
-      content)))
+(declare-function gptel-auto-workflow--load-directive-skill "gptel-auto-workflow-strategic" ())
 
 ;;; ─── Dynamic Content Generators ───
 

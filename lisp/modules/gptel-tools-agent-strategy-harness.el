@@ -6,6 +6,8 @@
 (defvar gptel-auto-workflow--generation-count)
 (defvar gptel-auto-workflow--strategy-active-test-set)
 
+(declare-function gptel-auto-workflow--discover-targets "gptel-auto-workflow-strategic" ())
+
 ;;; Commentary:
 ;; This module evolves the PROMPT BUILDING STRATEGY itself, not just filling templates.
 ;; Strategies are stored as files in assistant/strategies/prompt-builders/
@@ -464,16 +466,6 @@ preferring the active strategy when it has no evaluations yet."
       "template-default"))))
 
 ;;; Target Discovery for Cross-Target Strategies
-
-(defun gptel-auto-workflow--discover-targets ()
-  "Discover all potential optimization targets.
-Returns list of target file paths."
-  (let ((targets '())
-        (modules-dir (expand-file-name "lisp/modules" (gptel-auto-workflow--project-root))))
-    (when (file-directory-p modules-dir)
-      (dolist (file (directory-files modules-dir t "\\.el$"))
-        (push (file-relative-name file (gptel-auto-workflow--project-root)) targets)))
-    targets))
 
   (defun gptel-auto-workflow--synthesize-global-patterns (_targets)
   "Synthesize patterns across all TARGETS from TSV history.
