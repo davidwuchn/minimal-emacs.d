@@ -221,9 +221,12 @@ Execute the mutation."
 (defun gptel-benchmark-evolution-mutate (act-result)
   "Generate mutation output from ACT-RESULT.
 This becomes input for next cycle."
-  (format "Evolution cycle %d: %s"
-          (plist-get gptel-benchmark-evolution-state :cycle)
-          (plist-get act-result :principle)))
+  (let* ((cycle (plist-get gptel-benchmark-evolution-state :cycle))
+         (principle (plist-get act-result :principle))
+         (output (format "Evolution cycle %d: %s" cycle principle)))
+    ;; Update state with last mutation for feed-forward metadata
+    (setf (plist-get gptel-benchmark-evolution-state :last-mutation) principle)
+    output))
 
 ;;; Feed Forward
 
