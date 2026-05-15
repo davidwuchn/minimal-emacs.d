@@ -13,6 +13,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'gptel)
+(require 'nucleus-tools)
 (require 'md5)
 
 (defcustom my/gptel-tool-repair-enabled t
@@ -271,13 +272,15 @@ streak should be treated as a stuck turn."
   :type 'integer
   :group 'gptel)
 
-(defconst my/gptel--inspection-tools
-  '("Code_Inspect" "Code_Map" "Code_Usages" "Read" "Grep")
-  "Read-only tools that contribute to same-file inspection thrash.")
+(defsubst my/gptel--inspection-tools ()
+  "Read-only tools that contribute to same-file inspection thrash.
+Derived from nucleus-tool-markers :symbolic plus Read and Grep."
+  (append (nucleus-tools-with-marker :symbolic) '("Read" "Grep")))
 
-(defconst my/gptel--write-tools
-  '("ApplyPatch" "Edit" "Insert" "Mkdir" "Move" "Write")
-  "Tools that reset inspection-thrash tracking because they can change files.")
+(defsubst my/gptel--write-tools ()
+  "Tools that reset inspection-thrash tracking because they can change files.
+Derived from nucleus-tool-markers :can-edit."
+  (nucleus-tools-with-marker :can-edit))
 
 (defun my/gptel--safe-serialize-args (args)
   "Return a safe string representation of ARGS for fingerprinting.
@@ -310,7 +313,7 @@ each unserializable call gets a unique fingerprint."
   (when (proper-list-p tc)
     (let ((name (plist-get tc :name))
           (args (plist-get tc :args)))
-      (when (and (member name my/gptel--inspection-tools)
+      (when (and (member name (my/gptel--inspection-tools))
                  (proper-list-p args))
         (or (plist-get args :file_path)
             (plist-get args :path))))))
@@ -406,7 +409,7 @@ to a write-capable tool."
           (let* ((name (plist-get tc :name))
                   (file (my/gptel--inspection-tool-target tc)))
             (cond
-             ((member name my/gptel--write-tools)
+             ((member name (my/gptel--write-tools))
               (setq current-file nil
                     current-run 0)
               (setf (gptel-fsm-info fsm)

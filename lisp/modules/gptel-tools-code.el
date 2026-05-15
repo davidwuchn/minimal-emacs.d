@@ -491,9 +491,10 @@ NEW-CODE must also be non-empty."
    ((string-empty-p new-code)
     (error "gptel-tools-code--validate-replace-args: new_code is empty"))))
 
-(defun gptel-tools-code--map-file (file_path)
+(defun gptel-tools-code--map-file (file_path &optional max_answer_chars)
   "Get a high-level outline of all functions and classes in FILE_PATH.
-Returns a formatted string with the file map, or an error message."
+Returns a formatted string with the file map, or an error message.
+MAX_ANSWER_CHARS limits output length with progressive shortening."
   (cond
    ((not file_path)
     (error "gptel-tools-code--map-file: file_path is nil"))
@@ -505,10 +506,27 @@ Returns a formatted string with the file map, or an error message."
           (let ((parser-error (gptel-tools-code--ensure-treesit-ready file_path "Read/Grep for this file")))
             (if parser-error
                 parser-error
-              (let ((map (treesit-agent-get-file-map)))
-                (if map
-                    (format "File map for %s:\n%s" file_path (string-join map "\n"))
-                  (format "Could not generate file map for %s.\n\nACTION: Check if tree-sitter is enabled for this file type.\n  - Run: M-x treesit-install-language-grammar RET <language> RET\n  - Verify: M-x eval-expression RET (treesit-language-available-p '<lang>) RET" file_path)))))))
+              (let* ((map (treesit-agent-get-file-map))
+                     (full-result (when map
+                                    (format "File map for %s:\n%s" file_path (string-join map "\n"))))
+                     (max-chars (or max_answer_chars
+                                    (bound-and-true-p nucleus-tool-max-answer-chars)
+                                    4000)))
+                (cond
+                 ((not map)
+                  (format "Could not generate file map for %s.\n\nACTION: Check if tree-sitter is enabled for this file type.\n  - Run: M-x treesit-install-language-grammar RET <language> RET\n  - Verify: M-x eval-expression RET (treesit-language-available-p '<lang>) RET" file_path))
+                 ((fboundp 'nucleus-limit-result-length)
+                  (nucleus-limit-result-length
+                   full-result max-chars
+                   (list (lambda ()
+                           (format "File map for %s (%d symbols):\n%s"
+                                   file_path (length map)
+                                   (string-join (seq-take map (min (length map) 20)) "\n")))
+                         (lambda ()
+                           (format "File map for %s: %d symbols (showing first 10)\n%s"
+                                   file_path (length map)
+                                   (string-join (seq-take map 10) "\n"))))))
+                 (t full-result)))))))
     (error (let* ((msg (error-message-string err))
                   (friendly (my/gptel--treesit-error-message msg file_path)))
              (or friendly

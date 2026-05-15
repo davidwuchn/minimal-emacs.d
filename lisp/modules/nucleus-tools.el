@@ -39,6 +39,114 @@ When enabled, validates:
   :type 'boolean
   :group 'nucleus-tools)
 
+;;; Tool Markers (Traits)
+
+;; Inspired by Serena's ToolMarker system. Each tool can carry multiple markers
+;; that declare its capabilities, enabling trait-based toolset derivation instead
+;; of hardcoded name lists.
+
+(defconst nucleus-tool-markers
+  '((:can-edit . ("ApplyPatch" "Edit" "Insert" "Mkdir" "Move" "Write"
+                   "Code_Replace" "create_skill"))
+    (:can-read . ("Bash" "Eval" "Glob" "Grep" "Read" "Programmatic"
+                   "WebFetch" "WebSearch" "YouTube"
+                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                   "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"
+                   "Skill" "TodoWrite" "RunAgent" "Preview"))
+    (:symbolic . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
+                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"))
+    (:web . ("WebFetch" "WebSearch" "YouTube"))
+    (:delegates . ("RunAgent"))
+    (:requires-project . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
+                           "Diagnostics" "find_buffers_and_recent"
+                           "describe_symbol" "get_symbol_source"))
+    (:plan-excluded . ("YouTube" "Preview")))
+  "Marker traits for each registered tool.
+
+:can-edit      — Tool modifies files or system state (requires confirmation)
+:can-read      — Tool reads/queries without side effects
+:symbolic      — Tool operates at symbol/code-structure level
+:web           — Tool accesses external web resources
+:delegates     — Tool delegates to sub-agents
+:requires-project — Tool needs an active project context
+:plan-excluded — Tool excluded from plan/readonly mode even though read-only
+
+A tool may carry multiple markers. Markers enable:
+  - Deriving toolsets by marker inclusion/exclusion
+  - Unified classification replacing scattered lists
+  - Conditional prompt generation based on available markers")
+
+(defun nucleus-tools-with-marker (marker)
+  "Return list of tool names carrying MARKER."
+  (or (alist-get marker nucleus-tool-markers) '()))
+
+(defun nucleus-tool-has-marker-p (tool-name marker)
+  "Return non-nil if TOOL-NAME carries MARKER."
+  (member tool-name (nucleus-tools-with-marker marker)))
+
+(defun nucleus-tools-with-any-marker (&rest markers)
+  "Return tools carrying any of MARKERS (union)."
+  (seq-uniq (apply #'append (mapcar #'nucleus-tools-with-marker markers))))
+
+(defun nucleus-tools-with-all-markers (&rest markers)
+  "Return tools carrying all of MARKERS (intersection)."
+  (when markers
+    (let ((result (nucleus-tools-with-marker (car markers))))
+      (dolist (m (cdr markers) (delete-dups result))
+        (setq result (seq-intersection result (nucleus-tools-with-marker m) #'equal))))))
+
+(defun nucleus-toolset-from-markers (include exclude)
+  "Derive a toolset from marker specifications.
+
+INCLUDE is a list of markers — tools carrying ANY included marker are candidates.
+EXCLUDE is a list of markers — tools carrying ANY excluded marker are removed.
+Either may be nil.
+
+Returns a list of tool name strings."
+  (let* ((candidates (if include
+                         (apply #'nucleus-tools-with-any-marker include)
+                       (apply #'nucleus-tools-with-any-marker :can-read :can-edit)))
+         (excluded (when exclude
+                     (apply #'nucleus-tools-with-any-marker exclude))))
+     (seq-difference candidates excluded #'equal)))
+
+;;; Progressive Tool Shortening
+
+;; Inspired by Serena's _limit_length with shortened_result_factories.
+;; When a tool's output exceeds a character budget, progressively shorter
+;; summaries are tried until one fits.
+
+(defcustom nucleus-tool-max-answer-chars 4000
+  "Default maximum characters for tool results before truncation.
+Tools can override this per-call via `max_answer_chars' parameter."
+  :type 'integer
+  :group 'nucleus-tools)
+
+(defun nucleus-limit-result-length (result max-chars &optional shortened-factories)
+  "Limit RESULT to MAX-CHARS, trying SHORTENED-FACTORIES progressively.
+
+If RESULT fits within MAX-CHARS, return it unchanged.
+If too long and SHORTENED-FACTORIES is provided, try each closure
+(a zero-arg function returning a shorter string) in order until one fits.
+If none fit or no factories given, return a truncation notice."
+  (when (stringp result)
+    (let ((n-chars (length result)))
+      (if (<= n-chars max-chars)
+          result
+        (let ((too-long-msg (format "Result too long (%d chars). Refine query or adjust max_answer_chars."
+                                    n-chars)))
+          (if shortened-factories
+              (let (candidate)
+                (catch 'found
+                  (dolist (factory shortened-factories)
+                    (setq candidate (funcall factory))
+                    (when (and (stringp candidate)
+                               (<= (length candidate) max-chars))
+                      (throw 'found (concat too-long-msg "\n" candidate)))))
+                too-long-msg)
+            too-long-msg))))))
+
+
 ;;; Toolset Definitions
 
 (defconst nucleus-toolsets
