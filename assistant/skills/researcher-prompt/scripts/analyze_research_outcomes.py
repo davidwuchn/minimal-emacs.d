@@ -118,7 +118,7 @@ def analyze_topic_performance(experiments, lookback_days=30):
             date_str = exp['id'].split('T')[0] if 'T' in exp['id'] else None
             if date_str:
                 exp_date = datetime.strptime(date_str, '%Y-%m-%d')
-        except:
+        except (ValueError, KeyError, TypeError):
             pass
         
         topics = extract_topics_from_hypothesis(exp['hypothesis'])
