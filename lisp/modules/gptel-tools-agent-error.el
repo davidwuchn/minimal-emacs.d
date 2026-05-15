@@ -131,7 +131,7 @@ When SKIP-BLACKLIST is nil (the default), add the current backend to
 switch to a fallback without blacklisting (used for transient errors)."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
              (stringp agent-type)
-             (listp preset))
+             (plistp preset))
     (let* ((current-backend
             (gptel-auto-workflow--preset-backend-name
              (plist-get preset :backend)))
