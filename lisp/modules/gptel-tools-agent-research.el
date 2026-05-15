@@ -730,9 +730,5 @@ M-x gptel-mementum-synthesis-run"
   (interactive)
   (gptel-mementum-synthesize-all-candidates))
 
-(provide 'gptel-tools-agent)
-
-;;; gptel-tools-agent.el ends here
-
 (provide 'gptel-tools-agent-research)
 ;;; gptel-tools-agent-research.el ends here
