@@ -459,9 +459,9 @@ Returns nil if file doesn't exist or isn't readable."
   "Terminate all shell processes currently tracked by auto-workflow."
   (when (hash-table-p gptel-auto-workflow--active-shell-processes)
     (let (processes)
-      (maphash (lambda (process _)
-                 (push process processes))
-               gptel-auto-workflow--active-shell-processes)
+      (cl-flet ((collect-process (process _)
+                 (push process processes)))
+        (maphash #'collect-process gptel-auto-workflow--active-shell-processes))
       (clrhash gptel-auto-workflow--active-shell-processes)
       (dolist (process processes)
         (when (processp process)

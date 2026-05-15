@@ -97,11 +97,11 @@ Uses latest checkpoint for each file."
     (dolist (checkpoint gptel-benchmark-rollback-current-session)
       (let ((file (plist-get checkpoint :file)))  ; key by file path, not ID, for deduplication
         (puthash file checkpoint files-to-restore)))
-    (maphash (lambda (_file checkpoint)
-               (gptel-benchmark-rollback-restore 
+    (cl-flet ((restore-checkpoint (_file checkpoint)
+               (gptel-benchmark-rollback-restore
                 (plist-get checkpoint :file)
-                (plist-get checkpoint :id)))
-             files-to-restore)
+                (plist-get checkpoint :id))))
+      (maphash #'restore-checkpoint files-to-restore))
     (message "[rollback] Restored %d files from session" (hash-table-count files-to-restore))))
 
 ;;; History Queries

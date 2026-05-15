@@ -451,24 +451,18 @@ to ensure registry remains in valid state.
 
 Returns t on success, signals error on failure."
   (let ((fsm-counts (make-hash-table :test 'eq)))
-    ;; Single pass validation
-    (maphash (lambda (key value)
+    (cl-flet ((validate-entry (key value)
                (cond
-                ;; ID → FSM mapping
                 ((stringp key)
-                 ;; Check ID format
                  (unless (my/gptel--fsm-id-valid-p key)
                    (error "FSM registry invariant violated: invalid ID format: %s" key))
-                 ;; Check bidirectional consistency
                  (let ((expected-fsm (gethash key my/gptel--fsm-registry))
                        (expected-id (gethash value my/gptel--fsm-registry)))
                    (unless (and (eq expected-fsm value)
                                 (equal expected-id key))
                      (error "FSM registry invariant violated: bidirectional mismatch for ID %s" key)))
-                 ;; Track FSM usage count
                  (let ((count (gethash value fsm-counts 0)))
                    (puthash value (1+ count) fsm-counts)))
-                ;; FSM → ID mapping: validate ID format and bidirectional consistency
                 ((my/gptel--fsm-p key)
                  (let ((id value))
                    (unless (stringp id)
@@ -478,18 +472,15 @@ Returns t on success, signals error on failure."
                    (let ((fsm-via-id (gethash id my/gptel--fsm-registry)))
                      (unless (eq fsm-via-id key)
                        (error "FSM registry invariant violated: FSM→ID bidirectional mismatch for FSM %S (expected ID %S, got %S)" key id fsm-via-id)))
-                   ;; Track FSM usage count
                    (let ((count (gethash key fsm-counts 0)))
                      (puthash key (1+ count) fsm-counts))))
-                ;; Unknown key type is a corruption
                 (t
-                 (error "FSM registry invariant violated: unknown key type %S" key))))
-             my/gptel--fsm-registry)
-    ;; Check unique IDs
-    (maphash (lambda (fsm count)
+                 (error "FSM registry invariant violated: unknown key type %S" key)))))
+      (maphash #'validate-entry my/gptel--fsm-registry))
+    (cl-flet ((check-unique (fsm count)
                (unless (= count 1)
-                 (error "FSM registry invariant violated: FSM mapped by %d IDs" count)))
-             fsm-counts)
+                 (error "FSM registry invariant violated: FSM mapped by %d IDs" count))))
+      (maphash #'check-unique fsm-counts))
     t))
 
 (provide 'gptel-ext-fsm-utils)

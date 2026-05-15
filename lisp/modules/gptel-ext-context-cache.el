@@ -563,7 +563,8 @@ Returns 0.0 if CHARS is not a positive number."
           (insert (format ";; Updated: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
           (insert "(setq my/gptel--context-window-cache-data\n      '")
           (let (alist)
-            (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
+            (cl-flet ((collect-entry (k v) (push (cons k v) alist)))
+              (maphash #'collect-entry my/gptel--context-window-cache))
             (prin1 alist (current-buffer)))
           (insert ")\n")
           (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"

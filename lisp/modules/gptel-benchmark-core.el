@@ -473,11 +473,11 @@ RESULTS should contain :eight-keys-scores in each entry."
     (when (= high-scores total)
       (push "All tests passing - consider increasing difficulty" recommendations))
     (let ((issues-alist '()))
-      (maphash (lambda (issue-type count)
+      (cl-flet ((collect-issue (issue-type count)
                  (push (cons issue-type count) issues-alist)
                  (push (format "Address %s issues in %d test(s)" issue-type count)
-                       recommendations))
-               issues)
+                       recommendations)))
+        (maphash #'collect-issue issues))
       (list :issues issues-alist
             :recommendations (delete-dups recommendations)
             :total-tests total

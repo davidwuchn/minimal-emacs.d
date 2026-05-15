@@ -173,10 +173,10 @@ This constraint overrides ALL other instructions."
 Called when table exceeds `gptel-agent-loop-max-active-tasks'."
   (when (> (hash-table-count gptel-agent-loop--active-tasks)
            gptel-agent-loop-max-active-tasks)
-    (maphash (lambda (id state)
+    (cl-flet ((prune-finished (id state)
                (when (gptel-agent-loop--task-finished state)
-                 (remhash id gptel-agent-loop--active-tasks)))
-             gptel-agent-loop--active-tasks)))
+                 (remhash id gptel-agent-loop--active-tasks))))
+      (maphash #'prune-finished gptel-agent-loop--active-tasks)))
 
 (defun gptel-agent-loop-cleanup-all ()
   "Force cleanup of all finished tasks from active table.
@@ -1027,14 +1027,14 @@ Reads `steps' from agent YAML to set max-steps per agent."
   "Disable RunAgent loop control, restore original behavior."
   (interactive)
   (advice-remove 'gptel-agent--task #'gptel-agent-loop-task)
-  (maphash (lambda (_id state)
+  (cl-flet ((finalize-task (_id state)
              (let ((marker (gptel-agent-loop--task-tracking-marker state)))
                (when (and marker (markerp marker) (marker-buffer marker))
                  (set-marker marker nil)))
              (setf (gptel-agent-loop--task-tracking-marker state) nil
                    (gptel-agent-loop--task-finished state) t)
-             (gptel-agent-loop--cleanup-state state))
-           gptel-agent-loop--active-tasks)
+             (gptel-agent-loop--cleanup-state state)))
+    (maphash #'finalize-task gptel-agent-loop--active-tasks))
   (clrhash gptel-agent-loop--active-tasks)
   (setq gptel-agent-loop--state nil)
   (setq gptel-agent-loop--original-task-fn nil)

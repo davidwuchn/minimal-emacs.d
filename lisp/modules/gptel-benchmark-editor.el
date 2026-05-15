@@ -241,12 +241,12 @@ PATCH is a unified diff format string."
 (defun gptel-benchmark-editor-list-checkpoints ()
   "List all stored checkpoints."
   (let (result)
-    (maphash (lambda (key checkpoint)
+    (cl-flet ((collect-checkpoint (key checkpoint)
                (push (list :key key
                            :file (plist-get checkpoint :file)
                            :timestamp (plist-get checkpoint :timestamp))
-                     result))
-             gptel-benchmark-editor-checkpoints)
+                     result)))
+      (maphash #'collect-checkpoint gptel-benchmark-editor-checkpoints))
     result))
 
 (defun gptel-benchmark-editor-clear-checkpoints ()

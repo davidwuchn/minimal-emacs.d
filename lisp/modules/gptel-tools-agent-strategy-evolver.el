@@ -330,9 +330,9 @@ Returns formatted string of top 5 failure reasons, or empty string if none found
         ""
       ;; Sort by frequency and take top 5
       (let ((sorted '()))
-        (maphash (lambda (reason count)
-                   (push (cons count reason) sorted))
-                 failure-reasons)
+        (cl-flet ((collect-failure (reason count)
+                   (push (cons count reason) sorted)))
+          (maphash #'collect-failure failure-reasons))
         (setq sorted (sort sorted (lambda (a b) (> (car a) (car b)))))
         (concat "## Historical Failure Patterns for This Strategy\n"
                 (format "Total discarded experiments: %d\n" total-failures)

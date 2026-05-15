@@ -511,14 +511,14 @@ Returns formatted string of global insights."
                       (* 100 (/ (float total-kept) (+ total-kept total-discarded))))
               "Success rates by axis:\n"
               (let ((results '()))
-                (maphash (lambda (axis count)
+                (cl-flet ((format-axis-rate (axis count)
                            (let ((successes (gethash axis axis-successes 0)))
                              (push (format "- %s: %.0f%% (%d/%d)"
                                            axis
                                            (* 100 (/ (float successes) count))
                                            successes count)
-                                   results)))
-                         axis-counts)
+                                   results))))
+                  (maphash #'format-axis-rate axis-counts))
                 (mapconcat #'identity (sort results #'string<) "\n"))
               "\n\nRecommendation: Focus on high-success axes globally.\n\n"))))
 

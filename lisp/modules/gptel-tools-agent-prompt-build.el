@@ -58,12 +58,12 @@ Returns cached content or nil if missing/stale."
 
 (defun gptel-auto-workflow--knowledge-cache-stats ()
   "Return cache statistics as string."
-  (let ((count 0)
-        (total-age 0))
-     (maphash (lambda (_key entry)
+   (let ((count 0)
+         (total-age 0))
+     (cl-flet ((tally-entry (_key entry)
                 (setq count (1+ count))
-                (setq total-age (+ total-age (float-time (time-subtract (current-time) (cdr entry))))))
-              gptel-auto-workflow--knowledge-cache)
+                (setq total-age (+ total-age (float-time (time-subtract (current-time) (cdr entry)))))))
+       (maphash #'tally-entry gptel-auto-workflow--knowledge-cache))
     (format "[knowledge-cache] %d entries, avg age %.0fs"
             count (if (> count 0) (/ total-age count) 0))))
 
@@ -162,9 +162,9 @@ With sufficient data, includes only sections with positive correlation."
          (total-experiments 0)
          (effective-sections '()))
     ;; Count total experiments with section tracking
-    (maphash (lambda (_ stats)
-               (setq total-experiments (+ total-experiments (cdr stats))))
-             section-stats)
+    (cl-flet ((count-experiments (_ stats)
+               (setq total-experiments (+ total-experiments (cdr stats)))))
+      (maphash #'count-experiments section-stats))
     (cond
      ;; Not enough data: include all, occasionally omit random section for exploration
      ((< total-experiments gptel-auto-workflow--ab-test-min-samples)
@@ -1317,9 +1317,9 @@ Targets with no frontier experiments are prioritized."
         (puthash target (length frontier) target-frontiers)))
     ;; Sort by frontier size (ascending)
     (let ((sorted '()))
-      (maphash (lambda (target size)
-                 (push (cons target size) sorted))
-               target-frontiers)
+      (cl-flet ((collect-frontier (target size)
+                 (push (cons target size) sorted)))
+        (maphash #'collect-frontier target-frontiers))
       (setq sorted (sort sorted (lambda (a b) (< (cdr a) (cdr b)))))
       (if n
           (seq-take sorted n)
@@ -1500,10 +1500,10 @@ Returns plist with :counts (axis->count), :successes (axis->kept-count),
                 (puthash axis (1+ (gethash axis successes 0)) successes))))
           (forward-line 1))))
     (let ((rates (make-hash-table :test 'equal)))
-      (maphash (lambda (axis count)
+      (cl-flet ((compute-rate (axis count)
                  (let ((success-count (gethash axis successes 0)))
-                   (puthash axis (/ (float success-count) count) rates)))
-               counts)
+                   (puthash axis (/ (float success-count) count) rates))))
+        (maphash #'compute-rate counts))
       (list :counts counts
             :successes successes
             :rates rates
@@ -1633,9 +1633,9 @@ Optional N limits number of reasons (default 3)."
           (forward-line 1))))
     ;; Convert to sorted list
     (let ((pairs '()))
-      (maphash (lambda (reason count)
-                 (push (cons reason count) pairs))
-               reasons)
+      (cl-flet ((collect-reason (reason count)
+                 (push (cons reason count) pairs)))
+        (maphash #'collect-reason reasons))
       (setq pairs (sort pairs (lambda (a b) (> (cdr a) (cdr b)))))
       (seq-take pairs (or n 3)))))
 

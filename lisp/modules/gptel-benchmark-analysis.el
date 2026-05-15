@@ -90,10 +90,10 @@ RESULTS is a list of benchmark results for a single test-id."
   (let* ((data (gptel-benchmark-read-json benchmark-file))
          (test-results (gptel-benchmark--group-by-test-id data))
          (flaky-tests '()))
-    (maphash (lambda (test-id results)
+    (cl-flet ((scan-flaky (test-id results)
                (when (gptel-benchmark--flaky-test-p results)
-                 (push test-id flaky-tests)))
-             test-results)
+                 (push test-id flaky-tests))))
+      (maphash #'scan-flaky test-results))
     flaky-tests))
 
 ;;; Non-Discriminating Test Detection
@@ -114,10 +114,10 @@ RESULTS is a list of benchmark results for a single test-id."
   (let* ((data (gptel-benchmark-read-json benchmark-file))
          (test-results (gptel-benchmark--group-by-test-id data))
          (non-discriminating '()))
-    (maphash (lambda (test-id results)
+    (cl-flet ((scan-nondiscriminating (test-id results)
                (when (gptel-benchmark--non-discriminating-p results)
-                 (push test-id non-discriminating)))
-             test-results)
+                 (push test-id non-discriminating))))
+      (maphash #'scan-nondiscriminating test-results))
     non-discriminating))
 
 ;;; Systematic Failure Detection
@@ -138,10 +138,10 @@ RESULTS is a list of benchmark results for a single test-id."
   (let* ((data (gptel-benchmark-read-json benchmark-file))
          (test-results (gptel-benchmark--group-by-test-id data))
          (systematic-failures '()))
-    (maphash (lambda (test-id results)
+    (cl-flet ((scan-systematic (test-id results)
                (when (gptel-benchmark--systematic-failure-p results)
-                 (push test-id systematic-failures)))
-             test-results)
+                 (push test-id systematic-failures))))
+      (maphash #'scan-systematic test-results))
     systematic-failures))
 
 ;;; Summary Generation
