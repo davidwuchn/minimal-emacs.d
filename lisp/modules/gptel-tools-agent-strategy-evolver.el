@@ -664,22 +664,28 @@ Returns new strategy name or nil if rejected."
           ;; Check 1: Not a parameter variant
           (if (and parent-code
                    (gptel-auto-workflow--is-parameter-variant-p candidate-code parent-code))
-              (message "[strategy-evolution] REJECTED candidate: Parameter variant")
+              (progn
+                (message "[strategy-evolution] REJECTED candidate: Parameter variant")
+                nil)
 
             ;; Check 2: Prototype validation
             (let ((prototype (gptel-auto-workflow--prototype-strategy
                              candidate-code
                              "lisp/modules/gptel-tools-agent-base.el")))
               (if (not (plist-get prototype :valid))
-                  (message "[strategy-evolution] REJECTED candidate: Prototype failed: %s"
-                           (mapconcat #'identity (plist-get prototype :errors) ", "))
+                  (progn
+                    (message "[strategy-evolution] REJECTED candidate: Prototype failed: %s"
+                             (mapconcat #'identity (plist-get prototype :errors) ", "))
+                    nil)
 
                 ;; Check 3: Actually returns a non-empty string
                 (let ((output (plist-get prototype :output)))
                   (if (or (not (stringp output))
                           (< (length output) 100))
-                      (message "[strategy-evolution] REJECTED candidate: Output too short (%d chars)"
-                               (length output))
+                      (progn
+                        (message "[strategy-evolution] REJECTED candidate: Output too short (%d chars)"
+                                 (length output))
+                        nil)
 
                     ;; Valid candidate
                     (push (list :code candidate-code
@@ -701,8 +707,10 @@ Returns new strategy name or nil if rejected."
                (proposer-name (plist-get best :proposer-name))
                (new-name (gptel-auto-workflow--generate-strategy-name proposer-name)))
          (if (not new-name)
-             (message "[strategy-evolution] REJECTED candidate: Proposed name '%s' is generic (must be descriptive)"
-                      (or proposer-name "nil"))
+             (progn
+               (message "[strategy-evolution] REJECTED candidate: Proposed name '%s' is generic (must be descriptive)"
+                        (or proposer-name "nil"))
+               nil)
            (let* ((final-code (gptel-auto-workflow--strategy-code-rewrite-name
                           best-code
                           (plist-get best :name)
@@ -719,13 +727,13 @@ Returns new strategy name or nil if rejected."
                  (gptel-auto-workflow--prototype-strategy
                   final-code
                   "lisp/modules/gptel-tools-agent-base.el")))
-            (if (not (plist-get final-prototype :valid))
-                (progn
-                  (delete-file strategy-file)
-                   (message "[strategy-evolution] REJECTED %s: Final prototype failed: %s"
-                            (format "%s" new-name)
-                            (mapconcat #'identity (plist-get final-prototype :errors) ", "))
-                  nil)
+                (if (not (plist-get final-prototype :valid))
+                    (progn
+                      (delete-file strategy-file)
+                      (message "[strategy-evolution] REJECTED %s: Final prototype failed: %s"
+                               (format "%s" new-name)
+                               (mapconcat #'identity (plist-get final-prototype :errors) ", "))
+                      nil)
               (gptel-auto-workflow--load-strategy new-name)
               (message "[strategy-evolution] ACCEPTED %s (axis %s) from %d candidates"
                        (format "%s" new-name)

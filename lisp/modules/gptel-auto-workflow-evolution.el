@@ -744,6 +744,16 @@ Returns hash table mapping strategy name to list of results."
           (puthash strategy (cons r (gethash strategy by-strategy)) by-strategy))))
     by-strategy))
 
+(defun gptel-auto-workflow--sanitize-strategy-name-for-filename (name)
+  "Sanitize strategy NAME for use as a filename component.
+Replaces characters unsafe in filenames (brackets, quotes, spaces, colons,
+semicolons, pipes) with hyphens, collapses multiple hyphens, and strips
+leading/trailing hyphens."
+  (let ((s (replace-regexp-in-string "[][{}()'\" \t:;|<>/*?\\%!#&]" "-" (or name "none"))))
+    (setq s (replace-regexp-in-string "-+" "-" s))
+    (setq s (replace-regexp-in-string "^-\\|-$" "" s))
+    (if (string-empty-p s) "none" s)))
+
 (defun gptel-auto-workflow--synthesize-research-knowledge (strategy results)
   "Synthesize knowledge page for research STRATEGY from RESULTS.
 Returns t if page created."
@@ -752,10 +762,11 @@ Returns t if page created."
          (discarded (cl-count-if (lambda (r) (equal (plist-get r :decision) "discarded")) results))
          (failed (cl-count-if (lambda (r) (equal (plist-get r :decision) "validation-failed")) results))
          (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
+         (safe-strategy (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy))
          (knowledge-dir (expand-file-name "mementum/knowledge"
                                           (gptel-auto-workflow--worktree-base-root)))
          (knowledge-file (expand-file-name
-                          (format "research-insights-%s.md" strategy)
+                          (format "research-insights-%s.md" safe-strategy)
                           knowledge-dir)))
     (when (> total 2)
       (make-directory knowledge-dir t)
