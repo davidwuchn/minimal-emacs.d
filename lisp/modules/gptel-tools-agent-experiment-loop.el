@@ -524,12 +524,16 @@ Relative paths are resolved from the project root."
     ;; idle placeholder view of workflow state. The shell wrapper already owns
     ;; stale-active detection; this guard prevents bogus idle rewrites with
     ;; synthetic run ids while a real run is still active elsewhere.
-    (when (and (not gptel-auto-workflow--force-idle-status-overwrite)
-               (gptel-auto-workflow--status-placeholder-p status)
-               (gptel-auto-workflow--status-active-p existing-status)
-               (not (gptel-auto-workflow--status-owned-by-current-run-p
-                     existing-status)))
-      (setq status existing-status))
+    ;; Use condition-case to handle stale native-comp function signature errors.
+    (condition-case err
+        (when (and (not gptel-auto-workflow--force-idle-status-overwrite)
+                   (gptel-auto-workflow--status-placeholder-p status)
+                   (gptel-auto-workflow--status-active-p existing-status)
+                   (not (gptel-auto-workflow--status-owned-by-current-run-p
+                         existing-status)))
+          (setq status existing-status))
+      (error
+       (message "[auto-workflow] Status guard error (native-comp stale?): %s" err)))
     (when dir
       (make-directory dir t))
     (with-temp-file file

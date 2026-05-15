@@ -389,13 +389,14 @@ When ERRORED is non-nil, preserve the existing error phase."
         gptel-auto-workflow--cron-job-timer nil)
   (let ((phase (plist-get gptel-auto-workflow--stats :phase)))
     (when (and (not errored)
-               (not (bound-and-true-p gptel-auto-workflow--running))
-               (member phase (list label
-                                   (format "%s-queued" label)
-                                   "selecting"
-                                   "running")))
-      (setq gptel-auto-workflow--stats
-            (plist-put gptel-auto-workflow--stats :phase "idle"))))
+               (not (bound-and-true-p gptel-auto-workflow--running)))
+      (cond
+       ((member phase (list label (format "%s-queued" label) "selecting" "running"))
+        (setq gptel-auto-workflow--stats
+              (plist-put gptel-auto-workflow--stats :phase "complete")))
+       ((not (member phase '("complete" "quota-exhausted" "error" "idle")))
+        (setq gptel-auto-workflow--stats
+              (plist-put gptel-auto-workflow--stats :phase "idle"))))))
   (when (fboundp 'gptel-auto-workflow--persist-status)
     (gptel-auto-workflow--persist-status)))
 
