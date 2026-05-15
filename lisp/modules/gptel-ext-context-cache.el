@@ -338,7 +338,7 @@ for a partial match (case-insensitive).  Returns nil if not found.
 Handles negative cache hits when KEY maps to a miss sentinel.
 Validates that cached values are positive integers or normalizable numbers before returning."
   (when (and (stringp key) (not (string-empty-p key)))
-    (if (and (hash-table-p hash-table) (listp alist))
+    (if (and (hash-table-p hash-table) (proper-list-p alist))
         (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
           (cond
            ((eq hash-value my/gptel--cache-sentinel)
@@ -358,7 +358,8 @@ Validates that cached values are positive integers or normalizable numbers befor
               normalized))
            (t
             (my/gptel--cache-or-alist-fallback hash-table alist key))))
-      (my/gptel--alist-partial-match alist key))))
+      (when (proper-list-p alist)
+        (my/gptel--alist-partial-match alist key)))))
 
 (defun my/gptel--cache-or-alist-fallback (hash-table alist key)
   "Look up KEY in ALIST and cache the result in HASH-TABLE.
@@ -384,7 +385,7 @@ Returns the cdr (value) of the matching entry, or nil if no match.
 Matches if the alist key is a prefix of SEARCH-STR.
 When multiple entries match, returns the one with the longest key for most specific match.
 Results are cached in `my/gptel--alist-partial-match-cache' for performance."
-  (when (and alist (listp alist) (stringp search-str) (not (string-empty-p search-str)))
+  (when (and alist (proper-list-p alist) (stringp search-str) (not (string-empty-p search-str)))
     (let* ((alist-id (sxhash alist))
            (cache-key (cons alist-id search-str)))
       (let ((cached (gethash cache-key my/gptel--alist-partial-match-cache)))
@@ -447,7 +448,7 @@ to avoid repeated table scans and redundant lookups."
                 (let ((result (catch 'found
                                 (dolist (var (my/gptel--gptel-model-tables))
                                   (let ((table (symbol-value var)))
-                                    (when (listp table)
+                                    (when (proper-list-p table)
                                       (let ((entry (assoc-string model-str table t)))
                                         (when (and (consp entry) (proper-list-p (cdr entry))
                                                    (plist-member (cdr entry) :context-window))
