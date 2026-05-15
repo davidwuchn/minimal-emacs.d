@@ -24,16 +24,19 @@
 (declare-function gptel-auto-workflow--alist-to-sandbox-env "strategic-daemon-functions")
 (declare-function gptel-auto-workflow--eval-rule-sandbox "strategic-daemon-functions")
 
+(defvar gptel-auto-workflow--active-strategy)
+(defvar gptel-auto-workflow--pending-outcome-updates)
+(defvar gptel-auto-workflow--outcome-evolution-threshold)
+
 (defun gptel-auto-workflow--plist-dedup-put (plist key value)
   "Like `plist-put' but removes duplicate KEY before inserting.
 Prevents plist key accumulation across successive plist-put calls
 on shared plists where `copy-sequence' preserves old keys."
   (let ((cleaned nil)
-        (rest plist)
-        (found nil))
+        (rest plist))
     (while rest
       (if (eq (car rest) key)
-          (progn (setq found t) (pop rest) (pop rest))
+          (progn (pop rest) (pop rest))
         (push (pop rest) cleaned)
         (when rest (push (pop rest) cleaned))))
     (setq cleaned (nreverse cleaned))
@@ -480,8 +483,7 @@ TRACES is list of trace plists."
       (let ((source (gptel-auto-workflow--trace-source trace))
             (output-length (or (plist-get trace :output-length) 0))
             (tokens-used (or (plist-get trace :tokens-used) 0))
-            (has-urls (plist-get trace :has-urls))
-            (confidence (or (plist-get trace :confidence) 0)))
+            (has-urls (plist-get trace :has-urls)))
         (setq total-tokens (+ total-tokens tokens-used))
         (setq total-output (+ total-output output-length))
         (cond
@@ -872,7 +874,7 @@ not just tunes parameters. The search space is the code itself."
        (list :best-controller best-controller :best-objective best-objective :history history))))
 
 
-(defun gptel-auto-workflow--controller-design-prompt (current-controller best-controller 
+(defun gptel-auto-workflow--controller-design-prompt (current-controller _best-controller 
                                                        best-objective train-traces iter max-iters)
   "Generate prompt for controller design agent."
   (let* ((trace-summary (gptel-auto-workflow--summarize-traces-for-prompt train-traces))
@@ -1102,9 +1104,8 @@ This is an OFFLINE evaluation — 0 LLM calls."
              (turn-count (or (plist-get trace :turn-count) 1))
              (success (gptel-auto-workflow--trace-success-p trace))
              (stop-threshold (plist-get config :min-confidence-stop))
-             (branch-threshold (plist-get config :branch-threshold))
              (delta-slack 0.01)
-             (trend-threshold (plist-get config :branch-threshold))
+             (trend-threshold (plist-get config :trend-threshold))
              ;; Simulate CMC decision for this trace
              (would-stop (and (>= ema-conf (or stop-threshold 0.7))
                               (>= ema-delta (- (or delta-slack 0.02)))))

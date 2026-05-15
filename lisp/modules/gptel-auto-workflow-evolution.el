@@ -1347,8 +1347,7 @@ with kept experiments, and updates the researcher prompt accordingly."
     ;; Count experiments by research quality
     (dolist (r results)
       (let ((quality (or (plist-get r :research-quality) "none"))
-            (decision (plist-get r :decision))
-            (hash (or (plist-get r :research-hash) "none")))
+            (decision (plist-get r :decision)))
         (when (and quality (not (string= quality "none")))
           (let ((current (or (gethash quality by-quality)
                               (let ((c (cons 0 0)))

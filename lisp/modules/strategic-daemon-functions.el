@@ -11,6 +11,12 @@
 
 (declare-function gptel-sandbox--eval-expr "gptel-sandbox" (expr env))
 
+(defvar gptel-auto-workflow--research-accumulated-findings)
+(defvar gptel-auto-workflow--research-total-tokens)
+(defvar gptel-auto-workflow--research-current-turn)
+(defvar gptel-auto-workflow--research-prompt)
+(defvar gptel-auto-workflow--research-controller-config)
+
 (defun gptel-auto-workflow--autotts-root ()
   "Return project root used for AutoTTS state files."
   (file-name-as-directory
@@ -295,7 +301,6 @@ Returns plist with :topic-rates alist and :best-topic for warm-starting decision
             (when (hash-table-p topics)
               (cl-flet ((scan-topic (topic stats)
                          (let ((rate (gethash "success_rate" stats 0.0))
-                               (kept (gethash "kept" stats 0))
                                (total (gethash "total_experiments" stats 0)))
                            (push (cons topic rate) rates)
                            (when (and (> total 4) (> rate best-rate))
