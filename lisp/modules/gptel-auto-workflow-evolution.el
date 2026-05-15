@@ -1542,7 +1542,7 @@ Higher is better. Based on keep rate and average score improvement."
                         (error 0)))
          (results (gptel-auto-workflow--parse-all-results))
          (current (length results)))
-    (- current (or last-total 0))))
+    (- current (or (ignore-errors (float last-total)) 0))))
 
 ;; ─── Skill Governance Integration ───
 
