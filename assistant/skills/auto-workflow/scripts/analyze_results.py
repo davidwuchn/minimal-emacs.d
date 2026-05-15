@@ -158,23 +158,25 @@ def main():
     records = parse_results(root_dir)
     
     if not records:
-        print("No experiment records found.", file=sys.stderr)
-        sys.exit(1)
+        existing_total = read_existing_total_experiments(root_dir)
+        if existing_total == 0:
+            print("No experiment records found.", file=sys.stderr)
+            sys.exit(1)
     
     # Compute statistics
     target_stats = compute_target_stats(records)
     research_stats = compute_research_stats(records)
     prompt_stats = compute_prompt_stats(records)
     
-    existing_total = read_existing_total_experiments(root_dir)
-    total_experiments = max(len(records), existing_total)
+    final_existing_total = read_existing_total_experiments(root_dir)
+    total_experiments = max(len(records), final_existing_total)
 
     # Build output
     output = {
         'generated_at': datetime.now().isoformat(),
         'total_experiments': total_experiments,
         'local_experiments': len(records),
-        'existing_total_experiments': existing_total,
+        'existing_total_experiments': final_existing_total,
         'target_stats': target_stats,
         'research_stats': research_stats,
         'prompt_stats': prompt_stats,
