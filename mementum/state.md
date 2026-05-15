@@ -2,6 +2,32 @@
 
 > Last session: 2026-05-15
 
+## Current Session: Controller Rule Normalization Fix
+
+**Status:** Full E2E pipeline completed; follow-up controller-design sandbox rejection is fixed and targeted-verified after syncing local `main` to `origin/main`.
+
+**Completed:**
+- Started from `HEAD` `7cdd73f4`; later fetched remotes and fast-forwarded local `main` to `origin/main` `6d755137` while preserving local changes.
+- Ran full non-smoke `scripts/run-pipeline.sh`; latest completed run wrote `/Users/davidwu/.emacs.d/var/tmp/experiments/2026-05-15T104135Z-0e5a/results.tsv` with 24 experiment rows.
+- Inspected pipeline/daemon logs after completion. The remaining real defect was controller-design generated rules rejected by sandbox validation.
+- Fixed generated controller rule handling in `gptel-auto-workflow-research-benchmark.el` and `strategic-daemon-functions.el`:
+  - exposed `own-priority` as an alias for `own-repo-priority`;
+  - exposed `ext-priority` as an alias for `external-priority`;
+  - normalized generated `(= source 'external)`, `(= source "external")`, and related source equality variants to string `equal` comparisons before validation/evaluation.
+- Added regressions for sandbox validation, offline replay evaluation, and runtime controller-rule application.
+- Left generated pipeline artifact churn uncommitted/untouched by policy.
+
+**Verification:**
+- `tests/test-gptel-auto-workflow-research-benchmark-regressions.el`: 16/16 passed.
+- `tests/test-gptel-auto-workflow-strategic-regressions.el`: 19/19 passed.
+- Byte-compiled `lisp/modules/gptel-auto-workflow-research-benchmark.el` and `lisp/modules/strategic-daemon-functions.el`; completed with existing warnings only.
+- `git diff --check` passed.
+
+**Remaining:**
+- Code/test/state changes are not committed yet on top of `origin/main` `6d755137`.
+- Generated full-pipeline artifacts remain dirty and should be reviewed, committed, or restored separately from this code fix.
+- `upstream/main` is still 26 commits behind the now-synced local/origin `main`; decide whether to push upstream after committing the verified controller-rule fix.
+
 ## Current Session: Multi-Turn Research Outcome Formatter Fix
 
 **Status:** Fixed a fresh smoke-discovered multi-turn research fallback and verified the smoke path now completes multi-turn research.

@@ -53,9 +53,13 @@ on shared plists where `copy-sequence' preserves old keys."
          (min-confidence-stop (or (plist-get controller-config :min-confidence-stop)
                                   stop-threshold))
          (branch-threshold (or (plist-get controller-config :branch-threshold) 0.3))
-         (max-turns (or (plist-get controller-config :max-turns) 3)))
-    `((own-repo-priority . ,(or (plist-get controller-config :own-repo-priority) 0.7))
-      (external-priority . ,(or (plist-get controller-config :external-priority) 0.15))
+         (max-turns (or (plist-get controller-config :max-turns) 3))
+         (own-priority (or (plist-get controller-config :own-repo-priority) 0.7))
+         (external-priority (or (plist-get controller-config :external-priority) 0.15)))
+    `((own-repo-priority . ,own-priority)
+      (own-priority . ,own-priority)
+      (external-priority . ,external-priority)
+      (ext-priority . ,external-priority)
       (fork-priority . ,(or (plist-get controller-config :fork-priority) 0.4))
       (web-priority . ,(or (plist-get controller-config :web-priority) 0.05))
       (stop-threshold . ,stop-threshold)
@@ -71,6 +75,49 @@ on shared plists where `copy-sequence' preserves old keys."
       (warm-up . ,(or (plist-get controller-config :warm-up) 2))
       (min-complete . ,(or (plist-get controller-config :min-complete) 2))
       (turn-count . ,(or (plist-get controller-config :turn-count) 0)))))
+
+(defun gptel-auto-workflow--controller-source-literal-string (value)
+  "Return VALUE as a source string literal, or nil when VALUE is not a literal."
+  (cond
+   ((and (consp value) (eq (car value) 'quote))
+    (gptel-auto-workflow--controller-source-literal-string (cadr value)))
+   ((stringp value)
+    (let ((cleaned (replace-regexp-in-string "\\\\\"" "\"" value)))
+      (string-trim cleaned "[\\\"']+" "[\\\"']+")))
+   ((and (symbolp value) (not (eq value 'source)))
+    (let ((cleaned (replace-regexp-in-string
+                    "\\\\\"" "\"" (symbol-name value))))
+      (string-trim cleaned "[\\\"']+" "[\\\"']+")))
+   (t nil)))
+
+(defun gptel-auto-workflow--normalize-controller-rule-expr (expr)
+  "Normalize common generated controller rule variants in EXPR."
+  (if (consp expr)
+      (let* ((op (car expr))
+             (args (mapcar #'gptel-auto-workflow--normalize-controller-rule-expr
+                           (cdr expr))))
+        (if (and (memq op '(= equal eq eql string=))
+                 (= (length args) 2)
+                 (or (eq (car args) 'source) (eq (cadr args) 'source)))
+            (let* ((literal (if (eq (car args) 'source) (cadr args) (car args)))
+                   (source-value
+                    (gptel-auto-workflow--controller-source-literal-string literal)))
+              (if (and source-value (not (string-empty-p source-value)))
+                  `(equal source ,source-value)
+                (cons op args)))
+          (cons op args)))
+    expr))
+
+(defun gptel-auto-workflow--normalize-controller-rules (rules)
+  "Normalize generated controller RULES for validation and evaluation."
+  (mapcar (lambda (rule)
+            (let ((copy (copy-sequence rule)))
+              (setq copy
+                    (plist-put copy :when
+                               (gptel-auto-workflow--normalize-controller-rule-expr
+                                (plist-get copy :when))))
+              copy))
+          rules))
 
 (defun gptel-auto-workflow--benchmark-research-strategy (strategy topic callback)
   "Benchmark single research STRATEGY on TOPIC.
@@ -334,10 +381,10 @@ Compares train vs test performance to detect overfitting."
   "Return controller rule list from FORM, or nil."
   (cond
    ((gptel-auto-workflow--controller-rule-p form)
-    (list form))
+    (gptel-auto-workflow--normalize-controller-rules (list form)))
    ((and (listp form)
          (cl-every #'gptel-auto-workflow--controller-rule-p form))
-    form)))
+    (gptel-auto-workflow--normalize-controller-rules form))))
 
 (defun gptel-auto-workflow--parse-controller-design-rules (response)
   "Parse controller design RESPONSE into a list of rule plists, or nil."
@@ -1015,7 +1062,8 @@ Returns t if all rules pass validation."
   (let ((valid-decisions '(stop continue branch cut)))
     (catch 'invalid-rule
       (dolist (rule rules)
-        (let ((when-expr (plist-get rule :when))
+        (let ((when-expr (gptel-auto-workflow--normalize-controller-rule-expr
+                          (plist-get rule :when)))
               (then-decision (plist-get rule :then)))
           (unless (and when-expr then-decision
                        (memq then-decision valid-decisions))
@@ -1070,7 +1118,8 @@ Programmatic-style evaluation: rules are applied as conditions, not hardcoded lo
              (decision
               (catch 'matched
                 (dolist (rule rules 'continue)
-                  (let ((when-expr (plist-get rule :when))
+                  (let ((when-expr (gptel-auto-workflow--normalize-controller-rule-expr
+                                    (plist-get rule :when)))
                         (then-decision (plist-get rule :then)))
                     (condition-case nil
                         (when (eval when-expr signals)

@@ -295,6 +295,26 @@
             "repo findings")
            'continue)))))
 
+(ert-deftest regression/auto-workflow-strategic/controller-rules-normalize-generated-source-forms ()
+  "Runtime controller rules should accept generated source equality and aliases."
+  (let ((gptel-auto-workflow--research-ema-conf 0.4))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--research-ema-delta)
+               (lambda () -0.1))
+              ((symbol-function 'gptel-auto-workflow--estimate-confidence)
+               (lambda (_output) 0.4)))
+      (should
+       (eq (gptel-auto-workflow--apply-controller-rules
+            (list :own-repo-priority 0.85
+                  :external-priority 0.15
+                  :token-budget 8000
+                  :rules (list (list :when '(and own-priority
+                                                  ext-priority
+                                                  (= source 'external)
+                                                  (< ema-conf 0.45))
+                                      :then 'branch)))
+            "external findings")
+           'branch)))))
+
 (ert-deftest regression/auto-workflow-strategic/recent-trace-outcomes-bind-key-before-stats ()
   "Recent trace outcome formatting should bind the hash key before reading stats."
   (cl-letf (((symbol-function 'gptel-auto-workflow--load-research-traces)

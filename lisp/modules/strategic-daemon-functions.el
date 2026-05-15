@@ -359,15 +359,19 @@ Returns plist with controller parameters."
   (let* ((token-budget (or (plist-get controller-config :token-budget)
                            (plist-get controller-config :max-tokens-budget)
                            8000))
-         (stop-threshold (or (plist-get controller-config :stop-threshold)
-                             (plist-get controller-config :min-confidence-stop)
-                             0.65))
-         (min-confidence-stop (or (plist-get controller-config :min-confidence-stop)
-                                  stop-threshold))
-         (branch-threshold (or (plist-get controller-config :branch-threshold) 0.3))
-         (max-turns (or (plist-get controller-config :max-turns) 3)))
-    `((own-repo-priority . ,(or (plist-get controller-config :own-repo-priority) 0.7))
-      (external-priority . ,(or (plist-get controller-config :external-priority) 0.15))
+          (stop-threshold (or (plist-get controller-config :stop-threshold)
+                              (plist-get controller-config :min-confidence-stop)
+                              0.65))
+          (min-confidence-stop (or (plist-get controller-config :min-confidence-stop)
+                                   stop-threshold))
+          (branch-threshold (or (plist-get controller-config :branch-threshold) 0.3))
+          (max-turns (or (plist-get controller-config :max-turns) 3))
+          (own-priority (or (plist-get controller-config :own-repo-priority) 0.7))
+          (external-priority (or (plist-get controller-config :external-priority) 0.15)))
+    `((own-repo-priority . ,own-priority)
+      (own-priority . ,own-priority)
+      (external-priority . ,external-priority)
+      (ext-priority . ,external-priority)
       (fork-priority . ,(or (plist-get controller-config :fork-priority) 0.4))
       (web-priority . ,(or (plist-get controller-config :web-priority) 0.05))
       (stop-threshold . ,stop-threshold)
@@ -383,6 +387,38 @@ Returns plist with controller parameters."
       (warm-up . ,(or (plist-get controller-config :warm-up) 2))
       (min-complete . ,(or (plist-get controller-config :min-complete) 2))
       (turn-count . ,(or (plist-get controller-config :turn-count) 0)))))
+
+(defun gptel-auto-workflow--controller-source-literal-string (value)
+  "Return VALUE as a source string literal, or nil when VALUE is not a literal."
+  (cond
+   ((and (consp value) (eq (car value) 'quote))
+    (gptel-auto-workflow--controller-source-literal-string (cadr value)))
+   ((stringp value)
+    (let ((cleaned (replace-regexp-in-string "\\\\\"" "\"" value)))
+      (string-trim cleaned "[\\\"']+" "[\\\"']+")))
+   ((and (symbolp value) (not (eq value 'source)))
+    (let ((cleaned (replace-regexp-in-string
+                    "\\\\\"" "\"" (symbol-name value))))
+      (string-trim cleaned "[\\\"']+" "[\\\"']+")))
+   (t nil)))
+
+(defun gptel-auto-workflow--normalize-controller-rule-expr (expr)
+  "Normalize common generated controller rule variants in EXPR."
+  (if (consp expr)
+      (let* ((op (car expr))
+             (args (mapcar #'gptel-auto-workflow--normalize-controller-rule-expr
+                           (cdr expr))))
+        (if (and (memq op '(= equal eq eql string=))
+                 (= (length args) 2)
+                 (or (eq (car args) 'source) (eq (cadr args) 'source)))
+            (let* ((literal (if (eq (car args) 'source) (cadr args) (car args)))
+                   (source-value
+                    (gptel-auto-workflow--controller-source-literal-string literal)))
+              (if (and source-value (not (string-empty-p source-value)))
+                  `(equal source ,source-value)
+                (cons op args)))
+          (cons op args)))
+    expr))
 
 (defun gptel-auto-workflow--apply-controller-rules (controller-config output-text)
   "Apply agent-generated decision rules from CONTROLLER-CONFIG.
@@ -411,7 +447,9 @@ Returns the decision from the first matching rule, or nil if no rules exist."
         (catch 'rule-matched
           (dolist (rule rules nil)
             (condition-case nil
-                (when (eval (plist-get rule :when) signals)
+                (when (eval (gptel-auto-workflow--normalize-controller-rule-expr
+                             (plist-get rule :when))
+                            signals)
                   (throw 'rule-matched (plist-get rule :then)))
               (error nil))))))))
 
