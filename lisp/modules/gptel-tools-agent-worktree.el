@@ -109,7 +109,7 @@ Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
                                 (> (length root) 0)
                                 (not (file-directory-p root)))
                        (push root roots))))
-            (maphash #'check-stale table))))
+            (maphash #'check-stale table)))))
     (let ((discarded 0))
       (dolist (root (delete-dups roots))
         (setq discarded (+ discarded
