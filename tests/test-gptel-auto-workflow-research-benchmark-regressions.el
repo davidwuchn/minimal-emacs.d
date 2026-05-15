@@ -192,6 +192,30 @@
           (should (file-exists-p (expand-file-name "source-effectiveness.json" data-dir))))
       (delete-directory root t))))
 
+(ert-deftest regression/research-benchmark/source-merge-writes-one-sources-key ()
+  "Trace source synthesis should not duplicate string and keyword JSON keys."
+  (let* ((root (make-temp-file "aw-research-benchmark" t))
+         (data-dir (expand-file-name "assistant/skills/researcher-prompt/data" root))
+         (source-file (expand-file-name "source-effectiveness.json" data-dir))
+         (source-perf (make-hash-table :test 'equal)))
+    (unwind-protect
+        (progn
+          (make-directory data-dir t)
+          (with-temp-file source-file
+            (insert "{\"version\":\"old\",\"sources\":{\"own-repo\":{\"experiments_kept\":1,\"experiments_enabled\":1}}}"))
+          (puthash "external" (list 1 2) source-perf)
+          (gptel-auto-workflow--merge-trace-sources-into-data source-perf data-dir)
+          (with-temp-buffer
+            (insert-file-contents source-file)
+            (let ((content (buffer-string))
+                  (count 0)
+                  (start 0))
+              (while (string-match "\"sources\"" content start)
+                (setq count (1+ count))
+                (setq start (match-end 0)))
+              (should (= count 1)))))
+      (delete-directory root t))))
+
 (provide 'test-gptel-auto-workflow-research-benchmark-regressions)
 
 ;;; test-gptel-auto-workflow-research-benchmark-regressions.el ends here

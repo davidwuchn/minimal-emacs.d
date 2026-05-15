@@ -811,8 +811,7 @@ Returns t if page created."
           (insert "- The findings may be too generic or targeting the wrong files.\n")
           (insert "- Try combining with git history for recency bias.\n"))
          (t
-          (insert "- **Insufficient data.** Run more experiments with this strategy.\n")))
-        (insert "\n"))
+          (insert "- **Insufficient data.** Run more experiments with this strategy.\n"))))
       (message "[evolution] Synthesized research knowledge for %s → %s"
                strategy knowledge-file)
       t)))

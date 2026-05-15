@@ -943,7 +943,7 @@ ASSUMPTION: Subagent may or may not be available.
 BEHAVIOR: Uses subagent with web tools if available, otherwise returns empty.
 BEHAVIOR: On failure, activates provider failover and retries (max 3).
 EDGE CASE: Returns empty findings if subagent unavailable.
-META-LEARNING: Stores digested insights in FINDINGS.md for future reference."
+META-LEARNING: Feeds findings to analyzer selection and the project research cache."
   (cl-block gptel-auto-workflow--research-patterns
   ;; Guard against concurrent research calls
   (when gptel-auto-workflow--research-in-progress

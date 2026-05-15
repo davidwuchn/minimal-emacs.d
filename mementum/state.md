@@ -2,6 +2,44 @@
 
 > Last session: 2026-05-15
 
+## Current Session: Pipeline Artifact Generator Cleanup
+
+**Status:** Fixed generator defects discovered after the aborted E2E pipeline run and targeted-verified the relevant paths.
+
+**Completed:**
+- Confirmed the auto-workflow daemon is no longer running; cached `*Messages*` showed the abort happened during analyzer fallback/timeout.
+- Rechecked `gptel-auto-experiment--shared-retryable-error-patterns` in the current source: `caar` and `cadr` now return strings, so the cached `wrong-type-argument stringp` was from the pre-sync daemon code path already corrected by incoming `f3dba0d2` changes.
+- Fixed `gptel-auto-workflow--merge-trace-sources-into-data` to write one canonical string key, `"sources"`, and remove legacy keyword `:sources` before JSON encoding.
+- Fixed `gptel-auto-workflow--synthesize-research-knowledge` to stop appending a blank line at EOF.
+- Cleaned current generated artifacts enough for whitespace/JSON validation: duplicate `"sources"` removed from `source-effectiveness.json`; generated research insight EOF whitespace removed.
+- Added regressions for duplicate `sources` JSON keys and blank-line-at-EOF research knowledge synthesis.
+- Updated stale `gptel-auto-workflow--research-patterns` docstring: it no longer claims research is stored in `FINDINGS.md`; it now describes analyzer selection and project research cache usage.
+
+**Verification:**
+- `tests/test-gptel-auto-workflow-research-benchmark-regressions.el`: 14/14 passed.
+- `tests/test-gptel-auto-workflow-evolution-regressions.el`: 3/3 passed.
+- `tests/test-gptel-auto-workflow-strategic-regressions.el`: 17/17 passed after the docstring cleanup.
+- Batch retry-pattern accessor check passed for `caar`/`cadr`, `is-retryable-error-p`, and `provider-pressure-error-p`.
+- JSON parse check passed for `source-effectiveness.json`, `strategy-guidance.json`, and `topic-performance.json`.
+- `git diff --check` passed after the docstring cleanup.
+
+**Remaining:**
+- Worktree still has uncommitted code/test fixes plus generated artifact churn from the aborted pipeline run.
+- Local `main` is still ahead of `upstream/main` by 9 commits; `origin/main` was already at `f3dba0d2`.
+- Full E2E pipeline was not rerun after this cleanup.
+
+**Dirty files after cleanup:**
+- `assistant/skills/evolution-patterns/SKILL.md` (generated churn)
+- `assistant/skills/researcher-prompt/data/source-effectiveness.json` (generated stats, duplicate key fixed)
+- `assistant/skills/researcher-prompt/data/strategy-guidance.json` (generated churn)
+- `assistant/skills/researcher-prompt/data/topic-performance.json` (generated churn)
+- `lisp/modules/gptel-auto-workflow-evolution.el` (generator EOF fix)
+- `lisp/modules/gptel-auto-workflow-research-benchmark.el` (canonical `sources` key fix)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (stale docstring fix)
+- `mementum/knowledge/research-insights-deep-external.md` (generated stats update)
+- `tests/test-gptel-auto-workflow-evolution-regressions.el` (new EOF regression)
+- `tests/test-gptel-auto-workflow-research-benchmark-regressions.el` (new JSON key regression)
+
 ## Current Session: Pipeline Post-Workflow Evolution Fix
 
 **Status:** Implemented and targeted-verified fixes for E2E issues discovered by the full pipeline run.
