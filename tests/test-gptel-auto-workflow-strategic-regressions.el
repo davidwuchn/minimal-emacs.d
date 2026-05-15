@@ -268,8 +268,32 @@
       (should
        (eq (gptel-auto-workflow--apply-controller-rules
             (list :rules (list (list :when '(> ema-conf 0.7) :then 'stop)))
-            "")
-           'stop)))))
+             "")
+            'stop)))))
+
+(ert-deftest regression/auto-workflow-strategic/controller-rules-see-config-signals ()
+  "Runtime controller rules should evaluate generated config-signal rules."
+  (let ((gptel-auto-workflow--research-ema-conf 0.6))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--research-ema-delta)
+               (lambda () 0.0))
+              ((symbol-function 'gptel-auto-workflow--estimate-confidence)
+               (lambda (_output) 0.6)))
+      (should
+       (eq (gptel-auto-workflow--apply-controller-rules
+            (list :own-repo-priority 0.85
+                  :external-priority 0.15
+                  :stop-threshold 0.65
+                  :min-confidence-stop 0.7
+                  :token-budget 8000
+                  :max-turns 4
+                  :turn-count 1
+                  :rules (list (list :when '(and (> own-repo-priority external-priority)
+                                                  (< turn max-turns)
+                                                  (>= min-confidence-stop stop-threshold)
+                                                  (> budget-remaining 1000))
+                                      :then 'continue)))
+            "repo findings")
+           'continue)))))
 
 (ert-deftest regression/auto-workflow-strategic/filter-valid-targets-rejects-nested-repos ()
   "Nested git repos should not be selected by the root workflow."

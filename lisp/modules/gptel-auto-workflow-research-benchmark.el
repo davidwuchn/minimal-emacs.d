@@ -27,6 +27,36 @@
 (defvar gptel-auto-workflow--research-benchmark-results nil
   "Accumulator for research benchmark results.")
 
+(defun gptel-auto-workflow--controller-config-rule-signals (controller-config)
+  "Return controller config values exposed to generated rule expressions."
+  (let* ((token-budget (or (plist-get controller-config :token-budget)
+                           (plist-get controller-config :max-tokens-budget)
+                           8000))
+         (stop-threshold (or (plist-get controller-config :stop-threshold)
+                             (plist-get controller-config :min-confidence-stop)
+                             0.65))
+         (min-confidence-stop (or (plist-get controller-config :min-confidence-stop)
+                                  stop-threshold))
+         (branch-threshold (or (plist-get controller-config :branch-threshold) 0.3))
+         (max-turns (or (plist-get controller-config :max-turns) 3)))
+    `((own-repo-priority . ,(or (plist-get controller-config :own-repo-priority) 0.7))
+      (external-priority . ,(or (plist-get controller-config :external-priority) 0.15))
+      (fork-priority . ,(or (plist-get controller-config :fork-priority) 0.4))
+      (web-priority . ,(or (plist-get controller-config :web-priority) 0.05))
+      (stop-threshold . ,stop-threshold)
+      (min-confidence-stop . ,min-confidence-stop)
+      (branch-threshold . ,branch-threshold)
+      (token-budget . ,token-budget)
+      (max-tokens-budget . ,token-budget)
+      (max-turns . ,max-turns)
+      (min-insights-for-stop . ,(or (plist-get controller-config :min-insights-for-stop) 2))
+      (beta . ,(or (plist-get controller-config :beta) 0.5))
+      (delta-slack . ,(or (plist-get controller-config :delta-slack) 0.04))
+      (trend-threshold . ,(or (plist-get controller-config :trend-threshold) 0.04))
+      (warm-up . ,(or (plist-get controller-config :warm-up) 2))
+      (min-complete . ,(or (plist-get controller-config :min-complete) 2))
+      (turn-count . ,(or (plist-get controller-config :turn-count) 0)))))
+
 (defun gptel-auto-workflow--benchmark-research-strategy (strategy topic callback)
   "Benchmark single research STRATEGY on TOPIC.
 Calls CALLBACK with result plist."
@@ -801,9 +831,9 @@ not just tunes parameters. The search space is the code itself."
         (unless proposal-rules
           (message "[controller-agent] Iter %d produced no valid controller rules; stopping" iter)
           (cl-return-from gptel-auto-workflow--run-controller-design-agent nil))
-        ;; Evaluate proposed controller against train traces (0 LLM calls!)
-        (let* ((eval-result (gptel-auto-workflow--evaluate-controller-rules
-                             proposal-rules train-traces))
+         ;; Evaluate proposed controller against train traces (0 LLM calls!)
+         (let* ((eval-result (gptel-auto-workflow--evaluate-controller-rules
+                              proposal-rules train-traces proposal))
                  (new-objective (plist-get eval-result :objective))
                  (train-accuracy (plist-get eval-result :accuracy)))
             ;; Validate on held-out test traces
@@ -869,7 +899,9 @@ Training traces summary (%d traces):
 Design an IMPROVED list of rules. Each rule must be a plist with:
 - :when: an Elisp expression over signals (ema-conf, ema-delta, turn,
   output-length, confidence, has-urls, has-structure, source,
-  budget-remaining)
+  budget-remaining, own-repo-priority, external-priority, fork-priority,
+  web-priority, stop-threshold, min-confidence-stop, branch-threshold,
+  token-budget, max-turns, min-insights-for-stop)
 - :then: one of stop, continue, branch, cut
 
 Rules:
@@ -947,7 +979,10 @@ Parses the response as a list of (:when EXPR :then DECISION) rules."
             (message "[controller-agent] Response not a valid rule list: %s"
                      (truncate-string-to-width response 100))
             nil)
-           ((gptel-auto-workflow--validate-controller-rules rules)
+           ((gptel-auto-workflow--validate-controller-rules
+             rules
+             (when (fboundp 'gptel-auto-workflow--load-autotts-controller)
+               (gptel-auto-workflow--load-autotts-controller)))
             rules)
            (t
             (message "[controller-agent] Rules failed sandbox validation")
@@ -955,7 +990,7 @@ Parses the response as a list of (:when EXPR :then DECISION) rules."
       (message "[controller-agent] No response from controller design subagent")
       nil)))
 
-(defun gptel-auto-workflow--validate-controller-rules (rules)
+(defun gptel-auto-workflow--validate-controller-rules (rules &optional controller-config)
   "Validate controller RULES in a Programmatic sandbox.
 Each rule must evaluate a valid :when expression and return a valid :then decision.
 Uses simple eval-in-restricted-context to prevent side effects.
@@ -971,27 +1006,24 @@ Returns t if all rules pass validation."
             (throw 'invalid-rule nil))
           ;; Validate :when is evaluable by testing with sample signals
           (condition-case err
-              (let* ((sample-signals '((ema-conf . 0.6) (ema-delta . 0.0)
-                                       (turn . 2) (output-length . 800)
-                                       (confidence . 0.5) (has-urls . t)
-                                       (has-structure . t) (source . "own-repo")
-                                       (budget-remaining . 4000)))
-                     ;; Bind samples as local variables for eval
-                     (result (cl-loop for (sym . val) in sample-signals
-                                     collect (list sym val))))
-                ;; Just check expr doesn't crash — result not used here
-                (eval when-expr `((ema-conf . 0.6) (ema-delta . 0.0)
-                                  (turn . 2) (output-length . 800)
-                                  (confidence . 0.5) (has-urls . t)
-                                  (has-structure . t) (source . "own-repo")
-                                  (budget-remaining . 4000))))
+              (let* ((config-signals
+                      (gptel-auto-workflow--controller-config-rule-signals controller-config))
+                     (sample-signals
+                      (append '((ema-conf . 0.6) (ema-delta . 0.0)
+                                (turn . 2) (output-length . 800)
+                                (confidence . 0.5) (has-urls . t)
+                                (has-structure . t) (source . "own-repo")
+                                (budget-remaining . 4000))
+                              config-signals)))
+                 ;; Just check expr doesn't crash — result not used here
+                 (eval when-expr sample-signals))
             (error
              (message "[controller-agent] Rule :when failed sandbox eval: %S → %s"
                       when-expr (error-message-string err))
              (throw 'invalid-rule nil)))))
       t)))
 
-(defun gptel-auto-workflow--evaluate-controller-rules (rules traces)
+(defun gptel-auto-workflow--evaluate-controller-rules (rules traces &optional controller-config)
   "Evaluate controller RULES against TRACES by applying rules to each trace.
 Returns plist with objective score.
 Programmatic-style evaluation: rules are applied as conditions, not hardcoded logic."
@@ -1008,11 +1040,15 @@ Programmatic-style evaluation: rules are applied as conditions, not hardcoded lo
              (has-urls (plist-get trace :has-urls))
              (has-structure (plist-get trace :has-structure))
              (success (gptel-auto-workflow--trace-success-p trace))
-             (signals `((ema-conf . ,ema-conf) (ema-delta . ,ema-delta)
-                        (turn . ,turn-count) (output-length . ,output-length)
-                        (confidence . ,confidence) (has-urls . ,has-urls)
-                        (has-structure . ,has-structure) (source . ,source)
-                        (budget-remaining . 8000)))
+             (config-signals
+              (gptel-auto-workflow--controller-config-rule-signals controller-config))
+             (token-budget (cdr (assq 'token-budget config-signals)))
+             (signals (append `((ema-conf . ,ema-conf) (ema-delta . ,ema-delta)
+                                (turn . ,turn-count) (output-length . ,output-length)
+                                (confidence . ,confidence) (has-urls . ,has-urls)
+                                (has-structure . ,has-structure) (source . ,source)
+                                (budget-remaining . ,(- token-budget (/ output-length 4))))
+                              config-signals))
              ;; Apply rules: find first matching rule
              (decision
               (catch 'matched

@@ -2,6 +2,30 @@
 
 > Last session: 2026-05-15
 
+## Current Session: Pipeline Post-Workflow Evolution Fix
+
+**Status:** Implemented and targeted-verified fixes for E2E issues discovered by the full pipeline run.
+
+**Completed:**
+- Added a reusable `run_self_evolution` helper in `scripts/run-pipeline.sh`.
+- Kept pre-workflow evolution for research digestion and added post-workflow evolution after a completed auto-workflow, so same-run `results.tsv` data can feed skills/controller evolution immediately.
+- Exposed controller config values to agent-generated rule expressions in both runtime and offline validation/evaluation paths: priorities, thresholds, token budget, max turns, beta, and related controller fields.
+- Updated the controller design prompt to list those supported signals.
+- Added regressions for controller rules that reference config-derived signals.
+
+**Verification:**
+- `bash -n scripts/run-pipeline.sh` passed.
+- `git diff --check` passed.
+- `tests/test-gptel-auto-workflow-research-benchmark-regressions.el`: 13/13 passed.
+- `tests/test-gptel-auto-workflow-strategic-regressions.el`: 17/17 passed.
+- `tests/test-gptel-auto-workflow-evolution-regressions.el`: 2/2 passed.
+- Byte-compile of `strategic-daemon-functions.el` and `gptel-auto-workflow-research-benchmark.el` passed with existing warnings only.
+
+**Remaining:**
+- Changes are not committed yet.
+- Generated skill/stat churn and generated strategy/research insight files from the E2E run remain uncommitted by policy unless explicitly wanted.
+- A full non-smoke pipeline rerun was not attempted because it can take hours.
+
 ## Current Session: Origin Merge + Pipeline Verification
 
 **Status:** Merge `b4670f5` pushed to `origin/main` and `upstream/main`; follow-up pipeline hardening implemented and smoke-verified.

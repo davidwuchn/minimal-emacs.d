@@ -92,6 +92,40 @@
         (should (plist-get result :best-controller))
         (should (numberp (plist-get result :best-objective)))))))
 
+(ert-deftest regression/research-benchmark/controller-rules-validate-config-signals ()
+  "Generated rules should validate when they reference controller config signals."
+  (should
+   (gptel-auto-workflow--validate-controller-rules
+    '((:when (and (> own-repo-priority external-priority)
+                  (< turn max-turns)
+                  (>= min-confidence-stop stop-threshold)
+                  (> token-budget 1000))
+       :then continue))
+    '(:own-repo-priority 0.85
+      :external-priority 0.15
+      :stop-threshold 0.65
+      :min-confidence-stop 0.7
+      :token-budget 8000
+      :max-turns 4))))
+
+(ert-deftest regression/research-benchmark/controller-rules-evaluate-config-signals ()
+  "Offline rule evaluation should expose the same controller config signals."
+  (let ((result (gptel-auto-workflow--evaluate-controller-rules
+                 '((:when (> own-repo-priority external-priority) :then stop)
+                   (:when t :then continue))
+                 (list '(:output-length 1200
+                         :confidence 0.8
+                         :ema-conf 0.8
+                         :ema-delta 0.1
+                         :turn-count 1
+                         :source "own-repo"
+                         :success-p t))
+                 '(:own-repo-priority 0.9
+                   :external-priority 0.1
+                   :token-budget 8000))))
+    (should (= (plist-get result :correct) 1))
+    (should (= (plist-get result :total) 1))))
+
 (ert-deftest regression/research-benchmark/held-out-validation-does-not-require-training-results ()
   "Held-out validation should not call undefined training-result helpers."
   (let ((result (gptel-auto-workflow--validate-on-held-out

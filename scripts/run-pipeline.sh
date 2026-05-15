@@ -120,6 +120,28 @@ wait_for_idle() {
     return 0
 }
 
+run_self_evolution() {
+    local label="$1"
+    local evolution_output
+
+    log "=== $label ==="
+
+    evolution_output="$(AUTO_WORKFLOW_ACTION_TIMEOUT="$MAX_WAIT_EVOLUTION" \
+        MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+        "$SCRIPT" evolution 2>&1)"
+    printf '%s\n' "$evolution_output" >> "$PIPELINE_LOG"
+    if printf '%s' "$evolution_output" | grep -q "already-running"; then
+        log "Self-evolution skipped (already running)"
+    elif printf '%s' "$evolution_output" | grep -q "Insufficient new data"; then
+        log "Self-evolution skipped (insufficient new data)"
+    elif printf '%s' "$evolution_output" | grep -q "Self-evolution cycle complete"; then
+        log "Self-evolution completed (research: $RESEARCH_QUALITY)"
+    else
+        log "WARNING: self-evolution command had issues, but continuing pipeline"
+        # Non-fatal: evolution failure shouldn't stop experiments
+    fi
+}
+
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
 "$SCRIPT" stop >/dev/null 2>&1 || true
@@ -244,26 +266,11 @@ if [ "$HAS_RESEARCH" -eq 0 ]; then
 fi
 
 # ─── Step 3: Self-Evolution (digest findings/results into skills) ───
-log "=== Step 3: Self-Evolution ==="
 # Pass research quality info to evolution context
 export PIPELINE_RESEARCH_QUALITY="$RESEARCH_QUALITY"
 export PIPELINE_FINDINGS_FILE="$FINDINGS_FILE"
 export PIPELINE_INTERNAL_FILE="$INTERNAL_FILE"
-
-evolution_output="$(AUTO_WORKFLOW_ACTION_TIMEOUT="$MAX_WAIT_EVOLUTION" \
-    MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-    "$SCRIPT" evolution 2>&1)"
-printf '%s\n' "$evolution_output" >> "$PIPELINE_LOG"
-if printf '%s' "$evolution_output" | grep -q "already-running"; then
-    log "Self-evolution skipped (already running)"
-elif printf '%s' "$evolution_output" | grep -q "Insufficient new data"; then
-    log "Self-evolution skipped (insufficient new data)"
-elif printf '%s' "$evolution_output" | grep -q "Self-evolution cycle complete"; then
-    log "Self-evolution completed (research: $RESEARCH_QUALITY)"
-else
-    log "WARNING: self-evolution command had issues, but continuing pipeline"
-    # Non-fatal: evolution failure shouldn't stop experiments
-fi
+run_self_evolution "Step 3: Self-Evolution (pre-workflow)"
 
 # ─── Step 4: Auto-Workflow (uses digested findings via directive) ───
 log "=== Step 4: Auto-Workflow ==="
@@ -288,7 +295,14 @@ elif printf '%s' "$workflow_status" | grep -Eq ':phase "running"'; then
     log "WARNING: Auto-workflow still running after timeout; may need more time"
 fi
 
-# ─── Step 5: Report results ───
+# ─── Step 5: Self-Evolution (digest fresh workflow results) ───
+if printf '%s' "$workflow_status" | grep -Eq ':phase "(idle|complete)"'; then
+    run_self_evolution "Step 5: Self-Evolution (post-workflow)"
+else
+    log "Skipping post-workflow self-evolution because auto-workflow did not complete"
+fi
+
+# ─── Step 6: Report results ───
 log "=== Pipeline Complete ==="
 RESULTS_PATTERN="$DIR/var/tmp/experiments/$(date +%F)*/results.tsv"
 if compgen -G "$RESULTS_PATTERN" >/dev/null; then
