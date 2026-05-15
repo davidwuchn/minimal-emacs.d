@@ -448,7 +448,7 @@ RESULTS should contain :eight-keys-scores in each entry."
   "Analyze RESULTS for patterns, issues, and generate recommendations."
   (let ((issues (make-hash-table :test 'equal))
         (recommendations '())
-        (total (length results))
+        (total (if (listp results) (length results) 0))
         (low-scores 0)
         (high-scores 0)
         (threshold 0.7))
