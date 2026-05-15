@@ -19,6 +19,8 @@
 (declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
 (declare-function gptel-benchmark-call-subagent-sync "gptel-benchmark-subagent")
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions")
+(declare-function gptel-auto-workflow--alist-to-sandbox-env "strategic-daemon-functions")
+(declare-function gptel-auto-workflow--eval-rule-sandbox "strategic-daemon-functions")
 
 (defun gptel-auto-workflow--plist-dedup-put (plist key value)
   "Like `plist-put' but removes duplicate KEY before inserting.
@@ -1091,7 +1093,7 @@ Returns t if all rules pass validation."
 (defun gptel-auto-workflow--evaluate-controller-rules (rules traces &optional controller-config)
   "Evaluate controller RULES against TRACES by applying rules to each trace.
 Returns plist with objective score.
-Programmatic-style evaluation: rules are applied as conditions, not hardcoded logic."
+Uses Programmatic sandbox for safe rule evaluation."
   (let ((correct 0) (total 0)
         (tokens-saved 0) (tokens-wasted 0))
     (dolist (trace traces)
@@ -1108,13 +1110,13 @@ Programmatic-style evaluation: rules are applied as conditions, not hardcoded lo
              (config-signals
               (gptel-auto-workflow--controller-config-rule-signals controller-config))
              (token-budget (cdr (assq 'token-budget config-signals)))
-             (signals (append `((ema-conf . ,ema-conf) (ema-delta . ,ema-delta)
-                                (turn . ,turn-count) (output-length . ,output-length)
-                                (confidence . ,confidence) (has-urls . ,has-urls)
-                                (has-structure . ,has-structure) (source . ,source)
-                                (budget-remaining . ,(- token-budget (/ output-length 4))))
-                              config-signals))
-             ;; Apply rules: find first matching rule
+             (signals-alist (append `((ema-conf . ,ema-conf) (ema-delta . ,ema-delta)
+                                      (turn . ,turn-count) (output-length . ,output-length)
+                                      (confidence . ,confidence) (has-urls . ,has-urls)
+                                      (has-structure . ,has-structure) (source . ,source)
+                                      (budget-remaining . ,(- token-budget (/ output-length 4))))
+                                    config-signals))
+             (signals-env (gptel-auto-workflow--alist-to-sandbox-env signals-alist))
              (decision
               (catch 'matched
                 (dolist (rule rules 'continue)
@@ -1122,10 +1124,9 @@ Programmatic-style evaluation: rules are applied as conditions, not hardcoded lo
                                     (plist-get rule :when)))
                         (then-decision (plist-get rule :then)))
                     (condition-case nil
-                        (when (eval when-expr signals)
+                        (when (gptel-auto-workflow--eval-rule-sandbox when-expr signals-env)
                           (throw 'matched then-decision))
                       (error (throw 'matched 'continue))))))))
-        ;; Score the decision
         (cond
          ((and success (eq decision 'stop))
           (cl-incf correct)

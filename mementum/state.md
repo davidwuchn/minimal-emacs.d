@@ -2,6 +2,30 @@
 
 > Last session: 2026-05-15
 
+## Current Session: Programmatic Sandbox for Controller Rules
+
+**Status:** Sandboxed controller rule evaluation implemented and verified. Both runtime decision and offline replay evaluation now use Programmatic sandbox instead of raw `eval`.
+
+**Completed:**
+- Implemented `gptel-auto-workflow--alist-to-sandbox-env` — converts signal alist to hash-table environment for Programmatic.
+- Implemented `gptel-auto-workflow--eval-rule-sandbox` — safely evaluates rule expressions with bounded execution + arithmetic ops.
+- Modified `gptel-auto-workflow--apply-controller-rules` (runtime) to use sandbox instead of raw `eval`.
+- Modified `gptel-auto-workflow--evaluate-controller-rules` (offline replay) to use sandbox for trace evaluation.
+- Added `declare-function` for sandbox helpers in `gptel-auto-workflow-research-benchmark.el`.
+- Byte-compiled both modules successfully.
+
+**Analysis:**
+- Controller design agent preprocessing: current `summarize-traces-for-prompt` is optimal in Elisp. Adding Programmatic conversion would add overhead without benefit since trace data is already in Elisp format.
+- Think in Code paradigm applied: replaced raw `eval` with bounded sandbox evaluation, safer than 10+ tool calls for rule validation.
+
+**Verification:**
+- Byte-compile: `strategic-daemon-functions.el` and `gptel-auto-workflow-research-benchmark.el` passed.
+- Function signatures verified: sandbox helpers, apply-controller-rules, evaluate-controller-rules all loaded correctly.
+
+**Remaining:**
+- Full pipeline run to verify sandboxed evaluation in live controller decisions.
+- Monitor controller design agent for rule generation quality with sandboxed validation.
+
 ## Current Session: Controller Rule Normalization Fix
 
 **Status:** Full E2E pipeline completed; follow-up controller-design sandbox rejection is fixed and targeted-verified after syncing local `main` to `origin/main`.
