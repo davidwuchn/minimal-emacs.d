@@ -559,7 +559,7 @@ Returns list of deficient element keywords."
   (when (and (proper-list-p observation)
              (plist-get observation :element-status))
     (let ((diagnosis (plist-get observation :element-status)))
-      (when (proper-list-p diagnosis)
+      (when (listp diagnosis)
         (cl-loop for d in diagnosis
                  when (gptel-benchmark-evolution--deficient-p d)
                  collect (plist-get d :element))))))
@@ -572,7 +572,7 @@ Returns element keyword if opportunity found, nil otherwise."
     (let* ((deficient (plist-get observation :element-status))
            (found (and (proper-list-p deficient)
                        (cl-find-if #'gptel-benchmark-evolution--deficient-p deficient))))
-      (when found
+      (when (and found (proper-list-p found))
         (plist-get found :element)))))
 
 ;;; Co-Evolution Interface
