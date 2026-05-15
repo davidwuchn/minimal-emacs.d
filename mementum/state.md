@@ -2,6 +2,33 @@
 
 > Last session: 2026-05-15
 
+## Current Session: Strategy Evolution Load-Check Fix
+
+**Status:** Fixed strategy-evolver not checking `load-strategy` return value, causing strategy name to leak into `active-strategy` even when file wasn't created.
+
+**Completed:**
+- Synced with origin: pulled doom-loop detection, Serena patterns, memory tools, controller fixes
+- Pulled from upstream: controller normalization fix
+- Fixed strategy-evolver bug: `load-strategy` return value now checked before printing ACCEPTED
+- Committed and pushed to both remotes, staging synced
+
+**Bug Found (Strategy Evolution):**
+- `gptel-auto-workflow--evolve-strategy` called `load-strategy` but didn't check return value
+- If `load-strategy` returned nil (file not found), code still printed ACCEPTED and returned strategy name
+- Strategy name leaked into `gptel-auto-workflow--active-strategy` and `results.tsv`
+- Fix: wrapped load-strategy call in `if`, return nil on failure
+
+**New Features from Origin Sync:**
+- Controller doom-loop detection (ml-intern pattern)
+- Memory tools (`gptel-tools-memory.el`) — Serena-style memory-as-tool
+- Tool markers + progressive shortening
+- Strategy name sanitization for filenames
+- Serena architecture lessons documented
+
+**Next Pipeline:** 23:00 (2.5 hours away)
+
+---
+
 ## Current Session: Pipeline 15:03 Completion + Status Fix
 
 **Status:** Pipeline 15:03 completed successfully after 4.5 hours with 23 experiments and 1 target improved. Status file was stale due to compiled function error; manually fixed.
