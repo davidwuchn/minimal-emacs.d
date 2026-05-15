@@ -1574,7 +1574,7 @@ Since we can't instrument subagent internals, we reconstruct from output."
                         steps))
               (error nil))))))
     ;; If we found explicit steps, prefer those over parsed ones
-    (or (reverse steps) nil)))
+    (reverse steps)))
 
 (defun gptel-auto-workflow--merge-steps-with-session (steps)
   "Merge parsed STEPS into the session step accumulator.

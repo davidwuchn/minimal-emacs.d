@@ -132,10 +132,10 @@ Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N
                     nil)))
     (if result
         (list :status 'ok
-              :skills (length (or (gethash :skills result) nil))
-              :broken-symlinks (length (or (gethash :broken_symlinks result) nil))
-              :load-blockers (length (or (gethash :runtime_load_blockers result) nil))
-              :collisions (length (or (gethash :name_collisions result) nil))
+              :skills (length (gethash :skills result))
+              :broken-symlinks (length (gethash :broken_symlinks result))
+              :load-blockers (length (gethash :runtime_load_blockers result))
+              :collisions (length (gethash :name_collisions result))
               :topology (if (hash-table-p (gethash :topology result))
                             (hash-table-count (gethash :topology result))
                           0)
