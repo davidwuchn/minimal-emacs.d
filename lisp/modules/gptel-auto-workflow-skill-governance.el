@@ -34,8 +34,8 @@
 
 (defun gptel-auto-workflow--semia-scan-skill (skill-dir)
   "Run Semia security audit on SKILL-DIR.
-Returns plist with :skill :findings :errors :warnings :status, or nil on failure.
-Uses offline baseline (no LLM calls) for fast static analysis."
+Returns plist with :skill :findings :errors :warnings :status, or nil on
+failure.  Uses offline baseline (no LLM calls) for fast static analysis."
   (let* ((slug (file-name-nondirectory (directory-file-name skill-dir)))
          (run-dir (expand-file-name slug (gptel-auto-workflow--semia-report-dir)))
          (result-file (expand-file-name "detection_result.json" run-dir))
@@ -120,7 +120,8 @@ Returns list of result plists."
 
 (defun gptel-auto-workflow--skill-governance-scan ()
   "Run skill-scan.sh and return health plist.
-Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N :collisions N)."
+Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N
+:collisions N)."
   (let* ((root (gptel-auto-workflow--skill-governance-tools-root))
          (scan (expand-file-name "skill-hygiene/bin/skill-scan.sh" root))
          (cmd (format "cd %s && SKILLS_REFINER_TOOLS_ROOT=%s bash %s --json"
@@ -240,9 +241,9 @@ allowing us to track which skills agents actually use vs ignore."
 
 (defun gptel-auto-workflow--skill-eval-run-ab (skill-name target-file &optional n-experiments)
   "Run controlled A/B experiment for SKILL-NAME on TARGET-FILE.
-Returns plist with (:skill :baseline-success :treatment-success :delta :recommendation).
-Integrates skill-eval methodology with benchmark infrastructure.
-N-EXPERIMENTS per arm (default 3)."
+Returns plist with (:skill :baseline-success :treatment-success :delta
+:recommendation).  Integrates skill-eval methodology with benchmark
+infrastructure.  N-EXPERIMENTS per arm (default 3)."
   (let* ((n (or n-experiments 3))
          (skill-label (format "skill-eval:%s" skill-name))
          (baseline (gptel-auto-workflow--skill-eval-run-arm

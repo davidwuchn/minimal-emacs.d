@@ -715,10 +715,12 @@ Monthly subscription: LLM selection finds best targets each run."
   "Time budget per experiment in seconds (default: ~13 min).
 
 Increased from 500s to 800s because:
-1. CF-Gateway with kimi-k2.6 needs ~800s for complex multi-step code analysis
+1. CF-Gateway with kimi-k2.6 needs ~800s for complex multi-step code
+   analysis
 2. 500s was too tight for CF-Gateway (experiments timing out at 500-900s)
 3. 800s idle + 60s grace = 860s max provides comfortable margin
-4. Prevents timeout losses on high-quality experiments that need full reasoning time"
+4. Prevents timeout losses on high-quality experiments that need full
+   reasoning time"
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)

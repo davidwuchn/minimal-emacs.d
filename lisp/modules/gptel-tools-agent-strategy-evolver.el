@@ -24,7 +24,8 @@
     (D . "Variable computation and formatting")
     (E . "Skill loading and integration")
     (F . "Adaptive compression and filtering"))
-  "Exploration axes for strategy evolution, analogous to Meta-Harness exploitation axes.")
+  "Exploration axes for strategy evolution, analogous to Meta-Harness
+exploitation axes.")
 
 (defun gptel-auto-workflow--strategy-axis-description (axis)
   "Return a human-readable description for strategy AXIS."
@@ -303,7 +304,8 @@ Returns the body as a string, or CODE if extraction fails or CODE is nil."
 
 (defun gptel-auto-workflow--analyze-strategy-failures (strategy-name)
   "Analyze TSV results to find failure patterns for STRATEGY-NAME.
-Returns formatted string of top 5 failure reasons, or empty string if none found."
+Returns formatted string of top 5 failure reasons, or empty string if
+none found."
   (let ((results-file (gptel-auto-workflow--results-file-path))
         (failure-reasons (make-hash-table :test 'equal))
         (total-failures 0))
@@ -549,8 +551,8 @@ CANDIDATE_3:
 
 (defun gptel-auto-workflow--parse-strategy-candidates (response)
   "Parse 3 strategy candidates from gptel RESPONSE.
-Returns list of 3 code strings.
-Handles multiple formats: CANDIDATE_N markers, numbered lists, or bare code blocks."
+Returns list of 3 code strings.  Handles multiple formats: CANDIDATE_N
+markers, numbered lists, or bare code blocks."
   (if (or (null response) (not (stringp response)) (string-empty-p response))
       (progn
         (message "[strategy-evolution] Invalid response for parsing")

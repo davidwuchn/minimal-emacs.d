@@ -136,8 +136,8 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
 
 (defcustom gptel-auto-experiment-require-tests t
   "When non-nil, require tests to pass before merging experiment to staging.
-This catches bugs that the grader might miss (e.g., CL idioms that don't work in ELisp).
-Set to nil to disable (only for emergency situations)."
+This catches bugs that the grader might miss (e.g., CL idioms that don't
+work in ELisp).  Set to nil to disable (only for emergency situations)."
   :type 'boolean
   :group 'gptel-auto-workflow)
 
@@ -227,9 +227,9 @@ Checks that the number of changed files is within limits."
 
 (defun gptel-auto-experiment-benchmark (&optional skip-tests hypothesis)
   "Run syntax validation + Eight Keys scoring.
-  If SKIP-TESTS is non-nil, skip test execution (tests run in staging flow).
-  HYPOTHESIS is the experiment hypothesis string, used for task-type-aware scoring.
-  Returns plist with :passed, :tests-passed, :eight-keys, etc.
+If SKIP-TESTS is non-nil, skip test execution (tests run in staging flow).
+HYPOTHESIS is the experiment hypothesis string, used for task-type-aware
+scoring.  Returns plist with :passed, :tests-passed, :eight-keys, etc.
 
 NOTE: Nucleus script validation is skipped for experiments because:
 1. verify-nucleus.sh uses script location ($DIR), not worktree context
@@ -237,9 +237,10 @@ NOTE: Nucleus script validation is skipped for experiments because:
 3. Full validation happens in staging flow
 
 IMPORTANT: When `gptel-auto-experiment-require-tests' is non-nil (default),
-tests still run before the experiment is considered passed, even if SKIP-TESTS
-is t. The exception is the normal headless staging workflow, where benchmark
-tests are deferred to the staging gate to keep the worker daemon alive."
+tests still run before the experiment is considered passed, even if
+SKIP-TESTS is t.  The exception is the normal headless staging workflow,
+where benchmark tests are deferred to the staging gate to keep the worker
+daemon alive."
   (let* ((start (float-time))
          (default-directory (gptel-auto-workflow--worktree-or-project-dir))
          (target-file (when gptel-auto-workflow--current-target
@@ -460,7 +461,8 @@ resume from buffers outside the original project context."
             :recommendations recommendations))))
 
 (defcustom gptel-auto-experiment-repeat-focus-threshold 3
-  "Prior non-kept attempts on the same changed symbol before short-circuiting repeats."
+  "Prior non-kept attempts on the same changed symbol before
+short-circuiting repeats."
   :type 'integer
   :group 'gptel-tools-agent)
 
@@ -622,8 +624,9 @@ Values are plist: (:done :timer).")
 
 (defvar gptel-auto-experiment-grade-timeout 180
   "Timeout in seconds for grading subagent.
-Default 180s (3 min) allows grader to process complex outputs with CF-Gateway.
-Increased from 120s because CF-Gateway grader needs more time for detailed analysis.")
+Default 180s (3 min) allows grader to process complex outputs with
+CF-Gateway.  Increased from 120s because CF-Gateway grader needs more
+time for detailed analysis.")
 
 (defun gptel-auto-experiment--reset-grade-state ()
   "Cancel and clear all pending grade callbacks."
@@ -719,9 +722,10 @@ executor's prose summary."
         error-output)))
 
 (defun gptel-auto-experiment--timeout-salvage-output (output prompt target &optional worktree)
-  "Return synthetic executor output when timed-out error OUTPUT left real target edits.
-PROMPT is the original executor prompt so the salvage path can preserve the
-intended hypothesis. TARGET and WORKTREE identify the actual edited file."
+  "Return synthetic executor output when timed-out error OUTPUT left real
+target edits.  PROMPT is the original executor prompt so the salvage path
+can preserve the intended hypothesis.  TARGET and WORKTREE identify the
+actual edited file."
   (when (and (gptel-auto-experiment--agent-error-p output)
              (gptel-auto-experiment--executor-timeout-p output)
              (gptel-auto-experiment--target-pending-changes-p target worktree))
@@ -841,12 +845,12 @@ THRESHOLD defaults to 0.005 and matches the comparator prompt rules."
             &optional threshold)
   "Return gated comparator decision metadata for WINNER.
 
-The gate rejects changes whose combined score (60% eight-keys + 40% code quality)
-regresses.  A small eight-keys score dip is tolerated when code quality improves
-enough to lift the combined score above threshold.
+The gate rejects changes whose combined score (60% eight-keys + 40% code
+quality) regresses.  A small eight-keys score dip is tolerated when code
+quality improves enough to lift the combined score above threshold.
 
-For high-baseline targets (quality >= 0.85), the quality gain requirement is
-reduced because well-written code is harder to improve measurably."
+For high-baseline targets (quality >= 0.85), the quality gain requirement
+is reduced because well-written code is harder to improve measurably."
   (let* ((score-before (gptel-auto-experiment--coerce-number score-before 0))
         (score-after (gptel-auto-experiment--coerce-number score-after 0))
         (quality-before (gptel-auto-experiment--coerce-number quality-before 0.5))

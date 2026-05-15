@@ -22,7 +22,8 @@
 
 (defun gptel-benchmark-analyze-results (benchmark-file)
   "Analyze results in BENCHMARK-FILE.
-Returns plist with flaky tests, non-discriminating tests, and systematic failures."
+Returns plist with flaky tests, non-discriminating tests, and systematic
+failures."
   (if (fboundp 'gptel-agent--task)
       (let ((result nil) (done nil))
         (gptel-agent--task

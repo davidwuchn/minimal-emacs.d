@@ -192,7 +192,8 @@
 
 (defun gptel-auto-workflow--cache-research-turn (topic turn-data)
   "Cache a research turn for TOPIC.
-TURN-DATA is a plist with :prompt :findings :controller-decision :confidence etc."
+TURN-DATA is a plist with :prompt :findings :controller-decision
+:confidence etc."
   (gptel-auto-workflow--ensure-research-cache-dir)
   (gptel-auto-workflow--load-research-cache-index)
   

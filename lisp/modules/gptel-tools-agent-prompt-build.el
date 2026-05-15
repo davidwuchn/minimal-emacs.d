@@ -936,13 +936,15 @@ fallback backend before giving up on otherwise-good executor output.")
 
 (defvar gptel-auto-experiment-max-aux-subagent-retries 10
   "Maximum local retries for transient analyzer/comparator failures.
-Set to 10 to allow 2 attempts per provider across the 5-provider fallback chain.
-Fewer retries reduce quota exhaustion when providers are rate-limited.")
+Set to 10 to allow 2 attempts per provider across the 5-provider fallback
+chain.  Fewer retries reduce quota exhaustion when providers are
+rate-limited.")
 
 (defvar gptel-auto-experiment-max-per-provider-attempts 5
-  "Consecutive retries on the same provider before advancing to next fallback.
-Set to 5 for executor to maximize usage of monthly subscription backends (MiniMax).
-Aux subagents may use lower values to reduce quota exhaustion.")
+  "Consecutive retries on the same provider before advancing to next
+fallback.  Set to 5 for executor to maximize usage of monthly subscription
+backends (MiniMax).  Aux subagents may use lower values to reduce quota
+exhaustion.")
 
 (defvar gptel-auto-experiment-retry-delay 15
   "Seconds to wait between retries.")
@@ -992,12 +994,13 @@ Uses capable models for code generation:
 - moonshot: kimi-k2.6 (best for code changes)
 - DashScope: glm-5 (capable and cost-effective)
 - DeepSeek: deepseek-v4-pro (strong reasoning)
-- CF-Gateway: @cf/moonshotai/kimi-k2.6 (262k context, reasoning, function calling)
+- CF-Gateway: @cf/moonshotai/kimi-k2.6 (262k context, reasoning,
+  function calling)
 
-Headless executor prefers MiniMax by default. When the active executor backend
-returns a rate-limit error during a headless run, later retries in that same
-run can advance through this list instead of repeatedly hammering the same
-provider."
+Headless executor prefers MiniMax by default.  When the active executor
+backend returns a rate-limit error during a headless run, later retries
+in that same run can advance through this list instead of repeatedly
+hammering the same provider."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)

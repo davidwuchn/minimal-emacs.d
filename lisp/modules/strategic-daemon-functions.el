@@ -91,7 +91,8 @@ Each entry: (decision ema-range delta-sign output-hash).")
 
 (defvar gptel-auto-workflow--branch-pool nil
   "List of active research branches (plists).
-Each branch plist: (:id :strategy :findings :tokens :turn :alignment :ema :alive-since).")
+Each branch plist: (:id :strategy :findings :tokens :turn :alignment
+:ema :alive-since).")
 
 (defvar gptel-auto-workflow--branch-pool-max 6
   "Maximum number of concurrent branches in the pool.")
@@ -297,8 +298,9 @@ Reads var/tmp/researcher-feedback.sexp and suggests beta/threshold tweaks."
            nil))))))
 
 (defun gptel-auto-workflow--load-skill-topic-priors ()
-  "Load topic success rates from data/topic-performance.json as controller priors.
-Returns plist with :topic-rates alist and :best-topic for warm-starting decisions."
+  "Load topic success rates from data/topic-performance.json as controller
+priors.  Returns plist with :topic-rates alist and :best-topic for
+warm-starting decisions."
   (let* ((data-dir (gptel-auto-workflow--autotts-file
                     "assistant/skills/researcher-prompt/data"))
          (topic-file (expand-file-name "topic-performance.json" data-dir)))
@@ -492,9 +494,9 @@ Returns the decision from the first matching rule, or nil if no rules exist."
     env))
 
 (defun gptel-auto-workflow--eval-rule-expr-fallback (expr env)
-  "Evaluate simple rule EXPR against hash-table ENV without the full sandbox.
-Handles numbers, strings, symbol lookup, comparisons, boolean logic, and arithmetic.
-Used when gptel-sandbox is not loaded."
+  "Evaluate simple rule EXPR against hash-table ENV without the full
+sandbox.  Handles numbers, strings, symbol lookup, comparisons, boolean
+logic, and arithmetic.  Used when gptel-sandbox is not loaded."
   (cond
    ((numberp expr) expr)
    ((stringp expr) expr)
@@ -967,8 +969,8 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
 
 (defun gptel-auto-workflow--inject-source-directive (prompt controller-config turn accumulated-findings)
   "Inject PROGRAMMATIC source selection directive into PROMPT.
-The controller actively selects which sources to search next, not just advisory text.
-Based on source classification and effectiveness data.
+The controller actively selects which sources to search next, not just
+advisory text.  Based on source classification and effectiveness data.
 Returns modified prompt with source directive appended."
   (let* ((own-priority (or (plist-get controller-config :own-repo-priority) 0.7))
          (external-priority (or (plist-get controller-config :external-priority) 0.15))

@@ -998,9 +998,9 @@ Parses the response as a list of (:when EXPR :then DECISION) rules."
 
 (defun gptel-auto-workflow--validate-controller-rules (rules &optional controller-config)
   "Validate controller RULES in a Programmatic sandbox.
-Each rule must evaluate a valid :when expression and return a valid :then decision.
-Uses simple eval-in-restricted-context to prevent side effects.
-Returns t if all rules pass validation."
+Each rule must evaluate a valid :when expression and return a valid
+:then decision.  Uses simple eval-in-restricted-context to prevent side
+effects.  Returns t if all rules pass validation."
   (let ((valid-decisions '(stop continue branch cut)))
     (catch 'invalid-rule
       (dolist (rule rules)
@@ -1086,10 +1086,10 @@ Uses Programmatic sandbox for safe rule evaluation."
             :token-ratio token-ratio :correct correct :total total))))
 
 (defun gptel-auto-workflow--evaluate-controller-config (config traces)
-  "Evaluate CONTROLLER-CONFIG against TRACES by SIMULATING controller decisions.
-For each trace, simulate what the CMC controller would have decided at each
-turn point, comparing against actual outcomes. Returns plist with objective score.
-This is an OFFLINE evaluation — 0 LLM calls."
+  "Evaluate CONTROLLER-CONFIG against TRACES by SIMULATING controller
+decisions.  For each trace, simulate what the CMC controller would have
+decided at each turn point, comparing against actual outcomes.  Returns
+plist with objective score.  This is an OFFLINE evaluation — 0 LLM calls."
   (let ((simulated-stops 0)      ; correct STOP decisions (trace was successful, controller would STOP)
         (simulated-continues 0)   ; correct CONTINUE decisions (trace needed more turns)
         (simulated-branches 0)    ; correct BRANCH decisions (trace was poor, controller would BRANCH)
@@ -1329,9 +1329,10 @@ sees a unified view of both TSV and trace analysis."
              source-file (hash-table-count sources))))
 
 (defun gptel-auto-workflow--update-skill-with-controller (controller-config)
-  "Write evolved CONTROLLER-CONFIG as strategy guidance JSON for SKILL.md injection.
-Stores to data/strategy-guidance.json so evolve_researcher.py won't overwrite it.
-The researcher-prompt/SKILL.md uses {{strategy-guidance}} template variable."
+  "Write evolved CONTROLLER-CONFIG as strategy guidance JSON for SKILL.md
+injection.  Stores to data/strategy-guidance.json so evolve_researcher.py
+won't overwrite it.  The researcher-prompt/SKILL.md uses
+{{strategy-guidance}} template variable."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (data-dir (expand-file-name "assistant/skills/researcher-prompt/data" root))
          (guidance-file (expand-file-name "strategy-guidance.json" data-dir))

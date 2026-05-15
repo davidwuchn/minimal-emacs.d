@@ -1059,9 +1059,10 @@ Returns output string or nil on failure."
         output))))
 
 (defun gptel-auto-workflow--update-directive-skill ()
-  "Update DIRECTIVE.md by calling analyze_results.py + generate_directive.py pipeline.
-Runs analysis and directive generation directly instead of through evolve_skills.py
-to ensure DIRECTIVE.md is always regenerated when experiments exist."
+  "Update DIRECTIVE.md by calling analyze_results.py + generate_directive.py
+pipeline.  Runs analysis and directive generation directly instead of
+through evolve_skills.py to ensure DIRECTIVE.md is always regenerated
+when experiments exist."
   (message "[evolution] Updating directive skill via script...")
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (output-dir (expand-file-name "var/tmp/skill-evolution" root))

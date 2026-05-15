@@ -324,9 +324,9 @@ Returns empty alist if TOTALS is nil to prevent nil propagation errors."
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.
-Returns alist of (score-type . value) for the standard scores.
-Handles nil values gracefully by returning 0.0 for missing scores.
-Handles both plist format (keyword keys) and alist format (symbol or keyword keys).
+Returns alist of (score-type . value) for the standard scores.  Handles
+nil values gracefully by returning 0.0 for missing scores.  Handles both
+plist format (keyword keys) and alist format (symbol or keyword keys).
 Returns nil if SCORES is not a list."
   (cond
    ((null scores) nil)

@@ -3,9 +3,9 @@
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
-CALLBACK receives keep/discard decision with reasoning.
-LLM decides when available; local fallback for tests.
-The comparator subagent overlay will appear in the current buffer at time of call."
+CALLBACK receives keep/discard decision with reasoning.  LLM decides
+when available; local fallback for tests.  The comparator subagent
+overlay will appear in the current buffer at time of call."
   ;; Capture the current buffer to ensure comparator overlay appears in right place
   (let* ((decide-buffer (current-buffer))
          (score-before (gptel-auto-workflow--plist-get before :score 0))
