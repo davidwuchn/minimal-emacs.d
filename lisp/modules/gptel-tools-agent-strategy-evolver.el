@@ -727,24 +727,24 @@ Returns new strategy name or nil if rejected."
                  (gptel-auto-workflow--prototype-strategy
                   final-code
                   "lisp/modules/gptel-tools-agent-base.el")))
-                (if (not (plist-get final-prototype :valid))
-                    (progn
-                      (delete-file strategy-file)
-                      (message "[strategy-evolution] REJECTED %s: Final prototype failed: %s"
-                               (format "%s" new-name)
-                               (mapconcat #'identity (plist-get final-prototype :errors) ", "))
-                      nil)
-                  (if (gptel-auto-workflow--load-strategy new-name)
-                      (progn
-                        (message "[strategy-evolution] ACCEPTED %s (axis %s) from %d candidates"
-                                 (format "%s" new-name)
-                                 (format "%s" axis)
-                                 (length valid-candidates))
-                        new-name)
-                    (progn
-                      (message "[strategy-evolution] REJECTED %s: Load failed after file write"
-                               (format "%s" new-name))
-                      nil))))))))))
+             (if (not (plist-get final-prototype :valid))
+                 (progn
+                   (delete-file strategy-file)
+                   (message "[strategy-evolution] REJECTED %s: Final prototype failed: %s"
+                            (format "%s" new-name)
+                            (mapconcat #'identity (plist-get final-prototype :errors) ", "))
+                   nil)
+               (if (gptel-auto-workflow--load-strategy new-name)
+                   (progn
+                     (message "[strategy-evolution] ACCEPTED %s (axis %s) from %d candidates"
+                              (format "%s" new-name)
+                              (format "%s" axis)
+                              (length valid-candidates))
+                     new-name)
+                 (progn
+                   (message "[strategy-evolution] REJECTED %s: Load failed after file write"
+                            (format "%s" new-name))
+                   nil)))))))))))
 
 ;;; Periodic Strategy Evolution
 
