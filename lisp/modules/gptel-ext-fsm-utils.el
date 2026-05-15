@@ -359,6 +359,21 @@ ADAPTS TO: Pure functional approach eliminates mutable state,
 improving testability and reducing cognitive load."
   (car (my/gptel--fsm-collect-list object)))
 
+(defun my/gptel--fsm-count (object)
+  "Count all FSMs in OBJECT without building a list.
+Returns integer count. More efficient than length of fsm-collect-list.
+
+ASSUMPTION: OBJECT may be atom, cons cell, or nested structure.
+BEHAVIOR: Returns count of FSMs found.
+EDGE CASE: Nil object returns 0.
+EDGE CASE: Single FSM returns 1."
+
+  (let ((seen (make-hash-table :test 'eq))
+        (count 0))
+    (cl-labels ((count-fsm (_fsm) (cl-incf count)))
+      (my/gptel--fsm-traverse object seen #'count-fsm))
+    count))
+
 (defun my/gptel--fsm-depth (object)
   "Return nesting depth of FSMs in OBJECT.
 
@@ -381,8 +396,8 @@ ADAPTS TO: Provides quantitative measure of nesting for decision making.
 PROACTIVE MITIGATION: Enables detection of nested scenarios before
 wrong FSM selection occurs.
 
-SIGNAL: explicit assumptions - Uses shared traversal helper."
-  (length (car (my/gptel--fsm-collect-list object))))
+SIGNAL: explicit assumptions - Uses dedicated counter instead of building list."
+  (my/gptel--fsm-count object))
 
 ;;; Registry Validation
 
