@@ -1276,14 +1276,15 @@ sees a unified view of both TSV and trace analysis."
 (defun gptel-auto-workflow--merge-trace-sources-into-data (source-perf data-dir)
   "Merge trace SOURCE-PERF into the TSV-based source-effectiveness.json."
   (let* ((source-file (expand-file-name "source-effectiveness.json" data-dir))
-          (existing (condition-case nil
-                        (let ((json-object-type 'hash-table)
-                              (json-key-type 'string))
-                          (json-read-file source-file))
-                     (error (make-hash-table :test 'equal))))
-         (sources-raw (or (gethash :sources existing) (gethash "sources" existing)))
+         (existing (condition-case nil
+                       (let ((json-object-type 'hash-table)
+                             (json-key-type 'string))
+                         (json-read-file source-file))
+                    (error (make-hash-table :test 'equal))))
+         (sources-raw (or (gethash "sources" existing) (gethash :sources existing)))
          (sources (if (hash-table-p sources-raw) sources-raw (make-hash-table :test 'equal))))
-    (puthash :sources sources existing)
+    (remhash :sources existing)
+    (puthash "sources" sources existing)
     (maphash (lambda (source stats)
                (let* ((source (or source "unknown"))
                       (kept (nth 0 stats))

@@ -32,6 +32,24 @@
             (should (= (gptel-auto-workflow--evolution-record-score) 0.5))))
       (delete-directory root t))))
 
+(ert-deftest regression/auto-workflow-evolution/research-knowledge-has-no-blank-eof ()
+  "Synthesized research insight pages should satisfy `git diff --check'."
+  (let ((root (make-temp-file "aw-evolution" t)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () root)))
+          (should
+           (gptel-auto-workflow--synthesize-research-knowledge
+            "test-strategy"
+            (list '(:decision "kept" :target "a.el")
+                  '(:decision "discarded" :target "b.el")
+                  '(:decision "discarded" :target "c.el"))))
+          (with-temp-buffer
+            (insert-file-contents
+             (expand-file-name "mementum/knowledge/research-insights-test-strategy.md" root))
+            (should-not (string-match-p "\n\n\\'" (buffer-string)))))
+      (delete-directory root t))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
