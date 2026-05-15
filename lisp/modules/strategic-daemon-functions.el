@@ -16,6 +16,19 @@
 (defvar gptel-auto-workflow--research-current-turn)
 (defvar gptel-auto-workflow--research-prompt)
 (defvar gptel-auto-workflow--research-controller-config)
+(defvar gptel-auto-workflow--current-research-context)
+
+(declare-function gptel-auto-workflow--normalize-response "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--research-has-external-content-p "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--research-error-p "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--local-research-patterns "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--estimate-confidence "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--log-research-step "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--format-research-strategy-prompt "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--save-research-trace "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--digest-research-findings "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--statistical-prob-kept "gptel-auto-workflow-strategic")
+(declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
 
 (defun gptel-auto-workflow--autotts-root ()
   "Return project root used for AutoTTS state files."
@@ -960,9 +973,6 @@ Returns modified prompt with source directive appended."
          (classification (when accumulated-findings
                            (gptel-auto-workflow--classify-source
                             "own-research" accumulated-findings)))
-         ;; Get source effectiveness data for informed scheduling
-         (own-effectiveness (gptel-auto-workflow--get-source-effectiveness "own-repo"))
-         (ext-effectiveness (gptel-auto-workflow--get-source-effectiveness "external"))
          (own-score (gptel-auto-workflow--source-priority-score "own-repo"))
          (ext-score (gptel-auto-workflow--source-priority-score "external"))
          ;; Build directive based on controller state
@@ -1263,7 +1273,7 @@ Conditions: enough traces, significant performance variance."
 
 ;; Source scheduling in controller
 
-(defun gptel-auto-workflow--apply-source-priority-to-prompt (prompt &optional findings)
+(defun gptel-auto-workflow--apply-source-priority-to-prompt (prompt &optional _findings)
   "Enhance PROMPT with source priority scheduling.
 If FINDINGS provided, classifies sources and adds scheduling guidance."
   (let ((source-guidance (gptel-auto-workflow--generate-source-priority-guidance)))
