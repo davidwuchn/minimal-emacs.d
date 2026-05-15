@@ -207,7 +207,8 @@ Always runs git commands from the main repo root to avoid worktree issues."
                 (when target
                   (puthash target (1+ (gethash target freq 0)) freq))))
             (let (result)
-              (maphash (lambda (k v) (push (cons k v) result)) freq)
+              (cl-flet ((collect (k v) (push (cons k v) result)))
+                (maphash #'collect freq))
               (sort result (lambda (a b) (> (cdr a) (cdr b)))))))))
 
 ;; ─── Phase 2: Verify ──→ Benchmark as Pattern Validator ───
@@ -256,7 +257,7 @@ Returns alist of target → (category success-rate count)."
                    target-stats))))
     ;; Convert to sorted alist
     (let ((result nil))
-      (maphash (lambda (key data)
+      (cl-flet ((collect-target (key data)
                  (let* ((target (car key))
                         (cat (cdr key))
                         (total (nth 0 data))
@@ -266,8 +267,8 @@ Returns alist of target → (category success-rate count)."
                      (let ((existing (assoc target result)))
                        (if existing
                            (push (list cat rate total) (cdr existing))
-                         (push (cons target (list (list cat rate total))) result))))))
-               target-stats)
+                         (push (cons target (list (list cat rate total))) result)))))))
+        (maphash #'collect-target target-stats))
       ;; Sort each target's categories by success rate
       (dolist (item result)
         (setcdr item (sort (cdr item)
@@ -391,13 +392,13 @@ Writes runtime evolution data under var/tmp/evolution/."
                            section-stats)))))
           (if (= 0 (hash-table-count section-stats))
               (insert "*No A/B test data yet. Run experiments with varying sections.*\n")
-            (maphash (lambda (section stats)
-                       (let* ((with (plist-get stats :with))
-                              (kept (plist-get stats :kept))
-                              (rate (if (> with 0) (/ (* 100.0 kept) with) 0)))
-                         (insert (format "- **%s**: %.0f%% success (%d/%d experiments)\n"
-                                         section rate kept with))))
-                     section-stats))
+            (cl-flet ((log-section (section stats)
+                        (let* ((with (plist-get stats :with))
+                               (kept (plist-get stats :kept))
+                               (rate (if (> with 0) (/ (* 100.0 kept) with) 0)))
+                          (insert (format "- **%s**: %.0f%% success (%d/%d experiments)\n"
+                                          section rate kept with)))))
+              (maphash #'log-section section-stats)))
           (insert "\n**Section Inclusion Config:**\n")
           (insert "- default: include all\n")
           (insert "- a-b-test-enabled: t\n")
@@ -1196,13 +1197,13 @@ Analyzes which research topics and sources produce the best downstream results."
       
       ;; Sort topics by keep rate
       (let ((sorted-topics nil))
-        (maphash (lambda (target counts)
-                   (let ((total (car counts))
-                         (kept (cadr counts)))
-                     (when (>= total 3)
-                       (push (list :target target :rate (/ (float kept) total) :total total :kept kept)
-                             sorted-topics))))
-                 topic-performance)
+        (cl-flet ((collect-topic (target counts)
+                    (let ((total (car counts))
+                          (kept (cadr counts)))
+                      (when (>= total 3)
+                        (push (list :target target :rate (/ (float kept) total) :total total :kept kept)
+                              sorted-topics)))))
+          (maphash #'collect-topic topic-performance))
         (setq sorted-topics (sort sorted-topics (lambda (a b) (> (plist-get a :rate) (plist-get b :rate)))))
         
         (if sorted-topics
@@ -1369,7 +1370,7 @@ with kept experiments, and updates the researcher prompt accordingly."
     
     ;; Calculate effectiveness per quality level
     (let ((stats nil))
-      (maphash (lambda (quality counts)
+      (cl-flet ((collect-quality (quality counts)
                  (let ((kept (car counts))
                        (total (cdr counts)))
                    (when (> total 0)
@@ -1377,8 +1378,8 @@ with kept experiments, and updates the researcher prompt accordingly."
                                  :kept kept
                                  :total total
                                  :rate (/ (float kept) total))
-                           stats))))
-               by-quality)
+                           stats)))))
+        (maphash #'collect-quality by-quality))
       
       ;; Log findings
       (if stats

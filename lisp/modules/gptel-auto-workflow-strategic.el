@@ -625,15 +625,15 @@ Returns empty string when no trace data is available."
                                  (1+ (nth 1 stats)))
                        source-stats)))))
       ;; Format outcome summary.
-      (maphash (lambda (key stats)
+      (cl-flet ((format-outcome (key stats)
                  (let ((kept (nth 0 stats))
                        (total (nth 1 stats)))
                    (when (> total 0)
                      (push (format "- **%s**: %d/%d kept (%.0f%%)"
                                    key kept total
                                    (* 100 (/ (float kept) total)))
-                           lines))))
-               source-stats)
+                           lines)))))
+        (maphash #'format-outcome source-stats))
       (if lines
           (string-join (sort lines #'string<) "\n")
         ""))))

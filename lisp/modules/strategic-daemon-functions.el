@@ -293,15 +293,15 @@ Returns plist with :topic-rates alist and :best-topic for warm-starting decision
                  (best-topic nil)
                  (best-rate 0.0))
             (when (hash-table-p topics)
-              (maphash (lambda (topic stats)
+              (cl-flet ((scan-topic (topic stats)
                          (let ((rate (gethash "success_rate" stats 0.0))
                                (kept (gethash "kept" stats 0))
                                (total (gethash "total_experiments" stats 0)))
                            (push (cons topic rate) rates)
                            (when (and (> total 4) (> rate best-rate))
                              (setq best-rate rate
-                                   best-topic topic))))
-                       topics)
+                                   best-topic topic)))))
+                (maphash #'scan-topic topics))
               (message "[autotts] Loaded %d topic priors from skill data (best: %s %.0f%%)"
                        (length rates) (or best-topic "none") (* 100 best-rate))
               (list :topic-rates rates
@@ -1182,9 +1182,9 @@ Returns formatted string with source effectiveness data."
   (let ((sources '())
         (guidance "## Source Effectiveness (AutoTTS Tracking)\n\n"))
     ;; Collect all tracked sources
-    (maphash (lambda (source stats)
-               (push (cons source stats) sources))
-             gptel-auto-workflow--source-effectiveness-table)
+    (cl-flet ((collect-source (source stats)
+               (push (cons source stats) sources)))
+      (maphash #'collect-source gptel-auto-workflow--source-effectiveness-table))
     ;; Sort by priority score
     (setq sources (sort sources
                        (lambda (a b)

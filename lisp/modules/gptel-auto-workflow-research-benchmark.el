@@ -172,18 +172,18 @@ Runs after pipeline completes to pick best strategy for next run."
                          (+ (nth 1 existing) (plist-get r :tokens))
                          (1+ (nth 2 existing)))
                    strategies)))
-      (let ((best nil)
-            (best-score 0))
-        (maphash (lambda (name stats)
-                   (let ((avg-quality (/ (nth 0 stats) (nth 2 stats)))
-                         (avg-tokens (/ (nth 1 stats) (nth 2 stats)))
-                         (score (/ (nth 0 stats) (max (nth 1 stats) 1))))
-                     (when (> score best-score)
-                       (setq best name
-                             best-score score))
-                     (message "[research-evolve] %s: avg-quality=%.2f avg-tokens=%.0f score=%.4f"
-                              name avg-quality avg-tokens score)))
-                 strategies)
+       (let ((best nil)
+             (best-score 0))
+         (cl-flet ((score-strategy (name stats)
+                    (let ((avg-quality (/ (nth 0 stats) (nth 2 stats)))
+                          (avg-tokens (/ (nth 1 stats) (nth 2 stats)))
+                          (score (/ (nth 0 stats) (max (nth 1 stats) 1))))
+                      (when (> score best-score)
+                        (setq best name
+                              best-score score))
+                      (message "[research-evolve] %s: avg-quality=%.2f avg-tokens=%.0f score=%.4f"
+                               name avg-quality avg-tokens score))))
+           (maphash #'score-strategy strategies))
         (when best
           (message "[research-evolve] Evolved to strategy: %s" best)
           (setq gptel-auto-workflow--active-strategy best))))))
@@ -760,30 +760,30 @@ Extract topic performance, source effectiveness, and EMA-outcome correlation."
     ;; Log synthesis
     (message "[autotts] Knowledge synthesis:")
     (message "[autotts]  Strategies:")
-    (maphash (lambda (name stats)
+    (cl-flet ((log-rate (name stats)
                (let ((rate (if (> (nth 1 stats) 0)
                               (/ (float (nth 0 stats)) (nth 1 stats))
                             0)))
                  (message "[autotts]    %s: %.0f%% success (%d/%d)"
-                          name (* 100 rate) (nth 0 stats) (nth 1 stats))))
-             topic-perf)
+                          name (* 100 rate) (nth 0 stats) (nth 1 stats)))))
+      (maphash #'log-rate topic-perf))
     (message "[autotts]  Sources:")
-    (maphash (lambda (name stats)
+    (cl-flet ((log-rate (name stats)
                (let ((rate (if (> (nth 1 stats) 0)
                               (/ (float (nth 0 stats)) (nth 1 stats))
                             0)))
                  (message "[autotts]    %s: %.0f%% success (%d/%d)"
-                          name (* 100 rate) (nth 0 stats) (nth 1 stats))))
-              source-perf)
+                          name (* 100 rate) (nth 0 stats) (nth 1 stats)))))
+      (maphash #'log-rate source-perf))
      ;; EMA-outcome correlation
      (message "[autotts]  EMA-outcome correlation:")
-     (maphash (lambda (key stats)
-                (let ((rate (if (> (nth 1 stats) 0)
-                               (/ (float (nth 0 stats)) (nth 1 stats))
-                             0)))
-                  (message "[autotts]    %s: %.0f%% success (%d/%d)"
-                           key (* 100 rate) (nth 0 stats) (nth 1 stats))))
-              ema-decision-perf)
+    (cl-flet ((log-rate (key stats)
+               (let ((rate (if (> (nth 1 stats) 0)
+                              (/ (float (nth 0 stats)) (nth 1 stats))
+                            0)))
+                 (message "[autotts]    %s: %.0f%% success (%d/%d)"
+                          key (* 100 rate) (nth 0 stats) (nth 1 stats)))))
+      (maphash #'log-rate ema-decision-perf))
     ;; Persist synthesis so evolve_researcher.py can consume trace-level analysis
     (gptel-auto-workflow--save-trace-synthesis topic-perf source-perf)))
 
@@ -1017,9 +1017,9 @@ Returns t if all rules pass validation."
                                 (confidence . 0.5) (has-urls . t)
                                 (has-structure . t) (source . "own-repo")
                                 (budget-remaining . 4000))
-                              config-signals)))
-                 ;; Just check expr doesn't crash — result not used here
-                 (eval when-expr sample-signals))
+                              config-signals))
+                     (signals-env (gptel-auto-workflow--alist-to-sandbox-env sample-signals)))
+                 (gptel-auto-workflow--eval-rule-sandbox when-expr signals-env))
             (error
              (message "[controller-agent] Rule :when failed sandbox eval: %S → %s"
                       when-expr (error-message-string err))
@@ -1230,7 +1230,7 @@ sees a unified view of both TSV and trace analysis."
          (topics-raw (or (gethash :topics existing) (gethash "topics" existing)))
          (topics (if (hash-table-p topics-raw) topics-raw (make-hash-table :test 'equal))))
     ;; Merge trace topic data into existing hash
-    (maphash (lambda (strategy stats)
+    (cl-flet ((merge-topic (strategy stats)
                (let* ((strategy (or strategy "unknown"))
                       (kept (nth 0 stats))
                       (total (nth 1 stats))
@@ -1261,14 +1261,14 @@ sees a unified view of both TSV and trace analysis."
                               (puthash "first_seen" :null h)
                               (puthash "last_seen" :null h)
                               h)
-                            topics))))
-             topic-perf)
+                            topics)))))
+      (maphash #'merge-topic topic-perf))
     ;; Update total experiments
     (let ((new-total 0) (new-kept 0))
-      (maphash (lambda (_ stats)
-                 (setq new-total (+ new-total (gethash "total_experiments" stats 0)))
-                 (setq new-kept (+ new-kept (gethash "kept" stats 0))))
-               topics)
+      (cl-flet ((accum-totals (_ stats)
+                  (setq new-total (+ new-total (gethash "total_experiments" stats 0)))
+                  (setq new-kept (+ new-kept (gethash "kept" stats 0)))))
+        (maphash #'accum-totals topics))
       (puthash "total_experiments" new-total existing))
     (puthash "version" (format-time-string "%Y-%m-%dT%H:%M:%SZ") existing)
     (with-temp-file topic-file
@@ -1288,7 +1288,7 @@ sees a unified view of both TSV and trace analysis."
          (sources (if (hash-table-p sources-raw) sources-raw (make-hash-table :test 'equal))))
     (remhash :sources existing)
     (puthash "sources" sources existing)
-    (maphash (lambda (source stats)
+    (cl-flet ((merge-source (source stats)
                (let* ((source (or source "unknown"))
                       (kept (nth 0 stats))
                       (total (nth 1 stats))
@@ -1310,8 +1310,8 @@ sees a unified view of both TSV and trace analysis."
                               (puthash "identifier" source h)
                               (puthash "techniques_suggested" (vector) h)
                               h)
-                            sources))))
-             source-perf)
+                            sources)))))
+      (maphash #'merge-source source-perf))
     (with-temp-file source-file
       (insert (json-encode existing)))
     (message "[autotts] Merged trace source data into %s (%d sources)"
