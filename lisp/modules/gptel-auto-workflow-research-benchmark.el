@@ -20,6 +20,21 @@
 (declare-function gptel-benchmark-call-subagent-sync "gptel-benchmark-subagent")
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions")
 
+(defun gptel-auto-workflow--plist-dedup-put (plist key value)
+  "Like `plist-put' but removes duplicate KEY before inserting.
+Prevents plist key accumulation across successive plist-put calls
+on shared plists where `copy-sequence' preserves old keys."
+  (let ((cleaned nil)
+        (rest plist)
+        (found nil))
+    (while rest
+      (if (eq (car rest) key)
+          (progn (setq found t) (pop rest) (pop rest))
+        (push (pop rest) cleaned)
+        (when rest (push (pop rest) cleaned))))
+    (setq cleaned (nreverse cleaned))
+    (plist-put cleaned key value)))
+
 (defvar gptel-auto-workflow--research-strategies
   '("own-repos-first" "deep-external" "quick-own-only" "topic-specific")
   "Available research strategies to benchmark.")
@@ -822,11 +837,13 @@ not just tunes parameters. The search space is the code itself."
                         train-traces iter max-iters))
              (proposal-rules (gptel-auto-workflow--call-controller-design-subagent prompt))
              (proposal (when proposal-rules
-                         (let ((config (copy-sequence current-controller)))
-                           (setq config (plist-put config :rules proposal-rules))
-                           (setq config (plist-put config :learning-method "agent-rules"))
-                           (setq config (plist-put config :evolved-at
-                                                   (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
+                         (let ((config (gptel-auto-workflow--plist-dedup-put
+                                        current-controller :rules proposal-rules)))
+                           (setq config (gptel-auto-workflow--plist-dedup-put
+                                         config :learning-method "agent-rules"))
+                           (setq config (gptel-auto-workflow--plist-dedup-put
+                                         config :evolved-at
+                                         (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
                            config))))
         (unless proposal-rules
           (message "[controller-agent] Iter %d produced no valid controller rules; stopping" iter)

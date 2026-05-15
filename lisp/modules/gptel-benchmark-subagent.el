@@ -180,8 +180,12 @@ TIMEOUT overrides default."
      (lambda (r)
        (setq result r done t))
      timeout)
-    (while (not done)
-      (sit-for 0.1))
+     (let ((iters 0)
+           (max-iters 1200))
+       (while (and (not done) (< (cl-incf iters) max-iters))
+         (sit-for 0.1))
+       (when (and (not done) (>= iters max-iters))
+         (message "[subagent] Timeout after %d iterations waiting for response" iters)))
     result))
 
 ;;; Grader Subagent
