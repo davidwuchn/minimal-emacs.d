@@ -12,24 +12,24 @@ extended with a full AI agent system built on
 | **New features** | Auto-workflow, pipeline orchestrator, benchmark, retry loop, researcher, sandbox, strategic planner, skill evolution |
 | **Strategies** | 40+ prompt-building strategies (auto-evolved + hand-written) |
 | **Agents** | 10+ (MiniMax workhorse, moonshot/DashScope/DeepSeek/CF-Gateway fallbacks) |
-| **Cron jobs** | 6 scheduled jobs (auto-workflow, research, mementum, instincts) |
+| **Cron jobs** | Pi5/Linux: 6 pipeline runs/day plus weekly mementum and instincts; macOS: 3 pipeline runs/day plus weekly jobs |
 
-### Latest Features (2026-05-12)
+### Latest Features (2026-05-15)
 
 | Feature | Purpose |
 |---------|---------|
-| **Pipeline Orchestrator** | `run-pipeline.sh`: Research → Self-Evolution → Auto-Workflow in sequence |
-| **Skill Evolution** | 20 auto-evolved skills (DIRECTIVE.md, FINDINGS.md, benchmark-improver, etc.) |
+| **Pipeline Orchestrator** | `run-pipeline.sh`: Research → Verify → Self-Evolution (pre-workflow) → Auto-Workflow → Self-Evolution (post-workflow) |
+| **Skill Evolution** | Auto-evolved skills and guidance data (`DIRECTIVE.md`, researcher-prompt data, benchmark-improver, etc.) |
 | **Provider Failover** | 5x retry per provider before advancing chain; auto-switch back when quota resets |
 | **Strategy Evolution** | Meta-Harness search: 40+ strategies, agent-driven proposer, Pareto frontier, held-out test sets |
 | **Backend Fallback** | Executor: MiniMax → ... → CF-Gateway `@cf/moonshotai/kimi-k2.6`; Headless: CF-Gateway `@cf/openai/gpt-oss-120b` |
 | **Benchmark System** | Score tracking, quality metrics, evolution patterns, task-type-aware scoring |
 | **Review Retry Loop** | Executor fixes issues, reviewer validates, max 2 retries |
-| **Periodic Researcher** | Every 4h, finds anti-patterns for target selection via `FINDINGS.md` |
+| **Periodic Researcher** | Every 4h, writes `var/tmp/research-findings.md` for analyzer target selection |
 | **Sandbox Execution** | Safe code evaluation with `proper-list-p` validation and arity checking |
 | **Strategic Planner** | Long-term improvement planning with hypothesis tracking + directive skill |
 | **Transient Error Handling** | Curl exit codes 35 (SSL) and 56 (recv) treated as retryable, not permanent failures |
-| **Self-Evolution Fix** | Pipeline correctly detects "already-running" vs completion status |
+| **Self-Evolution Fix** | Pipeline distinguishes "already-running" from completion and evolves again after fresh workflow results |
 | **Strategy Naming** | Auto-generated `evolved-NNNN` and `candidate-*` names rejected; descriptive names required |
 | **AutoTTS Controller** | Multi-turn research with real-time controller: STOP/CONTINUE/CUT/BRANCH decisions, trace collection, offline evolution |
 
@@ -219,8 +219,9 @@ earlier external startup path.
   models like Moonshot/Kimi.
 - **Transient error recovery** - curl exit codes 35 (SSL) and 56 (recv) trigger
   retry + fallback instead of permanent blacklisting.
-- **Self-evolution** - Pipeline auto-digests research findings into evolving
-  skills; correctly handles "already-running" vs completion states.
+- **Self-evolution** - Pipeline digests research before auto-workflow and
+  digests fresh workflow results afterward so same-run outcomes can evolve
+  skills and controller rules.
 - **Tree-sitter code tooling** - structural map, inspect, replace, usages, and
   diagnostics across a multi-language workspace.
 - **Backend indirection** - one backend/model source of truth in
@@ -274,9 +275,9 @@ Phased autonomous agent for optimization experiments with auto-evolution.
 ### Pipeline
 
 ```
-Research → Self-Evolution → Auto-Workflow
-                    ↓
-        worktree → analyzer → executor → grader → benchmark → decide
+Research → Verify → Self-Evolution (pre) → Auto-Workflow → Self-Evolution (post)
+                                      ↓
+                          worktree → analyzer → executor → grader → benchmark → decide
 ```
 
 **Decision logic:** 70% grader + 30% code quality
@@ -383,18 +384,19 @@ The researcher uses an AutoTTS-style controller for adaptive multi-turn research
 
 | Job | Pi5 Schedule | macOS Schedule |
 |-----|-------------|----------------|
-| Pipeline (research→workflow→evolution) | 11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6x) | 10AM, 2PM, 6PM (3x) |
+| Pipeline (research→pre-evolution→workflow→post-evolution) | 11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6x) | 10AM, 2PM, 6PM (3x) |
 | Weekly mementum | Sunday 4AM | Sunday 4AM |
 | Weekly instincts | Sunday 5AM | Sunday 5AM |
 
 Install: `./scripts/install-cron.sh`
 
-Cron runs through `./scripts/run-auto-workflow-cron.sh`, which uses a dedicated `copilot-auto-workflow` Emacs daemon and writes a fast status snapshot to `var/tmp/cron/auto-workflow-status.sexp`.
+Cron runs `./scripts/run-pipeline.sh`, which calls `./scripts/run-auto-workflow-cron.sh` for daemon-backed research, evolution, auto-workflow, status, and message snapshots. The wrapper uses a dedicated `copilot-auto-workflow` Emacs daemon and writes a fast status snapshot to `var/tmp/cron/auto-workflow-status.sexp`.
 
 **Recent pipeline fixes:**
 - **4h timeout** — Extended from 2h to handle 25+ experiment batches
 - **.dir-locals propagation** — Project config (1200s time-budget) now inherited by all subagent buffers
 - **Self-evolution status** — Correctly detects "already-running" vs actual completion
+- **Post-workflow evolution** — Fresh `results.tsv` data feeds skill/controller evolution in the same pipeline run
 - **Completion verification** — Post-timeout check confirms workflow actually finished
 
 ### Usage
@@ -429,7 +431,10 @@ RunAgent("code", "optimize gptel-ext-context.el following docs/auto-workflow.md"
 ```
 
 ```bash
-# Cron-style manual run
+# Cron-style full pipeline run
+./scripts/run-pipeline.sh
+
+# Direct auto-workflow only (skips research and self-evolution pipeline steps)
 ./scripts/run-auto-workflow-cron.sh auto-workflow
 
 # Fast snapshot-based status + recent output
@@ -465,7 +470,7 @@ gptel-auto-workflow-max-targets-per-run   ; default 5
 - Test gate: `./scripts/verify-nucleus.sh` must pass
 - Benchmark validation required
 - Token/time budget enforcement
-- **Main NEVER touched** - all changes wait in staging
+- Experiment worktrees do not edit `main` directly; verified staging changes are merged deliberately
 - Pre-merge review catches blockers/critical issues
 
 See [docs/auto-workflow.md](docs/auto-workflow.md) for full specification.
