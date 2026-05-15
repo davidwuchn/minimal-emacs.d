@@ -307,8 +307,8 @@ Returns simulated controller decision without API calls."
                                           (plist-get turn-trace :ema-conf))
                                         (plist-get trace-data :trace-log)))
                           (list (or (plist-get trace-data :ema-conf) 0.0)))))
-              (gptel-auto-workflow--controller-decide-research-flow
-               replay-config output-length findings))
+(gptel-auto-workflow--controller-decide-with-doom-check
+                replay-config output-length findings))
           (when (boundp 'gptel-auto-workflow--research-ema-conf)
             (setq gptel-auto-workflow--research-ema-conf old-ema-conf))
           (when (boundp 'gptel-auto-workflow--research-ema-history)

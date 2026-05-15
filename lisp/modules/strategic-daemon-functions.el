@@ -57,6 +57,13 @@
 (defvar gptel-auto-workflow--research-ema-window 6
   "Number of turns to keep in EMA history for trend analysis.")
 
+(defvar gptel-auto-workflow--controller-decision-history nil
+  "History of controller decisions for doom loop detection.
+Each entry: (decision ema-range delta-sign output-hash).")
+
+(defvar gptel-auto-workflow--controller-doom-loop-threshold 3
+  "Number of identical controller decision patterns before doom loop abort.")
+
 ;; Execution trace recording
 (defvar gptel-auto-workflow--research-trace-log nil
   "Log of detailed execution traces for each research turn.")
@@ -481,6 +488,60 @@ Handles comparisons and arithmetic that Programmatic supports."
 
 ;; ─── End Agent-Generated Rule Evaluation ───
 
+;; ─── Controller Doom Loop Detection (ml-intern pattern) ───
+
+(defun gptel-auto-workflow--controller-decision-signature (decision ema-conf ema-delta output-text)
+  "Return doom loop signature for controller decision.
+Signature: (decision ema-range delta-sign output-hash).
+Includes output-hash so legitimate progress isn't flagged."
+  (let* ((ema-range (cond ((>= ema-conf 0.7) 'high)
+                          ((>= ema-conf 0.4) 'medium)
+                          (t 'low)))
+         (delta-sign (cond ((> ema-delta 0.02) 'rising)
+                           ((< ema-delta -0.02) 'falling)
+                           (t 'stable)))
+         (output-hash (when output-text
+                        (md5 (substring output-text 0 (min 100 (length output-text)))))))
+    (list decision ema-range delta-sign output-hash)))
+
+(defun gptel-auto-workflow--detect-controller-doom-loop ()
+  "Check if controller is stuck in repeated decision pattern.
+Returns corrective action or nil."
+  (let ((history gptel-auto-workflow--controller-decision-history)
+        (threshold gptel-auto-workflow--controller-doom-loop-threshold))
+    (when (and history (>= (length history) threshold))
+      (let ((recent (seq-take history threshold)))
+        (when (apply #'equal recent)
+          (let* ((stuck (car (car recent)))
+                 (corrective (if (eq stuck 'continue) 'branch 'stop)))
+            (message "[autotts] Doom loop: %s × %d → forcing %s"
+                     stuck threshold corrective)
+            corrective))))))
+
+(defun gptel-auto-workflow--record-controller-decision (decision ema-conf ema-delta output-text)
+  "Record controller decision in history for doom loop detection."
+  (let ((sig (gptel-auto-workflow--controller-decision-signature
+              decision ema-conf ema-delta output-text)))
+    (push sig gptel-auto-workflow--controller-decision-history)
+    (when (> (length gptel-auto-workflow--controller-decision-history) 10)
+      (setq gptel-auto-workflow--controller-decision-history
+            (seq-take gptel-auto-workflow--controller-decision-history 10)))))
+
+(defun gptel-auto-workflow--controller-decide-with-doom-check (controller-config output-length output-text)
+  "Controller with doom loop detection wrapper.
+Calls controller, checks for doom loop, records history, returns final decision."
+  (let* ((decision (gptel-auto-workflow--controller-decide-research-flow
+                    controller-config output-length output-text))
+         (ema-conf gptel-auto-workflow--research-ema-conf)
+         (ema-delta (gptel-auto-workflow--research-ema-delta))
+         (doom (gptel-auto-workflow--detect-controller-doom-loop)))
+    (if doom
+        doom
+      (gptel-auto-workflow--record-controller-decision decision ema-conf ema-delta output-text)
+      decision)))
+
+;; ─── End Controller Doom Loop Detection ───
+
 (defun gptel-auto-workflow--controller-decide-research-flow (controller-config output-length &optional output-text)
   "AutoTTS controller with EMA momentum gate.
 Decides: stop, continue, branch, or cut.
@@ -720,11 +781,11 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
                                    (concat gptel-auto-workflow--research-accumulated-findings 
                                            "\n\n---\n\n" effective-findings)
                                  effective-findings))
-              ;; Controller decision with EMA-enhanced config
-              (controller-decision (if timeout-p
-                                       'timeout
-                                     (gptel-auto-workflow--controller-decide-research-flow
-                                      controller-config-with-turn (length merged-findings) merged-findings))))
+              ;; Controller decision with EMA-enhanced config + doom loop detection
+               (controller-decision (if timeout-p
+                                        'timeout
+                                      (gptel-auto-workflow--controller-decide-with-doom-check
+                                        controller-config-with-turn (length merged-findings) merged-findings))))
           ;; Record execution trace with failure classification
           (gptel-auto-workflow--record-research-trace
            turn
