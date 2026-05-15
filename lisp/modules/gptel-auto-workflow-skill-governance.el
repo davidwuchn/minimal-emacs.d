@@ -10,6 +10,7 @@
 ;;; Code:
 
 (require 'json)
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 
 ;; ─── Semia Security Audit (Layer 2) ───
 
@@ -245,7 +246,7 @@ Returns plist with (:skill :baseline-success :treatment-success :delta
 :recommendation).  Integrates skill-eval methodology with benchmark
 infrastructure.  N-EXPERIMENTS per arm (default 3)."
   (let* ((n (or n-experiments 3))
-         (skill-label (format "skill-eval:%s" skill-name))
+         (_skill-label (format "skill-eval:%s" skill-name))
          (baseline (gptel-auto-workflow--skill-eval-run-arm
                     target-file nil n))
          (treatment (gptel-auto-workflow--skill-eval-run-arm

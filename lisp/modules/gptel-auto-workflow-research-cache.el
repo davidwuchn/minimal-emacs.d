@@ -18,6 +18,7 @@
 (require 'cl-lib)
 (require 'json)
 (require 'subr-x)
+(declare-function gptel-auto-workflow--controller-decide-with-doom-check "strategic-daemon-functions")
 
 (defvar gptel-auto-workflow--research-cache-dir
   (expand-file-name "var/tmp/research-traces/"

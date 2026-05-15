@@ -17,6 +17,7 @@
 (require 'gptel-benchmark-principles)
 (require 'gptel-benchmark-core)
 (require 'gptel-benchmark-memory)
+(declare-function gptel-auto-workflow--substitute-template "gptel-tools-agent-prompt-build")
 
 (declare-function gptel-request "gptel")
 (declare-function gptel-abort "gptel" (buffer))
@@ -43,7 +44,7 @@
 
 (defun gptel-benchmark-llm-suggest-improvements (name type anti-patterns &optional callback)
   "Use LLM to generate improvement suggestions.
-NAME is skill/workflow name, TYPE is 'skill or 'workflow.
+NAME is skill/workflow name, TYPE is \='skill or \='workflow.
 ANTI-PATTERNS is list of detected anti-patterns.
 CALLBACK receives suggestions when complete (async)."
   (if (and gptel-benchmark-llm-enabled (fboundp 'gptel-request))
@@ -239,7 +240,7 @@ Uses skill if available, otherwise falls back to hardcoded template."
 
 ;;; Fallback Functions (no LLM)
 
-(defun gptel-benchmark--fallback-suggestions (name type anti-patterns callback)
+(defun gptel-benchmark--fallback-suggestions (_name _type anti-patterns callback)
   "Generate fallback suggestions without LLM."
   (let ((suggestions (mapcar
                       (lambda (ap)

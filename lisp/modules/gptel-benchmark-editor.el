@@ -112,7 +112,7 @@ Operations: :prepend, :append, :replace-section, :add-constraint."
         checkpoint-id))))
 
 (defun gptel-benchmark-edit-skill-add-behavior (skill-name behavior type)
-  "Add BEHAVIOR to SKILL-NAME. TYPE is 'expected or 'forbidden."
+  "Add BEHAVIOR to SKILL-NAME. TYPE is \='expected or \='forbidden."
   (let* ((test-file (expand-file-name (format "%s.json" skill-name)
                                       gptel-benchmark-editor-tests-dir)))
     (if (not (file-exists-p test-file))
@@ -195,28 +195,30 @@ MODIFICATIONS is a plist of changes."
 
 (defun gptel-benchmark-edit-workflow-config (workflow-name modifications)
   "Edit WORKFLOW-NAME configuration with MODIFICATIONS."
-  (let ((workflow-file (expand-file-name (format "%s.el" workflow-name) "lisp/workflows/")))
-    (if (not (file-exists-p workflow-file))
-        (message "[editor] Workflow file not found: %s" workflow-file)
-      (let ((checkpoint-id (gptel-benchmark-editor-create-checkpoint workflow-file)))
-        (with-temp-buffer
-          (insert-file-contents workflow-file)
-          (dolist (mod modifications)
-            (pcase (car mod)
-              (:add-step
-               (goto-char (point-max))
-               (forward-line -3)
-               (insert (cdr mod) "\n"))
-              (:modify-threshold
-               (goto-char (point-min))
-               (when (re-search-forward (format "defcustom.*%s" (plist-get (cdr mod) :name)) nil t)
-                 (when (re-search-forward ":type 'number" nil t)
-                   (forward-line 1)
-                   (when (re-search-forward "[0-9]+" nil t)
-                     (replace-match (number-to-string (plist-get (cdr mod) :value))))))))))
-          (write-region (point-min) (point-max) workflow-file))
-        (message "[editor] Modified workflow %s (checkpoint: %s)" workflow-name checkpoint-id)
-        checkpoint-id))))
+  (let* ((workflow-file (expand-file-name (format "%s.el" workflow-name) "lisp/workflows/"))
+         (file-exists (file-exists-p workflow-file))
+         (wf-checkpoint-id (and file-exists (gptel-benchmark-editor-create-checkpoint workflow-file))))
+    (if file-exists
+        (progn
+          (with-temp-buffer
+            (insert-file-contents workflow-file)
+            (dolist (mod modifications)
+              (pcase (car mod)
+                (:add-step
+                 (goto-char (point-max))
+                 (forward-line -3)
+                 (insert (cdr mod) "\n"))
+                (:modify-threshold
+                 (goto-char (point-min))
+                 (when (re-search-forward (format "defcustom.*%s" (plist-get (cdr mod) :name)) nil t)
+                   (when (re-search-forward ":type 'number" nil t)
+                     (forward-line 1)
+                     (when (re-search-forward "[0-9]+" nil t)
+                       (replace-match (number-to-string (plist-get (cdr mod) :value))))))))))
+            (write-region (point-min) (point-max) workflow-file))
+          (message "[editor] Modified workflow %s (checkpoint: %s)" workflow-name wf-checkpoint-id)
+          wf-checkpoint-id)
+      (message "[editor] Workflow file not found: %s" workflow-file))))
 
 ;;; Patch Application
 

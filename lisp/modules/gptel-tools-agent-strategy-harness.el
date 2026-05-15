@@ -701,5 +701,7 @@ Falls back to default template if strategy not found or fails."
      (message "[strategy] ERROR using %s: %s, falling back to default" strategy-name err)
      (gptel-auto-experiment-build-prompt target experiment-id max-experiments analysis baseline previous-results))))
 
+(declare-function gptel-auto-experiment-build-prompt "gptel-tools-agent-prompt-build")
+
 (provide 'gptel-tools-agent-strategy-harness)
 ;;; gptel-tools-agent-strategy-harness.el ends here

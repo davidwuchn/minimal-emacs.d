@@ -13,6 +13,8 @@
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-base" ())
 (declare-function gptel-auto-workflow--results-file-path "gptel-tools-agent-base" (&optional run-id))
 (declare-function gptel-request "gptel" (prompt &rest args))
+(declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-workflow--substitute-template "gptel-tools-agent-prompt-build")
 (defvar gptel-auto-workflow--suppress-strategy-metadata-persistence)
 
 ;;; Strategy Generation
@@ -457,6 +459,8 @@ CANDIDATE_1:
 ;; The name should describe the core mechanism in 2-4 hyphenated words.
 
 (require 'gptel-tools-agent-prompt-build)
+(declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-workflow--substitute-template "gptel-tools-agent-prompt-build")
 
 (defun strategy-NAME-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   ;; NEW MECHANISM HERE
@@ -750,7 +754,7 @@ Returns new strategy name or nil if rejected."
 
 ;;; Periodic Strategy Evolution
 
-(defun gptel-auto-workflow--maybe-evolve-strategy (target)
+(defun gptel-auto-workflow--maybe-evolve-strategy (_target)
   "Maybe evolve a new strategy for TARGET based on recent performance.
 Called periodically from the experiment loop.
 If current strategy is underperforming, tries to generate a new one.
@@ -760,7 +764,7 @@ strategy as the parent for evolution."
              (fboundp 'gptel-auto-workflow--select-best-strategy))
     (let* ((current-strategy gptel-auto-workflow--active-strategy)
            (current-perf (gptel-auto-workflow--get-strategy-performance current-strategy))
-           (current-success-rate (plist-get current-perf :success-rate))
+           (_current-success-rate (plist-get current-perf :success-rate))
            (current-total (plist-get current-perf :total))
            ;; If active strategy is unevaluated, check evaluated strategies for evolution candidates
            (parent-strategy
@@ -830,7 +834,7 @@ strategy as the parent for evolution."
                   (setq target-axis axis))))
             ;; Evolve strategy (with interrupt protection)
             (let ((new-strategy
-                   (condition-case quit
+                   (condition-case _quit
                         (gptel-auto-workflow--evolve-strategy
                          parent-strategy
                         (format "Improve strategy by targeting axis %s (%s)"

@@ -131,6 +131,10 @@
     (require 'gptel-request)
     (require 'gptel-agent)
     (require 'gptel-agent-tools)))
+(declare-function gptel-auto-workflow-queue-all-instincts "gptel-auto-workflow-projects")
+(declare-function gptel-auto-workflow-queue-all-mementum "gptel-auto-workflow-projects")
+(declare-function gptel-auto-workflow-queue-all-projects "gptel-auto-workflow-projects")
+(declare-function gptel-auto-workflow-queue-all-research "gptel-auto-workflow-projects")
 
 (defun gptel-auto-workflow-bootstrap-run (root action)
   "Bootstrap headless workflow execution from ROOT for ACTION."

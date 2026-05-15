@@ -1,3 +1,27 @@
+; -*- lexical-binding: t; -*-
+(declare-function gptel-agent-read-file nil)
+(declare-function gptel-auto-workflow-load-research-findings "gptel-auto-workflow-strategic")
+(declare-function gptel-benchmark--detect-task-type "gptel-benchmark-principles")
+(declare-function my/gptel-get-model-metadata "gptel-ext-context-cache")
+(declare-function gptel-auto-workflow--current-run-id "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--ensure-results-file "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--make-idempotent-callback "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--results-file-path "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
+(declare-function gptel-auto-experiment--eight-keys-scores "gptel-tools-agent-benchmark")
+(declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark")
+(declare-function gptel-auto-workflow--persist-status "gptel-tools-agent-experiment-loop")
+(declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git")
+(declare-function gptel-auto-workflow--extract-mutation-templates "gptel-tools-agent-main")
+(declare-function gptel-auto-workflow--format-weakest-keys "gptel-tools-agent-main")
+(declare-function gptel-auto-workflow-skill-suggest-hypothesis "gptel-tools-agent-main")
+(declare-function gptel-auto-experiment--inspection-thrash-result-p "gptel-tools-agent-prompt-analyze")
+(declare-function gptel-auto-experiment--needs-inspection-thrash-recovery-p "gptel-tools-agent-prompt-analyze")
+(declare-function gptel-auto-experiment--select-large-target-focus "gptel-tools-agent-prompt-analyze")
+(declare-function gptel-auto-experiment--target-byte-size "gptel-tools-agent-prompt-analyze")
+(declare-function gptel-auto-workflow--get-worktree-dir "gptel-tools-agent-subagent")
 ;;; gptel-tools-agent-prompt-build.el --- Prompt building - construction & logging -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
@@ -58,12 +82,15 @@ Returns cached content or nil if missing/stale."
 
 (defun gptel-auto-workflow--knowledge-cache-stats ()
   "Return cache statistics as string."
-   (let ((count 0)
-         (total-age 0))
-     (cl-flet ((tally-entry (_key entry)
-                (setq count (1+ count))
-                (setq total-age (+ total-age (float-time (time-subtract (current-time) (cdr entry)))))))
-       (maphash #'tally-entry gptel-auto-workflow--knowledge-cache))
+  (let ((count 0)
+        (total-age 0))
+    (maphash
+     (cl-function (lambda (_key entry)
+                     (cl-incf count)
+                     (cl-incf total-age
+                              (float-time
+                               (time-subtract (current-time) (cdr entry))))))
+     gptel-auto-workflow--knowledge-cache)
     (format "[knowledge-cache] %d entries, avg age %.0fs"
             count (if (> count 0) (/ total-age count) 0))))
 

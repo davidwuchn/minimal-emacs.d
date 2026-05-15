@@ -176,7 +176,7 @@ Called when table exceeds `gptel-agent-loop-max-active-tasks'."
     (cl-flet ((prune-finished (id state)
                (when (gptel-agent-loop--task-finished state)
                  (remhash id gptel-agent-loop--active-tasks))))
-      (maphash #'prune-finished gptel-agent-loop--active-tasks)))
+      (maphash #'prune-finished gptel-agent-loop--active-tasks))))
 
 (defun gptel-agent-loop-cleanup-all ()
   "Force cleanup of all finished tasks from active table.

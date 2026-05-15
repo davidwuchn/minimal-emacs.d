@@ -3,6 +3,9 @@
 
 (require 'cl-lib)
 
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--worktree-base-repo-root "gptel-tools-agent-worktree")
+
 (defun gptel-auto-workflow--path-exists-or-symlink-p (path)
   "Return non-nil when PATH exists or is a symlink, including broken links."
   (or (file-exists-p path)

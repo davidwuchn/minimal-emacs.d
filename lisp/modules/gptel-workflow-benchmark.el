@@ -20,6 +20,8 @@
 (require 'cl-lib)
 (require 'json)
 (require 'subr-x)
+(declare-function gptel-agent-loop--task-continuation-count nil)
+(declare-function gptel-agent-loop--task-step-count nil)
 
 (declare-function gptel-agent--task "gptel-tools-agent")
 (declare-function gptel-benchmark-eight-keys-score "gptel-benchmark-principles")

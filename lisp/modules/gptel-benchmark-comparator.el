@@ -15,6 +15,7 @@
 (require 'json)
 (require 'cl-lib)
 (require 'gptel-benchmark-core)
+(declare-function cl-last nil)
 
 ;;; Memoization Cache for Performance
 

@@ -1,3 +1,12 @@
+; -*- lexical-binding: t; -*-
+(declare-function gptel-auto-experiment--call-aux-subagent-with-retry nil)
+(declare-function gptel-auto-experiment--decision-gate nil)
+(declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
+(declare-function gptel-auto-experiment--expected-comparator-winner "gptel-tools-agent-benchmark")
+(declare-function gptel-auto-experiment--parse-comparator-winner "gptel-tools-agent-benchmark")
+(declare-function my/gptel--invoke-callback-safely "gptel-tools-agent-subagent")
+(defvar gptel-auto-experiment-use-subagents)
+(require 'cl-lib)
 ;;; gptel-tools-agent-prompt-analyze.el --- Prompt building - analysis & selection -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 

@@ -12,6 +12,11 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(declare-function gptel-auto-workflow--categorize-hypothesis "gptel-auto-workflow-evolution")
+(declare-function gptel-auto-workflow--git-compute-category-stats "gptel-auto-workflow-git-learning")
+(declare-function gptel-auto-workflow--git-compute-target-stats "gptel-auto-workflow-git-learning")
+(declare-function gptel-auto-workflow--git-experiment-commits "gptel-auto-workflow-git-learning")
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 
 ;; ─── Configuration ───
 

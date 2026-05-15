@@ -2,6 +2,9 @@
 ;;; Bypasses all strategic.el functions. Works even when load-file corrupts them.
 
 (require 'json)
+(declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
+(defvar gptel-auto-workflow--current-research-context)
+(defvar gptel-auto-workflow--research-in-progress)
 
 (defun slr--root ()
   "Return the project root for standalone research."

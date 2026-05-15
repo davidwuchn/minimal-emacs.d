@@ -15,8 +15,8 @@
 ;; fail to resolve lexically-bound parameters on arm64 Emacs 30.1.
 ;; Intentionally unprefixed — these names match closure variable names
 ;; that native-comp expects to find dynamically bound.
-(defvar async nil)
-(defvar process nil)
+(defvar gptel-auto-workflow--async nil)
+(defvar gptel-auto-workflow--process nil)
 
 (require 'cl-lib)
 (require 'gptel-tools-agent)
