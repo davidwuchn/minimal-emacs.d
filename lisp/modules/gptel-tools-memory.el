@@ -76,22 +76,24 @@ Returns success message or error."
           (format "Memory '%s' written (%d chars)" slug (length content)))
       (error (format "Error writing memory '%s': %s" slug (error-message-string err))))))
 
+(defun gptel-tools-memory--collect-dir (dir type-label root &optional topic)
+  "Collect memory entries from DIR with TYPE-LABEL.
+Each entry is formatted as \"name (type-label)\".
+If TOPIC is non-nil, filter by topic match."
+  (when (file-directory-p dir)
+    (cl-loop for f in (directory-files-recursively dir "\\.md$")
+             for base = (file-name-sans-extension (file-name-nondirectory f))
+             when (or (not topic)
+                      (string-match-p (regexp-quote topic) base))
+             collect (format "%s (%s)" base type-label))))
+
 (defun gptel-tools-memory--list (&optional topic)
   "List available memories, optionally filtered by TOPIC."
   (let* ((root (gptel-tools-memory--project-root))
          (mem-dir (expand-file-name gptel-tools-memory-dir root))
          (know-dir (expand-file-name gptel-tools-memory-knowledge-dir root))
-         (results (cl-loop for dir in (list mem-dir know-dir)
-                          when (file-directory-p dir)
-                          append (cl-loop for f in (directory-files-recursively dir "\\.md$")
-                                         for rel = (file-relative-name f root)
-                                         for name = (file-name-sans-extension (file-relative-name f dir))
-                                         when (or (not topic)
-                                                  (string-match-p (regexp-quote topic) name))
-                                         collect (format "%s (%s)"
-                                                        name
-                                                        (if (string-prefix-p "mementum/knowledge" rel)
-                                                            "knowledge" "memory"))))))
+         (results (append (gptel-tools-memory--collect-dir mem-dir "memory" root topic)
+                          (gptel-tools-memory--collect-dir know-dir "knowledge" root topic))))
     (if results
         (format "Available memories (%d):\n%s"
                 (length results)
