@@ -169,14 +169,16 @@ Applied after toolset selection but before `gptel-tools' is set.
 Can be set via .dir-locals.el or (setq-local nucleus-project-excluded-tools ...).
 Example: (setq-local nucleus-project-excluded-tools '(\"YouTube\" \"WebSearch\"))"
   :type '(repeat string)
-  :group 'nucleus-tools)
+  :group 'nucleus-tools
+  :safe #'listp)
 
 (defcustom nucleus-project-readonly-override nil
   "When non-nil, override the plan-mode toolset with this list of tool names.
 Useful for projects that need custom readonly tool availability.
 When nil (default), the standard :readonly toolset is used."
   :type '(choice (const nil) (repeat string))
-  :group 'nucleus-tools)
+  :group 'nucleus-tools
+  :safe (lambda (v) (or (null v) (listp v))))
 
 (defun nucleus--apply-project-exclusions (tools)
   "Remove project-excluded tools from TOOLS list.
@@ -417,12 +419,15 @@ defers sync via idle timer to allow tool registration to complete."
           (when nucleus-tools-verbose
             (message "[nucleus-tools] No nucleus preset active, skipping tool sync"))
         (let ((toolset-key (pcase active-preset
-                             ('gptel-plan :readonly)
-                             ('gptel-agent :nucleus))))
-          (if (nucleus--tools-ready-p toolset-key)
-              (progn
-                 (setq-local gptel-tools (nucleus--apply-project-exclusions
-                                          (nucleus-get-tools toolset-key)))
+                              ('gptel-plan :readonly)
+                              ('gptel-agent :nucleus))))
+           (if (nucleus--tools-ready-p toolset-key)
+               (progn
+                  (setq-local gptel-tools (nucleus--apply-project-exclusions
+                                           (if (and (eq toolset-key :readonly)
+                                                    nucleus-project-readonly-override)
+                                               nucleus-project-readonly-override
+                                             (nucleus-get-tools toolset-key))))
                  (when nucleus-tools-verbose
                    (message "[nucleus-tools] Tool profile synced to %s (%d tools, %d excluded by project)"
                             active-preset (length gptel-tools)
