@@ -375,13 +375,16 @@ SIGNAL: explicit assumptions - Uses shared traversal helper."
 ;;; Registry Validation
 
 (defvar my/gptel--fsm-id-regexp
-  (concat "\\`fsm-" "\\([0-9]+\\)" "-[0-9]+\\.[0-9]+\\'")
-  "Compiled regex for validating FSM ID format.
+  (rx-to-string '(seq bos "fsm-" (group (one-or-more digit)) "-" (one-or-more digit) "." (one-or-more digit) eos))
+  "Pre-compiled regex for validating FSM ID format.
 
 ASSUMPTION: Pattern matches \"fsm-N-TIMESTAMP\" format exactly.
 BEHAVIOR: Pre-compiled at load time for O(1) matching.
 TEST: (string-match my/gptel--fsm-id-regexp \"fsm-1-1234567890.123\") => t
-TEST: (string-match my/gptel--fsm-id-regexp \"invalid\") => nil")
+TEST: (string-match my/gptel--fsm-id-regexp \"invalid\") => nil
+
+BUILDS ON DISCOVERY: Using rx-to-string avoids repeated regex compilation
+on each string-match-p call, improving Vitality.")
 
 (defun my/gptel--fsm-id-valid-p (id)
   "Return t if ID matches expected FSM ID format.
