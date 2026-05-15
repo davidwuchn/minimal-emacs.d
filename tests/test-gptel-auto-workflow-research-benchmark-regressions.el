@@ -253,6 +253,30 @@
               (should (= count 1)))))
       (delete-directory root t))))
 
+(ert-deftest regression/research-benchmark/cmc-simulation-respects-warm-up-gate ()
+  "CMC simulation should NOT stop on turn 1 even with high confidence (warm-up=2)."
+  (let ((result (gptel-auto-workflow--evaluate-controller-config
+                 '(:stop-threshold 0.6 :warm-up 2 :min-complete 2 :max-turns 4)
+                 (list '(:output-length 1200 :confidence 0.9 :ema-conf 0.9 :ema-delta 0.1 :turn-count 1 :success-p t)))))
+    (should (= (plist-get result :simulated-stops) 0))
+    (should (> (plist-get result :false-continues) 0))))
+
+(ert-deftest regression/research-benchmark/cmc-simulation-stops-after-warm-up ()
+  "CMC simulation should stop on turn 3 when confidence is high and warm-up=2."
+  (let ((result (gptel-auto-workflow--evaluate-controller-config
+                 '(:stop-threshold 0.6 :warm-up 2 :min-complete 2 :max-turns 4)
+                 (list '(:output-length 1200 :confidence 0.9 :ema-conf 0.9 :ema-delta 0.1 :turn-count 3 :success-p t)))))
+    (should (> (plist-get result :simulated-stops) 0))))
+
+(ert-deftest regression/research-benchmark/cmc-simulation-uses-canonical-defaults ()
+  "CMC simulation should use canonical defaults (delta-slack=0.04, trend-threshold=0.04).
+With ema-delta=0.03 (> -0.04) and ema-conf=0.8 (> 0.7) and turn-count=3 (>= warm-up=2),
+simulation should decide STOP for successful trace."
+  (let ((result (gptel-auto-workflow--evaluate-controller-config
+                 '(:stop-threshold 0.7)
+                 (list '(:output-length 1200 :confidence 0.8 :ema-conf 0.8 :ema-delta 0.03 :turn-count 3 :success-p t)))))
+    (should (> (plist-get result :simulated-stops) 0))))
+
 (provide 'test-gptel-auto-workflow-research-benchmark-regressions)
 
 ;;; test-gptel-auto-workflow-research-benchmark-regressions.el ends here
