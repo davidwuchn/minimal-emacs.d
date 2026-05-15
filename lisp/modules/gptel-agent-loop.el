@@ -265,10 +265,12 @@ otherwise returns nil. This avoids silent failures with dotted pairs."
 
 (defun gptel-agent-loop--append-output (state text)
   "Append TEXT to STATE's accumulated output.
-Returns nil if TEXT is not a string (defensive guard)."
+Returns nil if TEXT is not a string (defensive guard).
+ASSUMPTION: STATE is already validated by caller (task-p check done once).
+BEHAVIOR: Uses direct slot access to avoid redundant task-p check on hot path."
   (when (and (gptel-agent-loop--task-p state) (stringp text))
     (setf (gptel-agent-loop--task-accumulated-output state)
-          (concat (gptel-agent-loop--safe-accumulated-output state)
+          (concat (or (gptel-agent-loop--task-accumulated-output state) "")
                   text
                   (unless (string-suffix-p "\n" text) "\n")))))
 
@@ -716,11 +718,12 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
          ((and (consp resp) (eq (car resp) 'reasoning))
           ;; Handle reasoning blocks (e.g., <think> tags) by extracting the text
           (let ((reasoning-text (cdr resp)))
-            (unless (gptel-agent-loop--check-aborted state ov)
-              (let ((final-turn (not (plist-get info :tool-use))))
-                (when final-turn
-                  (gptel-agent-loop--cleanup-overlay ov)
-                  (gptel-agent-loop--handle-string-response state reasoning-text use-tools))))))
+            (when (stringp reasoning-text)
+              (unless (gptel-agent-loop--check-aborted state ov)
+                (let ((final-turn (not (plist-get info :tool-use))))
+                  (when final-turn
+                    (gptel-agent-loop--cleanup-overlay ov)
+                    (gptel-agent-loop--handle-string-response state reasoning-text use-tools)))))))
 
          ((eq resp 'abort)
           (gptel-agent-loop--handle-aborted-state state ov t))
@@ -806,16 +809,30 @@ Returns non-nil if result was delivered."
          (gptel-agent-loop--build-incomplete-result state resp))))
     t))
 
-(defun gptel-agent-loop--handle-final-response (state _resp)
+(defun gptel-agent-loop--handle-final-response (state resp)
   "Handle STATE when RESP is a final response to deliver.
 Called only from `handle-string-response' when STATE is task-p.
 _RESP is unused as final result uses accumulated output only.
-Returns non-nil if result was delivered."
-  (gptel-agent-loop--deliver-result
-   state
-   (gptel-agent-loop--build-final-result state "")
-   t)
-  t)
+Returns non-nil if result was delivered.
+BEHAVIOR: Only delivers as final if RESP looks complete.
+Otherwise schedules continuation to prevent premature termination."
+  (when (stringp resp)
+    (if (or (gptel-agent-loop--seems-complete-p resp)
+            (gptel-agent-loop--looks-like-finishing-p resp))
+        (progn
+          (gptel-agent-loop--deliver-result
+           state
+           (gptel-agent-loop--build-final-result state "")
+           t)
+          t)
+      (when (and (gptel-agent-loop--continuation-needed-p state resp)
+                 (not (gptel-agent-loop--task-max-steps-reached state)))
+        (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
+          (message "[RunAgent] Response doesn't look complete, auto-continuing (continuation %d/%d)..."
+                   cont-count gptel-agent-loop-max-continuations)
+          (gptel-agent-loop--append-output state resp)
+          (gptel-agent-loop--schedule-request state (gptel-agent-loop--continuation-prompt-for state) t))
+        t))))
 
 (defun gptel-agent-loop--handle-string-response (state resp use-tools)
   "Handle string response RESP for STATE.
@@ -1022,10 +1039,12 @@ Use this in the main agent to decide whether to re-call RunAgent."
         (cons steps cleaned)))))
 
 (defun gptel-agent-loop-extract-result (result)
-  "Extract clean result from RunAgent output, removing continuation markers."
-  (if (stringp result)
-      (replace-regexp-in-string "\\[RUNAGENT_INCOMPLETE:[0-9]+ steps\\(?:, [0-9]+ continuations\\)?\\]\\s-*" "" result)
-    result))
+  "Extract clean result from RunAgent output, removing continuation markers.
+Returns empty string if RESULT is nil or not a string (defensive guard)."
+  (cond ((stringp result)
+         (replace-regexp-in-string "\\[RUNAGENT_INCOMPLETE:[0-9]+ steps\\(?:, [0-9]+ continuations\\)?\\]\\s-*" "" result))
+        ((null result) "")
+        (t "")))
 
 (gptel-agent-loop--ensure-patterns-compiled)
 
