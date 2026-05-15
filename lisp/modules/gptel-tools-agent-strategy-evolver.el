@@ -532,8 +532,13 @@ CANDIDATE_3:
             ;; gptel's async response handler from running.
             (with-timeout (120 (message "[strategy-evolution] Timeout waiting for proposals")
                              nil)
-              (while (not done)
-                (accept-process-output nil 0.5)))
+              (let ((iterations 0)
+                    (max-iterations 300))
+                (while (and (not done)
+                            (< (cl-incf iterations) max-iterations))
+                  (accept-process-output nil 0.5))
+                (when (and (not done) (>= iterations max-iterations))
+                  (message "[strategy-evolution] Exhausted %d iterations waiting for proposals" iterations))))
 
             (when responses
               (message "[strategy-evolution] Received proposals, parsing...")

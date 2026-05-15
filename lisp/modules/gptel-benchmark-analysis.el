@@ -32,7 +32,10 @@ Returns plist with flaky tests, non-discriminating tests, and systematic failure
          (format "Analyze: %s" (file-name-base benchmark-file))
          (format "Analyze benchmark results in %s. Output JSON with findings and recommendations."
                  benchmark-file))
-        (while (not done) (sit-for 0.1))
+        (let ((iters 0)
+              (max-iters 1200))
+          (while (and (not done) (< (cl-incf iters) max-iters))
+            (sit-for 0.1)))
         (gptel-benchmark--parse-analysis-result result))
     (let* ((data (gptel-benchmark-read-json benchmark-file))
            (flaky-tests (gptel-benchmark-find-flaky-tests benchmark-file))
