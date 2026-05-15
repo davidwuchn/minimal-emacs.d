@@ -879,9 +879,10 @@ not just tunes parameters. The search space is the code itself."
   "Generate prompt for controller design agent."
   (let* ((trace-summary (gptel-auto-workflow--summarize-traces-for-prompt train-traces))
          (current-params (format "own-repo-priority=%.2f ext-priority=%.2f stop-threshold=%.2f branch-threshold=%.2f beta=%.2f"
-                                (or (plist-get current-controller :own-repo-priority) 0.85)
+                                (or (plist-get current-controller :own-repo-priority) 0.7)
                                 (or (plist-get current-controller :external-priority) 0.15)
-                                (or (plist-get current-controller :min-confidence-stop) 0.7)
+                                 (or (plist-get current-controller :stop-threshold)
+                                     (plist-get current-controller :min-confidence-stop) 0.7)
                                 (or (plist-get current-controller :branch-threshold) 0.3)
                                 (or (plist-get current-controller :beta) 0.5))))
     (format
@@ -1103,15 +1104,23 @@ This is an OFFLINE evaluation — 0 LLM calls."
              (ema-delta (or (plist-get trace :ema-delta) 0.0))
              (turn-count (or (plist-get trace :turn-count) 1))
              (success (gptel-auto-workflow--trace-success-p trace))
-             (stop-threshold (plist-get config :min-confidence-stop))
-             (delta-slack 0.01)
-             (trend-threshold (plist-get config :trend-threshold))
-             ;; Simulate CMC decision for this trace
-             (would-stop (and (>= ema-conf (or stop-threshold 0.7))
-                              (>= ema-delta (- (or delta-slack 0.02)))))
-             (would-branch (and (< ema-conf (or stop-threshold 0.7))
-                                (<= ema-delta (or trend-threshold 0.05))
-                                (>= turn-count 1))))
+             (stop-threshold (or (plist-get config :stop-threshold)
+                                 (plist-get config :min-confidence-stop)
+                                 0.65))
+             (delta-slack (or (plist-get config :delta-slack) 0.04))
+             (trend-threshold (or (plist-get config :trend-threshold) 0.04))
+             (warm-up (or (plist-get config :warm-up) 2))
+             (min-complete (or (plist-get config :min-complete) 2))
+             (max-turns (or (plist-get config :max-turns) 3))
+             ;; Simulate CMC decision for this trace (mirrors controller-decide-research-flow)
+             (would-stop (and (>= turn-count warm-up)
+                              (>= turn-count min-complete)
+                              (>= ema-conf stop-threshold)
+                              (>= ema-delta (- delta-slack))))
+             (would-branch (and (>= turn-count (max 1 (/ warm-up 2)))
+                                (< ema-conf stop-threshold)
+                                (<= ema-delta trend-threshold)
+                                (< turn-count (1- max-turns)))))
         ;; Score the simulated decision against actual outcome
         (cond
          ;; Trace was successful → STOP would have been right, CONTINUE wasted tokens

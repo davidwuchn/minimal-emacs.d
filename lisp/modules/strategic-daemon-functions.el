@@ -598,7 +598,8 @@ Calls controller, checks for doom loop, records history, returns final decision.
 Decides: stop, continue, branch, or cut.
 Uses EMA trend analysis for momentum-aware stopping."
   (let* ((tokens-used (/ output-length 4))
-         (max-tokens (or (plist-get controller-config :token-budget) 8000))
+         (max-tokens (or (plist-get controller-config :token-budget)
+                         (plist-get controller-config :max-tokens-budget) 8000))
          (text (or output-text ""))
          (has-urls (string-match-p "https?://" text))
          (has-structure (string-match-p "## .*\\n" text))
@@ -608,7 +609,8 @@ Uses EMA trend analysis for momentum-aware stopping."
          (ema-conf gptel-auto-workflow--research-ema-conf)
          (ema-delta (gptel-auto-workflow--research-ema-delta))
          ;; Thresholds from beta schedule
-         (stop-threshold (or (plist-get controller-config :stop-threshold) 0.65))
+         (stop-threshold (or (plist-get controller-config :stop-threshold)
+                             (plist-get controller-config :min-confidence-stop) 0.65))
          (branch-threshold (or (plist-get controller-config :branch-threshold) 0.3))
          (delta-slack (or (plist-get controller-config :delta-slack) 0.04))
          (trend-threshold (or (plist-get controller-config :trend-threshold) 0.04))
@@ -929,7 +931,7 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
      (let* ((source-classification (when accumulated-findings
                                      (gptel-auto-workflow--classify-source
                                       "own-research" accumulated-findings)))
-            (own-priority (or (plist-get controller-config :own-repo-priority) 0.85))
+             (own-priority (or (plist-get controller-config :own-repo-priority) 0.7))
             (base-timeout 180)
             ;; Alignment multiplier: aligned=1.5x, neutral=1.0x, deviant=0.7x
             (alignment-factor (cond
@@ -953,7 +955,7 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
 The controller actively selects which sources to search next, not just advisory text.
 Based on source classification and effectiveness data.
 Returns modified prompt with source directive appended."
-  (let* ((own-priority (or (plist-get controller-config :own-repo-priority) 0.85))
+  (let* ((own-priority (or (plist-get controller-config :own-repo-priority) 0.7))
          (external-priority (or (plist-get controller-config :external-priority) 0.15))
          (classification (when accumulated-findings
                            (gptel-auto-workflow--classify-source
