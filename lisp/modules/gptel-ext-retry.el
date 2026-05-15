@@ -156,8 +156,8 @@ BEHAVIOR: keep count decreases with each retry:
 (defun my/gptel--info-data (info)
   "Safely extract :data from INFO plist.
 Returns the :data value if INFO is a proper list, nil otherwise.
-Guards against malformed info that is truthy but not a list."
-  (and (listp info) (plist-get info :data)))
+Guards against malformed info that is truthy but not a proper list."
+  (and (proper-list-p info) (plist-get info :data)))
 
 (defun my/gptel--info-get (info key &optional default)
   "Safely extract KEY from INFO plist, returning DEFAULT if unavailable.
@@ -569,7 +569,7 @@ Returns the message string if found, nil otherwise.
 ASSUMPTION: Error messages can be in :message (plist) or 'message (alist) keys."
   (cond
     ((stringp error-data) error-data)
-    ((listp error-data)
+    ((proper-list-p error-data)
      (or (plist-get error-data :message)
          (cdr (assq 'message error-data))))
     (t nil)))
@@ -625,11 +625,11 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
         (and (numberp status) (memq status my/gptel--transient-http-statuses))
         (and (numberp status)
              (= status 400)
-             (listp error-data)
+             (proper-list-p error-data)
              (stringp error-msg)
              http-400-pattern
              (string-match-p http-400-pattern error-msg))
-        (and (listp error-data)
+        (and (proper-list-p error-data)
              (stringp error-msg)
              (or (null status) (not (memq status my/gptel--auth-failure-statuses)))
              msg-pattern
@@ -974,9 +974,12 @@ WISDOM: 9-pass progressive approach minimizes context loss:
 TEST: Create payload >200KB, verify compaction runs and reduces size.
   Check message log for pass-by-pass progress reports."
   (when my/gptel-payload-byte-limit
-    (let* ((info (gptel-fsm-info fsm))
-           (retries (or (plist-get info :retries) 0)))
-      (when (= retries 0)
+    (let* ((raw-info (gptel-fsm-info fsm))
+           ;; Guard: ensure info is a proper list before accessing with plist-get
+           (info (and (listp raw-info) raw-info))
+           ;; Guard: protect plist-get from nil info
+           (retries (if info (or (plist-get info :retries) 0) 0)))
+      (when (and info (= retries 0)
         (let ((limit (my/gptel--effective-byte-limit info))
               (repaired (my/gptel--repair-thinking-tool-call-messages info)))
           (when (> repaired 0)
@@ -1000,7 +1003,7 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                   (message "gptel: WARNING: Payload still %dKB after %d passes of compaction (limit %dKB)"
                            (/ bytes 1024) pass (/ limit 1024))
                 (message "gptel: Compaction complete: %d items trimmed across %d pass(es), payload now %dKB"
-                         trimmed-total pass (/ bytes 1024))))))))))
+                         trimmed-total pass (/ bytes 1024)))))))))))
 
 (advice-add 'gptel-curl-get-response :before #'my/gptel--compact-payload)
 
