@@ -222,7 +222,7 @@ Returns the message string or nil."
              (gptel-auto-experiment--rate-limit-error-p msg)
              (gptel-auto-experiment--provider-usage-limit-error-p msg)
              (let ((case-fold-search t))
-               (string-match-p (car gptel-auto-experiment--shared-retryable-error-patterns) msg))))))
+                (string-match-p (caar gptel-auto-experiment--shared-retryable-error-patterns) msg))))))
 
 (defvar gptel-auto-experiment--quota-reset-timestamp nil
   "Parsed timestamp (seconds since epoch) when quota resets.
@@ -280,7 +280,7 @@ This is used for retry logic and includes transient errors."
       (let ((msg (gptel-auto-experiment--error-message error-output)))
         (and (stringp msg)
              (let ((case-fold-search t))
-               (string-match-p (cdr gptel-auto-experiment--shared-retryable-error-patterns) msg))))))
+                (string-match-p (cadr gptel-auto-experiment--shared-retryable-error-patterns) msg))))))
 
 (defun gptel-auto-experiment--should-blacklist-provider-p (error-output)
   "Return non-nil only when ERROR-OUTPUT shows a real rate limit or hard quota.

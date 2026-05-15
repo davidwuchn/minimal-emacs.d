@@ -858,6 +858,12 @@ just that gitlink from MAIN-REF, then rehydrate and commit the repair."
                         (and main-commit
                              (gptel-auto-workflow--shared-submodule-git-dir path main-commit))))
                   (cond
+                   ((and current-commit main-commit
+                         (equal current-commit main-commit))
+                    (push (format "%s=%s (already aligned)"
+                                  path
+                                  (gptel-auto-workflow--truncate-hash main-commit))
+                          repaired))
                    ((and main-commit
                          main-git-dir
                          (not (equal current-commit main-commit)))
