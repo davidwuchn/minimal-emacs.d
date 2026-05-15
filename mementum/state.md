@@ -2,6 +2,28 @@
 
 > Last session: 2026-05-15
 
+## Current Session: Multi-Turn Research Outcome Formatter Fix
+
+**Status:** Fixed a fresh smoke-discovered multi-turn research fallback and verified the smoke path now completes multi-turn research.
+
+**Completed:**
+- Ran `PIPELINE_SMOKE_ONLY=yes scripts/run-pipeline.sh` after `6b29c0da`; it completed research/integration/self-evolution, but logs showed the multi-turn EMA research path failed with `(void-variable key)` and fell back to single-turn.
+- Reproduced the failure directly in batch by calling `gptel-auto-workflow--build-recent-trace-outcomes-string`.
+- Fixed `gptel-auto-workflow--build-recent-trace-outcomes-string` by using `let*` for the `key`/`stats` dependency and replacing the broken `cl-flet`/`maphash` pairing with an inline `maphash` lambda.
+- Added regression `regression/auto-workflow-strategic/recent-trace-outcomes-bind-key-before-stats`.
+- Cleaned smoke-generated artifact churn from researcher/evolution skill data, keeping only code/test/state changes.
+
+**Verification:**
+- Direct batch reproduction now returns a string instead of signaling.
+- `tests/test-gptel-auto-workflow-strategic-regressions.el`: 18/18 passed.
+- `git diff --check` passed.
+- Reran `PIPELINE_SMOKE_ONLY=yes scripts/run-pipeline.sh`: passed research, integration verification, and pre-workflow self-evolution.
+- Fresh researcher log shows multi-turn path ran through turn 1 timeout, turn 2 success, controller STOP, research trace saved, `research-findings.md` saved, and no fresh `void-variable key` fallback.
+
+**Remaining:**
+- Full non-smoke E2E was not rerun; smoke intentionally skipped the auto-workflow batch queue.
+- Commit/push pending for this focused fix.
+
 ## Current Session: Pipeline Artifact Generator Cleanup
 
 **Status:** Fixed generator defects discovered after the aborted E2E pipeline run and targeted-verified the relevant paths.

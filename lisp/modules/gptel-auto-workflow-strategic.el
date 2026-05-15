@@ -619,24 +619,24 @@ Returns empty string when no trace data is available."
               (success (gptel-auto-workflow--trace-success-p trace))
               (known (gptel-auto-workflow--trace-outcome-known-p trace)))
           (when known
-            (let ((key (format "%s via %s" source strategy))
-                  (stats (gethash key source-stats '(0 0))))
+            (let* ((key (format "%s via %s" source strategy))
+                   (stats (gethash key source-stats '(0 0))))
               (puthash key (list (+ (nth 0 stats) (if success 1 0))
-                                (1+ (nth 1 stats)))
+                                 (1+ (nth 1 stats)))
                        source-stats)))))
-      ;; Format outcome summary
-      (cl-flet ((format-outcome (key stats)
-                  (let ((kept (nth 0 stats))
-                        (total (nth 1 stats)))
-                    (when (> total 0)
-                      (push (format "- **%s**: %d/%d kept (%.0f%%)"
-                                    key kept total
-                                    (* 100 (/ (float kept) total)))
-                           lines))))))
-         (maphash #'format-outcome source-stats))
-       (if lines
-           (string-join (sort lines #'string<) "\n")
-         "")))
+      ;; Format outcome summary.
+      (maphash (lambda (key stats)
+                 (let ((kept (nth 0 stats))
+                       (total (nth 1 stats)))
+                   (when (> total 0)
+                     (push (format "- **%s**: %d/%d kept (%.0f%%)"
+                                   key kept total
+                                   (* 100 (/ (float kept) total)))
+                           lines))))
+               source-stats)
+      (if lines
+          (string-join (sort lines #'string<) "\n")
+        ""))))
 
 (defun gptel-auto-workflow--load-strategy-guidance-json ()
   "Load strategy guidance JSON from data/ directory.

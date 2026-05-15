@@ -295,6 +295,18 @@
             "repo findings")
            'continue)))))
 
+(ert-deftest regression/auto-workflow-strategic/recent-trace-outcomes-bind-key-before-stats ()
+  "Recent trace outcome formatting should bind the hash key before reading stats."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--load-research-traces)
+             (lambda ()
+               (list '(:source "own-repo"
+                       :strategy "standalone-research"
+                       :outcomes ((:kept t)))))))
+    (should
+     (string-match-p
+      "own-repo via standalone-research"
+      (gptel-auto-workflow--build-recent-trace-outcomes-string)))))
+
 (ert-deftest regression/auto-workflow-strategic/filter-valid-targets-rejects-nested-repos ()
   "Nested git repos should not be selected by the root workflow."
   (let* ((proj-root (make-temp-file "aw-strategic" t))
