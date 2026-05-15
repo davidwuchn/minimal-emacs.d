@@ -23,6 +23,7 @@
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions")
 (declare-function gptel-auto-workflow--alist-to-sandbox-env "strategic-daemon-functions")
 (declare-function gptel-auto-workflow--eval-rule-sandbox "strategic-daemon-functions")
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
 
 (defvar gptel-auto-workflow--active-strategy)
 (defvar gptel-auto-workflow--pending-outcome-updates)
