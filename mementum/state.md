@@ -2,40 +2,43 @@
 
 > Last session: 2026-05-15
 
-## Current Session: Pipeline Bug Fixes + Dedup
+## Current Session: Pipeline Bug Fixes + Architecture Cleanup
 
-**Status:** Fixed controller rule eval fallback, deduplicated config-rule-signals, cleaned up test guards. All batch-runnable tests green.
+**Status:** Major pipeline bugs fixed. CMC simulation now matches live controller. All maphash lambdas converted. Security ACL complete.
 
-**Completed This Session:**
-- `gptel-auto-workflow--eval-rule-expr-fallback`: lightweight evaluator for controller rule expressions when gptel-sandbox not loaded (comparisons, boolean, arithmetic, symbol lookup)
-- `eval-rule-sandbox` now falls back to `eval-rule-expr-fallback` instead of returning nil
-- Deduplicated `controller-config-rule-signals` from research-benchmark.el (canonical in strategic-daemon-functions.el)
-- `skip-unless` guard on grep-normalize test (gptel not available in batch)
-- Committed: `150d3e12`
+**Commits This Session:**
+- `150d3e12` — eval-rule-fallback, dedup controller-config-rule-signals, skip-unless guard
+- `3e78a1bc` — Fix eval-with-alist bug, 16 maphash cl-flet (pipeline modules)
+- `bc175f88` — 22 remaining maphash cl-flet conversions (13 files)
+- `dd4f136c` — Remove (or preset nil) no-op, dedup bash.el duplicate defuns
+- `58778d4c` — Security ACL: add missing file tools, dedup cross-file defuns
+- `d7908de1` — Fix trend-threshold wrong config key, remove unused vars, add defvars
+- `be87a9cf` — Fix CMC simulation divergence, unify fallback chains, fix own-repo-priority default
+- `7d136211` — Add 3 CMC simulation regression tests
 
-**Previously Completed (this arc):**
-- Tool marker system: 10 markers in `nucleus-tool-markers` as single source of truth
-- Derived toolsets (`:readonly`, `:nucleus`, `:executor`) from markers
-- Derived sandbox profiles from markers (allowed=22, readonly=12, confirming=9)
-- Progressive shortening: Code_Inspect, Diagnostics, Grep (async)
-- Project-level tool exclusion + readonly override via `.dir-locals.el`
-- Marker-conditional prompts (memory, web sections in agent system prompt)
-- Memory tools: `read_memory`, `write_memory`, `list_memories`
-- Fixed: caar/cadr, cons vs list, plist-dedup, 5 busy-wait loops, DRY (controller-source-literal-string, normalize-controller-rule-expr)
-- Regression tests: 7 new tests + updated toolset counts
+**Key Fixes:**
+- `eval-rule-expr-fallback`: lightweight rule evaluator when sandbox unavailable
+- `eval` with alist-as-environment bug: controller rule validation used raw eval instead of sandbox
+- `trend-threshold` pulled `:branch-threshold` (0.3) instead of `:trend-threshold` (0.04)
+- CMC simulation diverged from live controller: missing warm-up/min-complete gates, wrong delta-slack (0.01 vs 0.04), wrong trend-threshold default (0.05 vs 0.04)
+- `own-repo-priority` default inconsistency: 0.85 in 2 functions vs canonical 0.7
+- Stop-threshold/token-budget missing dual-key fallback chains
+- Security ACL missing Code_Map, Code_Inspect, Diagnostics, ApplyPatch
+- 38 `maphash (lambda ...)` → `cl-flet` + `maphash #'name` across 18 files
+- 4 duplicate defuns removed (bash.el ×2, load-directive-skill, discover-targets)
 
 **Test Results:**
-- research-benchmark regressions: 16/16
-- evolution regressions: 3/3
+- research-benchmark: 19/19 (was 16/16, added 3 CMC tests)
+- evolution: 3/3
 - standalone-research: 3/3
 - sandbox: 36/36
-- nucleus-tools: 26 pass + 4 skip (all batch-mode guards)
-- sanitize: 37 pass + 12 fail (all pre-existing gptel-not-in-batch)
+- nucleus-tools: 26 pass + 4 skip
 
-**Remaining:**
-- Auto-generated JSON data files not committed (per constraint)
-- 12 sanitize tests still fail in batch (gptel dependency) — not our changes
-- End-to-end pipeline validation with live Emacs
-- Push to origin when ready
+**Remaining (low priority):**
+- Evolution TODO:128 — pattern loading not wired into categorizer
+- Security ACL still hardcoded tool names (not marker-derived)
+- Guidance JSON `:own-priority` key might not match `:own-repo-priority` (needs investigation)
+- Docstring width warnings (cosmetic)
+- 12 sanitize tests fail in batch (gptel dependency, pre-existing)
 
 ---
