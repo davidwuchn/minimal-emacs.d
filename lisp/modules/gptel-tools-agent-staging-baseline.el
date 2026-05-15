@@ -195,14 +195,17 @@ under `.git/worktrees/.../modules'."
       (dolist (path paths nil)
         (unless failure
           (let* ((commit (gptel-auto-workflow--staging-submodule-gitlink-revision root path))
-                 (shared-git-dir (gptel-auto-workflow--shared-submodule-git-dir path commit))
-                 (target (expand-file-name path root))
-                 add-result)
+                  (shared-git-dir (gptel-auto-workflow--shared-submodule-git-dir path commit))
+                  (target (expand-file-name path root))
+                  add-result)
+            (when (and commit (not shared-git-dir))
+              (gptel-auto-workflow--fetch-submodule-into-bare path)
+              (setq shared-git-dir (gptel-auto-workflow--shared-submodule-git-dir path commit)))
             (cond
              ((not commit)
               (setq failure (format "Missing gitlink revision for submodule %s" path)))
              ((not (and shared-git-dir
-                        (file-directory-p shared-git-dir)))
+                         (file-directory-p shared-git-dir)))
               (setq failure
                     (format "Missing shared submodule repo for %s: %s"
                             path shared-git-dir)))

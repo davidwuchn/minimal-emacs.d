@@ -806,7 +806,20 @@ When COMMIT is nil, only check that GIT-DIR exists."
                       (format "git --git-dir=%s cat-file -e %s^{commit}"
                               (shell-quote-argument git-dir)
                               (shell-quote-argument commit))
-                      60))))))
+                       60))))))
+
+(defun gptel-auto-workflow--fetch-submodule-into-bare (path)
+  "Fetch latest refs into the bare git store for submodule PATH.
+This ensures .git/modules/PATH contains the commit needed for hydration."
+  (let* ((repo-git-dir (gptel-auto-workflow--worktree-base-git-common-dir))
+         (module-git-dir (and repo-git-dir
+                              (expand-file-name (format "modules/%s" path) repo-git-dir))))
+    (when (and module-git-dir (file-directory-p module-git-dir))
+      (message "[auto-workflow] Fetching submodule %s into bare repo" path)
+      (gptel-auto-workflow--git-result
+       (format "git --git-dir=%s fetch origin 2>&1"
+               (shell-quote-argument module-git-dir))
+       60))))
 
 (defun gptel-auto-workflow--shared-submodule-git-dir (path &optional commit)
   "Return a local git dir for submodule PATH that can materialize COMMIT.
@@ -850,13 +863,21 @@ just that gitlink from MAIN-REF, then rehydrate and commit the repair."
                     (and current-commit
                          (gptel-auto-workflow--shared-submodule-git-dir path current-commit))))
               (when (and current-commit (not current-git-dir))
+                (gptel-auto-workflow--fetch-submodule-into-bare path)
+                (setq current-git-dir
+                      (gptel-auto-workflow--shared-submodule-git-dir path current-commit)))
+              (when (and current-commit (not current-git-dir))
                 (let* ((main-commit
                         (and (gptel-auto-workflow--non-empty-string-p main-ref)
                              (gptel-auto-workflow--staging-submodule-gitlink-revision-at-ref
                               worktree main-ref path)))
-                       (main-git-dir
-                        (and main-commit
-                             (gptel-auto-workflow--shared-submodule-git-dir path main-commit))))
+                        (main-git-dir
+                         (and main-commit
+                              (gptel-auto-workflow--shared-submodule-git-dir path main-commit))))
+                  (when (and main-commit (not main-git-dir))
+                    (gptel-auto-workflow--fetch-submodule-into-bare path)
+                    (setq main-git-dir
+                          (gptel-auto-workflow--shared-submodule-git-dir path main-commit)))
                   (cond
                    ((and current-commit main-commit
                          (equal current-commit main-commit))
