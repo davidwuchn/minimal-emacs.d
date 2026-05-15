@@ -106,10 +106,11 @@ gptel preset.")
   "Comparison operators allowed in sandbox expressions.")
 
 (defconst gptel-sandbox--data-ops
-  '(concat format list vector append length car cdr nth
-           cons assoc alist-get plist-get split-string string-join
-           string-trim string-empty-p string-match-p substring)
-  "Data manipulation operators allowed in sandbox expressions.")
+  '(+ - * / 1+ 1- mod max min abs
+    concat format list vector append length car cdr nth
+    cons assoc alist-get plist-get split-string string-join
+    string-trim string-empty-p string-match-p substring)
+  "Data and arithmetic operators allowed in sandbox expressions.")
 
 (defconst gptel-sandbox--builtin-ops
   (append gptel-sandbox--comparison-ops gptel-sandbox--data-ops)
@@ -121,6 +122,8 @@ gptel preset.")
     (string-match-p 2 3) (format 1 nil) (split-string 1 4)
     (string-join 1 2) (string-trim 1 3) (substring 2 3)
     (alist-get 2 5)
+    (+ 0 nil) (- 1 nil) (* 0 nil) (/ 1 nil)
+    (1+ 1 1) (1- 1 1) (mod 2 2) (max 1 nil) (min 1 nil) (abs 1 1)
     (equal 2 nil) (string= 2 nil) (= 2 nil)
     (< 2 nil) (> 2 nil) (<= 2 nil) (>= 2 nil))
   "Alist of (FUNC MIN-ARGS MAX-ARGS) for arity validation.
@@ -264,6 +267,42 @@ When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
     (let ((value nil))
       (dolist (form body value)
         (setq value (gptel-sandbox--eval-expr form child-env))))))
+
+(defcustom my/gptel-programmatic-max-loop-iterations 100
+  "Maximum iterations allowed in dolist/while loops.
+Prevents runaway loops consuming CPU. Matches context-mode's iteration guard pattern."
+  :type 'integer
+  :group 'gptel-sandbox)
+
+(defun gptel-sandbox--eval-dolist (expr env)
+  "Evaluate sandbox dolist EXPR in ENV with iteration guard.
+Shape: (dolist (item list [result]) body...)
+Max iterations bounded by my/gptel-programmatic-max-loop-iterations."
+  (pcase expr
+    (`(,_ (,item ,list-expr . ,result-form) . ,body)
+     (unless (symbolp item)
+       (error "Programmatic dolist variable must be a symbol, got: %S" item))
+     (let* ((items (gptel-sandbox--eval-expr list-expr env))
+            (result-var (car result-form))
+            (iterations 0)
+            (max-iter my/gptel-programmatic-max-loop-iterations))
+       (unless (proper-list-p items)
+         (error "Programmatic dolist expects a proper list, got: %S" items))
+       (let ((child-env (gptel-sandbox--copy-env env))
+             (value nil))
+         (catch 'dolist-done
+           (dolist (item-val items value)
+             (when (>= (cl-incf iterations) max-iter)
+               (throw 'dolist-done
+                      (format "[dolist truncated at %d iterations]" max-iter)))
+             (puthash item item-val child-env)
+             (dolist (form body)
+               (setq value (gptel-sandbox--eval-expr form child-env)))))
+         (when result-var
+           (puthash result-var value child-env)
+           (gptel-sandbox--eval-expr result-var child-env)))))
+    (_
+     (error "Programmatic dolist requires (var list [result]) and body forms"))))
 
 (defun gptel-sandbox--eval-map-like (expr env filterp)
   "Evaluate sandbox `mapcar' or `filter' EXPR in ENV.
@@ -418,8 +457,10 @@ supports a small, explicit whitelist of pure operations."
          (not (gptel-sandbox--eval-expr (car args) env))))
       ('mapcar
        (gptel-sandbox--eval-map-like expr env nil))
-      ('filter
-       (gptel-sandbox--eval-map-like expr env t))
+('filter
+        (gptel-sandbox--eval-map-like expr env t))
+      ('dolist
+       (gptel-sandbox--eval-dolist expr env))
       ('and
        (gptel-sandbox--short-circuit-eval (cdr expr) env t #'not))
       ('or
