@@ -20,4 +20,3 @@ insight-quality: 3.3/10
 
 - **This strategy shows promise.** Refine the research prompt.
 - Focus on more specific code patterns (e.g., specific functions rather than broad categories).
-
