@@ -902,19 +902,28 @@ Writes to var/tmp/evolution/findings.md."
                                          (time-less-p
                                           (time-subtract (current-time) (days-to-time 7))
                                           (file-attribute-modification-time (file-attributes raw-findings-file))))
-                                 (with-temp-buffer
-                                   (insert-file-contents raw-findings-file)
-                                   ;; Clean raw findings: strip researcher task headers and reasoning chains
-                                   (goto-char (point-min))
-                                   (while (re-search-forward "^Researcher result for task:.*$\|^I'll conduct targeted research.*$\|^Good results.*$\|^Let me fetch.*$\|^Let me search for.*$\|^Based on my research.*$" nil t)
-                                     (replace-match ""))
-                                   ;; Strip empty reasoning blocks
-                                   (goto-char (point-min))
-                                   (while (re-search-forward "\\(reasoning\\s-*\\.\\s-*<think>\\)" nil t)
-                                     (let ((start (match-beginning 0)))
-                                       (when (re-search-forward "</think>" nil t)
-                                         (delete-region start (point)))))
-                                   (buffer-string)))))))
+                                  (with-temp-buffer
+                                    (insert-file-contents raw-findings-file)
+                                    ;; Clean raw findings: strip LLM conversational noise
+                                    (goto-char (point-min))
+                                    (while (re-search-forward "^\\(?:Researcher result for task:.*$\\|I'll \\(?:conduct\\|follow\\|dig\\|check\\|search\\|fetch\\|look\\|analyze\\|examine\\|explore\\|start\\|use\\|begin\\|try\\|run\\|read\\|review\\|investigate\\).*\\|Good results.*$\\|Let me \\(?:fetch\\|search\\|dig\\|check\\|look\\|analyze\\|examine\\|explore\\|find\\|review\\|investigate\\|see\\).*\\|Based on my research.*$\\|Excellent findings!?.*$\\|Found a relevant.*$\\)" nil t)
+                                      (replace-match ""))
+                                    ;; Strip remaining conversational lines (first-person present tense)
+                                    (goto-char (point-min))
+                                    (while (re-search-forward "^\\(?:Now I \\|Now let me \\|Let me now \\)" nil t)
+                                      (replace-match ""))
+                                    ;; Strip empty reasoning blocks
+                                    (goto-char (point-min))
+                                    (while (re-search-forward "\\(reasoning\\s-*\\.\\s-*olle\\)" nil t)
+                                      (let ((start (match-beginning 0)))
+                                        (when (re-search-forward "}
+" nil t)
+                                          (delete-region start (point)))))
+                                    ;; Collapse multiple blank lines
+                                    (goto-char (point-min))
+                                    (while (re-search-forward "\n\\{3,\\}" nil t)
+                                      (replace-match "\n\n"))
+                                    (buffer-string)))))))
        (when raw-findings
          (push raw-findings recent-insights)))
      
