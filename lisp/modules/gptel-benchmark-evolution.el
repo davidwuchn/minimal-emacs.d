@@ -562,7 +562,8 @@ Returns list of deficient element keywords."
   (when (and (proper-list-p observation)
              (plist-get observation :element-status))
     (let ((diagnosis (plist-get observation :element-status)))
-      (when (listp diagnosis)
+      (when (and (proper-list-p diagnosis)
+                 (listp diagnosis))
         (cl-loop for d in diagnosis
                  when (gptel-benchmark-evolution--deficient-p d)
                  collect (plist-get d :element))))))
