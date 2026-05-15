@@ -35,8 +35,9 @@ Returns alist of (category . pattern) or nil."
 (defun gptel-error--match-ignore-case (pattern string)
   "Return non-nil if PATTERN matches STRING case-insensitively.
 This is a convenience wrapper that sets case-fold-search around string-match-p."
-  (let ((case-fold-search t))
-    (string-match-p pattern string)))
+  (when (stringp string)
+    (let ((case-fold-search t))
+      (string-match-p pattern string))))
 
 (defconst gptel-auto-experiment--hard-quota-error-pattern
   (or (car (gptel-error--load-patterns-from-skill))
