@@ -201,9 +201,9 @@ Model is read from YAML frontmatter in code_agent.md and plan_agent.md."
                      nucleus-tools-strict-validation)
             (nucleus--validate-agent-tool-contracts))
           ;; Agent tool contracts (counts must match nucleus-toolsets):
-          ;; - executor:     :executor   (29 tools) - code changes & execution
+          ;; - executor:     :executor   (30 tools) - code changes & execution
           ;; - researcher:   :researcher (19 tools) - exploration & research
-          ;; - introspector: :readonly   (18 tools) - Emacs introspection
+          ;; - introspector: :readonly   (20 tools) - Emacs introspection
           ;; - explorer:     :explorer    (5 tools) - read-only codebase exploration
           ;; - reviewer:     :reviewer    (4 tools) - read-only code review
           ))
