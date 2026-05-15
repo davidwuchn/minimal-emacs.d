@@ -31,6 +31,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'project)
+(require 'nucleus-tools)
 
 ;;; Customization
 
@@ -292,12 +293,17 @@ Idempotent: only registers and logs once per session."
                (agent-sys (nucleus--read-gptel-agent-system agent-file))
                (plan-sys (nucleus--read-gptel-agent-system plan-file))
                (agent-tools (nucleus-get-tools :snippets))
-               (agent-snips (tool-snippets-for agent-tools))
-               (agent-sys (if agent-snips
-                              (concat agent-sys
-                                      "\n\n## Nucleus Tool Prompts (Supplemental)\n"
-                                      agent-snips)
-                            agent-sys)))
+                (agent-snips (tool-snippets-for agent-tools))
+                (marker-text (nucleus-marker-conditional-system-text))
+                (agent-sys (if agent-snips
+                               (concat agent-sys
+                                       "\n\n## Nucleus Tool Prompts (Supplemental)\n"
+                                       agent-snips)
+                             agent-sys))
+                (agent-sys (if marker-text
+                               (concat agent-sys
+                                       "\n\n" marker-text)
+                             agent-sys)))
           (when (stringp agent-sys)
             (setf (alist-get 'nucleus-gptel-agent
                             gptel-directives nil nil #'eq)
@@ -315,6 +321,49 @@ Format as a structured brief with: [progress] [decisions] [next_steps] [tech_det
           (nucleus--log "Registered %d directives"
                        (length gptel-directives))
           (setq nucleus--directives-registered t))))))
+;;; Marker-Conditional Prompt Sections
+
+(defconst nucleus-marker-conditional-prompts
+  '((:memory
+     . "## Memory Tools
+
+You have access to persistent memory tools (read_memory, write_memory, list_memories).
+Use them to store insights, patterns, and project knowledge that should survive across sessions.
+- read_memory: Recall previously stored insights by querying with keywords
+- write_memory: Store new insights (requires confirmation) — use for non-trivial discoveries
+- list_memories: Browse all stored memories
+
+Prefer storing insights that would help a future AI session avoid re-deriving the same knowledge.")
+    (:web
+     . "## Web Tools
+
+You have access to web search and fetch tools. Use them to:
+- Look up current documentation or API references
+- Find solutions to unfamiliar error messages
+- Verify library versions or compatibility
+
+Prefer local code exploration over web search when the answer is likely in the codebase."))
+  "Alist of marker → conditional prompt text.
+Each entry is included in the system prompt only when the marker has
+at least one registered tool available.")
+
+(defun nucleus-marker-conditional-system-text ()
+  "Return prompt text sections for markers with registered tools.
+Iterates `nucleus-marker-conditional-prompts' and includes each
+section whose marker has at least one tool registered in `gptel--known-tools'."
+  (let ((sections nil))
+    (dolist (entry nucleus-marker-conditional-prompts)
+      (let ((marker (car entry))
+            (text (cdr entry)))
+        (when (and text
+                   (let ((marker-tools (nucleus-tools-with-marker marker)))
+                     (cl-some (lambda (tool-name)
+                                (and (fboundp 'gptel-get-tool)
+                                     (ignore-errors (gptel-get-tool tool-name))))
+                              marker-tools)))
+          (push text sections))))
+    (and sections (string-join (nreverse sections) "\n\n"))))
+
 ;;; Public API
 
 (defun nucleus-gptel-tool-prompts ()

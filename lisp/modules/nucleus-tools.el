@@ -207,64 +207,58 @@ For use in prompt templates to conditionally include instructions."
 
 ;;; Toolset Definitions
 
-(defconst nucleus-toolsets
-  '((:readonly . ("Bash" "Eval" "Glob" "Grep" "Read" "RunAgent" "Skill" "TodoWrite"
-                  "Programmatic"
-                  "WebFetch" "WebSearch"
-                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                  "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"
-                  "read_memory" "list_memories"))
+;; Primary toolsets (:readonly, :nucleus, :executor) are derived from markers.
+;; Subagent toolsets are hand-curated for specific roles and cannot be
+;; purely derived from markers — they have role-specific inclusions/exclusions.
+
+(defconst nucleus-toolset-definitions
+  '((:readonly   . (:derived (:can-read) (:can-edit :plan-excluded)))
+    (:nucleus    . (:derived (:can-read :can-edit) nil))
+    (:executor   . (:derived (:can-read :can-edit) (:delegates)))
     (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill" "Programmatic"
                     "WebFetch" "WebSearch" "YouTube"
                     "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                     "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"
                     "read_memory" "list_memories"))
-    (:nucleus . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-                 "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
-                 "RunAgent"
-                 "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
-                 "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                 "Preview"
-                 "read_memory" "write_memory" "list_memories"
-                 "create_skill"
-                 "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-    (:executor . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-                  "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
-                  "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
-                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                  "Preview"
-                  "read_memory" "write_memory" "list_memories"
-                  "create_skill"
-                  "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
     (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
     (:reviewer . ("Glob" "Grep" "Read" "Diagnostics"))
     (:analyzer . ("Bash" "Read" "Glob" "Grep" "Code_Map"
                   "Diagnostics" "Programmatic"))
     (:comparator . ("Read" "Glob" "Grep"))
     (:grader . ("Read" "Glob" "Grep" "Bash" "Eval")))
-  "Canonical toolset definitions for nucleus.
+  "Toolset definitions for nucleus.
 
-:readonly — Plan mode tools (20 tools): Eval, RunAgent, web search, memory read
-:researcher — Codebase + web research (19 tools): Full analysis + memory read
-:nucleus — Top-level action tools (31 tools): Includes RunAgent, memory read/write
-:executor — Subagent execution tools (30 tools): No RunAgent (prevent recursive delegation)
-:explorer — Codebase exploration (5 tools): Glob, Grep, Read, Code_Map, Code_Inspect
-:reviewer — Code review (4 tools): Read-only + Diagnostics
-:analyzer — Benchmark analysis (7 tools): Live runtime analyzer tools
-:comparator — A/B comparison (3 tools): Read, Glob, Grep
-:grader — Assertion grading (5 tools): Read, Glob, Grep, Bash, Eval
+Primary toolsets use (:derived INCLUDE EXCLUDE) to compute from markers.
+Subagent toolsets are hand-curated for specific roles.
 
-:snippets is derived from :nucleus at runtime (see `nucleus-get-tools').
+:readonly   — Plan mode: can-read minus can-edit minus plan-excluded
+:nucleus    — Full action: can-read + can-edit
+:executor   — Action minus delegation (no RunAgent)
+:researcher — Codebase + web research + memory read
+:explorer   — Codebase exploration
+:reviewer   — Code review + Diagnostics
+:analyzer   — Benchmark analysis
+:comparator — A/B comparison
+:grader     — Assertion grading")
 
-Tool contracts enforced in `nucleus--override-gptel-agent-presets':
-   executor     → :executor    (30 tools) - code changes & execution (no RunAgent)
-   researcher   → :researcher  (19 tools) - web + codebase + Eval + memory
-   introspector → :readonly    (20 tools) - Emacs introspection + web + memory read
-  explorer     → :explorer     (5 tools) - codebase exploration + Code tools
-  reviewer     → :reviewer     (4 tools) - code review + Diagnostics
-  analyzer     → :analyzer     (7 tools) - benchmark result analysis
-  comparator   → :comparator   (3 tools) - blind A/B comparison
-  grader       → :grader       (5 tools) - assertion grading")
+(defun nucleus--resolve-toolset (definition)
+  "Resolve a toolset DEFINITION to a list of tool names.
+Handles both derived and explicit definitions."
+  (if (and (consp definition) (eq (car definition) :derived))
+      (nucleus-toolset-from-markers (cadr definition) (caddr definition))
+    definition))
+
+(defun nucleus--build-toolsets ()
+  "Build the full toolsets alist from nucleus-toolset-definitions."
+  (mapcar (lambda (entry)
+            (cons (car entry)
+                  (nucleus--resolve-toolset (cdr entry))))
+          nucleus-toolset-definitions))
+
+(defconst nucleus-toolsets (nucleus--build-toolsets)
+  "Resolved toolset definitions for nucleus.
+Computed from `nucleus-toolset-definitions' at load time.
+See `nucleus-toolset-definitions' for documentation.")
 
 (defconst nucleus-agent-tool-contracts
   '(("executor"     . :executor)

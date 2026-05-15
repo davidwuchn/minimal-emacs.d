@@ -532,9 +532,10 @@ MAX_ANSWER_CHARS limits output length with progressive shortening."
              (or friendly
                  (format "Error executing Code_Map on %s: %s\n\nACTION: Check file permissions and try again." file_path msg))))))
 
-(defun gptel-tools-code--inspect-node (node_name &optional file_path)
+(defun gptel-tools-code--inspect-node (node_name &optional file_path max_answer_chars)
   "Extract the code block for NODE_NAME, optionally from FILE_PATH.
-When FILE_PATH is nil, searches the entire project workspace."
+When FILE_PATH is nil, searches the entire project workspace.
+MAX_ANSWER_CHARS limits output length with progressive shortening."
   (cond
    ((not node_name)
     (error "gptel-tools-code--inspect-node: node_name is nil"))
@@ -549,7 +550,23 @@ When FILE_PATH is nil, searches the entire project workspace."
                     parser-error
                   (let ((text (treesit-agent-extract-node node_name)))
                     (if text
-                        (format "Code block '%s' from %s:\n\n%s" node_name file_path text)
+                        (let* ((full-result (format "Code block '%s' from %s:\n\n%s" node_name file_path text))
+                               (max-chars (or max_answer_chars
+                                              (bound-and-true-p nucleus-tool-max-answer-chars)
+                                              4000))
+                               (lines (split-string text "\n")))
+                          (if (fboundp 'nucleus-limit-result-length)
+                              (nucleus-limit-result-length
+                               full-result max-chars
+                               (list (lambda ()
+                                       (format "Code block '%s' from %s (%d lines, showing first 30):\n\n%s"
+                                               node_name file_path (length lines)
+                                               (string-join (seq-take lines 30) "\n")))
+                                     (lambda ()
+                                       (format "Code block '%s' from %s: %d lines (showing first 10)\n\n%s"
+                                               node_name file_path (length lines)
+                                               (string-join (seq-take lines 10) "\n")))))
+                            full-result))
                       (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols in the file\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name))))))
           ;; Search workspace if no file provided
           (let ((result (treesit-agent-find-workspace node_name)))
@@ -641,12 +658,13 @@ Syncs buffer with disk, validates parser, guards against truncation."
                     (line-number-at-pos)
                     type text line-text)))))))
 
-(defun gptel-tools-code--diagnostics (&optional all file-path)
+(defun gptel-tools-code--diagnostics (&optional all file_path max_answer_chars)
   "Collect diagnostics via LSP/Flymake or CLI linters.
 
 If FILE-PATH is provided, check only that file.
 Otherwise, check the entire project.
 When ALL is non-nil, include notes and low-severity diagnostics.
+MAX_ANSWER_CHARS limits output length with progressive shortening.
 
 For .el files, uses checkdoc/byte-compile/package-lint instead of LSP."
   ;; Handle .el files specially
@@ -672,11 +690,33 @@ For .el files, uses checkdoc/byte-compile/package-lint instead of LSP."
                 "No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean)."
               (concat "Note: No LSP server running for this project.\nFalling back to CLI linter:\n\n"
                       (my/gptel--run-fallback-linter dir file-path)))
-          (let ((formatted (mapcar #'gptel-tools-code--format-diagnostic filtered)))
-            (format "Found %d diagnostic(s)%s:\n\n%s"
-                    (length formatted)
-                    (if all " (including notes)" "")
-                    (string-join formatted "\n\n"))))))))
+          (let* ((formatted (mapcar #'gptel-tools-code--format-diagnostic filtered))
+                 (errors-only (seq-filter
+                               (lambda (d) (eq (flymake-diagnostic-type d) :error))
+                               filtered))
+                 (full-result (format "Found %d diagnostic(s)%s:\n\n%s"
+                                      (length formatted)
+                                      (if all " (including notes)" "")
+                                      (string-join formatted "\n\n")))
+                 (max-chars (or max_answer_chars
+                                (bound-and-true-p nucleus-tool-max-answer-chars)
+                                4000)))
+            (if (fboundp 'nucleus-limit-result-length)
+                (nucleus-limit-result-length
+                 full-result max-chars
+                 (list (lambda ()
+                         (if errors-only
+                             (format "Found %d diagnostic(s), %d error(s):\n\n%s"
+                                     (length formatted) (length errors-only)
+                                     (string-join (mapcar #'gptel-tools-code--format-diagnostic errors-only) "\n\n"))
+                           full-result))
+                       (lambda ()
+                         (format "Found %d diagnostic(s): %d error(s), %d warning(s)%s"
+                                 (length formatted)
+                                 (length errors-only)
+                                 (- (length filtered) (length errors-only))
+                                 (if all " (including notes)" ""))))))
+              full-result)))))))
 
 (defun gptel-tools-code-register ()
   "Register the unified Code tools with gptel."
@@ -691,15 +731,16 @@ Always use this first to understand the structure of a file before editing."
      :category "gptel-agent"
      :include t)
 
-    (gptel-make-tool
-     :name "Code_Inspect"
-     :description "Extract the exact, perfectly balanced code block for a specific function or class by name. \
+     (gptel-make-tool
+      :name "Code_Inspect"
+      :description "Extract the exact, perfectly balanced code block for a specific function or class by name. \
 If file_path is omitted, it will search the entire project to find the definition automatically."
-     :function #'gptel-tools-code--inspect-node
-     :args (list '(:name "node_name" :type string :description "Exact name of the function/class to read")
-                 '(:name "file_path" :type string :optional t :description "Path to the file (optional)"))
-     :category "gptel-agent"
-     :include t)
+      :function #'gptel-tools-code--inspect-node
+      :args (list '(:name "node_name" :type string :description "Exact name of the function/class to read")
+                  '(:name "file_path" :type string :optional t :description "Path to the file (optional)")
+                  '(:name "max_answer_chars" :type integer :optional t :description "Max output chars (default 4000)"))
+      :category "gptel-agent"
+      :include t)
 
     (gptel-make-tool
      :name "Code_Replace"
@@ -713,9 +754,9 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
      :confirm t
      :include t)
 
-    (gptel-make-tool
-     :name "Diagnostics"
-     :description "Collect diagnostics (errors and warnings) via LSP/Flymake or CLI linters.
+     (gptel-make-tool
+      :name "Diagnostics"
+      :description "Collect diagnostics (errors and warnings) via LSP/Flymake or CLI linters.
 
 For .el files: runs checkdoc, byte-compile, and package-lint.
 For other files: uses LSP diagnostics or falls back to CLI linters.
@@ -723,22 +764,27 @@ For other files: uses LSP diagnostics or falls back to CLI linters.
 Arguments:
 - file_path (optional): Check only this file. If omitted, checks entire project.
 - all (optional): Include notes and low-severity diagnostics.
+- max_answer_chars (optional): Max output chars (default 4000).
 
 Examples:
   Diagnostics{file_path: \"lisp/eca-ext.el\"}  ; Check single .el file
   Diagnostics{}                                  ; Project-wide check
   Diagnostics{all: true}                        ; Include notes"
-     :function #'gptel-tools-code--diagnostics
-     :args (list '(:name "file_path"
-                         :type string
-                         :optional t
-                         :description "Path to check. If omitted, checks entire project. For .el files, runs checkdoc/byte-compile/package-lint.")
-                 '(:name "all"
-                         :type boolean
-                         :optional t
-                         :description "When true, also collect notes and low-severity diagnostics. Default: only errors and warnings."))
-     :category "gptel-agent"
-     :include t)
+      :function #'gptel-tools-code--diagnostics
+      :args (list '(:name "file_path"
+                          :type string
+                          :optional t
+                          :description "Path to check. If omitted, checks entire project. For .el files, runs checkdoc/byte-compile/package-lint.")
+                  '(:name "all"
+                          :type boolean
+                          :optional t
+                          :description "When true, also collect notes and low-severity diagnostics. Default: only errors and warnings.")
+                  '(:name "max_answer_chars"
+                          :type integer
+                          :optional t
+                          :description "Max output chars (default 4000). Large results are progressively shortened."))
+      :category "gptel-agent"
+      :include t)
 
     (gptel-make-tool
      :name "Code_Usages"
