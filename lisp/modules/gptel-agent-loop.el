@@ -1043,12 +1043,14 @@ Reads `steps' from agent YAML to set max-steps per agent."
 (defun gptel-agent-loop-needs-continuation-p (result)
   "Check if RESULT from RunAgent indicates incomplete task.
 Returns (STEPS . CLEANED-RESULT) if continuation needed, nil otherwise.
-Use this in the main agent to decide whether to re-call RunAgent."
-  (when (stringp result)
-    (when (string-match "\\[RUNAGENT_INCOMPLETE:\\([0-9]+\\) steps\\(?:, [0-9]+ continuations\\)?\\]" result)
-      (let ((steps (string-to-number (match-string 1 result)))
-            (cleaned (replace-match "" nil nil result)))
-        (cons steps cleaned)))))
+Use this in the main agent to decide whether to re-call RunAgent.
+Returns nil if RESULT is nil or not a string (explicit defensive guard)."
+  (cond ((null result) nil)
+        ((not (stringp result)) nil)
+        ((string-match "\\[RUNAGENT_INCOMPLETE:\\([0-9]+\\) steps\\(?:, [0-9]+ continuations\\)?\\]" result)
+         (let ((steps (string-to-number (match-string 1 result)))
+               (cleaned (replace-match "" nil nil result)))
+           (cons steps cleaned)))))
 
 (defun gptel-agent-loop-extract-result (result)
   "Extract clean result from RunAgent output, removing continuation markers.
