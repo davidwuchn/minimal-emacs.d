@@ -9,6 +9,8 @@
 (require 'json)
 (require 'subr-x)
 
+(declare-function gptel-sandbox--eval-expr "gptel-sandbox" (expr env))
+
 (defun gptel-auto-workflow--autotts-root ()
   "Return project root used for AutoTTS state files."
   (file-name-as-directory
@@ -423,35 +425,59 @@ Returns plist with controller parameters."
 (defun gptel-auto-workflow--apply-controller-rules (controller-config output-text)
   "Apply agent-generated decision rules from CONTROLLER-CONFIG.
 Evaluates (:when EXPR :then DECISION) rules against current signals.
+Uses Programmatic sandbox for safe evaluation.
 Returns the decision from the first matching rule, or nil if no rules exist."
   (let ((rules (plist-get controller-config :rules)))
     (when (and rules (listp rules))
       (let* ((config-signals (gptel-auto-workflow--controller-config-rule-signals controller-config))
              (token-budget (cdr (assq 'token-budget config-signals)))
              (turn-count (cdr (assq 'turn-count config-signals)))
-             (signals (append
-                       `((ema-conf . ,gptel-auto-workflow--research-ema-conf)
-                         (ema-delta . ,(gptel-auto-workflow--research-ema-delta))
-                         (turn . ,turn-count)
-                         (output-length . ,(length (or output-text "")))
-                         (confidence . ,(if (and (fboundp 'gptel-auto-workflow--estimate-confidence)
-                                                 (functionp (symbol-function 'gptel-auto-workflow--estimate-confidence)))
-                                            (or (gptel-auto-workflow--estimate-confidence output-text) 0.0)
-                                          0.0))
-                         (has-urls . ,(and output-text (string-match-p "https?://" output-text) t))
-                         (has-structure . ,(and output-text (string-match-p "## .*\\n" output-text) t))
-                         (source . ,(if (string-match-p "davidwuchn\\|own.repo" (or output-text ""))
-                                        "own-repo" "external"))
-                         (budget-remaining . ,(- token-budget (/ (length (or output-text "")) 4))))
-                       config-signals)))
+             (signals-alist (append
+                              `((ema-conf . ,gptel-auto-workflow--research-ema-conf)
+                                (ema-delta . ,(gptel-auto-workflow--research-ema-delta))
+                                (turn . ,turn-count)
+                                (output-length . ,(length (or output-text "")))
+                                (confidence . ,(if (and (fboundp 'gptel-auto-workflow--estimate-confidence)
+                                                        (functionp (symbol-function 'gptel-auto-workflow--estimate-confidence)))
+                                                   (or (gptel-auto-workflow--estimate-confidence output-text) 0.0)
+                                                 0.0))
+                                (has-urls . ,(and output-text (string-match-p "https?://" output-text) t))
+                                (has-structure . ,(and output-text (string-match-p "## .*\\n" output-text) t))
+                                (source . ,(if (string-match-p "davidwuchn\\|own.repo" (or output-text ""))
+                                               "own-repo" "external"))
+                                (budget-remaining . ,(- token-budget (/ (length (or output-text "")) 4))))
+                              config-signals))
+             (signals-env (gptel-auto-workflow--alist-to-sandbox-env signals-alist)))
         (catch 'rule-matched
           (dolist (rule rules nil)
             (condition-case nil
-                (when (eval (gptel-auto-workflow--normalize-controller-rule-expr
-                             (plist-get rule :when))
-                            signals)
-                  (throw 'rule-matched (plist-get rule :then)))
+                (let ((normalized-expr
+                       (gptel-auto-workflow--normalize-controller-rule-expr
+                        (plist-get rule :when))))
+                  (when (gptel-auto-workflow--eval-rule-sandbox normalized-expr signals-env)
+                    (throw 'rule-matched (plist-get rule :then))))
               (error nil))))))))
+
+(defun gptel-auto-workflow--alist-to-sandbox-env (alist)
+  "Convert ALIST to Programmatic sandbox hash-table environment."
+  (let ((env (make-hash-table :test 'eq)))
+    (dolist (entry alist)
+      (when (consp entry)
+        (puthash (car entry) (cdr entry) env)))
+    env))
+
+(defun gptel-auto-workflow--eval-rule-sandbox (expr env)
+  "Evaluate rule EXPR in Programmatic sandbox ENV.
+Returns non-nil if expression is truthy, nil otherwise.
+Handles comparisons and arithmetic that Programmatic supports."
+  (condition-case err
+      (if (and (fboundp 'gptel-sandbox--eval-expr)
+               (hash-table-p env))
+          (gptel-sandbox--eval-expr expr env)
+        nil)
+    (error
+     (message "[autotts] Rule eval error: %s" (error-message-string err))
+     nil)))
 
 ;; ─── End Agent-Generated Rule Evaluation ───
 
