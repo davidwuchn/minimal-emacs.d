@@ -260,11 +260,11 @@ Type C-g to cancel."
       (while (and (not done)
                   (not gptel-skill-benchmark--cancelled)
                   (< (cl-incf iters) max-iters))
-      (when (input-pending-p)
-        (let ((event (read-event nil nil 0.1)))
-          (when (and event (eq event ?\C-g))
-            (gptel-skill-benchmark-cancel)
-            (keyboard-quit)))))
+        (when (input-pending-p)
+          (let ((event (read-event nil nil 0.1)))
+            (when (and event (eq event ?\C-g))
+              (gptel-skill-benchmark-cancel)
+              (keyboard-quit))))))
     (when (called-interactively-p 'interactive)
       (cond
        (gptel-skill-benchmark--cancelled
