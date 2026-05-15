@@ -164,14 +164,19 @@ inconsistent lookups if registry structure changes."
 ;;; FSM Predicates and Coercion
 
 (defvar my/gptel--fsm-predicate-fn
-  (if (fboundp 'gptel-fsm-p)
-      #'gptel-fsm-p
+  (cond
+   ((and (fboundp 'gptel-fsm-p) (fboundp 'gptel-fsm-state))
+    #'gptel-fsm-p)
+   ((fboundp 'gptel-fsm-state)
     (lambda (obj) (ignore-errors (gptel-fsm-state obj) t)))
+   (t
+    (lambda (_obj) nil)))
   "Cached FSM predicate function for performance.
 
-ASSUMPTION: gptel-fsm-p is available when loaded.
-BEHAVIOR: Uses built-in predicate if available.
-BEHAVIOR: Falls back to safe state access otherwise.
+ASSUMPTION: gptel-fsm-p and gptel-fsm-state are available together.
+BEHAVIOR: Uses built-in predicate if both accessors available.
+BEHAVIOR: Falls back to safe state access if gptel-fsm-state available.
+BEHAVIOR: Returns nil if neither accessor available (safe default).
 TEST: (funcall my/gptel--fsm-predicate-fn some-fsm) => t or nil
 BUILDS ON DISCOVERY: Caching at load time eliminates per-call fboundp
 overhead, improving Vitality (performance).")
