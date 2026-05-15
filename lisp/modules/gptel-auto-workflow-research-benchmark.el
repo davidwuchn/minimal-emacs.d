@@ -1471,7 +1471,7 @@ Called from experiment logging to link research → experiment results."
                                     :score-after (or score-after 0)
                                     :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ"))))
                         (setq trace (plist-put trace :outcomes
-                                               (append (or outcomes nil)
+                                               (append outcomes
                                                        (list new-outcome))))
                         (erase-buffer)
                         (insert (json-encode trace))

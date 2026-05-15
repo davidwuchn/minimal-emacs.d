@@ -1514,7 +1514,7 @@ Saves to var/tmp/evolution-scores.json."
     (plist-put history :scores
                (cons (list :timestamp (format-time-string "%Y-%m-%dT%H:%M")
                           :score score :total total)
-                     (seq-take (or scores nil) 20)))
+                     (seq-take scores 20)))
     (when (> score (or best 0.0))
       (plist-put history :best score)
       (plist-put history :best-at (format-time-string "%Y-%m-%dT%H:%M")))

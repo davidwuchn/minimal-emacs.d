@@ -501,7 +501,7 @@ FALLBACK defaults to nil if not provided."
   (condition-case nil
       (json-read-from-string
        (if (stringp response) response (format "%S" response)))
-    (error (or fallback nil))))
+    (error fallback)))
 
 (defun gptel-benchmark--parse-analysis-response (response)
   "Parse analyzer RESPONSE into plist."
