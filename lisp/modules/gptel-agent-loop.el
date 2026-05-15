@@ -658,9 +658,15 @@ Retries when error is transient and retry budget remains."
 REQUEST-PROMPT and USE-TOOLS are reused on retries."
   (let ((task-id (gptel-agent-loop--task-identity state)))
     (lambda (resp info)
-      (let ((info (if (proper-list-p info) info (list)))
-            (ov (plist-get info :context))
-            (error-data (plist-get info :error)))
+      (let ((info (cond
+                    ((null info) nil)
+                    ((proper-list-p info) info)
+                    (t
+                     (message "[RunAgent] Warning: info is not a proper list (type: %S), using nil"
+                              (type-of info))
+                     nil)))
+            (ov (and info (plist-get info :context)))
+            (error-data (and info (plist-get info :error))))
         (cond
          ((gptel-agent-loop--task-finished state)
           (gptel-agent-loop--cleanup-overlay ov))
@@ -701,10 +707,14 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
                   (message "[RunAgent] Max steps (%d) reached for task '%s'"
                            max-steps
                            (cdr task-id))))
-              (unless (plist-member info :tracking-marker)
-                (setq info (plist-put info :tracking-marker
-                                      (gptel-agent-loop--task-tracking-marker state))))
-              (gptel--display-tool-calls calls info))))
+              (when (and (null info)
+                         (gptel-agent-loop--task-tracking-marker state))
+                (setq info (list)))
+              (when info
+                (unless (plist-member info :tracking-marker)
+                  (setq info (plist-put info :tracking-marker
+                                        (gptel-agent-loop--task-tracking-marker state)))))
+              (gptel--display-tool-calls calls (or info ())))))
 
          ((and (consp resp) (eq (car resp) 'tool-result))
           (gptel-agent-loop--cleanup-overlay ov)
