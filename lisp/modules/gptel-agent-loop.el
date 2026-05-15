@@ -442,10 +442,13 @@ BEHAVIOR: Validates patterns is a proper list before processing."
 
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
   "Return non-nil when TEXT matches any string in PATTERNS.
-Returns nil if TEXT is not a string or PATTERNS is not a proper list of strings.
-Patterns are matched case-insensitively.
-Invalid regex patterns are caught and return nil instead of signaling error.
-EDGE CASE: Guards against dotted pairs and non-sequences that would cause cl-every to error."
+Returns nil if TEXT is not a string or PATTERNS is not a
+proper list of strings.  Patterns are matched
+case-insensitively.
+Invalid regex patterns are caught and return nil instead of
+signaling error.
+EDGE CASE: Guards against dotted pairs and non-sequences
+that would cause cl-every to error."
   (and (stringp text)
        (proper-list-p patterns)
        (cl-every #'stringp patterns)
