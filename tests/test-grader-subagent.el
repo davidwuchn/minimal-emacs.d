@@ -62,9 +62,9 @@
   "Grading timeout should return auto-pass."
   (require 'gptel-tools-agent)
   (should (boundp 'gptel-auto-experiment-grade-timeout))
-  ;; Timeout should be reasonable (30-120 seconds)
+  ;; Timeout should be reasonable for CF-Gateway grader latency.
   (should (>= gptel-auto-experiment-grade-timeout 30))
-  (should (<= gptel-auto-experiment-grade-timeout 120)))
+  (should (<= gptel-auto-experiment-grade-timeout 180)))
 
 ;;; Test 5: Grading Timeout Wrapper
 
@@ -496,14 +496,14 @@ Result: Tests pass."))
 ;;; Test 41: Experiment Timeout Handling
 
 (ert-deftest grader/experiment-timeout-default ()
-  "Default experiment time budget should be 600s (10 min)."
+  "Default experiment time budget should be 800s."
   (require 'gptel-tools-agent)
-  (should (= gptel-auto-experiment-time-budget 600)))
+  (should (= gptel-auto-experiment-time-budget 800)))
 
 (ert-deftest grader/grade-timeout-default ()
-  "Default grade timeout should be 120s."
+  "Default grade timeout should be 180s."
   (require 'gptel-tools-agent)
-  (should (= gptel-auto-experiment-grade-timeout 120)))
+  (should (= gptel-auto-experiment-grade-timeout 180)))
 
 ;;; Test 43: Multi-Machine Branch Naming
 

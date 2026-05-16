@@ -120,7 +120,8 @@ Returns prompt template string or nil if not found."
         (let ((section-regexp
                (format "## %s\\(.*?\\)## \\|\\'"
                        (regexp-quote prompt-name))))
-          (when (string-match section-regexp skill)
+          (when (and (string-match section-regexp skill)
+                     (match-string 1 skill))
             (string-trim (match-string 1 skill))))))))
 
 (defun gptel-benchmark--make-improvement-prompt (name type anti-patterns)

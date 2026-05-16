@@ -239,15 +239,17 @@ Uses the staging worktree instead of switching branches in the root repo."
                               (setq git-state (gptel-auto-workflow--cached-cherry-pick-state)))
                             (gptel-auto-workflow--cached-unmerged-files git-state))))
                      (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                     (if (gptel-auto-workflow--non-empty-string-p unmerged-files)
-                         (progn
-                           (message "[auto-workflow] Cherry-pick conflicted; refusing merge fallback. Conflicted files: %s"
-                                    (my/gptel--sanitize-for-logging unmerged-files 160))
-                           nil)
-                       (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
-                                (my/gptel--sanitize-for-logging cherry-output 160))
-                       (if (not (gptel-auto-workflow--ensure-staging-submodules-ready worktree))
-                           nil
+                      (if (gptel-auto-workflow--non-empty-string-p unmerged-files)
+                          (progn
+                            (message "[auto-workflow] Cherry-pick conflicted; refusing merge fallback. Conflicted files: %s"
+                                     (my/gptel--sanitize-for-logging unmerged-files 160))
+                            (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                            nil)
+                        (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
+                                 (my/gptel--sanitize-for-logging cherry-output 160))
+                        (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                                      (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
+                            nil
                          (let* ((merge-result
                                  (gptel-auto-workflow--git-result
                                   (format "git merge -X theirs %s --no-ff -m %s"
@@ -259,11 +261,12 @@ Uses the staging worktree instead of switching branches in the root repo."
                             ((= 0 (cdr merge-result)) t)
                             ((string-match-p "Already up[ -]to[- ]date" merge-output)
                              :already-integrated)
-                            (t
-                             (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
-                             (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                             (message "[auto-workflow] Merge also failed: %s"
-                                      (my/gptel--sanitize-for-logging merge-output 160))
+                             (t
+                              (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
+                              (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                              (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                              (message "[auto-workflow] Merge also failed: %s"
+                                       (my/gptel--sanitize-for-logging merge-output 160))
                              nil)))))))))))))))))
 
 
@@ -797,13 +800,13 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
      (review-error
       (if (< gptel-auto-workflow--review-error-retry-count
              gptel-auto-workflow--review-max-retries)
-          (progn
-             (when (and (memq review-error-category '(:api-rate-limit :api-error :timeout))
-                        (gptel-auto-experiment--should-blacklist-provider-p review-output))
-               (when-let ((reviewer-preset
-                           (gptel-auto-workflow--agent-base-preset "reviewer")))
-                 (gptel-auto-workflow--activate-provider-failover
-                  "reviewer" reviewer-preset review-output)))
+             (progn
+              (when (memq review-error-category '(:api-rate-limit :api-error :timeout))
+                (when-let ((reviewer-preset
+                            (gptel-auto-workflow--agent-base-preset "reviewer")))
+                  (gptel-auto-workflow--activate-provider-failover
+                   "reviewer" reviewer-preset review-output
+                   (not (gptel-auto-experiment--should-blacklist-provider-p review-output)))))
             (cl-incf gptel-auto-workflow--review-error-retry-count)
             (message "[auto-workflow] Review failed transiently, retrying review (%d/%d)..."
                      gptel-auto-workflow--review-error-retry-count

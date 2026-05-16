@@ -514,12 +514,31 @@ supports a small, explicit whitelist of pure operations."
            (length arg-pairs)))
   (let ((table (make-hash-table :test #'eq)))
     (while arg-pairs
-      (let ((key (pop arg-pairs))
-            (value (pop arg-pairs)))
+        (let ((key (pop arg-pairs))
+              (value (pop arg-pairs)))
         (unless (keywordp key)
           (error "Programmatic tool-call keys must be keywords, got: %S" key))
         (puthash key value table)))
     table))
+
+(defun gptel-sandbox--tool-slot (tool-spec accessor slot-name)
+  "Return TOOL-SPEC slot SLOT-NAME using ACCESSOR or a struct fallback."
+  (let ((value (condition-case nil
+                   (funcall accessor tool-spec)
+                 (error gptel-sandbox--missing-marker))))
+    (if (not (eq value gptel-sandbox--missing-marker))
+        value
+      (let* ((type (and tool-spec (type-of tool-spec)))
+             (fallback (and (symbolp type)
+                            (intern-soft (format "%s-%s" type slot-name)))))
+        (cond
+         ((and fallback (fboundp fallback))
+          (funcall fallback tool-spec))
+         ((proper-list-p tool-spec)
+          (plist-get tool-spec (intern (format ":%s" slot-name))))
+         (t
+          (error "Programmatic tool spec is missing gptel-tool accessors, got: %S"
+                 tool-spec)))))))
 
 (defun gptel-sandbox--resolve-tool-args (tool-spec arg-forms env)
   "Resolve TOOL-SPEC arguments from ARG-FORMS using ENV."
@@ -530,7 +549,7 @@ supports a small, explicit whitelist of pure operations."
   (unless (and tool-spec (fboundp 'gptel-tool-args))
     (error "Programmatic tool spec is missing gptel-tool accessors, got: %S" tool-spec))
   (let* ((arg-map (gptel-sandbox--tool-arg-map arg-forms))
-         (spec-args (gptel-tool-args tool-spec)))
+         (spec-args (gptel-sandbox--tool-slot tool-spec #'gptel-tool-args "args")))
     (unless (proper-list-p spec-args)
       (error "Programmatic tool spec returned invalid :args property (must be proper list), got: %S" spec-args))
     (let ((values nil))
@@ -547,10 +566,14 @@ supports a small, explicit whitelist of pure operations."
            ((not key-present)
             (if (plist-get arg :optional)
                 (push nil values)
-              (error "Missing required argument %s for tool %s"
-                     name (gptel-tool-name tool-spec))))
+               (error "Missing required argument %s for tool %s"
+                      name (gptel-sandbox--tool-slot tool-spec #'gptel-tool-name "name"))))
            (t
-            (push (gptel-sandbox--eval-expr (gethash key arg-map) env) values))))))))
+             (let ((raw-value (gethash key arg-map)))
+               (push (if (null raw-value)
+                         nil
+                       (gptel-sandbox--eval-expr raw-value env))
+                      values)))))))))
 
 (defun gptel-sandbox--normalize-tool-name (tool-name)
   "Convert TOOL-NAME to string representation.

@@ -64,10 +64,10 @@ This is a convenience wrapper that sets case-fold-search around string-match-p."
       (string-match-p pattern string))))
 
 (defconst gptel-auto-experiment--hard-quota-error-pattern
-  (or (car (gptel-error--load-patterns-from-skill))
-      "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached")
+  "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached\\|quota exceeded"
   "Regex pattern matching hard quota exhaustion errors.
-Loaded from provider-error-analyzer skill if available.")
+Usage-limit errors are excluded because they are retryable rate limits until
+the configured fallback chain is exhausted.")
 
 (defconst gptel-auto-experiment--shared-retryable-error-patterns
   (cons
@@ -174,9 +174,18 @@ switch to a fallback without blacklisting (used for transient errors)."
                       gptel-auto-workflow--rate-limited-backends
                       :test #'string=))
         (setq candidate
-              (gptel-auto-workflow--runtime-provider-failover-candidate
-               agent-type preset)))
+              (if skip-blacklist
+                  (gptel-auto-workflow--first-available-provider-candidate
+                   (gptel-auto-workflow--rate-limit-failover-candidates agent-type)
+                   current-backend)
+                (gptel-auto-workflow--runtime-provider-failover-candidate
+                 agent-type preset))))
       (when candidate
+        (when skip-blacklist
+          (setf (alist-get agent-type
+                           gptel-auto-workflow--runtime-subagent-provider-overrides
+                           nil nil #'string=)
+                candidate))
         (message "[auto-workflow] Provider failure on %s/%s for %s%s; future retries will use %s/%s"
                  (or current-backend "unknown")
                  (or current-model "unknown")

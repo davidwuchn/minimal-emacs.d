@@ -174,18 +174,22 @@ Auto-applies LLM backend failover when current provider is rate-limited."
 TYPE, DESCRIPTION, PROMPT same as async version.
 TIMEOUT overrides default."
   (let ((result nil)
-        (done nil))
+        (done nil)
+        (deadline (+ (float-time) (or timeout gptel-benchmark-subagent-timeout))))
     (gptel-benchmark-call-subagent
      type description prompt
      (lambda (r)
        (setq result r done t))
      timeout)
-     (let ((iters 0)
-           (max-iters 1200))
-       (while (and (not done) (< (cl-incf iters) max-iters))
-         (sit-for 0.1))
-       (when (and (not done) (>= iters max-iters))
-         (message "[subagent] Timeout after %d iterations waiting for response" iters)))
+      (let ((iters 0)
+            (max-iters 1200))
+        (while (and (not done)
+                    (< (float-time) deadline)
+                    (< (cl-incf iters) max-iters))
+          (sit-for 0.1))
+        (unless done
+          (message "[subagent] Timeout after %ds waiting for response"
+                   (or timeout gptel-benchmark-subagent-timeout))))
     result))
 
 ;;; Grader Subagent

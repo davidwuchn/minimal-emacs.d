@@ -88,6 +88,7 @@ run_unit_tests() {
         -L "$DIR/lisp/modules" \
         -L "$DIR/packages/gptel" \
         -L "$DIR/packages/gptel-agent" \
+        -L "$DIR/var/elpa/yaml-1.2.3" \
         -L "$DIR/tests" \
         -l ert \
         --eval "(setq load-prefer-newer t)" \

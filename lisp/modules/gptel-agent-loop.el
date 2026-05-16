@@ -832,22 +832,28 @@ Returns non-nil if result was delivered.
 BEHAVIOR: Only delivers as final if RESP looks complete.
 Otherwise schedules continuation to prevent premature termination."
   (when (stringp resp)
-    (if (or (gptel-agent-loop--seems-complete-p resp)
-            (gptel-agent-loop--looks-like-finishing-p resp))
-        (progn
-          (gptel-agent-loop--deliver-result
-           state
-           (gptel-agent-loop--build-final-result state "")
-           t)
-          t)
-      (when (and (gptel-agent-loop--continuation-needed-p state resp)
-                 (not (gptel-agent-loop--task-max-steps-reached state)))
-        (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
-          (message "[RunAgent] Response doesn't look complete, auto-continuing (continuation %d/%d)..."
-                   cont-count gptel-agent-loop-max-continuations)
-          (gptel-agent-loop--append-output state resp)
-          (gptel-agent-loop--schedule-request state (gptel-agent-loop--continuation-prompt-for state) t))
-        t))))
+    (cond
+     ((or (gptel-agent-loop--seems-complete-p resp)
+          (gptel-agent-loop--looks-like-finishing-p resp))
+      (gptel-agent-loop--deliver-result
+       state
+       (gptel-agent-loop--build-final-result state "")
+       t)
+      t)
+     ((and (gptel-agent-loop--continuation-needed-p state resp)
+           (not (gptel-agent-loop--task-max-steps-reached state)))
+      (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
+        (message "[RunAgent] Response doesn't look complete, auto-continuing (continuation %d/%d)..."
+                 cont-count gptel-agent-loop-max-continuations)
+        (gptel-agent-loop--append-output state resp)
+        (gptel-agent-loop--schedule-request state (gptel-agent-loop--continuation-prompt-for state) t))
+      t)
+     (t
+      (gptel-agent-loop--deliver-result
+       state
+       (gptel-agent-loop--build-final-result state resp)
+       t)
+      t))))
 
 (defun gptel-agent-loop--handle-string-response (state resp use-tools)
   "Handle string response RESP for STATE.
