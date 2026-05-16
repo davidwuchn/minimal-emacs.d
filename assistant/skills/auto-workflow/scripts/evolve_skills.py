@@ -201,6 +201,7 @@ def update_skill_metadata(skills_dir, analysis):
         with open(skill_file, 'r') as f:
             content = f.read()
         content = re.sub(r'^updated:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^\s*last-evolution:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n', '', content, flags=re.MULTILINE)
         
         # Add evolution metadata if not present
         if 'evolution-stats:' not in content:
