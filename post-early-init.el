@@ -98,7 +98,7 @@
 ;; "Lisp nesting exceeds max-lisp-eval-depth" errors from deeply nested
 ;; subagent async callbacks (curl sentinel → FSM → callback → next process).
 ;; Default 1600 is too low for 5+ nested subagent layers.
-(setq max-lisp-eval-depth 8000)
+(setq max-lisp-eval-depth 10000)
 
 (provide 'post-early-init)
 
