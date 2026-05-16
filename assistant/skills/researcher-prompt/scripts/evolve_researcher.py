@@ -346,8 +346,8 @@ def main():
         skill_path = Path(args.skill)
     elif args.root:
         root = Path(args.root)
-        data_dir = root / "assistant" / "skills" / "researcher-prompt" / "data"
-        skill_path = root / "assistant" / "skills" / "researcher-prompt" / "SKILL.md"
+        data_dir = Path(args.analysis) if args.analysis else root / "assistant" / "skills" / "researcher-prompt" / "data"
+        skill_path = Path(args.output_dir) / "SKILL.md" if args.output_dir else root / "assistant" / "skills" / "researcher-prompt" / "SKILL.md"
     else:
         parser.error("Either --data-dir + --skill or --root is required")
     

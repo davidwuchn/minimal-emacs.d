@@ -1170,11 +1170,11 @@ Returns symbol: aligned, neutral, or deviant."
                           (list :aligned 0 :neutral 0 :deviant 0 :total-quality 0.0 :count 0)))
          (new-count (1+ (plist-get current :count)))
          (new-quality (+ (plist-get current :total-quality) quality)))
-     (plist-put current (intern (concat ":" (symbol-name classification)))
-                (1+ (or (plist-get current (intern (concat ":" (symbol-name classification)))) 0)))
-    (plist-put current :total-quality new-quality)
-    (plist-put current :count new-count)
-    (plist-put current :avg-quality (/ new-quality new-count))
+    (setq current (plist-put current (intern (concat ":" (symbol-name classification)))
+                             (1+ (or (plist-get current (intern (concat ":" (symbol-name classification)))) 0))))
+    (setq current (plist-put current :total-quality new-quality))
+    (setq current (plist-put current :count new-count))
+    (setq current (plist-put current :avg-quality (/ new-quality new-count)))
     (puthash source current gptel-auto-workflow--source-effectiveness-table)))
 
 (defun gptel-auto-workflow--get-source-effectiveness (source)
@@ -1257,23 +1257,6 @@ Requires at least MIN-TRACES (default: 20) cached traces."
       (message "[autotts] Not enough traces for '%s' (%d/%d), using default beta=%.2f"
                topic (or (length traces) 0) min-required gptel-auto-workflow--research-beta)
       nil)))
-
-(defun gptel-auto-workflow--maybe-auto-tune-beta (topic)
-  "Auto-tune beta if conditions are met.
-Conditions: enough traces, significant performance variance."
-  (let ((traces (when (fboundp 'gptel-auto-workflow--get-cached-traces)
-                 (gptel-auto-workflow--get-cached-traces topic))))
-    (when (and traces (>= (length traces) 20))
-      ;; Check if current beta is underperforming
-      (let* ((current-beta gptel-auto-workflow--research-beta)
-             (current-params (gptel-auto-workflow--research-beta-schedule current-beta))
-             (current-result (when (fboundp 'gptel-auto-workflow--evaluate-controller-offline)
-                              (gptel-auto-workflow--evaluate-controller-offline current-params topic 20)))
-             (current-confidence (or (plist-get current-result :avg-confidence) 0.5)))
-        ;; If confidence is low, try auto-tuning
-        (when (< current-confidence 0.4)
-          (message "[autotts] Low confidence (%.2f) for '%s', triggering auto-tune..." current-confidence topic)
-          (gptel-auto-workflow--auto-tune-beta topic))))))
 
 ;; Source scheduling in controller
 

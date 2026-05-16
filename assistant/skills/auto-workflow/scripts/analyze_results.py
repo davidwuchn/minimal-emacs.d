@@ -80,7 +80,6 @@ def compute_target_stats(records):
             'avg_score_before': sum(r['score_before'] for r in target_records) / total,
             'avg_score_after': sum(r['score_after'] for r in target_records) / total,
             'avg_quality': sum(r['code_quality'] for r in target_records) / total,
-            'experiments': target_records,
         })
     
     # Sort by keep rate descending
@@ -162,6 +161,24 @@ def main():
         if existing_total == 0:
             print("No experiment records found.", file=sys.stderr)
             sys.exit(1)
+        output = {
+            'generated_at': datetime.now().isoformat(),
+            'total_experiments': existing_total,
+            'local_experiments': 0,
+            'stale': True,
+            'target_stats': [],
+            'research_stats': [],
+            'prompt_stats': {'total_experiments': 0, 'total_kept': 0,
+                             'total_discarded': 0, 'avg_kept_prompt': 0,
+                             'avg_discarded_prompt': 0},
+        }
+        json_str = json.dumps(output, indent=2)
+        if args.output == '-':
+            print(json_str)
+        else:
+            with open(args.output, 'w') as f:
+                f.write(json_str)
+        return
     
     # Compute statistics
     target_stats = compute_target_stats(records)
