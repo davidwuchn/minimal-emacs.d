@@ -2,45 +2,43 @@
 
 > Last session: 2026-05-16
 
-## Current Session: Byte-Compile Cleanup + Architecture Fixes
+## Current Session: Pipeline Hardening + Strategy Artifact Prevention
 
-**Status:** Source generator fixes applied for bad strategy artifacts; pipeline source loads clean.
+**Status:** Pipeline source loads clean; bad generated strategy artifacts are blocked before persistence.
 
 **Commits This Session:**
-- `9aefcd47` — Broaden research findings noise stripping
-- `e720624a` — Security ACL: marker-derived classification
-- `91c6ef84` — Wire evolution patterns into categorizer
-- `ff4daf5e` — Fix 27 docstring width warnings
-- `3ee22e28` — Fix 370 byte-compile warnings: declare-function, lexical-binding, paren bugs
-- `6d82cd3d` — Fix bare except: in analyze_research_outcomes.py
+- `f3da0801` — Fix garbage topic name leak + declare-function nil→correct + .gitignore pycache
+- `26f1a954` — Fix case-mismatch in extract_topics regex
+- `0980fcc9` — Merge + push to origin/main
+- `aab097ad` — Fix trend detection, lookback filter, TRACE_DIR, evolve timestamp preservation
+- `7688cf72` — Prevent bad strategy artifacts
 
 **Key Fixes:**
-- Strategy evolution prototype now exercises representative analysis data and rejects missing skill references before writing accepted strategy files.
-- Research knowledge synthesis now skips rejected diagnostic strategy labels, unsafe strategy names, `none`/`unknown`, and zero-kept strategies.
-- Added regressions for rejected research labels, zero-kept research strategies, dynamic missing skill references, and literal skill extraction.
-- 2 `End-of-file-during-parsing` from cl-flet conversion (missing close parens)
-- 4 missing `lexical-binding` directives
-- ~100 `declare-function` declarations across 17 files
-- 3 docstring quoting fixes, 5 unused var prefixes, 4 defvar declarations
-- Security ACL: `my/gptel-tool-acl-needs-confirm` uses `:file-inspector ∪ :can-edit` markers
-- Evolution patterns: skill loading now parses High-Signal Keywords (was stub)
-- `:own-priority`/`:own-repo-priority` investigated: no bug, boundaries clean
+- Strategy evolver REJECTED messages leaking into topic-performance.json as topic names
+- Added `gptel-auto-workflow--valid-strategy-name-p` and `_valid_topic_name()` defenses
+- `extract_topics_from_hypothesis` regex never matched: capitalized verbs in lowered text
+- Trend detection, lookback filtering, undefined `TRACE_DIR`, and skill timestamp preservation fixed
+- Strategy evolution prototype now exercises representative analysis data and rejects missing skill references before writing accepted strategy files
+- Research knowledge synthesis now skips rejected diagnostic strategy labels, unsafe strategy names, `none`/`unknown`, and zero-kept strategies
+- Added regressions for rejected research labels, zero-kept research strategies, placeholder strategy labels, dynamic missing skill references, and literal skill extraction
+- 14 `declare-function nil` → correct source file across 9 files
+- `__pycache__/` + `*.pyc` added to `.gitignore`
 
-**Prior Session (Remote):**
-- Controller doom loop detection (ml-intern pattern)
-- Status stuck at running after completion bug fixed
+**Prior Session:**
+- 377→11 byte-compile warnings, 2 End-of-file-during-parsing, cl-flet conversion
 - Tool marker architecture, memory tools, progressive shortening
 
-**Remaining (11 warnings, all cosmetic/unfixable):**
+**Remaining Warnings (11, all cosmetic/unfixable):**
 - 2 `(setf ...)` warnings: Emacs 30.2 ignores declare-function for setf
 - 2 Malformed function: `cl-labels` byte-compiler limitation
 - 5 cascade warnings from cl-labels Malformed function
-- 1 `retire-buffer` not known: cl-labels local (same root cause)
+- 1 `retire-buffer` not known: cl-labels local
 - 8 "Cannot open load file: gptel" (pre-existing, needs gptel package)
 
 **Test Results:**
-- evolution-regressions: 5/5
-- strategy-evolver-regressions: 2/2
+- focused strategy-artifact regressions: 8/8
+- changed module batch-load: clean
+- `git diff --check`: clean
 - research-benchmark: 19/19
 - nucleus-tools: 28 pass + 2 skip (0 unexpected)
 
