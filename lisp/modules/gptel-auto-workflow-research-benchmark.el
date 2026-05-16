@@ -246,13 +246,31 @@ When fewer than 10 traces, all go to train (not enough for meaningful split)."
     (if (< n 10)
         (list :train sorted :test nil)
       (list :train (seq-take sorted split-idx)
-            :test (seq-drop sorted split-idx)))))
+             :test (seq-drop sorted split-idx)))))
 
-(defun gptel-auto-workflow--controller-evolution-results (_mode)
-  "Return trace results for controller evolution.
-MODE is reserved for future use (e.g., :train :val :test).
-Currently returns all loaded research traces."
-  (gptel-auto-workflow--load-research-traces))
+(defun gptel-auto-workflow--parse-controller-design-response (response)
+  "Parse controller design RESPONSE into a plist, or nil."
+  (let* ((normalized (if (fboundp 'gptel-auto-workflow--normalize-response)
+                         (gptel-auto-workflow--normalize-response response)
+                       (if (stringp response) response (format "%s" response))))
+         (text (string-trim normalized))
+         (text (replace-regexp-in-string "\\`[[:space:]]*```[[:alpha:]]*\n?" "" text))
+         (text (replace-regexp-in-string "\n?```[[:space:]]*\\'" "" text)))
+    (cl-labels ((read-plist-at
+                 (start)
+                 (condition-case nil
+                     (let ((form (car (read-from-string text start))))
+                       (when (plistp form)
+                         form))
+                   (error nil))))
+      (or (read-plist-at 0)
+          (catch 'controller-plist
+            (let ((pos 0))
+              (while (string-match (regexp-quote "(") text pos)
+                (when-let ((form (read-plist-at (match-beginning 0))))
+                  (throw 'controller-plist form))
+                (setq pos (1+ (match-beginning 0))))
+              nil))))))
 
 (defun gptel-auto-workflow--validate-on-held-out (controller-config test-traces)
   "Evaluate CONTROLLER-CONFIG on held-out TEST-TRACES.
@@ -281,38 +299,12 @@ Compares train vs test performance to detect overfitting."
            (configured-stop (or (plist-get controller-config :min-confidence-stop)
                                 (plist-get controller-config :stop-threshold)
                                 0.7))
-           ;; Compare held-out success against the configured target threshold.
-           ;; This avoids using training traces while still surfacing obvious overfit.
            (overfit-score (- 1.0 (min 1.0 (abs (- test-rate configured-stop))))))
       (list :test-accuracy test-rate
             :test-tokens total-tokens
             :test-count (length test-traces)
             :overfit-score (max 0.0 (min 1.0 overfit-score))
             :overfit-warning (if (< overfit-score 0.3) t nil)))))
-
-(defun gptel-auto-workflow--parse-controller-design-response (response)
-  "Parse controller design RESPONSE into a plist, or nil."
-  (let* ((normalized (if (fboundp 'gptel-auto-workflow--normalize-response)
-                         (gptel-auto-workflow--normalize-response response)
-                       (if (stringp response) response (format "%s" response))))
-         (text (string-trim normalized))
-         (text (replace-regexp-in-string "\\`[[:space:]]*```[[:alpha:]]*\n?" "" text))
-         (text (replace-regexp-in-string "\n?```[[:space:]]*\\'" "" text)))
-    (cl-labels ((read-plist-at
-                 (start)
-                 (condition-case nil
-                     (let ((form (car (read-from-string text start))))
-                       (when (plistp form)
-                         form))
-                   (error nil))))
-      (or (read-plist-at 0)
-          (catch 'controller-plist
-            (let ((pos 0))
-              (while (string-match (regexp-quote "(") text pos)
-                (when-let ((form (read-plist-at (match-beginning 0))))
-                  (throw 'controller-plist form))
-                (setq pos (1+ (match-beginning 0))))
-              nil))))))
 
 (defun gptel-auto-workflow--controller-rule-p (rule)
   "Return non-nil when RULE is a controller rule plist."
@@ -1083,21 +1075,21 @@ Uses Programmatic sandbox for safe rule evaluation."
                             (/ (float tokens-saved) (+ tokens-saved tokens-wasted))
                           0.5))
            (objective (+ (* accuracy 0.6) (* token-ratio 0.4))))
-      (list :objective objective :accuracy accuracy
-            :token-ratio token-ratio :correct correct :total total))))
+       (list :objective objective :accuracy accuracy
+             :token-ratio token-ratio :correct correct :total total))))
 
 (defun gptel-auto-workflow--evaluate-controller-config (config traces)
   "Evaluate CONTROLLER-CONFIG against TRACES by SIMULATING controller
 decisions.  For each trace, simulate what the CMC controller would have
 decided at each turn point, comparing against actual outcomes.  Returns
 plist with objective score.  This is an OFFLINE evaluation — 0 LLM calls."
-  (let ((simulated-stops 0)      ; correct STOP decisions (trace was successful, controller would STOP)
-        (simulated-continues 0)   ; correct CONTINUE decisions (trace needed more turns)
-        (simulated-branches 0)    ; correct BRANCH decisions (trace was poor, controller would BRANCH)
-        (false-stops 0)           ; wrong STOP decisions (trace was poor, controller would STOP too early)
-        (false-continues 0)       ; wrong CONTINUE decisions (trace was good, controller kept going)
-        (total-tokens-saved 0)    ; tokens saved by early STOP decisions
-        (total-tokens-wasted 0)   ; tokens wasted on unnecessary CONTINUE decisions
+  (let ((simulated-stops 0)
+        (simulated-continues 0)
+        (simulated-branches 0)
+        (false-stops 0)
+        (false-continues 0)
+        (total-tokens-saved 0)
+        (total-tokens-wasted 0)
         (n (length traces)))
     (dolist (trace traces)
       (let* ((output-length (or (plist-get trace :output-length) 0))
@@ -1114,7 +1106,6 @@ plist with objective score.  This is an OFFLINE evaluation — 0 LLM calls."
              (warm-up (or (plist-get config :warm-up) 2))
              (min-complete (or (plist-get config :min-complete) 2))
              (max-turns (or (plist-get config :max-turns) 3))
-             ;; Simulate CMC decision for this trace (mirrors controller-decide-research-flow)
              (would-stop (and (>= turn-count warm-up)
                               (>= turn-count min-complete)
                               (>= ema-conf stop-threshold)
@@ -1123,17 +1114,13 @@ plist with objective score.  This is an OFFLINE evaluation — 0 LLM calls."
                                 (< ema-conf stop-threshold)
                                 (<= ema-delta trend-threshold)
                                 (< turn-count (1- max-turns)))))
-        ;; Score the simulated decision against actual outcome
         (cond
-         ;; Trace was successful → STOP would have been right, CONTINUE wasted tokens
          (success
           (if would-stop
               (progn (cl-incf simulated-stops)
-                     ;; Token savings: if we stopped at turn N instead of continuing
                      (setq total-tokens-saved (+ total-tokens-saved (/ output-length 8))))
             (cl-incf false-continues)
             (setq total-tokens-wasted (+ total-tokens-wasted (/ output-length 4)))))
-         ;; Trace was poor → BRANCH or CUT would have been right
          (t
           (if would-branch
               (cl-incf simulated-branches)
@@ -1165,38 +1152,6 @@ plist with objective score.  This is an OFFLINE evaluation — 0 LLM calls."
             :tokens-wasted total-tokens-wasted))))
 
 ;; ─── Trace-Outcome Bridge: Experiment Results → Trace Learning ───
-
-(defun gptel-auto-workflow--bridge-trace-outcomes (results-tsv-path)
-  "Bridge experiment results back to research traces.
-Reads RESULTS-TSV-PATH, finds the research trace that led to each experiment,
-and updates trace metadata with actual experiment outcomes.
-Closes the loop: research strategy → experiment → outcome → controller learning."
-  (cl-block gptel-auto-workflow--bridge-trace-outcomes
-   (let* ((traces (gptel-auto-workflow--load-research-traces))
-          (updated 0)
-          (results (gptel-auto-workflow--parse-tsv-results results-tsv-path)))
-    (unless traces
-      (cl-return-from gptel-auto-workflow--bridge-trace-outcomes 0))
-    (dolist (result results)
-      (let* ((target (plist-get result :target))
-             (decision (plist-get result :decision))
-             (score (or (plist-get result :score) 0.0))
-             (success-p (equal decision "kept")))
-        (when (and target success-p)
-          (dolist (trace traces)
-            (let ((trace-strategy (plist-get trace :strategy)))
-              (when (and trace-strategy
-                         (not (plist-get trace :outcome-linked)))
-                (plist-put trace :experiment-target target)
-                (plist-put trace :experiment-decision decision)
-                (plist-put trace :experiment-score score)
-                (plist-put trace :experiment-success t)
-                (plist-put trace :outcome-linked t)
-                (cl-incf updated)
-                (cl-return)))))))
-    (message "[trace-bridge] Bridged %d traces to experiment outcomes (%d results)"
-             updated (length results))
-    updated)))
 
 (defun gptel-auto-workflow--parse-tsv-results (tsv-path)
   "Parse TSV experiment results file into list of plists.
