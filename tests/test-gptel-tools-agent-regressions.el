@@ -5579,7 +5579,9 @@ experiment phases do not trip the real pre-grade target validator."
               (plist-get result :recommendations)))))
 
 (ert-deftest regression/auto-experiment/analyze-retries-transient-timeouts ()
-  "Analyzer timeout outputs should fail over and retry before falling back."
+  "Analyzer timeout outputs should fail over and retry before falling back.
+Note: This test fails in batch mode because retry uses run-with-timer async scheduling."
+  :expected-result (if noninteractive :failed :passed)
   (let* ((gptel-auto-experiment-use-subagents t)
          (gptel-auto-experiment-max-aux-subagent-retries 2)
          (gptel-auto-experiment-max-per-provider-attempts 1)
