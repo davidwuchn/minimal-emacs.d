@@ -4,7 +4,7 @@
 
 ## Current Session: Byte-Compile Cleanup + Architecture Fixes
 
-**Status:** 377→11 byte-compile warnings (9 cosmetic/unfixable). Pipeline solid.
+**Status:** Source generator fixes applied for bad strategy artifacts; pipeline source loads clean.
 
 **Commits This Session:**
 - `9aefcd47` — Broaden research findings noise stripping
@@ -15,6 +15,9 @@
 - `6d82cd3d` — Fix bare except: in analyze_research_outcomes.py
 
 **Key Fixes:**
+- Strategy evolution prototype now exercises representative analysis data and rejects missing skill references before writing accepted strategy files.
+- Research knowledge synthesis now skips rejected diagnostic strategy labels, unsafe strategy names, `none`/`unknown`, and zero-kept strategies.
+- Added regressions for rejected research labels, zero-kept research strategies, dynamic missing skill references, and literal skill extraction.
 - 2 `End-of-file-during-parsing` from cl-flet conversion (missing close parens)
 - 4 missing `lexical-binding` directives
 - ~100 `declare-function` declarations across 17 files
@@ -36,7 +39,9 @@
 - 8 "Cannot open load file: gptel" (pre-existing, needs gptel package)
 
 **Test Results:**
+- evolution-regressions: 5/5
+- strategy-evolver-regressions: 2/2
 - research-benchmark: 19/19
-- nucleus-tools: 26 pass + 4 skip (0 unexpected)
+- nucleus-tools: 28 pass + 2 skip (0 unexpected)
 
 ---
