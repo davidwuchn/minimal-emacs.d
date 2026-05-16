@@ -992,7 +992,7 @@ Set to 10 to allow 2 attempts per provider across the 5-provider fallback
 chain.  Fewer retries reduce quota exhaustion when providers are
 rate-limited.")
 
-(defvar gptel-auto-experiment-max-per-provider-attempts 5
+(defvar gptel-auto-experiment-max-per-provider-attempts 3
   "Consecutive retries on the same provider before advancing to next
 fallback.  Set to 5 for executor to maximize usage of monthly subscription
 backends (MiniMax).  Aux subagents may use lower values to reduce quota
