@@ -715,8 +715,8 @@ For .el files, uses checkdoc/byte-compile/package-lint instead of LSP."
                                  (length formatted)
                                   (length errors-only)
                                   (- (length filtered) (length errors-only))
-                                  (if all " (including notes)" "")))))
-                full-result)))))))
+                                  (if all " (including notes)" ""))))))
+              full-result))))))
 
 (defun gptel-tools-code-register ()
   "Register the unified Code tools with gptel."
