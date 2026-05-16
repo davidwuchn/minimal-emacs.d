@@ -57,29 +57,33 @@ EDGE CASE: Missing error message returns nil.
 EDGE CASE: STOP reason not 'STOP returns nil.
 EDGE CASE: FSM already in DONE state returns nil.
 EDGE CASE: Non-FSM object passed returns nil (safety check).
-EDGE CASE: Malformed FSM struct returns nil (ignore-errors protection).
+EDGE CASE: Malformed FSM struct returns nil (condition-case protection).
 TEST: (my/gptel--fsm-needs-recovery-p nil nil) => nil
 TEST: (my/gptel--fsm-needs-recovery-p fsm info-with-error+stop+not-done) => t
 TEST: (my/gptel--fsm-needs-recovery-p fsm info-without-error) => nil
 TEST: (my/gptel--fsm-needs-recovery-p \"not-a-fsm\" info) => nil
 
-BUILDS ON DISCOVERY: Extracting validation logic enables reuse
-and makes the recovery condition explicit and testable.
+BUILDS ON DISCOVERY: Replacing ignore-errors with condition-case
+enables specific error handling while maintaining safety.
 
-ADAPTS TO: Centralizes recovery decision logic for consistency.
+ADAPTS TO: Explicit state validation catches real FSM issues.
 
-PROACTIVE MITIGATION: Prevents recovery attempts on invalid FSMs."
+PROACTIVE MITIGATION: Distinguishes nil state from error state."
   (when (and (my/gptel--fsm-p fsm)
              (proper-list-p info) (plist-member info :buffer))
     (let* ((fsm-buffer (plist-get info :buffer))
            (error-msg (plist-get info :error))
            (stop-reason (plist-get info :stop-reason))
-           (fsm-state (ignore-errors (gptel-fsm-state fsm))))
+           (fsm-state (condition-case err
+                         (gptel-fsm-state fsm)
+                       (error
+                        (message "[gptel-fsm] FSM state access error: %s" (error-message-string err))
+                        nil))))
       (and fsm-buffer
            (buffer-live-p fsm-buffer)
            (stringp error-msg)
            (eq stop-reason 'STOP)
-           fsm-state
+           (symbolp fsm-state)
            (not (eq fsm-state 'DONE))))))
 
 (defun my/gptel--get-active-fsm ()
