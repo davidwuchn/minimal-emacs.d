@@ -41,6 +41,20 @@ Accepts already-normalized tool structs and registry entries of the form
     (cdr tool))
    (t nil)))
 
+(defun my/gptel--tool-name-from-spec (ts &optional log-errors tool)
+  "Extract tool name from TS, returning nil on error.
+When LOG-ERRORS is non-nil and an error occurs, log a message using TOOL.
+Avoids code duplication in functions that extract tool names."
+  (when (and (fboundp 'gptel-tool-p)
+             (gptel-tool-p ts))
+    (condition-case err
+        (gptel-tool-name ts)
+      (error
+       (when log-errors
+         (message "gptel: tool-name extraction failed for %S: %s"
+                  tool (error-message-string err)))
+       nil))))
+
 (defun my/gptel--normalize-tool-list (tools)
   "Return TOOLS as a list of bare `gptel-tool' structs."
   (delq nil (mapcar #'my/gptel--tool-spec tools)))
@@ -50,12 +64,7 @@ Accepts already-normalized tool structs and registry entries of the form
 COMPARISON-FN should accept two strings and return non-nil if they match.
 Defaults to `string='."
   (cl-find-if (lambda (ts)
-                (let ((tool-name
-                       (and (fboundp 'gptel-tool-p)
-                            (gptel-tool-p ts)
-                            (condition-case nil
-                                (gptel-tool-name ts)
-                              (error nil)))))
+                (let ((tool-name (my/gptel--tool-name-from-spec ts)))
                   (and tool-name
                        (funcall (or comparison-fn #'string=)
                                 tool-name name))))
@@ -91,11 +100,7 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
         (when (and my/gptel-tool-repair-enabled normalized)
           (cl-find-if
            (lambda (ts)
-             (let ((tool-name (and (fboundp 'gptel-tool-p)
-                                   (gptel-tool-p ts)
-                                   (condition-case nil
-                                       (gptel-tool-name ts)
-                                     (error nil)))))
+             (let ((tool-name (my/gptel--tool-name-from-spec ts)))
                (and tool-name
                     (string= normalized
                              (my/gptel--normalize-tool-name tool-name)))))
@@ -471,14 +476,7 @@ Uses last-wins so the most recently registered struct takes precedence."
              (let ((seen (make-hash-table :test #'equal)))
                ;; Iterate reversed to capture last occurrence of each name.
                (dolist (tool (nreverse tools))
-                 (let ((name (and (fboundp 'gptel-tool-p)
-                                  (gptel-tool-p tool)
-                                  (condition-case err
-                                      (gptel-tool-name tool)
-                                    (error
-                                     (message "gptel: tool-name extraction failed for %S: %s"
-                                              tool (error-message-string err))
-                                     nil)))))
+                 (let ((name (my/gptel--tool-name-from-spec tool 'log-errors tool)))
                    (when name (puthash name tool seen))))
                ;; Return values in original order (first occurrence wins).
                (nreverse (hash-table-values seen))))))
