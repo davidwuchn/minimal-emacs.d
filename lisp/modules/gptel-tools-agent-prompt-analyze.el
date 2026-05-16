@@ -384,14 +384,15 @@ Rotates across the top-ranked candidates using EXPERIMENT-ID."
 
 (defun gptel-auto-experiment--inspection-thrash-result-p (result)
   "Return non-nil when RESULT records an inspection-thrash failure."
-  (cl-some
-   (lambda (text)
-     (and (stringp text)
-          (string-match-p "inspection-thrash aborted" text)))
-   (list (plist-get result :error)
-         (plist-get result :agent-output)
-         (plist-get result :grader-reason)
-         (plist-get result :comparator-reason))))
+  (when (proper-list-p result)
+    (cl-some
+     (lambda (text)
+       (and (stringp text)
+            (string-match-p "inspection-thrash aborted" text)))
+     (list (plist-get result :error)
+           (plist-get result :agent-output)
+           (plist-get result :grader-reason)
+           (plist-get result :comparator-reason)))))
 
 (defun gptel-auto-experiment--needs-inspection-thrash-recovery-p (previous-results)
   "Return non-nil when PREVIOUS-RESULTS include inspection-thrash failures."

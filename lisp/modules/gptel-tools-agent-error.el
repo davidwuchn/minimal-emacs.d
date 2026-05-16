@@ -561,7 +561,11 @@ RETRY-COUNT tracks current retry attempt."
     (gptel-auto-experiment-run
      target experiment-id max-experiments baseline baseline-code-quality previous-results
       (lambda (result)
-        (let* ((agent-output (plist-get result :agent-output))
+        (let* ((result (if (proper-list-p result) result
+                         (progn
+                           (message "[auto-experiment] Invalid result structure received, treating as empty plist")
+                           (list :error "Invalid result structure"))))
+               (agent-output (plist-get result :agent-output))
               (raw-error (or (plist-get result :error)
                              (and (gptel-auto-experiment--agent-error-p agent-output)
                                   agent-output)))
