@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 16:25
 name: evolution-patterns
 description: Domain knowledge for experiment hypothesis categorization and score prediction. Extracted from gptel-auto-workflow-evolution.el.
 version: 1.0
@@ -105,24 +106,3 @@ Based on analysis of experiment errors.
 ## Evolved Patterns
 
 ### High-Signal Keywords
-
-- `(adapts`: 100% (9/9)
-- `several`: 100% (6/6)
-- `pre-existing`: 100% (6/6)
-- ``id``: 100% (5/5)
-- `reporting`: 100% (5/5)
-- `cases.let`: 100% (5/5)
-- `about`: 86% (19/22)
-- ``my/gptel--sanitize-multimodal-content``: 83% (5/6)
-- `gptel-ext-core.el`: 83% (5/6)
-- ``fsm``: 83% (5/6)
-- `invariant`: 83% (5/6)
-- `testable).`: 83% (5/6)
-- `score`: 81% (13/16)
-- `definitions)`: 80% (16/20)
-- `assumptions).`: 80% (12/15)
-- `analyze`: 80% (4/5)
-- ``gptel-benchmark-analyze-patterns``: 80% (4/5)
-- `detection.`: 80% (4/5)
-- `their`: 80% (4/5)
-- `clearly.`: 80% (4/5)

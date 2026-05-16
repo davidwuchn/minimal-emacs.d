@@ -92,8 +92,62 @@ Default nil for speed (analyzer has enough context from git/history)."
 (defvar gptel-auto-workflow--current-research-context nil
   "Plist tracking current research run context.
 Set when research runs before target selection.
-Contains :strategy :hash :findings for mementum tracking.
+Contains :strategy :hash :findings :source :controller-decision for mementum tracking.
 Reset after each run.")
+
+(defun gptel-auto-workflow--research-trace-for-hash (research-hash)
+  "Return persisted research trace plist matching RESEARCH-HASH, if any."
+  (when (and (stringp research-hash) (not (string-empty-p research-hash)))
+    (let ((trace-dir (expand-file-name "var/tmp/research-traces"
+                                       (gptel-auto-workflow--effective-project-root)))
+          trace)
+      (when (file-directory-p trace-dir)
+        (catch 'found
+          (dolist (file (directory-files trace-dir t "\\.json\\'"))
+            (when (string-match-p (regexp-quote research-hash)
+                                  (file-name-nondirectory file))
+              (condition-case nil
+                  (let ((json-object-type 'plist)
+                        (json-array-type 'list)
+                        (json-key-type 'keyword))
+                    (with-temp-buffer
+                      (insert-file-contents file)
+                      (setq trace (json-read)))
+                    (throw 'found trace))
+                (error nil))))))
+      trace)))
+
+(defun gptel-auto-workflow--research-context-from-findings (findings &optional source)
+  "Return a persisted research context plist for FINDINGS.
+SOURCE defaults to external when FINDINGS look like external research."
+  (when (and (stringp findings) (not (string-empty-p findings)))
+    (let* ((research-hash (sha1 findings))
+           (trace (gptel-auto-workflow--research-trace-for-hash research-hash))
+           (inferred-source
+            (or source
+                (plist-get trace :source)
+                (if (and (fboundp 'gptel-auto-workflow--research-has-external-content-p)
+                         (gptel-auto-workflow--research-has-external-content-p findings))
+                    "external"
+                  "internal"))))
+      (list :strategy (or (plist-get trace :strategy) "persisted-findings")
+            :hash research-hash
+            :findings findings
+            :digested (or (plist-get trace :digested) findings)
+            :source inferred-source
+            :controller-decision (or (plist-get trace :controller-decision) "persisted")
+            :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))))
+
+(defun gptel-auto-workflow--ensure-research-context (findings &optional source)
+  "Ensure `gptel-auto-workflow--current-research-context' exists for FINDINGS."
+  (when (and (stringp findings) (not (string-empty-p findings)))
+    (let ((research-hash (sha1 findings)))
+      (unless (and (listp gptel-auto-workflow--current-research-context)
+                   (equal (plist-get gptel-auto-workflow--current-research-context :hash)
+                          research-hash))
+        (setq gptel-auto-workflow--current-research-context
+              (gptel-auto-workflow--research-context-from-findings findings source))))
+    gptel-auto-workflow--current-research-context))
 
 (defcustom gptel-auto-workflow-research-interval (* 4 3600)
   "Interval in seconds between periodic researcher runs.
@@ -1793,11 +1847,13 @@ Findings are cached per-project."
            (or (not (stringp cached))
                (string-empty-p cached)
                (> (length file-findings) (length cached))))
-      (puthash cache-key file-findings gptel-auto-workflow--research-findings-cache)
-      (message "[research] Loaded cached findings from disk for %s (%d chars)"
-               proj-root (length file-findings))
-      file-findings)
+       (puthash cache-key file-findings gptel-auto-workflow--research-findings-cache)
+       (gptel-auto-workflow--ensure-research-context file-findings)
+       (message "[research] Loaded cached findings from disk for %s (%d chars)"
+                proj-root (length file-findings))
+       file-findings)
      ((and (stringp cached) (not (string-empty-p cached)))
+      (gptel-auto-workflow--ensure-research-context cached)
       (message "[research] Using in-memory findings for %s (%d chars)"
                proj-root (length cached))
       cached)

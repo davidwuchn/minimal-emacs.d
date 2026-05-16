@@ -49,6 +49,7 @@
 (defvar gptel-auto-workflow--skills)
 (defvar gptel-auto-experiment-large-target-byte-threshold)
 (defvar gptel-auto-workflow--last-prompt-sections)
+(defvar gptel-auto-workflow--current-research-context)
 (defvar gptel-auto-experiment-time-budget)
 (defvar gptel-auto-workflow-use-staging)
 (defvar gptel-auto-workflow--running)
@@ -769,20 +770,24 @@ row for the same experiment and target."
          (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
           (truncated-output (gptel-auto-experiment--tsv-escape
                               (truncate-string-to-width agent-output 500 nil nil "..."))))
-    ;; Inject research metadata from global context into experiment record
-    ;; This closes the feedback loop: experiments carry the research strategy that produced them
-    (when (and (boundp 'gptel-auto-workflow--active-strategy)
-               gptel-auto-workflow--active-strategy
-               (or (not (fboundp 'gptel-auto-workflow--valid-strategy-name-p))
-                   (gptel-auto-workflow--valid-strategy-name-p
-                    gptel-auto-workflow--active-strategy)))
-      (plist-put experiment :research-strategy gptel-auto-workflow--active-strategy))
+    ;; Inject research metadata from global context into experiment record.
+    ;; This closes the feedback loop: experiments carry the research run that
+    ;; influenced the prompt so trace outcomes can be linked after logging.
     (when (and (boundp 'gptel-auto-workflow--current-research-context)
-               gptel-auto-workflow--current-research-context)
+                gptel-auto-workflow--current-research-context)
       (let ((ctx gptel-auto-workflow--current-research-context))
-        (plist-put experiment :research-hash (or (plist-get ctx :hash) "none"))
-        (plist-put experiment :research-quality (if (plist-get ctx :strategy) "external" "none"))
-        (plist-put experiment :controller-decision "unknown")))
+        (setq experiment
+              (plist-put experiment :research-strategy
+                         (or (plist-get ctx :strategy) "none")))
+        (setq experiment
+              (plist-put experiment :research-hash
+                         (or (plist-get ctx :hash) "none")))
+        (setq experiment
+              (plist-put experiment :research-quality
+                         (or (plist-get ctx :source) "none")))
+        (setq experiment
+              (plist-put experiment :controller-decision
+                         (or (plist-get ctx :controller-decision) "unknown")))))
     (with-temp-buffer
       (insert-file-contents file)
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
@@ -908,12 +913,12 @@ supplied on failure, use it as the downgrade reason."
             (final-result
              (if (or (not staging-reported-p) staging-succeeded)
                  exp-result
-               (let ((failed-result (and (listp exp-result)
-                                          (plist-put (copy-sequence exp-result) :kept nil))))
-                 (when failed-result
-                   (plist-put failed-result :decision nil)
-                   (plist-put failed-result :comparator-reason failure-reason))
-                 (or failed-result exp-result)))))
+                (let ((failed-result (and (listp exp-result)
+                                           (plist-put (copy-sequence exp-result) :kept nil))))
+                  (when failed-result
+                    (setq failed-result (plist-put failed-result :decision nil))
+                    (setq failed-result (plist-put failed-result :comparator-reason failure-reason)))
+                  (or failed-result exp-result)))))
        (when (functionp log-fn)
          (funcall log-fn run-id final-result))
        (when (and callback (functionp callback))

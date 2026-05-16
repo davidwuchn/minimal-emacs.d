@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 16:25
 name: skill-eval
 description: >
   Meta-skill for validating skills through controlled A/B experiments.

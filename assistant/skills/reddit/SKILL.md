@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 16:25
 name: reddit
 description: Search and retrieve content from Reddit. Get posts, comments, subreddit info, and user profiles via the public JSON API. Use when user mentions Reddit, a subreddit, or r/ links.
 version: 1.0.0

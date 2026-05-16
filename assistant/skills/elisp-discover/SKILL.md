@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 16:25
 name: elisp-discover
 description: >
   Systematic Emacs Lisp API discovery before implementation.
