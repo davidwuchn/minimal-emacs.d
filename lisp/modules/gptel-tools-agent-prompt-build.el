@@ -1,4 +1,20 @@
 ; -*- lexical-binding: t; -*-
+(require 'cl-lib)
+(require 'seq)
+(require 'subr-x)
+
+(defconst gptel-auto-experiment--axis-names
+  '(("A" . "Error Handling")
+    ("B" . "Performance")
+    ("C" . "Refactoring")
+    ("D" . "Safety")
+    ("E" . "Test Coverage")
+    ("F" . "Memory Management")
+    ("G" . "Documentation")
+    ("H" . "Type Safety")
+    ("I" . "Edge Cases"))
+  "Mapping from axis letters to human-readable names.")
+
 (declare-function gptel-agent-read-file "gptel-agent-tools")
 (declare-function gptel-auto-workflow--valid-strategy-name-p "gptel-tools-agent-strategy-evolver" (name))
 (declare-function gptel-auto-workflow-load-research-findings "gptel-auto-workflow-strategic")
@@ -1567,15 +1583,7 @@ Returns string describing which axes have been most successful."
   (let* ((stats (gptel-auto-experiment--get-axis-stats target))
          (rates (plist-get stats :rates))
          (counts (plist-get stats :counts))
-         (axis-names '(("A" . "Error Handling")
-                       ("B" . "Performance")
-                       ("C" . "Refactoring")
-                       ("D" . "Safety")
-                       ("E" . "Test Coverage")
-                       ("F" . "Memory Management")
-                       ("G" . "Documentation")
-                       ("H" . "Type Safety")
-                       ("I" . "Edge Cases")))
+         (axis-names gptel-auto-experiment--axis-names)
          (results '()))
     (dolist (pair axis-names)
       (let* ((axis (car pair))
@@ -1606,13 +1614,7 @@ Returns string describing which axes have been most successful."
   "Format guidance for exploring AXIS.
 Returns string with axis description and rationale."
   (when axis
-    (let* ((axis-info (assoc axis
-                             '(("A" . "Error Handling")
-                               ("B" . "Performance")
-                               ("C" . "Refactoring")
-                               ("D" . "Safety")
-                               ("E" . "Test Coverage")
-                               ("F" . "Memory Management"))))
+    (let* ((axis-info (assoc axis gptel-auto-experiment--axis-names))
            (axis-name (cdr axis-info)))
       (concat "## Exploration Guidance\n"
               "Priority axis: " axis " (" axis-name ") — least explored for this target.\n"
@@ -1624,6 +1626,9 @@ Returns string with axis description and rationale."
                 ("D" "adding guards, type checking, boundary validation")
                 ("E" "adding missing tests for existing functionality")
                 ("F" "fixing memory leaks, optimizing allocation, improving cleanup")
+                ("G" "improving docstrings, adding comments, clarifying APIs")
+                ("H" "adding type predicates, stricter contracts, defensive checks")
+                ("I" "testing edge cases, boundary values, unusual inputs")
                 (_ "general improvements"))
               ".\n\n"))))
 

@@ -1,6 +1,9 @@
 ;;; gptel-tools-agent-subagent.el --- Subagent caching, context, delegation -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(require 'cl-lib)
+(require 'subr-x)
+
 ;; Forward declarations for dynamic variables from gptel-agent package
 (defvar my/gptel--current-agent-task-id)
 (defvar my/gptel--agent-task-state)

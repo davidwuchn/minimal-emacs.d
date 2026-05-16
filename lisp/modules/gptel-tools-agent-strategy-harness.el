@@ -133,25 +133,7 @@ Only removes files NOT tracked by git to preserve committed strategies."
     (setq gptel-auto-workflow--generation-count 0)
     (message "[strategy] Fresh start complete")))
 
-(defun gptel-auto-workflow--strategy-iteration-count ()
-  "Return the highest iteration number in the evolution summary (for resume)."
-  (let ((summary-file (gptel-auto-workflow--strategy-evolution-summary-path))
-        (max-iter 0))
-    (when (file-exists-p summary-file)
-      (with-temp-buffer
-        (insert-file-contents summary-file)
-        (goto-char (point-min))
-        (while (not (eobp))
-          (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
-            (when (not (string-empty-p line))
-              (condition-case nil
-                  (let* ((entry (json-read-from-string line))
-                         (iter (cdr (assoc 'iteration entry))))
-                    (when (and iter (integerp iter) (> iter max-iter))
-                      (setq max-iter iter)))
-                (error nil))))
-          (forward-line 1))))
-    max-iter))
+
 
 (defun gptel-auto-workflow--ensure-strategy-run-directories ()
   "Create strategy run directories if they don't exist."
@@ -303,29 +285,9 @@ Returns JSON value or nil if strategy is stateless or method not defined."
         (error (message "[strategy] get-state error for %s: %s" name err)
                nil)))))
 
-(defun gptel-auto-workflow--strategy-set-state (name state)
-  "Restore STATE into strategy NAME.
-Returns nil (silently no-ops if method not defined)."
-  (let* ((state-fn (intern (format "strategy-%s-set-state" name))))
-    (when (fboundp state-fn)
-      (condition-case err
-          (funcall state-fn state)
-        (error (message "[strategy] set-state error for %s: %s" name err))))))
 
-(defun gptel-auto-workflow--strategy-persist-all-states ()
-  "Persist states for all registered strategies to their metadata files.
-Call after experiments to save accumulated learnings."
-  (maphash
-   (lambda (name _entry)
-     (let ((state (gptel-auto-workflow--strategy-get-state name)))
-       (when state
-         (let ((metadata (gethash name gptel-auto-workflow--strategy-registry)))
-           (when metadata
-             (gptel-auto-workflow--persist-strategy-metadata
-              name
-              (append (plist-get metadata :metadata)
-                      (list :state state))))))))
-   gptel-auto-workflow--strategy-registry))
+
+
 
 ;;; Strategy Evaluation Tracking
 
@@ -585,25 +547,7 @@ SECTIONS: list of sections included"
               :sections sections)
         gptel-auto-workflow--strategy-execution-log))
 
-(defun gptel-auto-workflow--get-strategy-execution-stats (strategy-name)
-  "Get execution statistics for STRATEGY-NAME.
-Returns plist with :count :avg-prompt-size :avg-sections."
-  (let ((entries (cl-remove-if-not
-                  (lambda (entry)
-                    (equal (plist-get entry :strategy) strategy-name))
-                  gptel-auto-workflow--strategy-execution-log))
-        (total-chars 0)
-        (total-sections 0))
-    (dolist (entry entries)
-      (setq total-chars (+ total-chars (or (plist-get entry :prompt-chars) 0)))
-      (setq total-sections (+ total-sections (length (plist-get entry :sections)))))
-    (list :count (length entries)
-          :avg-prompt-size (if (> (length entries) 0)
-                              (/ total-chars (length entries))
-                            0)
-          :avg-sections (if (> (length entries) 0)
-                           (/ total-sections (length entries))
-                         0))))
+
 
 ;;; Held-Out Test Set (Meta-Harness Anti-Overfitting)
 
@@ -627,46 +571,9 @@ When test-ratio is 0, all targets go to the search set."
              n (length search-set) (length test-set) (* 100 ratio))
     (cons search-set test-set)))
 
-(defun gptel-auto-workflow--is-test-set-target-p (target search-set)
-  "Return non-nil if TARGET is in the test set (not in SEARCH-SET)."
-  (not (member target search-set)))
 
-(defun gptel-auto-workflow--run-test-evaluation (strategies)
-  "Run final held-out test evaluation for STRATEGIES.
-STRATEGIES is a list of strategy names to evaluate against the test set.
-Writes results to `assistant/strategies/test_results.jsonl'.
-Returns t if any test results were recorded."
-  (unless gptel-auto-workflow--strategy-active-test-set
-    (message "[strategy] No test set defined, skipping test evaluation")
-    nil)
-  (unless strategies
-    (setq strategies (gptel-auto-workflow--compute-strategy-frontier)))
-  (unless strategies
-    (message "[strategy] No strategies to evaluate on test set")
-    nil)
-  (let ((test-file (expand-file-name "test_results.jsonl"
-                                     (gptel-auto-workflow--strategy-run-directory)))
-        (results '()))
-    (make-directory (file-name-directory test-file) t)
-    (dolist (strategy strategies)
-      (let ((perf (gptel-auto-workflow--get-strategy-performance strategy)))
-        (push `(:strategy ,strategy
-                :search-success-rate ,(plist-get perf :success-rate)
-                :search-avg-score ,(plist-get perf :avg-score)
-                :search-total ,(plist-get perf :total)
-                :test-targets ,(length gptel-auto-workflow--strategy-active-test-set)
-                :test-completed ,(format-time-string "%Y-%m-%d %H:%M:%S"))
-              results)))
-    (with-temp-buffer
-      (when (file-exists-p test-file)
-        (insert-file-contents test-file))
-      (goto-char (point-max))
-      (dolist (result (nreverse results))
-        (insert (json-encode result) "\n"))
-      (write-region (point-min) (point-max) test-file))
-    (message "[strategy] Test evaluation written for %d strategy(s) to %s"
-             (length strategies) test-file)
-    t))
+
+
 
 (defvar gptel-auto-workflow--strategy-active-search-set nil
   "The current search set of targets used during evolution.
@@ -675,13 +582,7 @@ Test-set targets are excluded from this list.")
 (defvar gptel-auto-workflow--strategy-active-test-set nil
   "The current test set of targets held out from evolution.")
 
-(defun gptel-auto-workflow--filter-search-targets (targets)
-  "Return TARGETS filtered to only include search-set targets.
-Stores both sets in globals for later reference."
-  (let ((split (gptel-auto-workflow--split-targets-search-test targets)))
-    (setq gptel-auto-workflow--strategy-active-search-set (car split))
-    (setq gptel-auto-workflow--strategy-active-test-set (cdr split))
-    (car split)))
+
 
 ;;; Strategy Execution
 

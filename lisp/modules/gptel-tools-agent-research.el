@@ -171,29 +171,7 @@ Creates .index file with topic → file mapping for O(1) lookup."
        index))
     (message "[mementum] Index built: %d keywords" (hash-table-count index))))
 
-(defun gptel-mementum-recall (query)
-  "Quick lookup for QUERY in recall index.
-Returns list of matching files."
-  (let* ((index-file (expand-file-name gptel-mementum-index-file
-                                       (gptel-auto-workflow--project-root)))
-         (result '()))
-    (when (file-exists-p index-file)
-      (with-temp-buffer
-        (insert-file-contents index-file)
-        (goto-char (point-min))
-        (when (re-search-forward (format "^%s: " (regexp-quote query)) nil t)
-          (let ((line (buffer-substring-no-properties (point) (line-end-position))))
-            (setq result (split-string line ",\\s-*"))))))
-    (or result
-        (progn
-          (message "[mementum] Index miss, using git grep for: %s" query)
-          (let ((default-directory (gptel-auto-workflow--project-root)))
-            ;; SECURITY: Use shell-quote-argument to prevent shell injection
-            (split-string
-             (shell-command-to-string
-              (format "git grep -l %s -- mementum/knowledge/ 2>/dev/null || true"
-                      (shell-quote-argument query)))
-             "\n" t))))))
+
 
 (defun gptel-mementum-decay-skills ()
   "Apply decay to skill files not tested in 4+ weeks.

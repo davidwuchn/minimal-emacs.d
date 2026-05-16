@@ -12,6 +12,7 @@
 
 (require 'cl-lib)
 (require 'json)
+(require 'seq)
 (require 'subr-x)
 
 ;; External functions from other modules
@@ -251,27 +252,6 @@ Always runs git commands from the main repo root to avoid worktree issues."
 
 ;; ─── Phase 2: Verify ──→ Benchmark as Pattern Validator ───
 
-(defun gptel-auto-workflow--benchmark-verify-patterns (patterns)
-  "Verify PATTERNS against benchmark data.
-PATTERNS is an alist of (name . hypothesis-function).
-Returns alist of (name . verified-score)."
-  (let ((records (gptel-auto-workflow--parse-all-results))
-        (verified nil))
-    (dolist (pattern patterns)
-      (let* ((name (car pattern))
-             (hypothesis-matcher (cdr pattern))
-             (matching (cl-remove-if-not
-                        (lambda (r)
-                          (funcall hypothesis-matcher (plist-get r :hypothesis)))
-                        records))
-             (kept (cl-count-if (lambda (r) (string= (plist-get r :decision) "kept"))
-                                matching))
-             (total (length matching)))
-        (push (list name total kept
-                    (if (> total 0) (/ (float kept) total) 0.0))
-              verified)))
-    (nreverse verified)))
-
 ;; ─── Phase 2.5: Per-Target Pattern Analysis ───
 
 (defun gptel-auto-workflow--target-pattern-analysis ()
@@ -315,30 +295,6 @@ Returns alist of target → (category success-rate count)."
       (sort result (lambda (a b)
                      (> (cl-reduce #'+ (mapcar (lambda (x) (nth 2 x)) (cdr a)))
                         (cl-reduce #'+ (mapcar (lambda (x) (nth 2 x)) (cdr b)))))))))
-
-(defun gptel-auto-workflow--evolution-pending-drafts ()
-  "Scan mementum knowledge drafts and return list of (topic age-days preview)."
-  (let* ((drafts-dir (expand-file-name "mementum/knowledge/drafts"
-                                       (gptel-auto-workflow--worktree-base-root)))
-         (drafts '())
-         (now (current-time)))
-    (when (file-directory-p drafts-dir)
-      (dolist (file (directory-files drafts-dir t "\\.md$"))
-        (let* ((topic (file-name-sans-extension (file-name-nondirectory file)))
-               (mtime (file-attribute-modification-time (file-attributes file)))
-               (age-days (/ (float-time (time-subtract now mtime)) 86400))
-               (preview (with-temp-buffer
-                          (insert-file-contents file)
-                          (goto-char (point-min))
-                          (when (looking-at "---")
-                            (forward-line 1)
-                            (while (not (looking-at "---"))
-                              (forward-line 1))
-                            (forward-line 1))
-                          (buffer-substring (point) (min (+ (point) 300) (point-max))))))
-          (push (list topic age-days preview) drafts))))
-    ;; Sort by age descending (oldest first)
-    (sort drafts (lambda (a b) (> (nth 1 a) (nth 1 b))))))
 
 ;; ─── Phase 3: Synthesize ──→ Mementum as Knowledge ───
 
@@ -545,10 +501,10 @@ Uses cache to avoid repeated file reads."
                      (goto-char (point-min))
                      ;; Skip frontmatter
                      (when (looking-at "---")
-                       (forward-line 1)
-                       (while (not (looking-at "---"))
-                         (forward-line 1))
-                       (forward-line 1))
+                        (forward-line 1)
+                        (while (and (not (eobp)) (not (looking-at "---")))
+                          (forward-line 1))
+                        (forward-line 1))
                      (buffer-string))))
               (when (fboundp 'gptel-auto-workflow--knowledge-cache-set)
                 (gptel-auto-workflow--knowledge-cache-set 'self-evolution content)
@@ -605,88 +561,70 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
                   (t "general")))
                 (group (gethash target-key target-groups)))
            (unless group
-             (puthash target-key (list :target target-key :count 0 :files nil
-                                       :hypotheses nil :decisions nil
-                                       :scores nil :qualities nil
-                                       :values nil :lessons nil)
+              (puthash target-key (list :target target-key :count 0 :files nil
+                                        :pairs nil :hypotheses nil :decisions nil
+                                        :scores nil :qualities nil
+                                        :values nil :lessons nil)
                       target-groups)
              (setq group (gethash target-key target-groups)))
-           (plist-put group :count (1+ (plist-get group :count)))
-           (push file (plist-get group :files))
-           ;; Extract decision
+           (setq group (plist-put group :count (1+ (plist-get group :count))))
+           (setq group (plist-put group :files (cons file (plist-get group :files))))
            (let ((decision (if (string-match "\\*\\*Decision:\\*\\* \\(.+\\)" full-content)
                                (match-string 1 full-content)
-                             "unknown")))
-             (push decision (plist-get group :decisions)))
-           ;; Extract hypothesis
-           (when (string-match "\\*\\*Hypothesis:\\*\\* \\(.+\\)" full-content)
-             (push (match-string 1 full-content) (plist-get group :hypotheses)))
-           ;; Extract score
+                             "unknown"))
+                 (hypothesis (when (string-match "\\*\\*Hypothesis:\\*\\* \\(.+\\)" full-content)
+                               (match-string 1 full-content))))
+             (setq group (plist-put group :pairs (cons (cons decision hypothesis) (plist-get group :pairs))))
+             (setq group (plist-put group :decisions (cons decision (plist-get group :decisions))))
+             (when hypothesis
+               (setq group (plist-put group :hypotheses (cons hypothesis (plist-get group :hypotheses))))))
            (when (string-match "Score:\\*\\* \\([0-9.]+\\)" full-content)
-             (push (string-to-number (match-string 1 full-content)) (plist-get group :scores)))
-           ;; Extract quality
+             (setq group (plist-put group :scores (cons (string-to-number (match-string 1 full-content)) (plist-get group :scores)))))
            (when (string-match "Quality:\\*\\* \\([0-9.]+\\)" full-content)
-             (push (string-to-number (match-string 1 full-content)) (plist-get group :qualities)))
-           ;; Score insight value (0-10)
-           (let ((value 5)) ; start neutral
-             ;; Bonus for clear decision
+             (setq group (plist-put group :qualities (cons (string-to-number (match-string 1 full-content)) (plist-get group :qualities)))))
+           (let ((value 5))
              (when (string-match-p "\\*\\*Decision:\\*\\* \\(kept\\|discarded\\|timeout\\|validation-failed\\|repeated-focus-symbol\\|grader-rejected\\)" full-content)
                (setq value (+ value 2)))
-             ;; Bonus for actionable lesson
              (when (string-match-p "Lesson:" full-content)
                (setq value (+ value 3)))
-             ;; Bonus for score/quality data
              (when (string-match-p "Score:" full-content)
                (setq value (+ value 1)))
              (when (string-match-p "Quality:" full-content)
                (setq value (+ value 1)))
-             ;; Bonus for specific patterns mentioned
              (when (string-match-p "proper-list-p\\|nil guard\\|helper function\\|validation" full-content)
                (setq value (+ value 1)))
-             ;; Penalty for empty/generic content
              (when (string-match-p "Unexpected experiment outcome\\.?$" full-content)
                (setq value (- value 4)))
-             ;; Penalty for no hypothesis detail
              (when (or (null (plist-get group :hypotheses))
                        (< (length (car (plist-get group :hypotheses))) 20))
                (setq value (- value 2)))
-             ;; Clamp to 0-10
              (setq value (max 0 (min 10 value)))
-             (push value (plist-get group :values))
-             ;; Extract lesson if present
+             (setq group (plist-put group :values (cons value (plist-get group :values))))
              (when (string-match "Lesson:\\*\\* \\(.+\\)" full-content)
-               (push (match-string 1 full-content) (plist-get group :lessons)))))))
+               (setq group (plist-put group :lessons (cons (match-string 1 full-content) (plist-get group :lessons))))))
+            (puthash target-key group target-groups)))
      ;; Synthesize each group into a knowledge page
      (maphash
-      (lambda (target-key group)
-        (let* ((count (plist-get group :count))
-               (decisions (plist-get group :decisions))
-               (hypotheses (plist-get group :hypotheses))
-               (values (plist-get group :values))
-               (lessons (plist-get group :lessons))
-               (kept-count (cl-count "kept" (append decisions nil) :test #'string=))
-               (discarded-count (cl-count "discarded" (append decisions nil) :test #'string=))
-               (failed-count (cl-count "validation-failed" (append decisions nil) :test #'string=))
-               (timeout-count (cl-count "timeout" (append decisions nil) :test #'string=))
-               (avg-value (if values (/ (cl-reduce #'+ values) (float (length values))) 0))
-               (kept-hypotheses
-                (let ((result nil))
-                  (cl-do ((i 0 (1+ i)))
-                      ((>= i (length hypotheses)))
-                    (when (and (< i (length decisions))
-                               (string= (nth i decisions) "kept"))
-                      (push (nth i hypotheses) result)))
-                  (nreverse result)))
-               (discarded-hypotheses
-                (let ((result nil))
-                  (cl-do ((i 0 (1+ i)))
-                      ((>= i (length hypotheses)))
-                    (when (and (< i (length decisions))
-                               (or (string= (nth i decisions) "discarded")
-                                   (string= (nth i decisions) "validation-failed")
-                                   (string= (nth i decisions) "timeout")))
-                      (push (nth i hypotheses) result)))
-                  (nreverse result)))
+       (lambda (target-key group)
+         (let* ((count (plist-get group :count))
+                (decisions (plist-get group :decisions))
+                (pairs (plist-get group :pairs))
+                (values (plist-get group :values))
+                (lessons (plist-get group :lessons))
+                (kept-count (cl-count "kept" (append decisions nil) :test #'string=))
+                (discarded-count (cl-count "discarded" (append decisions nil) :test #'string=))
+                (failed-count (cl-count "validation-failed" (append decisions nil) :test #'string=))
+                (timeout-count (cl-count "timeout" (append decisions nil) :test #'string=))
+                (avg-value (if values (/ (cl-reduce #'+ values) (float (length values))) 0))
+                (kept-hypotheses
+                 (delq nil (mapcar (lambda (p)
+                                     (when (string= (car p) "kept") (cdr p)))
+                                   (append pairs nil))))
+                (discarded-hypotheses
+                 (delq nil (mapcar (lambda (p)
+                                     (when (member (car p) '("discarded" "validation-failed" "timeout"))
+                                       (cdr p)))
+                                   (append pairs nil))))
                (knowledge-file (expand-file-name
                                 (format "experiment-insights-%s.md" target-key)
                                 knowledge-dir)))
@@ -768,7 +706,7 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
      (when (> consolidated 0)
        (message "[evolution] Consolidated %d insight files across %d groups"
                 consolidated (hash-table-count target-groups)))
-     consolidated)))
+      consolidated))))
 
 ;;; ─── Research Evolution ───
 
@@ -938,17 +876,16 @@ Writes to var/tmp/evolution/findings.md."
                  ;; For bold format, move past newline to content
                  (when (looking-at-p "\n")
                    (forward-char 1))
-                 (let ((start (point)))
-                   ;; Find next section (heading or end of file)
-                   (unless (re-search-forward "^\\(## \\|\\*\\*[^:]+:\\*\\*\\)" nil t)
-                     (goto-char (point-max)))
-                   (backward-char (length (match-string 0)))
-                   (push (buffer-substring-no-properties start (point)) recent-insights))))))))
+                  (let ((start (point)))
+                    (if (re-search-forward "^\\(## \\|\\*\\*[^:]+:\\*\\*\\)" nil t)
+                        (backward-char (length (match-string 0)))
+                      (goto-char (point-max)))
+                    (push (buffer-substring-no-properties start (point)) recent-insights))))))))
      ;; Read raw research findings from pipeline
      (let* ((raw-findings-file (expand-file-name "var/tmp/research-findings.md"
                                                   (gptel-auto-workflow--worktree-base-root)))
             (raw-findings (when (file-readable-p raw-findings-file)
-                            (let ((size (nth 7 (file-attributes raw-findings-file))))
+                            (let ((size (file-attribute-size (file-attributes raw-findings-file))))
                               ;; Only use if >500 bytes and <7 days old
                               (when (and size
                                          (> size 500)
@@ -1074,41 +1011,6 @@ Returns output string or nil on failure."
             nil)
         (message "[evolution] %s completed" script-name)
         output))))
-
-(defun gptel-auto-workflow--update-directive-skill ()
-  "Update DIRECTIVE.md by calling analyze_results.py + generate_directive.py
-pipeline.  Runs analysis and directive generation directly instead of
-through evolve_skills.py to ensure DIRECTIVE.md is always regenerated
-when experiments exist."
-  (message "[evolution] Updating directive skill via script...")
-  (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (output-dir (expand-file-name "var/tmp/skill-evolution" root))
-         (analysis-file (expand-file-name "analysis.json" output-dir))
-         (directive-file (expand-file-name "assistant/skills/auto-workflow/DIRECTIVE.md" root))
-         (analysis-output nil)
-         (directive-output nil))
-    (make-directory output-dir t)
-    (setq analysis-output
-          (gptel-auto-workflow--run-evolution-script
-           "analyze_results.py" "--root" root
-           "--output" analysis-file))
-    (when (and analysis-output (file-exists-p analysis-file))
-      (setq directive-output
-            (gptel-auto-workflow--run-evolution-script
-             "generate_directive.py"
-             "--analysis" analysis-file
-             "--output" directive-file
-             "--root" root))
-      (when directive-output
-        (message "[evolution] Directive updated: %s" directive-file)))
-    directive-output))
-
-(defun gptel-auto-workflow--evolve-token-efficiency-data ()
-  "Update token-efficiency data in var/tmp/evolution/.
-Token efficiency is now part of the unified evolution pipeline.
-Data is written directly to var/tmp/evolution/token-efficiency.md."
-  (message "[evolution] Token-efficiency data updated in var/tmp/evolution/")
-  t)
 
 (declare-function gptel-auto-workflow--load-directive-skill "gptel-auto-workflow-strategic" ())
 
@@ -1589,29 +1491,20 @@ Saves to var/tmp/evolution-scores.json."
           (scores (gptel-auto-workflow--evolution-score-list
                    (plist-get history :scores)))
           (best (plist-get history :best)))
-    (plist-put history :last-score score)
-    (plist-put history :last-total total)
-    (plist-put history :scores
-               (cons (list :timestamp (format-time-string "%Y-%m-%dT%H:%M")
-                          :score score :total total)
-                     (seq-take scores 20)))
+    (setq history (plist-put history :last-score score))
+    (setq history (plist-put history :last-total total))
+    (setq history (plist-put history :scores
+                (cons (list :timestamp (format-time-string "%Y-%m-%dT%H:%M")
+                           :score score :total total)
+                      (seq-take scores 20))))
     (when (> score (or best 0.0))
-      (plist-put history :best score)
-      (plist-put history :best-at (format-time-string "%Y-%m-%dT%H:%M")))
+      (setq history (plist-put history :best score))
+      (setq history (plist-put history :best-at (format-time-string "%Y-%m-%dT%H:%M"))))
     (make-directory (file-name-directory score-file) t)
     (with-temp-file score-file
       (insert (json-encode history)))
     (message "[evolution] Recorded score: %.4f (best: %.4f, total: %d)" score (plist-get history :best) total)
     score))
-
-(defun gptel-auto-workflow--evolution-calculate-score ()
-  "Calculate current evolution quality score from experiment results.
-Higher is better. Based on keep rate and average score improvement."
-  (let* ((results (gptel-auto-workflow--parse-all-results))
-         (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
-         (total (length results))
-         (keep-rate (if (> total 0) (/ (float kept) (float total)) 0.0)))
-    keep-rate))
 
 (defun gptel-auto-workflow--evolution-count-new ()
   "Count new experiments since last recorded score."
@@ -1643,7 +1536,7 @@ Used by skill-governance to select candidates for A/B testing."
         (when (file-directory-p skill-dir)
           (let ((skill-file (expand-file-name "SKILL.md" skill-dir)))
             (when (and (file-exists-p skill-file)
-                       (let ((mtime (nth 5 (file-attributes skill-file))))
+                        (let ((mtime (file-attribute-modification-time (file-attributes skill-file))))
                          (and mtime (> (float-time mtime) cutoff))))
               (push (file-name-nondirectory skill-dir) recent))))))
     (delete-dups recent)))

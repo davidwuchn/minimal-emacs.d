@@ -709,23 +709,7 @@ Also logs agent-output snippet for debugging when category is :unknown."
         halved)
     original-max))
 
-(defun gptel-auto-experiment--log-failure-analysis (target error-category error-details)
-  "Log failure analysis for TARGET with ERROR-CATEGORY and ERROR-DETAILS.
-This helps understand patterns in discarded experiments."
-  (let ((log-file (expand-file-name 
-                   "var/tmp/experiments/failure-analysis.log"
-                   (gptel-auto-workflow--project-root))))
-    (make-directory (file-name-directory log-file) t)
-    (with-temp-buffer
-      (when (file-exists-p log-file)
-        (insert-file-contents log-file))
-      (goto-char (point-max))
-      (insert (format "%s | %s | %s | %s\n"
-                      (format-time-string "%Y-%m-%d %H:%M:%S")
-                      target
-                      error-category
-                      error-details))
-      (write-region (point-min) (point-max) log-file))))
+
 
 ;;; Dynamic Stop
 
@@ -741,31 +725,7 @@ Auto-workflow never asks user - just retries until success or max retries."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defun gptel-auto-experiment--with-retry (fn &optional max-retries)
-  "Call FN with retry on failure.
-Never asks user - retries up to MAX-RETRIES times.
-Auto-workflow principle: try harder, again and again, never stop to ask."
-  (let ((attempts 0)
-        (max (or max-retries gptel-auto-experiment-max-retries))
-        result
-        last-error)
-    (while (and (< attempts max) (not result))
-      (cl-incf attempts)
-      (condition-case err
-          (progn
-            (setq result (funcall fn)
-                  last-error nil)
-            (when result
-              (message "[auto-experiment] Success on attempt %d/%d" attempts max)))
-        (error
-         (setq last-error err
-               result nil)
-         (message "[auto-experiment] Attempt %d/%d failed: %s"
-                  attempts max
-                  (my/gptel--sanitize-for-logging (error-message-string err) 160))
-         (when (< attempts max)
-           (sit-for 1)))))
-    (or result (and last-error (error-message-string last-error)))))
+
 
 ;;; Single Experiment
 

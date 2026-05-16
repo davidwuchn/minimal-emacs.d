@@ -52,51 +52,7 @@ jobs)."
           (gptel-auto-workflow--push-staging))))))
 
 
-(defun gptel-auto-workflow--sync-branches (source-branch target-branch action-name)
-  "Fast-forward TARGET-BRANCH to match SOURCE-BRANCH.
-ACTION-NAME is used in log messages (e.g., \"Synced\", \"Promoted\").
-All shell commands have timeout protection to prevent deadlocks."
-  (unless (and (gptel-auto-workflow--non-empty-string-p source-branch)
-               (gptel-auto-workflow--non-empty-string-p target-branch)
-               (gptel-auto-workflow--non-empty-string-p action-name))
-    (error "[auto-workflow] sync-branches: source-branch, target-branch, and action-name must be non-empty strings"))
-  (let* ((default-directory (gptel-auto-workflow--default-dir))
-         (remote (gptel-auto-workflow--shared-remote))
-         (remote-source (format "%s/%s" remote source-branch))
-         (remote-target (format "%s/%s" remote target-branch))
-         (original-branch (gptel-auto-workflow--git-cmd
-                           "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main"))
-         (original-branch (and (stringp original-branch)
-                               (not (string-empty-p original-branch))
-                               original-branch)))
-    (condition-case err
-        (progn
-          (gptel-auto-workflow--git-cmd (format "git fetch %s" remote) 180)
-          (let* ((source-commit (gptel-auto-workflow--git-cmd
-                                 (format "git rev-parse %s" remote-source)))
-                 (target-commit (gptel-auto-workflow--git-cmd
-                                 (format "git rev-parse %s 2>/dev/null || echo \"none\"" remote-target)))
-                 (source-commit (or source-commit "none"))
-                 (target-commit (or target-commit "none")))
-            (if (string= source-commit target-commit)
-                (message "[auto-workflow] %s already in sync with %s" target-branch source-branch)
-              (progn
-                (gptel-auto-workflow--git-cmd (format "git checkout %s" target-branch))
-                (gptel-auto-workflow--git-cmd (format "git merge %s --ff-only" remote-source))
-                (gptel-auto-workflow--with-skipped-submodule-sync
-                 (lambda ()
-                   (gptel-auto-workflow--git-cmd (format "git push %s %s" remote target-branch))))
-                (when original-branch
-                  (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch)))
-                (message "[auto-workflow] %s %s to %s (%s -> %s)"
-                         action-name target-branch source-branch
-                         (gptel-auto-workflow--truncate-hash target-commit)
-                         (gptel-auto-workflow--truncate-hash source-commit))))))
-      (error
-       (when original-branch
-         (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch)))
-       (message "[auto-workflow] Failed to %s %s to %s: %s" (downcase action-name) target-branch source-branch err)
-       nil))))
+
 
 ;;;###autoload
 
@@ -108,10 +64,7 @@ Ensures experiments run against latest code without touching the root worktree."
 
 ;;;###autoload
 
-(defun gptel-auto-workflow--promote-staging-to-main ()
-  "Leave staging promotion to a human reviewer."
-  (message "[auto-workflow] Auto-promotion to main is disabled; merge staging manually")
-  nil)
+
 
 
 ;;; Customization
@@ -435,8 +388,8 @@ large-result truncation, and result caching."
                                 agent-type preset result)
                                (funcall main-cb result)))
                             (`(tool-call . ,calls)
-                             (unless (plist-get info :tracking-marker)
-                               (plist-put info :tracking-marker tracking-marker))
+                              (unless (plist-get info :tracking-marker)
+                                (setq info (plist-put info :tracking-marker tracking-marker)))
                              (gptel--display-tool-calls calls info))
                             (`(tool-result . ,_results))
                             ((pred stringp)
@@ -872,18 +825,7 @@ request buffer for an active workflow task."
       (or (memq buffer tracked)
           (string-prefix-p "*gptel-agent:" (buffer-name buffer))))))
 
-(defun my/gptel--agent-task-request-worktree-dir (state)
-  "Return STATE request buffer's workflow-owned worktree dir when available."
-  (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-              ((buffer-live-p request-buf)))
-    (with-current-buffer request-buf
-      (let* ((dir (and (stringp default-directory)
-                       (file-name-as-directory
-                        (expand-file-name default-directory))))
-             (root (and dir (my/gptel--workflow-owned-worktree-root dir))))
-        (when (and root
-                   (my/gptel--workflow-routed-worktree-buffer-p request-buf root))
-          root)))))
+
 
 (defun my/gptel--cleanup-agent-request-buffer (state)
   "Abort STATE's live request buffer.
@@ -915,21 +857,7 @@ helpers handle explicit stale-buffer discards during recreate/delete flows."
   "Return non-nil when AGENT-TYPE should use inactivity-based timeout extension."
   (equal agent-type "executor"))
 
-(defun my/gptel--agent-task-note-active-activity (&optional agent-type timestamp)
-  "Record fresh activity for active idle-timeout tasks matching AGENT-TYPE.
 
-When AGENT-TYPE is nil, note activity for every active idle-timeout task."
-  (let ((activity-time (or timestamp (current-time))))
-    (when (> (hash-table-count my/gptel--agent-task-state) 0)
-      (maphash
-       (lambda (task-id state)
-         (when (and (not (plist-get state :done))
-                    (my/gptel--agent-task-uses-idle-timeout-p
-                     (plist-get state :agent-type))
-                    (or (null agent-type)
-                        (equal (plist-get state :agent-type) agent-type)))
-           (my/gptel--agent-task-note-activity task-id activity-time)))
-       my/gptel--agent-task-state))))
 
 (defun my/gptel--path-within-directory-p (path directory)
   "Return non-nil when PATH is DIRECTORY itself or lives beneath it."

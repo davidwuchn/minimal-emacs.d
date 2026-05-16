@@ -6,12 +6,14 @@ This is the smooth integration layer:
 2. Self-Evolution: Evolves the knowledge (WHAT to research)
 3. Together: Controller uses evolved knowledge to make better decisions
 """
+import argparse
 import json
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-ROOT = Path("/home/davidwu/.emacs.d")
+DEFAULT_ROOT = Path(__file__).resolve().parents[3]
+ROOT = DEFAULT_ROOT
 CONTROLLER_FILE = ROOT / "var/tmp/researcher-controller.json"
 REPLAY_FILE = ROOT / "var/tmp/research-replay-store.json"
 TRACE_DIR = ROOT / "var/tmp/research-traces"
@@ -267,4 +269,15 @@ def main():
     print(f"  - Knowledge from {len(traces)} historical traces")
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Unified evolution loop')
+    parser.add_argument('--root', default=None, help='Project root directory')
+    args = parser.parse_args()
+    if args.root:
+        global ROOT, CONTROLLER_FILE, REPLAY_FILE, TRACE_DIR, GUIDANCE_FILE, SKILL_FILE
+        ROOT = Path(args.root)
+        CONTROLLER_FILE = ROOT / "var/tmp/researcher-controller.json"
+        REPLAY_FILE = ROOT / "var/tmp/research-replay-store.json"
+        TRACE_DIR = ROOT / "var/tmp/research-traces"
+        GUIDANCE_FILE = ROOT / "var/tmp/researcher-strategy-guidance.json"
+        SKILL_FILE = ROOT / "assistant/skills/researcher-prompt/SKILL.md"
     main()
