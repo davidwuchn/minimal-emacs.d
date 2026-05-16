@@ -308,6 +308,7 @@ Call periodically to prevent memory growth from unaccessed entries."
     (maphash
      (lambda (key value)
        (when (and (consp value)
+                  (numberp (car value))
                   (> (- now (car value)) my/gptel-subagent-cache-ttl))
          (push key expired)
          (cl-incf count)))
