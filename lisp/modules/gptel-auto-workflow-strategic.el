@@ -753,21 +753,7 @@ Returns t if evolution was triggered, nil otherwise."
     
     triggered))
 
-(defun gptel-auto-workflow--maybe-trigger-researcher-evolution ()
-  "Check if researcher evolution should be triggered.
-Called periodically by the auto-workflow loop.
-Returns t if triggered."
-  (let* ((meta-data (gptel-auto-workflow--load-researcher-meta-learning))
-         (effectiveness (or (plist-get meta-data :effectiveness) 100))
-         (total (or (plist-get meta-data :total) 0))
-         ;; Trigger every 50 experiments or when keep rate drops
-         (should-trigger (or (< effectiveness 14)
-                             (and (> total 0) (zerop (mod total 50))))))
-    (when should-trigger
-      (if (< effectiveness 14)
-          (gptel-auto-workflow--trigger-researcher-meta-learning 'threshold)
-        (gptel-auto-workflow--trigger-researcher-meta-learning 'post-batch)))
-    should-trigger))
+
 
 (defun gptel-auto-workflow--directive-extract-priority-targets (directive-content)
   "Extract high-priority targets from DIRECTIVE-CONTENT.
@@ -788,37 +774,7 @@ Returns formatted string or nil."
             (mapconcat (lambda (targ) (format "- %s" targ)) (nreverse targets) "\n")
           nil)))))
 
-(defun gptel-auto-workflow--research-git-patterns-from-history ()
-  "Extract effective code patterns from git history and mementum.
-Returns string of grep patterns or nil."
-  (condition-case err
-      (let* ((root (gptel-auto-workflow--effective-project-root))
-             (knowledge-dir (expand-file-name "mementum/knowledge" root))
-             (patterns nil))
-        ;; Look for successful patterns in research knowledge
-        (when (file-directory-p knowledge-dir)
-          (dolist (kf (directory-files knowledge-dir t "research-insights-.+\\.md$"))
-            (with-temp-buffer
-              (insert-file-contents kf)
-              (goto-char (point-min))
-              ;; Extract successful targets to infer patterns
-              (when (re-search-forward "## Successful Targets" nil t)
-                (forward-line 2)
-                (while (looking-at "^- `\\(.+\\)`")
-                  (let ((target (match-string 1)))
-                    ;; Infer pattern from target filename
-                    (when (string-match "\\(cache\\|sanitize\\|error\\|validate\\|guard\\)" target)
-                      (push (format "git grep -n '%s' -- lisp/modules/ | head -10"
-                                    (match-string 1 target))
-                            patterns)))
-                  (forward-line 1))))))
-        (if patterns
-            (concat "Suggested grep commands based on successful targets:\n"
-                    (mapconcat #'identity (delete-dups patterns) "\n"))
-          nil))
-    (error
-     (message "[research] Error extracting git patterns: %s" err)
-     nil)))
+
 
 (defun gptel-auto-workflow--digest-research-findings (raw-findings callback)
   "Digest RAW-FINDINGS if needed.  Preserves external content, only digests unstructured data.
@@ -915,9 +871,10 @@ RULES:
                      (message "[auto-workflow] Digestion complete: %d chars → %d chars"
                               (length raw-findings) (length digested))
                      ;; Update context with digested version
-                     (when (boundp 'gptel-auto-workflow--current-research-context)
-                       (plist-put gptel-auto-workflow--current-research-context
-                                  :digested digested))
+                      (when (boundp 'gptel-auto-workflow--current-research-context)
+                        (setq gptel-auto-workflow--current-research-context
+                              (plist-put gptel-auto-workflow--current-research-context
+                                         :digested digested)))
                      (funcall callback digested))))))
         (if (fboundp 'gptel-request)
             (gptel-request
@@ -1731,22 +1688,7 @@ Returns float 0-1, or nil if no data."
       (when (> (length all-topic) 0)
         (/ (float (length topic-results)) (length all-topic))))))
 
-(defun gptel-auto-workflow--adjust-thresholds-for-topic (topic stop-threshold branch-threshold)
-  "Adjust STOP-THRESHOLD and BRANCH-THRESHOLD based on self-evolution topic performance.
-Returns plist with :stop-threshold and :branch-threshold.
-If topic has high keep rate in experiments, lowers stop threshold (keep researching).
-If topic has low keep rate, raises stop threshold (stop early)."
-  (let ((self-evol-rate (when (fboundp 'gptel-auto-workflow--parse-all-results)
-                          (gptel-auto-workflow--get-self-evolution-topic-rate topic))))
-    (if self-evol-rate
-        (list :stop-threshold (max 0.5 (min 0.95
-                                        (- stop-threshold
-                                           (* (- self-evol-rate 0.5) 0.3))))
-              :branch-threshold (max 0.1 (min 0.5
-                                          (- branch-threshold
-                                             (* (- self-evol-rate 0.5) 0.2)))))
-      (list :stop-threshold stop-threshold
-            :branch-threshold branch-threshold))))
+
 
 (defun gptel-auto-workflow--statistical-prob-kept (controller-config output-length output-text)
   "Calculate P(kept) using learned statistical model.
@@ -1970,30 +1912,7 @@ Uses gptel-auto-workflow-research-benchmark.el to:
 
 ;; ─── Trace Synthesizer ───
 
-(defun gptel-auto-workflow--bootstrap-traces ()
-  "Create synthetic traces from experiment results for controller learning."
-  (let* ((results (gptel-auto-workflow--parse-all-results))
-         (dir gptel-auto-workflow--research-trace-dir)
-         (n 0))
-    (make-directory dir t)
-    (dolist (r (seq-take results 20))
-      (let* ((kept (equal (plist-get r :decision) "kept"))
-             (h (sha1 (format "%s" (plist-get r :target))))
-             (f (expand-file-name (format "bs-%s.json" h) dir)))
-        (unless (file-exists-p f)
-          (with-temp-file f
-            (insert (json-encode
-                     (list :strategy "bootstrap"
-                           :confidence (if kept 0.8 0.3)
-                           :ema-conf (if kept 0.75 0.35)
-                           :ema-delta (if kept 0.06 -0.03)
-                           :output-length (if kept 1800 350)
-                           :has-urls nil :has-code t :has-structure t
-                           :source "own-repo" :turn-count 1
-                           :controller-decision (if kept "stop" "branch")
-                           :success-p kept :synthesized t))))
-          (cl-incf n))))
-    (message "[autotts] Bootstrapped %d traces" n) n))
+
 
 (provide 'gptel-auto-workflow-strategic)
 

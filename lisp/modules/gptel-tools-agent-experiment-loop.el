@@ -1,4 +1,6 @@
 ; -*- lexical-binding: t; -*-
+(require 'cl-lib)
+(require 'subr-x)
 (declare-function magit-git-success "magit-git")
 (declare-function cl-subseq "cl-lib")
 (declare-function gptel-auto-workflow--call-in-run-context "gptel-tools-agent-base")
