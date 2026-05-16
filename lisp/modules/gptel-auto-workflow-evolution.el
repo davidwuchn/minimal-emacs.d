@@ -725,11 +725,17 @@ Returns hash table mapping strategy name to list of results."
   "Sanitize strategy NAME for use as a filename component.
 Replaces characters unsafe in filenames (brackets, quotes, spaces, colons,
 semicolons, pipes) with hyphens, collapses multiple hyphens, and strips
-leading/trailing hyphens."
+leading/trailing hyphens.
+Returns \"none\" when NAME is nil, empty, or contains diagnostic/rejected text."
   (let ((s (replace-regexp-in-string "[][{}()'\" \t:;|<>/*?\\%!#&]" "-" (or name "none"))))
     (setq s (replace-regexp-in-string "-+" "-" s))
     (setq s (replace-regexp-in-string "^-\\|-$" "" s))
-    (if (string-empty-p s) "none" s)))
+    (if (or (string-empty-p s)
+            (string-match-p "\\bREJECTED\\b" s)
+            (string-match-p "\\bproposed-name\\b" (downcase s))
+            (string-match-p "\\bdiagnostic\\b" (downcase s)))
+        "none"
+      s)))
 
 (defun gptel-auto-workflow--valid-research-strategy-name-p (name)
   "Return non-nil when NAME is safe to synthesize as a research strategy.
@@ -761,6 +767,7 @@ Returns t if page created."
                           (format "research-insights-%s.md" safe-strategy)
                           knowledge-dir)))
     (when (and (gptel-auto-workflow--valid-research-strategy-name-p strategy-name)
+               (not (string= safe-strategy "none"))
                (> total 2)
                (> kept 0))
       (make-directory knowledge-dir t)
