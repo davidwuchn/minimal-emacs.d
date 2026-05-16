@@ -2,8 +2,8 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.16
-total-experiments: 870
-total-kept: 193
+total-experiments: 877
+total-kept: 195
 ---
 
 # Auto-Workflow Program
@@ -22,22 +22,24 @@ total-kept: 193
 | `lisp/modules/gptel-agent-loop.el` | 33% | 87 | 29 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-git.el` | 33% | 6 | 2 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-worktree.el` | 33% | 9 | 3 | ✅ High yield |
-| `lisp/modules/gptel-workflow-benchmark.el` | 33% | 6 | 2 | ✅ High yield |
 | `lisp/modules/gptel-auto-workflow-bootstrap.el` | 33% | 3 | 1 | ✅ High yield |
 | `lisp/modules/gptel-benchmark-core.el` | 30% | 46 | 14 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-validation.el` | 30% | 10 | 3 | ✅ High yield |
 | `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 29% | 21 | 6 | 🟡 Active |
+| `lisp/modules/gptel-workflow-benchmark.el` | 29% | 7 | 2 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **unless-guard** (8× from git)
-- **extract-helper-function** (7× from git)
-- **add-variable** (4× from git)
+- **extract-helper-function** (11× from git)
+- **add-variable** (6× from git)
+- **unless-guard** (5× from git)
+- **error-handling** (3× from git)
 - **Applicability** (2× from mementum)
 - **Key insight** (2× from mementum)
+- **manual-fix** (2× from git)
 
 ## 🛠️ Effective Techniques
 
@@ -54,10 +56,10 @@ total-kept: 193
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (704×): Investigate root cause
-- **timeout** (75×): Add smaller batch sizes or chunked processing
-- **test-failure** (40×): Run tests before committing experiments
-- **validation-failed** (21×): Improve pre-grade validation prompts
+- **other** (712×): Investigate root cause
+- **timeout** (76×): Add smaller batch sizes or chunked processing
+- **test-failure** (41×): Run tests before committing experiments
+- **validation-failed** (24×): Improve pre-grade validation prompts
 - **api-limit** (18×): Implement provider fallback or rate limit handling
 
 ## Success Patterns
@@ -105,4 +107,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (193 kept locally across 864 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 877 experiments (195 kept locally across 877 local records). It evolves every self-evolution cycle.*

@@ -10,6 +10,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'gptel-tools-agent-experiment-loop)
+(require 'gptel-tools-agent-error)
 
 ;;; Hypothesis extraction tests
 

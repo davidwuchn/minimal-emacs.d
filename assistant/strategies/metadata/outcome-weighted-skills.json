@@ -1,0 +1,1 @@
+{"name":"outcome-weighted-skills","version":"1.0","hypothesis":"Loading skills based on historical success patterns for similar improvement types yields better results than static skill-to-filetype mapping","axis":"E","components":["outcome-extraction","skill-weighting","adaptive-selection"]}

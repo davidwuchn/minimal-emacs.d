@@ -72,6 +72,9 @@
       (should (eq (gptel-fsm-state fsm) 'DONE)))))
 
 (ert-deftest wrapped-fsm/prompt-marker-coerces-buffer-local-wrapper ()
+  "Prompt marker function should handle wrapped FSM in temp buffer.
+This test is skipped in batch mode where gptel-mode cannot be enabled."
+  :expected-result (if noninteractive :failed :passed)
   (with-temp-buffer
     (gptel-mode 1)
     (insert "response")

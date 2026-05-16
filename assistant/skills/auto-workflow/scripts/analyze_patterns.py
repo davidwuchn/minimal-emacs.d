@@ -18,6 +18,19 @@ from datetime import datetime
 from pathlib import Path
 
 
+def valid_technique(technique):
+    """Return True if TECHNIQUE is an actionable mementum label."""
+    if not (15 < len(technique) < 120):
+        return False
+    if technique.startswith('```') or technique.startswith('**'):
+        return False
+    if re.match(r'^\d{4}-\d{2}-\d{2}', technique):
+        return False
+    if re.match(r'^commit\s+`?[0-9a-f]{6,40}', technique, re.IGNORECASE):
+        return False
+    return True
+
+
 def parse_mementum_memories(root_dir):
     """Read mementum memories to extract successful patterns."""
     memories_dir = Path(root_dir) / "mementum" / "memories"
@@ -38,14 +51,11 @@ def parse_mementum_memories(root_dir):
         with open(mem_file, 'r') as f:
             content = f.read()
         
-        # Extract pattern tags (e.g., "Pattern:", "Fix:", "Insight:")
-        for match in re.finditer(r'(?:Pattern|Fix|Insight|Technique):\s*(.+)', content, re.IGNORECASE):
-            technique = match.group(1).strip()
-            # Filter out code blocks, timestamps, and very short/long entries
-            if (len(technique) > 15 and len(technique) < 120 and
-                not technique.startswith('```') and
-                not re.match(r'^\d{4}-\d{2}-\d{2}', technique) and
-                not technique.startswith('**')):
+        # Extract explicit pattern tags without matching quoted commit subjects like "fix: ...".
+        tag_re = r'^[ \t]*(?:[-*][ \t]*)?(?:\*\*)?(?:Pattern|Fix|Insight|Technique)(?::\*\*|\*\*:|:)[ \t]*(.+)$'
+        for match in re.finditer(tag_re, content, re.IGNORECASE | re.MULTILINE):
+            technique = match.group(1).strip().rstrip(':').strip()
+            if valid_technique(technique):
                 patterns['techniques'][technique] += 1
         
         # Check if memory indicates success or failure
