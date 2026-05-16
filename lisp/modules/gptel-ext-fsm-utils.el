@@ -163,23 +163,34 @@ inconsistent lookups if registry structure changes."
 
 ;;; FSM Predicates and Coercion
 
-(defvar my/gptel--fsm-predicate-fn
-  (cond
-   ((and (fboundp 'gptel-fsm-p) (fboundp 'gptel-fsm-state))
-    #'gptel-fsm-p)
-   ((fboundp 'gptel-fsm-state)
-    (lambda (obj) (ignore-errors (gptel-fsm-state obj) t)))
-   (t
-    (lambda (_obj) nil)))
-  "Cached FSM predicate function for performance.
+(defvar my/gptel--fsm-predicate-fn nil
+  "Lazy FSM predicate function for runtime resolution.
 
-ASSUMPTION: gptel-fsm-p and gptel-fsm-state are available together.
-BEHAVIOR: Uses built-in predicate if both accessors available.
+BEHAVIOR: Resolved on first call via `my/gptel--fsm-predicate-resolve'.
+BEHAVIOR: Cached after first resolution for performance.
+TEST: (funcall (my/gptel--fsm-predicate-resolve) some-fsm) => t or nil
+
+BUILDS ON DISCOVERY: Lazy resolution prevents issues when gptel loads
+after this module, improving Vitality (error resilience).")
+
+(defun my/gptel--fsm-predicate-resolve ()
+  "Resolve and cache the FSM predicate function at runtime.
+Returns a predicate function appropriate for the current environment.
+
+ASSUMPTION: gptel-fsm-p and gptel-fsm-state may be available at runtime.
+BEHAVIOR: Returns built-in predicate if both accessors available.
 BEHAVIOR: Falls back to safe state access if gptel-fsm-state available.
-BEHAVIOR: Returns nil if neither accessor available (safe default).
-TEST: (funcall my/gptel--fsm-predicate-fn some-fsm) => t or nil
-BUILDS ON DISCOVERY: Caching at load time eliminates per-call fboundp
-overhead, improving Vitality (performance).")
+BEHAVIOR: Returns identity function if neither available (for validation).
+EDGE CASE: Missing accessors handled gracefully."
+  (setq my/gptel--fsm-predicate-fn
+        (cond
+         ((and (fboundp 'gptel-fsm-p) (fboundp 'gptel-fsm-state))
+          #'gptel-fsm-p)
+         ((fboundp 'gptel-fsm-state)
+          (lambda (obj) (ignore-errors (gptel-fsm-state obj) t)))
+         (t
+          (lambda (_obj) nil))))
+  my/gptel--fsm-predicate-fn)
 
 (defun my/gptel--fsm-p (object)
   "Return non-nil when OBJECT behaves like a `gptel-fsm'.
@@ -195,9 +206,11 @@ TEST: (my/gptel--fsm-p nil) => nil
 TEST: (my/gptel--fsm-p \"not-fsm\") => nil
 TEST: (my/gptel--fsm-p 42) => nil
 
-SIGNAL: explicit assumptions - Uses cached predicate function."
+SIGNAL: explicit assumptions - Uses lazy predicate resolution."
   (and object
-       (funcall my/gptel--fsm-predicate-fn object)))
+       (funcall (or my/gptel--fsm-predicate-fn
+                    (my/gptel--fsm-predicate-resolve))
+                object)))
 
 (defun my/gptel--coerce-fsm (object &optional context-id)
   "Return the FSM matching CONTEXT-ID from OBJECT, or first FSM if no match.
