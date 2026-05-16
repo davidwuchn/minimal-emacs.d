@@ -310,18 +310,18 @@ without duplicating cycle-detection logic.
 
 PROACTIVE MITIGATION: Single traversal implementation ensures
 consistent behavior across all FSM collection operations."
-  (setq fsm-callback (or fsm-callback #'ignore))
-  (cond
-   ((null object) nil)
-   ((consp object)
-    (unless (gethash object seen)
-      (puthash object t seen)
-      (my/gptel--fsm-traverse (car object) seen fsm-callback)
-      (my/gptel--fsm-traverse (cdr object) seen fsm-callback)))
-   ((my/gptel--fsm-p object)
-    (unless (gethash object seen)
-      (puthash object t seen)
-      (funcall fsm-callback object)))))
+  (when (functionp fsm-callback)
+    (cond
+     ((null object) nil)
+     ((consp object)
+      (unless (gethash object seen)
+        (puthash object t seen)
+        (my/gptel--fsm-traverse (car object) seen fsm-callback)
+        (my/gptel--fsm-traverse (cdr object) seen fsm-callback)))
+     ((my/gptel--fsm-p object)
+      (unless (gethash object seen)
+        (puthash object t seen)
+        (funcall fsm-callback object))))))
 
 (defun my/gptel--fsm-collect-list (object)
   "Collect all FSMs from OBJECT into a list.
