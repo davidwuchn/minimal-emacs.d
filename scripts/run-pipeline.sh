@@ -83,7 +83,13 @@ wait_for_idle() {
         elif [ "$socket_name" = "copilot-researcher" ]; then
             # Researcher daemon is persistent; wait for findings file instead
             if [ -f "$FINDINGS_FILE" ] && [ "$(wc -c < "$FINDINGS_FILE" 2>/dev/null || echo 0)" -gt 100 ]; then
-                findings_mtime="$(stat -c %Y "$FINDINGS_FILE" 2>/dev/null || stat -f %m "$FINDINGS_FILE" 2>/dev/null || echo 0)"
+                if findings_mtime="$(stat -f %m "$FINDINGS_FILE" 2>/dev/null)"; then
+                    :
+                elif findings_mtime="$(stat -c %Y "$FINDINGS_FILE" 2>/dev/null)"; then
+                    :
+                else
+                    findings_mtime=0
+                fi
                 if [ "$findings_mtime" -ge "$PIPELINE_START_TIME" ]; then
                     log "$action completed after ${elapsed}s (findings file ready)"
                     return 0
@@ -147,6 +153,10 @@ run_self_evolution() {
         # Non-fatal: evolution failure shouldn't stop experiments
     fi
 }
+
+# ─── Clear stale byte-compiled files to force source reload ───
+find "$DIR/lisp/modules" -name "*.elc" -delete 2>/dev/null || true
+log "Cleared stale .elc files from lisp/modules/"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
