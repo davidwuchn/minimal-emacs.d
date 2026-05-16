@@ -1,5 +1,5 @@
 ---
-last-evolution: 2026-05-16 16:25
+last-evolution: 2026-05-16 17:34
 name: agent-prompts
 description: |
   System prompts for AI subagents (executor, grader, analyzer, researcher, etc.).

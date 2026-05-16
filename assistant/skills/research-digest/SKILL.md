@@ -1,5 +1,5 @@
 ---
-last-evolution: 2026-05-16 16:25
+last-evolution: 2026-05-16 17:34
 name: research-digest
 description: Prompt template for digesting raw external research findings into actionable insights. Extracted from gptel-auto-workflow-strategic.el.
 version: 1.0

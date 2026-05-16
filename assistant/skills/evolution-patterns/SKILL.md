@@ -1,5 +1,5 @@
 ---
-last-evolution: 2026-05-16 16:25
+last-evolution: 2026-05-16 17:34
 name: evolution-patterns
 description: Domain knowledge for experiment hypothesis categorization and score prediction. Extracted from gptel-auto-workflow-evolution.el.
 version: 1.0

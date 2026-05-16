@@ -1,5 +1,5 @@
 ---
-last-evolution: 2026-05-16 16:25
+last-evolution: 2026-05-16 17:34
 name: elisp-debug
 description: >
   Interactive Emacs Lisp debugging via REPL inspection instead of println/logging.

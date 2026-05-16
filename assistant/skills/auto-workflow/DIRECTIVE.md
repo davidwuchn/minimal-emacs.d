@@ -2,8 +2,8 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.16
-total-experiments: 1765
-total-kept: 345
+total-experiments: 870
+total-kept: 193
 ---
 
 # Auto-Workflow Program
@@ -17,16 +17,16 @@ total-kept: 345
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-benchmark-memory.el` | 50% | 4 | 2 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-integrate.el` | 43% | 14 | 6 | ✅ High yield |
-| `lisp/modules/gptel-ext-core.el` | 40% | 20 | 8 | ✅ High yield |
-| `lisp/modules/gptel-tools.el` | 38% | 8 | 3 | ✅ High yield |
-| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 35% | 26 | 9 | ✅ High yield |
-| `lisp/modules/gptel-ext-context.el` | 29% | 31 | 9 | 🟡 Active |
-| `lisp/modules/gptel-auto-workflow-git-learning.el` | 29% | 7 | 2 | 🟡 Active |
-| `lisp/modules/gptel-tools-memory.el` | 29% | 7 | 2 | 🟡 Active |
-| `lisp/modules/gptel-benchmark-core.el` | 28% | 68 | 19 | 🟡 Active |
-| `lisp/modules/gptel-ext-fsm-utils.el` | 26% | 132 | 34 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-experiment-loop.el` | 40% | 5 | 2 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-evolution.el` | 40% | 10 | 4 | ✅ High yield |
+| `lisp/modules/gptel-agent-loop.el` | 33% | 87 | 29 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-git.el` | 33% | 6 | 2 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-worktree.el` | 33% | 9 | 3 | ✅ High yield |
+| `lisp/modules/gptel-workflow-benchmark.el` | 33% | 6 | 2 | ✅ High yield |
+| `lisp/modules/gptel-auto-workflow-bootstrap.el` | 33% | 3 | 1 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-core.el` | 30% | 46 | 14 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-validation.el` | 30% | 10 | 3 | ✅ High yield |
+| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 29% | 21 | 6 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -54,11 +54,11 @@ total-kept: 345
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (1332×): Investigate root cause
-- **timeout** (270×): Add smaller batch sizes or chunked processing
-- **test-failure** (103×): Run tests before committing experiments
-- **api-limit** (32×): Implement provider fallback or rate limit handling
-- **syntax-error** (20×): Add pre-flight syntax validation
+- **other** (704×): Investigate root cause
+- **timeout** (75×): Add smaller batch sizes or chunked processing
+- **test-failure** (40×): Run tests before committing experiments
+- **validation-failed** (21×): Improve pre-grade validation prompts
+- **api-limit** (18×): Implement provider fallback or rate limit handling
 
 ## Success Patterns
 
@@ -75,11 +75,11 @@ total-kept: 345
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-memory.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 50%)
-- **lisp/modules/gptel-benchmark-integrate.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 43%)
-- **lisp/modules/gptel-ext-core.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 40%)
-- **lisp/modules/gptel-auto-workflow-strategic.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-tools-agent-base.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-benchmark-evolution.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 40%)
+- **lisp/modules/gptel-tools-agent-experiment-loop.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 40%)
+- **lisp/modules/gptel-agent-loop.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 33%)
+- **lisp/modules/gptel-tools-agent.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/nucleus-tools.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -105,4 +105,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1765 experiments (345 kept locally across 1765 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (193 kept locally across 864 local records). It evolves every self-evolution cycle.*

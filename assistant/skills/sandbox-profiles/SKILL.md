@@ -1,5 +1,5 @@
 ---
-last-evolution: 2026-05-16 16:25
+last-evolution: 2026-05-16 17:34
 name: sandbox-profiles
 description: |
   Defines tool permission profiles for programmatic agent execution.

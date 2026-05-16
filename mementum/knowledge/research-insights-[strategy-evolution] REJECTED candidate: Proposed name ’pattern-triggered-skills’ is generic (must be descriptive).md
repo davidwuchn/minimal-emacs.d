@@ -1,14 +1,14 @@
 ---
-title: Research Insights - topic-knowledge-amplification
+title: Research Insights - [strategy-evolution] REJECTED candidate: Proposed name ’pattern-triggered-skills’ is generic (must be descriptive)
 status: active
 category: knowledge
-tags: [research, auto-workflow, topic-knowledge-amplification]
+tags: [research, auto-workflow, [strategy-evolution] REJECTED candidate: Proposed name ’pattern-triggered-skills’ is generic (must be descriptive)]
 insight-quality: 0.0/10
 ---
 
-# Research Strategy: topic-knowledge-amplification
+# Research Strategy: [strategy-evolution] REJECTED candidate: Proposed name ’pattern-triggered-skills’ is generic (must be descriptive)
 
-*Consolidated from 11 experiments (0% keep rate).*
+*Consolidated from 7 experiments (0% keep rate).*
 
 **Performance:** 0 kept / 2 discarded / 1 failed
 
