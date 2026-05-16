@@ -1,5 +1,5 @@
 ---
-last-evolution: 2026-05-16 17:01
+last-evolution: 2026-05-16 17:34
 name: clojure-expert
 description: Writing/generating Clojure code with REPL-first methodology. Use when Clojure REPL tools available.
 version: 2.0.0

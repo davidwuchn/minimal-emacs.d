@@ -3,27 +3,27 @@ title: Research Insights - deep-external
 status: active
 category: knowledge
 tags: [research, auto-workflow, deep-external]
-insight-quality: 1.3/10
+insight-quality: 2.6/10
 ---
 
 # Research Strategy: deep-external
 
-*Consolidated from 30 experiments (13% keep rate).*
+*Consolidated from 23 experiments (26% keep rate).*
 
-**Performance:** 4 kept / 24 discarded / 1 failed
+**Performance:** 6 kept / 10 discarded / 1 failed
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-runtime.el`
-- `lisp/modules/gptel-ext-tool-sanitize.el`
-- `lisp/modules/gptel-ext-retry.el`
 - `lisp/modules/gptel-sandbox.el`
+- `lisp/modules/gptel-agent-loop.el`
+- `lisp/modules/gptel-benchmark-core.el`
+- `lisp/modules/gptel-ext-retry.el`
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-ext-tool-sanitize.el`
+- `lisp/modules/gptel-agent-loop.el`
 
 ## Meta-Learning Recommendations
 

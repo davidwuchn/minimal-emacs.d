@@ -98,6 +98,9 @@ wait_for_idle() {
             # Actually check if researcher daemon is alive
             if emacsclient --socket-name="copilot-researcher" --eval 't' >/dev/null 2>&1; then
                 daemon_was_seen=1
+            elif [ "$daemon_was_seen" -eq 1 ]; then
+                log "WARNING: $action daemon stopped after ${elapsed}s without findings"
+                return 1
             fi
             if [ "$elapsed" -ge "$min_start_wait" ] && [ "$daemon_was_seen" -eq 0 ]; then
                 log "WARNING: $action daemon was not observed within ${elapsed}s"
@@ -128,8 +131,8 @@ wait_for_idle() {
         elapsed=$((elapsed + POLL_INTERVAL))
     done
 
-    log "WARNING: $action did not complete within ${max_wait}s, proceeding anyway"
-    return 0
+    log "WARNING: $action did not complete within ${max_wait}s"
+    return 1
 }
 
 run_self_evolution() {
@@ -154,6 +157,69 @@ run_self_evolution() {
     fi
 }
 
+write_research_fallback() {
+    local reason="$1"
+
+    mkdir -p "$(dirname "$FINDINGS_FILE")"
+    cat > "$FINDINGS_FILE" <<EOF
+# Research Findings
+
+> Updated: $(date '+%Y-%m-%d %H:%M')
+> Source type: local-fallback
+> Reason: $reason
+
+## Local Research Fallback
+
+The dedicated researcher daemon did not produce fresh external findings. Use this local context rather than running auto-workflow with no research signal:
+
+- Preserve the feedback loop: every experiment row must include a non-none research hash so AutoTTS can link outcomes back to the research trace.
+- Treat missing research files as a pipeline defect, not a successful empty research run.
+- Prefer structured, machine-parseable research outputs with source, technique, apply-to-us, and verification fields.
+- Guard daemon orchestration boundaries: if a researcher daemon disappears after being observed, fail fast and fall back instead of waiting until the global timeout.
+- Prioritize changes that make self-evolution observable through results.tsv metadata, research traces, and controller decisions.
+
+EOF
+    cat > "$INTERNAL_FILE" <<EOF
+# Internal Code Analysis
+
+> Updated: $(date '+%Y-%m-%d %H:%M')
+> Source type: local-fallback
+
+The pipeline generated fallback research because the researcher daemon did not produce fresh findings. This is still useful input for self-evolution: focus on daemon lifecycle, result metadata, trace outcome linking, and pipeline validation.
+
+EOF
+    if [ "$RESEARCH_QUALITY" = "none" ] || [ "$RESEARCH_QUALITY" = "failed" ]; then
+        RESEARCH_QUALITY="internal"
+    fi
+    log "Generated local research fallback after: $reason"
+}
+
+verify_research_feedback_loop() {
+    local results_file="$1"
+    local data_rows linked_rows
+
+    if [ "$RESEARCH_QUALITY" != "external" ]; then
+        return 0
+    fi
+    if [ ! -f "$results_file" ]; then
+        return 0
+    fi
+
+    data_rows=$(awk 'NR > 1 { count++ } END { print count + 0 }' "$results_file")
+    if [ "$data_rows" -eq 0 ]; then
+        log "WARNING: No experiment rows found to validate research feedback loop"
+        return 0
+    fi
+
+    linked_rows=$(awk 'BEGIN { FS = sprintf("%c", 9) } NR > 1 && $22 != "" && $22 != "none" { count++ } END { print count + 0 }' "$results_file")
+    if [ "$linked_rows" -eq 0 ]; then
+        log "WARNING: Research feedback loop broken: 0/${data_rows} experiment rows have a research hash"
+        return 1
+    fi
+
+    log "Research feedback loop: ${linked_rows}/${data_rows} experiment rows linked to research"
+}
+
 # ─── Clear stale byte-compiled files to force source reload ───
 find "$DIR/lisp/modules" -name "*.elc" -delete 2>/dev/null || true
 log "Cleared stale .elc files from lisp/modules/"
@@ -171,6 +237,9 @@ log "Cleared stale findings files"
 # Capture start time AFTER clearing stale files so mtime check is reliable
 PIPELINE_START_TIME="$(date +%s)"
 
+# Verify findings were produced
+RESEARCH_QUALITY="none"
+
 # ─── Step 1: Research ───
 log "=== Step 1: Research ==="
 # The cron script's research action starts daemon, queues job, and returns.
@@ -178,10 +247,10 @@ log "=== Step 1: Research ==="
 # We just need to wait for it to complete.
 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
     "$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
-wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher" || true
-
-# Verify findings were produced
-RESEARCH_QUALITY="none"
+if ! wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher"; then
+    AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher "$SCRIPT" stop >> "$PIPELINE_LOG" 2>&1 || true
+    write_research_fallback "research daemon ended before producing findings"
+fi
 
 if [ -f "$FINDINGS_FILE" ]; then
     findings_size=$(wc -c < "$FINDINGS_FILE")
@@ -189,10 +258,12 @@ if [ -f "$FINDINGS_FILE" ]; then
     
     # Check for actual external content (URLs, techniques, not just header)
     if grep -q "https\?://" "$FINDINGS_FILE" 2>/dev/null || \
-       grep -q "## .*Technique" "$FINDINGS_FILE" 2>/dev/null || \
-       grep -q "Source type:" "$FINDINGS_FILE" 2>/dev/null; then
+        grep -q "## .*Technique" "$FINDINGS_FILE" 2>/dev/null; then
         log "  ✓ External research content detected"
         RESEARCH_QUALITY="external"
+    elif grep -q "Source type: local-fallback" "$FINDINGS_FILE" 2>/dev/null; then
+        log "  ⚠ Local fallback research generated"
+        RESEARCH_QUALITY="internal"
     elif [ "$findings_size" -gt 200 ]; then
         log "  ⚠ Findings file present but may lack external content"
         RESEARCH_QUALITY="unknown"
@@ -202,6 +273,8 @@ if [ -f "$FINDINGS_FILE" ]; then
     fi
 else
     log "WARNING: No findings file found at $FINDINGS_FILE"
+    write_research_fallback "research findings file missing after wait"
+    RESEARCH_QUALITY="internal"
 fi
 
 # Check internal research (local code patterns)
@@ -304,7 +377,7 @@ printf '%s\n' "$auto_workflow_output" >> "$PIPELINE_LOG"
 if printf '%s' "$auto_workflow_output" | grep -q "already-running"; then
     log "Auto-workflow already running, waiting for completion"
 fi
-wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "copilot-auto-workflow"
+wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "copilot-auto-workflow" || true
 
 # Verify auto-workflow actually completed (not timed out)
 workflow_status="$($SCRIPT status 2>/dev/null || true)"
@@ -328,6 +401,7 @@ if compgen -G "$RESULTS_PATTERN" >/dev/null; then
     latest_result=$(ls -t $RESULTS_PATTERN | head -1)
     result_count=$(wc -l < "$latest_result")
     log "Results: $latest_result ($((result_count - 1)) experiments)"
+    verify_research_feedback_loop "$latest_result" || true
 else
     log "No results file found for today"
 fi

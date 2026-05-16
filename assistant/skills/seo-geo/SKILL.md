@@ -1,5 +1,5 @@
 ---
-last-evolution: 2026-05-16 17:01
+last-evolution: 2026-05-16 17:34
 name: seo-geo
 description: SEO & GEO (Generative Engine Optimization) for websites. Analyze keywords, generate schema markup, optimize for AI search engines (ChatGPT, Perplexity, Gemini, Copilot, Claude) and traditional search (Google, Bing). Use when user wants to improve search visibility, search optimization, search ranking, AI visibility, ChatGPT ranking, Google AI Overview, indexing, JSON-LD, meta tags, or keyword research.
 version: 1.0.0

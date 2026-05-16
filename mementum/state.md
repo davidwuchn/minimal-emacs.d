@@ -2,54 +2,33 @@
 
 > Last session: 2026-05-16
 
-## Current Session: Eval Depth Cascade Analysis Complete
+## Current Session: Retry Depth Fixes + Pipeline Verification
 
-**Status:** System operational. max-lisp-eval-depth at 12000. Daemon running clean.
-
-**Analysis Findings:**
-- Timer-based retry (`run-at-time` at gptel-ext-retry.el:794) properly breaks synchronous nesting
-- 2000 depth/provider comes from FSM transition chains + handler calls + advice wrapping
-- 6-provider fallback chain (MiniMax→moonshot→DashScope→glm-5→DeepSeek→CF-Gateway) = ~12000 total
-- `my/gptel-auto-retry` advises `gptel--fsm-transition` :around, intercepts ERRS transitions
-- Sentinel flow: parse → FSM transition → callback → FSM transition → cleanup
-- Provider failover uses `run-with-timer` for retries (async), not synchronous
-
-**Prior Session: Second Audit Pass — plist-put Bugs + Dead Code Sweep**
-
-**Status:** All known `plist-put` return-value bugs fixed. 26 dead functions removed (315+ lines). 57 tests green.
+**Status:** All direct recursive retries converted to stack-safe timer-based patterns. Pipeline verified working end-to-end.
 
 **Commits This Session:**
-- `a995f4e8` — Fix 3 HIGH bugs + dead code + axis consolidation (first audit pass)
-- `06c71a9b` — Fix 2 HIGH plist-put bugs + missing requires + 18 dead functions (second audit pass)
+- `7c764a66` — ⊘ Convert direct retry recursion to timer-based (stack-safe)
 
-**Key Fixes (First Audit):**
-- `push` on `plist-get` silently dropped all data in `consolidate-insights` (9 sites) → `plist-put` + `setq` + `puthash`
-- `plist-put` return value discarded for `:avg-quality` in `strategic-daemon-functions.el` (4 sites)
-- Missing `(require 'seq)` in `evolution.el`, missing requires in `prompt-build.el`
-- Removed 8 dead functions, unified axis-name mapping, deprecated `nth` file-attribute accessors
+**Key Fixes:**
+- 4 sites converted: research-patterns retry, request-analyzer retry, call-aux-subagent retry, run-next delay=0 path
+- Pattern: `direct recursive call` → `let capture vars` → `run-with-timer 0 nil (lambda () (fn captured-vars))`
+- `run-next` always uses timer now (removed `funcall continue` when delay=0)
+- Zero new byte-compile warnings. 57 tests green. Pipeline smoke test passes.
 
-**Key Fixes (Second Audit):**
-- `plist-put` return value discarded in `strategic.el:919` (`:digested` key) → `setq` capture
-- `plist-put` return value discarded in `git.el:438` (`:tracking-marker` key) → `setq` capture
-- Added `(require 'cl-lib)` + `(require 'subr-x)` to subagent, experiment-loop, worktree
-- Added `(require 'subr-x)` to staging-merge
-- Removed 18 more dead unreferenced functions across 5 files
+**Pipeline Health:**
+- Research: 3788 bytes, external URLs ✓
+- Self-Evolution: completes ✓
+- Auto-Workflow: experiment executed with real code change, grader 8/8 ✓
+- Strategy: `metric-adaptive-sections` (evolved) ✓
 
-**Total plist-put Bug Class Fixed:**
-- `push` on `plist-get` (9 sites in evolution.el) — data silently dropped
-- `plist-put` return discarded with new keys (6 sites across 3 files) — new key/value silently dropped
-- Pattern: `plist-put` mutates in-place for existing keys but returns a NEW plist for new keys
+**Prior Sessions:**
+- 2 HIGH plist-put bugs fixed + 18 dead functions removed
+- macOS stat fix + .elc cleanup in pipeline
+- unified-evolution.py SyntaxError fix
 
-**Prior Session:**
-- 377→11 byte-compile warnings, cl-flet conversion, tool marker architecture
-- Pipeline hardening, strategy artifact prevention
-
-**Remaining Warnings (11, all cosmetic/unfixable):**
-- 2 `(setf ...)` warnings: Emacs 30.2 ignores declare-function for setf
-- 2 Malformed function: `cl-labels` byte-compiler limitation
-- 5 cascade warnings from cl-labels Malformed function
-- 1 `retire-buffer` not known: cl-labels local
-- 8 "Cannot open load file: gptel" (pre-existing, needs gptel package)
+**Remaining Warnings (12, all pre-existing/unfixable):**
+- 10 "Cannot open load file: gptel" (needs package in batch mode)
+- 2 `(setf ...)` warnings (Emacs 30.2 limitation)
 
 **Test Results:**
 - 57 tests, 53 pass, 0 unexpected, 4 skip

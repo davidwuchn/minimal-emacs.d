@@ -1,5 +1,5 @@
 ---
-last-evolution: 2026-05-16 17:01
+last-evolution: 2026-05-16 17:34
 name: elisp-refactor
 description: >
   Design improvement for Emacs Lisp by separating mechanism from policy.

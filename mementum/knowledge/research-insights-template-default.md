@@ -3,29 +3,39 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 3.3/10
+<<<<<<< Updated upstream
+insight-quality: 1.4/10
+=======
+insight-quality: 1.8/10
+>>>>>>> Stashed changes
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 15 experiments (33% keep rate).*
+<<<<<<< Updated upstream
+*Consolidated from 36 experiments (14% keep rate).*
 
-**Performance:** 5 kept / 6 discarded / 2 failed
+**Performance:** 5 kept / 20 discarded / 1 failed
+=======
+*Consolidated from 22 experiments (18% keep rate).*
+
+**Performance:** 4 kept / 12 discarded / 3 failed
+>>>>>>> Stashed changes
 
 ## Successful Targets
 
-- `lisp/modules/gptel-ext-context-images.el`
-- `lisp/modules/gptel-tools-agent-git.el`
-- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-tools-memory.el`
+- `lisp/modules/gptel-ext-fsm-utils.el`
+- `lisp/modules/gptel-sandbox.el`
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-tools-agent-git.el`
-- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-ext-tool-sanitize.el`
 
 ## Meta-Learning Recommendations
 
-- **This strategy shows promise.** Refine the research prompt.
-- Focus on more specific code patterns (e.g., specific functions rather than broad categories).
+- **This strategy underperforms.** Consider evolving a new approach.
+- The findings may be too generic or targeting the wrong files.
+- Try combining with git history for recency bias.

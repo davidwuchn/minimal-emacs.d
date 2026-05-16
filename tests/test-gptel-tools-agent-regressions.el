@@ -6838,6 +6838,76 @@ failure."
              (should (= persist-count 4)))
         (delete-directory tmpdir t)))))
 
+(ert-deftest regression/auto-workflow/log-tsv-persists-research-context ()
+  "results.tsv should carry research metadata for trace outcome learning."
+  (let* ((tmpdir (make-temp-file "gptel-tsv-research" t))
+         (run-id "run-research-context")
+         (results-file (expand-file-name
+                        (format "var/tmp/experiments/%s/results.tsv" run-id)
+                        tmpdir))
+         (gptel-auto-workflow--current-research-context
+          '(:strategy "deep-external"
+            :hash "abc123"
+            :source "external"
+            :controller-decision "stop")))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () tmpdir))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () nil)))
+      (unwind-protect
+          (progn
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 1 :target "one" :kept nil :strategy "prompt-strategy"))
+            (with-temp-buffer
+              (insert-file-contents results-file)
+              (forward-line 1)
+              (let ((fields (split-string
+                             (buffer-substring-no-properties
+                              (line-beginning-position)
+                              (line-end-position))
+                             "\t")))
+                (should (equal (nth 19 fields) "prompt-strategy"))
+                (should (equal (nth 20 fields) "deep-external"))
+                (should (equal (nth 21 fields) "abc123"))
+                (should (equal (nth 22 fields) "external"))
+                (should (equal (nth 23 fields) "stop")))))
+        (delete-directory tmpdir t)))))
+
+(ert-deftest regression/auto-workflow/load-research-findings-restores-context ()
+  "Persisted research findings should reconstruct context in the workflow daemon."
+  (require 'gptel-auto-workflow-strategic)
+  (let* ((tmpdir (make-temp-file "gptel-research-context" t))
+         (findings "## External Technique\n- Source: https://example.com\n- Technique: guard retry")
+         (research-hash (sha1 findings))
+         (gptel-auto-workflow--project-root-override tmpdir)
+         (gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal))
+         (gptel-auto-workflow--current-research-context nil)
+         (trace-dir (expand-file-name "var/tmp/research-traces" tmpdir))
+         (findings-file (expand-file-name "var/tmp/research-findings.md" tmpdir)))
+    (unwind-protect
+        (progn
+          (make-directory trace-dir t)
+          (make-directory (file-name-directory findings-file) t)
+          (with-temp-file findings-file
+            (insert (format "# Research Findings\n\n%s" findings)))
+          (with-temp-file (expand-file-name (format "trace-%s.json" research-hash) trace-dir)
+            (insert (json-encode
+                     (list :strategy "trace-strategy"
+                           :findings-hash research-hash
+                           :source "external"
+                           :controller-decision "stop"))))
+          (should (equal (gptel-auto-workflow-load-research-findings) findings))
+          (should (equal (plist-get gptel-auto-workflow--current-research-context :hash)
+                         research-hash))
+          (should (equal (plist-get gptel-auto-workflow--current-research-context :strategy)
+                         "trace-strategy"))
+          (should (equal (plist-get gptel-auto-workflow--current-research-context :source)
+                         "external"))
+          (should (equal (plist-get gptel-auto-workflow--current-research-context :controller-decision)
+                         "stop")))
+      (delete-directory tmpdir t))))
+
 (ert-deftest regression/auto-workflow/log-tsv-preserves-failure-decision-labels ()
   "results.tsv should keep terminal failure labels instead of flattening to discarded."
   (let* ((tmpdir (make-temp-file "gptel-tsv-decisions" t))
