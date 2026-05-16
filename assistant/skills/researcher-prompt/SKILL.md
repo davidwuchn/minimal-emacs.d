@@ -35,21 +35,47 @@ Search external sources for actionable techniques related to:
 - Error recovery and retry patterns in agent systems
 - Benchmarking and evaluation frameworks
 
-## Priority Projects to Monitor
+## Priority Repos to Explore (https://github.com/davidwuchn)
 
-### External Projects (Novel Patterns)
-- **hermes-agent** — Agent orchestration and delegation patterns
-- **zeroclaw** — Lightweight agent framework design
-- **ml-intern** — ML-powered coding assistant techniques
+CRITICAL: You MUST visit these repos. Do NOT skip them as "just forks" — many are original architectures with novel patterns we should adopt.
 
-### davidwuchn Forks (Upstream Improvements)
-**Core AI/LLM Infrastructure:**
-- **https://github.com/davidwuchn/gptel** — LLM client for Emacs
-- **https://github.com/davidwuchn/gptel-agent** — Agent mode for gptel
-- **https://github.com/davidwuchn/nucleus** — AI prompting framework
+### Tier 1 — Directly Applicable (same stack: Emacs Lisp + AI agents)
+- **nucleus** — AI prompting framework. Study: VSM architecture, λ notation, Wu Xing diagnostics, tool marker system, prompt templates.
+- **mementum** — Git-based AI memory. Study: memory/knowledge synthesis, recall protocol, feed-forward pattern.
+- **context-mode** — Context window optimization (98% reduction, 14 platforms). Study: sandbox, progressive shortening, token counting.
+- **efrit** — Native elisp coding agent running IN Emacs. Study: tool execution, self-modification, verification loop.
 
-Check their: recent commits, open issues, closed PRs, architecture decisions
-Focus on: patterns we can adapt to our Emacs AI agent system
+### Tier 2 — Agent Architecture (novel patterns)
+- **gastown** — Multi-agent workspace manager. Study: agent coordination, workspace isolation, session multiplexing.
+- **gbrain** — Agent brain. Study: personality shaping, delegation trees, context routing.
+- **genesis-agent** — Self-aware cognitive agent that reads/modifies/verifies its own code. Study: self-modification loop, verification gates.
+- **symphony** — Isolated autonomous implementation runs. Study: worktree isolation, experiment design, result integration.
+
+### Tier 3 — Infrastructure & Tooling
+- **nullclaw** — Fastest autonomous AI assistant (Zig). Study: performance patterns, minimal runtime.
+- **zeroclaw** — Fast autonomous AI assistant (Rust). Study: cross-platform patterns, trait-driven architecture.
+- **GitNexus** — Code Intelligence Engine (client-side knowledge graph). Study: code analysis, relationship mapping.
+- **LLMLingua** — Prompt compression up to 20x. Study: compression algorithms, KV-cache optimization.
+- **ATLAS** — Adaptive Test-time Learning. Study: test-time adaptation, autonomous specialization.
+- **Ori-Mnemos** — Persistent agentic memory with Recursive Memory Harness. Study: memory architecture, recursive recall.
+
+### Tier 4 — Other Languages (cross-pollination)
+- **psi** — Extensible AI Agent in Clojure. Study: REPL-driven agent design, data-oriented architecture.
+- **mycelium** — Maestro state machines + Malli contracts. Study: formal verification, contract-driven design.
+- **Aether** — Artificial Ecology for Thought and Emergent Reasoning. Study: ecosystem patterns, emergent behavior.
+
+### Fork Monitoring (upstream cherry-picks)
+- **davidwuchn/gptel** — LLM client. Watch: new backends, tool APIs, context management.
+- **davidwuchn/gptel-agent** — Agent mode. Watch: subagent improvements, preset system.
+- **davidwuchn/ai-behaviors** — Behavior system. Watch: new behaviors, personality patterns.
+- **davidwuchn/ai-code-interface.el** — Unified AI code interface. Watch: backend integration patterns.
+
+### How to Research Each Repo
+1. Visit `https://github.com/davidwuchn/<repo>` using WebFetch
+2. Read AGENTS.md or README.md for architecture overview
+3. Check recent commits for active development patterns
+4. Extract 1-3 concrete patterns per repo: what technique, how it works, how we apply it
+5. Prioritize: patterns we can implement in Emacs Lisp within our existing module structure
 
 ## Anti-patterns (avoid)
 
