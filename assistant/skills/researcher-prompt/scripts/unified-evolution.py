@@ -273,7 +273,6 @@ if __name__ == '__main__':
     parser.add_argument('--root', default=None, help='Project root directory')
     args = parser.parse_args()
     if args.root:
-        global ROOT, CONTROLLER_FILE, REPLAY_FILE, TRACE_DIR, GUIDANCE_FILE, SKILL_FILE
         ROOT = Path(args.root)
         CONTROLLER_FILE = ROOT / "var/tmp/researcher-controller.json"
         REPLAY_FILE = ROOT / "var/tmp/research-replay-store.json"

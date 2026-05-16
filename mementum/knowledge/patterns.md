@@ -329,6 +329,14 @@ Migrated from LEARNING.md (32 patterns).
 - **Error detection early**: Check for error messages before processing.
 - **Log everything**: TSV format for explainable results.
 
+## plist-put Return Value Trap
+
+- **`plist-put` mutates in-place for existing keys, returns NEW plist for new keys**: Discarding the return value silently drops new key-value pairs.
+- **`push` on `plist-get` is always a bug**: `plist-get` is not a generalized variable; `push` creates a cons cell that's immediately discarded. Use `(setq place (plist-put place :key (cons val (plist-get place :key))))` instead.
+- **Always capture return**: `(setq var (plist-put var :key val))` — never bare `(plist-put var :key val)`.
+- **Hash-table values need double-persist**: After `setq` on a plist from a hash table, also `(puthash key var table)`.
+- **Detection**: `rg 'plist-put\s+\w' --glob '*.el' | rg -v setq` catches most instances.
+
 ## Eight Keys Signal Phrases
 
 - **Signals in commit messages**: Include phrases like "builds on discoveries", "explicit assumptions".
