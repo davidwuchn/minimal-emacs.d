@@ -2,41 +2,46 @@
 
 > Last session: 2026-05-16
 
-## Current Session: Byte-Compile Cleanup + Architecture Fixes
+## Current Session: Pipeline Bug Fixes + Strategy Name Validation
 
-**Status:** 377→11 byte-compile warnings (9 cosmetic/unfixable). Pipeline solid.
+**Status:** All known bugs fixed. Pipeline solid. 49 tests green.
 
 **Commits This Session:**
-- `9aefcd47` — Broaden research findings noise stripping
-- `e720624a` — Security ACL: marker-derived classification
-- `91c6ef84` — Wire evolution patterns into categorizer
-- `ff4daf5e` — Fix 27 docstring width warnings
-- `3ee22e28` — Fix 370 byte-compile warnings: declare-function, lexical-binding, paren bugs
-- `6d82cd3d` — Fix bare except: in analyze_research_outcomes.py
+- `f3da0801` — Fix garbage topic name leak + declare-function nil→correct + .gitignore pycache
+- `26f1a954` — Fix case-mismatch in extract_topics regex
+- `0980fcc9` — Merge + push to origin/main
 
 **Key Fixes:**
-- 2 `End-of-file-during-parsing` from cl-flet conversion (missing close parens)
-- 4 missing `lexical-binding` directives
-- ~100 `declare-function` declarations across 17 files
-- 3 docstring quoting fixes, 5 unused var prefixes, 4 defvar declarations
-- Security ACL: `my/gptel-tool-acl-needs-confirm` uses `:file-inspector ∪ :can-edit` markers
-- Evolution patterns: skill loading now parses High-Signal Keywords (was stub)
-- `:own-priority`/`:own-repo-priority` investigated: no bug, boundaries clean
+- Strategy evolver REJECTED messages leaking into topic-performance.json as topic names
+  - Added `gptel-auto-workflow--valid-strategy-name-p` (3-layer defense: maybe-evolve, load-active-strategy, experiment record)
+  - Added `_valid_topic_name()` in `analyze_research_outcomes.py`
+  - Cleaned garbage from runtime data (evolution_summary, topic-performance, controller JSON, research trace)
+- `extract_topics_from_hypothesis` regex never matched: capitalized verbs in lowered text
+- 14 `declare-function nil` → correct source file across 9 files
+- `__pycache__/` + `*.pyc` added to `.gitignore`
+- Wrong `defvar` for cl-defstruct accessors in `gptel-workflow-benchmark.el`
 
-**Prior Session (Remote):**
-- Controller doom loop detection (ml-intern pattern)
-- Status stuck at running after completion bug fixed
+**Pipeline Audit Findings (not yet fixed):**
+- HIGH: Trend detection indexes global list by position, not topic experiments (analyze_research_outcomes.py:177)
+- HIGH: `TRACE_DIR` undefined in unified-evolution.py:234 (NameError)
+- MEDIUM: lookback_days filter is computed but never applied (analyze_research_outcomes.py:115)
+- MEDIUM: evolve_skills.py deletes timestamp metadata without replacement
+- MEDIUM: evolve_researcher.py ignores --output-dir and --analysis args
+
+**Prior Session:**
+- 377→11 byte-compile warnings, 2 End-of-file-during-parsing, cl-flet conversion
 - Tool marker architecture, memory tools, progressive shortening
 
-**Remaining (11 warnings, all cosmetic/unfixable):**
+**Remaining Warnings (11, all cosmetic/unfixable):**
 - 2 `(setf ...)` warnings: Emacs 30.2 ignores declare-function for setf
 - 2 Malformed function: `cl-labels` byte-compiler limitation
 - 5 cascade warnings from cl-labels Malformed function
-- 1 `retire-buffer` not known: cl-labels local (same root cause)
+- 1 `retire-buffer` not known: cl-labels local
 - 8 "Cannot open load file: gptel" (pre-existing, needs gptel package)
 
 **Test Results:**
 - research-benchmark: 19/19
 - nucleus-tools: 26 pass + 4 skip (0 unexpected)
+- Total: 49 tests, 0 unexpected failures
 
 ---

@@ -124,15 +124,16 @@ def analyze_topic_performance(experiments, lookback_days=30):
     })
     
     for exp in experiments:
-        # Parse date from experiment ID if possible
         exp_date = None
         try:
-            # Format: 2026-04-23T190130Z-2884
             date_str = exp['id'].split('T')[0] if 'T' in exp['id'] else None
             if date_str:
                 exp_date = datetime.strptime(date_str, '%Y-%m-%d')
         except (ValueError, KeyError, TypeError):
             pass
+        
+        if exp_date and exp_date < cutoff:
+            continue
         
         topics = extract_topics_from_hypothesis(exp['hypothesis'])
         
@@ -155,7 +156,7 @@ def analyze_topic_performance(experiments, lookback_days=30):
                 if stats['last_seen'] is None or exp_date > stats['last_seen']:
                     stats['last_seen'] = exp_date
             
-            stats['experiments'].append(exp['id'])
+            stats['experiments'].append({'id': exp['id'], 'decision': exp['decision']})
     
     # Calculate derived metrics
     result = {}
@@ -174,10 +175,10 @@ def analyze_topic_performance(experiments, lookback_days=30):
             if days_span > 7:
                 # Simple trend: compare first half vs second half
                 mid = stats['total'] // 2
-                first_half_kept = sum(1 for i, e in enumerate(stats['experiments'][:mid]) 
-                                    if experiments[i]['decision'] == 'kept') if mid > 0 else 0
-                second_half_kept = sum(1 for i, e in enumerate(stats['experiments'][mid:]) 
-                                      if experiments[mid + i]['decision'] == 'kept') if (stats['total'] - mid) > 0 else 0
+                first_half_kept = sum(1 for e in stats['experiments'][:mid]
+                                     if e['decision'] == 'kept') if mid > 0 else 0
+                second_half_kept = sum(1 for e in stats['experiments'][mid:]
+                                      if e['decision'] == 'kept') if (stats['total'] - mid) > 0 else 0
                 first_rate = first_half_kept / mid if mid > 0 else 0
                 second_rate = second_half_kept / (stats['total'] - mid) if (stats['total'] - mid) > 0 else 0
                 
