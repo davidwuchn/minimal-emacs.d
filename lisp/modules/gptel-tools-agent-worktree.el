@@ -1,6 +1,9 @@
 ;;; gptel-tools-agent-worktree.el --- Worktree management, staging setup -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(require 'cl-lib)
+(require 'subr-x)
+
 ;; Forward declarations for dynamic variables
 (defvar gptel-auto-workflow-shared-remote)
 (defvar gptel-auto-workflow--skip-submodule-sync-env)

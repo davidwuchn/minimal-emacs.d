@@ -1,6 +1,7 @@
 ;;; gptel-tools-agent-staging-merge.el --- Staging branch protection - merge & verify -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(require 'subr-x)
 (require 'gptel-auto-workflow-behavioral-tests nil t)
 (declare-function gptel-auto-workflow--current-run-id "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--make-idempotent-callback "gptel-tools-agent-base")
