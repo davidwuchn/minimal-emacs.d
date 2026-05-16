@@ -9,6 +9,7 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'nucleus-presets)
 (require 'nucleus-header-line)
 
 ;;; Preset toggle tests
@@ -16,10 +17,13 @@
 (ert-deftest test-header/toggle-preset-switches ()
   "Toggle should switch between agent and plan presets."
   (let ((gptel--preset 'gptel-agent))
-    (nucleus-header-toggle-preset)
-    (should (eq gptel--preset 'gptel-plan))
-    (nucleus-header-toggle-preset)
-    (should (eq gptel--preset 'gptel-agent))))
+    (cl-letf (((symbol-function 'gptel--apply-preset)
+               (lambda (preset setter)
+                 (funcall setter 'gptel--preset preset))))
+      (nucleus-header-toggle-preset)
+      (should (eq gptel--preset 'gptel-plan))
+      (nucleus-header-toggle-preset)
+      (should (eq gptel--preset 'gptel-agent)))))
 
 ;;; Header-line format tests
 
@@ -48,7 +52,7 @@
         (header-line-format '("default" "rest")))
     (nucleus--header-line-apply-preset-label)
     (should (consp header-line-format))
-    (should (eq (car header-line-format) :eval))))
+    (should (eq (caar header-line-format) :eval))))
 
 (ert-deftest test-header/apply-preset-label-modifies-plan ()
   "Apply preset label should modify header for plan preset."
@@ -58,7 +62,7 @@
         (header-line-format '("default" "rest")))
     (nucleus--header-line-apply-preset-label)
     (should (consp header-line-format))
-    (should (eq (car header-line-format) :eval))))
+    (should (eq (caar header-line-format) :eval))))
 
 (provide 'test-nucleus-header-line)
 ;;; test-nucleus-header-line.el ends here

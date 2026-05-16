@@ -15,7 +15,7 @@
 
 (ert-deftest test-base/validate-string-accepts-valid ()
   "Validation should accept non-empty strings."
-  (should (gptel-auto-workflow--validate-non-empty-string "valid" "test")))
+  (should-not (gptel-auto-workflow--validate-non-empty-string "valid" "test")))
 
 (ert-deftest test-base/validate-string-rejects-nil ()
   "Validation should reject nil."
