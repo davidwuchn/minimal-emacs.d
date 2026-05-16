@@ -1,5 +1,4 @@
 ---
-last-evolution: 2026-05-16 17:34
 name: provider-error-analyzer
 description: |
   Analyzes LLM provider error messages to determine retry strategy, failover candidates,
