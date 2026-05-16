@@ -993,8 +993,12 @@ META-LEARNING: Feeds findings to analyzer selection and the project research cac
                                (backend (plist-get preset :backend)))
                      (gptel-auto-workflow--activate-provider-failover
                       "researcher" preset "empty research output" t))
-                   (setq gptel-auto-workflow--research-in-progress nil)
-                   (gptel-auto-workflow--research-patterns callback (1+ attempt)))
+                    (setq gptel-auto-workflow--research-in-progress nil)
+                    (let ((cb callback)
+                          (att (1+ attempt)))
+                      (run-with-timer 0 nil
+                                      (lambda ()
+                                        (gptel-auto-workflow--research-patterns cb att)))))
                ;; Findings are good enough or retries exhausted
                (progn
                  (setq gptel-auto-workflow--research-in-progress nil)
@@ -1121,8 +1125,10 @@ EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget 
                           (message "[auto-workflow] Retrying analyzer target selection with %s/%s"
                                    (car candidate)
                                    (cdr candidate))
-                          (gptel-auto-workflow--clear-analyzer-error-state)
-                          (request-analyzer (1+ attempt)))
+                           (gptel-auto-workflow--clear-analyzer-error-state)
+                           (let ((att (1+ attempt)))
+                             (run-with-timer 0 nil
+                                             (lambda () (request-analyzer att)))))
                       (funcall callback targets))))
                 analyzer-timeout)))
           (message "[auto-workflow] Asking analyzer to select targets...")

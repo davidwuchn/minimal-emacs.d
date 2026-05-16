@@ -611,10 +611,15 @@ on the current provider."
                       agent-type category
                       (1+ attempt) gptel-auto-experiment-max-aux-subagent-retries
                       (if should-advance " [advanced provider]" ""))
-             (gptel-auto-experiment--call-aux-subagent-with-retry
-              agent-type invoke callback (1+ attempt)
-              ;; Reset provider counter if advancing, else increment
-              (if should-advance 0 (1+ prov-attempts))))
+              (let ((at agent-type)
+                    (inv invoke)
+                    (cb callback)
+                    (next-att (1+ attempt))
+                    (next-prov (if should-advance 0 (1+ prov-attempts))))
+                (run-with-timer 0 nil
+                                (lambda ()
+                                  (gptel-auto-experiment--call-aux-subagent-with-retry
+                                   at inv cb next-att next-prov)))))
          (funcall callback result))))))
 
 (defun gptel-auto-experiment-analyze (previous-results callback)
