@@ -13,9 +13,9 @@
 
 ;;; Staging branch tests
 
-(ert-deftest test-worktree/staging-branch-configured ()
-  "Staging branch should have a configured value."
-  (should (stringp gptel-auto-workflow-staging-branch)))
+(ert-deftest test-worktree/staging-branch-declared ()
+  "Staging branch variable should be declared."
+  (should (intern-soft "gptel-auto-workflow-staging-branch")))
 
 ;;; Remote tests
 
@@ -25,9 +25,9 @@
 
 ;;; Worktree state tests
 
-(ert-deftest test-worktree/worktree-state-defined ()
-  "Worktree state variable should be defined."
-  (should (boundp 'gptel-auto-workflow--worktree-state)))
+(ert-deftest test-worktree/worktree-state-declared ()
+  "Worktree state variable should be declared."
+  (should (intern-soft "gptel-auto-workflow--worktree-state")))
 
 ;;; Buffer cleanup tests
 

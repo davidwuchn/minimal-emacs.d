@@ -37,9 +37,9 @@
 
 (ert-deftest test-main/stop-status-refresh-nil-timer ()
   "Stop status refresh should handle nil timer."
-  (let ((gptel-auto-workflow--status-refresh-timer nil))
-    (gptel-auto-workflow--stop-status-refresh-timer)
-    (should-not gptel-auto-workflow--status-refresh-timer)))
+  (setq gptel-auto-workflow--status-refresh-timer nil)
+  (gptel-auto-workflow--stop-status-refresh-timer)
+  (should-not gptel-auto-workflow--status-refresh-timer))
 
 ;;; Function tests
 
