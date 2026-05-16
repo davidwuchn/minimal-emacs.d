@@ -530,24 +530,25 @@ RETRY-COUNT tracks local grader retries."
             (plist-get result :agent-output)
             (plist-get result :grader-reason)))))
 
+(defun gptel-auto-experiment--hard-quota-match-p (msg)
+  "Return non-nil if MSG matches hard quota exhaustion pattern.
+MSG must be a string. Returns t if pattern matches, nil otherwise."
+  (and (stringp msg)
+       (let ((case-fold-search t))
+         (string-match-p
+          gptel-auto-experiment--hard-quota-error-pattern
+          msg))))
+
 (defun gptel-auto-experiment--quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows provider quota exhaustion."
   (let ((msg (gptel-auto-experiment--error-message agent-output)))
-    (and (stringp msg)
-         (or (gptel-auto-experiment--provider-usage-limit-error-p msg)
-             (let ((case-fold-search t))
-               (string-match-p
-                gptel-auto-experiment--hard-quota-error-pattern
-                msg))))))
+    (or (gptel-auto-experiment--provider-usage-limit-error-p msg)
+        (gptel-auto-experiment--hard-quota-match-p msg))))
 
 (defun gptel-auto-experiment--hard-quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows a hard quota stop for executor work."
   (let ((msg (gptel-auto-experiment--error-message agent-output)))
-    (and (stringp msg)
-         (let ((case-fold-search t))
-           (string-match-p
-            gptel-auto-experiment--hard-quota-error-pattern
-            msg)))))
+    (gptel-auto-experiment--hard-quota-match-p msg)))
 
 (defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count provider-attempts)
   "Run experiment with automatic retry on transient errors.
