@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import List, Dict, Optional
 
-ROOT = Path("/home/davidwu/.emacs.d")
+ROOT = Path(__file__).resolve().parents[3]
 STRATEGY_DIR = ROOT / "assistant/skills/researcher-prompt/strategies"
 
 def ensure_strategy_dir():

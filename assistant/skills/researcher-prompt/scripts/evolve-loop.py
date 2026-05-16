@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/davidwu/.emacs.d")
+ROOT = Path(__file__).resolve().parents[3]
 TRACE_DIR = ROOT / "var/tmp/research-traces"
 STRATEGY_DIR = ROOT / "assistant/skills/researcher-prompt/strategies"
 RESULTS_FILE = ROOT / "var/tmp/strategy-evaluation-results.json"

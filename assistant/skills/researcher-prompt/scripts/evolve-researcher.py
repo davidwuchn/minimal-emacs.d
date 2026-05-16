@@ -13,7 +13,7 @@ import hashlib
 from pathlib import Path
 from datetime import datetime
 
-ROOT = Path("/home/davidwu/.emacs.d")
+ROOT = Path(__file__).resolve().parents[3]
 REPLAY_FILE = ROOT / "var/tmp/research-replay-store.json"
 STRATEGY_FILE = ROOT / "var/tmp/researcher-strategy.json"
 
