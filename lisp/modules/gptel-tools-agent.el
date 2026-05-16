@@ -33,11 +33,17 @@
   (unless (featurep feature)
     (let* ((source (and gptel-tools-agent--module-dir
                         (expand-file-name (format "%s.el" feature)
-                                          gptel-tools-agent--module-dir))))
+                                          gptel-tools-agent--module-dir)))
+           (load-error nil))
       (if (and source (file-readable-p source))
           (condition-case err
               (load source nil 'nomessage)
-            (error (require feature)))
+            (error
+             (setq load-error err)
+             (condition-case nil
+                 (require feature)
+               (error
+                (error "Failed to load %s: %S (require also failed)" source load-error)))))
         (require feature))
       (unless (featurep feature)
         (error "Module %s did not provide feature %S" (or source feature) feature)))))
