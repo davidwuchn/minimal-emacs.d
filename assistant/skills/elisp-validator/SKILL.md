@@ -1,5 +1,4 @@
 ---
-last-evolution: 2026-05-16 17:34
 name: elisp-validator
 description: |
   Emacs Lisp code validation rules for AI-generated code. Checks for syntax errors,

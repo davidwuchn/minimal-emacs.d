@@ -1,5 +1,4 @@
 ---
-last-evolution: 2026-05-16 17:34
 name: researcher-prompt
 description: Prompt template for external research specialist subagent. Auto-evolves based on experiment outcomes.
 version: 2.0
