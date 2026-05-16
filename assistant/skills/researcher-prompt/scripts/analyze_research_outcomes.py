@@ -89,7 +89,7 @@ def extract_topics_from_hypothesis(hypothesis):
             topics.append(topic)
     
     # Also extract action+target patterns
-    actions = re.findall(r'\b(Add|Fix|Remove|Prevent|Handle|Check|Validate|Ensure|Improve|Optimize|Refactor|Extract|Move|Rename|Update|Implement|Create)\s+([A-Za-z_\-]+)', hyp_lower)
+    actions = re.findall(r'\b(add|fix|remove|prevent|handle|check|validate|ensure|improve|optimize|refactor|extract|move|rename|update|implement|create)\s+([a-z_\-]+)', hyp_lower)
     for verb, noun in actions:
         technique = f"{verb.lower()}-{noun.lower()}"
         topics.append(technique)
