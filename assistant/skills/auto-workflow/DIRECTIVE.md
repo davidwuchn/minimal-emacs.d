@@ -1,9 +1,9 @@
 ---
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
-version: 2026.05.15
-total-experiments: 2928
-total-kept: 193
+version: 2026.05.16
+total-experiments: 906
+total-kept: 156
 ---
 
 # Auto-Workflow Program
@@ -17,26 +17,25 @@ total-kept: 193
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-tools-agent-validation.el` | 43% | 7 | 3 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-experiment-loop.el` | 40% | 5 | 2 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-evolution.el` | 40% | 10 | 4 | ✅ High yield |
-| `lisp/modules/gptel-agent-loop.el` | 33% | 87 | 29 | ✅ High yield |
-| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 33% | 18 | 6 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-git.el` | 33% | 6 | 2 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-worktree.el` | 33% | 9 | 3 | ✅ High yield |
-| `lisp/modules/gptel-workflow-benchmark.el` | 33% | 6 | 2 | ✅ High yield |
-| `lisp/modules/gptel-auto-workflow-bootstrap.el` | 33% | 3 | 1 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-core.el` | 30% | 46 | 14 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-comparator.el` | 56% | 9 | 5 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-runtime.el` | 38% | 8 | 3 | ✅ High yield |
+| `lisp/modules/gptel-workflow-benchmark.el` | 35% | 23 | 8 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-staging-baseline.el` | 33% | 3 | 1 | ✅ High yield |
+| `lisp/modules/gptel-ext-context-images.el` | 33% | 9 | 3 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-worktree.el` | 29% | 24 | 7 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-error.el` | 29% | 28 | 8 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-git.el` | 28% | 29 | 8 | 🟡 Active |
+| `lisp/modules/gptel-agent-loop.el` | 25% | 32 | 8 | 🟡 Active |
+| `lisp/modules/gptel-ext-abort.el` | 25% | 4 | 1 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **unless-guard** (9× from git)
-- **extract-helper-function** (8× from git)
+- **unless-guard** (8× from git)
+- **extract-helper-function** (7× from git)
 - **add-variable** (4× from git)
-- **manual-fix** (3× from git)
 - **Applicability** (2× from mementum)
 - **Key insight** (2× from mementum)
 
@@ -45,21 +44,21 @@ total-kept: 193
 <!-- AUTO-UPDATED: From mementum insights -->
 
 - Removing Defensive JSON Key Lookups (seen 2×)
+- Schema Validation + Type Checking Gap (seen 1×)
+- commit `0b3a4da` (seen 1×)
 - Correct parentheses balance" (seen 1×)
 - define marker traits on tools, derive all classification lists from markers at load time. (seen 1×)
-- commit `0b3a4da` (seen 1×)
-- Schema Validation + Type Checking Gap (seen 1×)
-- commit `25c63eb` then `9056845` (seen 1×)
+- Repetition Guard (seen 1×)
 
 ## 🛡️ Error Mitigation
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (694×): Investigate root cause
-- **timeout** (75×): Add smaller batch sizes or chunked processing
-- **test-failure** (40×): Run tests before committing experiments
-- **validation-failed** (21×): Improve pre-grade validation prompts
+- **other** (738×): Investigate root cause
+- **timeout** (105×): Add smaller batch sizes or chunked processing
+- **validation-failed** (38×): Improve pre-grade validation prompts
 - **api-limit** (18×): Implement provider fallback or rate limit handling
+- **test-failure** (7×): Run tests before committing experiments
 
 ## Success Patterns
 
@@ -76,11 +75,11 @@ total-kept: 193
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-tools-agent-validation.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 43%)
-- **lisp/modules/gptel-benchmark-evolution.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 40%)
-- **lisp/modules/gptel-tools-agent-experiment-loop.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 40%)
-- **lisp/modules/gptel-tools-agent.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/nucleus-tools.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-benchmark-comparator.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 56%)
+- **lisp/modules/gptel-tools-agent-runtime.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 38%)
+- **lisp/modules/gptel-workflow-benchmark.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 35%)
+- **lisp/modules/gptel-sandbox.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -106,4 +105,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 2928 experiments (193 kept locally across 854 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 906 experiments (156 kept locally across 906 local records). It evolves every self-evolution cycle.*

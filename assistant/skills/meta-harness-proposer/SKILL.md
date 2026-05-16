@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 17:01
 name: meta-harness-proposer
 description: Run one iteration of prompt-building strategy evolution. Proposes 3 new strategy candidates based on prior results.
 version: 1.0

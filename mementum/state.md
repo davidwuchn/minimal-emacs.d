@@ -2,7 +2,19 @@
 
 > Last session: 2026-05-16
 
-## Current Session: Second Audit Pass — plist-put Bugs + Dead Code Sweep
+## Current Session: Eval Depth Cascade Analysis Complete
+
+**Status:** System operational. max-lisp-eval-depth at 12000. Daemon running clean.
+
+**Analysis Findings:**
+- Timer-based retry (`run-at-time` at gptel-ext-retry.el:794) properly breaks synchronous nesting
+- 2000 depth/provider comes from FSM transition chains + handler calls + advice wrapping
+- 6-provider fallback chain (MiniMax→moonshot→DashScope→glm-5→DeepSeek→CF-Gateway) = ~12000 total
+- `my/gptel-auto-retry` advises `gptel--fsm-transition` :around, intercepts ERRS transitions
+- Sentinel flow: parse → FSM transition → callback → FSM transition → cleanup
+- Provider failover uses `run-with-timer` for retries (async), not synchronous
+
+**Prior Session: Second Audit Pass — plist-put Bugs + Dead Code Sweep**
 
 **Status:** All known `plist-put` return-value bugs fixed. 26 dead functions removed (315+ lines). 57 tests green.
 
