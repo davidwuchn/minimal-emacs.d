@@ -79,6 +79,7 @@ Call FN with its path, then clean up."
          (unless (= 0 (cdr add-result))
            (error "git worktree add failed: %s" (car add-result))))
        (gptel-auto-workflow--seed-worktree-runtime-var worktree-dir)
+       (gptel-auto-workflow--ensure-staging-submodules-ready worktree-dir)
        (unwind-protect
            (funcall fn worktree-dir)
          (gptel-auto-workflow--cleanup-staging-submodule-worktrees worktree-dir)

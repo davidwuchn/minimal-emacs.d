@@ -211,7 +211,8 @@ If branch exists locally, deletes it first to avoid conflicts."
                   (message "[auto-workflow] Git stderr: %s" stderr-preview))
                 (error "git worktree add failed with exit code %s: %s"
                        exit-code (or stderr-preview "no output")))
-              (gptel-auto-workflow--seed-worktree-runtime-var worktree-dir)
+           (gptel-auto-workflow--seed-worktree-runtime-var worktree-dir)
+           (gptel-auto-workflow--ensure-staging-submodules-ready worktree-dir)
               (when (gptel-auto-workflow--worktree-needs-submodule-hydration-p worktree-dir)
                 (unless (gptel-auto-workflow--ensure-staging-submodules-ready worktree-dir)
                   (error "failed to hydrate experiment submodules in %s" worktree-dir))))

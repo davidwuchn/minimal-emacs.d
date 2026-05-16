@@ -218,7 +218,7 @@ def learn_controller(traces):
 
 def main():
     if len(sys.argv) < 2:
-        trace_dir = "/home/davidwu/.emacs.d/var/tmp/research-traces"
+        trace_dir = str(Path(__file__).resolve().parents[3] / "var" / "tmp" / "research-traces")
     else:
         trace_dir = sys.argv[1]
     
