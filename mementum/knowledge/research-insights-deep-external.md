@@ -14,16 +14,16 @@ insight-quality: 1.3/10
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-runtime.el`
-- `lisp/modules/gptel-ext-tool-sanitize.el`
-- `lisp/modules/gptel-ext-retry.el`
-- `lisp/modules/gptel-sandbox.el`
+- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 3 discarded)
+- `lisp/modules/gptel-ext-tool-sanitize.el` (1 kept / 5 discarded / 1 failed)
+- `lisp/modules/gptel-ext-retry.el` (1 kept / 3 discarded)
+- `lisp/modules/gptel-sandbox.el` (1 kept / 6 discarded)
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-ext-tool-sanitize.el`
+- `lisp/modules/gptel-ext-tool-sanitize.el` (1 kept / 5 discarded / 1 failed)
 
 ## Meta-Learning Recommendations
 

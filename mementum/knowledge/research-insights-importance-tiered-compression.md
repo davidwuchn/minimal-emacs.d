@@ -14,7 +14,7 @@ insight-quality: 6.0/10
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-tools-agent-error.el` (3 kept / 1 discarded)
 
 ## Meta-Learning Recommendations
 

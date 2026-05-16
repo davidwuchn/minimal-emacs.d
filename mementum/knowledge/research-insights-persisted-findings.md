@@ -3,25 +3,25 @@ title: Research Insights - persisted-findings
 status: active
 category: knowledge
 tags: [research, auto-workflow, persisted-findings]
-insight-quality: 1.5/10
+insight-quality: 1.1/10
 ---
 
 # Research Strategy: persisted-findings
 
-*Consolidated from 13 experiments (15% keep rate).*
+*Consolidated from 18 experiments (11% keep rate).*
 
-**Performance:** 2 kept / 1 discarded / 3 failed
+**Performance:** 2 kept / 4 discarded / 1 failed
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-error.el`
-- `lisp/modules/gptel-ext-fsm.el`
+- `lisp/modules/gptel-tools-agent.el` (1 kept / 4 discarded)
+- `lisp/modules/gptel-benchmark-comparator.el` (1 kept)
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-tools-agent-subagent.el`
+- `lisp/modules/gptel-benchmark-core.el` (1 failed)
 
 ## Meta-Learning Recommendations
 
