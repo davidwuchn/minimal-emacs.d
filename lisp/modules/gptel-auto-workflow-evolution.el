@@ -762,14 +762,29 @@ Returns t if page created."
          (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
          (safe-strategy (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy-name))
          (knowledge-dir (expand-file-name "mementum/knowledge"
-                                           (gptel-auto-workflow--worktree-base-root)))
+                                            (gptel-auto-workflow--worktree-base-root)))
          (knowledge-file (expand-file-name
                           (format "research-insights-%s.md" safe-strategy)
-                          knowledge-dir)))
+                          knowledge-dir))
+         (target-outcomes (make-hash-table :test 'equal)))
+    (dolist (result results)
+      (let ((target (plist-get result :target))
+            (decision (plist-get result :decision)))
+        (when (and (stringp target) (not (string-empty-p target)))
+          (let ((counts (or (gethash target target-outcomes)
+                            (list :kept 0 :discarded 0 :failed 0))))
+            (cond
+             ((equal decision "kept")
+              (setq counts (plist-put counts :kept (1+ (plist-get counts :kept)))))
+             ((equal decision "discarded")
+              (setq counts (plist-put counts :discarded (1+ (plist-get counts :discarded)))))
+             ((equal decision "validation-failed")
+              (setq counts (plist-put counts :failed (1+ (plist-get counts :failed))))))
+            (puthash target counts target-outcomes)))))
     (when (and (gptel-auto-workflow--valid-research-strategy-name-p strategy-name)
-               (not (string= safe-strategy "none"))
-               (> total 2)
-               (> kept 0))
+                (not (string= safe-strategy "none"))
+                (> total 2)
+                (> kept 0))
       (make-directory knowledge-dir t)
       (with-temp-file knowledge-file
         (insert "---\n")
@@ -787,28 +802,42 @@ Returns t if page created."
         (insert (format "**Performance:** %d kept / %d discarded / %d failed\n\n"
                         kept discarded failed))
         ;; Extract successful targets
-        (let ((kept-targets (delete-dups
-                             (mapcar (lambda (r) (plist-get r :target))
-                                     (cl-remove-if-not
-                                      (lambda (r) (equal (plist-get r :decision) "kept"))
-                                      results)))))
-          (when kept-targets
-            (insert "## Successful Targets\n\n")
-            (dolist (targ (seq-take kept-targets 10))
-              (insert (format "- `%s`\n" targ)))
-            (insert "\n")))
-        ;; Extract failed targets with patterns
-        (let ((failed-targets (delete-dups
-                               (mapcar (lambda (r) (plist-get r :target))
-                                       (cl-remove-if-not
-                                        (lambda (r) (equal (plist-get r :decision) "validation-failed"))
-                                        results)))))
-          (when failed-targets
-            (insert "## Targets with Validation Failures\n\n")
-            (insert "These targets may need different research patterns or the research findings were misleading.\n\n")
-            (dolist (targ (seq-take failed-targets 5))
-              (insert (format "- `%s`\n" targ)))
-            (insert "\n")))
+        (cl-labels ((format-target-with-counts
+                     (target)
+                     (let* ((counts (or (gethash target target-outcomes)
+                                        (list :kept 0 :discarded 0 :failed 0)))
+                            (parts nil))
+                       (when (> (plist-get counts :kept) 0)
+                         (push (format "%d kept" (plist-get counts :kept)) parts))
+                       (when (> (plist-get counts :discarded) 0)
+                         (push (format "%d discarded" (plist-get counts :discarded)) parts))
+                       (when (> (plist-get counts :failed) 0)
+                         (push (format "%d failed" (plist-get counts :failed)) parts))
+                       (format "- `%s` (%s)\n" target (string-join (nreverse parts) " / "))))
+                    (targets-for-decision
+                     (decision)
+                     (delete-dups
+                      (seq-filter
+                       (lambda (target)
+                         (and (stringp target) (not (string-empty-p target))))
+                       (mapcar (lambda (r) (plist-get r :target))
+                               (cl-remove-if-not
+                                (lambda (r) (equal (plist-get r :decision) decision))
+                                results))))))
+          (let ((kept-targets (targets-for-decision "kept")))
+            (when kept-targets
+              (insert "## Successful Targets\n\n")
+              (dolist (targ (seq-take kept-targets 10))
+                (insert (format-target-with-counts targ)))
+              (insert "\n")))
+          ;; Extract failed targets with patterns
+          (let ((failed-targets (targets-for-decision "validation-failed")))
+            (when failed-targets
+              (insert "## Targets with Validation Failures\n\n")
+              (insert "These targets may need different research patterns or the research findings were misleading.\n\n")
+              (dolist (targ (seq-take failed-targets 5))
+                (insert (format-target-with-counts targ)))
+              (insert "\n"))))
         ;; Meta-learning recommendations
         (insert "## Meta-Learning Recommendations\n\n")
         (cond

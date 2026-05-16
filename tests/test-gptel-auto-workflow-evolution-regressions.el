@@ -50,6 +50,26 @@
             (should-not (string-match-p "\n\n\\'" (buffer-string)))))
       (delete-directory root t))))
 
+(ert-deftest regression/auto-workflow-evolution/research-knowledge-shows-target-decision-counts ()
+  "Targets appearing in multiple outcome buckets should show per-target evidence."
+  (let ((root (make-temp-file "aw-evolution" t)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () root)))
+          (should
+           (gptel-auto-workflow--synthesize-research-knowledge
+            "test-strategy"
+            (list '(:decision "kept" :target "a.el")
+                  '(:decision "validation-failed" :target "a.el")
+                  '(:decision "discarded" :target "a.el")
+                  '(:decision "kept" :target "b.el"))))
+          (with-temp-buffer
+            (insert-file-contents
+             (expand-file-name "mementum/knowledge/research-insights-test-strategy.md" root))
+            (should (string-match-p "`a\\.el` (1 kept / 1 discarded / 1 failed)"
+                                    (buffer-string)))))
+      (delete-directory root t))))
+
 (ert-deftest regression/auto-workflow-evolution/research-knowledge-skips-rejected-strategy-labels ()
   "Rejected strategy evolution diagnostics must not become active knowledge pages."
   (let ((root (make-temp-file "aw-evolution" t))

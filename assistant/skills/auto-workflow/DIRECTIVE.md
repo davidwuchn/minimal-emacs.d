@@ -46,8 +46,8 @@ total-kept: 157
 
 - Removing Defensive JSON Key Lookups (seen 2×)
 - Schema Validation + Type Checking Gap (seen 1×)
-- commit `0b3a4da` (seen 1×)
-- Correct parentheses balance" (seen 1×)
+- Direct path is more efficient than full cycle for simple tasks. (seen 1×)
+- Guard nil values before passing to functions expecting number-or-marker. (seen 1×)
 - define marker traits on tools, derive all classification lists from markers at load time. (seen 1×)
 - Repetition Guard (seen 1×)
 
