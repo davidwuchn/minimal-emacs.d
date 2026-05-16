@@ -207,6 +207,21 @@ TEST: (my/gptel--fsm-p \"not-fsm\") => nil
 TEST: (my/gptel--fsm-p 42) => nil
 
 SIGNAL: explicit assumptions - Uses lazy predicate resolution."
+  (my/gptel--fsm-valid-p object))
+
+(defun my/gptel--fsm-valid-p (object)
+  "Return non-nil when OBJECT is a valid FSM.
+
+ASSUMPTION: Uses lazy predicate resolution from my/gptel--fsm-predicate-resolve.
+BEHAVPTION: Returns t if OBJECT is non-nil and passes predicate check.
+BEHAVPTION: Returns nil if OBJECT is nil or fails predicate check.
+EDGE CASE: Nil OBJECT returns nil.
+EDGE CASE: Predicate check errors are suppressed.
+TEST: (my/gptel--fsm-valid-p valid-fsm) => t
+TEST: (my/gptel--fsm-valid-p nil) => nil
+TEST: (my/gptel--fsm-valid-p \"not-fsm\") => nil
+
+EXPLICIT ASSUMPTIONS: Non-nil required, predicate determines validity."
   (and object
        (funcall (or my/gptel--fsm-predicate-fn
                     (my/gptel--fsm-predicate-resolve))
