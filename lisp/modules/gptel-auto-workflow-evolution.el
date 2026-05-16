@@ -793,31 +793,48 @@ leading/trailing hyphens."
     (setq s (replace-regexp-in-string "^-\\|-$" "" s))
     (if (string-empty-p s) "none" s)))
 
+(defun gptel-auto-workflow--valid-research-strategy-name-p (name)
+  "Return non-nil when NAME is safe to synthesize as a research strategy.
+
+Historical TSV rows can contain diagnostic strings such as rejected strategy
+evolution messages.  Those are useful logs, but they must not become active
+knowledge pages or YAML tags."
+  (and (stringp name)
+       (let ((trimmed (string-trim name)))
+         (and (not (string-empty-p trimmed))
+              (not (member (downcase trimmed) '("none" "nil" "unknown")))
+              (not (string-match-p "\\`[[]strategy-evolution[]]" trimmed))
+              (not (string-match-p "\\bREJECTED\\b" trimmed))
+              (string-match-p "\\`[[:alnum:]][[:alnum:]_-]*\\'" trimmed)))))
+
 (defun gptel-auto-workflow--synthesize-research-knowledge (strategy results)
   "Synthesize knowledge page for research STRATEGY from RESULTS.
 Returns t if page created."
-  (let* ((total (length results))
+  (let* ((strategy-name (and (stringp strategy) (string-trim strategy)))
+         (total (length results))
          (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
          (discarded (cl-count-if (lambda (r) (equal (plist-get r :decision) "discarded")) results))
          (failed (cl-count-if (lambda (r) (equal (plist-get r :decision) "validation-failed")) results))
          (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
-         (safe-strategy (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy))
+         (safe-strategy (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy-name))
          (knowledge-dir (expand-file-name "mementum/knowledge"
-                                          (gptel-auto-workflow--worktree-base-root)))
+                                           (gptel-auto-workflow--worktree-base-root)))
          (knowledge-file (expand-file-name
                           (format "research-insights-%s.md" safe-strategy)
                           knowledge-dir)))
-    (when (> total 2)
+    (when (and (gptel-auto-workflow--valid-research-strategy-name-p strategy-name)
+               (> total 2)
+               (> kept 0))
       (make-directory knowledge-dir t)
       (with-temp-file knowledge-file
         (insert "---\n")
-        (insert (format "title: Research Insights - %s\n" strategy))
+        (insert (format "title: Research Insights - %s\n" strategy-name))
         (insert "status: active\n")
         (insert "category: knowledge\n")
-        (insert (format "tags: [research, auto-workflow, %s]\n" strategy))
+        (insert (format "tags: [research, auto-workflow, %s]\n" strategy-name))
         (insert (format "insight-quality: %.1f/10\n" (* 10 keep-rate)))
         (insert "---\n\n")
-        (insert (format "# Research Strategy: %s\n\n" strategy))
+        (insert (format "# Research Strategy: %s\n\n" strategy-name))
         (insert (format "*Consolidated from %d experiments (%.0f%% keep rate).*%s\n\n"
                         total
                         (* 100 keep-rate)
@@ -863,7 +880,7 @@ Returns t if page created."
          (t
           (insert "- **Insufficient data.** Run more experiments with this strategy.\n"))))
       (message "[evolution] Synthesized research knowledge for %s → %s"
-               strategy knowledge-file)
+               strategy-name knowledge-file)
       t)))
 
 (defun gptel-auto-workflow--evolution-research-synthesize ()

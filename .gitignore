@@ -73,3 +73,5 @@ mementum/knowledge/token-efficiency.md
 assistant/skills/auto-workflow/FINDINGS.md
 assistant/skills/auto-workflow/RESEARCHER.md
 assistant/skills/benchmark-improver/SKILL.md
+__pycache__/
+*.pyc

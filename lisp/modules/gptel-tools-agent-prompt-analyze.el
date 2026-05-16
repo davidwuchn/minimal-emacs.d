@@ -1,6 +1,6 @@
 ; -*- lexical-binding: t; -*-
-(declare-function gptel-auto-experiment--call-aux-subagent-with-retry nil)
-(declare-function gptel-auto-experiment--decision-gate nil)
+(declare-function gptel-auto-experiment--call-aux-subagent-with-retry "gptel-tools-agent-benchmark")
+(declare-function gptel-auto-experiment--decision-gate "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--expected-comparator-winner "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment--parse-comparator-winner "gptel-tools-agent-benchmark")

@@ -1,6 +1,6 @@
 ; -*- lexical-binding: t; -*-
-(declare-function gptel-auto-experiment--promote-correctness-fix-decision nil)
-(declare-function magit-git-success nil)
+(declare-function gptel-auto-experiment--promote-correctness-fix-decision "gptel-tools-agent-prompt-analyze")
+(declare-function magit-git-success "magit-git")
 (declare-function gptel-auto-experiment--extract-axis "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--stale-run-p "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--stale-run-result "gptel-tools-agent-base")

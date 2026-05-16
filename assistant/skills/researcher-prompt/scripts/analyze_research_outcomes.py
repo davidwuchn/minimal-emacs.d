@@ -89,12 +89,25 @@ def extract_topics_from_hypothesis(hypothesis):
             topics.append(topic)
     
     # Also extract action+target patterns
-    actions = re.findall(r'\b(Add|Fix|Remove|Prevent|Handle|Check|Validate|Ensure|Improve|Optimize|Refactor|Extract|Move|Rename|Update|Implement|Create)\s+([A-Za-z_\-]+)', hyp_lower)
+    actions = re.findall(r'\b(add|fix|remove|prevent|handle|check|validate|ensure|improve|optimize|refactor|extract|move|rename|update|implement|create)\s+([a-z_\-]+)', hyp_lower)
     for verb, noun in actions:
         technique = f"{verb.lower()}-{noun.lower()}"
         topics.append(technique)
     
-    return list(set(topics))
+    return [t for t in list(set(topics)) if _valid_topic_name(t)]
+
+
+def _valid_topic_name(name):
+    """Reject topic names that are log messages or contain brackets/special chars."""
+    if not name or not isinstance(name, str):
+        return False
+    if '[' in name or ']' in name or "'" in name or '"' in name:
+        return False
+    if name in ('rejected', 'accepted'):
+        return False
+    if not re.match(r'^[a-z][a-z0-9-]+$', name):
+        return False
+    return True
 
 
 def analyze_topic_performance(experiments, lookback_days=30):
@@ -111,18 +124,19 @@ def analyze_topic_performance(experiments, lookback_days=30):
     })
     
     for exp in experiments:
-        # Parse date from experiment ID if possible
         exp_date = None
         try:
-            # Format: 2026-04-23T190130Z-2884
             date_str = exp['id'].split('T')[0] if 'T' in exp['id'] else None
             if date_str:
                 exp_date = datetime.strptime(date_str, '%Y-%m-%d')
         except (ValueError, KeyError, TypeError):
             pass
-        
+
+        if exp_date and exp_date < cutoff:
+            continue
+
         topics = extract_topics_from_hypothesis(exp['hypothesis'])
-        
+
         for topic in topics:
             stats = topic_stats[topic]
             stats['total'] += 1
@@ -142,7 +156,7 @@ def analyze_topic_performance(experiments, lookback_days=30):
                 if stats['last_seen'] is None or exp_date > stats['last_seen']:
                     stats['last_seen'] = exp_date
             
-            stats['experiments'].append(exp['id'])
+            stats['experiments'].append({'id': exp['id'], 'decision': exp['decision']})
     
     # Calculate derived metrics
     result = {}
@@ -161,10 +175,10 @@ def analyze_topic_performance(experiments, lookback_days=30):
             if days_span > 7:
                 # Simple trend: compare first half vs second half
                 mid = stats['total'] // 2
-                first_half_kept = sum(1 for i, e in enumerate(stats['experiments'][:mid]) 
-                                    if experiments[i]['decision'] == 'kept') if mid > 0 else 0
-                second_half_kept = sum(1 for i, e in enumerate(stats['experiments'][mid:]) 
-                                      if experiments[mid + i]['decision'] == 'kept') if (stats['total'] - mid) > 0 else 0
+                first_half_kept = sum(1 for e in stats['experiments'][:mid]
+                                     if e['decision'] == 'kept') if mid > 0 else 0
+                second_half_kept = sum(1 for e in stats['experiments'][mid:]
+                                      if e['decision'] == 'kept') if (stats['total'] - mid) > 0 else 0
                 first_rate = first_half_kept / mid if mid > 0 else 0
                 second_rate = second_half_kept / (stats['total'] - mid) if (stats['total'] - mid) > 0 else 0
                 

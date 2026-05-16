@@ -20,8 +20,8 @@
 (require 'cl-lib)
 (require 'json)
 (require 'subr-x)
-(declare-function gptel-agent-loop--task-continuation-count nil)
-(declare-function gptel-agent-loop--task-step-count nil)
+(declare-function gptel-agent-loop--task-continuation-count "gptel-agent-loop")
+(declare-function gptel-agent-loop--task-step-count "gptel-agent-loop")
 
 (declare-function gptel-agent--task "gptel-tools-agent")
 (declare-function gptel-benchmark-eight-keys-score "gptel-benchmark-principles")
@@ -29,9 +29,7 @@
 (declare-function gptel-benchmark-memory-read "gptel-benchmark-memory")
 
 (defvar gptel-agent-loop--state)
-(defvar gptel-agent-loop--task-step-count)
 (defvar gptel-benchmark-eight-keys-definitions)
-(defvar gptel-agent-loop--task-continuation-count)
 
 ;;; Helpers
 

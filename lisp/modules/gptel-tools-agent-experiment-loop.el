@@ -1,6 +1,5 @@
 ; -*- lexical-binding: t; -*-
-(declare-function magit-git-success nil)
-(declare-function run-next nil)
+(declare-function magit-git-success "magit-git")
 (declare-function cl-subseq "cl-lib")
 (declare-function gptel-auto-workflow--call-in-run-context "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--default-dir "gptel-tools-agent-base")

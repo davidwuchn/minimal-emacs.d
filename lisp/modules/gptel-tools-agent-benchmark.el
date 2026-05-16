@@ -2,7 +2,7 @@
 ;; Part of gptel-tools-agent split
 
 (require 'gptel-tools-agent-validation)
-(declare-function project-root nil)
+(declare-function project-root "project")
 (declare-function gptel-auto-workflow--call-in-run-context "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")

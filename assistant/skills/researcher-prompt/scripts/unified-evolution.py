@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 ROOT = Path("/home/davidwu/.emacs.d")
 CONTROLLER_FILE = ROOT / "var/tmp/researcher-controller.json"
 REPLAY_FILE = ROOT / "var/tmp/research-replay-store.json"
+TRACE_DIR = ROOT / "var/tmp/research-traces"
 GUIDANCE_FILE = ROOT / "var/tmp/researcher-strategy-guidance.json"
 SKILL_FILE = ROOT / "assistant/skills/researcher-prompt/SKILL.md"
 

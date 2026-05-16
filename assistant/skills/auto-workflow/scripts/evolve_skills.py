@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -196,11 +197,13 @@ def generate_skill(skill_name, skill_info, analysis_path, root_dir, patterns_pat
 
 def update_skill_metadata(skills_dir, analysis):
     """Update all SKILL.md files with latest metadata."""
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
     for skill_file in skills_dir.rglob("SKILL.md"):
         with open(skill_file, 'r') as f:
             content = f.read()
         content = re.sub(r'^updated:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n', '', content, flags=re.MULTILINE)
         content = re.sub(r'^\s*last-evolution:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^(---)\n', rf'\1\nlast-evolution: {now_str}\n', content, count=1, flags=re.MULTILINE)
         
         # Add evolution metadata if not present
         if 'evolution-stats:' not in content:
