@@ -127,18 +127,8 @@ def format_priority_topics(topic_data, temporal_data, max_topics=6):
 
 def format_project_priorities(source_data):
     """Format project monitoring priorities based on source effectiveness."""
-    if not source_data:
-        return """### External Projects (Novel Patterns)
-- **hermes-agent** — Agent orchestration and delegation patterns
-- **zeroclaw** — Lightweight agent framework design
-- **ml-intern** — ML-powered coding assistant techniques
-
-### davidwuchn Forks (Upstream Improvements)
-**Core AI/LLM Infrastructure:**
-- **https://github.com/davidwuchn/gptel** — LLM client for Emacs
-- **https://github.com/davidwuchn/gptel-agent** — Agent mode for gptel
-- **https://github.com/davidwuchn/nucleus** — AI prompting framework
-"""
+    if not source_data or not source_data.get('sources'):
+        return "_No source effectiveness data yet. See repo list below._"
     
     sources = source_data.get('sources', {})
     
@@ -215,6 +205,12 @@ def generate_evolved_skill(skill_path, data_dir):
     source_data = load_json_safe(data_dir / 'source-effectiveness.json')
     temporal_data = load_json_safe(data_dir / 'temporal-patterns.json')
     
+    # Load static repo list (survives auto-evolution)
+    repos_md = ""
+    repos_file = skill_path.parent / "REPOS.md"
+    if repos_file.exists():
+        repos_md = repos_file.read_text(encoding="utf-8").strip()
+    
     # Calculate overall effectiveness
     topics = topic_data.get('topics', {})
     total_kept = sum(s['kept'] for s in topics.values())
@@ -262,6 +258,12 @@ Your job: hunt the internet for novel ideas that could improve our project.
 ## Priority Projects to Monitor
 
 {project_priorities_md}
+
+---
+
+{repos_md}
+
+---
 
 Check their: recent commits, open issues, closed PRs, architecture decisions
 Focus on: patterns we can adapt to our Emacs AI agent system
