@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 17:34
 name: tool-prompts
 description: |
   Prompt templates for AI tools (Read, Write, Bash, Edit, etc.).

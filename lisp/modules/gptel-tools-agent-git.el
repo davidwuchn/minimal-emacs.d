@@ -174,8 +174,8 @@ Executor results are side-effectful during auto-workflow: reusing cached prose
 after a worktree is recreated would skip reapplying the file edits that prose
 describes."
   (not (and (equal agent-type "executor")
-            (or gptel-auto-workflow--current-target
-                gptel-auto-workflow--current-project))))
+            (or (bound-and-true-p gptel-auto-workflow--current-target)
+                (bound-and-true-p gptel-auto-workflow--current-project)))))
 
 (defun my/gptel--cacheable-subagent-result-p (result &optional agent-type)
   "Return non-nil when RESULT is safe to reuse from the subagent cache.
@@ -208,8 +208,7 @@ Returns nil if cache disabled, not found, or expired."
     (let* ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff))
            (cached (gethash key my/gptel--subagent-cache)))
       (when (and (consp cached)
-                 (numberp (car cached))
-                 (consp (cdr cached)))
+                 (numberp (car cached)))
         (let ((timestamp (car cached))
               (result (cdr cached)))
           (if (> (- (float-time) timestamp) my/gptel-subagent-cache-ttl)

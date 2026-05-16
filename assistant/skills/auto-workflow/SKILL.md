@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 17:34
 name: auto-workflow
 description: Orchestrates automated code improvement through hypothesis-driven experimentation and self-evolution
 version: 1.1

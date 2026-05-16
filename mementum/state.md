@@ -2,44 +2,35 @@
 
 > Last session: 2026-05-16
 
-## Current Session: Pipeline Hardening + Strategy Artifact Prevention
+## Current Session: Retry Depth Fixes + Pipeline Verification
 
-**Status:** Pipeline source loads clean; bad generated strategy artifacts are blocked before persistence.
+**Status:** All direct recursive retries converted to stack-safe timer-based patterns. Pipeline verified working end-to-end.
 
 **Commits This Session:**
-- `f3da0801` — Fix garbage topic name leak + declare-function nil→correct + .gitignore pycache
-- `26f1a954` — Fix case-mismatch in extract_topics regex
-- `0980fcc9` — Merge + push to origin/main
-- `aab097ad` — Fix trend detection, lookback filter, TRACE_DIR, evolve timestamp preservation
-- `7688cf72` — Prevent bad strategy artifacts
+- `7c764a66` — ⊘ Convert direct retry recursion to timer-based (stack-safe)
 
 **Key Fixes:**
-- Strategy evolver REJECTED messages leaking into topic-performance.json as topic names
-- Added `gptel-auto-workflow--valid-strategy-name-p` and `_valid_topic_name()` defenses
-- `extract_topics_from_hypothesis` regex never matched: capitalized verbs in lowered text
-- Trend detection, lookback filtering, undefined `TRACE_DIR`, and skill timestamp preservation fixed
-- Strategy evolution prototype now exercises representative analysis data and rejects missing skill references before writing accepted strategy files
-- Research knowledge synthesis now skips rejected diagnostic strategy labels, unsafe strategy names, `none`/`unknown`, and zero-kept strategies
-- Added regressions for rejected research labels, zero-kept research strategies, placeholder strategy labels, dynamic missing skill references, and literal skill extraction
-- 14 `declare-function nil` → correct source file across 9 files
-- `__pycache__/` + `*.pyc` added to `.gitignore`
+- 4 sites converted: research-patterns retry, request-analyzer retry, call-aux-subagent retry, run-next delay=0 path
+- Pattern: `direct recursive call` → `let capture vars` → `run-with-timer 0 nil (lambda () (fn captured-vars))`
+- `run-next` always uses timer now (removed `funcall continue` when delay=0)
+- Zero new byte-compile warnings. 57 tests green. Pipeline smoke test passes.
 
-**Prior Session:**
-- 377→11 byte-compile warnings, 2 End-of-file-during-parsing, cl-flet conversion
-- Tool marker architecture, memory tools, progressive shortening
+**Pipeline Health:**
+- Research: 3788 bytes, external URLs ✓
+- Self-Evolution: completes ✓
+- Auto-Workflow: experiment executed with real code change, grader 8/8 ✓
+- Strategy: `metric-adaptive-sections` (evolved) ✓
 
-**Remaining Warnings (11, all cosmetic/unfixable):**
-- 2 `(setf ...)` warnings: Emacs 30.2 ignores declare-function for setf
-- 2 Malformed function: `cl-labels` byte-compiler limitation
-- 5 cascade warnings from cl-labels Malformed function
-- 1 `retire-buffer` not known: cl-labels local
-- 8 "Cannot open load file: gptel" (pre-existing, needs gptel package)
+**Prior Sessions:**
+- 2 HIGH plist-put bugs fixed + 18 dead functions removed
+- macOS stat fix + .elc cleanup in pipeline
+- unified-evolution.py SyntaxError fix
+
+**Remaining Warnings (12, all pre-existing/unfixable):**
+- 10 "Cannot open load file: gptel" (needs package in batch mode)
+- 2 `(setf ...)` warnings (Emacs 30.2 limitation)
 
 **Test Results:**
-- focused strategy-artifact regressions: 8/8
-- changed module batch-load: clean
-- `git diff --check`: clean
-- research-benchmark: 19/19
-- nucleus-tools: 28 pass + 2 skip (0 unexpected)
+- 57 tests, 53 pass, 0 unexpected, 4 skip
 
 ---

@@ -400,11 +400,12 @@ When ERRORED is non-nil, preserve the existing error phase."
   (when (fboundp 'gptel-auto-workflow--persist-status)
     (gptel-auto-workflow--persist-status)))
 
-(defun gptel-auto-workflow--queue-cron-job (label fn &optional use-async)
+(defun gptel-auto-workflow--queue-cron-job (label fn &optional use-async &rest options)
   "Queue FN for LABEL and return immediately.
 This keeps `emacsclient --eval' callers from monopolizing the daemon.
 When USE-ASYNC is non-nil, FN must accept a completion callback
 and invoke it when the queued job actually finishes."
+  (setq use-async (or use-async (plist-get options :async)))
   (if (or gptel-auto-workflow--cron-job-running
           (bound-and-true-p gptel-auto-workflow--running))
       (progn

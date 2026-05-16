@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 17:34
 name: elisp-expert
 description: Writing/generating Emacs Lisp code with dangerous pattern awareness. Use when editing .el files or implementing features in Emacs packages.
 metadata:

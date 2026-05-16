@@ -330,10 +330,8 @@ Adapts max-experiments based on API error rate."
                                         (message "[auto-experiment] Run %s no longer active; returning accumulated results for %s"
                                                  run-id target)
                                         (funcall callback (nreverse results)))))))
-                             (if (> gptel-auto-experiment-delay-between 0)
-                                 (run-with-timer gptel-auto-experiment-delay-between nil
-                                                 continue)
-                               (funcall continue)))))))))
+                             (run-with-timer gptel-auto-experiment-delay-between nil
+                                             continue))))))))
         (gptel-auto-workflow--call-in-run-context
          workflow-root
          (lambda () (run-next 1))

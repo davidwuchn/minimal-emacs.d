@@ -744,22 +744,20 @@ Increased from 500s to 800s because:
 1. CF-Gateway with kimi-k2.6 needs ~800s for complex multi-step code
    analysis
 2. 500s was too tight for CF-Gateway (experiments timing out at 500-900s)
-3. 800s idle + 60s grace = 860s max provides comfortable margin
+3. 800s idle + 180s grace = 980s max provides provider headroom
 4. Prevents timeout losses on high-quality experiments that need full
    reasoning time"
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-active-grace 60
+(defcustom gptel-auto-experiment-active-grace 180
   "Extra wall-clock seconds active executor experiments may use beyond budget.
 
 Executor requests still use `gptel-auto-experiment-time-budget' as their idle
 timeout, but active runs may exceed it by this grace period before they are
-forcibly aborted.  Reduced from 420s to 60s because:
-1. Provider API calls have their own timeouts (30-180s)
-2. Long-running experiments waste quota on stuck API calls
-3. 120s idle + 60s grace = 180s max is sufficient for code changes"
+    forcibly aborted.  Default 180s keeps full executor runs above provider
+    request ceilings while still bounding stuck tasks."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
