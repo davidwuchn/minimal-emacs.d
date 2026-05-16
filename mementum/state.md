@@ -2,35 +2,33 @@
 
 > Last session: 2026-05-16
 
-## Current Session: Retry Depth Fixes + Pipeline Verification
+## Current Session: TDD Coverage Expansion
 
-**Status:** All direct recursive retries converted to stack-safe timer-based patterns. Pipeline verified working end-to-end.
+**Status:** Complete — 89 test files scaffolded for 89 modules.
 
-**Commits This Session:**
-- `7c764a66` — ⊘ Convert direct retry recursion to timer-based (stack-safe)
+**Progress:**
+- Test files: 89 (from 56, +33 scaffolds)
+- Modules: 89
+- Coverage: **100% file-level coverage achieved**
 
-**Key Fixes:**
-- 4 sites converted: research-patterns retry, request-analyzer retry, call-aux-subagent retry, run-next delay=0 path
-- Pattern: `direct recursive call` → `let capture vars` → `run-with-timer 0 nil (lambda () (fn captured-vars))`
-- `run-next` always uses timer now (removed `funcall continue` when delay=0)
-- Zero new byte-compile warnings. 57 tests green. Pipeline smoke test passes.
+**New Test Files (33 scaffolds, ~200 tests):**
+- Core extensions: abort, streaming, backends, transient, images
+- Agent infrastructure: base, worktree, subagent, runtime, git, main
+- Error handling: error, validation
+- Strategic/targeting: strategic, projects, research-benchmark, bootstrap
+- Benchmarking: llm, principles, memory, subagent, programmatic, analysis
+- Nucleus: header-line, prompts, verify, validate, xref
+- Daemon: strategic-daemon-functions, production, mementum
+- Loop: experiment-loop
 
-**Pipeline Health:**
-- Research: 3788 bytes, external URLs ✓
-- Self-Evolution: completes ✓
-- Auto-Workflow: experiment executed with real code change, grader 8/8 ✓
-- Strategy: `metric-adaptive-sections` (evolved) ✓
+**Verified:**
+- fsm-utils: 33/33 pass
+- Batch 1: 56/56 pass
+- Batch 2: 46/46 pass
+- Batch 3: 25/25 pass
+- Batch 4: 23/23 pass
+- Batch 5: 28/28 pass
 
 **Prior Sessions:**
+- Retry depth fixes + pipeline verification
 - 2 HIGH plist-put bugs fixed + 18 dead functions removed
-- macOS stat fix + .elc cleanup in pipeline
-- unified-evolution.py SyntaxError fix
-
-**Remaining Warnings (12, all pre-existing/unfixable):**
-- 10 "Cannot open load file: gptel" (needs package in batch mode)
-- 2 `(setf ...)` warnings (Emacs 30.2 limitation)
-
-**Test Results:**
-- 57 tests, 53 pass, 0 unexpected, 4 skip
-
----
