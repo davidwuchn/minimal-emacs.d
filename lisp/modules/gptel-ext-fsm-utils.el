@@ -163,18 +163,34 @@ inconsistent lookups if registry structure changes."
 
 ;;; FSM Predicates and Coercion
 
-(defvar my/gptel--fsm-predicate-fn
-  (if (fboundp 'gptel-fsm-p)
-      #'gptel-fsm-p
-    (lambda (obj) (ignore-errors (gptel-fsm-state obj) t)))
-  "Cached FSM predicate function for performance.
+(defvar my/gptel--fsm-predicate-fn nil
+  "Lazy FSM predicate function for runtime resolution.
 
-ASSUMPTION: gptel-fsm-p is available when loaded.
-BEHAVIOR: Uses built-in predicate if available.
-BEHAVIOR: Falls back to safe state access otherwise.
-TEST: (funcall my/gptel--fsm-predicate-fn some-fsm) => t or nil
-BUILDS ON DISCOVERY: Caching at load time eliminates per-call fboundp
-overhead, improving Vitality (performance).")
+BEHAVIOR: Resolved on first call via `my/gptel--fsm-predicate-resolve'.
+BEHAVIOR: Cached after first resolution for performance.
+TEST: (funcall (my/gptel--fsm-predicate-resolve) some-fsm) => t or nil
+
+BUILDS ON DISCOVERY: Lazy resolution prevents issues when gptel loads
+after this module, improving Vitality (error resilience).")
+
+(defun my/gptel--fsm-predicate-resolve ()
+  "Resolve and cache the FSM predicate function at runtime.
+Returns a predicate function appropriate for the current environment.
+
+ASSUMPTION: gptel-fsm-p and gptel-fsm-state may be available at runtime.
+BEHAVIOR: Returns built-in predicate if both accessors available.
+BEHAVIOR: Falls back to safe state access if gptel-fsm-state available.
+BEHAVIOR: Returns identity function if neither available (for validation).
+EDGE CASE: Missing accessors handled gracefully."
+  (setq my/gptel--fsm-predicate-fn
+        (cond
+         ((and (fboundp 'gptel-fsm-p) (fboundp 'gptel-fsm-state))
+          #'gptel-fsm-p)
+         ((fboundp 'gptel-fsm-state)
+          (lambda (obj) (ignore-errors (gptel-fsm-state obj) t)))
+         (t
+          (lambda (_obj) nil))))
+  my/gptel--fsm-predicate-fn)
 
 (defun my/gptel--fsm-p (object)
   "Return non-nil when OBJECT behaves like a `gptel-fsm'.
@@ -190,9 +206,26 @@ TEST: (my/gptel--fsm-p nil) => nil
 TEST: (my/gptel--fsm-p \"not-fsm\") => nil
 TEST: (my/gptel--fsm-p 42) => nil
 
-SIGNAL: explicit assumptions - Uses cached predicate function."
+SIGNAL: explicit assumptions - Uses lazy predicate resolution."
+  (my/gptel--fsm-valid-p object))
+
+(defun my/gptel--fsm-valid-p (object)
+  "Return non-nil when OBJECT is a valid FSM.
+
+ASSUMPTION: Uses lazy predicate resolution from my/gptel--fsm-predicate-resolve.
+BEHAVPTION: Returns t if OBJECT is non-nil and passes predicate check.
+BEHAVPTION: Returns nil if OBJECT is nil or fails predicate check.
+EDGE CASE: Nil OBJECT returns nil.
+EDGE CASE: Predicate check errors are suppressed.
+TEST: (my/gptel--fsm-valid-p valid-fsm) => t
+TEST: (my/gptel--fsm-valid-p nil) => nil
+TEST: (my/gptel--fsm-valid-p \"not-fsm\") => nil
+
+EXPLICIT ASSUMPTIONS: Non-nil required, predicate determines validity."
   (and object
-       (funcall my/gptel--fsm-predicate-fn object)))
+       (funcall (or my/gptel--fsm-predicate-fn
+                    (my/gptel--fsm-predicate-resolve))
+                object)))
 
 (defun my/gptel--coerce-fsm (object &optional context-id)
   "Return the FSM matching CONTEXT-ID from OBJECT, or first FSM if no match.
@@ -305,18 +338,18 @@ without duplicating cycle-detection logic.
 
 PROACTIVE MITIGATION: Single traversal implementation ensures
 consistent behavior across all FSM collection operations."
-  (setq fsm-callback (or fsm-callback #'ignore))
-  (cond
-   ((null object) nil)
-   ((consp object)
-    (unless (gethash object seen)
-      (puthash object t seen)
-      (my/gptel--fsm-traverse (car object) seen fsm-callback)
-      (my/gptel--fsm-traverse (cdr object) seen fsm-callback)))
-   ((my/gptel--fsm-p object)
-    (unless (gethash object seen)
-      (puthash object t seen)
-      (funcall fsm-callback object)))))
+  (when (functionp fsm-callback)
+    (cond
+     ((null object) nil)
+     ((consp object)
+      (unless (gethash object seen)
+        (puthash object t seen)
+        (my/gptel--fsm-traverse (car object) seen fsm-callback)
+        (my/gptel--fsm-traverse (cdr object) seen fsm-callback)))
+     ((my/gptel--fsm-p object)
+      (unless (gethash object seen)
+        (puthash object t seen)
+        (funcall fsm-callback object))))))
 
 (defun my/gptel--fsm-collect-list (object)
   "Collect all FSMs from OBJECT into a list.
