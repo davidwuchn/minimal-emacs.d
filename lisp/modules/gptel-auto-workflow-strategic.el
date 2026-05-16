@@ -53,6 +53,7 @@
 (declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
 (declare-function gptel-auto-experiment--is-retryable-error-p "gptel-tools-agent-error" (response))
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark" ())
+(declare-function gptel-auto-workflow--valid-strategy-name-p "gptel-tools-agent-strategy-evolver" (name))
 
 (defcustom gptel-auto-workflow-strategic-selection t
   "When non-nil, use LLM-based target selection.
@@ -1462,7 +1463,10 @@ Called during research initialization to restore evolved strategy after daemon r
                            (insert-file-contents strategy-file)
                            (goto-char (point-min))
                            (json-read))))
-              (when (plist-get data :active-strategy)
+              (when (and (plist-get data :active-strategy)
+                         (fboundp 'gptel-auto-workflow--valid-strategy-name-p)
+                         (gptel-auto-workflow--valid-strategy-name-p
+                          (plist-get data :active-strategy)))
                 (setq gptel-auto-workflow--active-strategy
                       (plist-get data :active-strategy))
                 (message "[autotts] Restored active strategy: %s"

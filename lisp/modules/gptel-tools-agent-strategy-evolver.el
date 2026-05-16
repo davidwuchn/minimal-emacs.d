@@ -68,6 +68,13 @@ the candidate and ask the proposer for a better name."
                proposed-name))
     nil))
 
+(defun gptel-auto-workflow--valid-strategy-name-p (name)
+  "Return non-nil if NAME is a valid strategy name.
+Rejects log messages and other garbage."
+  (and (stringp name)
+       (string-match-p "\\`[a-z][a-z0-9-]+\\'" name)
+       (not (string-match-p "\\[strategy-evolution\\]\\|REJECTED\\|ACCEPTED" name))))
+
 ;;; Strategy Template
 
 (defun gptel-auto-workflow--strategy-template (name hypothesis axis parent-strategies code)
@@ -846,7 +853,7 @@ strategy as the parent for evolution."
                       (message "[strategy] Evolution interrupted by signal, got %.0f%% complete"
                                (* 100 (/ (float (length all-axes)) 6.0)))
                       nil))))
-              (when new-strategy
+              (when (gptel-auto-workflow--valid-strategy-name-p new-strategy)
                  (message "[strategy] Evolved new strategy: %s" (format "%s" new-strategy))
                 ;; Write evolution summary
                 (let* ((perf (gptel-auto-workflow--get-strategy-performance new-strategy))

@@ -463,7 +463,7 @@ fallback subagent symbol such as `researcher' or `executor'."
               (when (and yaml-dir (file-directory-p yaml-dir))
                 (add-to-list 'load-path yaml-dir)))
             (require 'gptel-agent nil t))
-(declare-function hash-table-keys nil)
+(declare-function hash-table-keys "subr-x")
 (declare-function cl-count-if "cl-lib")
 (declare-function cl-remove "cl-lib")
 (declare-function cl-remove-if-not "cl-lib")

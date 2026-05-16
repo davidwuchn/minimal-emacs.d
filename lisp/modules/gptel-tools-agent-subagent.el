@@ -195,8 +195,8 @@ its async continuation layer in the worker daemon."
 (defun my/gptel--disable-auto-retry-for-fsm (fsm)
   "Mark FSM so global auto-retry advice will not reschedule it."
   (require 'gptel-request)
-(declare-function gptel-agent-update nil)
-(declare-function gptel-fsm-info nil)
+(declare-function gptel-agent-update "gptel-agent-tools")
+(declare-function gptel-fsm-info "gptel-request")
 (declare-function gptel-auto-workflow--default-dir "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--state-active-p "gptel-tools-agent-base")

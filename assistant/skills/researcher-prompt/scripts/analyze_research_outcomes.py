@@ -94,7 +94,20 @@ def extract_topics_from_hypothesis(hypothesis):
         technique = f"{verb.lower()}-{noun.lower()}"
         topics.append(technique)
     
-    return list(set(topics))
+    return [t for t in list(set(topics)) if _valid_topic_name(t)]
+
+
+def _valid_topic_name(name):
+    """Reject topic names that are log messages or contain brackets/special chars."""
+    if not name or not isinstance(name, str):
+        return False
+    if '[' in name or ']' in name or "'" in name or '"' in name:
+        return False
+    if name in ('rejected', 'accepted'):
+        return False
+    if not re.match(r'^[a-z][a-z0-9-]+$', name):
+        return False
+    return True
 
 
 def analyze_topic_performance(experiments, lookback_days=30):

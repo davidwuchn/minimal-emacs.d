@@ -1,5 +1,6 @@
 ; -*- lexical-binding: t; -*-
-(declare-function gptel-agent-read-file nil)
+(declare-function gptel-agent-read-file "gptel-agent-tools")
+(declare-function gptel-auto-workflow--valid-strategy-name-p "gptel-tools-agent-strategy-evolver" (name))
 (declare-function gptel-auto-workflow-load-research-findings "gptel-auto-workflow-strategic")
 (declare-function gptel-benchmark--detect-task-type "gptel-benchmark-principles")
 (declare-function my/gptel-get-model-metadata "gptel-ext-context-cache")
@@ -755,7 +756,10 @@ row for the same experiment and target."
     ;; Inject research metadata from global context into experiment record
     ;; This closes the feedback loop: experiments carry the research strategy that produced them
     (when (and (boundp 'gptel-auto-workflow--active-strategy)
-               gptel-auto-workflow--active-strategy)
+               gptel-auto-workflow--active-strategy
+               (or (not (fboundp 'gptel-auto-workflow--valid-strategy-name-p))
+                   (gptel-auto-workflow--valid-strategy-name-p
+                    gptel-auto-workflow--active-strategy)))
       (plist-put experiment :research-strategy gptel-auto-workflow--active-strategy))
     (when (and (boundp 'gptel-auto-workflow--current-research-context)
                gptel-auto-workflow--current-research-context)

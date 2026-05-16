@@ -24,6 +24,7 @@
 (declare-function gptel-auto-workflow--alist-to-sandbox-env "strategic-daemon-functions")
 (declare-function gptel-auto-workflow--eval-rule-sandbox "strategic-daemon-functions")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
+(declare-function gptel-auto-workflow--valid-strategy-name-p "gptel-tools-agent-strategy-evolver" (name))
 
 (defvar gptel-auto-workflow--active-strategy)
 (defvar gptel-auto-workflow--pending-outcome-updates)
@@ -1560,10 +1561,14 @@ Persists evolved strategy for daemon restarts."
         (let ((strategy-file (expand-file-name "var/tmp/researcher-strategy.json"
                                                 (gptel-auto-workflow--worktree-base-root))))
           (make-directory (file-name-directory strategy-file) t)
-          (with-temp-file strategy-file
-            (insert (json-encode `(:active-strategy ,gptel-auto-workflow--active-strategy
-                                   :efficiency ,(plist-get best :efficiency)
-                                   :evolved-at ,(format-time-string "%Y-%m-%dT%H:%M:%SZ"))))))
+           (with-temp-file strategy-file
+             (insert (json-encode `(:active-strategy ,(if (and (fboundp 'gptel-auto-workflow--valid-strategy-name-p)
+                                                               (gptel-auto-workflow--valid-strategy-name-p
+                                                                gptel-auto-workflow--active-strategy))
+                                                          gptel-auto-workflow--active-strategy
+                                                        "template-default")
+                                    :efficiency ,(plist-get best :efficiency)
+                                    :evolved-at ,(format-time-string "%Y-%m-%dT%H:%M:%SZ"))))))
         best))))
 
 (defun gptel-auto-workflow--bootstrap-strategy-guidance ()
