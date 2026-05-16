@@ -14,8 +14,23 @@
 (declare-function gptel-auto-workflow--results-file-path "gptel-tools-agent-base" (&optional run-id))
 (declare-function gptel-request "gptel" (prompt &rest args))
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-workflow--find-skill-file "gptel-tools-agent-prompt-build" (skill-name))
 (declare-function gptel-auto-workflow--substitute-template "gptel-tools-agent-prompt-build")
 (defvar gptel-auto-workflow--suppress-strategy-metadata-persistence)
+
+(defvar gptel-auto-workflow--strategy-prototype-analysis
+  (list :patterns (list (list :type "memory-leak")
+                        (list :type "null-check")
+                        (list :type "resource-disposal")
+                        (list :type "validation-guard")
+                        (list :type "error-handling")
+                        (list :type "nil-safety"))
+        :target "lisp/modules/gptel-tools-agent-base.el"
+        :failure-reasons (list "validation-failed" "syntax-error"))
+  "Representative analysis plist used when validating evolved strategies.
+
+The prototype should exercise pattern and skill-loading branches, not just the
+empty-analysis happy path.")
 
 ;;; Strategy Generation
 
@@ -228,7 +243,8 @@ Returns empty list if CODE is nil or empty."
 Returns plist with :valid t/nil :errors list :test-output string."
   (let ((temp-file (make-temp-file "strategy-prototype-" nil ".el"))
         (errors '())
-        (test-output ""))
+        (test-output "")
+        (missing-skills nil))
     (unwind-protect
         (progn
           ;; Write strategy to temp file
@@ -248,21 +264,68 @@ Returns plist with :valid t/nil :errors list :test-output string."
                 (let* ((build-fn-name (gptel-auto-workflow--extract-build-function-name strategy-code))
                         (build-fn (intern build-fn-name)))
                   (if (fboundp build-fn)
-                      (setq test-output
-                            (funcall build-fn test-target 1 10 nil 0.5 nil))
+                      (let ((load-skill-fn (and (fboundp 'gptel-auto-workflow--load-skill-content)
+                                                (symbol-function 'gptel-auto-workflow--load-skill-content))))
+                        (if load-skill-fn
+                            (cl-letf (((symbol-function 'gptel-auto-workflow--load-skill-content)
+                                       (lambda (skill-name)
+                                         (unless (and (fboundp 'gptel-auto-workflow--find-skill-file)
+                                                      (gptel-auto-workflow--find-skill-file skill-name))
+                                           (push skill-name missing-skills))
+                                         (funcall load-skill-fn skill-name))))
+                              (setq test-output
+                                    (funcall build-fn test-target 1 10
+                                             gptel-auto-workflow--strategy-prototype-analysis
+                                             0.5
+                                             (list (list :decision "discarded"
+                                                         :reason "validation-failed"
+                                                         :target test-target)))))
+                          (setq test-output
+                                (funcall build-fn test-target 1 10
+                                         gptel-auto-workflow--strategy-prototype-analysis
+                                         0.5
+                                         (list (list :decision "discarded"
+                                                     :reason "validation-failed"
+                                                     :target test-target))))))
                     (push "Build function not found after loading" errors)))
               (error
-               (push (format "Build error: %s" err) errors))))
+                (push (format "Build error: %s" err) errors))))
           
           ;; Test 3: Output is a string
           (when (and (not errors) (not (stringp test-output)))
             (push (format "Build function returned %s instead of string" (type-of test-output)) errors))
-          
+
+          ;; Test 4: Skill-loading strategies must reference real skills.
+          (when (and (not errors)
+                     (string-match-p "gptel-auto-workflow--load-skill-content" strategy-code))
+            (let ((static-missing-skills nil))
+              (dolist (skill (gptel-auto-workflow--extract-loaded-skill-names strategy-code))
+                (when (and (fboundp 'gptel-auto-workflow--find-skill-file)
+                           (not (gptel-auto-workflow--find-skill-file skill)))
+                  (push skill static-missing-skills)))
+              (when (or missing-skills static-missing-skills)
+                (push (format "Missing referenced skills: %s"
+                              (mapconcat #'identity
+                                         (sort (delete-dups (append missing-skills static-missing-skills)) #'string<)
+                                         ", "))
+                      errors))))
+
           (list :valid (null errors)
-                :errors (nreverse errors)
-                :output test-output))
+                 :errors (nreverse errors)
+                 :output test-output))
       (when (file-exists-p temp-file)
         (delete-file temp-file)))))
+
+(defun gptel-auto-workflow--extract-loaded-skill-names (code)
+  "Return literal skill names loaded by strategy CODE."
+  (let ((names nil))
+    (when (stringp code)
+      (with-temp-buffer
+        (insert code)
+        (goto-char (point-min))
+        (while (re-search-forward "gptel-auto-workflow--load-skill-content[[:space:]\n]+\"\\([^\"]+\\)\"" nil t)
+          (push (match-string 1) names))))
+    (delete-dups (nreverse names))))
 
 (defun gptel-auto-workflow--extract-build-function-name (code)
   "Extract the build function name from strategy CODE.

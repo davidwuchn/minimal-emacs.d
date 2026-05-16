@@ -2,31 +2,27 @@
 
 > Last session: 2026-05-16
 
-## Current Session: Pipeline Bug Fixes + Strategy Name Validation
+## Current Session: Pipeline Hardening + Strategy Artifact Prevention
 
-**Status:** All known bugs fixed. Pipeline solid. 49 tests green.
+**Status:** Pipeline source loads clean; bad generated strategy artifacts are blocked before persistence.
 
 **Commits This Session:**
 - `f3da0801` — Fix garbage topic name leak + declare-function nil→correct + .gitignore pycache
 - `26f1a954` — Fix case-mismatch in extract_topics regex
 - `0980fcc9` — Merge + push to origin/main
+- `aab097ad` — Fix trend detection, lookback filter, TRACE_DIR, evolve timestamp preservation
+- `7688cf72` — Prevent bad strategy artifacts
 
 **Key Fixes:**
 - Strategy evolver REJECTED messages leaking into topic-performance.json as topic names
-  - Added `gptel-auto-workflow--valid-strategy-name-p` (3-layer defense: maybe-evolve, load-active-strategy, experiment record)
-  - Added `_valid_topic_name()` in `analyze_research_outcomes.py`
-  - Cleaned garbage from runtime data (evolution_summary, topic-performance, controller JSON, research trace)
+- Added `gptel-auto-workflow--valid-strategy-name-p` and `_valid_topic_name()` defenses
 - `extract_topics_from_hypothesis` regex never matched: capitalized verbs in lowered text
+- Trend detection, lookback filtering, undefined `TRACE_DIR`, and skill timestamp preservation fixed
+- Strategy evolution prototype now exercises representative analysis data and rejects missing skill references before writing accepted strategy files
+- Research knowledge synthesis now skips rejected diagnostic strategy labels, unsafe strategy names, `none`/`unknown`, and zero-kept strategies
+- Added regressions for rejected research labels, zero-kept research strategies, placeholder strategy labels, dynamic missing skill references, and literal skill extraction
 - 14 `declare-function nil` → correct source file across 9 files
 - `__pycache__/` + `*.pyc` added to `.gitignore`
-- Wrong `defvar` for cl-defstruct accessors in `gptel-workflow-benchmark.el`
-
-**Pipeline Audit Findings (not yet fixed):**
-- HIGH: Trend detection indexes global list by position, not topic experiments (analyze_research_outcomes.py:177)
-- HIGH: `TRACE_DIR` undefined in unified-evolution.py:234 (NameError)
-- MEDIUM: lookback_days filter is computed but never applied (analyze_research_outcomes.py:115)
-- MEDIUM: evolve_skills.py deletes timestamp metadata without replacement
-- MEDIUM: evolve_researcher.py ignores --output-dir and --analysis args
 
 **Prior Session:**
 - 377→11 byte-compile warnings, 2 End-of-file-during-parsing, cl-flet conversion
@@ -40,8 +36,10 @@
 - 8 "Cannot open load file: gptel" (pre-existing, needs gptel package)
 
 **Test Results:**
+- focused strategy-artifact regressions: 8/8
+- changed module batch-load: clean
+- `git diff --check`: clean
 - research-benchmark: 19/19
-- nucleus-tools: 26 pass + 4 skip (0 unexpected)
-- Total: 49 tests, 0 unexpected failures
+- nucleus-tools: 28 pass + 2 skip (0 unexpected)
 
 ---

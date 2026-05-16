@@ -131,12 +131,12 @@ def analyze_topic_performance(experiments, lookback_days=30):
                 exp_date = datetime.strptime(date_str, '%Y-%m-%d')
         except (ValueError, KeyError, TypeError):
             pass
-        
+
         if exp_date and exp_date < cutoff:
             continue
-        
+
         topics = extract_topics_from_hypothesis(exp['hypothesis'])
-        
+
         for topic in topics:
             stats = topic_stats[topic]
             stats['total'] += 1
