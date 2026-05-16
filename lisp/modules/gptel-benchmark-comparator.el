@@ -97,7 +97,8 @@ Internal helper to centralize trend data extraction logic."
 
 (defun gptel-benchmark-load-result (name version)
   "Load benchmark result for NAME VERSION.
-Results are cached to avoid repeated file I/O for the same benchmark."
+Results are cached to avoid repeated file I/O for the same benchmark.
+Returns nil if the benchmark file does not exist."
   (unless (and name (stringp name) (not (string-empty-p name)))
     (signal 'wrong-type-argument (list "stringp" name)))
   (let* ((cache-key (cons name version))
@@ -105,11 +106,10 @@ Results are cached to avoid repeated file I/O for the same benchmark."
     (if cached
         cached
       (let ((benchmark-file (gptel-benchmark-get-file name version)))
-        (if (file-exists-p benchmark-file)
-            (let ((result (gptel-benchmark-read-json benchmark-file)))
-              (gptel-benchmark--cache-put cache-key result)
-              result)
-          '())))))
+        (when (file-exists-p benchmark-file)
+          (let ((result (gptel-benchmark-read-json benchmark-file)))
+            (gptel-benchmark--cache-put cache-key result)
+            result))))))
 
 (defun gptel-benchmark--read-version-file (name file-type fallback-fn default)
   "Read version from NAME's FILE-TYPE file.
