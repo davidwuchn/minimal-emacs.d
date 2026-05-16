@@ -9,7 +9,7 @@ import hashlib
 from pathlib import Path
 from datetime import datetime
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 TRACE_DIR = ROOT / "var/tmp/research-traces"
 
 def ensure_trace_dir():

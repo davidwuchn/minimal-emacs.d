@@ -11,7 +11,7 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 CONTROLLER_FILE = ROOT / "var/tmp/researcher-controller.json"
 TRACE_DIR = ROOT / "var/tmp/research-traces"
 
