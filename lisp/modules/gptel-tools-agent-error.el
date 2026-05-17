@@ -241,8 +241,8 @@ Only permanently blacklists for real rate limits and hard quotas."
 ERROR-OUTPUT may be a string, a plist with :error or :message key, or nil.
 Returns the message string or nil."
   (cond ((stringp error-output) error-output)
-        ((plistp error-output) (or (plist-get error-output :error)
-                                   (plist-get error-output :message)))
+        ((proper-list-p error-output) (or (plist-get error-output :error)
+                                          (plist-get error-output :message)))
         (t nil)))
 
 (defun gptel-auto-experiment--shared-transient-error-p (error-output)
@@ -262,7 +262,7 @@ Returns the message string or nil."
              (gptel-auto-experiment--rate-limit-error-p msg)
              (gptel-auto-experiment--provider-usage-limit-error-p msg)
              (let ((case-fold-search t))
-                (string-match-p (caar gptel-auto-experiment--shared-retryable-error-patterns) msg))))))
+               (string-match-p (caar gptel-auto-experiment--shared-retryable-error-patterns) msg))))))
 
 (defvar gptel-auto-experiment--quota-reset-timestamp nil
   "Parsed timestamp (seconds since epoch) when quota resets.
@@ -320,7 +320,7 @@ This is used for retry logic and includes transient errors."
       (let ((msg (gptel-auto-experiment--error-message error-output)))
         (and (stringp msg)
              (let ((case-fold-search t))
-                (string-match-p (cadr gptel-auto-experiment--shared-retryable-error-patterns) msg))))))
+               (string-match-p (cadr gptel-auto-experiment--shared-retryable-error-patterns) msg))))))
 
 (defun gptel-auto-experiment--should-blacklist-provider-p (error-output)
   "Return non-nil only when ERROR-OUTPUT shows a real rate limit or hard quota.
@@ -464,7 +464,7 @@ RETRY-COUNT tracks local grader retries."
     (gptel-auto-experiment-grade
      output
      (lambda (grade)
-        (let* ((grade-passed (plist-get grade :passed))
+       (let* ((grade-passed (plist-get grade :passed))
               (grade-details (plist-get grade :details))
               (grade-error-output
                (gptel-auto-experiment--grade-failure-error-output
@@ -477,9 +477,9 @@ RETRY-COUNT tracks local grader retries."
          (if (and (not grade-passed)
                   (gptel-auto-experiment--should-retry-grader-p
                    output grade-error-output error-category retries))
-              (progn
-                (gptel-auto-experiment--note-api-pressure
-                 target error-category grade-error-output "grader" nil)
+             (progn
+               (gptel-auto-experiment--note-api-pressure
+                target error-category grade-error-output "grader" nil)
                (let ((retry-delay
                       (gptel-auto-experiment--retry-delay-seconds
                        grade-error-output retries)))
@@ -488,10 +488,10 @@ RETRY-COUNT tracks local grader retries."
                  (run-with-timer
                   retry-delay nil
                   (lambda ()
-                     (if (buffer-live-p grade-buffer)
-                         (with-current-buffer grade-buffer
-                           (gptel-auto-experiment--grade-with-retry
-                            output callback (1+ retries)))
+                    (if (buffer-live-p grade-buffer)
+                        (with-current-buffer grade-buffer
+                          (gptel-auto-experiment--grade-with-retry
+                           output callback (1+ retries)))
                       (let ((final-grade (copy-sequence grade)))
                         (when grade-error-output
                           (setq final-grade
@@ -561,12 +561,12 @@ RETRY-COUNT tracks current retry attempt."
         (attempt-logs nil))
     (gptel-auto-experiment-run
      target experiment-id max-experiments baseline baseline-code-quality previous-results
-      (lambda (result)
-        (let* ((result (if (proper-list-p result) result
-                         (progn
-                           (message "[auto-experiment] Invalid result structure received, treating as empty plist")
-                           (list :error "Invalid result structure"))))
-               (agent-output (plist-get result :agent-output))
+     (lambda (result)
+       (let* ((result (if (proper-list-p result) result
+                        (progn
+                          (message "[auto-experiment] Invalid result structure received, treating as empty plist")
+                          (list :error "Invalid result structure"))))
+              (agent-output (plist-get result :agent-output))
               (raw-error (or (plist-get result :error)
                              (and (gptel-auto-experiment--agent-error-p agent-output)
                                   agent-output)))
@@ -613,14 +613,14 @@ RETRY-COUNT tracks current retry attempt."
          (if (and (not quota-exhausted)
                   (< retries gptel-auto-experiment-max-retries)
                   retryable-failure)
-(progn
-                 (when should-advance
-                   (condition-case nil
-                       (gptel-auto-workflow--maybe-activate-rate-limit-failover
-                        "executor"
-                        (gptel-auto-workflow--agent-base-preset "executor")
-                        raw-error)
-                     (error nil)))
+             (progn
+               (when should-advance
+                 (condition-case nil
+                     (gptel-auto-workflow--maybe-activate-rate-limit-failover
+                      "executor"
+                      (gptel-auto-workflow--agent-base-preset "executor")
+                      raw-error)
+                   (error nil)))
                (setq attempt-logs nil)
                (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay%s"
                         experiment-id (1+ retries) gptel-auto-experiment-max-retries
@@ -653,7 +653,7 @@ RETRY-COUNT tracks current retry attempt."
            (when quota-exhausted
              (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
                       experiment-id))
-            (funcall callback result))))
+           (funcall callback result))))
      (lambda (_logged-run-id exp-result)
        (push exp-result attempt-logs)))))
 
