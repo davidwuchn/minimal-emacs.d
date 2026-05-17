@@ -35,15 +35,19 @@
                                     gptel-tools-agent--module-dir)))
       (if (file-readable-p source)
           (condition-case err
-              (load source nil 'nomessage)
+              (progn
+                (load source nil 'nomessage)
+                (unless (featurep feature)
+                  (error "Module %s did not provide feature %S" source feature)))
             (error
-             (condition-case nil
+             (condition-case require-err
                  (require feature)
                (error
-                (error "Failed to load %s: %S (require also failed)" source err)))))
-        (require feature))
-      (unless (featurep feature)
-        (error "Module %s did not provide feature %S" source feature)))))
+                (error "Failed to load %s: %S (require also failed: %S)"
+                       source err require-err)))))
+        (require feature)
+        (unless (featurep feature)
+          (error "Module %s did not provide feature %S" source feature))))))
 
 (dolist (feature '(gptel-tools-agent-base
                    gptel-tools-agent-git
