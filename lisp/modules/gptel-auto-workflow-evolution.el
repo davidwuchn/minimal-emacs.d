@@ -1675,6 +1675,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (gptel-auto-workflow--evolution-record-score)
   (gptel-auto-workflow--evolution-optimize-backend-order)
   (gptel-auto-workflow--evolution-vsm-health-check)
+  (gptel-auto-workflow--audit-signal)
   (message "[auto-workflow] Self-evolution cycle complete.")))
 
 ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
