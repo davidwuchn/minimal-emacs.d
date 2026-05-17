@@ -5,7 +5,7 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT="${1:-$DIR/var/tmp/prefetched-research.md}"
-MAX_REPOS="${MAX_RESEARCH_FETCH:-6}"
+MAX_REPOS="${MAX_RESEARCH_FETCH:-17}"
 
 mkdir -p "$(dirname "$OUTPUT")"
 
@@ -16,6 +16,17 @@ REPOS=(
   "davidwuchn/efrit"
   "davidwuchn/gastown"
   "davidwuchn/genesis-agent"
+  "davidwuchn/gbrain"
+  "davidwuchn/symphony"
+  "davidwuchn/nullclaw"
+  "davidwuchn/zeroclaw"
+  "davidwuchn/GitNexus"
+  "davidwuchn/LLMLingua"
+  "davidwuchn/ATLAS"
+  "davidwuchn/Ori-Mnemos"
+  "davidwuchn/psi"
+  "davidwuchn/mycelium"
+  "davidwuchn/Aether"
 )
 
 {
