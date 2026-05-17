@@ -24,10 +24,9 @@
 
 ;; Auto-workflow daemons can hit deep recursion in gptel process
 ;; sentinel chains (gptel-abort → callback → FSM transition → handler
-;; → process → sentinel → ...). Increase from default 1600 to prevent
-;; "Lisp nesting exceeds max-lisp-eval-depth" crashes.
-;; post-early-init.el sets this to 40000; keep consistent.
-(setq max-lisp-eval-depth 40000)
+;; → process → sentinel → ...). Root cause fixed: gptel-abort defers
+;; callback via run-at-time to break synchronous recursion.
+(setq max-lisp-eval-depth 20000)
 
 ;;; Internal variables
 
