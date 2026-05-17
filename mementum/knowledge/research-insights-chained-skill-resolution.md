@@ -14,7 +14,7 @@ insight-quality: 1.7/10
 
 ## Successful Targets
 
-- `lisp/modules/gptel-agent-loop.el`
+- `lisp/modules/gptel-agent-loop.el` (1 kept / 1 discarded)
 
 ## Meta-Learning Recommendations
 

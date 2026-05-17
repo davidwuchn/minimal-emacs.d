@@ -263,7 +263,9 @@ log "=== Step 1: Research ==="
 # We just need to wait for it to complete.
 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
     "$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
-if ! wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher"; then
+# Researcher daemon startup can take 90-120s (emacs init + package loading).
+# Use min_start_wait=120 to give it enough time before giving up.
+if ! wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher" 120; then
     AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher "$SCRIPT" stop >> "$PIPELINE_LOG" 2>&1 || true
     write_research_fallback "research daemon ended before producing findings"
 fi
@@ -273,7 +275,8 @@ if [ -f "$FINDINGS_FILE" ]; then
     log "Research findings: ${findings_size} bytes"
     
     # If findings are local fallback AND we have pre-fetched content, use that instead
-    if grep -q "Local Codebase Analysis (fallback" "$FINDINGS_FILE" 2>/dev/null && \
+    if (grep -q "Local Codebase Analysis (fallback" "$FINDINGS_FILE" 2>/dev/null || \
+        grep -q "Source type: local-fallback" "$FINDINGS_FILE" 2>/dev/null) && \
        [ -f "$PREFETCH_FILE" ] && [ "$(wc -c < "$PREFETCH_FILE")" -gt 200 ]; then
         log "  ⚠ Replacing local fallback with pre-fetched external content"
         cat > "$FINDINGS_FILE" <<HEADER

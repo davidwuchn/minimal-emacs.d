@@ -14,13 +14,13 @@ insight-quality: 5.0/10
 
 ## Successful Targets
 
-- `lisp/modules/gptel-auto-workflow-projects.el`
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 1 discarded / 1 failed)
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-projects.el`
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 1 discarded / 1 failed)
 
 ## Meta-Learning Recommendations
 

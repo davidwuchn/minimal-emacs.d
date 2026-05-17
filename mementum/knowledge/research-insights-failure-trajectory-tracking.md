@@ -14,14 +14,14 @@ insight-quality: 1.8/10
 
 ## Successful Targets
 
-- `lisp/modules/gptel-ext-context-cache.el`
-- `lisp/modules/gptel-tools-agent-git.el`
+- `lisp/modules/gptel-ext-context-cache.el` (1 kept / 4 discarded)
+- `lisp/modules/gptel-tools-agent-git.el` (1 kept / 2 discarded / 1 failed)
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-tools-agent-git.el`
+- `lisp/modules/gptel-tools-agent-git.el` (1 kept / 2 discarded / 1 failed)
 
 ## Meta-Learning Recommendations
 

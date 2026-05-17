@@ -826,6 +826,9 @@ request buffer for an active workflow task."
 
 
 
+(defvar my/gptel--abort-depth 0
+  "Guard against recursive gptel-abort in sentinel chains.")
+
 (defun my/gptel--cleanup-agent-request-buffer (state)
   "Abort STATE's live request buffer.
 Do not kill routed worktree buffers here: gptel process sentinels may still
@@ -834,7 +837,11 @@ helpers handle explicit stale-buffer discards during recreate/delete flows."
   (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
               ((buffer-live-p request-buf))
               ((fboundp 'gptel-abort)))
-    (ignore-errors (gptel-abort request-buf))))
+    (if (> my/gptel--abort-depth 3)
+        (message "[nucleus] Skipping gptel-abort at depth %d (recursion guard)"
+                 my/gptel--abort-depth)
+      (let ((my/gptel--abort-depth (1+ my/gptel--abort-depth)))
+        (ignore-errors (gptel-abort request-buf))))))
 
 (defun my/gptel--agent-task-buffer-tick (buffer)
   "Return BUFFER's current modification tick when BUFFER is live."
