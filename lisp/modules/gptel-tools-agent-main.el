@@ -27,8 +27,12 @@
 (defvar gptel-benchmark-eight-keys-definitions)
 (defvar gptel-auto-workflow-run-async)
 
-(defcustom gptel-auto-workflow--process-timeout-secs 300
-  "Timeout in seconds for blocking subprocess calls during verification."
+(defcustom gptel-auto-workflow--process-timeout-secs 1800
+  "Timeout in seconds for blocking subprocess calls during verification.
+
+300s was too short for the 89-file test suite (~30 min full run).
+1800s (30 min) prevents indefinite hangs while allowing legitimate
+test runs to complete. Exit code 124 if timeout expires."
   :type 'integer
   :group 'gptel-auto-workflow)
 
