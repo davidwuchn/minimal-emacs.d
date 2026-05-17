@@ -43,7 +43,7 @@
              (condition-case nil
                  (require feature)
                (error
-                (error "Failed to load %s: %S (require also failed)" source load-error)))))
+                (error "Failed to load %s: %s (require also failed)" source (error-message-string load-error))))))
         (require feature))
       (unless (featurep feature)
         (error "Module %s did not provide feature %S" (or source feature) feature)))))
