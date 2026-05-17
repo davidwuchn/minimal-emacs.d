@@ -37,6 +37,7 @@
           (condition-case err
               (load source nil 'nomessage)
             (error
+<<<<<<< origin/staging
              (condition-case nil
                  (require feature)
                (error
@@ -48,6 +49,12 @@
 =======
                 (error "Failed to load %s: %S (require also failed)" source err)))))
 >>>>>>> 24f3ea54 (Merge optimize/agent-neopi5-r111511z2df4-exp3 for verification)
+>>>>>>> origin/main
+=======
+              (condition-case nil
+                  (require feature)
+                (error
+                 (error "Failed to load %s: %S (require also failed)" source err))))))
 >>>>>>> origin/main
         (require feature))
       (unless (featurep feature)
