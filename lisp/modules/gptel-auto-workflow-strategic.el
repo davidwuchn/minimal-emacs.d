@@ -1312,6 +1312,13 @@ EDGE CASE: nil returns nil, non-list atoms return nil."
          (or (symbolp (caar value))
              (stringp (caar value))))))
 
+(defun gptel-auto-workflow--invoke-static-fallback (reason static-targets callback)
+  "Invoke CALLBACK with STATIC-TARGETS and log REASON.
+Returns t to indicate fallback was used."
+  (message "[auto-workflow] %s; using static targets" reason)
+  (funcall callback static-targets)
+  t)
+
 (defun gptel-auto-workflow--handle-analyzer-error-state (targets static-targets callback)
   "Handle analyzer error states and invoke CALLBACK with appropriate targets.
 TARGETS is the analyzer result, STATIC-TARGETS is fallback list.
@@ -1321,18 +1328,12 @@ Returns non-nil if error state was handled."
   (cond
    ((and gptel-auto-workflow--analyzer-quota-exhausted
          (not targets))
-    (message "[auto-workflow] Analyzer quota exhausted; using static targets")
-    (funcall callback static-targets)
-    t)
+    (gptel-auto-workflow--invoke-static-fallback "Analyzer quota exhausted" static-targets callback))
    ((and gptel-auto-workflow--analyzer-transient-failure
          (not targets))
-    (message "[auto-workflow] Analyzer transient failure; using static targets")
-    (funcall callback static-targets)
-    t)
+    (gptel-auto-workflow--invoke-static-fallback "Analyzer transient failure" static-targets callback))
    ((not targets)
-    (message "[auto-workflow] Analyzer returned no targets; using static targets")
-    (funcall callback static-targets)
-    t)
+    (gptel-auto-workflow--invoke-static-fallback "Analyzer returned no targets" static-targets callback))
    (t nil)))
 
 (defun gptel-auto-workflow--normalize-target-candidate (candidate)
