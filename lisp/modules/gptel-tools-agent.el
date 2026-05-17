@@ -18,21 +18,29 @@
 (defvar gptel-tools-agent--module-dir nil
   "Directory containing gptel-tools-agent modules.")
 
+(defun gptel-tools-agent--ensure-module-dir ()
+  "Ensure `gptel-tools-agent--module-dir' is set and return it.
+Signals an error if the directory cannot be determined or does not exist."
+  (unless gptel-tools-agent--module-dir
+    (let ((file (or (bound-and-true-p load-file-name)
+                    buffer-file-name)))
+      (unless file
+        (error "Cannot determine module directory"))
+      (let ((dir (file-name-directory file)))
+        (unless (and dir (file-directory-p dir))
+          (error "Module directory does not exist: %s" dir))
+        (setq gptel-tools-agent--module-dir dir))))
+  gptel-tools-agent--module-dir)
+
 (defun gptel-tools-agent--load-module (feature)
   "Load split module FEATURE from this directory, falling back to `require'."
   (unless (and feature (symbolp feature))
     (error "Feature must be a non-nil symbol: %S" feature))
   (when (string-match-p "[/\\]" (symbol-name feature))
     (error "Feature name contains invalid characters: %S" feature))
-  (unless gptel-tools-agent--module-dir
-    (let ((file (or (bound-and-true-p load-file-name)
-                    buffer-file-name)))
-      (unless file
-        (error "Cannot determine module directory"))
-      (setq gptel-tools-agent--module-dir (file-name-directory file))))
   (unless (featurep feature)
     (let ((source (expand-file-name (format "%s.el" feature)
-                                    gptel-tools-agent--module-dir)))
+                                    (gptel-tools-agent--ensure-module-dir))))
       (if (file-readable-p source)
           (condition-case err
               (progn
