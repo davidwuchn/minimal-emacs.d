@@ -982,12 +982,23 @@ Returns t if page created."
                                (cl-remove-if-not
                                 (lambda (r) (equal (plist-get r :decision) decision))
                                 results))))))
-          (let ((kept-targets (targets-for-decision "kept")))
-            (when kept-targets
-              (insert "## Successful Targets\n\n")
-              (dolist (targ (seq-take kept-targets 10))
-                (insert (format-target-with-counts targ)))
-              (insert "\n")))
+            (let ((kept-targets (targets-for-decision "kept")))
+              (when kept-targets
+                (insert "## Successful Targets\n\n")
+                (dolist (targ (seq-take kept-targets 10))
+                  (insert (format-target-with-counts targ)))
+                (insert "\n")
+                ;; Structure summary for primary target (graphify pattern)
+                (let ((primary (car kept-targets)))
+                  (when (and primary (stringp primary))
+                    (let ((full-path (expand-file-name primary (gptel-auto-workflow--worktree-base-root))))
+                      (when (file-exists-p full-path)
+                        (condition-case nil
+                            (let ((structure (gptel-auto-workflow--extract-elisp-structure full-path)))
+                              (insert "### Structure (deterministic scan)\n\n")
+                              (insert (gptel-auto-workflow--summarize-elisp-structure structure))
+                              (insert "\n\n"))
+                          (error nil))))))))
           ;; Extract failed targets with patterns
           (let ((failed-targets (targets-for-decision "validation-failed")))
             (when failed-targets
