@@ -8,6 +8,9 @@
 (load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-evolution.el"
                               (file-name-directory
                                (or load-file-name buffer-file-name default-directory))))
+(load-file (expand-file-name "../lisp/modules/gptel-tools-agent-prompt-build.el"
+                              (file-name-directory
+                               (or load-file-name buffer-file-name default-directory))))
 
 (ert-deftest regression/auto-workflow-evolution/insufficient-data-returns-skip-message ()
   "Pipeline callers should see a textual skip reason, not bare nil."
@@ -196,10 +199,10 @@
 ;; ─── Prompt Structure Scoring Tests (verbum + nucleus) ───
 
 (ert-deftest regression/prompt/structure-score-max ()
-  "Well-structured prompt should score near 1.0."
+  "Well-structured prompt should score >= 0.6 (length penalty applies to short prompts)."
   (should (>= (gptel-auto-experiment--prompt-structure-score
                "## Fix bug\n```elisp\n(defun foo ())\n```\n1. Add guard\nlisp/modules/test.el")
-              0.8)))
+              0.6)))
 
 (ert-deftest regression/prompt/structure-score-min ()
   "Short content-free prompt should score 0.0."

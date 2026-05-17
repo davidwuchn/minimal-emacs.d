@@ -1336,11 +1336,16 @@ EDGE CASE: nil returns nil, non-list atoms return nil."
 (defun gptel-auto-workflow--semantic-similar-files (&optional proj-root)
   "Find files semantically similar to recent kept experiment targets.
 Uses git-embed if installed: discovers files with similar embeddings.
-Returns formatted string of similar files or empty string."
+Returns formatted string of similar files or empty string.
+Fails gracefully if git-embed is slow or index unavailable (10s timeout)."
   (let ((cmd "git embed search")
         (query nil))
     (when (and (executable-find "git-embed")
-               (fboundp 'gptel-auto-workflow--parse-all-results))
+               (fboundp 'gptel-auto-workflow--parse-all-results)
+               ;; Quick canary: check if index exists at all before searching
+               (= 0 (call-process "timeout" nil nil nil "5" "git" "-C"
+                                  (or proj-root default-directory)
+                                  "embed" "status")))
       (let ((results (gptel-auto-workflow--parse-all-results))
             (kept-targets nil))
         (dolist (r results)
@@ -1348,12 +1353,12 @@ Returns formatted string of similar files or empty string."
             (push (plist-get r :target) kept-targets)))
         (when kept-targets
           (setq query (car kept-targets))
-          (let ((root (or proj-root (gptel-auto-workflow--effective-project-root)))
-                (output (shell-command-to-string
-                         (format "cd %s && git embed similar %s 2>/dev/null | head -10"
-                                 (shell-quote-argument root)
-                                 (shell-quote-argument query)))))
-            (if (and output (not (string-empty-p output))
+          (let* ((root (or proj-root (gptel-auto-workflow--effective-project-root)))
+                 (output (shell-command-to-string
+                          (format "cd %s && timeout 10 git embed similar %s 2>/dev/null | head -10"
+                                  (shell-quote-argument root)
+                                  (shell-quote-argument query)))))
+            (if (and (stringp output) (not (string-empty-p output))
                      (> (length output) 20))
                 (format "Semantically similar to %s (via git-embed):\n%s" query output)
               "")))))))
