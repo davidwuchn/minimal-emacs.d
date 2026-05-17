@@ -1672,7 +1672,68 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (message "[auto-workflow] Running skill governance cycle...")
     (gptel-auto-workflow--skill-governance-run-cycle))
   (gptel-auto-workflow--evolution-record-score)
+  (gptel-auto-workflow--evolution-optimize-backend-order)
   (message "[auto-workflow] Self-evolution cycle complete.")))
+
+;; ─── Backend Performance Optimization ───
+
+(defun gptel-auto-workflow--evolution-backend-stats ()
+  "Analyze backend performance from all experiment results.
+Returns alist of (backend-name . keep-rate) sorted by performance descending.
+Like promptfoo's model comparison: data-driven backend selection."
+  (let ((by-backend (make-hash-table :test 'equal))
+        (stats nil))
+    (dolist (result (gptel-auto-workflow--parse-all-results))
+      (let ((backend (or (plist-get result :backend) "unknown"))
+            (kept (equal (plist-get result :decision) "kept")))
+        (let ((entry (or (gethash backend by-backend) (cons 0 0))))
+          (setcar entry (1+ (car entry)))
+          (when kept (setcdr entry (1+ (cdr entry))))
+          (puthash backend entry by-backend))))
+    (maphash (lambda (backend counts)
+               (when (> (car counts) 5)
+                 (push (cons backend (/ (float (cdr counts)) (car counts))) stats)))
+             by-backend)
+    (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
+
+(defun gptel-auto-workflow--evolution-optimize-backend-order ()
+  "Auto-reorder the fallback chain based on backend performance data.
+Moves better-performing backends to the front of the fallback chain."
+  (let* ((stats (gptel-auto-workflow--evolution-backend-stats))
+         (ordered (mapcar #'car stats)))
+    (when (and ordered (> (length ordered) 2))
+      (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+        (let ((new-chain
+               (seq-filter (lambda (entry)
+                             (member (car entry) ordered))
+                           (mapcar (lambda (name)
+                                     (cons name
+                                           (cdr (assoc name
+                                                       gptel-auto-workflow-executor-rate-limit-fallbacks
+                                                       #'string=))))
+                                   ordered))))
+          (when (> (length new-chain) 2)
+            ;; Keep backends not in stats at the end
+            (dolist (entry gptel-auto-workflow-executor-rate-limit-fallbacks)
+              (unless (assoc (car entry) new-chain #'string=)
+                (setq new-chain (append new-chain (list entry)))))
+            (when (not (equal new-chain gptel-auto-workflow-executor-rate-limit-fallbacks))
+              (message "[evolution] Reordering fallback chain by performance: %s → %s"
+                       (mapconcat #'car gptel-auto-workflow-executor-rate-limit-fallbacks "→")
+                       (mapconcat #'car new-chain "→"))
+              (setq gptel-auto-workflow-executor-rate-limit-fallbacks new-chain)
+              (gptel-auto-workflow--evolution-persist-backend-order
+               gptel-auto-workflow-executor-rate-limit-fallbacks))))))))
+
+(defun gptel-auto-workflow--evolution-persist-backend-order (chain)
+  "Persist the current backend fallback CHAIN to disk."
+  (let ((file (expand-file-name "var/tmp/backend-fallback-order.el"
+                                (gptel-auto-workflow--worktree-base-root))))
+    (with-temp-file file
+      (insert ";; Auto-evolved backend fallback order\n")
+      (insert (format ";; Generated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
+      (insert (format "(setq gptel-auto-workflow-executor-rate-limit-fallbacks\n      '%S)\n"
+                      chain)))))
 
 ;; ─── Evolution Quality Gates ───
 

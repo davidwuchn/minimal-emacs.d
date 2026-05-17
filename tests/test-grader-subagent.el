@@ -496,9 +496,9 @@ Result: Tests pass."))
 ;;; Test 41: Experiment Timeout Handling
 
 (ert-deftest grader/experiment-timeout-default ()
-  "Default experiment time budget should be 800s."
+  "Default experiment time budget should be 1200s (increased for slow providers)."
   (require 'gptel-tools-agent)
-  (should (= gptel-auto-experiment-time-budget 800)))
+  (should (= gptel-auto-experiment-time-budget 1200)))
 
 (ert-deftest grader/grade-timeout-default ()
   "Default grade timeout should be 180s."
