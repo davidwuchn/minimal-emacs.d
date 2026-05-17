@@ -53,6 +53,7 @@ lisp/modules/*.elc
 !mementum/state.md
 !mementum/knowledge/
 !mementum/knowledge/*.md
+mementum/knowledge/*REJECTED*
 !mementum/memories/
 !mementum/memories/*.md
 !benchmarks/

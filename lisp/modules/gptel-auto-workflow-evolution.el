@@ -634,7 +634,8 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
             (with-temp-file knowledge-file
               (insert "---\n")
               (insert (format "title: Experiment Insights - %s\n" target-key))
-              (insert "status: active\n")
+        (insert "status: active\n")
+        (insert "confidence: EXTRACTED\n")
               (insert "category: knowledge\n")
               (insert (format "tags: [auto-workflow, experiments, %s]\n"
                               (replace-regexp-in-string "[ /]" "-" target-key)))
@@ -724,18 +725,27 @@ Returns hash table mapping strategy name to list of results."
 (defun gptel-auto-workflow--sanitize-strategy-name-for-filename (name)
   "Sanitize strategy NAME for use as a filename component.
 Replaces characters unsafe in filenames (brackets, quotes, spaces, colons,
-semicolons, pipes) with hyphens, collapses multiple hyphens, and strips
-leading/trailing hyphens.
+semicolons, pipes) with hyphens, collapses multiple hyphens, strips
+leading/trailing hyphens, and caps at 200 chars.
 Returns \"none\" when NAME is nil, empty, or contains diagnostic/rejected text."
   (let ((s (replace-regexp-in-string "[][{}()'\" \t:;|<>/*?\\%!#&]" "-" (or name "none"))))
     (setq s (replace-regexp-in-string "-+" "-" s))
     (setq s (replace-regexp-in-string "^-\\|-$" "" s))
+    (setq s (substring s 0 (min (length s) 200)))
     (if (or (string-empty-p s)
             (string-match-p "\\bREJECTED\\b" s)
             (string-match-p "\\bproposed-name\\b" (downcase s))
             (string-match-p "\\bdiagnostic\\b" (downcase s)))
         "none"
       s)))
+
+(defun gptel-auto-workflow--sanitize-knowledge-label (label)
+  "Sanitize LABEL for use in YAML front matter and knowledge page titles.
+Strips control characters, caps at 256 chars, trims whitespace.
+Like graphify's sanitize_label(): validates before writing."
+  (let ((s (replace-regexp-in-string "[\x00-\x1f\x7f]" "" (or label ""))))
+    (setq s (string-trim s))
+    (substring s 0 (min (length s) 256))))
 
 (defun gptel-auto-workflow--valid-research-strategy-name-p (name)
   "Return non-nil when NAME is safe to synthesize as a research strategy.
@@ -751,9 +761,154 @@ knowledge pages or YAML tags."
               (not (string-match-p "\\bREJECTED\\b" trimmed))
               (string-match-p "\\`[[:alnum:]][[:alnum:]_-]*\\'" trimmed)))))
 
+(defun gptel-auto-workflow--valid-knowledge-input-p (results)
+  "Validate RESULTS have required structure before synthesis.
+Like graphify's validate.py: reject malformed input before processing.
+Each result must have :target (non-empty string) and :decision (string)."
+  (and (proper-list-p results)
+       (> (length results) 2)
+       (cl-every (lambda (r)
+                   (and (proper-list-p r)
+                        (let ((target (plist-get r :target))
+                              (decision (plist-get r :decision)))
+                          (and (stringp target)
+                               (not (string-empty-p target))
+                               (stringp decision)
+                               (not (string-empty-p decision))))))
+                 results)))
+
+(defun gptel-auto-workflow--results-cache-key (results)
+  "Return a SHA1 hash of RESULTS for cache comparison.
+Like graphify's file_hash(): deterministic content-based key for incremental processing."
+  (secure-hash 'sha1 (format "%S" (sort (copy-sequence results)
+                                        (lambda (a b)
+                                          (string< (or (plist-get a :target) "")
+                                                   (or (plist-get b :target) "")))))))
+
+(defun gptel-auto-workflow--results-cache-fresh-p (_strategy results knowledge-dir safe-strategy)
+  "Return non-nil if cached knowledge page for STRATEGY matches current RESULTS.
+Compares stored hash against current data hash to skip unchanged synthesis."
+  (let* ((cache-file (expand-file-name (format ".%s.hash" safe-strategy) knowledge-dir))
+         (current-hash (gptel-auto-workflow--results-cache-key results)))
+    (and (file-exists-p cache-file)
+         (let ((stored-hash (with-temp-buffer
+                              (insert-file-contents cache-file)
+                              (string-trim (buffer-string)))))
+           (string= current-hash stored-hash)))))
+
+(defun gptel-auto-workflow--results-cache-save (results knowledge-dir safe-strategy)
+  "Save hash of RESULTS to cache file for future comparison."
+  (let ((cache-file (expand-file-name (format ".%s.hash" safe-strategy) knowledge-dir)))
+    (with-temp-file cache-file
+      (insert (gptel-auto-workflow--results-cache-key results)))))
+
+;; ─── Deterministic Elisp Extraction (graphify LanguageConfig pattern) ───
+
+(defconst gptel-auto-workflow--elisp-extraction-config
+  '(:defun-pattern "^(defun[ \t]+\\([^ \t\n(]+\\)"
+    :defvar-pattern "^(defvar[ \t]+\\([^ \t\n(]+\\)"
+    :defcustom-pattern "^(defcustom[ \t]+\\([^ \t\n(]+\\)"
+    :require-pattern "^(require[ \t]+'\\([^ \t\n)]+\\)"
+    :provide-pattern "^(provide[ \t]+'\\([^ \t\n)]+\\)"
+    :declare-pattern "^(declare-function[ \t]+\\([^ \t\n(]+\\)"
+    :error-pattern "\\(error\\|signal\\|user-error\\)[ \t]+\\([^ \t\n)]+\\)"
+    :condition-pattern "(condition-case[ \t]+\\([^ \t\n(]+\\)"
+    :advice-pattern "(advice-add[ \t]+'\\([^ \t\n)]+\\)")
+  "Elisp extraction schema. Like graphify's LanguageConfig dataclass:
+maps extraction targets to regex patterns for deterministic scanning.
+Each pattern captures the name of the first relevant symbol.")
+
+(defun gptel-auto-workflow--extract-elisp-structure (file-path)
+  "Deterministic pre-pass: extract structural info from FILE-PATH.
+Returns plist with :defuns :defvars :requires :provides :declares
+:errors :handlers :advised — all lists of symbol-name strings.
+This is the graphify two-pass pattern: structure without LLM cost."
+  (let ((defuns nil) (defvars nil) (requires nil) (provides nil)
+        (declares nil) (errors nil) (handlers nil) (advised nil))
+    (with-temp-buffer
+      (insert-file-contents file-path)
+      (goto-char (point-min))
+      (while (not (eobp))
+        (forward-line 1)
+        (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
+          (dolist (pattern '(:defun-pattern :defvar-pattern :defcustom-pattern
+                             :require-pattern :provide-pattern :declare-pattern
+                             :error-pattern :condition-pattern :advice-pattern))
+            (when (string-match (plist-get gptel-auto-workflow--elisp-extraction-config pattern) line)
+              (let ((name (match-string 1 line)))
+                (when (and name (not (string-empty-p name)))
+                  (cl-case pattern
+                    (:defun-pattern (push name defuns))
+                    (:defvar-pattern (push name defvars))
+                    (:defcustom-pattern (push name defvars))
+                    (:require-pattern (push name requires))
+                    (:provide-pattern (push name provides))
+                    (:declare-pattern (push name declares))
+                    (:error-pattern (push name errors))
+                    (:condition-pattern (push name handlers))
+                    (:advice-pattern (push name advised))))))))))
+    (list :defuns (nreverse defuns)
+          :defvars (nreverse defvars)
+          :requires (nreverse requires)
+          :provides (nreverse provides)
+          :declares (nreverse declares)
+          :errors (nreverse errors)
+          :handlers (nreverse handlers)
+          :advised (nreverse advised))))
+
+(defun gptel-auto-workflow--summarize-elisp-structure (structure)
+  "Format STRUCTURE plist into a compact summary string for prompt injection.
+Reduces full file content to a one-paragraph structure overview (no LLM cost)."
+  (let ((parts nil))
+    (dolist (key '(:defuns :defvars :requires :provides :declares
+                   :errors :handlers :advised))
+      (let ((items (plist-get structure key)))
+        (when items
+          (push (format "%s: %s"
+                        (substring (symbol-name key) 1)
+                        (mapconcat #'identity (seq-take items 20) ", "))
+                parts))))
+    (concat "```elisp-structure\n" (string-join (nreverse parts) "\n") "\n```")))
+
+(defun gptel-auto-workflow--module-cohesion (file-path)
+  "Score how cohesive an Elisp module is (0.0-1.0).
+Like graphify's cohesion_score(): ratio of internal references to total.
+High cohesion: most defun calls target other defuns in the same file.
+Low cohesion: module is a grab-bag of unrelated functions — candidate for refactoring."
+  (let* ((structure (gptel-auto-workflow--extract-elisp-structure file-path))
+         (defuns (plist-get structure :defuns))
+         (requires (plist-get structure :requires))
+         (declares (plist-get structure :declares))
+         (internal-refs 0)
+         (external-refs 0))
+    (dolist (dep (append requires declares))
+      (if (member dep defuns)
+          (setq internal-refs (1+ internal-refs))
+        (setq external-refs (1+ external-refs))))
+    (let ((total (+ internal-refs external-refs)))
+      (if (> total 0)
+          (/ (float internal-refs) total)
+        1.0))))
+
+(defun gptel-auto-workflow--find-surprising-modules (module-dir)
+  "Find modules with unexpected dependency patterns.
+Like graphify's surprising_connections(): modules that bridge
+disconnected areas or have low cohesion.
+Returns list of (file-path . cohesion-score) sorted by score ascending."
+  (let ((results nil))
+    (dolist (file (directory-files module-dir t "\\.el$"))
+      (let ((score (gptel-auto-workflow--module-cohesion file)))
+        (when (< score 0.5)
+          (push (cons file score) results))))
+    (sort results (lambda (a b) (< (cdr a) (cdr b))))))
+
+;; ─── Knowledge Synthesis ───
+
 (defun gptel-auto-workflow--synthesize-research-knowledge (strategy results)
   "Synthesize knowledge page for research STRATEGY from RESULTS.
 Returns t if page created."
+  (unless (gptel-auto-workflow--valid-knowledge-input-p results)
+    (cl-return-from gptel-auto-workflow--synthesize-research-knowledge nil))
   (let* ((strategy-name (and (stringp strategy) (string-trim strategy)))
          (total (length results))
          (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
@@ -781,14 +936,17 @@ Returns t if page created."
              ((equal decision "validation-failed")
               (setq counts (plist-put counts :failed (1+ (plist-get counts :failed))))))
             (puthash target counts target-outcomes)))))
-    (when (and (gptel-auto-workflow--valid-research-strategy-name-p strategy-name)
+     (when (and (gptel-auto-workflow--valid-research-strategy-name-p strategy-name)
                 (not (string= safe-strategy "none"))
                 (> total 2)
                 (> kept 0))
+      (when (gptel-auto-workflow--results-cache-fresh-p strategy results knowledge-dir safe-strategy)
+        (message "[evolution] Results unchanged for %s, skipping synthesis" strategy-name)
+        (cl-return-from gptel-auto-workflow--synthesize-research-knowledge t))
       (make-directory knowledge-dir t)
       (with-temp-file knowledge-file
         (insert "---\n")
-        (insert (format "title: Research Insights - %s\n" strategy-name))
+        (insert (format "title: Research Insights - %s\n" (gptel-auto-workflow--sanitize-knowledge-label strategy-name)))
         (insert "status: active\n")
         (insert "category: knowledge\n")
         (insert (format "tags: [research, auto-workflow, %s]\n" strategy-name))
@@ -799,7 +957,7 @@ Returns t if page created."
                         total
                         (* 100 keep-rate)
                         (if (> total 0) "" " No data yet.")))
-        (insert (format "**Performance:** %d kept / %d discarded / %d failed\n\n"
+        (insert (format "**Performance:** %d kept / %d discarded / %d failed (EXTRACTED — from TSV)\n\n"
                         kept discarded failed))
         ;; Extract successful targets
         (cl-labels ((format-target-with-counts
@@ -824,12 +982,23 @@ Returns t if page created."
                                (cl-remove-if-not
                                 (lambda (r) (equal (plist-get r :decision) decision))
                                 results))))))
-          (let ((kept-targets (targets-for-decision "kept")))
-            (when kept-targets
-              (insert "## Successful Targets\n\n")
-              (dolist (targ (seq-take kept-targets 10))
-                (insert (format-target-with-counts targ)))
-              (insert "\n")))
+            (let ((kept-targets (targets-for-decision "kept")))
+              (when kept-targets
+                (insert "## Successful Targets\n\n")
+                (dolist (targ (seq-take kept-targets 10))
+                  (insert (format-target-with-counts targ)))
+                (insert "\n")
+                ;; Structure summary for primary target (graphify pattern)
+                (let ((primary (car kept-targets)))
+                  (when (and primary (stringp primary))
+                    (let ((full-path (expand-file-name primary (gptel-auto-workflow--worktree-base-root))))
+                      (when (file-exists-p full-path)
+                        (condition-case nil
+                            (let ((structure (gptel-auto-workflow--extract-elisp-structure full-path)))
+                              (insert "### Structure (deterministic scan)\n\n")
+                              (insert (gptel-auto-workflow--summarize-elisp-structure structure))
+                              (insert "\n\n"))
+                          (error nil))))))))
           ;; Extract failed targets with patterns
           (let ((failed-targets (targets-for-decision "validation-failed")))
             (when failed-targets
@@ -839,7 +1008,7 @@ Returns t if page created."
                 (insert (format-target-with-counts targ)))
               (insert "\n"))))
         ;; Meta-learning recommendations
-        (insert "## Meta-Learning Recommendations\n\n")
+        (insert "## Meta-Learning Recommendations (INFERRED — from pattern analysis)\n\n")
         (cond
          ((>= keep-rate 0.5)
           (insert "- **This strategy is effective.** Continue using it.\n")
@@ -855,6 +1024,7 @@ Returns t if page created."
           (insert "- **Insufficient data.** Run more experiments with this strategy.\n"))))
       (message "[evolution] Synthesized research knowledge for %s → %s"
                strategy-name knowledge-file)
+      (gptel-auto-workflow--results-cache-save results knowledge-dir safe-strategy)
       t)))
 
 (defun gptel-auto-workflow--evolution-research-synthesize ()

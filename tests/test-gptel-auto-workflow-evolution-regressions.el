@@ -116,6 +116,83 @@
           (should-not (file-directory-p (expand-file-name "mementum/knowledge" root))))
       (delete-directory root t))))
 
+;; ─── Graphify Pattern Tests ───
+
+(ert-deftest regression/auto-workflow-evolution/extract-elisp-structure-returns-plist ()
+  "Extraction should return a plist with expected keys."
+  (let ((result (gptel-auto-workflow--extract-elisp-structure
+                 (expand-file-name "lisp/modules/gptel-auto-workflow-evolution.el"
+                                   default-directory))))
+    (should (plist-get result :defuns))
+    (should (plist-get result :defvars))
+    (should (plist-get result :requires))
+    (should (> (length (plist-get result :defuns)) 5))))
+
+(ert-deftest regression/auto-workflow-evolution/summarize-structure-outputs-markdown ()
+  "Structure summary should produce a markdown code block."
+  (let* ((structure (gptel-auto-workflow--extract-elisp-structure
+                     (expand-file-name "lisp/modules/gptel-auto-workflow-evolution.el"
+                                       default-directory)))
+         (summary (gptel-auto-workflow--summarize-elisp-structure structure)))
+    (should (string-match-p "```elisp-structure" summary))
+    (should (string-match-p "defuns:" summary))
+    (should (string-match-p "requires:" summary))))
+
+(ert-deftest regression/auto-workflow-evolution/sanitize-rejects-REJECTED ()
+  "Sanitize should return 'none' for REJECTED diagnostic slugs."
+  (should (string= "none" (gptel-auto-workflow--sanitize-strategy-name-for-filename
+                           "[strategy-evolution] REJECTED candidate: Proposed name pattern-triggered-skills is generic"))))
+
+(ert-deftest regression/auto-workflow-evolution/sanitize-preserves-valid-name ()
+  "Sanitize should preserve valid kebab-case names."
+  (should (string= "template-default" (gptel-auto-workflow--sanitize-strategy-name-for-filename "template-default"))))
+
+(ert-deftest regression/auto-workflow-evolution/sanitize-label-strips-control-chars ()
+  "sanitize-knowledge-label should strip control characters."
+  (should (string= "hello" (gptel-auto-workflow--sanitize-knowledge-label "hel\x01lo"))))
+
+(ert-deftest regression/auto-workflow-evolution/sanitize-label-caps-length ()
+  "sanitize-knowledge-label should cap at 256 chars."
+  (let ((long (make-string 300 ?x)))
+    (should (<= (length (gptel-auto-workflow--sanitize-knowledge-label long)) 256))))
+
+(ert-deftest regression/auto-workflow-evolution/valid-input-rejects-nil-results ()
+  "valid-knowledge-input-p should reject nil results."
+  (should-not (gptel-auto-workflow--valid-knowledge-input-p nil)))
+
+(ert-deftest regression/auto-workflow-evolution/valid-input-accepts-valid-results ()
+  "valid-knowledge-input-p should accept properly structured results."
+  (should (gptel-auto-workflow--valid-knowledge-input-p
+           (list (list :target "a.el" :decision "kept")
+                 (list :target "b.el" :decision "discarded")
+                 (list :target "c.el" :decision "validation-failed")))))
+
+(ert-deftest regression/auto-workflow-evolution/valid-input-rejects-missing-fields ()
+  "valid-knowledge-input-p should reject results without required fields."
+  (should-not (gptel-auto-workflow--valid-knowledge-input-p
+               (list (list :target "a.el")  ; missing :decision
+                     (list :target "b.el" :decision "kept")
+                     (list :target "c.el" :decision "discarded")))))
+
+(ert-deftest regression/auto-workflow-evolution/cache-key-deterministic ()
+  "Same results should produce same cache hash."
+  (let ((results (list (list :target "a.el" :decision "kept"))))
+    (should (string= (gptel-auto-workflow--results-cache-key results)
+                     (gptel-auto-workflow--results-cache-key results)))))
+
+(ert-deftest regression/auto-workflow-evolution/cache-key-different-for-different-data ()
+  "Different results should produce different cache hashes."
+  (let ((r1 (list (list :target "a.el" :decision "kept")))
+        (r2 (list (list :target "b.el" :decision "kept"))))
+    (should-not (string= (gptel-auto-workflow--results-cache-key r1)
+                         (gptel-auto-workflow--results-cache-key r2)))))
+
+(ert-deftest regression/auto-workflow-evolution/elisp-extraction-config-has-required-keys ()
+  "Extraction config should have all required pattern keys."
+  (dolist (key '(:defun-pattern :defvar-pattern :require-pattern :provide-pattern
+                 :declare-pattern :error-pattern :condition-pattern :advice-pattern))
+    (should (plist-get gptel-auto-workflow--elisp-extraction-config key))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

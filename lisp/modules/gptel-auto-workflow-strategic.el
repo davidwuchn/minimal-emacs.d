@@ -312,13 +312,24 @@ EDGE CASE: Only caches context when shell commands produce non-empty output."
         (if (and (stringp git-history) (stringp file-list-shell)
                  (not (string-empty-p git-history))
                  (not (string-empty-p file-list-shell)))
-            (let* ((context (list :git-history git-history
+            (let* ((module-dir (expand-file-name "lisp/modules" proj-root))
+                   (low-cohesion (gptel-auto-workflow--find-surprising-modules module-dir))
+                   (cohesion-str
+                    (if low-cohesion
+                        (mapconcat (lambda (entry)
+                                     (format "%s:%.2f"
+                                             (file-name-nondirectory (car entry))
+                                             (cdr entry)))
+                                   (seq-take low-cohesion 8) " ")
+                      ""))
+                   (context (list :git-history git-history
                                   :file-sizes (shell-command-to-string
                                                (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
                                                        safe-root))
                                   :todos (shell-command-to-string
                                           (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
                                                   safe-root))
+                                  :cohesion cohesion-str
                                   :file-list (let* ((all-files (delq nil
                                                                      (mapcar (lambda (s)
                                                                                (unless (string-empty-p s) s))
@@ -1079,6 +1090,9 @@ RECENT GIT HISTORY:
 FILES BY SIZE:
 %s
 
+MODULE COHESION (deterministic scan — low cohesion = needs refactoring):
+%s
+
 KNOWN ISSUES (TODOs/FIXMEs):
 %s
 
@@ -1107,6 +1121,7 @@ OUTPUT JSON ONLY:
             (or (plist-get context :file-list) "")
             (or (plist-get context :git-history) "")
             (or (plist-get context :file-sizes) "")
+            (or (plist-get context :cohesion) "not available")
             (or (plist-get context :todos) "")
             (if (or (null research-findings) (string-empty-p research-findings))
                 "Not available (research disabled)"
@@ -1334,8 +1349,6 @@ Returns non-nil if error state was handled."
     (gptel-auto-workflow--invoke-static-fallback "Analyzer transient failure" static-targets callback))
    ((not targets)
     (gptel-auto-workflow--invoke-static-fallback "Analyzer returned no targets" static-targets callback))
-   ((and targets (not (proper-list-p targets)))
-    (gptel-auto-workflow--invoke-static-fallback "Analyzer returned non-list targets" static-targets callback))
    (t nil)))
 
 (defun gptel-auto-workflow--normalize-target-candidate (candidate)
@@ -1454,16 +1467,20 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
            (lambda (targets)
              (if (gptel-auto-workflow--handle-analyzer-error-state targets static-targets callback)
                  nil  ; Error already handled
-               (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                      (final-targets (if (and filtered-targets (listp filtered-targets))
-                                         filtered-targets
-                                       targets)))
-                 (unless (or (null filtered-targets) (listp filtered-targets))
-                   (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
-                            filtered-targets))
-                 (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
-                          (length targets) (length final-targets))
-                 (funcall callback final-targets)))))
+               (if (null targets)
+                   (progn
+                     (message "[auto-workflow] Analyzer returned no targets; using static targets")
+                     (funcall callback static-targets))
+                 (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
+                        (final-targets (if (and filtered-targets (listp filtered-targets))
+                                           filtered-targets
+                                         targets)))
+                   (unless (or (null filtered-targets) (listp filtered-targets))
+                     (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
+                              filtered-targets))
+                   (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
+                            (length targets) (length final-targets))
+                   (funcall callback final-targets))))))
         (let* ((filtered-targets (if static-targets
                                      (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
                                    nil))
