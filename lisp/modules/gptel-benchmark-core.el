@@ -378,7 +378,7 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                   (gptel-benchmark--accumulate-scores
                    score-totals
                    (gptel-benchmark--extract-score-types scores)))
-            (when (>= (or overall-score 0) 0.7)
+            (when (>= (gptel-benchmark--normalize-score overall-score) 0.7)
               (cl-incf passed)))))
       (append (list :total-tests total :passed-tests passed)
               (mapcan (lambda (m)
