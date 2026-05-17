@@ -193,6 +193,42 @@
                  :declare-pattern :error-pattern :condition-pattern :advice-pattern))
     (should (plist-get gptel-auto-workflow--elisp-extraction-config key))))
 
+;; ─── Prompt Structure Scoring Tests (verbum + nucleus) ───
+
+(ert-deftest regression/prompt/structure-score-max ()
+  "Well-structured prompt should score near 1.0."
+  (should (>= (gptel-auto-experiment--prompt-structure-score
+               "## Fix bug\n```elisp\n(defun foo ())\n```\n1. Add guard\nlisp/modules/test.el")
+              0.8)))
+
+(ert-deftest regression/prompt/structure-score-min ()
+  "Short content-free prompt should score 0.0."
+  (should (= (gptel-auto-experiment--prompt-structure-score "short") 0.0)))
+
+(ert-deftest regression/prompt/structure-score-has-sections ()
+  "Prompt with sections should score higher than empty."
+  (should (> (gptel-auto-experiment--prompt-structure-score
+              "## Sections\ncontent\n## More\nhere")
+             (gptel-auto-experiment--prompt-structure-score ""))))
+
+;; ─── nucleus Compiler Audit Tests ───
+
+(ert-deftest regression/prompt/edn-score-rich ()
+  "EDN with states and transitions should score above 0.4."
+  (should (> (gptel-auto-experiment--edn-richness-score
+              "{:states {:idle {:on {:fix :working}} :working {:on {:done :idle}}} :initial :idle}")
+             0.4)))
+
+(ert-deftest regression/prompt/edn-score-empty ()
+  "Empty EDN string should score 0.0."
+  (should (= (gptel-auto-experiment--edn-richness-score "") 0.0)))
+
+(ert-deftest regression/prompt/edn-count-elements ()
+  "EDN with 2 :on + 1 :states = 3 elements should be > 2."
+  (should (> (gptel-auto-experiment--count-edn-elements
+              "{:states {:a {:on {:x :b}} :b {:on {:y :a}}}} :initial :a}")
+             2)))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

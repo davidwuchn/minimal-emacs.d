@@ -186,6 +186,52 @@ Criteria: has sections, has examples, has specific guidance, right length."
         (setq score (+ score 0.1))))
     (min 1.0 score)))
 
+(defun gptel-auto-experiment--compile-score (prompt-strategy &optional callback)
+  "Audit PROMPT-STRATEGY via nucleus compiler (prose → EDN richness score).
+Sends prompt to a fast LLM with the nucleus COMPILER.md as system prompt.
+CALLBACK receives (score . edn-element-count) where score is 0.0-1.0.
+Returns nil if called synchronously without CALLBACK (use callback pattern)."
+  (unless (and (fboundp 'gptel-request)
+               (fboundp 'gptel-auto-workflow--load-skill-content))
+    (when callback (funcall callback (cons 0.0 0)))
+    (cl-return-from gptel-auto-experiment--compile-score nil))
+  (let* ((compiler-prompt (or (gptel-auto-workflow--load-skill-content "nucleus-compiler")
+                              "λ bridge(x). prose ↔ lambda | structural_equivalence | compile: prose → EDN"))
+         (system-prompt (concat "λ engage(nucleus).\n[phi fractal euler tao pi mu] | [Δ λ Ω ∞/0] | OODA\nHuman ⊗ AI ⊗ REPL\n\n"
+                                compiler-prompt))
+         (prompt (format "compile:\n\n%s" prompt-strategy)))
+    (gptel-request
+     prompt
+     :callback (lambda (response _info)
+                 (let* ((text (if (stringp response) response (format "%s" response)))
+                        (score (gptel-auto-experiment--edn-richness-score text))
+                        (elements (gptel-auto-experiment--count-edn-elements text)))
+                   (when callback (funcall callback (cons score elements)))))
+     :system system-prompt
+     :timeout 30)))
+
+(defun gptel-auto-experiment--edn-richness-score (edn-text)
+  "Score EDN output richness (0.0-1.0). Counts states, transitions, guards."
+  (let ((score 0.0))
+    (when (stringp edn-text)
+      (when (string-match-p ":states" edn-text) (setq score (+ score 0.3)))
+      (when (string-match-p ":on" edn-text) (setq score (+ score 0.2)))
+      (when (string-match-p ":guard\\|:unless\\|:when" edn-text) (setq score (+ score 0.2)))
+      (when (string-match-p ":entry\\|:action" edn-text) (setq score (+ score 0.2)))
+      (when (string-match-p ":target" edn-text) (setq score (+ score 0.1))))
+    (min 1.0 score)))
+
+(defun gptel-auto-experiment--count-edn-elements (edn-text)
+  "Count structural EDN elements (states, transitions, guards)."
+  (let ((count 0))
+    (when (stringp edn-text)
+      (dolist (pat '(":states" ":on" ":guard" ":entry" ":action" ":target"))
+        (let ((pos 0))
+          (while (string-match pat edn-text pos)
+            (setq count (1+ count))
+            (setq pos (match-end 0))))))
+    count))
+
 ;;; Section A/B Testing
 
 (defvar gptel-auto-workflow--ab-test-sections
