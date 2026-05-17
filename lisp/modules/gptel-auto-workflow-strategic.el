@@ -329,6 +329,8 @@ EDGE CASE: Only caches context when shell commands produce non-empty output."
                                   :todos (shell-command-to-string
                                           (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
                                                   safe-root))
+                                  :semantic-similar
+                                  (gptel-auto-workflow--semantic-similar-files proj-root)
                                   :cohesion cohesion-str
                                   :file-list (let* ((all-files (delq nil
                                                                      (mapcar (lambda (s)
@@ -1096,6 +1098,9 @@ MODULE COHESION (deterministic scan — low cohesion = needs refactoring):
 KNOWN ISSUES (TODOs/FIXMEs):
 %s
 
+SEMANTIC SIMILARITY (git-embed — files similar to successful targets):
+%s
+
 EXTERNAL RESEARCH FINDINGS (new ideas from internet):
 %s
 
@@ -1123,6 +1128,7 @@ OUTPUT JSON ONLY:
             (or (plist-get context :file-sizes) "")
             (or (plist-get context :cohesion) "not available")
             (or (plist-get context :todos) "")
+            (or (plist-get context :semantic-similar) "git-embed not available")
             (if (or (null research-findings) (string-empty-p research-findings))
                 "Not available (research disabled)"
               (truncate-string-to-width research-findings 3500 nil nil "..."))
@@ -1326,6 +1332,31 @@ EDGE CASE: nil returns nil, non-list atoms return nil."
          (consp (car value))
          (or (symbolp (caar value))
              (stringp (caar value))))))
+
+(defun gptel-auto-workflow--semantic-similar-files (&optional proj-root)
+  "Find files semantically similar to recent kept experiment targets.
+Uses git-embed if installed: discovers files with similar embeddings.
+Returns formatted string of similar files or empty string."
+  (let ((cmd "git embed search")
+        (query nil))
+    (when (and (executable-find "git-embed")
+               (fboundp 'gptel-auto-workflow--parse-all-results))
+      (let ((results (gptel-auto-workflow--parse-all-results))
+            (kept-targets nil))
+        (dolist (r results)
+          (when (equal (plist-get r :decision) "kept")
+            (push (plist-get r :target) kept-targets)))
+        (when kept-targets
+          (setq query (car kept-targets))
+          (let ((root (or proj-root (gptel-auto-workflow--effective-project-root)))
+                (output (shell-command-to-string
+                         (format "cd %s && git embed similar %s 2>/dev/null | head -10"
+                                 (shell-quote-argument root)
+                                 (shell-quote-argument query)))))
+            (if (and output (not (string-empty-p output))
+                     (> (length output) 20))
+                (format "Semantically similar to %s (via git-embed):\n%s" query output)
+              "")))))))
 
 (defun gptel-auto-workflow--invoke-static-fallback (reason static-targets callback)
   "Invoke CALLBACK with STATIC-TARGETS and log REASON.
