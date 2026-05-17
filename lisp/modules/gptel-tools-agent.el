@@ -37,10 +37,10 @@
           (condition-case err
               (load source nil 'nomessage)
             (error
-              (condition-case nil
-                  (require feature)
-                (error
-                 (error "Failed to load %s: %S (require also failed)" source err))))))
+             (condition-case nil
+                 (require feature)
+               (error
+                (error "Failed to load %s: %S (require also failed)" source err)))))
         (require feature))
       (unless (featurep feature)
         (error "Module %s did not provide feature %S" source feature)))))
