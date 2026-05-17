@@ -26,7 +26,8 @@
 ;; sentinel chains (gptel-abort → callback → FSM transition → handler
 ;; → process → sentinel → ...). Increase from default 1600 to prevent
 ;; "Lisp nesting exceeds max-lisp-eval-depth" crashes.
-(setq max-lisp-eval-depth 32000)
+;; post-early-init.el sets this to 40000; keep consistent.
+(setq max-lisp-eval-depth 40000)
 
 ;;; Internal variables
 
