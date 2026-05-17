@@ -27,19 +27,35 @@
 (defvar gptel-benchmark-eight-keys-definitions)
 (defvar gptel-auto-workflow-run-async)
 
+(defcustom gptel-auto-workflow--process-timeout-secs 300
+  "Timeout in seconds for blocking subprocess calls during verification."
+  :type 'integer
+  :group 'gptel-auto-workflow)
+
 (defun gptel-auto-workflow--call-process-with-watchdog (program &optional infile destination display &rest args)
-  "Run blocking PROGRAM while pausing the workflow watchdog.
+  "Run blocking PROGRAM with timeout while pausing the workflow watchdog.
+
+Uses GNU timeout(1) to prevent indefinite hangs during long verification runs.
+Returns 124 if timeout expired, or the actual process exit code otherwise.
 
 This avoids false watchdog force-stops when long local verification phases block
 Emacs long enough for a queued watchdog check to fire immediately afterward."
   (let ((workflow-active (or gptel-auto-workflow--running
-                             gptel-auto-workflow--cron-job-running)))
+                             gptel-auto-workflow--cron-job-running))
+        (use-timeout (and (stringp program)
+                          (or (string= program "bash")
+                              (string= program "sh")
+                              (string= program "emacs")))))
     (when workflow-active
       (when (timerp gptel-auto-workflow--watchdog-timer)
         (cancel-timer gptel-auto-workflow--watchdog-timer))
       (setq gptel-auto-workflow--watchdog-timer nil))
     (unwind-protect
-        (apply #'call-process program infile destination display args)
+        (if use-timeout
+            (apply #'call-process "timeout" infile destination display
+                   (number-to-string gptel-auto-workflow--process-timeout-secs)
+                   program args)
+          (apply #'call-process program infile destination display args))
       (when workflow-active
         (gptel-auto-workflow--update-progress)
         (gptel-auto-workflow--persist-status)
