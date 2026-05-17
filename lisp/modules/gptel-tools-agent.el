@@ -51,10 +51,11 @@ Signals an error if the directory cannot be determined or does not exist."
              (let ((err-msg (error-message-string err)))
                (if (string-match-p "did not provide feature" err-msg)
                    (error "%s" err-msg)
-                 (condition-case nil
+                 (condition-case require-err
                      (require feature)
                    (error
-                    (error "Failed to load %s: %s" source err-msg)))))))
+                    (error "Failed to load %s: %s (require also failed: %s)"
+                           source err-msg (error-message-string require-err))))))))
         (require feature)))))
 
 (dolist (feature '(gptel-tools-agent-base
