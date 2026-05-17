@@ -305,7 +305,7 @@ daemon alive."
                                (and baseline-check (car baseline-check))))
              (final-tests-output (or (and baseline-check (cdr baseline-check))
                                      tests-output))
-              (scores (gptel-auto-experiment--eight-keys-scores hypothesis)))
+             (scores (gptel-auto-experiment--eight-keys-scores hypothesis)))
         (when defer-tests-to-staging
           (message "[auto-exp] Deferring tests to staging flow for %s"
                    (or gptel-auto-workflow--current-target default-directory)))
@@ -333,10 +333,10 @@ If HYPOTHESIS is provided, use task-type-aware scoring."
            (commit-msg (shell-command-to-string
                         (format "cd %s && git log -1 --format='%%B' 2>/dev/null || echo ''"
                                 worktree-quoted)))
-            (code-diff (shell-command-to-string
-                        (format "cd %s && git diff HEAD~1 --unified=2 2>/dev/null | head -200"
-                                worktree-quoted)))
-            (output (concat commit-msg "\n\n" code-diff)))
+           (code-diff (shell-command-to-string
+                       (format "cd %s && git diff HEAD~1 --unified=2 2>/dev/null | head -200"
+                               worktree-quoted)))
+           (output (concat commit-msg "\n\n" code-diff)))
       (if hypothesis
           (condition-case err
               (gptel-benchmark-eight-keys-score output hypothesis)
@@ -611,15 +611,15 @@ on the current provider."
                       agent-type category
                       (1+ attempt) gptel-auto-experiment-max-aux-subagent-retries
                       (if should-advance " [advanced provider]" ""))
-              (let ((at agent-type)
-                    (inv invoke)
-                    (cb callback)
-                    (next-att (1+ attempt))
-                    (next-prov (if should-advance 0 (1+ prov-attempts))))
-                (run-with-timer 0 nil
-                                (lambda ()
-                                  (gptel-auto-experiment--call-aux-subagent-with-retry
-                                   at inv cb next-att next-prov)))))
+             (let ((at agent-type)
+                   (inv invoke)
+                   (cb callback)
+                   (next-att (1+ attempt))
+                   (next-prov (if should-advance 0 (1+ prov-attempts))))
+               (run-with-timer 0 nil
+                               (lambda ()
+                                 (gptel-auto-experiment--call-aux-subagent-with-retry
+                                  at inv cb next-att next-prov)))))
          (funcall callback result))))))
 
 (defun gptel-auto-experiment-analyze (previous-results callback)
@@ -872,10 +872,19 @@ THRESHOLD defaults to 0.005 and matches the comparator prompt rules."
      (t "tie"))))
 
 (defun gptel-auto-experiment--coerce-number (value default)
-  "Return VALUE as a number, or DEFAULT if conversion fails."
-  (if (numberp value)
-      value
-    (or default 0)))
+  "Return VALUE as a number, or DEFAULT if conversion fails.
+Handles strings by converting via `string-to-number', returning DEFAULT
+for empty strings or non-numeric strings."
+  (cond
+   ((numberp value) value)
+   ((stringp value)
+    (let ((num (string-to-number value)))
+      (if (= num 0)
+          (if (string-match-p "\\`[[:space:]]*0\\(?:[.,]0*\\)?[[:space:]]*\\'" value)
+              num
+            (or default 0))
+        num)))
+   (t (or default 0))))
 
 (defun gptel-auto-experiment--decision-gate
     (winner score-before score-after quality-before quality-after combined-before combined-after
@@ -889,12 +898,12 @@ quality improves enough to lift the combined score above threshold.
 For high-baseline targets (quality >= 0.85), the quality gain requirement
 is reduced because well-written code is harder to improve measurably."
   (let* ((score-before (gptel-auto-experiment--coerce-number score-before 0))
-        (score-after (gptel-auto-experiment--coerce-number score-after 0))
-        (quality-before (gptel-auto-experiment--coerce-number quality-before 0.5))
-        (quality-after (gptel-auto-experiment--coerce-number quality-after 0.5))
-        (combined-before (gptel-auto-experiment--coerce-number combined-before 0))
-        (combined-after (gptel-auto-experiment--coerce-number combined-after 0))
-        (decision-threshold (or threshold 0.005))
+         (score-after (gptel-auto-experiment--coerce-number score-after 0))
+         (quality-before (gptel-auto-experiment--coerce-number quality-before 0.5))
+         (quality-after (gptel-auto-experiment--coerce-number quality-after 0.5))
+         (combined-before (gptel-auto-experiment--coerce-number combined-before 0))
+         (combined-after (gptel-auto-experiment--coerce-number combined-after 0))
+         (decision-threshold (or threshold 0.005))
          (score-delta (- score-after score-before))
          (quality-delta (- quality-after quality-before))
          (combined-delta (- combined-after combined-before))
@@ -908,35 +917,35 @@ is reduced because well-written code is harder to improve measurably."
            ;; Normal baseline: standard threshold
            (t gptel-auto-experiment-min-quality-gain-on-score-tie))))
     (cond
-      ;; Combined score regression: reject outright regardless of individual deltas
-      ((<= combined-delta (- decision-threshold))
-       (list :winner "A"
-             :note "Rejected: combined score regressed"))
-      ;; Score regressed but combined score improves: quality gain compensates
-      ((< score-delta (- decision-threshold))
-       (if (> combined-delta decision-threshold)
-           (list :winner "B"
-                 :note (format "Kept: quality gain (%.2f) compensates for score regression (%.3f)"
-                               quality-delta score-delta))
-         (list :winner "A"
-               :note "Rejected: score regressed without sufficient combined improvement")))
-      ;; Score tie (within decision threshold)
-      ((< (abs score-delta) decision-threshold)
-       (if (and (> combined-delta 0)
-                (>= quality-delta quality-gain-threshold))
-           (list :winner "B"
-                 :note (format "Kept: score tie with >= %.3f quality gain (baseline %.2f)"
-                               quality-gain-threshold quality-before))
-         (list :winner "A"
-               :note (if (<= combined-delta 0)
-                         "Rejected: score tie without positive combined improvement"
-                       (format "Rejected: score tie without >= %.3f quality gain (baseline %.2f, got %.3f)"
-                               quality-gain-threshold quality-before quality-delta)))))
-      ;; Score improved: accept
-      (t
-       (list :winner (if (string= winner "tie") "B" winner)
-             :note (and (string= winner "tie")
-                        "Kept: score improved despite combined tie"))))))
+     ;; Combined score regression: reject outright regardless of individual deltas
+     ((<= combined-delta (- decision-threshold))
+      (list :winner "A"
+            :note "Rejected: combined score regressed"))
+     ;; Score regressed but combined score improves: quality gain compensates
+     ((< score-delta (- decision-threshold))
+      (if (> combined-delta decision-threshold)
+          (list :winner "B"
+                :note (format "Kept: quality gain (%.2f) compensates for score regression (%.3f)"
+                              quality-delta score-delta))
+        (list :winner "A"
+              :note "Rejected: score regressed without sufficient combined improvement")))
+     ;; Score tie (within decision threshold)
+     ((< (abs score-delta) decision-threshold)
+      (if (and (> combined-delta 0)
+               (>= quality-delta quality-gain-threshold))
+          (list :winner "B"
+                :note (format "Kept: score tie with >= %.3f quality gain (baseline %.2f)"
+                              quality-gain-threshold quality-before))
+        (list :winner "A"
+              :note (if (<= combined-delta 0)
+                        "Rejected: score tie without positive combined improvement"
+                      (format "Rejected: score tie without >= %.3f quality gain (baseline %.2f, got %.3f)"
+                              quality-gain-threshold quality-before quality-delta)))))
+     ;; Score improved: accept
+     (t
+      (list :winner (if (string= winner "tie") "B" winner)
+            :note (and (string= winner "tie")
+                       "Kept: score improved despite combined tie"))))))
 
 (provide 'gptel-tools-agent-benchmark)
 ;;; gptel-tools-agent-benchmark.el ends here
