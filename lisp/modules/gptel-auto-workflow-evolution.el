@@ -1811,6 +1811,25 @@ Returns alist of (strategy . avg-structure-score) for strategies with >3 experim
              by-strategy)
     (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
 
+(defun gptel-auto-workflow--audit-signal ()
+  "Return list of strategies needing nucleus compile audit.
+Signals: structure score < 0.15 OR keep rate < 5% with >10 experiments.
+Call from emacsclient --eval to check which strategies need attention."
+  (interactive)
+  (let ((needs-audit nil))
+    (dolist (entry (gptel-auto-workflow--evolution-strategy-structure-scores))
+      (let ((strategy (car entry))
+            (avg-score (cdr entry)))
+        (when (< avg-score 0.15)
+          (push (format "%s (structure: %.2f)" strategy avg-score) needs-audit))))
+    (if needs-audit
+        (progn
+          (message "[audit] %d strategies need compile audit:" (length needs-audit))
+          (dolist (s needs-audit)
+            (message "[audit]   %s" s)))
+      (message "[audit] All strategies have adequate structure scores."))
+    needs-audit))
+
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
   "Auto-reorder the fallback chain based on backend performance data.
 Moves better-performing backends to the front of the fallback chain."
