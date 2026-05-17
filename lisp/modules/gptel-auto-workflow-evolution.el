@@ -724,18 +724,27 @@ Returns hash table mapping strategy name to list of results."
 (defun gptel-auto-workflow--sanitize-strategy-name-for-filename (name)
   "Sanitize strategy NAME for use as a filename component.
 Replaces characters unsafe in filenames (brackets, quotes, spaces, colons,
-semicolons, pipes) with hyphens, collapses multiple hyphens, and strips
-leading/trailing hyphens.
+semicolons, pipes) with hyphens, collapses multiple hyphens, strips
+leading/trailing hyphens, and caps at 200 chars.
 Returns \"none\" when NAME is nil, empty, or contains diagnostic/rejected text."
   (let ((s (replace-regexp-in-string "[][{}()'\" \t:;|<>/*?\\%!#&]" "-" (or name "none"))))
     (setq s (replace-regexp-in-string "-+" "-" s))
     (setq s (replace-regexp-in-string "^-\\|-$" "" s))
+    (setq s (substring s 0 (min (length s) 200)))
     (if (or (string-empty-p s)
             (string-match-p "\\bREJECTED\\b" s)
             (string-match-p "\\bproposed-name\\b" (downcase s))
             (string-match-p "\\bdiagnostic\\b" (downcase s)))
         "none"
       s)))
+
+(defun gptel-auto-workflow--sanitize-knowledge-label (label)
+  "Sanitize LABEL for use in YAML front matter and knowledge page titles.
+Strips control characters, caps at 256 chars, trims whitespace.
+Like graphify's sanitize_label(): validates before writing."
+  (let ((s (replace-regexp-in-string "[\x00-\x1f\x7f]" "" (or label ""))))
+    (setq s (string-trim s))
+    (substring s 0 (min (length s) 256))))
 
 (defun gptel-auto-workflow--valid-research-strategy-name-p (name)
   "Return non-nil when NAME is safe to synthesize as a research strategy.
@@ -806,7 +815,7 @@ Returns t if page created."
       (make-directory knowledge-dir t)
       (with-temp-file knowledge-file
         (insert "---\n")
-        (insert (format "title: Research Insights - %s\n" strategy-name))
+        (insert (format "title: Research Insights - %s\n" (gptel-auto-workflow--sanitize-knowledge-label strategy-name)))
         (insert "status: active\n")
         (insert "category: knowledge\n")
         (insert (format "tags: [research, auto-workflow, %s]\n" strategy-name))
