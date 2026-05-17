@@ -40,7 +40,15 @@
              (condition-case nil
                  (require feature)
                (error
+<<<<<<< origin/staging
                 (error "Failed to load %s: %S (require also failed)" source err)))))
+=======
+<<<<<<< HEAD
+                (error "Failed to load %s: %s (require also failed)" source (error-message-string load-error))))))
+=======
+                (error "Failed to load %s: %S (require also failed)" source err)))))
+>>>>>>> 24f3ea54 (Merge optimize/agent-neopi5-r111511z2df4-exp3 for verification)
+>>>>>>> origin/main
         (require feature))
       (unless (featurep feature)
         (error "Module %s did not provide feature %S" source feature)))))
