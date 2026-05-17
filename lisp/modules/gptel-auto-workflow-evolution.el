@@ -799,7 +799,7 @@ Returns t if page created."
                         total
                         (* 100 keep-rate)
                         (if (> total 0) "" " No data yet.")))
-        (insert (format "**Performance:** %d kept / %d discarded / %d failed\n\n"
+        (insert (format "**Performance:** %d kept / %d discarded / %d failed (EXTRACTED — from TSV)\n\n"
                         kept discarded failed))
         ;; Extract successful targets
         (cl-labels ((format-target-with-counts
@@ -839,7 +839,7 @@ Returns t if page created."
                 (insert (format-target-with-counts targ)))
               (insert "\n"))))
         ;; Meta-learning recommendations
-        (insert "## Meta-Learning Recommendations\n\n")
+        (insert "## Meta-Learning Recommendations (INFERRED — from pattern analysis)\n\n")
         (cond
          ((>= keep-rate 0.5)
           (insert "- **This strategy is effective.** Continue using it.\n")
