@@ -534,7 +534,7 @@ Returns plist with suggested threshold adjustments."
         (if (zerop count)
             (list :status :insufficient-data
                   :message "No valid scores found in history")
-          (let* ((avg (apply #'+ avg-scores))
+          (let* ((avg (cl-reduce #'+ avg-scores :initial-value 0))
                  (overall-avg (/ avg count)))
             (cond
              ((> overall-avg 0.9)
