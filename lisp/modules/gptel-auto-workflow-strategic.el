@@ -1334,6 +1334,8 @@ Returns non-nil if error state was handled."
     (gptel-auto-workflow--invoke-static-fallback "Analyzer transient failure" static-targets callback))
    ((not targets)
     (gptel-auto-workflow--invoke-static-fallback "Analyzer returned no targets" static-targets callback))
+   ((and targets (not (proper-list-p targets)))
+    (gptel-auto-workflow--invoke-static-fallback "Analyzer returned non-list targets" static-targets callback))
    (t nil)))
 
 (defun gptel-auto-workflow--normalize-target-candidate (candidate)
