@@ -2,8 +2,8 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.17
-total-experiments: 928
-total-kept: 158
+total-experiments: 934
+total-kept: 160
 ---
 
 # Auto-Workflow Program
@@ -35,10 +35,10 @@ total-kept: 158
 
 - **extract-helper-function** (12× from git)
 - **add-variable** (6× from git)
-- **unless-guard** (4× from git)
 - **error-handling** (4× from git)
 - **Applicability** (2× from mementum)
 - **Key insight** (2× from mementum)
+- **unless-guard** (2× from git)
 - **manual-fix** (2× from git)
 
 ## 🛠️ Effective Techniques
@@ -56,7 +56,7 @@ total-kept: 158
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (757×): Investigate root cause
+- **other** (763×): Investigate root cause
 - **timeout** (105×): Add smaller batch sizes or chunked processing
 - **validation-failed** (39×): Improve pre-grade validation prompts
 - **api-limit** (19×): Implement provider fallback or rate limit handling
@@ -107,4 +107,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 928 experiments (158 kept locally across 928 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 934 experiments (160 kept locally across 934 local records). It evolves every self-evolution cycle.*
