@@ -1704,7 +1704,71 @@ Maps nucleus VSM layers to our system components:
      ((< backends 3)
       (message "[vsm] 相克: Metal(S2) weak → Fire(S4) should coordinate backends"))
      (t
-      (message "[vsm] 相生: All layers balanced — generating cycle active")))))
+      (message "[vsm] 相生: All layers balanced — generating cycle active")))
+    ;; Minimal pair detection (verbum probe pattern)
+    (condition-case nil
+        (let* ((results (gptel-auto-workflow--parse-all-results))
+               (first-target (when results (plist-get (car results) :target))))
+          (when first-target
+            (let ((pairs (gptel-auto-workflow--detect-minimal-pairs first-target)))
+              (when pairs
+                (message "[pair] %d minimal pair(s) found for %s:" (length pairs) first-target)
+                (dolist (p (seq-take pairs 3))
+                  (message "[pair]   %s" (cdr p)))))))
+      (error nil))))
+
+(defun gptel-auto-workflow--detect-minimal-pairs (target)
+  "Detect minimal pair experiments for TARGET from TSV history.
+Like verbum's probe pairs: experiments on same target where hypothesis
+differs by one variable (nil-safety vs type-checking on same function).
+Returns list of ((exp-a . exp-b) . insight-string) for pairs found."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (target-results
+          (cl-remove-if-not (lambda (r) (equal (plist-get r :target) target)) results))
+         (pairs nil))
+    (when (> (length target-results) 1)
+      ;; Find experiments with similar hypotheses differing by one concept
+      (dolist (a target-results)
+        (dolist (b target-results)
+          (unless (eq a b)
+            (let* ((ha (plist-get a :hypothesis))
+                   (hb (plist-get b :hypothesis))
+                   (sa (plist-get a :score-after))
+                   (sb (plist-get b :score-after))
+                   (da (plist-get a :decision))
+                   (db (plist-get b :decision)))
+              (when (and (stringp ha) (stringp hb)
+                         (not (equal ha hb))
+                         (gptel-auto-workflow--similar-except-one-var-p ha hb))
+                (let ((insight (gptel-auto-workflow--pair-insight ha hb sa sb da db)))
+                  (when insight
+                    (push (cons (cons a b) insight) pairs)))))))))
+    (cl-remove-duplicates pairs :test (lambda (x y) (equal (cdr x) (cdr y))))))
+
+(defun gptel-auto-workflow--similar-except-one-var-p (ha hb)
+  "Return non-nil if HA and HB are similar hypotheses differing by one concept.
+Compares after stripping common prefixes like 'Adding nil validation to X will...'"
+  (let* ((wa (split-string ha "[ \t]+"))
+         (wb (split-string hb "[ \t]+"))
+         (diff 0))
+    (when (> (length wa) 4)
+      (dotimes (i (min (length wa) (length wb)))
+        (unless (string= (nth i wa) (nth i wb))
+          (cl-incf diff)))
+      (and (> diff 0) (< diff 5)))))
+
+(defun gptel-auto-workflow--pair-insight (ha hb sa sb da db)
+  "Generate insight from minimal pair (HA,HB) with outcomes (SA,SB,DA,DB).
+Returns insights string or nil."
+  (let ((delta (- (or sa 0) (or sb 0))))
+    (when (> (abs delta) 0.001)
+      (format "%s (%.2f,%s) vs %s (%.2f,%s): %.3f delta → prefer %s"
+              (truncate-string-to-width ha 40 nil nil "...")
+              (or sa 0) da
+              (truncate-string-to-width hb 40 nil nil "...")
+              (or sb 0) db
+              delta
+              (if (> delta 0) "HA" "HB")))))
 
 ;; ─── Backend Performance Optimization ───
 
