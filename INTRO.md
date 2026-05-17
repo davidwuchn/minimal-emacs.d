@@ -1,516 +1,186 @@
 # minimal-emacs.d + gptel-nucleus
 
-A fork of [jamescherti/minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d)
-extended with a full AI agent system built on
-[gptel](https://github.com/karthink/gptel).
+> **An AI-powered Emacs that researches, codes, reviews, and self-evolves — autonomously.**
 
-## Project Status
+A fork of [jamescherti/minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) extended into a full autonomous AI agent system built on [gptel](https://github.com/karthink/gptel).
 
-| Metric | Value |
-|--------|-------|
-| **Code fixes** | 1700+ commits, 1100+ verified experiment merges |
-| **New features** | Auto-workflow, pipeline orchestrator, benchmark, retry loop, researcher, sandbox, strategic planner, skill evolution |
-| **Strategies** | 40+ prompt-building strategies (auto-evolved + hand-written) |
-| **Agents** | 10+ (MiniMax workhorse, moonshot/DashScope/DeepSeek/CF-Gateway fallbacks) |
-| **Cron jobs** | Pi5/Linux: 6 pipeline runs/day plus weekly mementum and instincts; macOS: 3 pipeline runs/day plus weekly jobs |
+---
 
-### Latest Features (2026-05-15)
+## What It Does
 
-| Feature | Purpose |
-|---------|---------|
-| **Pipeline Orchestrator** | `run-pipeline.sh`: Research → Verify → Self-Evolution (pre-workflow) → Auto-Workflow → Self-Evolution (post-workflow) |
-| **Skill Evolution** | Auto-evolved skills and guidance data (`DIRECTIVE.md`, researcher-prompt data, benchmark-improver, etc.) |
-| **Provider Failover** | 5x retry per provider before advancing chain; auto-switch back when quota resets |
-| **Strategy Evolution** | Meta-Harness search: 40+ strategies, agent-driven proposer, Pareto frontier, held-out test sets |
-| **Backend Fallback** | Executor: MiniMax → ... → CF-Gateway `@cf/moonshotai/kimi-k2.6`; Headless: CF-Gateway `@cf/openai/gpt-oss-120b` |
-| **Benchmark System** | Score tracking, quality metrics, evolution patterns, task-type-aware scoring |
-| **Review Retry Loop** | Executor fixes issues, reviewer validates, max 2 retries |
-| **Periodic Researcher** | Every 4h, writes `var/tmp/research-findings.md` for analyzer target selection |
-| **Sandbox Execution** | Safe code evaluation with `proper-list-p` validation and arity checking |
-| **Strategic Planner** | Long-term improvement planning with hypothesis tracking + directive skill |
-| **Transient Error Handling** | Curl exit codes 35 (SSL) and 56 (recv) treated as retryable, not permanent failures |
-| **Self-Evolution Fix** | Pipeline distinguishes "already-running" from completion and evolves again after fresh workflow results |
-| **Strategy Naming** | Auto-generated `evolved-NNNN` and `candidate-*` names rejected; descriptive names required |
-| **AutoTTS Controller** | Multi-turn research with real-time controller: STOP/CONTINUE/CUT/BRANCH decisions, trace collection, offline evolution |
+This setup turns Emacs into an **autonomous optimization pipeline** — it researches external projects for novel techniques, writes and tests code improvements, reviews its own work, and learns from results to get better over time. All inside Emacs, all automated.
+
+| Capability | How |
+|-----------|-----|
+| **Researches** | Scans GitHub, arXiv, and 18+ davidwuchn repos for novel AI patterns |
+| **Codes** | Writes Emacs Lisp fixes: nil-safety guards, DRY refactors, error handling |
+| **Reviews** | AI reviewer checks every change before merge |
+| **Verifies** | Runs 89+ test files in isolated staging worktrees |
+| **Self-Evolves** | Learns from 870+ experiments — 40+ auto-evolved strategies |
+| **Runs on Schedule** | Cron-driven: 3-6 pipeline runs/day, fully autonomous |
+
+---
 
 ## Quick Start
 
 ```bash
-# 1. Install required packages from Git
-./scripts/setup-packages.sh
-
-# 2. Setup ECA symlinks
-./scripts/setup-eca-links.sh
+./scripts/setup-packages.sh     # Install required Git-tracked packages
+./scripts/setup-eca-links.sh    # Setup ECA config symlinks
+./scripts/install-cron.sh       # (Optional) Install cron jobs
 ```
 
-## Before you use this repo
+Then it runs. No manual intervention needed.
 
-This setup expects the ECA config and wrapper paths below to exist before you
-use the project:
+---
 
-```bash
-scripts/setup-eca-links.sh
-```
-
-Equivalent manual setup:
-
-```bash
-mkdir -p ~/.emacs.d ~/.config ~/bin
-ln -sfn ~/.emacs.d/eca ~/.config/eca
-ln -sfn ~/.emacs.d/eca/eca-secure ~/bin/eca
-```
-
-Required path layout:
-
-- `~/.config/eca` -> `~/.emacs.d/eca`
-- `~/bin/eca` -> `~/.emacs.d/eca/eca-secure`
-
-Without these links, ECA-backed secure provider flows may not resolve the
-expected config and wrapper locations.
-
-## Package Installation
-
-This fork tracks its core AI packages from Git submodules under `packages/`
-instead of relying only on ELPA snapshots:
-
-```bash
-./scripts/setup-packages.sh           # Install if missing
-./scripts/setup-packages.sh --update  # Sync submodules to tracked remote heads
-./scripts/setup-packages.sh --force   # Reinstall
-./scripts/check-submodule-sync.sh     # Verify gitlinks match tracked remote heads
-```
-
-Git hooks and CI now fail if a committed submodule gitlink is either missing on
-its configured remote or behind the branch head declared in `.gitmodules`.
-
-Key paths:
-- `packages/` - Git-tracked package checkouts managed by `setup-packages.sh`
-- `var/elpa/` - `package.el` state, archives, and bootstrap cache
-
-Important Git-tracked packages:
-- `gptel` - Chat engine and FSM-based tool execution
-- `gptel-agent` - Subagent delegation and tool orchestration
-- `ai-code`, `ai-behaviors`, `mementum`, `nucleus`
-
-**Why Git-tracked packages?** ELPA's `gptel-0.9.9.4` is missing functions
-required by `gptel-agent` (e.g., `gptel--handle-pre-tool`). The tracked Git
-heads include these fixes.
-
-## Model Configuration
-
-Model is configured in YAML frontmatter (single source of truth):
-
-| Use Case | Model | YAML File |
-|----------|-------|-----------|
-| **Plan preset** | `minimax-m2.7-highspeed` | `assistant/agents/plan_agent.md` |
-| **Agent preset** | `minimax-m2.7-highspeed` | `assistant/agents/code_agent.md` |
-| **Subagents** | per-agent YAML | `assistant/agents/*.md` |
-
-### Backend Fallback Chain
-
-Auto-workflow uses MiniMax as the primary workhorse with automatic provider failover. The fallback chain differs by agent type:
-
-**Executor (code changes, needs function calling):**
-1. **MiniMax** — `minimax-m2.7-highspeed` (primary)
-2. **DashScope** — `qwen3.6-plus`
-3. **moonshot** — `kimi-k2.6`
-4. **DeepSeek** — `deepseek-v4-pro`
-5. **CF-Gateway** — `@cf/moonshotai/kimi-k2.6` (262k context, reasoning + function calling)
-
-**Headless subagents (analyzer, grader, etc.):**
-- **CF-Gateway** — `@cf/openai/gpt-oss-120b` (fast reasoning, 128k context)
-
-Requires `api.minimaxi.com` API key in auth-source. All alternate backends require their respective API keys configured in auth-source.
-
-## Directory Structure
-
-Follows upstream `minimal-emacs.d` with `user-emacs-directory` set to `var/`:
+## The Pipeline
 
 ```
-var/
-├── autosave/        - Auto-save crash recovery [upstream]
-├── backup/          - Versioned backups (.~1~) [upstream]
-├── tramp-autosave/  - TRAMP auto-save [upstream]
-├── cache/           - Cache files
-├── elpa/            - Packages (gptel, gptel-agent)
-├── lockfiles/       - Lock files
-├── savefile/        - gptel context cache
-├── tmp/             - Temp files (gptel tools)
-├── history          - Command history
-├── projects         - Project list
-├── recentf          - Recent files
-├── saveplace        - File positions [upstream]
-└── tramp            - TRAMP persistence
+┌──────────┐    ┌──────────┐    ┌─────────────┐    ┌──────────────┐
+│ Research │───→│ Evolution│───→│ Auto-Workflow│───→│ Post-Evolve  │
+│ (3min)   │    │ (2min)   │    │ (1-4h)       │    │ (2min)        │
+└──────────┘    └──────────┘    └─────────────┘    └──────────────┘
+     ↓                               ↓
+  External findings             worktree → analyzer
+  + 18-repo prefetch            → executor → grader
+                                → benchmark → decide
+                                → reviewer → staging
 ```
 
-Files in `var/` (not subdirectories) match upstream pattern.
+**Each auto-workflow experiment:** selects a target file, generates a hypothesis, implements a fix, runs tests, grades itself, gets reviewed, and either merges to staging or learns from failure.
 
-Important: `~/.emacs.d/eca` is the real directory used by this setup. The
-`~/.config/eca` path should be the symlink that points back to it.
+---
 
-## What this fork adds
+## Proven Results
 
-**gptel** provides the chat engine and FSM-based tool execution. **nucleus**
-adds tool management, preset routing, security ACLs, prompt infrastructure,
-payload resilience, and an agent workflow inside Emacs.
+| Metric | Value |
+|--------|-------|
+| **Commits** | 1700+ fixes, 1100+ verified experiment merges |
+| **Kept experiments** | 195+ (code improvements that passed all gates) |
+| **Evolved strategies** | 40+ prompt-building strategies |
+| **Test coverage** | 89 module files, 57 regression test files |
+| **Backend fallback** | 5-provider chain (MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway) |
 
-### AI Code Behaviors
+---
 
-This fork includes [ai-code](https://github.com/davidwuchn/ai-code-interface.el)
-with [ai-behaviors](https://github.com/xificurC/ai-behaviors) integration:
+## Key Features
 
-- **ai-code** - Unified interface for AI coding assistants (Claude Code, Gemini, Copilot, etc.)
-- **ai-behaviors** - Structured prompting framework with 40+ predefined behaviors
+### Autonomous Pipeline
+- **Research**: Multi-turn AutoTTS controller searches 18+ repos + arXiv + GitHub for relevant techniques
+- **Code**: Executor subagent reads files, writes fixes, verifies syntax — all in isolated git worktrees
+- **Review**: AI reviewer checks for blockers, regressions, and code quality
+- **Decide**: Comparator weighs before/after scores (70% grader, 30% code quality)
+- **Learn**: Non-kept experiments feed back into strategy evolution
 
-Behaviors are loaded from the `packages/ai-behaviors` submodule. Use them in prompts:
+### Self-Evolution
+- **40+ strategies** auto-discovered from prompt-builder code
+- **Pareto frontier** tracks non-dominated strategies for exploration/exploitation balance
+- **AutoTTS controller** learns from 21+ research traces, adjusting priorities over time
+- **Convergence detection** stops evolution when plateau detected (prevents overfitting)
 
-```
-#=code Fix the auth bug          # Production code mode
-#=debug Why is this failing      # Systematic debugging
-#=review This function           # Code review mode
-#=deep Thorough analysis         # Deep thinking mode
-```
-
-Setup automatically handled by `./scripts/setup-packages.sh`.
-
-## Upstream init chain note
-
-Recent upstream `minimal-emacs.d` now exposes four startup-stage toggles:
-
-- `minimal-emacs-load-pre-early-init`
-- `minimal-emacs-load-post-early-init`
-- `minimal-emacs-load-pre-init`
-- `minimal-emacs-load-post-init`
-
-These let you temporarily skip hook files while debugging startup issues or
-bisecting configuration problems. In practice, `pre-early-init.el` is the best
-place to disable the later three stages:
-
-```elisp
-(setq minimal-emacs-load-post-early-init nil
-      minimal-emacs-load-pre-init nil
-      minimal-emacs-load-post-init nil)
-```
-
-Important caveat: `minimal-emacs-load-pre-early-init` is checked before
-`pre-early-init.el` itself is loaded, so it only helps if you set it from an
-earlier external startup path.
-
-## Key capabilities
-
-- **Agent and Plan modes** - separate presets with different capability
-  profiles. `gptel-agent` gets the full action toolset; `gptel-plan` stays
-  readonly but can still bundle readonly Programmatic workflows.
-- **31-tool nucleus stack** - Bash, Glob, Grep, Read, Write, Edit,
-  ApplyPatch, Preview, Programmatic, RunAgent, structural Code_* tools, and
-  Emacs introspection tools.
-- **Programmatic orchestration** - restricted Emacs Lisp programs can chain
-  multiple tools in one call. Agent mode supports preview-backed mutating runs;
-  plan mode gets a separate readonly profile.
-- **Aggregate mutating preview** - multi-step mutating Programmatic runs now
-  show one aggregate approval summary before the existing per-tool preview and
-  confirmation flow.
-- **Subagent delegation** - `RunAgent` can spawn explorer, researcher,
-  reviewer, and executor subagents with scoped toolsets.
-- **Security ACLs** - hard capability filtering by preset. Readonly plan mode
-  physically cannot reach mutating tools.
-- **Payload resilience** - pre-send payload compaction, retry-time tool-result
-  truncation, tool-array reduction, and reasoning repair for thinking-enabled
-  models like Moonshot/Kimi.
-- **Transient error recovery** - curl exit codes 35 (SSL) and 56 (recv) trigger
-  retry + fallback instead of permanent blacklisting.
-- **Self-evolution** - Pipeline digests research before auto-workflow and
-  digests fresh workflow results afterward so same-run outcomes can evolve
-  skills and controller rules.
-- **Tree-sitter code tooling** - structural map, inspect, replace, usages, and
-  diagnostics across a multi-language workspace.
-- **Backend indirection** - one backend/model source of truth in
-  `lisp/gptel-config.el` for presets, subagents, and routing.
-- **CI and regression coverage** - dedicated suites for Programmatic flows,
-  confirmation UI, payload trimming, and nucleus tool validation.
-- **Auto-workflow** - phased autonomous agent for optimization experiments
-  with auto-evolution via 相生/相克. See [docs/auto-workflow.md](docs/auto-workflow.md).
-
-## Architecture
-
-```text
-lisp/modules/
-  gptel-ext-backends.el      Backend definitions
-  gptel-ext-fsm.el           FSM recovery / stuck-state fixes
-  gptel-ext-reasoning.el     Thinking-model reasoning capture/injection
-  gptel-ext-retry.el         Retry logic + payload compaction
-  gptel-ext-security.el      Preset ACL routing
-  gptel-ext-streaming.el     Streaming safety helpers
-  gptel-ext-tool-confirm.el  Confirmation UI + permit memory
-  gptel-ext-tool-sanitize.el Nil-tool filtering / doom-loop detection
-  gptel-tools.el             Tool registration orchestrator
-  gptel-tools-agent.el       RunAgent + subagent delegation
-  gptel-tools-code.el        Code_Map / Inspect / Replace / Usages / Diagnostics
-  gptel-tools-preview.el     Unified diff preview layer
-  gptel-tools-programmatic.el
-                             Programmatic tool registration
-  gptel-sandbox.el           Restricted Programmatic evaluator
-  gptel-programmatic-benchmark.el
-                             Benchmark harness for Programmatic workflows
-  nucleus-tools.el           Toolset definitions and filtering
-  nucleus-presets.el         Preset management + contract validation
-  nucleus-prompts.el         Prompt loading from `assistant/prompts/`
-
-assistant/prompts/           Agent and plan system prompts
-tests/                      ERT suites for Programmatic, trim, and UI flows
-.github/workflows/ci.yml    Compile + Programmatic/trim/nucleus CI
-```
-
-## Multi-backend support
-
-Configured for MiniMax (default), Moonshot/Kimi, DashScope/Qwen, DeepSeek,
-Gemini, OpenRouter, GitHub Copilot, and Cloudflare Workers AI. Backend/model
-selection is centralized so presets and subagents inherit the active default
-instead of hardcoding provider-specific values.
-
-## Auto-Workflow
-
-Phased autonomous agent for optimization experiments with auto-evolution.
-
-### Pipeline
-
-```
-Research → Verify → Self-Evolution (pre) → Auto-Workflow → Self-Evolution (post)
-                                      ↓
-                          worktree → analyzer → executor → grader → benchmark → decide
-```
-
-**Decision logic:** 70% grader + 30% code quality
-**Timeout:** 4 hours max for auto-workflow batch
-**Lock:** Prevents overlapping pipeline runs
-
-### Features
-
-| Feature | Purpose |
-|---------|---------|
-| **Code Quality** | Docstring coverage scoring (0.0-1.0) |
-| **LLM Degradation** | Detect off-topic, apologies, AI self-reference |
-| **Dynamic Stop** | Stop after N consecutive no-improvements |
-| **TSV Logging** | Explainable results with code_quality column |
-| **Pre-Merge Review** | Reviewer checks for blockers before staging merge |
-| **Strategy Evolution** | Meta-Harness harness search: agent-driven proposal, Pareto frontier, anti-overfitting |
-| **AutoTTS Controller** | Test-time scaling: multi-turn research with STOP/CONTINUE/CUT/BRANCH decisions |
-| **Reward Signal Bridge** | Links research traces to experiment outcomes for controller learning |
-
-### Strategy Evolution (Meta-Harness)
-
-The auto-workflow system searches over **prompt-building strategies** (how prompts are constructed), not just prompt content. Based on the Stanford IRIS Lab [Meta-Harness](https://github.com/stanford-iris-lab/meta-harness) framework:
-
-```
-Proposer (gptel) → 3 candidates → Validate → Prototype → Evolve → Frontier
-     ↑                                                              ↓
-     └───────────── Warm-start from failure analysis ───────────────┘
-```
-
-| Component | Purpose |
-|-----------|---------|
-| **Agent-driven proposer** | Generates 3 novel strategy candidates per evolution iteration |
-| **Pareto frontier** | Tracks non-dominated strategies by success rate and avg score |
-| **Held-out test set** | 20% of targets held out during evolution to prevent overfitting |
-| **Anti-overfitting rules** | Explicit: no target-specific hints, no file names in strategy code |
-| **Anti-parameter-tuning** | Self-critique rejects constant-only changes |
-| **Stateful interface** | `analyze-results`, `get-state`, `set-state` for learning strategies |
-| **Run isolation** | `--run-name`, `--fresh`, per-run evolution summaries |
-| **Evolution summary** | `evolution_summary.jsonl` tracking per-iteration results |
-| **Strategy discovery** | Auto-discovers 40+ strategies from `assistant/strategies/prompt-builders/*.el` |
-| **Signal handling** | Graceful `quit` handling preserves state on interrupt |
-| **Name enforcement** | Rejects generic `evolved-NNNN` and `candidate-*` names; requires descriptive 2-4 word names |
-
-Exploitation axes: A=Template architecture, B=Context retrieval, C=Section ordering, D=Variable computation, E=Skill loading, F=Adaptive compression.
-
-### AutoTTS: Test-Time Scaling via Controller Discovery
-
-The researcher uses an AutoTTS-style controller for adaptive multi-turn research. Instead of a single long research call, the controller breaks research into shorter turns with checkpoints between them.
-
-**Controller decisions after each turn:**
-- **STOP** — High confidence output with URLs and structure; return findings
-- **CONTINUE** — Partial results; proceed to next turn
-- **CUT** — Over token budget; return accumulated findings
-- **BRANCH** — Stagnation detected; try alternate strategy (e.g., own-repos-first → deep-external)
-
-**Trace Collection & Reward Signal:**
-- Every research session saves a trace to `var/tmp/research-traces/`
-- Step-level logging captures search queries, fetched URLs, and analysis sections
-- Experiment outcomes (kept/discarded) are linked back to traces via `:outcomes` array
-- Controller evolves toward research that leads to kept experiments, not just long output
-
-**Offline Evolution (0 LLM calls):**
-- Strategies benchmarked against historical traces without calling LLMs
-- Convergence detection stops evolution when no meaningful improvement (3-gen window, 0.01 threshold)
-- Evolved controller config saved to `var/tmp/researcher-controller.json`
-- Joint optimization updates both controller parameters and SKILL.md guidance
-
-**Timeout Handling:**
-- Turn 1: 180s (search phase)
-- Turn 2+: 300s (web fetch phase needs more time)
-- On timeout: returns accumulated findings from previous turns instead of failing
+### Safety & Reliability
+- **Git worktree isolation** — never touches `main` directly
+- **Staging verification** — 1800s timeout, 89-test suite, rollback on failure
+- **Conflict marker guard** — rejects commits with `<<<<<<<` markers
+- **Provider failover** — 5 backends with automatic chain advancement
+- **Watchdog** — force-stops stuck workflows after 90 minutes
+- **Quota-aware** — skips runs when API quota exhausted
 
 ### Architecture
+- **31-tool nucleus stack** — Read, Write, Edit, Bash, Grep, Glob, Code_Map, Programmatic, RunAgent...
+- **6 subagent types** — executor, grader, reviewer, analyzer, comparator, researcher
+- **Security ACLs** — hard capability filtering by preset (plan mode physically cannot mutate)
+- **Payload resilience** — pre-send compaction, auto-retry, reasoning repair for thinking models
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    AUTO-WORKFLOW SYSTEM                      │
-├─────────────────────────────────────────────────────────────┤
-│  Researcher (moonshot) ──→ Analyzer (MiniMax) ──→ Executor │
-│        ↓                        ↓                    ↓      │
-│  Findings Cache          Target Selection        Code Fixes │
-│                                                      ↓      │
-│                                               Reviewer       │
-│                                              (moonshot)      │
-│                                                   ↓          │
-│                                              Staging         │
-│                                                ↓             │
-│                                              Main            │
-└─────────────────────────────────────────────────────────────┘
-```
+---
 
-### Agent Distribution
+## Backend Fallback Chain
 
-| Agent | Backend | Purpose |
-|-------|---------|---------|
-| analyzer | MiniMax → ... → CF-Gateway `@cf/openai/gpt-oss-120b` | Target selection |
-| comparator | MiniMax → ... → CF-Gateway `@cf/openai/gpt-oss-120b` | Before/after comparison |
-| executor | MiniMax → ... → CF-Gateway `@cf/moonshotai/kimi-k2.6` | Code changes |
-| grader | MiniMax → ... → CF-Gateway `@cf/openai/gpt-oss-120b` | Quality scoring |
-| reviewer | MiniMax → ... → CF-Gateway `@cf/openai/gpt-oss-120b` | Pre-merge code review |
-| researcher | MiniMax → ... → CF-Gateway `@cf/openai/gpt-oss-120b` | Code research, anti-pattern detection |
+Auto-workflow runs on MiniMax by default, automatically failing over when rate-limited:
 
-### Cron Schedule
+| # | Backend | Model | Use |
+|---|---------|-------|-----|
+| 1 | MiniMax | minimax-m2.7-highspeed | Primary workhorse |
+| 2 | moonshot | kimi-k2.6 | Best for code changes |
+| 3 | DashScope | qwen3.6-plus | Fast, reliable |
+| 4 | DeepSeek | deepseek-v4-pro | Strong reasoning |
+| 5 | CF-Gateway | @cf/moonshotai/kimi-k2.6 | 262k context, function calling |
 
-| Job | Pi5 Schedule | macOS Schedule |
-|-----|-------------|----------------|
-| Pipeline (research→pre-evolution→workflow→post-evolution) | 11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6x) | 10AM, 2PM, 6PM (3x) |
-| Weekly mementum | Sunday 4AM | Sunday 4AM |
-| Weekly instincts | Sunday 5AM | Sunday 5AM |
+---
 
-Install: `./scripts/install-cron.sh`
+## Requirements
 
-Cron runs `./scripts/run-pipeline.sh`, which calls `./scripts/run-auto-workflow-cron.sh` for daemon-backed research, evolution, auto-workflow, status, and message snapshots. The wrapper uses a dedicated `copilot-auto-workflow` Emacs daemon and writes a fast status snapshot to `var/tmp/cron/auto-workflow-status.sexp`.
+- Emacs 29.1+
+- API keys in auth-source: `api.minimaxi.com`, `api.kimi.com`, `coding.dashscope.aliyuncs.com`, `api.deepseek.com`, `gateway.ai.cloudflare.com`
+- Git, `gh` CLI (for repo prefetch), `timeout` (for staging verification)
+- macOS or Linux
 
-**Recent pipeline fixes:**
-- **4h timeout** — Extended from 2h to handle 25+ experiment batches
-- **.dir-locals propagation** — Project config (1200s time-budget) now inherited by all subagent buffers
-- **Self-evolution status** — Correctly detects "already-running" vs actual completion
-- **Post-workflow evolution** — Fresh `results.tsv` data feeds skill/controller evolution in the same pipeline run
-- **Completion verification** — Post-timeout check confirms workflow actually finished
+---
 
-### Usage
+## Installation
 
-```
-#=frame #file var/tmp/experiments/{run-id}/{target}/frame.md
-#=research #ground #file
-#=design #subtract #file
-#=code #checklist
-#=review #file
-#=review #meta #file
+```bash
+# 1. Clone with submodules
+git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d ~/.emacs.d
+
+# 2. Install packages
+cd ~/.emacs.d && ./scripts/setup-packages.sh
+
+# 3. Setup ECA symlinks
+./scripts/setup-eca-links.sh
+
+# 4. Start Emacs normally
+emacs
 ```
 
-### Parallel Overnight (via RunAgent)
+---
 
-```
-RunAgent("code", "optimize gptel-ext-retry.el following docs/auto-workflow.md")
-RunAgent("code", "optimize gptel-ext-context.el following docs/auto-workflow.md")
-```
-
-### Key Commands
+## Key Commands
 
 ```elisp
-;; Workflow
+;; Manual workflow triggers
 (gptel-auto-workflow-run-async)        ; Start workflow
 (gptel-auto-workflow-status)           ; Check status
-(gptel-auto-workflow-log)              ; Get clean log
-
-;; Researcher
 (gptel-auto-workflow-run-research)     ; Run researcher now
-(gptel-auto-workflow-research-status)  ; Researcher status
 ```
 
 ```bash
-# Cron-style full pipeline run
+# Full pipeline (research → evolve → work → evolve)
 ./scripts/run-pipeline.sh
 
-# Direct auto-workflow only (skips research and self-evolution pipeline steps)
+# Direct auto-workflow (skip research)
 ./scripts/run-auto-workflow-cron.sh auto-workflow
 
-# Fast snapshot-based status + recent output
+# Status snapshots
 ./scripts/run-auto-workflow-cron.sh status
 ./scripts/run-auto-workflow-cron.sh messages
 ```
 
-### Config Options
+---
 
-```elisp
-gptel-auto-workflow-require-review        ; default t
-gptel-auto-workflow-research-targets      ; default nil
-gptel-auto-workflow-research-before-fix   ; default nil
-gptel-auto-workflow--review-max-retries   ; default 2
-gptel-auto-workflow-research-interval     ; default 14400 (4h)
-gptel-auto-workflow-max-targets-per-run   ; default 5
+## Directory Structure
+
 ```
-
-### Phases
-
-| Phase | Trigger | Purpose |
-|-------|---------|---------|
-| **Frame** | `#=frame #file` | Define target, goal, constraints |
-| **Research** | `#=research #ground #file` | Understand, benchmark baseline |
-| **Design** | `#=design #subtract #file` | Propose minimal approach |
-| **Execute** | `#=code #checklist` | Implement in worktree, validate |
-| **Review** | `#=review #file` | Summary, recommendation |
-| **Learn** | `#=review #meta #file` | Auto-evolve via 相生/相克 |
-
-### Safety
-
-- Git worktree isolation per experiment
-- Test gate: `./scripts/verify-nucleus.sh` must pass
-- Benchmark validation required
-- Token/time budget enforcement
-- Experiment worktrees do not edit `main` directly; verified staging changes are merged deliberately
-- Pre-merge review catches blockers/critical issues
-
-See [docs/auto-workflow.md](docs/auto-workflow.md) for full specification.
-
-## ECA + ai-code Integration
-
-[ECA](https://github.com/editor-code-assistant/eca-emacs) is configured as a backend for [ai-code](https://github.com/tninja/ai-code).
-
-### Setup
-
-```bash
-# Create symlinks
-./scripts/setup-eca-links.sh
-
-# Or manually:
-mkdir -p ~/.config ~/bin
-ln -sfn ~/.emacs.d/eca ~/.config/eca
-ln -sfn ~/.emacs.d/eca/eca-secure ~/bin/eca
+~/.emacs.d/
+├── lisp/modules/         80+ Elisp modules (AI agents, tools, evolution)
+├── packages/              Git-tracked dependencies (gptel, gptel-agent, nucleus, mementum)
+├── assistant/             Agent prompts, skills, strategies (40+ evolved)
+├── tests/                 57 regression test files
+├── scripts/               Pipeline orchestration, cron, prefetch, setup
+├── mementum/              AI memory system (insights, patterns, knowledge)
+├── var/tmp/               Runtime data (experiments, traces, findings, staging)
+├── var/elpa/              Package state (auto-seeded in worktrees)
+└── eca/                   ECA provider configuration + secure wrappers
 ```
-
-### Configuration
-
-| File | Purpose |
-|------|---------|
-| `eca/config.json` | Provider configuration |
-| `eca/eca-secure` | Secure wrapper script |
-| `eca/prompts/` | Custom prompts |
-| `eca/.behaviors/` | Behavior configurations |
-
-### Usage
-
-```elisp
-M-x ai-code-menu          ; Main menu (C-c a)
-M-x ai-code-set-backend   ; Switch to 'eca
-```
-
-See `eca/README.md` and `eca/AGENTS.md` for details.
 
 ---
 
-This fork builds on
-[minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) by James
-Cherti. See the upstream `README.md` for the base Emacs configuration.
+## Upstream
+
+This fork builds on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) by James Cherti. See `README.md` for the base Emacs configuration.
+
+Key divergences:
+- `pre-early-init.el` — max-lisp-eval-depth 20000, daemon workflow support
+- `post-init.el` — AI module loading, runtime seeding, research overrides
+- `lisp/init-ai.el` — gptel + nucleus + ECA + benchmark integration
+- Git-tracked `packages/` instead of ELPA for gptel/gptel-agent (ELPA lags behind required APIs)
