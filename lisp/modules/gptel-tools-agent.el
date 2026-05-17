@@ -32,6 +32,12 @@ Signals an error if the directory cannot be determined or does not exist."
         (setq gptel-tools-agent--module-dir dir))))
   gptel-tools-agent--module-dir)
 
+(defun gptel-tools-agent--module-path (feature-name)
+  "Return the full path for module with FEATURE-NAME (a symbol).
+Ensures the module directory exists before constructing the path."
+  (expand-file-name (format "%s.el" feature-name)
+                    (gptel-tools-agent--ensure-module-dir)))
+
 (defun gptel-tools-agent--load-module (feature)
   "Load split module FEATURE from this directory, falling back to `require'."
   (unless (and feature (symbolp feature))
@@ -39,8 +45,7 @@ Signals an error if the directory cannot be determined or does not exist."
   (when (string-match-p "[/\\]" (symbol-name feature))
     (error "Feature name contains invalid characters: %S" feature))
   (unless (featurep feature)
-    (let ((source (expand-file-name (format "%s.el" feature)
-                                    (gptel-tools-agent--ensure-module-dir))))
+    (let ((source (gptel-tools-agent--module-path feature)))
       (if (file-readable-p source)
           (condition-case err
               (progn
