@@ -43,14 +43,11 @@
              (let ((err-msg (error-message-string err)))
                (if (string-match-p "did not provide feature" err-msg)
                    (error "%s" err-msg)
-                 (condition-case require-err
+                 (condition-case nil
                      (require feature)
                    (error
-                    (error "Failed to load %s: %S (require also failed: %S)"
-                           source err require-err)))))))
-        (require feature)
-        (unless (featurep feature)
-          (error "Module %s did not provide feature %S" source feature))))))
+                    (error "Failed to load %s: %s" source err-msg)))))))
+        (require feature)))))
 
 (dolist (feature '(gptel-tools-agent-base
                    gptel-tools-agent-git
