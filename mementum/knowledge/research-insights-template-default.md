@@ -14,16 +14,16 @@ insight-quality: 3.3/10
 
 ## Successful Targets
 
-- `lisp/modules/gptel-ext-context-images.el`
-- `lisp/modules/gptel-tools-agent-git.el`
-- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-ext-context-images.el` (2 kept / 3 discarded)
+- `lisp/modules/gptel-tools-agent-git.el` (1 kept / 2 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (2 kept / 1 failed)
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-tools-agent-git.el`
-- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-tools-agent-git.el` (1 kept / 2 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (2 kept / 1 failed)
 
 ## Meta-Learning Recommendations
 

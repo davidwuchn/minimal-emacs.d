@@ -6,7 +6,7 @@ evolve-script: evolve_researcher.py
 ---
 metadata:
   evolution-stats:
-    total-experiments: 3252
+    total-experiments: 870
 
 ---
 
@@ -19,44 +19,25 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
 ## Current Research Performance
 
-- Overall research effectiveness: 40.3% (1311/3252 research-correlated experiments kept)
-- Analysis window: last 90 days
+- Overall research effectiveness: 0.0% (0/0 research-correlated experiments kept)
+- Analysis window: last 30 days
 - Topics ranked by downstream success:
 
-| Rank | Topic | Success Rate | Experiments | Trend | Top Targets |
-|------|-------|--------------|-------------|-------|-------------|
-| 1 | deep-external | 100.0% | 46/46 | ➡️ stable |  |
-| 2 | chained-skill-resolution | 83.3% | 5/6 | ➡️ stable |  |
-| 3 | template-default | 82.9% | 350/422 | ➡️ stable |  |
-| 4 | standalone-research | 70.8% | 614/867 | ➡️ stable |  |
-| 5 | topic-knowledge-amplification | 66.7% | 16/24 | ➡️ stable |  |
-| 6 | nil-safety | 28.3% | 15/53 | ➡️ stable | lisp/modules/gptel-agent-loop.el, lisp/modules/gptel-sandbox.el |
-| 7 | validation-guard | 18.6% | 85/456 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
-| 8 | performance | 17.8% | 24/135 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-tools-agent-git.el |
-| 9 | type-validation | 15.9% | 10/63 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
-| 10 | clarity | 14.5% | 54/372 | ➡️ stable | lisp/modules/gptel-ext-context-cache.el, lisp/modules/gptel-sandbox.el |
+*No topic data available yet.*
 
 ## Mission
 
 Search external sources for actionable techniques related to:
-- **Nil safety and null pointer prevention** (success: 28%) — nil-safety
-- **Defensive validation and guard patterns** (success: 19%) — validation-guard
-- **Deep External** (success: 100%) — deep-external
-- **Chained Skill Resolution** (success: 83%) — chained-skill-resolution
-- **Template Default** (success: 83%) — template-default
-- **Standalone Research** (success: 71%) — standalone-research
+- AI agent architectures and workflows
+- Emacs Lisp AI integration patterns
+- LLM self-evolution and meta-learning
+- Prompt engineering for code generation
+- Error recovery and retry patterns in agent systems
+- Benchmarking and evaluation frameworks
 
 ## Priority Projects to Monitor
 
-### External Projects (Ranked by Downstream Success)
-
-- **own-repo** — Success: 92% (252/273) Techniques: various
-- **karthink/gptel** — Success: 19% (85/456) Techniques: validation-guard
-
-### Other Sources
-
-- **external** — Success: 70%
-- **external** — Success: 0%
+_No source effectiveness data yet. See repo list below._
 
 ---
 
@@ -110,17 +91,13 @@ Focus on: patterns we can adapt to our Emacs AI agent system
 ## Anti-patterns (avoid)
 
 - Generic advice ('use AI', 'improve code')
-- Ideas already in our codebase
-- **Unknown** — Only 0% success (0/57 experiments kept)
-- **Pattern Triggered Skills** — Only 0% success (0/8 experiments kept)
-- **Cleanup** — Only 6% success (3/51 experiments kept)
-- **Async** — Only 7% success (9/126 experiments kept)
-- **Helper Extraction** — Only 9% success (7/75 experiments kept)
+- Ideas already in our codebase (check git log first)
+- Purely theoretical without implementation path
 - Tools requiring heavy external dependencies
 
 ## Dynamic Updates
 
-This skill auto-evolves every 90 days based on:
+This skill auto-evolves every 30 days based on:
 1. Correlation between research topics and experiment keep rates
 2. Source effectiveness tracking (which external projects produce actionable insights)
 3. Temporal pattern detection (emerging vs declining topics)

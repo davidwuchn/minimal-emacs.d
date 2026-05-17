@@ -605,7 +605,26 @@ Returns placeholder message if TOPICS is nil or empty."
                    (format "| %s | %.0f%% | %d/%d | %s |"
                            topic (* 100 rate) kept total trend)))
                (seq-take topic-list 10)
-               "\n")))))
+                "\n")))))
+
+(defun gptel-auto-workflow--load-prefetched-content ()
+  "Load pre-fetched repo content from PIPELINE_PREFETCH_FILE env var.
+Returns content string or nil if no pre-fetched content available."
+  (let ((prefetch-file (or (getenv "PIPELINE_PREFETCH_FILE")
+                           (expand-file-name "var/tmp/prefetched-research.md"
+                                             (gptel-auto-workflow--effective-project-root)))))
+    (when (and prefetch-file (file-exists-p prefetch-file))
+      (let ((content (with-temp-buffer
+                       (insert-file-contents prefetch-file)
+                       (buffer-string))))
+        (if (> (length content) 200)
+            (progn
+              (message "[research] Loaded pre-fetched content from %s (%d chars)"
+                       (file-name-nondirectory prefetch-file) (length content))
+              content)
+          (message "[research] Pre-fetched file %s too small (%d chars), skipping"
+                   (file-name-nondirectory prefetch-file) (length content))
+          nil)))))
 
 (defun gptel-auto-workflow--build-research-prompt ()
   "Build external research prompt by loading RESEARCHER.md skill.
@@ -628,6 +647,12 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (recent-outcomes (gptel-auto-workflow--build-recent-trace-outcomes-string)))
     (concat (or base-prompt "")
             "\n\n"
+            (let ((prefetched (gptel-auto-workflow--load-prefetched-content)))
+              (if prefetched
+                  (concat "## Pre-Fetched Repo Content (already fetched — synthesize from this)\n\n"
+                          prefetched
+                          "\n\n")
+                ""))
             "## Dynamic Context\n\n"
             (if (string-empty-p skill-content)
                 ""
@@ -1207,20 +1232,14 @@ include raw URLs in the summary."
             (string-match-p "\\b\\(karthink/gptel\\|hermes-agent\\|zeroclaw\\|ml-intern\\)\\b" response))))
 
 (defun gptel-auto-workflow--research-error-p (response)
-  "Return non-nil when RESPONSE is a researcher task failure wrapper.
-Treats short responses (< 500 chars) without external references as failures.
-Long responses (>1000 chars) are assumed successful and never flagged as errors.
-Only checks retryable-error patterns for short responses that look like error messages."
+  "Return non-nil when RESPONSE is a true researcher failure (error wrapper or empty).
+Does NOT flag short but substantive responses as errors — the controller
+decides quality, not a length threshold."
   (and (stringp response)
        (or (string-match-p "\\`Error:" response)
-           ;; Only check retryable errors for short responses (<1000 chars)
-           ;; that are likely error messages, not valid research output
-           (and (< (length response) 1000)
-                (fboundp 'gptel-auto-experiment--is-retryable-error-p)
-                (gptel-auto-experiment--is-retryable-error-p response))
-           ;; Only flag as missing external content if short AND no refs
-           (and (< (length response) 500)
-                (not (gptel-auto-workflow--research-has-external-content-p response))))))
+           (< (length response) 50)
+           (and (fboundp 'gptel-auto-experiment--is-retryable-error-p)
+                (gptel-auto-experiment--is-retryable-error-p response)))))
 
 (defun gptel-auto-workflow--analyzer-transient-error-p (response)
   "Return non-nil when RESPONSE reflects a transient analyzer/provider failure."
