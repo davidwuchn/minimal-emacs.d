@@ -155,6 +155,12 @@ When CACHED-STATE is provided, uses it instead of querying git again."
           30))
        "")))
 
+(defun gptel-auto-workflow--staging-has-conflict-markers-p ()
+  "Return non-nil if any staged file contains unresolved conflict markers."
+  (let* ((result (gptel-auto-workflow--git-result "git diff --cached" 30))
+         (diff (and (= 0 (cdr result)) (car result))))
+    (and diff (string-match-p "^\\+<<<<<<< " diff))))
+
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
   "Merge OPTIMIZE-BRANCH to staging using cherry-pick.
 Cherry-pick the tip commit of OPTIMIZE-BRANCH onto staging.
@@ -202,14 +208,18 @@ Uses the staging worktree instead of switching branches in the root repo."
                    (message "[auto-workflow] Failed to resolve commit hash for %s"
                             optimize-branch)
                    nil)
-                  ((= 0 (cdr cherry-result))
-                   (let ((commit-result
-                          (gptel-auto-workflow--git-result
-                           (format "%s git commit -m %s"
-                                   gptel-auto-workflow--skip-submodule-sync-env
-                                   (shell-quote-argument merge-message))
-                           commit-timeout)))
-                     (cond
+                   ((= 0 (cdr cherry-result))
+                    (let ((commit-result
+                           (gptel-auto-workflow--git-result
+                            (format "%s git commit -m %s"
+                                    gptel-auto-workflow--skip-submodule-sync-env
+                                    (shell-quote-argument merge-message))
+                            commit-timeout)))
+                      (when (gptel-auto-workflow--staging-has-conflict-markers-p)
+                        (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                        (message "[auto-workflow] Cherry-pick produced conflict markers; refusing commit")
+                        (setq commit-result (cons "Conflict markers detected" 1)))
+                      (cond
                       ((= 0 (cdr commit-result))
                        t)
                       ((progn
@@ -258,7 +268,8 @@ Uses the staging worktree instead of switching branches in the root repo."
                                   180))
                                 (merge-output (or (car-safe merge-result) "")))
                            (cond
-                            ((= 0 (cdr merge-result)) t)
+                            ((= 0 (cdr merge-result))
+                             (not (gptel-auto-workflow--staging-has-conflict-markers-p)))
                             ((string-match-p "Already up[ -]to[- ]date" merge-output)
                              :already-integrated)
                              (t
