@@ -8,24 +8,24 @@ insight-quality: 1.1/10
 
 # Research Strategy: persisted-findings
 
-*Consolidated from 37 experiments (11% keep rate).*
+*Consolidated from 38 experiments (11% keep rate).*
 
 **Performance:** 4 kept / 8 discarded / 6 failed
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent.el` (1 kept / 6 discarded / 2 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (1 kept / 1 failed)
-- `lisp/modules/gptel-tools-agent-error.el` (1 kept / 1 discarded)
-- `lisp/modules/gptel-ext-fsm.el` (1 kept / 1 discarded)
+- `lisp/modules/gptel-tools-agent.el`
+- `lisp/modules/gptel-auto-workflow-strategic.el`
+- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-ext-fsm.el`
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-tools-agent.el` (1 kept / 6 discarded / 2 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (1 kept / 1 failed)
-- `lisp/modules/gptel-tools-agent-subagent.el` (3 failed)
+- `lisp/modules/gptel-tools-agent.el`
+- `lisp/modules/gptel-auto-workflow-strategic.el`
+- `lisp/modules/gptel-tools-agent-subagent.el`
 
 ## Meta-Learning Recommendations
 

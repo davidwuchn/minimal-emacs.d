@@ -14,15 +14,15 @@ insight-quality: 1.8/10
 
 ## Successful Targets
 
-- `lisp/modules/gptel-ext-fsm-utils.el` (3 kept / 4 discarded)
-- `lisp/modules/gptel-ext-context-cache.el` (1 kept / 2 discarded / 1 failed)
+- `lisp/modules/gptel-ext-fsm-utils.el`
+- `lisp/modules/gptel-ext-context-cache.el`
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-sandbox.el` (1 discarded / 2 failed)
-- `lisp/modules/gptel-ext-context-cache.el` (1 kept / 2 discarded / 1 failed)
+- `lisp/modules/gptel-sandbox.el`
+- `lisp/modules/gptel-ext-context-cache.el`
 
 ## Meta-Learning Recommendations
 

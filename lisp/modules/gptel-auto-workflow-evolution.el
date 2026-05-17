@@ -634,7 +634,8 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
             (with-temp-file knowledge-file
               (insert "---\n")
               (insert (format "title: Experiment Insights - %s\n" target-key))
-              (insert "status: active\n")
+        (insert "status: active\n")
+        (insert "confidence: EXTRACTED\n")
               (insert "category: knowledge\n")
               (insert (format "tags: [auto-workflow, experiments, %s]\n"
                               (replace-regexp-in-string "[ /]" "-" target-key)))

@@ -14,7 +14,7 @@ insight-quality: 3.3/10
 
 ## Successful Targets
 
-- `lisp/modules/gptel-benchmark-evolution.el` (1 kept / 2 discarded)
+- `lisp/modules/gptel-benchmark-evolution.el`
 
 ## Meta-Learning Recommendations
 
