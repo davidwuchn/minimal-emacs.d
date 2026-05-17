@@ -31,22 +31,23 @@
         (error "Cannot determine module directory"))
       (setq gptel-tools-agent--module-dir (file-name-directory file))))
   (unless (featurep feature)
-    (let* ((source (and gptel-tools-agent--module-dir
-                        (expand-file-name (format "%s.el" feature)
-                                          gptel-tools-agent--module-dir)))
-           (load-error nil))
-      (if (and source (file-readable-p source))
+    (let ((source (expand-file-name (format "%s.el" feature)
+                                    gptel-tools-agent--module-dir)))
+      (if (file-readable-p source)
           (condition-case err
               (load source nil 'nomessage)
             (error
-             (setq load-error err)
              (condition-case nil
                  (require feature)
                (error
+<<<<<<< HEAD
                 (error "Failed to load %s: %s (require also failed)" source (error-message-string load-error))))))
+=======
+                (error "Failed to load %s: %S (require also failed)" source err)))))
+>>>>>>> 24f3ea54 (Merge optimize/agent-neopi5-r111511z2df4-exp3 for verification)
         (require feature))
       (unless (featurep feature)
-        (error "Module %s did not provide feature %S" (or source feature) feature)))))
+        (error "Module %s did not provide feature %S" source feature)))))
 
 (dolist (feature '(gptel-tools-agent-base
                    gptel-tools-agent-git
