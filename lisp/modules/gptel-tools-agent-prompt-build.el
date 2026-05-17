@@ -154,6 +154,38 @@ Returns the adjusted max chars value."
       (message "[prompt-efficiency] Skill-guided compression: %d chars" compression)))
   gptel-auto-workflow--topic-knowledge-max-chars)
 
+;; ─── Prompt Structure Scoring (verbum + nucleus pattern) ───
+
+(defun gptel-auto-experiment--prompt-structure-score (prompt)
+  "Score PROMPT structure quality (0.0-1.0).
+Like nucleus's compiler: well-structured prompts 'compile' better.
+Criteria: has sections, has examples, has specific guidance, right length."
+  (let ((score 0.0))
+    (when (stringp prompt)
+      ;; Has explicit sections (+0.2)
+      (when (string-match-p "## " prompt)
+        (setq score (+ score 0.2)))
+      ;; Has code examples (+0.2)
+      (when (string-match-p "```" prompt)
+        (setq score (+ score 0.2)))
+      ;; Has specific instructions / numbered lists (+0.15)
+      (when (string-match-p "^[0-9]+\\." prompt)
+        (setq score (+ score 0.15)))
+      ;; Right size: 2000-12000 chars (+0.2)
+      (let ((len (length prompt)))
+        (when (and (> len 2000) (< len 12000))
+          (setq score (+ score 0.2)))
+        ;; Penalty for too short (<1000) or too long (>18000)
+        (when (< len 1000) (setq score (max 0 (- score 0.15))))
+        (when (> len 18000) (setq score (max 0 (- score 0.1)))))
+      ;; Has action verbs (+0.15)
+      (when (string-match-p "\\bfix\\b\\|\\badd\\b\\|\\bremove\\b\\|\\brefactor\\b\\|\\bimprove\\b" prompt)
+        (setq score (+ score 0.15)))
+      ;; Has target-specific reference (+0.1)
+      (when (string-match-p "lisp/modules/" prompt)
+        (setq score (+ score 0.1))))
+    (min 1.0 score)))
+
 ;;; Section A/B Testing
 
 (defvar gptel-auto-workflow--ab-test-sections

@@ -1696,6 +1696,25 @@ Like promptfoo's model comparison: data-driven backend selection."
              by-backend)
     (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
 
+(defun gptel-auto-workflow--evolution-strategy-structure-scores ()
+  "Analyze prompt structure scores per strategy from experiment results.
+Returns alist of (strategy . avg-structure-score) for strategies with >3 experiments."
+  (let ((by-strategy (make-hash-table :test 'equal))
+        (stats nil))
+    (dolist (result (gptel-auto-workflow--parse-all-results))
+      (let ((strategy (or (plist-get result :strategy) "template-default"))
+            (structure (plist-get result :prompt-structure)))
+        (when (numberp structure)
+          (let ((entry (or (gethash strategy by-strategy) (cons 0 0.0))))
+            (setcar entry (1+ (car entry)))
+            (setcdr entry (+ (cdr entry) structure))
+            (puthash strategy entry by-strategy)))))
+    (maphash (lambda (strategy acc)
+               (when (> (car acc) 3)
+                 (push (cons strategy (/ (cdr acc) (car acc))) stats)))
+             by-strategy)
+    (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
+
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
   "Auto-reorder the fallback chain based on backend performance data.
 Moves better-performing backends to the front of the fallback chain."
