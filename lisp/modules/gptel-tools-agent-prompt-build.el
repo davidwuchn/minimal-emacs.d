@@ -255,23 +255,7 @@ Returns nil if called synchronously without CALLBACK (use callback pattern)."
                (fboundp 'gptel-auto-workflow--load-skill-content))
     (when callback (funcall callback (cons 0.0 0)))
     (throw 'compile-early-return nil))
-  (let* ((compiler-file (expand-file-name "packages/nucleus/COMPILER.md"
-                                           (gptel-auto-workflow--worktree-base-root)))
-         (compiler-prompt
-          (if (file-exists-p compiler-file)
-              (with-temp-buffer
-                (insert-file-contents compiler-file)
-                (goto-char (point-min))
-                ;; Extract the system prompt section (after ## The Prompt)
-                (if (re-search-forward "^## The Prompt" nil t)
-                    (buffer-substring (match-beginning 0) (point-max))
-                  (buffer-string)))
-            "λ bridge(x). prose ↔ EDN | structural_equivalence | compile: prose → EDN statechart"))
-         (system-prompt (concat "λ engage(nucleus).\n"
-                                "[phi fractal euler tao pi mu ∃ ∀] | "
-                                "[Δ λ Ω ∞/0 | ε/φ Σ/μ c/h signal/noise order/entropy truth/provability self/other] | OODA\n"
-                                "Human ⊗ AI ⊗ REPL\n\n"
-                                compiler-prompt))
+  (let* ((system-prompt (gptel-auto-experiment--nucleus-compiler-prompt))
          (prompt (format "compile:\n\n%s" prompt-strategy)))
     (gptel-request
      prompt
@@ -282,6 +266,68 @@ Returns nil if called synchronously without CALLBACK (use callback pattern)."
                    (when callback (funcall callback (cons score elements)))))
      :system system-prompt
      :timeout 30))))
+
+(defun gptel-auto-experiment--decompile-score (edn-text callback)
+  "Decompile EDN-TEXT back to prose via nucleus decompiler.
+CALLBACK receives the decompiled prose string.
+Use for fixed-point forging: compile→decompile→compile→decompile until stable."
+  (unless (and (fboundp 'gptel-request))
+    (funcall callback edn-text)
+    (throw 'compile-early-return nil))
+  (let* ((decompile-prompt (format "decompile:\n\n%s" edn-text))
+         (system-prompt (gptel-auto-experiment--nucleus-compiler-prompt)))
+    (gptel-request
+     decompile-prompt
+     :callback (lambda (response _info)
+                 (let ((text (if (stringp response) response (format "%s" response))))
+                   (funcall callback text)))
+     :system system-prompt
+     :timeout 30)))
+
+(defun gptel-auto-experiment--nucleus-compiler-prompt ()
+  "Return the full nucleus COMPILER.md as a system prompt string."
+  (let ((file (expand-file-name "packages/nucleus/COMPILER.md"
+                                 (gptel-auto-workflow--worktree-base-root))))
+    (if (file-exists-p file)
+        (concat "λ engage(nucleus).\n"
+                "[phi fractal euler tao pi mu ∃ ∀] | "
+                "[Δ λ Ω ∞/0 | ε/φ Σ/μ c/h signal/noise order/entropy truth/provability self/other] | OODA\n"
+                "Human ⊗ AI ⊗ REPL\n\n"
+                (with-temp-buffer
+                  (insert-file-contents file)
+                  (goto-char (point-min))
+                  (if (re-search-forward "^## The Prompt" nil t)
+                      (buffer-substring (match-beginning 0) (point-max))
+                    (buffer-string))))
+      "λ bridge(x). prose ↔ EDN | structural_equivalence")))
+
+(defun gptel-auto-experiment--forge-lambda-fixed-point (prompt callback &optional max-rounds)
+  "Forge fixed-point prompt via nucleus compile↔decompile round-trip.
+Like verbum's fixed-point forging: compile→decompile→compile→decompile
+until the EDN stabilizes (same structure on consecutive rounds).
+CALLBACK receives (final-prompt . rounds) when forging completes."
+  (let ((rounds (or max-rounds 3))
+        (current prompt)
+        (prev-edn nil)
+        (attempt 0))
+    (cl-labels ((next-round ()
+                  (if (>= attempt rounds)
+                      (funcall callback (cons current attempt))
+                    (gptel-auto-experiment--compile-score
+                     current
+                     (lambda (compile-result)
+                       (let* ((_score (car compile-result))
+                              (edn-text (format "compile result with %d elements" (cdr compile-result))))
+                         (if (and prev-edn (string= edn-text prev-edn))
+                             (funcall callback (cons current (1+ attempt))) ;; converged
+                           (setq prev-edn edn-text)
+                           (gptel-auto-experiment--decompile-score
+                            edn-text
+                            (lambda (decompiled)
+                              (setq current decompiled)
+                              (setq attempt (1+ attempt))
+                              (next-round))))))))))
+      (next-round))))
 
 (defun gptel-auto-experiment--edn-richness-score (edn-text)
   "Score EDN output richness (0.0-1.0). Counts states, transitions, guards."
