@@ -751,9 +751,27 @@ knowledge pages or YAML tags."
               (not (string-match-p "\\bREJECTED\\b" trimmed))
               (string-match-p "\\`[[:alnum:]][[:alnum:]_-]*\\'" trimmed)))))
 
+(defun gptel-auto-workflow--valid-knowledge-input-p (results)
+  "Validate RESULTS have required structure before synthesis.
+Like graphify's validate.py: reject malformed input before processing.
+Each result must have :target (non-empty string) and :decision (string)."
+  (and (proper-list-p results)
+       (> (length results) 2)
+       (cl-every (lambda (r)
+                   (and (proper-list-p r)
+                        (let ((target (plist-get r :target))
+                              (decision (plist-get r :decision)))
+                          (and (stringp target)
+                               (not (string-empty-p target))
+                               (stringp decision)
+                               (not (string-empty-p decision))))))
+                 results)))
+
 (defun gptel-auto-workflow--synthesize-research-knowledge (strategy results)
   "Synthesize knowledge page for research STRATEGY from RESULTS.
 Returns t if page created."
+  (unless (gptel-auto-workflow--valid-knowledge-input-p results)
+    (cl-return-from gptel-auto-workflow--synthesize-research-knowledge nil))
   (let* ((strategy-name (and (stringp strategy) (string-trim strategy)))
          (total (length results))
          (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
