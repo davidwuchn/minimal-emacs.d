@@ -1316,6 +1316,8 @@ EDGE CASE: nil returns nil, non-list atoms return nil."
   "Handle analyzer error states and invoke CALLBACK with appropriate targets.
 TARGETS is the analyzer result, STATIC-TARGETS is fallback list.
 Returns non-nil if error state was handled."
+  (unless (functionp callback)
+    (error "gptel-auto-workflow--handle-analyzer-error-state: callback must be a function"))
   (cond
    ((and gptel-auto-workflow--analyzer-quota-exhausted
          (not targets))
