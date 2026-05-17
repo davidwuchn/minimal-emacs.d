@@ -250,13 +250,27 @@ Returns (refined-prompt . iterations)."
 Sends prompt to a fast LLM with the nucleus COMPILER.md as system prompt.
 CALLBACK receives (score . edn-element-count) where score is 0.0-1.0.
 Returns nil if called synchronously without CALLBACK (use callback pattern)."
+  (catch 'compile-early-return
   (unless (and (fboundp 'gptel-request)
                (fboundp 'gptel-auto-workflow--load-skill-content))
     (when callback (funcall callback (cons 0.0 0)))
-    (cl-return-from gptel-auto-experiment--compile-score nil))
-  (let* ((compiler-prompt (or (gptel-auto-workflow--load-skill-content "nucleus-compiler")
-                              "λ bridge(x). prose ↔ lambda | structural_equivalence | compile: prose → EDN"))
-         (system-prompt (concat "λ engage(nucleus).\n[phi fractal euler tao pi mu] | [Δ λ Ω ∞/0] | OODA\nHuman ⊗ AI ⊗ REPL\n\n"
+    (throw 'compile-early-return nil))
+  (let* ((compiler-file (expand-file-name "packages/nucleus/COMPILER.md"
+                                           (gptel-auto-workflow--worktree-base-root)))
+         (compiler-prompt
+          (if (file-exists-p compiler-file)
+              (with-temp-buffer
+                (insert-file-contents compiler-file)
+                (goto-char (point-min))
+                ;; Extract the system prompt section (after ## The Prompt)
+                (if (re-search-forward "^## The Prompt" nil t)
+                    (buffer-substring (match-beginning 0) (point-max))
+                  (buffer-string)))
+            "λ bridge(x). prose ↔ EDN | structural_equivalence | compile: prose → EDN statechart"))
+         (system-prompt (concat "λ engage(nucleus).\n"
+                                "[phi fractal euler tao pi mu ∃ ∀] | "
+                                "[Δ λ Ω ∞/0 | ε/φ Σ/μ c/h signal/noise order/entropy truth/provability self/other] | OODA\n"
+                                "Human ⊗ AI ⊗ REPL\n\n"
                                 compiler-prompt))
          (prompt (format "compile:\n\n%s" prompt-strategy)))
     (gptel-request
@@ -267,7 +281,7 @@ Returns nil if called synchronously without CALLBACK (use callback pattern)."
                         (elements (gptel-auto-experiment--count-edn-elements text)))
                    (when callback (funcall callback (cons score elements)))))
      :system system-prompt
-     :timeout 30)))
+     :timeout 30))))
 
 (defun gptel-auto-experiment--edn-richness-score (edn-text)
   "Score EDN output richness (0.0-1.0). Counts states, transitions, guards."
