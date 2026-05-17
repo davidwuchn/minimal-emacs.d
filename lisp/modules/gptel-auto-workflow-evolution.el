@@ -870,6 +870,40 @@ Reduces full file content to a one-paragraph structure overview (no LLM cost)."
                 parts))))
     (concat "```elisp-structure\n" (string-join (nreverse parts) "\n") "\n```")))
 
+(defun gptel-auto-workflow--module-cohesion (file-path)
+  "Score how cohesive an Elisp module is (0.0-1.0).
+Like graphify's cohesion_score(): ratio of internal references to total.
+High cohesion: most defun calls target other defuns in the same file.
+Low cohesion: module is a grab-bag of unrelated functions — candidate for refactoring."
+  (let* ((structure (gptel-auto-workflow--extract-elisp-structure file-path))
+         (defuns (plist-get structure :defuns))
+         (requires (plist-get structure :requires))
+         (declares (plist-get structure :declares))
+         (internal-refs 0)
+         (external-refs 0))
+    (dolist (dep (append requires declares))
+      (if (member dep defuns)
+          (setq internal-refs (1+ internal-refs))
+        (setq external-refs (1+ external-refs))))
+    (let ((total (+ internal-refs external-refs)))
+      (if (> total 0)
+          (/ (float internal-refs) total)
+        1.0))))
+
+(defun gptel-auto-workflow--find-surprising-modules (module-dir)
+  "Find modules with unexpected dependency patterns.
+Like graphify's surprising_connections(): modules that bridge
+disconnected areas or have low cohesion.
+Returns list of (file-path . cohesion-score) sorted by score ascending."
+  (let ((results nil))
+    (dolist (file (directory-files module-dir t "\\.el$"))
+      (let ((score (gptel-auto-workflow--module-cohesion file)))
+        (when (< score 0.5)
+          (push (cons file score) results))))
+    (sort results (lambda (a b) (< (cdr a) (cdr b))))))
+
+;; ─── Knowledge Synthesis ───
+
 (defun gptel-auto-workflow--synthesize-research-knowledge (strategy results)
   "Synthesize knowledge page for research STRATEGY from RESULTS.
 Returns t if page created."
