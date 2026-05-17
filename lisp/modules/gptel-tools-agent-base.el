@@ -66,7 +66,7 @@ Helper for validation in callback-based functions."
 Reduces duplication of `(or (plist-get ...) default-value)` patterns.
 Handles the common case where a key exists in the plist but has a nil value,
 which would otherwise cause format specifier errors when passed to format strings."
-  (if (listp plist)
+  (if (proper-list-p plist)
       (if (plist-member plist key)
           (let ((value (plist-get plist key)))
             (if (null value) default value))
