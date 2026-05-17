@@ -154,6 +154,143 @@ Returns the adjusted max chars value."
       (message "[prompt-efficiency] Skill-guided compression: %d chars" compression)))
   gptel-auto-workflow--topic-knowledge-max-chars)
 
+;; ─── Prompt Structure Scoring (verbum + nucleus pattern) ───
+
+(defun gptel-auto-experiment--prompt-structure-score (prompt)
+  "Score PROMPT structure quality (0.0-1.0).
+Like nucleus's compiler: well-structured prompts 'compile' better.
+Criteria: has sections, has examples, has specific guidance, right length."
+  (let ((score 0.0))
+    (when (stringp prompt)
+      ;; Has explicit sections (+0.2)
+      (when (string-match-p "## " prompt)
+        (setq score (+ score 0.2)))
+      ;; Has code examples (+0.2)
+      (when (string-match-p "```" prompt)
+        (setq score (+ score 0.2)))
+      ;; Has specific instructions / numbered lists (+0.15)
+      (when (string-match-p "^[0-9]+\\." prompt)
+        (setq score (+ score 0.15)))
+      ;; Right size: 2000-12000 chars (+0.2)
+      (let ((len (length prompt)))
+        (when (and (> len 2000) (< len 12000))
+          (setq score (+ score 0.2)))
+        ;; Penalty for too short (<1000) or too long (>18000)
+        (when (< len 1000) (setq score (max 0 (- score 0.15))))
+        (when (> len 18000) (setq score (max 0 (- score 0.1)))))
+      ;; Has action verbs (+0.15)
+      (when (string-match-p "\\bfix\\b\\|\\badd\\b\\|\\bremove\\b\\|\\brefactor\\b\\|\\bimprove\\b" prompt)
+        (setq score (+ score 0.15)))
+      ;; Has target-specific reference (+0.1)
+      (when (string-match-p "lisp/modules/" prompt)
+        (setq score (+ score 0.1))))
+    (min 1.0 score)))
+
+;; ─── KIBC-M Axis Tagging (verbum lambda kernel pattern) ───
+
+(defconst gptel-auto-experiment--kibcm-patterns
+  ;; Tier 1 — Confirmed (KIBC-M: all models, all scales)
+  '((:K "nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove nil\\|unless nil\\|when nil\\|error.*handling")
+    (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same entity\\|unchanged\\|copy\\|self[^a-z]")
+    (:B "compose\\|chain\\|extract helper\\|helper function\\|refactor into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
+    (:C "reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
+    (:M "pattern\\|template\\|apply pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar to")
+    ;; Tier 2 — Predicted (seeking discovery: larger models)
+    (:W "duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
+    (:T "type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
+    (:PHI "both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
+    (:D "deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
+    ;; Tier 3 — Structural (architecture-level)
+    (:SCOPE "scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
+    (:SUBST "simplif\\|reductio\\|substitut\\|replace.*with\\|instead of\\|compress\\|shorte\\|inline\\|expand")
+    (:WHNF "done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
+    ;; Tier 4 — Meta (self-evolution itself)
+    (:Y "recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
+    (:QUOTE "document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))
+  "15-axis KIBC-M+ operation patterns for hypothesis classification.
+Tier 1 (K,I,B,C,M): confirmed in all models.
+Tier 2 (W,T,PHI,D): predicted in larger models.
+Tier 3 (SCOPE,SUBST,WHNF): structural/architecture operations.
+Tier 4 (Y,QUOTE): meta/self-referential operations.
+Like verbum's lambda_kernel_probes.py: 400 probes across 15 axes.")
+
+(defun gptel-auto-experiment--kibcm-axis (hypothesis)
+  "Classify HYPOTHESIS into KIBC-M operation axis (:K :I :B :C :M or nil)."
+  (when (stringp hypothesis)
+    (let ((best nil) (best-score 0))
+      (dolist (entry gptel-auto-experiment--kibcm-patterns)
+        (let* ((axis (car entry)) (pattern (cadr entry))
+               (count 0) (pos 0))
+          (while (string-match pattern hypothesis pos)
+            (setq count (1+ count) pos (match-end 0)))
+          (when (> count best-score)
+            (setq best axis best-score count))))
+      best)))
+
+(defun gptel-auto-experiment--forge-fixed-point (prompt &optional max-iterations)
+  "Deterministic fixed-point refinement: iteratively improve structure score.
+Returns (refined-prompt . iterations)."
+  (let ((current prompt) (iter 0) (max-iter (or max-iterations 3)))
+    (while (< iter max-iter)
+      (let* ((score (gptel-auto-experiment--prompt-structure-score current))
+             (improved current))
+        (when (and (< iter 1) (not (string-match-p "## " current)))
+          (setq improved (concat "## Fix\n\n" current)))
+        (when (and (< iter 2) (not (string-match-p "```" current))
+                   (string-match-p "lisp/modules/" current))
+          (setq improved (concat improved "\n\nUse Read and Edit tools.")))
+        (if (string= improved current)
+            (setq iter max-iter)
+          (setq current improved))
+        (setq iter (1+ iter))))
+    (cons current iter)))
+
+(defun gptel-auto-experiment--compile-score (prompt-strategy &optional callback)
+  "Audit PROMPT-STRATEGY via nucleus compiler (prose → EDN richness score).
+Sends prompt to a fast LLM with the nucleus COMPILER.md as system prompt.
+CALLBACK receives (score . edn-element-count) where score is 0.0-1.0.
+Returns nil if called synchronously without CALLBACK (use callback pattern)."
+  (unless (and (fboundp 'gptel-request)
+               (fboundp 'gptel-auto-workflow--load-skill-content))
+    (when callback (funcall callback (cons 0.0 0)))
+    (cl-return-from gptel-auto-experiment--compile-score nil))
+  (let* ((compiler-prompt (or (gptel-auto-workflow--load-skill-content "nucleus-compiler")
+                              "λ bridge(x). prose ↔ lambda | structural_equivalence | compile: prose → EDN"))
+         (system-prompt (concat "λ engage(nucleus).\n[phi fractal euler tao pi mu] | [Δ λ Ω ∞/0] | OODA\nHuman ⊗ AI ⊗ REPL\n\n"
+                                compiler-prompt))
+         (prompt (format "compile:\n\n%s" prompt-strategy)))
+    (gptel-request
+     prompt
+     :callback (lambda (response _info)
+                 (let* ((text (if (stringp response) response (format "%s" response)))
+                        (score (gptel-auto-experiment--edn-richness-score text))
+                        (elements (gptel-auto-experiment--count-edn-elements text)))
+                   (when callback (funcall callback (cons score elements)))))
+     :system system-prompt
+     :timeout 30)))
+
+(defun gptel-auto-experiment--edn-richness-score (edn-text)
+  "Score EDN output richness (0.0-1.0). Counts states, transitions, guards."
+  (let ((score 0.0))
+    (when (stringp edn-text)
+      (when (string-match-p ":states" edn-text) (setq score (+ score 0.3)))
+      (when (string-match-p ":on" edn-text) (setq score (+ score 0.2)))
+      (when (string-match-p ":guard\\|:unless\\|:when" edn-text) (setq score (+ score 0.2)))
+      (when (string-match-p ":entry\\|:action" edn-text) (setq score (+ score 0.2)))
+      (when (string-match-p ":target" edn-text) (setq score (+ score 0.1))))
+    (min 1.0 score)))
+
+(defun gptel-auto-experiment--count-edn-elements (edn-text)
+  "Count structural EDN elements (states, transitions, guards)."
+  (let ((count 0))
+    (when (stringp edn-text)
+      (dolist (pat '(":states" ":on" ":guard" ":entry" ":action" ":target"))
+        (let ((pos 0))
+          (while (string-match pat edn-text pos)
+            (setq count (1+ count))
+            (setq pos (match-end 0))))))
+    count))
+
 ;;; Section A/B Testing
 
 (defvar gptel-auto-workflow--ab-test-sections
