@@ -293,6 +293,12 @@ accumulate-score, accumulate-scores, and extract-score-types."
   (cond
    ((numberp value) value)
    ((null value) 0.0)
+   ((stringp value)
+    (if (string-match-p "\\`-?[0-9]+\\(\\.[0-9]+\\)?\\'" value)
+        (string-to-number value)
+      (when warn-p
+        (message "[benchmark] Non-numeric string score %S treated as 0" value))
+      0.0))
    (t
     (when warn-p
       (message "[benchmark] Non-numeric score %S treated as 0" value))
@@ -474,9 +480,9 @@ RESULTS should contain :eight-keys-scores in each entry."
       (push "All tests passing - consider increasing difficulty" recommendations))
     (let ((issues-alist '()))
       (cl-flet ((collect-issue (issue-type count)
-                 (push (cons issue-type count) issues-alist)
-                 (push (format "Address %s issues in %d test(s)" issue-type count)
-                       recommendations)))
+                  (push (cons issue-type count) issues-alist)
+                  (push (format "Address %s issues in %d test(s)" issue-type count)
+                        recommendations)))
         (maphash #'collect-issue issues))
       (list :issues issues-alist
             :recommendations (delete-dups recommendations)
