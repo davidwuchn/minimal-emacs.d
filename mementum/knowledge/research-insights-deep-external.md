@@ -10,13 +10,13 @@ insight-quality: 3.3/10
 
 *Consolidated from 3 experiments (33% keep rate).*
 
-**Performance:** 1 kept / 2 discarded / 0 failed (EXTRACTED — from TSV)
+**Performance:** 1 kept / 2 discarded / 0 failed
 
 ## Successful Targets
 
-- `lisp/modules/gptel-benchmark-evolution.el` (1 kept / 2 discarded)
+- `lisp/modules/gptel-benchmark-evolution.el`
 
-## Meta-Learning Recommendations (INFERRED — from pattern analysis)
+## Meta-Learning Recommendations
 
 - **This strategy shows promise.** Refine the research prompt.
 - Focus on more specific code patterns (e.g., specific functions rather than broad categories).
