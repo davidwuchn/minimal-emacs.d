@@ -907,9 +907,9 @@ Returns list of (file-path . cohesion-score) sorted by score ascending."
 (defun gptel-auto-workflow--synthesize-research-knowledge (strategy results)
   "Synthesize knowledge page for research STRATEGY from RESULTS.
 Returns t if page created."
-  (catch 'early-return
+  (cl-block gptel-auto-workflow--synthesize-research-knowledge
   (unless (gptel-auto-workflow--valid-knowledge-input-p results)
-    (throw 'early-return nil))
+    (cl-return-from gptel-auto-workflow--synthesize-research-knowledge nil))
   (let* ((strategy-name (and (stringp strategy) (string-trim strategy)))
          (total (length results))
          (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
@@ -943,7 +943,7 @@ Returns t if page created."
                 (> kept 0))
       (when (gptel-auto-workflow--results-cache-fresh-p strategy results knowledge-dir safe-strategy)
         (message "[evolution] Results unchanged for %s, skipping synthesis" strategy-name)
-        (throw 'early-return t))
+        (cl-return-from gptel-auto-workflow--synthesize-research-knowledge t))
       (make-directory knowledge-dir t)
       (with-temp-file knowledge-file
         (insert "---\n")
@@ -1026,8 +1026,7 @@ Returns t if page created."
       (message "[evolution] Synthesized research knowledge for %s → %s"
                strategy-name knowledge-file)
       (gptel-auto-workflow--results-cache-save results knowledge-dir safe-strategy)
-      t)))
-  )
+      t))))
 
 (defun gptel-auto-workflow--evolution-research-synthesize ()
   "Synthesize research insights from all historical results.
