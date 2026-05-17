@@ -1452,20 +1452,16 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
            (lambda (targets)
              (if (gptel-auto-workflow--handle-analyzer-error-state targets static-targets callback)
                  nil  ; Error already handled
-               (if (null targets)
-                   (progn
-                     (message "[auto-workflow] Analyzer returned no targets; using static targets")
-                     (funcall callback static-targets))
-                 (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                        (final-targets (if (and filtered-targets (listp filtered-targets))
-                                           filtered-targets
-                                         targets)))
-                   (unless (or (null filtered-targets) (listp filtered-targets))
-                     (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
-                              filtered-targets))
-                   (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
-                            (length targets) (length final-targets))
-                   (funcall callback final-targets))))))
+               (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
+                      (final-targets (if (and filtered-targets (listp filtered-targets))
+                                         filtered-targets
+                                       targets)))
+                 (unless (or (null filtered-targets) (listp filtered-targets))
+                   (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
+                            filtered-targets))
+                 (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
+                          (length targets) (length final-targets))
+                 (funcall callback final-targets)))))
         (let* ((filtered-targets (if static-targets
                                      (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
                                    nil))
