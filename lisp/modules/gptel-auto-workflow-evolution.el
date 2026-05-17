@@ -1813,22 +1813,34 @@ Returns alist of (strategy . avg-structure-score) for strategies with >3 experim
     (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
 
 (defun gptel-auto-workflow--audit-signal ()
-  "Return list of strategies needing nucleus compile audit.
-Signals: structure score < 0.15 OR keep rate < 5% with >10 experiments.
-Call from emacsclient --eval to check which strategies need attention."
+  "Audit strategies needing nucleus compile review.
+Schedules async compile-score checks for strategies with low structure scores.
+Returns list of strategies that were flagged."
   (interactive)
   (let ((needs-audit nil))
     (dolist (entry (gptel-auto-workflow--evolution-strategy-structure-scores))
       (let ((strategy (car entry))
             (avg-score (cdr entry)))
         (when (< avg-score 0.15)
-          (push (format "%s (structure: %.2f)" strategy avg-score) needs-audit))))
-    (if needs-audit
-        (progn
-          (message "[audit] %d strategies need compile audit:" (length needs-audit))
-          (dolist (s needs-audit)
-            (message "[audit]   %s" s)))
-      (message "[audit] All strategies have adequate structure scores."))
+          (push strategy needs-audit))))
+    (when needs-audit
+      (message "[audit] %d strategies flagged for auto-compile audit" (length needs-audit))
+      ;; Auto-audit the worst strategy (lowest structure score)
+      (let ((worst (car (last needs-audit))))
+        (message "[audit] Auto-compiling strategy '%s' via nucleus compiler..." worst)
+        (condition-case nil
+            (gptel-auto-experiment--compile-score
+             worst
+             (lambda (result)
+               (let ((score (car result))
+                     (elements (cdr result)))
+                 (if (> score 0.3)
+                     (message "[audit] Strategy '%s' passed audit: EDN richness %.2f, %d elements"
+                              worst score elements)
+                   (message "[audit] Strategy '%s' FAILED audit: EDN richness %.2f, %d elements — review recommended"
+                            worst score elements)))))
+          (error
+           (message "[audit] Strategy '%s' compile audit failed (gptel-request unavailable)" worst)))))
     needs-audit))
 
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
