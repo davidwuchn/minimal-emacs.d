@@ -1824,7 +1824,28 @@ Maps nucleus VSM layers to our system components:
                                           issues-a issues-b
                                           (if (< issues-a issues-b) "HA has cleaner spec"
                                             (if (< issues-b issues-a) "HB has cleaner spec"
-                                              "equally coherent"))))))))))))))))
+                                               "equally coherent"))))))))))))))))
+      ;; Conflict detection (Semantica pattern)
+      (condition-case nil
+          (let ((conflicts (gptel-auto-workflow--detect-hypothesis-conflicts)))
+            (when conflicts
+              (message "[conflict] %d hypothesis opposition(s) detected:" (length conflicts))
+              (dolist (c (seq-take conflicts 3))
+                (message "[conflict]   %s: %d opposing pairs (%s) — %s"
+                         (plist-get c :target)
+                         (length (plist-get c :opposing-pairs))
+                         (plist-get c :severity)
+                         (plist-get c :recommendation)))))
+         (error nil))
+      ;; Ontology snapshot + causal links (Semantica pattern)
+      (condition-case nil
+          (let ((ontology (gptel-auto-workflow--generate-experiment-ontology))
+                (causal (gptel-auto-workflow--experiment-causal-links)))
+            (message "[onto] Ontology: %d classes, %d instances"
+                     (plist-get ontology :class-count) (plist-get ontology :instance-count))
+            (when (> (length causal) 0)
+              (message "[causal] %d targets with multi-experiment chains" (length causal))))
+        (error nil))
       (error nil))))
 
 (defun gptel-auto-workflow--detect-minimal-pairs (target)
@@ -2200,6 +2221,176 @@ Use to determine which minimal pair has cleaner behavioral specification."
                                        (car (gptel-auto-experiment--allium-issues-count issues-b)))))))))))))))
     (when callback (funcall callback (cons 99 99)))
     nil))
+
+;; ─── Semantica Ontology: experiment → class/instance structure ───
+
+(defun gptel-auto-workflow--generate-experiment-ontology ()
+  "Generate an ontology from experiment results (Semantica pattern).
+Strategies → owl:Class, targets → instances, kept/discarded → outcome properties.
+Returns ontology plist with :classes, :instances, :class-count, :instance-count."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (strategy-classes (make-hash-table :test 'equal))
+         (target-instances (make-hash-table :test 'equal)))
+    (dolist (r results)
+      (let ((strategy (or (plist-get r :strategy) "template-default"))
+            (target (plist-get r :target))
+            (decision (plist-get r :decision)))
+        (when (stringp strategy)
+          (let ((entry (or (gethash strategy strategy-classes) (list :total 0 :kept 0 :discarded 0 :failed 0))))
+            (setq entry (plist-put entry :total (1+ (plist-get entry :total))))
+            (cond
+             ((equal decision "kept")
+              (setq entry (plist-put entry :kept (1+ (plist-get entry :kept)))))
+             ((equal decision "discarded")
+              (setq entry (plist-put entry :discarded (1+ (plist-get entry :discarded)))))
+             (t
+              (setq entry (plist-put entry :failed (1+ (plist-get entry :failed))))))
+            (puthash strategy entry strategy-classes)))
+        (when (and (stringp target) (not (string-empty-p target)))
+          (let ((entry (or (gethash target target-instances) (list :total 0 :kept 0 :discarded 0))))
+            (setq entry (plist-put entry :total (1+ (plist-get entry :total))))
+            (when (equal decision "kept")
+              (setq entry (plist-put entry :kept (1+ (plist-get entry :kept)))))
+            (when (equal decision "discarded")
+              (setq entry (plist-put entry :discarded (1+ (plist-get entry :discarded)))))
+            (puthash target entry target-instances)))))
+    (let ((class-list nil) (instance-list nil))
+      (maphash (lambda (strategy counts)
+                 (let ((keep-rate (if (> (plist-get counts :total) 0)
+                                      (/ (float (plist-get counts :kept)) (plist-get counts :total))
+                                    0.0)))
+                   (push (list :name strategy :@type "Strategy"
+                               :total (plist-get counts :total) :keep-rate keep-rate
+                               :status (cond ((>= keep-rate 0.5) "effective")
+                                             ((>= keep-rate 0.3) "promising")
+                                             (t "underperforming")))
+                         class-list)))
+               strategy-classes)
+      (maphash (lambda (target counts)
+                 (let ((keep-rate (if (> (plist-get counts :total) 0)
+                                      (/ (float (plist-get counts :kept)) (plist-get counts :total))
+                                    0.0)))
+                   (push (list :name target :@type "Target"
+                               :total (plist-get counts :total) :keep-rate keep-rate
+                               :classification (cond ((>= keep-rate 0.5) "high-value")
+                                                     ((>= keep-rate 0.3) "moderate")
+                                                     (t "low-value")))
+                         instance-list)))
+               target-instances)
+      (list :generated (format-time-string "%Y-%m-%dT%H:%M")
+            :classes (sort class-list (lambda (a b) (> (plist-get a :keep-rate) (plist-get b :keep-rate))))
+            :instances (sort instance-list (lambda (a b) (> (plist-get a :total) (plist-get b :total))))
+            :class-count (hash-table-count strategy-classes)
+            :instance-count (hash-table-count target-instances)))))
+
+(defun gptel-auto-workflow--experiment-causal-links ()
+  "Build causal link graph between experiments on the same target.
+BFS over :CAUSED edges to find root experiments. Semantica decision-tracking pattern.
+Returns alist of (target . (root-experiment downstream ...))."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (by-target (make-hash-table :test 'equal))
+         (causal-graph nil))
+    (dolist (r results)
+      (let ((target (plist-get r :target)))
+        (when (and (stringp target) (not (string-empty-p target)))
+          (puthash target (cons r (gethash target by-target)) by-target))))
+    (maphash
+     (lambda (target experiments)
+       (when (> (length experiments) 1)
+         (let ((sorted (sort experiments
+                             (lambda (a b)
+                               (let ((sa (plist-get a :score-after))
+                                     (sb (plist-get b :score-after)))
+                                 (> (or sa 0) (or sb 0))))))
+               (chain nil))
+           (dolist (exp sorted)
+             (let* ((decision (plist-get exp :decision))
+                    (hyp (plist-get exp :hypothesis))
+                    (score-before (plist-get exp :score-before))
+                    (score-after (plist-get exp :score-after)))
+               (push (list :hypothesis (truncate-string-to-width (or hyp "?") 60)
+                           :decision decision
+                           :delta (if (and score-before score-after)
+                                      (- score-after score-before) 0))
+                     chain)))
+           (when chain
+             (push (cons target (nreverse chain)) causal-graph)))))
+     by-target)
+    causal-graph))
+
+;; ─── Semantica Patterns: ValidationResult + Conflict Detection ───
+
+(defun gptel-auto-workflow--validation-result (valid &optional errors warnings)
+  "Create a structured validation result plist.
+VALID is t or nil. ERRORS and WARNINGS are lists of strings.
+Pattern from Semantica: universal Valid/Errors/Warnings contract."
+  (list :valid valid
+        :errors (or errors nil)
+        :warnings (or warnings nil)))
+
+(defun gptel-auto-workflow--detect-hypothesis-conflicts ()
+  "Detect contradictory hypotheses across experiments for the same target.
+Groups experiments by target, compares hypotheses for opposite claims.
+Returns list of conflict plists with :target, :hypotheses, :severity, :recommendation.
+Pattern from Semantica: group-by-entity → value-diff → severity score."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (by-target (make-hash-table :test 'equal))
+         (conflicts nil))
+    (dolist (r results)
+      (let* ((target (plist-get r :target))
+             (hyp (plist-get r :hypothesis))
+             (decision (plist-get r :decision)))
+        (when (and (stringp target) (stringp hyp)
+                   (not (string-empty-p target)))
+          (puthash target
+                   (cons (list hyp decision) (gethash target by-target))
+                   by-target))))
+    (maphash
+     (lambda (target entries)
+       (when (> (length entries) 1)
+         (let* ((kept (cl-remove-if-not (lambda (e) (equal (cadr e) "kept")) entries))
+                (discarded (cl-remove-if-not (lambda (e) (equal (cadr e) "discarded")) entries))
+                (pairs nil))
+           ;; Compare kept vs discarded hypotheses for same-context opposition
+           (dolist (k kept)
+             (dolist (d discarded)
+               (let ((kh (car k)) (dh (car d)))
+                 (when (gptel-auto-workflow--opposing-hypotheses-p kh dh)
+                   (push (cons kh dh) pairs)))))
+           (when pairs
+             (let* ((severity (if (> (length pairs) 2) "high" "medium"))
+                    (recommendation
+                     (if (equal severity "high")
+                         "Multiple opposed outcomes — reconsider strategy"
+                       "Contradictory results — test with different approach")))
+               (push (list :target target
+                           :opposing-pairs pairs
+                           :severity severity
+                           :recommendation recommendation)
+                     conflicts))))))
+     by-target)
+    conflicts))
+
+(defun gptel-auto-workflow--opposing-hypotheses-p (h1 h2)
+  "Return non-nil if H1 and H2 are opposing claims (add vs remove, nil vs non-nil).
+Simple keyword-based opposition detection."
+  (let ((opposition-pairs
+         '(("add" . "remove") ("add" . "delete") ("adding" . "removing")
+           ("nil" . "non-nil") ("guard" . "remove guard")
+           ("simplify" . "complex")
+           ("increase" . "decrease") ("more" . "less")
+           ("before" . "after") ("enable" . "disable")
+           ("optimize" . "simple"))))
+    (catch 'found
+      (dolist (pair opposition-pairs)
+        (let ((a (car pair)) (b (cdr pair)))
+          (when (and (string-match-p (regexp-quote a) h1)
+                     (string-match-p (regexp-quote b) h2))
+            (throw 'found t))
+          (when (and (string-match-p (regexp-quote b) h1)
+                     (string-match-p (regexp-quote a) h2))
+            (throw 'found t))))
+      nil)))
 
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
   "Auto-reorder the fallback chain based on backend performance data.
