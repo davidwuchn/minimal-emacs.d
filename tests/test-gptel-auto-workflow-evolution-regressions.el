@@ -800,6 +800,12 @@ so tags before allium-issues is correctly detected."
     (should (= (length results) 6))
     (should (cdr (assoc "Which strategies are effective?" results)))))
 
+(ert-deftest regression/auto-workflow-evolution/pipe-validate-no-duplicates ()
+  "validate-pipeline detects no duplicate stage names."
+  (let ((r (gptel-auto-workflow--validate-pipeline)))
+    (should (plist-get r :valid))
+    (should-not (plist-get r :errors))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
