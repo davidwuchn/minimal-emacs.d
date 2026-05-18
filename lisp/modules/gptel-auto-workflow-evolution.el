@@ -1213,7 +1213,11 @@ Writes to var/tmp/evolution/findings.md."
                                     (buffer-string)))))))
         (when raw-findings
           (push raw-findings recent-insights)
-          (when (fboundp 'gptel-auto-workflow--allium-check-research-quality)
+          (when (and (fboundp 'gptel-auto-workflow--allium-check-research-quality)
+                     (or (not (boundp 'gptel-auto-workflow--allium-audit-last-run))
+                         (> (- (float-time (current-time))
+                               (or (symbol-value 'gptel-auto-workflow--allium-audit-last-run) 0))
+                            900)))
             (gptel-auto-workflow--allium-check-research-quality
              raw-findings
              (lambda (quality-result)
@@ -1942,8 +1946,12 @@ Maps nucleus VSM layers to our system components:
                 (message "[pair] %d minimal pair(s) found for %s:" (length pairs) first-target)
                 (dolist (p (seq-take pairs 3))
                   (message "[pair]   %s" (cdr p)))
-                ;; Enrich top pair with Allium behavioral diff (async)
-                (when (fboundp 'gptel-auto-workflow--allium-diff-minimal-pairs)
+                ;; Enrich top pair with Allium behavioral diff (async, throttled)
+                (when (and (fboundp 'gptel-auto-workflow--allium-diff-minimal-pairs)
+                           (or (not (boundp 'gptel-auto-workflow--allium-audit-last-run))
+                               (> (- (float-time (current-time))
+                                     (or (symbol-value 'gptel-auto-workflow--allium-audit-last-run) 0))
+                                  900)))
                   (let* ((top-pair (car pairs))
                          (exp-a (caar top-pair))
                          (exp-b (cdar top-pair)))
