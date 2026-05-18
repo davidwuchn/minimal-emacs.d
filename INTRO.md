@@ -16,6 +16,8 @@ Your job: ship fixes fast, know what changed, never break prod. Here's how this 
 
 **You need an audit trail of what changed and why.** Every experiment is recorded with hypothesis, delta, decision, and causal links to prior experiments. You can trace "why was this function refactored in March?" back to the specific research that triggered it.
 
+**You have mass customer data and need to structure, validate, and reason over it.** The same ontology pipeline that governs 89 code files can auto-generate OWL ontologies from your data, validate records against business rules, detect conflicting values from different sources, and diff what changed between data loads. You feed it raw data, it returns structure.
+
 ---
 
 ## What It Does (In Practice)
@@ -33,6 +35,7 @@ Pipeline: researches 18 repos for nil-guard patterns,
 |-------------|-------------|
 | A target file pattern | Tested, reviewed code changes (merged or explained) |
 | A research question | Relevant techniques from GitHub, arXiv, and 18+ repos |
+| Raw data (JSON, CSV, logs) | Auto-generated ontology (classes, properties, types) |
 | Nothing (it runs autonomously) | 3-6 cycles/day of self-directed improvement |
 | A status check | What changed, what failed, what it learned |
 
@@ -102,6 +105,53 @@ ls mementum/knowledge/research-insights-*.md
 - **KIBC-M 15-axis classification**: every hypothesis tagged by operation type (nil-safety, composition, pattern-matching, etc.) — you can see which categories produce the best results
 - **Pareto frontier**: balances exploration (trying new things) vs exploitation (doing what works)
 - **Policy engine**: enforces limits (max experiments per file, min keep-rate) so it doesn't waste API quota on hopeless targets
+
+---
+
+## FDE Superpower: Ontology For Your Data, Not Just Ours
+
+Forward Deployed Engineers deal with **mass, messy data** — customer databases, log streams, API responses, config sprawl. The same ontology system that structures our pipeline can structure *yours*:
+
+**You have 10,000 JSON records from a customer's API and need to understand what's in them.** Feed them to the ontology generator:
+
+```elisp
+;; Generate ontology from your data
+(let ((onto (gptel-auto-workflow--generate-experiment-ontology)))
+  (gptel-auto-experiment--owl-save
+   onto "~/customer-data-ontology.ttl"
+   (lambda (ok) (message "Saved OWL ontology"))))
+```
+
+Result: auto-detected classes (entity types), inferred properties (relationships between them), XSD-typed fields. No hand-authoring.
+
+**You need to validate a dataset against business rules.** Add rules to the policy engine:
+
+```elisp
+(setq gptel-auto-workflow--experiment-policy
+      '(:max-items-per-entity 100
+        :min-confidence 0.7
+        :required-fields ("id" "timestamp" "source")
+        :forbidden-values ("null" "undefined" "N/A")))
+```
+
+Any record that violates these gets flagged. Same validation-result pattern — `(valid, errors, warnings)`.
+
+**You have conflicting data from two sources.** The conflict detector spots opposing claims:
+
+```
+[conflict] 3 hypothesis opposition(s) detected:
+  customer_records: 2 opposing pairs (high) — Multiple opposed outcomes
+  user_profiles: 1 opposing pair (medium) — Contradictory results
+```
+
+**You need to explain to a customer what changed between data loads.** Cross-cycle diff:
+
+```bash
+cat var/tmp/evolution/knowledge-snapshot.el
+# Shows: +3 new classes, -1 removed class, ~2 changed
+```
+
+The core insight: **you don't write ontology code.** You feed the system data and get back structure, validation, and reasoning. Same engine that audits our 89-file codebase can audit your 100,000-record dataset.
 
 ---
 
