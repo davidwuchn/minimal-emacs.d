@@ -1767,6 +1767,18 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (unless (cdr r)
               (message "[cq]   UNANSWERABLE: %s" (car r))))))
     (error nil))
+  ;; Policy check (Semantica PolicyEngine pattern)
+  (condition-case nil
+      (let* ((results (gptel-auto-workflow--parse-all-results))
+             (target (when results (plist-get (car results) :target)))
+             (strategy (when results (or (plist-get (car results) :strategy) "template-default"))))
+        (let ((policy-result (gptel-auto-workflow--check-policy target strategy)))
+          (unless (plist-get policy-result :valid)
+            (dolist (e (plist-get policy-result :errors))
+              (message "[policy] VIOLATION: %s" e)))
+          (dolist (w (plist-get policy-result :warnings))
+            (message "[policy] WARNING: %s" w))))
+    (error nil))
   ;; Run audits and feed results back into evolution
   (let ((flagged (gptel-auto-workflow--audit-signal)))
     (when flagged
@@ -2134,6 +2146,53 @@ against class/property names. Returns ((question . answerable) ...)."
                 (throw 'found t)))))
         (push (cons question answerable) results)))
     (nreverse results)))
+
+;; ─── Semantica Policy: experiment execution rules ───
+
+(defvar gptel-auto-workflow--experiment-policy
+  '(:max-experiments-per-target 10
+    :max-experiments-per-strategy 50
+    :min-keep-rate 0.05
+    :required-sections ("## Successful Targets" "## Meta-Learning")
+    :forbidden-target-patterns ("packages/" "var/" "tests/"))
+  "Policy rules gating experiment execution (Semantica PolicyEngine pattern).
+:max-experiments-per-target — reject if target exceeds this
+:max-experiments-per-strategy — reject if strategy exceeds this
+:min-keep-rate — warn if strategy keep-rate falls below
+:required-sections — knowledge pages must have these
+:forbidden-target-patterns — reject targets matching these")
+
+(defun gptel-auto-workflow--check-policy (target strategy)
+  "Check if TARGET and STRATEGY comply with experiment policy.
+Returns validation-result plist with :valid, :errors, :warnings.
+Pattern from Semantica PolicyEngine.check_compliance()."
+  (let ((errors nil) (warnings nil)
+        (policy gptel-auto-workflow--experiment-policy)
+        (results (gptel-auto-workflow--parse-all-results)))
+    (let ((max-target (plist-get policy :max-experiments-per-target))
+          (max-strategy (plist-get policy :max-experiments-per-strategy))
+          (min-keep (plist-get policy :min-keep-rate))
+          (forbidden (plist-get policy :forbidden-target-patterns)))
+      (when (and max-target (stringp target))
+        (let ((count (cl-count-if (lambda (r) (equal (plist-get r :target) target)) results)))
+          (when (> count max-target)
+            (push (format "Target '%s' has %d experiments (max %d)" target count max-target) errors))))
+      (when (and max-strategy (stringp strategy))
+        (let ((count (cl-count-if (lambda (r) (equal (plist-get r :strategy) strategy)) results)))
+          (when (> count max-strategy)
+            (push (format "Strategy '%s' has %d experiments (max %d)" strategy count max-strategy) errors))))
+      (when (and min-keep (stringp strategy))
+        (let* ((strat-results (cl-remove-if-not (lambda (r) (equal (plist-get r :strategy) strategy)) results))
+               (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) strat-results))
+               (total (length strat-results))
+               (rate (if (> total 4) (/ (float kept) total) 1.0)))
+          (when (< rate min-keep)
+            (push (format "Strategy '%s' keep-rate %.0f%% below minimum %.0f%%" strategy (* 100 rate) (* 100 min-keep)) warnings))))
+      (when forbidden
+        (dolist (pat forbidden)
+          (when (and (stringp target) (string-match-p pat target))
+            (push (format "Target '%s' matches forbidden pattern '%s'" target pat) errors)))))
+    (gptel-auto-workflow--validation-result (null errors) errors warnings)))
 
 ;; ─── Backend Performance Optimization ───
 
