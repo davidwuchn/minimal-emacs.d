@@ -1701,6 +1701,15 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (interactive)
   (cl-block gptel-auto-workflow-evolution-run-cycle
   (message "[auto-workflow] Running self-evolution cycle...")
+  ;; Pipeline validation (Semantica PipelineValidator)
+  (condition-case nil
+      (let ((v (gptel-auto-workflow--validate-pipeline)))
+        (unless (plist-get v :valid)
+          (dolist (e (plist-get v :errors))
+            (message "[pipeline] ERROR: %s" e)))
+        (dolist (w (plist-get v :warnings))
+          (message "[pipeline] WARN: %s" w)))
+    (error nil))
   (let ((new-experiments (gptel-auto-workflow--evolution-count-new))
         (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                            (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
@@ -1829,6 +1838,13 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                      (cdr (assoc 'action a))
                      (cdr (assoc 'reason a))
                      (cdr (assoc 'severity a))))))
+    (error nil))
+  ;; AgentMemory status log (Semantica pattern)
+  (condition-case nil
+      (let ((mem (gptel-auto-workflow--memory-status)))
+        (message "[memory] 4-layer architecture:")
+        (dolist (m mem)
+          (message "[memory]   %s: %s (%s)" (plist-get m :layer) (plist-get m :state) (plist-get m :description))))
     (error nil))
   (message "[auto-workflow] Self-evolution cycle complete.")))
 
@@ -2916,7 +2932,77 @@ Checks: required frontmatter, duplicate titles, empty sections."
           (push (list :target target :hypothesis hyp :score combined :decision (plist-get r :decision)) scored))))
     (seq-take (sort scored (lambda (a b) (> (plist-get a :score) (plist-get b :score)))) (or max-results 10))))
 
+;; ─── Semantica Pipeline: stage definitions + validation ───
+
+(defconst gptel-auto-workflow--pipeline-stages
+  '((:name "synthesize" :label "Evolution Synthesize" :fn evolution-synthesize :required t)
+    (:name "generate-skill" :label "Generate Research Skill" :fn generate-research-skill :required t)
+    (:name "evolve-skills" :label "Evolve All Skills" :fn evolve-all-skills :required t)
+    (:name "strategy-evolution" :label "Strategy Evolution" :fn run-strategy-evolution :required nil)
+    (:name "governance" :label "Skill Governance" :fn skill-governance-run-cycle :required nil)
+    (:name "record-score" :label "Record Score" :fn evolution-record-score :required t)
+    (:name "optimize-backend" :label "Optimize Backend" :fn evolution-optimize-backend-order :required nil)
+    (:name "vsm-health" :label "VSM Health Check" :fn evolution-vsm-health-check :required t)
+    (:name "audit" :label "Nucleus Audit" :fn audit-signal :required t)
+    (:name "allium-audit" :label "Allium Audit" :fn allium-audit-signal :required t)
+    (:name "reasoning" :label "Forward Chain" :fn forward-chain-log :required nil)
+    (:name "diff" :label "Knowledge Diff" :fn diff-knowledge-pages :required nil))
+  "Pipeline stage definitions. Semantica PipelineBuilder pattern.")
+
+(defun gptel-auto-workflow--validate-pipeline ()
+  "Validate pipeline stages. Returns validation-result plist."
+  (let ((errors nil) (warnings nil)
+        (names (mapcar (lambda (s) (plist-get s :name)) gptel-auto-workflow--pipeline-stages))
+        (seen (make-hash-table :test 'equal)))
+    (dolist (name names)
+      (if (gethash name seen)
+          (push (format "Duplicate stage: %s" name) errors)
+        (puthash name t seen)))
+    (dolist (s gptel-auto-workflow--pipeline-stages)
+      (when (and (plist-get s :required)
+                 (not (fboundp (intern (concat "gptel-auto-workflow--" (symbol-name (plist-get s :fn)))))))
+        (push (format "Missing fn for required stage '%s'" (plist-get s :label)) warnings)))
+    (gptel-auto-workflow--validation-result (null errors) errors warnings)))
+
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
+
+;; ─── Semantica AgentMemory: formalize mementum layers ───
+
+(defconst gptel-auto-workflow--agent-memory-layers
+  '((:layer "short-term" :description "In-session working memory"
+     :location "var/tmp/evolution/" :persistence nil :max-items 50)
+    (:layer "long-term" :description "Vector similarity search (git-embed)"
+     :location "git-embed index" :persistence t :backend "git-embed")
+    (:layer "structured" :description "Knowledge pages + Allium specs"
+     :location "mementum/knowledge/" :persistence t :format "markdown + allium")
+    (:layer "temporal" :description "Git-based timeline, experiment TSV history"
+     :location "git log + var/tmp/experiments/" :persistence t :format "git + tsv"))
+  "4-layer AgentMemory architecture (Semantica pattern).
+Layer 1: short-term working memory (in-session, cleared on daemon restart)
+Layer 2: long-term vector memory (git-embed semantic similarity, 840 files indexed)
+Layer 3: structured memory (knowledge pages, Allium behavioral specs, ontology)
+Layer 4: temporal index (git commit history, experiment TSV, cycle snapshots)")
+
+(defun gptel-auto-workflow--memory-status ()
+  "Report status of all memory layers. Returns plist with :layer → status."
+  (let ((status nil))
+    (dolist (layer gptel-auto-workflow--agent-memory-layers)
+      (let* ((name (plist-get layer :layer))
+             (location (plist-get layer :location))
+             (root (gptel-auto-workflow--worktree-base-root))
+             (full-path (expand-file-name location root))
+             (state (cond
+                     ((string-match-p "git-embed" location)
+                      (if (fboundp 'git-embed-search) "active" "unavailable"))
+                     ((file-directory-p full-path)
+                      (let ((count (length (directory-files full-path nil "\\`[^.]"))))
+                        (format "%d items" count)))
+                     (t "not found"))))
+        (push (list :layer name :location location :state state :description (plist-get layer :description))
+              status)))
+    (nreverse status)))
+
+;; ─── Backend Performance Optimization ───
   "Auto-reorder the fallback chain based on backend performance data.
 Moves better-performing backends to the front of the fallback chain."
   (let* ((stats (gptel-auto-workflow--evolution-backend-stats))
