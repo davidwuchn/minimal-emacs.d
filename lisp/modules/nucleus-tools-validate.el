@@ -79,14 +79,14 @@ Returns (status . message) where status is:
 (defun nucleus--count-validation-results (results)
   "Count validation RESULTS by status.
 
-Returns (ok . (warnings . errors)) counts."
+Returns list (ok warnings errors) counts."
   (let ((ok 0) (warnings 0) (errors 0))
     (cl-loop for (_tool-name . (status . _msg)) in results
              do (pcase status
                   ('ok (cl-incf ok))
                   ('warning (cl-incf warnings))
                   ('error (cl-incf errors))))
-    (cons ok (cons warnings errors))))
+    (list ok warnings errors)))
 
 (defun nucleus--validate-all-tools ()
   "Validate all tool prompts match their registered signatures.
@@ -116,7 +116,7 @@ Displays results in a buffer showing:
          (counts (nucleus--count-validation-results results))
          (ok (car counts))
          (warnings (cadr counts))
-         (errors (cddr counts)))
+         (errors (nth 2 counts)))
     (with-current-buffer (get-buffer-create "*nucleus-tool-validation*")
       (erase-buffer)
       (insert "Nucleus Tool Signature Validation\n")
@@ -140,7 +140,7 @@ Displays results in a buffer showing:
          (counts (nucleus--count-validation-results results))
          (ok (car counts))
          (warnings (cadr counts))
-         (errors (cddr counts))
+         (errors (nth 2 counts))
          (error-details '()))
     (cl-loop for (tool-name . (status . msg)) in results
              when (eq status 'error)
