@@ -695,6 +695,53 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
                (lambda () mock)))
       (should-not (gptel-auto-workflow--detect-hypothesis-conflicts)))))
 
+(ert-deftest regression/auto-workflow-evolution/seman-impact-breaking ()
+  "classify-experiment-impact: score regression → breaking."
+  (let ((mock (list (list :target "lisp/foo.el" :decision "kept" :score-before 0.5 :score-after 0.2))))
+    (let ((old (symbol-function 'gptel-auto-workflow--parse-all-results)))
+      (unwind-protect
+          (progn
+            (fset 'gptel-auto-workflow--parse-all-results (lambda () mock))
+            (let ((r (gptel-auto-workflow--classify-experiment-impact)))
+              (should (= (length (plist-get r :breaking)) 1))
+              (should (= (plist-get r :safe) 0))
+              (should-not (plist-get r :potentially-breaking))))
+        (fset 'gptel-auto-workflow--parse-all-results old)))))
+
+(ert-deftest regression/auto-workflow-evolution/seman-impact-safe ()
+  "classify-experiment-impact: score improvement → safe."
+  (let ((mock (list (list :target "lisp/foo.el" :decision "kept" :score-before 0.2 :score-after 0.6))))
+    (let ((old (symbol-function 'gptel-auto-workflow--parse-all-results)))
+      (unwind-protect
+          (progn
+            (fset 'gptel-auto-workflow--parse-all-results (lambda () mock))
+            (let ((r (gptel-auto-workflow--classify-experiment-impact)))
+              (should (= (plist-get r :safe) 1))
+              (should-not (plist-get r :breaking))))
+        (fset 'gptel-auto-workflow--parse-all-results old)))))
+
+(ert-deftest regression/auto-workflow-evolution/seman-policy-valid ()
+  "check-policy returns valid when no violations."
+  (let ((mock-results nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock-results))
+              ((symbol-value 'gptel-auto-workflow--experiment-policy)
+               '(:max-experiments-per-target 10 :forbidden-target-patterns ("packages/"))))
+      (let ((r (gptel-auto-workflow--check-policy "lisp/foo.el" "strat-a")))
+        (should (plist-get r :valid))
+        (should-not (plist-get r :errors))))))
+
+(ert-deftest regression/auto-workflow-evolution/seman-policy-forbidden-target ()
+  "check-policy flags forbidden target pattern."
+  (let ((mock-results nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock-results))
+              ((symbol-value 'gptel-auto-workflow--experiment-policy)
+               '(:forbidden-target-patterns ("packages/"))))
+      (let ((r (gptel-auto-workflow--check-policy "packages/foo.el" "s")))
+        (should-not (plist-get r :valid))
+        (should (plist-get r :errors))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
