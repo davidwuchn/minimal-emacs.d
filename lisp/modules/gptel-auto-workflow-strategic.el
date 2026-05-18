@@ -506,6 +506,47 @@ Uses standard skill loader so humans can edit researcher-prompt/SKILL.md."
         (message "[research] Loaded researcher skill (%d chars)" (length content))
         content))))
 
+(defun gptel-auto-workflow--load-research-priorities ()
+  "Load research priorities file (ontology-guided source scoring).
+Returns markdown string or empty."
+  (let ((file (expand-file-name "var/tmp/evolution/research-priorities.md"
+                                (gptel-auto-workflow--worktree-base-root))))
+    (if (file-readable-p file)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          (buffer-string))
+      "")))
+
+(defun gptel-auto-workflow--load-knowledge-summary ()
+  "Load a compact summary of what we already know from knowledge pages.
+Returns markdown string or empty."
+  (let* ((kd (expand-file-name "mementum/knowledge"
+                               (gptel-auto-workflow--worktree-base-root)))
+         (files (when (file-directory-p kd)
+                  (directory-files kd t "research-insights-.+\\.md$")))
+         (lines nil))
+    (when files
+      (dolist (f (seq-take files 5))
+        (condition-case nil
+            (with-temp-buffer
+              (insert-file-contents f)
+              (goto-char (point-min))
+              (when (re-search-forward "^title: \\(.+\\)" nil t)
+                (let ((title (match-string 1)))
+                  (when (re-search-forward "^## Meta-Learning Recommendations" nil t)
+                    (forward-line 1)
+                    (let ((start (point)))
+                      (when (re-search-forward "^## \|\\'" nil t)
+                        (backward-char 2))
+                      (push (format "- **%s**: %s" title
+                                    (string-trim (buffer-substring start (point))))
+                            lines))))))
+          (error nil)))
+      (if lines
+          (mapconcat #'identity (nreverse lines) "\n")
+        ""))))
+
 (defun gptel-auto-workflow--load-researcher-meta-learning ()
   "Load meta-learning data for researcher skill.
 Reads topic-performance.json and returns formatted stats.
@@ -658,7 +699,10 @@ Results feed into directive's 'Next Hypotheses' for target selection."
           ;; Load AutoTTS-style strategy guidance via {{strategy-guidance}} template injection only
           (source-guidance (when (fboundp 'gptel-auto-workflow--apply-source-priority-to-prompt)
                             (gptel-auto-workflow--apply-source-priority-to-prompt "")))
-         (recent-outcomes (gptel-auto-workflow--build-recent-trace-outcomes-string)))
+          (recent-outcomes (gptel-auto-workflow--build-recent-trace-outcomes-string))
+          ;; Research priorities from ontology (Semantica: self-evolving researcher)
+          (priorities (gptel-auto-workflow--load-research-priorities))
+          (knowledge-summary (gptel-auto-workflow--load-knowledge-summary)))
     (concat (or base-prompt "")
             "\n\n"
             (let ((prefetched (gptel-auto-workflow--load-prefetched-content)))
@@ -688,9 +732,27 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                "")
               (if (and source-guidance (not (string-empty-p source-guidance)))
                  (concat "### Source Scheduling (AutoTTS)\n"
-                         source-guidance
+                          source-guidance
+                          "\n\n")
+                "")
+             (if (and priorities (not (string-empty-p priorities)))
+                 (concat "### Research Priorities (Ontology-Guided)\n"
+                         "*These sources produced the best downstream experiment results. Prioritize them.*\n\n"
+                         priorities
                          "\n\n")
                "")
+             (if (and knowledge-summary (not (string-empty-p knowledge-summary)))
+                 (concat "### What We Already Know\n"
+                         "*Do not repeat research on these topics. Build upon or challenge these findings.*\n\n"
+                         knowledge-summary
+                         "\n\n")
+               "")
+             "### Research Method (Step-by-Step)\n"
+             "1. **Review** what we already know (above). Identify gaps — what techniques have NOT been tried?\n"
+             "2. **Scan** pre-fetched content for techniques that fill those gaps.\n"
+             "3. **Prioritize** sources with high keep-rates (Research Priorities above).\n"
+             "4. **Synthesize** each finding: source, technique, how to apply to Emacs Lisp, verification method.\n"
+             "5. **Output** only novel techniques — skip anything already covered in 'What We Already Know'.\n\n"
              "### Recent Failure Patterns\n"
              (gptel-auto-workflow--research-topics-string)
              "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
