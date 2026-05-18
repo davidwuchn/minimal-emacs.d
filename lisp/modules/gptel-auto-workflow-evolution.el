@@ -101,11 +101,11 @@ Uses cached value from load time, or detects from current directory."
                            (delta-str (or (nth 6 fields) "+0.00"))
                            (decision (nth 7 fields))
                             (grader-q (string-to-number (or (nth 9 fields) "0")))
-                              (prompt-chars (string-to-number (or (nth 15 fields) "0")))
-                               (research-strategy (or (nth 20 fields) "none"))
-                               (research-hash (or (nth 21 fields) "none"))
-                                (research-quality (or (nth 22 fields) "none"))
-                                (kibcm-axis (or (nth 23 fields) "?")))
+                               (prompt-chars (string-to-number (or (nth 16 fields) "0")))
+                                (research-strategy (or (nth 21 fields) "none"))
+                                (research-hash (or (nth 22 fields) "none"))
+                                 (research-quality (or (nth 23 fields) "none"))
+                                 (kibcm-axis (or (nth 25 fields) "?")))
                           (push (list :target target
                                       :hypothesis hypothesis
                                       :score-before score-before
@@ -372,7 +372,30 @@ Writes runtime evolution data under var/tmp/evolution/."
                (insert "\n**Recommendations:**\n")
                (insert (format "1. Target prompt size: ~%d chars for best success rate\n" (round avg-kept-prompt)))
                (insert "2. Compress knowledge sections if prompt exceeds optimal size\n")
-               (insert "3. Remove low-value sections that increase size without improving outcomes\n"))))
+                (insert "3. Remove low-value sections that increase size without improving outcomes\n"))
+             ;; Output efficiency analysis
+             (let* ((with-output (cl-remove-if (lambda (r) (not (plist-get r :output-chars))) with-prompt-data))
+                    (kept-out (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "kept")) with-output))
+                    (discarded-out (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "discarded")) with-output)))
+               (when with-output
+                 (let* ((avg-kept-out (/ (apply #'+ (mapcar (lambda (r) (or (plist-get r :output-chars) 0)) kept-out))
+                                        (max 1 (length kept-out))))
+                        (avg-discarded-out (/ (apply #'+ (mapcar (lambda (r) (or (plist-get r :output-chars) 0)) discarded-out))
+                                             (max 1 (length discarded-out))))
+                        (avg-kept-prompt (/ (apply #'+ (mapcar (lambda (r) (or (plist-get r :prompt-chars) 0)) kept-out))
+                                           (max 1 (length kept-out))))
+                        (ratio-kept (if (> avg-kept-prompt 0) (/ avg-kept-out avg-kept-prompt) 0))
+                        (ratio-discarded (if (> avg-kept-out 0) (/ avg-discarded-out avg-kept-out) 0))
+                        (inflation (and (> ratio-kept 2.0) (< (length kept-out) 5))))
+                   (insert "\n**Output Efficiency (agent output vs prompt size):**\n")
+                   (insert (format "- Avg output (kept): %d chars (%.1fx prompt)\n" (round avg-kept-out) ratio-kept))
+                   (insert (format "- Avg output (discarded): %d chars (%.1fx kept output)\n" (round avg-discarded-out) ratio-discarded))
+                   (when inflation
+                     (insert "- ⚠ INFLATION DETECTED: output >2x prompt size with <5 kept experiments — LLM may be over-explaining\n"))
+                   (insert (format "- %s\n"
+                                   (if (> avg-discarded-out avg-kept-out)
+                                       "Discarded experiments produce longer output — verbosity ≠ quality"
+                                     "Kept experiments produce longer output — detail correlates with success"))))))))
         (insert "\n")
 
         ;; Section 2: Section A/B Test Results

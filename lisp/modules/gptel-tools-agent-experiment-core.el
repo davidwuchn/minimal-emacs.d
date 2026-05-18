@@ -662,6 +662,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                              :retries 1
                                                                                              :backend actual-backend
                                                                                              :prompt-chars (length executor-prompt)
+                           :output-chars (length (or effective-agent-output ""))
                                                                                              :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
                            :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis)
                                                                                              :exploration-axis (gptel-auto-experiment--extract-axis retry-output)
@@ -873,6 +874,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                 :agent-output agent-output
                                                                 :backend actual-backend
                                                                 :prompt-chars (length executor-prompt)
+                           :output-chars (length (or effective-agent-output ""))
                                                                  :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
                                                                  :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis))))
                                                    (message "[auto-experiment] ✗ %s for %s" reason target)
