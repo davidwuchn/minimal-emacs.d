@@ -1819,6 +1819,17 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                          (length (plist-get v :errors))
                          (length (plist-get v :warnings))))))))
     (error nil))
+  ;; Forward chaining + DecisionQuery (Semantica reasoning + query)
+  (condition-case nil
+      (let ((inferred (gptel-auto-workflow--forward-chain)))
+        (when inferred
+          (message "[reasoning] %d actions inferred:" (length inferred))
+          (dolist (a (seq-take inferred 3))
+            (message "[reasoning]   %s: %s (severity: %s)"
+                     (cdr (assoc 'action a))
+                     (cdr (assoc 'reason a))
+                     (cdr (assoc 'severity a))))))
+    (error nil))
   (message "[auto-workflow] Self-evolution cycle complete.")))
 
 ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
@@ -2786,6 +2797,115 @@ Checks: required frontmatter, duplicate titles, empty sections."
      (null errors)
      errors
      warnings)))
+
+;; ─── Semantica Reasoning + Query ───
+
+(defconst gptel-auto-workflow--reasoning-rules
+  '(;; Strategy health
+    (:when ((keep-rate < 0.1) (total-experiments > 8))
+     :then ((action . "deprecate-strategy") (reason . "keep-rate below 10% with sufficient data") (severity . high)))
+    (:when ((keep-rate < 0.05))
+     :then ((action . "retire-strategy") (reason . "keep-rate below 5% — no further value") (severity . critical)))
+    (:when ((keep-rate > 0.6) (total-experiments > 5))
+     :then ((action . "promote-strategy") (reason . "consistently effective — consider expanding") (severity . low)))
+    ;; Target saturation
+    (:when ((target-frequency > 8))
+     :then ((action . "mark-saturated") (reason . "target has diminishing returns") (severity . medium)))
+    (:when ((target-frequency < 2) (keep-rate > 0.5))
+     :then ((action . "mark-underutilized") (reason . "effective target — explore more") (severity . low)))
+    ;; Backend
+    (:when ((backend-keep-rate < 0.2) (backend-experiments > 10))
+     :then ((action . "deprioritize-backend") (reason . "backend underperforming") (severity . high)))
+    (:when ((backend-keep-rate > 0.7) (backend-experiments > 5))
+     :then ((action . "prioritize-backend") (reason . "backend performing well") (severity . low)))
+    ;; Token
+    (:when ((output-ratio > 3.0) (kept-experiments < 3))
+     :then ((action . "flag-inflation") (reason . "output >> prompt with low keep rate") (severity . medium))))
+  "Forward chaining rules: (:when ((field op value) ...) :then ((key . value) ...)).")
+
+(defun gptel-auto-workflow--eval-condition (condition facts)
+  (let* ((field (nth 0 condition)) (op (nth 1 condition)) (threshold (nth 2 condition))
+         (actual (cdr (assoc field facts))))
+    (and actual (numberp actual)
+         (cond ((eq op '<) (< actual threshold)) ((eq op '>) (> actual threshold))
+               ((eq op '=) (= actual threshold)) ((eq op '>=) (>= actual threshold))
+               ((eq op '<=) (<= actual threshold)) (t nil)))))
+
+(defun gptel-auto-workflow--forward-chain ()
+  "Run forward chaining over experiment facts. Returns inferred actions."
+  (let* ((results (gptel-auto-workflow--parse-all-results)) (facts nil) (inferred nil))
+    (let ((by-strategy (make-hash-table :test 'equal))
+          (by-target (make-hash-table :test 'equal))
+          (by-backend (make-hash-table :test 'equal))
+          (kept 0) (total 0) (total-output 0) (total-prompt 0))
+      (dolist (r results)
+        (let ((strategy (or (plist-get r :strategy) "template-default"))
+              (target (plist-get r :target))
+              (backend (or (plist-get r :backend) "unknown"))
+              (decision (plist-get r :decision))
+              (pc (or (plist-get r :prompt-chars) 0)) (oc (or (plist-get r :output-chars) 0)))
+          (setq total (1+ total) total-output (+ total-output oc) total-prompt (+ total-prompt pc))
+          (when (equal decision "kept") (setq kept (1+ kept)))
+          (let ((se (or (gethash strategy by-strategy) (list :kept 0 :total 0))))
+            (setq se (plist-put se :total (1+ (plist-get se :total))))
+            (when (equal decision "kept") (setq se (plist-put se :kept (1+ (plist-get se :kept)))))
+            (puthash strategy se by-strategy))
+          (when (stringp target) (puthash target (1+ (or (gethash target by-target) 0)) by-target))
+          (when (stringp backend)
+            (let ((be (or (gethash backend by-backend) (list :kept 0 :total 0))))
+              (setq be (plist-put be :total (1+ (plist-get be :total))))
+              (when (equal decision "kept") (setq be (plist-put be :kept (1+ (plist-get be :kept)))))
+              (puthash backend be by-backend)))))
+      (push (cons 'total-experiments total) facts)
+      (push (cons 'kept-experiments kept) facts)
+      (push (cons 'overall-keep-rate (if (> total 0) (/ (float kept) total) 0.0)) facts)
+      (push (cons 'output-ratio (if (> total-prompt 0) (/ (float total-output) total-prompt) 0.0)) facts)
+      (maphash (lambda (s c)
+                 (let ((rate (if (> (plist-get c :total) 0)
+                                 (/ (float (plist-get c :kept)) (plist-get c :total)) 0.0)))
+                   (push (cons 'keep-rate rate) facts)
+                   (push (cons 'total-experiments (plist-get c :total)) facts)))
+               by-strategy)
+      (maphash (lambda (t c) (push (cons 'target-frequency c) facts)) by-target)
+      (maphash (lambda (b c)
+                 (let ((rate (if (> (plist-get c :total) 0)
+                                 (/ (float (plist-get c :kept)) (plist-get c :total)) 0.0)))
+                   (push (cons 'backend-keep-rate rate) facts)
+                   (push (cons 'backend-experiments (plist-get c :total)) facts)))
+               by-backend))
+    (let ((iter 0) (changed t) (max-iter 3))
+      (while (and changed (< iter max-iter))
+        (setq changed nil iter (1+ iter))
+        (dolist (rule gptel-auto-workflow--reasoning-rules)
+          (let ((conditions (plist-get rule :when)) (all-match t))
+            (dolist (cond conditions)
+              (unless (gptel-auto-workflow--eval-condition cond facts) (setq all-match nil)))
+            (when all-match
+              (push (plist-get rule :then) inferred) (setq changed t))))))
+    (delete-dups inferred)))
+
+(defun gptel-auto-workflow--jaccard (a b)
+  "Jaccard coefficient between strings A and B (word-level)."
+  (let* ((wa (split-string (downcase (or a "")) "[^a-z0-9]+" t))
+         (wb (split-string (downcase (or b "")) "[^a-z0-9]+" t))
+         (inter (cl-intersection wa wb :test #'string=))
+         (union (cl-union wa wb :test #'string=)))
+    (if union (/ (float (length inter)) (length union)) 0.0)))
+
+(defun gptel-auto-workflow--query-experiments (query &optional max-results)
+  "Weighted multi-criteria experiment search. Semantica DecisionQuery."
+  (let* ((results (gptel-auto-workflow--parse-all-results)) (scored nil))
+    (dolist (r results)
+      (let* ((hyp (or (plist-get r :hypothesis) ""))
+             (target (or (plist-get r :target) ""))
+             (text-sim (gptel-auto-workflow--jaccard query hyp))
+             (target-sim (gptel-auto-workflow--jaccard query target))
+             (cat-score (if (equal (plist-get r :decision) "kept") 0.8 0.3))
+             (delta (max 0 (- (or (plist-get r :score-after) 0) (or (plist-get r :score-before) 0))))
+             (combined (+ (* 0.4 text-sim) (* 0.3 target-sim) (* 0.2 cat-score) (* 0.1 (min 1.0 (/ delta 0.1))))))
+        (when (> combined 0.05)
+          (push (list :target target :hypothesis hyp :score combined :decision (plist-get r :decision)) scored))))
+    (seq-take (sort scored (lambda (a b) (> (plist-get a :score) (plist-get b :score)))) (or max-results 10))))
 
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
   "Auto-reorder the fallback chain based on backend performance data.
