@@ -2048,8 +2048,7 @@ Returns a markdown-formatted string of issues grouped by strategy, or empty stri
                        mtime)
                   (let ((content (buffer-string)))
                     (when (and content (> (length content) 20))
-                      (push content result)))))
-              (setq result result))
+                      (push content result))))))
           (error nil))))
     (if result
         (concat "### Allium Behavioral Audit (coherence check of last cycle's research)\n\n"

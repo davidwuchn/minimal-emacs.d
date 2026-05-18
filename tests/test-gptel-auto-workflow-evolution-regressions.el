@@ -366,6 +366,96 @@ Single keyword 'contradictory' (severity 0.3): (min 0.8 (/ 0.3 2.0)) = 0.15."
     (should called-p)
     (should (equal sentinel (cons 99 99)))))
 
+;; ─── Allium Feed-Forward Tests ───
+
+(defvar ert--allium-ff-tmpdir nil
+  "Temp directory for Allium feed-forward tests.")
+
+(defun ert--allium-ff-root ()
+  "Mock worktree root for Allium feed-forward tests."
+  (or ert--allium-ff-tmpdir
+      (setq ert--allium-ff-tmpdir (make-temp-file "allium-ff-" t))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-load-issues-empty-dir ()
+  "load-issues-for-guidance returns empty string when no issues directory exists."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+             #'ert--allium-ff-root))
+    (should (string= (gptel-auto-workflow--allium-load-issues-for-guidance) ""))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-persist-creates-spec-and-issues-files ()
+  "persist-spec creates .allium spec file and .md issues file with correct content."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+             #'ert--allium-ff-root))
+    (gptel-auto-workflow--allium-persist-spec
+     "test-strategy" "entity User name: string\nrule: unique name\n" "1. missing precondition" 1 0.3 0.15)
+    (let ((spec-file (expand-file-name "var/tmp/evolution/allium-specs/test-strategy.allium" (ert--allium-ff-root)))
+          (issues-file (expand-file-name "var/tmp/evolution/allium-issues/test-strategy.md" (ert--allium-ff-root))))
+      (should (file-exists-p spec-file))
+      (should (file-exists-p issues-file))
+      (with-temp-buffer
+        (insert-file-contents spec-file)
+        (should (string-match-p "Allium spec for research strategy: test-strategy" (buffer-string)))
+        (should (string-match-p "entity User" (buffer-string))))
+      (with-temp-buffer
+        (insert-file-contents issues-file)
+        (should (string-match-p "Allium Check.*test-strategy" (buffer-string)))
+        (should (string-match-p "missing precondition" (buffer-string)))))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-persist-double-no-duplicates ()
+  "Two persist-spec calls produce exactly one Allium appendix in knowledge page."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+             #'ert--allium-ff-root))
+    (let ((knowledge-dir (expand-file-name "mementum/knowledge" (ert--allium-ff-root)))
+          (knowledge-file (expand-file-name "mementum/knowledge/research-insights-test-strategy.md" (ert--allium-ff-root))))
+      (make-directory knowledge-dir t)
+      (with-temp-file knowledge-file
+        (insert "# Research Insights: test-strategy\n\n## Summary\n\nOriginal content.\n"))
+      (gptel-auto-workflow--allium-persist-spec
+       "test-strategy" "rule: first version\n" "1. first issue" 1 0.3 0.15)
+      (gptel-auto-workflow--allium-persist-spec
+       "test-strategy" "rule: second version\n" "2. second issue" 2 0.5 0.3)
+      (with-temp-buffer
+        (insert-file-contents knowledge-file)
+        (goto-char (point-min))
+        (let ((count 0)
+              (buffer (buffer-string)))
+          (while (re-search-forward "^## Allium Behavioral Spec" nil t)
+            (setq count (1+ count)))
+          (should (= count 1))
+          (should (string-match-p "second version" buffer))
+          (should (string-match-p "Research Insights" buffer))
+          (should (not (string-match-p "first version" buffer))))))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-load-issues-returns-formatted-content ()
+  "load-issues-for-guidance returns formatted markdown with recent issues from disk."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+             #'ert--allium-ff-root))
+    (let ((issues-dir (expand-file-name "var/tmp/evolution/allium-issues" (ert--allium-ff-root))))
+      (make-directory issues-dir t)
+      (with-temp-file (expand-file-name "strategy-a.md" issues-dir)
+        (insert "# Allium Check — strategy-a\n\n**Issues:** 3 | **Severity:** 0.45 | **Score:** 0.30\n\n## Issue Details\n\n1. contradictory rule\n2. missing precondition\n"))
+      (with-temp-file (expand-file-name "strategy-b.md" issues-dir)
+        (insert "# Allium Check — strategy-b\n\n**Issues:** 1 | **Severity:** 0.15\n\n## Issue Details\n\n1. style: prefers shorter names\n"))
+      (let ((result (gptel-auto-workflow--allium-load-issues-for-guidance)))
+        (should (string-match-p "Allium Behavioral Audit" result))
+        (should (string-match-p "strategy-a" result))
+        (should (string-match-p "strategy-b" result))
+        (should (string-match-p "contradictory rule" result))
+        (should (string-match-p "prefers shorter names" result))))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-load-issues-filters-short-content ()
+  "load-issues-for-guidance excludes files with <=20 chars of content."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+             #'ert--allium-ff-root))
+    (let ((issues-dir (expand-file-name "var/tmp/evolution/allium-issues" (ert--allium-ff-root))))
+      (make-directory issues-dir t)
+      (dolist (f (directory-files issues-dir t "\\.md$"))
+        (delete-file f))
+      (with-temp-file (expand-file-name "too-short.md" issues-dir)
+        (insert "short content"))
+      (let ((result (gptel-auto-workflow--allium-load-issues-for-guidance)))
+        (should (string= result ""))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
