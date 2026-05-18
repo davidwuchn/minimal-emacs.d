@@ -28,6 +28,7 @@
 (declare-function gptel-auto-experiment--allium-decompile "gptel-tools-agent-prompt-build" (allium-spec &optional callback audience))
 (declare-function gptel-auto-experiment--allium-issues-count "gptel-tools-agent-prompt-build" (check-output))
 (declare-function gptel-auto-experiment--allium-quality-score "gptel-tools-agent-prompt-build" (check-output))
+(declare-function gptel-auto-experiment--kibcm-axis "gptel-tools-agent-prompt-build" (hypothesis))
 
 ;; ─── Helpers ───
 
@@ -103,20 +104,22 @@ Uses cached value from load time, or detects from current directory."
                               (prompt-chars (string-to-number (or (nth 15 fields) "0")))
                                (research-strategy (or (nth 20 fields) "none"))
                                (research-hash (or (nth 21 fields) "none"))
-                               (research-quality (or (nth 22 fields) "none")))
-                         (push (list :target target
-                                     :hypothesis hypothesis
-                                     :score-before score-before
-                                     :score-after score-after
-                                     :code-quality quality
-                                     :delta delta-str
-                                     :decision decision
-                                     :grader-quality grader-q
-                                     :prompt-chars prompt-chars
-                                     :research-strategy research-strategy
-                                     :research-hash research-hash
-                                     :research-quality research-quality)
-                               records))))
+                                (research-quality (or (nth 22 fields) "none"))
+                                (kibcm-axis (or (nth 23 fields) "?")))
+                          (push (list :target target
+                                      :hypothesis hypothesis
+                                      :score-before score-before
+                                      :score-after score-after
+                                      :code-quality quality
+                                      :delta delta-str
+                                      :decision decision
+                                      :grader-quality grader-q
+                                      :prompt-chars prompt-chars
+                                      :research-strategy research-strategy
+                                      :research-hash research-hash
+                                      :research-quality research-quality
+                                      :kibcm-axis kibcm-axis)
+                                records))))
                 (forward-line 1)))))))
     (nreverse records)))
 
@@ -1727,13 +1730,18 @@ Maps nucleus VSM layers to our system components:
          (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
          (total (length results))
          (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
-         (strategies (length (gptel-auto-workflow--evolution-strategy-structure-scores)))
-         (backends (length (gptel-auto-workflow--evolution-backend-stats))))
+          (strategies (length (gptel-auto-workflow--evolution-strategy-structure-scores)))
+          (backends (length (gptel-auto-workflow--evolution-backend-stats)))
+          (axis-stats (gptel-auto-workflow--evolution-axis-stats)))
     (message "[vsm] S1-Ops: %d experiments, %.0f%% kept" total (* 100 keep-rate))
     (message "[vsm] S2-Coord: %d modules scanned, staging verify active" 89)
     (message "[vsm] S3-Control: %d backends in chain, watchdog 90min" backends)
     (message "[vsm] S4-Intel: %d strategies evolved, auto-backend-order active" strategies)
     (message "[vsm] S5-Identity: lambda notation, confidence tags, graphify patterns active")
+    (when axis-stats
+      (message "[vsm] KIBC-M Axis Performance: %s"
+               (mapconcat (lambda (a) (format "%s=%.0f%%" (car a) (* 100 (cdr a))))
+                          (seq-take axis-stats 5) " ")))
     ;; Wu Xing diagnostics
     (cond
      ((< keep-rate 0.05)
@@ -1832,6 +1840,25 @@ Returns insights string or nil."
               (if (> delta 0) "HA" "HB")))))
 
 ;; ─── Backend Performance Optimization ───
+
+(defun gptel-auto-workflow--evolution-axis-stats ()
+  "Analyze KIBC-M axis performance from experiment results.
+Returns alist of (axis . keep-rate) sorted by performance descending."
+  (let ((by-axis (make-hash-table :test 'equal))
+        (stats nil))
+    (dolist (result (gptel-auto-workflow--parse-all-results))
+      (let ((axis (or (plist-get result :kibcm-axis) "?"))
+            (kept (equal (plist-get result :decision) "kept")))
+        (unless (string= axis "?")
+          (let ((entry (or (gethash axis by-axis) (cons 0 0))))
+            (setcar entry (1+ (car entry)))
+            (when kept (setcdr entry (1+ (cdr entry))))
+            (puthash axis entry by-axis)))))
+    (maphash (lambda (axis counts)
+                (when (> (car counts) 2)
+                  (push (cons axis (/ (float (cdr counts)) (car counts))) stats)))
+              by-axis)
+    (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
 
 (defun gptel-auto-workflow--evolution-backend-stats ()
   "Analyze backend performance from all experiment results.

@@ -450,6 +450,9 @@ Returns list of 3 strategy code strings, or nil if generation fails."
    (t
     (let* ((axis-desc (gptel-auto-workflow--strategy-axis-description axis))
            (failure-analysis (gptel-auto-workflow--analyze-strategy-failures parent-strategy-name))
+           (allium-findings (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-guidance)
+                                (gptel-auto-workflow--allium-load-issues-for-guidance)
+                              ""))
            (skill-content (gptel-auto-workflow--load-proposer-skill))
             (proposer-template (or (gptel-auto-workflow--load-strategy-proposer-template)
                                    "You are a Meta-Harness strategy proposer. Your job is to generate NEW Emacs Lisp prompt-building strategies.
@@ -473,6 +476,8 @@ Parent strategy code:
 ```
 
 {{failure-analysis}}
+
+{{allium-findings}}
 
 ## Anti-Overfitting Rules
 
@@ -584,6 +589,7 @@ CANDIDATE_3:
                 (avg-score . ,(format "%.2f" (plist-get parent-perf :avg-score)))
                 (parent-code . ,(or parent-code "(baseline strategy)"))
                 (failure-analysis . ,(or failure-analysis ""))
+                (allium-findings . ,(if (string-empty-p allium-findings) "" (concat "## Allium Behavioral Audit (coherence gaps from last cycle)\n\n" allium-findings)))
                 (axis . ,(format "%s" axis))
                 (axis-desc . ,axis-desc)))))
 
