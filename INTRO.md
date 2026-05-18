@@ -1,126 +1,47 @@
 # minimal-emacs.d + gptel-nucleus
 
-> **An AI-powered Emacs that researches, codes, reviews, and self-evolves — autonomously.**
+> **Your AI teammate that researches, codes, reviews, and learns — so you ship faster.**
 
-A fork of [jamescherti/minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) extended into a full autonomous AI agent system built on [gptel](https://github.com/karthink/gptel).
+A fork of [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) turned into an autonomous AI agent system. Built on [gptel](https://github.com/karthink/gptel). Runs 3-6 autonomous improvement cycles per day inside Emacs.
 
 ---
 
-## What It Does
+## If You're a Forward Deployed Engineer
 
-This setup turns Emacs into an **autonomous optimization pipeline** — it researches external projects for novel techniques, writes and tests code improvements, reviews its own work, and learns from results to get better over time. All inside Emacs, all automated.
+Your job: ship fixes fast, know what changed, never break prod. Here's how this helps:
 
-| Capability | How |
-|-----------|-----|
-| **Researches** | Scans GitHub, arXiv, and 18+ davidwuchn repos for novel AI patterns |
-| **Codes** | Writes Emacs Lisp fixes: nil-safety guards, DRY refactors, error handling |
-| **Reviews** | AI reviewer checks every change before merge |
-| **Verifies** | Runs 89+ test files in isolated staging worktrees |
-| **Self-Evolves** | Learns from 870+ experiments — 40+ auto-evolved strategies |
-| **Runs on Schedule** | Cron-driven: 3-6 pipeline runs/day, fully autonomous |
+**You find a bug or a pattern that needs fixing across dozens of files.** Instead of spending hours on grep → edit → test → repeat, you tell the pipeline what to optimize. It researches similar fixes, proposes changes, tests them in isolation, and either merges or explains why it failed. You review the diff.
+
+**You're integrating with a customer's codebase and need to understand its patterns.** The system has already built an ontology of your code — it knows which strategies work on which files, which operations tend to succeed, and where contradictions hide. You query the knowledge pages instead of grepping blind.
+
+**You need an audit trail of what changed and why.** Every experiment is recorded with hypothesis, delta, decision, and causal links to prior experiments. You can trace "why was this function refactored in March?" back to the specific research that triggered it.
+
+---
+
+## What It Does (In Practice)
+
+```
+You: "My project has nil-safety bugs. Fix them."
+Pipeline: researches 18 repos for nil-guard patterns,
+          generates 10+ hypotheses, tests them,
+          merges the ones that pass 89-test suite,
+          learns which strategies actually worked,
+          gets better next cycle.
+```
+
+| You Give It | You Get Back |
+|-------------|-------------|
+| A target file pattern | Tested, reviewed code changes (merged or explained) |
+| A research question | Relevant techniques from GitHub, arXiv, and 18+ repos |
+| Nothing (it runs autonomously) | 3-6 cycles/day of self-directed improvement |
+| A status check | What changed, what failed, what it learned |
 
 ---
 
 ## Quick Start
 
 ```bash
-./scripts/setup-packages.sh     # Install required Git-tracked packages
-./scripts/setup-eca-links.sh    # Setup ECA config symlinks
-./scripts/install-cron.sh       # (Optional) Install cron jobs
-```
-
-Then it runs. No manual intervention needed.
-
----
-
-## The Pipeline
-
-```
-┌──────────┐    ┌──────────┐    ┌─────────────┐    ┌──────────────┐
-│ Research │───→│ Evolution│───→│ Auto-Workflow│───→│ Post-Evolve  │
-│ (3min)   │    │ (2min)   │    │ (1-4h)       │    │ (2min)        │
-└──────────┘    └──────────┘    └─────────────┘    └──────────────┘
-     ↓                               ↓
-  External findings             worktree → analyzer
-  + 18-repo prefetch            → executor → grader
-                                → benchmark → decide
-                                → reviewer → staging
-```
-
-**Each auto-workflow experiment:** selects a target file, generates a hypothesis, implements a fix, runs tests, grades itself, gets reviewed, and either merges to staging or learns from failure.
-
----
-
-## Proven Results
-
-| Metric | Value |
-|--------|-------|
-| **Commits** | 1700+ fixes, 1100+ verified experiment merges |
-| **Kept experiments** | 195+ (code improvements that passed all gates) |
-| **Evolved strategies** | 40+ prompt-building strategies |
-| **Test coverage** | 89 module files, 57 regression test files |
-| **Backend fallback** | 5-provider chain (MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway) |
-
----
-
-## Key Features
-
-### Autonomous Pipeline
-- **Research**: Multi-turn AutoTTS controller searches 18+ repos + arXiv + GitHub for relevant techniques
-- **Code**: Executor subagent reads files, writes fixes, verifies syntax — all in isolated git worktrees
-- **Review**: AI reviewer checks for blockers, regressions, and code quality
-- **Decide**: Comparator weighs before/after scores (70% grader, 30% code quality)
-- **Learn**: Non-kept experiments feed back into strategy evolution
-
-### Self-Evolution
-- **40+ strategies** auto-discovered from prompt-builder code
-- **Pareto frontier** tracks non-dominated strategies for exploration/exploitation balance
-- **AutoTTS controller** learns from 21+ research traces, adjusting priorities over time
-- **Convergence detection** stops evolution when plateau detected (prevents overfitting)
-
-### Safety & Reliability
-- **Git worktree isolation** — never touches `main` directly
-- **Staging verification** — 1800s timeout, 89-test suite, rollback on failure
-- **Conflict marker guard** — rejects commits with `<<<<<<<` markers
-- **Provider failover** — 5 backends with automatic chain advancement
-- **Watchdog** — force-stops stuck workflows after 90 minutes
-- **Quota-aware** — skips runs when API quota exhausted
-
-### Architecture
-- **31-tool nucleus stack** — Read, Write, Edit, Bash, Grep, Glob, Code_Map, Programmatic, RunAgent...
-- **6 subagent types** — executor, grader, reviewer, analyzer, comparator, researcher
-- **Security ACLs** — hard capability filtering by preset (plan mode physically cannot mutate)
-- **Payload resilience** — pre-send compaction, auto-retry, reasoning repair for thinking models
-
----
-
-## Backend Fallback Chain
-
-Auto-workflow runs on MiniMax by default, automatically failing over when rate-limited:
-
-| # | Backend | Model | Use |
-|---|---------|-------|-----|
-| 1 | MiniMax | minimax-m2.7-highspeed | Primary workhorse |
-| 2 | moonshot | kimi-k2.6 | Best for code changes |
-| 3 | DashScope | qwen3.6-plus | Fast, reliable |
-| 4 | DeepSeek | deepseek-v4-pro | Strong reasoning |
-| 5 | CF-Gateway | @cf/moonshotai/kimi-k2.6 | 262k context, function calling |
-
----
-
-## Requirements
-
-- Emacs 29.1+
-- API keys in auth-source: `api.minimaxi.com`, `api.kimi.com`, `coding.dashscope.aliyuncs.com`, `api.deepseek.com`, `gateway.ai.cloudflare.com`
-- Git, `gh` CLI (for repo prefetch), `timeout` (for staging verification)
-- macOS or Linux
-
----
-
-## Installation
-
-```bash
-# 1. Clone with submodules
+# 1. Clone
 git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d ~/.emacs.d
 
 # 2. Install packages
@@ -129,31 +50,133 @@ cd ~/.emacs.d && ./scripts/setup-packages.sh
 # 3. Setup ECA symlinks
 ./scripts/setup-eca-links.sh
 
-# 4. Start Emacs normally
-emacs
+# 4. Configure API keys in ~/.authinfo
+# machine api.minimaxi.com login apikey password YOUR_KEY
+# machine api.kimi.com      login apikey password YOUR_KEY
+
+# 5. Run it
+./scripts/run-pipeline.sh
 ```
+
+That's it. No manual intervention needed after setup.
+
+---
+
+## Three Things It Does For Your Job
+
+### 1. Ships Fixes You'd Rather Not Write
+
+Repetitive code fixes — nil guards, error handling, DRY refactors — are automated. Each experiment runs in a git worktree, passes through a 6-gate pipeline (analyzer → executor → grader → comparator → reviewer → staging), and either merges or tells you why not.
+
+```bash
+# Run a manual experiment on a specific file
+emacsclient -e "(gptel-auto-workflow-run-async)"
+
+# Check what happened
+./scripts/run-auto-workflow-cron.sh status
+```
+
+**What you review**: a clean git diff with a change summary, before/after scores, and the grader's reasoning. You decide whether to merge to main.
+
+### 2. Explains What Changed and Why
+
+The system doesn't just make changes — it builds a **living knowledge graph** of your codebase. Every cycle, it auto-generates:
+
+- **Knowledge pages** per strategy: which targets improved, which didn't, and the Allium behavioral spec checking for contradictions
+- **Impact classification**: every experiment tagged as BREAKING, POTENTIALLY BREAKING, or SAFE
+- **Causal chains**: which experiments caused which improvements, tracing root causes
+- **Cross-cycle diffs**: what knowledge was added, removed, or changed since last cycle
+
+```bash
+# View the latest ontology of your pipeline's operation
+cat var/tmp/evolution/experiment-ontology.ttl
+
+# Browse knowledge pages (Markdown + Allium-annotated)
+ls mementum/knowledge/research-insights-*.md
+```
+
+### 3. Learns From Every Run
+
+**195+ experiments** have produced **40+ evolved strategies**. The system tracks which approaches work, which don't, and automatically adjusts:
+
+- **KIBC-M 15-axis classification**: every hypothesis tagged by operation type (nil-safety, composition, pattern-matching, etc.) — you can see which categories produce the best results
+- **Pareto frontier**: balances exploration (trying new things) vs exploitation (doing what works)
+- **Policy engine**: enforces limits (max experiments per file, min keep-rate) so it doesn't waste API quota on hopeless targets
+
+---
+
+## Debugging: When You Need to Know What Happened
+
+```bash
+# Full pipeline status
+./scripts/run-auto-workflow-cron.sh messages
+
+# Per-experiment details
+cat var/tmp/experiments/*/results.tsv | head -1  # header
+cat var/tmp/experiments/*/results.tsv | grep kept
+
+# Knowledge page quality scores
+# Logged every cycle: coverage, completeness, relation links
+# Look for messages like:
+# [evaluator] Knowledge pages: 85% coverage, 92% completeness, 60% linked
+
+# Policy violations (what the system refused to do)
+# Look for: [policy] VIOLATION: Target 'foo.el' has 12 experiments (max 10)
+```
+
+---
+
+## The Pipeline
+
+```
+Research (3min)  →  Evolution (2min)  →  Auto-Workflow (1-4h)  →  Post-Evolve (2min)
+     ↓                                              ↓
+  External findings                      worktree → analyzer
+  + 18-repo prefetch                     → executor → grader
+                                         → benchmark → decide
+                                         → reviewer → staging
+```
+
+Each experiment: selects target → generates hypothesis → implements fix → runs tests → grades itself → gets reviewed → merges or feeds back into learning.
+
+---
+
+## Safety (Because You Deploy to Production)
+
+| Guard | What It Prevents |
+|-------|-----------------|
+| Git worktree isolation | Never touches `main` directly |
+| 89-test suite, 1800s timeout | Broken code caught before staging |
+| Conflict marker detection | No `<<<<<<<` in committed code |
+| 5-provider failover chain | Survives API rate limits |
+| 90-minute watchdog | Kills stuck workflows |
+| Quota awareness | Skips runs when API exhausted |
+| Policy engine | Rejects forbidden targets (packages/, var/, tests/) |
+
+---
+
+## Requirements
+
+- Emacs 29.1+ on macOS or Linux
+- API keys for at least one of: MiniMax, moonshot, DashScope, DeepSeek, Cloudflare Gateway
+- Git, `gh` CLI (for repo prefetch), `timeout` (for staging verification)
 
 ---
 
 ## Key Commands
 
 ```elisp
-;; Manual workflow triggers
+;; Manual triggers (inside Emacs)
 (gptel-auto-workflow-run-async)        ; Start workflow
-(gptel-auto-workflow-status)           ; Check status
+(gptel-auto-workflow-status)           ; Check status  
 (gptel-auto-workflow-run-research)     ; Run researcher now
 ```
 
 ```bash
-# Full pipeline (research → evolve → work → evolve)
-./scripts/run-pipeline.sh
-
-# Direct auto-workflow (skip research)
-./scripts/run-auto-workflow-cron.sh auto-workflow
-
-# Status snapshots
-./scripts/run-auto-workflow-cron.sh status
-./scripts/run-auto-workflow-cron.sh messages
+# From terminal
+./scripts/run-pipeline.sh              # Full pipeline
+./scripts/run-auto-workflow-cron.sh status    # Status
+./scripts/run-auto-workflow-cron.sh messages  # Recent activity
 ```
 
 ---
@@ -162,25 +185,22 @@ emacs
 
 ```
 ~/.emacs.d/
-├── lisp/modules/         80+ Elisp modules (AI agents, tools, evolution)
-├── packages/              Git-tracked dependencies (gptel, gptel-agent, nucleus, mementum)
-├── assistant/             Agent prompts, skills, strategies (40+ evolved)
+├── lisp/modules/         80+ Elisp modules (agents, tools, evolution)
+├── packages/              Git-tracked deps (gptel, nucleus, mementum)
+├── assistant/             Agent prompts, skills, 40+ evolved strategies
 ├── tests/                 57 regression test files
-├── scripts/               Pipeline orchestration, cron, prefetch, setup
-├── mementum/              AI memory system (insights, patterns, knowledge)
-├── var/tmp/               Runtime data (experiments, traces, findings, staging)
-├── var/elpa/              Package state (auto-seeded in worktrees)
-└── eca/                   ECA provider configuration + secure wrappers
+├── scripts/               Pipeline orchestration, cron, setup
+├── mementum/              AI memory: insights, patterns, knowledge pages
+├── var/tmp/               Runtime: experiments, traces, findings, staging
+│   └── evolution/         Auto-generated ontology, diffs, scores
+├── var/elpa/              Package state
+└── eca/                   Provider configuration
 ```
 
 ---
 
 ## Upstream
 
-This fork builds on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) by James Cherti. See `README.md` for the base Emacs configuration.
+Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) by James Cherti. See `README.md` for the base Emacs configuration.
 
-Key divergences:
-- `pre-early-init.el` — max-lisp-eval-depth 20000, daemon workflow support
-- `post-init.el` — AI module loading, runtime seeding, research overrides
-- `lisp/init-ai.el` — gptel + nucleus + ECA + benchmark integration
-- Git-tracked `packages/` instead of ELPA for gptel/gptel-agent (ELPA lags behind required APIs)
+Key additions: AI module loading, gptel + nucleus + ECA integration, autonomous pipeline orchestration, Git-tracked packages (avoids ELPA lag), Semantica-inspired ontology and knowledge management system.
