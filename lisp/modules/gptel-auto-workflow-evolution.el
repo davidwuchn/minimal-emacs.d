@@ -28,6 +28,7 @@
 (declare-function gptel-auto-experiment--allium-decompile "gptel-tools-agent-prompt-build" (allium-spec &optional callback audience))
 (declare-function gptel-auto-experiment--allium-issues-count "gptel-tools-agent-prompt-build" (check-output))
 (declare-function gptel-auto-experiment--allium-quality-score "gptel-tools-agent-prompt-build" (check-output))
+(declare-function gptel-auto-experiment--compile-score "gptel-tools-agent-prompt-build" (prompt-strategy &optional callback))
 (declare-function gptel-auto-experiment--kibcm-axis "gptel-tools-agent-prompt-build" (hypothesis))
 
 ;; ─── Helpers ───
