@@ -1034,7 +1034,7 @@ Returns t if page created."
                   (when (and primary (stringp primary))
                     (let ((full-path (expand-file-name primary (gptel-auto-workflow--worktree-base-root))))
                       (when (file-exists-p full-path)
-    (condition-case err
+    (condition-case nil
                             (let ((structure (gptel-auto-workflow--extract-elisp-structure full-path)))
                               (insert "### Structure (deterministic scan)\n\n")
                               (insert (gptel-auto-workflow--summarize-elisp-structure structure))
@@ -2095,22 +2095,22 @@ Returns ImpactReport-style plist with :breaking, :potentially-breaking, :safe, :
          ;; Score dropped more than 0.02 → BREAKING
          ((< delta -0.02)
           (setq impact "breaking")
-          (push (list :target target :decision decision :delta delta :reason "score regression") breaking))
+          (push (list :target target :decision decision :delta delta :impact impact :reason "score regression") breaking))
          ;; Discarded but had high score → POTENTIALLY_BREAKING
          ((and (equal decision "discarded") score-after (> score-after 0.5))
           (setq impact "potentially_breaking")
-          (push (list :target target :decision decision :delta delta :reason "discarded high-scorer") potentially-breaking))
+          (push (list :target target :decision decision :delta delta :impact impact :reason "discarded high-scorer") potentially-breaking))
          ;; Kept with negative delta → POTENTIALLY_BREAKING
          ((and (equal decision "kept") (< delta -0.01))
           (setq impact "potentially_breaking")
-          (push (list :target target :decision decision :delta delta :reason "kept despite regression") potentially-breaking))
+          (push (list :target target :decision decision :delta delta :impact impact :reason "kept despite regression") potentially-breaking))
          ;; Kept with improvement → safe
          ((and (equal decision "kept") (> delta 0.01))
           (setq impact "safe")
-          (push (list :target target :decision decision :delta delta) safe))
+          (push (list :target target :decision decision :delta delta :impact impact) safe))
          (t
           (setq impact "safe")
-          (push (list :target target :decision decision :delta delta) safe)))))
+          (push (list :target target :decision decision :delta delta :impact impact) safe)))))
     (list :breaking (nreverse breaking)
           :potentially-breaking (nreverse potentially-breaking)
           :safe (length safe)
@@ -2891,7 +2891,7 @@ Checks: required frontmatter, duplicate titles, empty sections."
                    (push (cons 'keep-rate rate) facts)
                    (push (cons 'total-experiments (plist-get c :total)) facts)))
                by-strategy)
-      (maphash (lambda (t c) (push (cons 'target-frequency c) facts)) by-target)
+       (maphash (lambda (target counts) (push (cons 'target-frequency counts) facts)) by-target)
       (maphash (lambda (b c)
                  (let ((rate (if (> (plist-get c :total) 0)
                                  (/ (float (plist-get c :kept)) (plist-get c :total)) 0.0)))

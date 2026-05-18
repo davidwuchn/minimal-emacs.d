@@ -696,7 +696,7 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
       (should-not (gptel-auto-workflow--detect-hypothesis-conflicts)))))
 
 (ert-deftest regression/auto-workflow-evolution/seman-impact-breaking ()
-  "classify-experiment-impact: score regression → breaking."
+  "classify-experiment-impact: score regression → breaking with impact tag."
   (let ((mock (list (list :target "lisp/foo.el" :decision "kept" :score-before 0.5 :score-after 0.2))))
     (let ((old (symbol-function 'gptel-auto-workflow--parse-all-results)))
       (unwind-protect
@@ -704,6 +704,7 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
             (fset 'gptel-auto-workflow--parse-all-results (lambda () mock))
             (let ((r (gptel-auto-workflow--classify-experiment-impact)))
               (should (= (length (plist-get r :breaking)) 1))
+              (should (string= (plist-get (car (plist-get r :breaking)) :impact) "breaking"))
               (should (= (plist-get r :safe) 0))
               (should-not (plist-get r :potentially-breaking))))
         (fset 'gptel-auto-workflow--parse-all-results old)))))
