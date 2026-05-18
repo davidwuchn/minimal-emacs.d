@@ -662,25 +662,6 @@ Returns placeholder message if TOPICS is nil or empty."
                (seq-take topic-list 10)
                 "\n")))))
 
-(defun gptel-auto-workflow--load-prefetched-content ()
-  "Load pre-fetched repo content from PIPELINE_PREFETCH_FILE env var.
-Returns content string or nil if no pre-fetched content available."
-  (let ((prefetch-file (or (getenv "PIPELINE_PREFETCH_FILE")
-                           (expand-file-name "var/tmp/prefetched-research.md"
-                                             (gptel-auto-workflow--effective-project-root)))))
-    (when (and prefetch-file (file-exists-p prefetch-file))
-      (let ((content (with-temp-buffer
-                       (insert-file-contents prefetch-file)
-                       (buffer-string))))
-        (if (> (length content) 200)
-            (progn
-              (message "[research] Loaded pre-fetched content from %s (%d chars)"
-                       (file-name-nondirectory prefetch-file) (length content))
-              content)
-          (message "[research] Pre-fetched file %s too small (%d chars), skipping"
-                   (file-name-nondirectory prefetch-file) (length content))
-          nil)))))
-
 (defun gptel-auto-workflow--build-research-prompt ()
   "Build external research prompt by loading RESEARCHER.md skill.
 
