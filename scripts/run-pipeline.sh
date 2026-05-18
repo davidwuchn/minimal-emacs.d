@@ -224,6 +224,19 @@ verify_research_feedback_loop() {
 find "$DIR/lisp/modules" -name "*.elc" -delete 2>/dev/null || true
 log "Cleared stale .elc files from lisp/modules/"
 
+# ─── Force-kill all stale Emacs daemons ───
+STALE_COUNT=$(ps aux | grep -c "[e]macs.*aw-complete\|[e]macs.*bg-daemon" 2>/dev/null || echo 0)
+if [ "$STALE_COUNT" -gt 0 ]; then
+    log "Killing $STALE_COUNT stale experiment daemons..."
+    ps aux | grep "[e]macs.*aw-complete\|[e]macs.*bg-daemon" | awk '{print $2}' | xargs kill -9 2>/dev/null || true
+    sleep 2
+fi
+# Clean default server socket (blocks --daemon startup)
+if [ -S /var/folders/*/*/*/emacs*/server ]; then
+    rm -f /var/folders/*/*/*/emacs*/server 2>/dev/null || true
+    log "Cleared stale default server socket"
+fi
+
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
 "$SCRIPT" stop >/dev/null 2>&1 || true
