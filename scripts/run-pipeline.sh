@@ -27,17 +27,10 @@ SKIP_IF_QUOTA_EXHAUSTED="${SKIP_IF_QUOTA_EXHAUSTED:-no}"
 mkdir -p "$LOG_DIR"
 
 log() {
-    local line stdout_path log_path
+    local line
 
     line="[pipeline $(date '+%H:%M:%S')] $*"
-    stdout_path="$(readlink -f /proc/$$/fd/1 2>/dev/null || true)"
-    log_path="$(readlink -f "$PIPELINE_LOG" 2>/dev/null || true)"
-
-    if [ -n "$stdout_path" ] && [ -n "$log_path" ] && [ "$stdout_path" = "$log_path" ]; then
-        printf '%s\n' "$line"
-    else
-        printf '%s\n' "$line" | tee -a "$PIPELINE_LOG"
-    fi
+    printf '%s\n' "$line"
 }
 
 # Prevent overlapping runs
