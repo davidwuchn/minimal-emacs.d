@@ -662,6 +662,39 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
         (should (= (length causal) 1))
         (should (string= (caar causal) "lisp/foo.el"))))))
 
+(ert-deftest regression/auto-workflow-evolution/seman-causal-links-nil-scores ()
+  "causal-links handles nil score-after gracefully via (or sa 0)."
+  (let ((mock (list
+              (list :target "lisp/foo.el" :score-after nil :decision "kept" :hypothesis "h1" :score-before nil)
+              (list :target "lisp/foo.el" :score-after 0.5 :decision "kept" :hypothesis "h2" :score-before 0.0))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock)))
+      (let ((causal (gptel-auto-workflow--experiment-causal-links)))
+        (should (= (length causal) 1))
+        (should (= (length (cdar causal)) 2))))))
+
+(ert-deftest regression/auto-workflow-evolution/seman-conflict-detection ()
+  "detect-hypothesis-conflicts finds kept-vs-discarded opposition pairs."
+  (let ((mock (list
+              (list :target "lisp/foo.el" :hypothesis "add nil guard" :decision "kept")
+              (list :target "lisp/foo.el" :hypothesis "remove nil guard" :decision "discarded")
+              (list :target "lisp/bar.el" :hypothesis "enable logging" :decision "kept"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock)))
+      (let ((conflicts (gptel-auto-workflow--detect-hypothesis-conflicts)))
+        (should (= (length conflicts) 1))
+        (should (string= (plist-get (car conflicts) :target) "lisp/foo.el"))
+        (should (plist-get (car conflicts) :severity))))))
+
+(ert-deftest regression/auto-workflow-evolution/seman-conflict-no-conflict ()
+  "No conflicts when all decisions for a target are kept."
+  (let ((mock (list
+              (list :target "lisp/foo.el" :hypothesis "add guard" :decision "kept")
+              (list :target "lisp/foo.el" :hypothesis "add nil check" :decision "kept"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock)))
+      (should-not (gptel-auto-workflow--detect-hypothesis-conflicts)))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
