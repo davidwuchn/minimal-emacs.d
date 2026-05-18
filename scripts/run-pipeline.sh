@@ -69,8 +69,16 @@ wait_for_idle() {
             local status
             status="$($SCRIPT status 2>/dev/null || true)"
             if printf '%s' "$status" | grep -Eq ':phase "(idle|complete|skipped|quota-exhausted)"|:running nil'; then
-                log "$action completed after ${elapsed}s"
-                return 0
+                # Verify experiments were actually produced (not just idle between cycles)
+                if find "$DIR/var/tmp/experiments" -name "results.tsv" -newer "$PIPELINE_LOG" 2>/dev/null | grep -q .; then
+                    log "$action completed after ${elapsed}s (experiments produced)"
+                    return 0
+                fi
+                # Still idle but no experiments yet — daemon might be between cycles
+                if [ "$elapsed" -gt 300 ]; then
+                    log "$action completed after ${elapsed}s (no experiments after 5min idle, daemon likely done)"
+                    return 0
+                fi
             fi
             daemon_was_seen=1
         elif [ "$socket_name" = "copilot-researcher" ]; then
