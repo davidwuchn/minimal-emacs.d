@@ -1,6 +1,53 @@
 # Mementum State
 
-> Last session: 2026-05-16
+> Last session: 2026-05-18
+> Last session goal: TDD — test all new Semantica/Allium/KIBC-M functions, fix bugs
+> 
+> ## Session Results
+> 
+> | Metric | Before | After |
+> |--------|--------|-------|
+> | Tests | 37 | 89 (+52) |
+> | Bugs fixed | — | 15 |
+> | TDD rounds | — | 23 |
+> | Files changed | — | 3 (evolution.el, prompt-build.el, test file) |
+> 
+> ## Bugs Fixed
+> 
+> 1. allium-quality-score: severity>0 without numbered lines returned false 0.0
+> 2. 5 throw compile-early-return guards → if/else with nil return
+> 3. (setq result result) dead code removed (×2: removed, then removed again after merge re-introduced it)
+> 4. maphash 3-arg bug: 12-close-paren cascade → lambda extraction refactor
+> 5. nil-root guards: persist-spec, load-issues-for-guidance, allium-read-quality
+> 6. validate-knowledge-page: field-order dependency (re-search-forward → string-match)
+> 7. allium-issues regex: no capture group → always defaulted to 0
+> 8. check-competency-questions: reversed string-match-p args + plural/singular mismatch
+> 9. classify-experiment-impact: impact variable computed but never wired into results
+> 10. forward-chain: 3 unused lambda args wired (strategy, target, backend)
+> 11. lambda (t c): t is special constant, renamed to (target counts)
+> 12. condition-case err: err bound but never used → reverted to nil
+> 13. missing declare-function for compile-score
+> 
+> ## Known Origin Bugs (not fixed — need origin-side fix)
+> 
+> - Empty defun at line ~2967 (evolution-optimize-backend-order) absorbs memory-status and subsequent functions
+> - memory-status not defined due to above
+> 
+> ## Test Coverage Added
+> 
+> - Allium: issues-count, quality-score, compiler-prompt, guard-callbacks, persist-spec, load-issues, read-quality, audit-signal (26 tests)
+> - KIBC-M: axis classification, axis-stats (8 tests)
+> - Semantica: opposing-hypotheses, validation-result, ontology, causal-links, conflict-detection, impact-classification, page-signature, page-validation, CQ-answerability, pipeline-validation (23 tests)
+> - PolicyEngine: check-policy (2 tests)
+> - TSV: column alignment (1 test)
+> - Forward-chain: eval-condition (2 tests)
+> 
+> ## Action Items
+> 
+> - [ ] Fix empty defun at ~2967 (origin-side — blocks memory-status)
+> - [ ] Test memory-status once available
+> - [ ] Test score-knowledge-pages, forward-chain (need worktree mock infrastructure)
+> - [ ] Test owl-generate/owl-save (async, needs LLM backend mock)
 
 
 ## Current Session: Generated Artifact Quality Fixes
