@@ -48,10 +48,10 @@ Returns list of arg name symbols, or nil if tool not found."
            (tool (ignore-errors (gptel-get-tool name-str))))
       (when tool
         (let ((args (gptel-tool-args tool)))
-          (cl-loop for arg in args
-                   for name = (plist-get arg :name)
-                   when name
-                   collect (intern (replace-regexp-in-string "-" "_" name))))))))
+          (when (listp args)
+            (cl-loop for arg in args
+                     when (and (listp arg) (plist-get arg :name))
+                     collect (intern (replace-regexp-in-string "-" "_" (plist-get arg :name))))))))))
 
 (defun nucleus--validate-tool (tool-name prompt-text)
   "Validate TOOL-NAME prompt signature matches registered args.
