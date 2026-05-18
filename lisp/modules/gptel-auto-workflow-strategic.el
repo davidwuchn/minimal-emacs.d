@@ -705,13 +705,15 @@ Results feed into directive's 'Next Hypotheses' for target selection."
           (knowledge-summary (gptel-auto-workflow--load-knowledge-summary)))
     (concat (or base-prompt "")
             "\n\n"
-            (let ((prefetched (gptel-auto-workflow--load-prefetched-content)))
-              (if prefetched
-                  (concat "## Pre-Fetched Repo Content (already fetched — synthesize from this)\n\n"
-                          prefetched
-                          "\n\n")
-                ""))
-            "## Dynamic Context\n\n"
+             (let ((prefetched (gptel-auto-workflow--load-prefetched-content)))
+               (if prefetched
+                   (concat "## Pre-Fetched Content (supplementary — fetch specific files on demand)\n\n"
+                           prefetched
+                           "\n\n")
+                 ""))
+             "## Research Mission\n\n"
+             "Do NOT rely only on pre-fetched content. Use `gh api` to fetch SPECIFIC files from repos you need.\n"
+             "Your job: produce a structured research plan with techniques, applications, and verification methods.\n\n"
             (if (string-empty-p skill-content)
                 ""
               (concat "### Previously Discovered Insights\n"
@@ -749,10 +751,22 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                "")
              "### Research Method (Step-by-Step)\n"
              "1. **Review** what we already know (above). Identify gaps — what techniques have NOT been tried?\n"
-             "2. **Scan** pre-fetched content for techniques that fill those gaps.\n"
+             "2. **Fetch** specific files you need from repos using:\n"
+             "   `gh api repos/davidwuchn/REPO/contents/PATH --jq '.content' | base64 -d`\n"
+             "   Only fetch files that fill identified gaps. Do NOT batch-dump.\n"
              "3. **Prioritize** sources with high keep-rates (Research Priorities above).\n"
-             "4. **Synthesize** each finding: source, technique, how to apply to Emacs Lisp, verification method.\n"
-             "5. **Output** only novel techniques — skip anything already covered in 'What We Already Know'.\n\n"
+             "4. **Synthesize** each finding: source, technique, how to apply to Emacs Lisp.\n"
+             "5. **Output** as a structured research plan (see format below).\n\n"
+             "### Output Format (Research Plan)\n"
+             "For each finding, output:\n"
+             "```\n"
+             "## [Technique Name]\n"
+             "**Source:** [repo/file]\n"
+             "**Technique:** [one-paragraph description]\n"
+             "**Apply To Us:** [specific module or pattern to improve]\n"
+             "**Verification:** [how to test this works]\n"
+             "**Priority:** [HIGH/MEDIUM/LOW based on keep-rate]\n"
+             "```\n\n"
              "### Recent Failure Patterns\n"
              (gptel-auto-workflow--research-topics-string)
              "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))

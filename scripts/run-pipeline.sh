@@ -253,20 +253,21 @@ PIPELINE_START_TIME="$(date +%s)"
 # Verify findings were produced
 RESEARCH_QUALITY="none"
 
-# ─── Step 0: Pre-fetch external repo content ───
+# ─── Step 0: Pre-fetch external repo content (optional — researcher can fetch on demand) ───
 PREFETCH_FILE="$DIR/var/tmp/prefetched-research.md"
 PREFETCH_SCRIPT="$DIR/scripts/prefetch-research-repos.sh"
-if [ -x "$PREFETCH_SCRIPT" ] && command -v gh >/dev/null 2>&1; then
-    log "=== Step 0: Pre-fetch Research Repos ==="
+PREFETCH_ENABLED="${PREFETCH_ENABLED:-no}"  # off by default — researcher fetches what it needs
+if [ "$PREFETCH_ENABLED" = "yes" ] && [ -x "$PREFETCH_SCRIPT" ] && command -v gh >/dev/null 2>&1; then
+    log "=== Step 0: Pre-fetch Research Repos (broad batch) ==="
     if "$PREFETCH_SCRIPT" "$PREFETCH_FILE" >> "$PIPELINE_LOG" 2>&1; then
         log "  ✓ Pre-fetched repo content ($(wc -c < "$PREFETCH_FILE" 2>/dev/null || echo 0)B)"
         export PIPELINE_PREFETCH_FILE="$PREFETCH_FILE"
     else
-        log "  ⚠ Pre-fetch had issues — continuing without pre-fetched content"
+        log "  ⚠ Pre-fetch had issues — researcher will fetch on demand"
         rm -f "$PREFETCH_FILE"
     fi
 else
-    log "=== Step 0: Skipped (gh not available or script missing) ==="
+    log "=== Step 0: Skipped (researcher fetches specific files on demand) ==="
 fi
 
 # ─── Step 1: Research ───
