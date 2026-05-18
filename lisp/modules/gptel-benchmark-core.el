@@ -207,6 +207,8 @@ Returns DIR for chaining convenience."
 (defun gptel-benchmark-save-historical (name results &optional results-dir)
   "Save RESULTS to historical file for NAME in RESULTS-DIR.
 Creates a history entry with timestamp and summary."
+  (when (null name)
+    (error "gptel-benchmark-save-historical: NAME cannot be nil"))
   (let* ((dir (or results-dir gptel-benchmark-default-dir))
          (history-file (expand-file-name (format "%s-history.json" name) dir))
          (existing (when (file-exists-p history-file)
@@ -225,6 +227,8 @@ Creates a history entry with timestamp and summary."
 
 (defun gptel-benchmark-load-history (name &optional results-dir)
   "Load historical benchmark data for NAME from RESULTS-DIR."
+  (when (null name)
+    (error "gptel-benchmark-load-history: NAME cannot be nil"))
   (let* ((dir (or results-dir gptel-benchmark-default-dir))
          (history-file (expand-file-name (format "%s-history.json" name) dir)))
     (when (file-exists-p history-file)
@@ -235,6 +239,8 @@ Creates a history entry with timestamp and summary."
   "Show trend of benchmark scores over time for NAME."
   (interactive
    (list (read-string "Name: ")))
+  (when (null name)
+    (error "gptel-benchmark-trend: NAME cannot be nil"))
   (let ((history (gptel-benchmark-load-history name results-dir)))
     (if (not history)
         (message "[benchmark] No historical data for %s" name)
@@ -378,7 +384,7 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                   (gptel-benchmark--accumulate-scores
                    score-totals
                    (gptel-benchmark--extract-score-types scores)))
-            (when (>= (or overall-score 0) 0.7)
+            (when (>= (gptel-benchmark--normalize-score overall-score) 0.7)
               (cl-incf passed)))))
       (append (list :total-tests total :passed-tests passed)
               (mapcan (lambda (m)

@@ -20,10 +20,12 @@
              (listp nucleus--validation-cache)
              (= 2 (length nucleus--validation-cache)))
     (pcase-let ((`(,timestamp . ,results) nucleus--validation-cache))
-      (when (and (numberp timestamp)
-                 (floatp (- (float-time) timestamp))
-                 (< (- (float-time) timestamp) nucleus--validation-cache-ttl))
-        results))))
+      (when (numberp timestamp)
+        (let ((age (- (float-time) timestamp)))
+          (when (and (numberp age)
+                     (< age nucleus--validation-cache-ttl)
+                     (proper-list-p results))
+            results))))))
 
 (defun nucleus--extract-prompt-signature (tool-name prompt-text)
   "Extract lambda signature for TOOL-NAME from PROMPT-TEXT.
@@ -47,10 +49,10 @@ Returns list of arg name symbols, or nil if tool not found."
            (tool (ignore-errors (gptel-get-tool name-str))))
       (when tool
         (let ((args (gptel-tool-args tool)))
-          (cl-loop for arg in args
-                   for name = (plist-get arg :name)
-                   when name
-                   collect (intern (replace-regexp-in-string "-" "_" name))))))))
+          (when (listp args)
+            (cl-loop for arg in args
+                     when (and (listp arg) (plist-get arg :name))
+                     collect (intern (replace-regexp-in-string "-" "_" (plist-get arg :name))))))))))
 
 (defun nucleus--validate-tool (tool-name prompt-text)
   "Validate TOOL-NAME prompt signature matches registered args.
@@ -78,14 +80,14 @@ Returns (status . message) where status is:
 (defun nucleus--count-validation-results (results)
   "Count validation RESULTS by status.
 
-Returns (ok . (warnings . errors)) counts."
+Returns list (ok warnings errors) counts."
   (let ((ok 0) (warnings 0) (errors 0))
     (cl-loop for (_tool-name . (status . _msg)) in results
              do (pcase status
                   ('ok (cl-incf ok))
                   ('warning (cl-incf warnings))
                   ('error (cl-incf errors))))
-    (cons ok (cons warnings errors))))
+    (list ok warnings errors)))
 
 (defun nucleus--validate-all-tools ()
   "Validate all tool prompts match their registered signatures.
@@ -115,7 +117,7 @@ Displays results in a buffer showing:
          (counts (nucleus--count-validation-results results))
          (ok (car counts))
          (warnings (cadr counts))
-         (errors (cddr counts)))
+         (errors (nth 2 counts)))
     (with-current-buffer (get-buffer-create "*nucleus-tool-validation*")
       (erase-buffer)
       (insert "Nucleus Tool Signature Validation\n")
@@ -139,7 +141,7 @@ Displays results in a buffer showing:
          (counts (nucleus--count-validation-results results))
          (ok (car counts))
          (warnings (cadr counts))
-         (errors (cddr counts))
+         (errors (nth 2 counts))
          (error-details '()))
     (cl-loop for (tool-name . (status . msg)) in results
              when (eq status 'error)
