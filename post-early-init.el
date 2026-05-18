@@ -99,7 +99,7 @@
 ;; subagent async callbacks (curl sentinel → FSM → callback → next process).
 ;; Default 1600 is too low for 5+ nested subagent layers.
 ;; Root cause fixed: gptel-abort now defers callback to break sync recursion.
-(setq max-lisp-eval-depth 20000)
+(setq max-lisp-eval-depth 40000)
 
 (provide 'post-early-init)
 
