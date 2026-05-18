@@ -2355,21 +2355,26 @@ Consumed by researcher daemon to focus on high-value repos."
     (message "[research-priorities] Wrote %d sources to %s" (length sources) file)))
 
 (defun gptel-auto-workflow--enrich-ontology-from-research ()
-  "Extract new techniques from research findings and merge into ontology.
-Reads research-findings.md, identifies novel patterns, adds to knowledge graph.
+  "Extract new techniques from researcher's Allium spec and merge into ontology.
+Researcher now outputs Allium v3 behavioral specs — parse Technique entities.
 Semantica pattern: continuous ontology enrichment by the research agent."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (findings-file (expand-file-name "var/tmp/research-findings.md" root))
-         (onto-file (expand-file-name "var/tmp/evolution/enriched-ontology.ttl" root))
          (new-concepts nil))
     (when (file-readable-p findings-file)
       (with-temp-buffer
         (insert-file-contents findings-file)
         (goto-char (point-min))
-        ;; Extract technique names: headings starting with "## "
-        (while (re-search-forward "^## \\(.+\\)" nil t)
+        ;; Parse Allium Technique entities: entity Technique { name: "X" source: "Y" ... }
+        (while (re-search-forward "Technique\\.created(\\s-*name:\\s-*\\([^,\n]+\\)" nil t)
+          (let ((name (string-trim (match-string 1) "\"" "\"")))
+            (unless (string-empty-p name)
+              (push name new-concepts))))
+        ;; Also catch markdown fallback headings
+        (goto-char (point-min))
+        (while (re-search-forward "^## \\([^R][^e][^s].+\\)" nil t)
           (let ((technique (string-trim (match-string 1))))
-            (unless (string-match-p "^Research\|^Pre-Fetched\|^Source\|^Dynamic\|^Local" technique)
+            (unless (string-match-p "^Research\|^Pre-Fetched\|^Source\|^Dynamic\|^Local\|Technique Name" technique)
               (push technique new-concepts))))
         ;; Check against existing knowledge pages for novelty
         (let ((kd (expand-file-name "mementum/knowledge" root))
@@ -2383,18 +2388,17 @@ Semantica pattern: continuous ontology enrichment by the research agent."
                                                (match-string 1) "")))
                                        (directory-files kd t "research-insights-.+\\.md$")
                                        " ")))
-              (dolist (c (nreverse new-concepts))
+              (dolist (c (nreverse (delete-dups new-concepts)))
                 (unless (string-match-p (regexp-quote c) existing)
                   (push c novel))))
             (when novel
-              (message "[onto-enrich] %d new techniques discovered: %s"
+              (message "[onto-enrich] %d new techniques from researcher: %s"
                        (length novel) (mapconcat #'identity (seq-take novel 3) ", "))
-              ;; Save enriched ontology
-              (let ((ontology (gptel-auto-workflow--generate-experiment-ontology)))
-                (when (and ontology (> (plist-get ontology :class-count) 0)
+              (let ((onto (gptel-auto-workflow--generate-experiment-ontology)))
+                (when (and onto (> (plist-get onto :class-count) 0)
                            (fboundp 'gptel-auto-experiment--owl-save))
                   (gptel-auto-experiment--owl-save
-                   ontology onto-file
+                   onto (expand-file-name "var/tmp/evolution/enriched-ontology.ttl" root)
                    (lambda (_ok) nil)))))))))))
 
 (defun gptel-auto-workflow--evolution-axis-stats ()
