@@ -1,256 +1,179 @@
 # minimal-emacs.d + gptel-nucleus
 
-> **Your AI teammate that researches, codes, reviews, and learns — so you ship faster.**
+> **Absorb everything. Convert it to your own power. Grow stronger with every fight.**
+>
+> Like the Northern Divine Art from the martial world — this system researches external techniques, assimilates them into working code, and learns from every outcome. You don't write fixes. You channel them.
 
-A fork of [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) turned into an autonomous AI agent system. Built on [gptel](https://github.com/karthink/gptel). Runs 3-6 autonomous improvement cycles per day inside Emacs.
-
----
-
-## If You're a Forward Deployed Engineer
-
-Your job: ship fixes fast, know what changed, never break prod. Here's how this helps:
-
-**You find a bug or a pattern that needs fixing across dozens of files.** Instead of spending hours on grep → edit → test → repeat, you tell the pipeline what to optimize. It researches similar fixes, proposes changes, tests them in isolation, and either merges or explains why it failed. You review the diff.
-
-**You're integrating with a customer's codebase and need to understand its patterns.** The system has already built an ontology of your code — it knows which strategies work on which files, which operations tend to succeed, and where contradictions hide. You query the knowledge pages instead of grepping blind.
-
-**You need an audit trail of what changed and why.** Every experiment is recorded with hypothesis, delta, decision, and causal links to prior experiments. You can trace "why was this function refactored in March?" back to the specific research that triggered it.
-
-**You have mass customer data and need to structure, validate, and reason over it.** The same ontology pipeline that governs 89 code files can auto-generate OWL ontologies from your data, validate records against business rules, detect conflicting values from different sources, and diff what changed between data loads. You feed it raw data, it returns structure.
+A fork of [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Built on [gptel](https://github.com/karthink/gptel).
 
 ---
 
-## What It Does (In Practice)
+## Bei Ming Shen Gong, For Your Codebase
+
+In the classics, the Northern Divine Art (北冥神功) does one thing no other art can: it absorbs the internal energy of any opponent and makes it yours. You don't need to cultivate for decades. You just need to touch them, and their power flows into you.
+
+This is the same principle, applied to software.
+
+**Every technique your pipeline absorbs — from 18 repositories, from arXiv, from GitHub — becomes a working code change in your project. Every experiment that fails teaches you what not to do. Every experiment that succeeds makes the next one stronger.**
+
+You are not the one writing fixes at 2am. You are the one channeling an entire research pipeline through your fingertips.
+
+---
+
+## What You Absorb
+
+### From the Outside World
+
+The system reaches out and pulls techniques from everywhere:
 
 ```
-You: "My project has nil-safety bugs. Fix them."
-Pipeline: researches 18 repos for nil-guard patterns,
-          generates 10+ hypotheses, tests them,
-          merges the ones that pass 89-test suite,
-          learns which strategies actually worked,
-          gets better next cycle.
+18+ repos → research → distill → strategy → execute
+GitHub    ↗
+arXiv     ↗
 ```
 
-| You Give It | You Get Back |
-|-------------|-------------|
-| A target file pattern | Tested, reviewed code changes (merged or explained) |
-| A research question | Relevant techniques from GitHub, arXiv, and 18+ repos |
-| Raw data (JSON, CSV, logs) | Auto-generated ontology (classes, properties, types) |
-| Nothing (it runs autonomously) | 3-6 cycles/day of self-directed improvement |
-| A status check | What changed, what failed, what it learned |
-
----
-
-## Quick Start
+A single command starts the flow:
 
 ```bash
-# 1. Clone
-git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d ~/.emacs.d
-
-# 2. Install packages
-cd ~/.emacs.d && ./scripts/setup-packages.sh
-
-# 3. Setup ECA symlinks
-./scripts/setup-eca-links.sh
-
-# 4. Configure API keys in ~/.authinfo
-# machine api.minimaxi.com login apikey password YOUR_KEY
-# machine api.kimi.com      login apikey password YOUR_KEY
-
-# 5. Run it
 ./scripts/run-pipeline.sh
 ```
 
-That's it. No manual intervention needed after setup.
+The pipeline researches similar fixes across all sources, selects targets, generates hypotheses, implements changes, runs 89 tests, has an AI reviewer grade the work, and merges what passes. What was once scattered across the internet is now running in your codebase.
 
----
+**What you see**: a clean git diff. Before/after scores. The grader's reasoning. You approve or redirect. The power was never yours to write — only to direct.
 
-## Three Things It Does For Your Job
+### From Customer Data
 
-### 1. Ships Fixes You'd Rather Not Write
-
-Repetitive code fixes — nil guards, error handling, DRY refactors — are automated. Each experiment runs in a git worktree, passes through a 6-gate pipeline (analyzer → executor → grader → comparator → reviewer → staging), and either merges or tells you why not.
-
-```bash
-# Run a manual experiment on a specific file
-emacsclient -e "(gptel-auto-workflow-run-async)"
-
-# Check what happened
-./scripts/run-auto-workflow-cron.sh status
-```
-
-**What you review**: a clean git diff with a change summary, before/after scores, and the grader's reasoning. You decide whether to merge to main.
-
-### 2. Explains What Changed and Why
-
-The system doesn't just make changes — it builds a **living knowledge graph** of your codebase. Every cycle, it auto-generates:
-
-- **Knowledge pages** per strategy: which targets improved, which didn't, and the Allium behavioral spec checking for contradictions
-- **Impact classification**: every experiment tagged as BREAKING, POTENTIALLY BREAKING, or SAFE
-- **Causal chains**: which experiments caused which improvements, tracing root causes
-- **Cross-cycle diffs**: what knowledge was added, removed, or changed since last cycle
-
-```bash
-# View the latest ontology of your pipeline's operation
-cat var/tmp/evolution/experiment-ontology.ttl
-
-# Browse knowledge pages (Markdown + Allium-annotated)
-ls mementum/knowledge/research-insights-*.md
-```
-
-### 3. Learns From Every Run
-
-**195+ experiments** have produced **40+ evolved strategies**. The system tracks which approaches work, which don't, and automatically adjusts:
-
-- **KIBC-M 15-axis classification**: every hypothesis tagged by operation type (nil-safety, composition, pattern-matching, etc.) — you can see which categories produce the best results
-- **Pareto frontier**: balances exploration (trying new things) vs exploitation (doing what works)
-- **Policy engine**: enforces limits (max experiments per file, min keep-rate) so it doesn't waste API quota on hopeless targets
-
----
-
-## FDE Superpower: Ontology For Your Data, Not Just Ours
-
-Forward Deployed Engineers deal with **mass, messy data** — customer databases, log streams, API responses, config sprawl. The same ontology system that structures our pipeline can structure *yours*:
-
-**You have 10,000 JSON records from a customer's API and need to understand what's in them.** Feed them to the ontology generator:
+A customer drops 10,000 JSON records on you. "Make sense of this."
 
 ```elisp
-;; Generate ontology from your data
 (let ((onto (gptel-auto-workflow--generate-experiment-ontology)))
-  (gptel-auto-experiment--owl-save
-   onto "~/customer-data-ontology.ttl"
-   (lambda (ok) (message "Saved OWL ontology"))))
+  (message "Found %d classes, %d instances"
+           (plist-get onto :class-count)
+           (plist-get onto :instance-count)))
 ```
 
-Result: auto-detected classes (entity types), inferred properties (relationships between them), XSD-typed fields. No hand-authoring.
-
-**You need to validate a dataset against business rules.** Add rules to the policy engine:
+The system absorbs the data — detects entity types, infers relationships, types every field — and returns a formal ontology. What was chaos is now structure. Add rules to filter out the impure:
 
 ```elisp
 (setq gptel-auto-workflow--experiment-policy
-      '(:max-items-per-entity 100
-        :min-confidence 0.7
-        :required-fields ("id" "timestamp" "source")
-        :forbidden-values ("null" "undefined" "N/A")))
+      '(:required-fields ("id" "timestamp" "source")
+        :forbidden-values ("null" "undefined")))
 ```
 
-Any record that violates these gets flagged. Same validation-result pattern — `(valid, errors, warnings)`.
+Violations are flagged. Only clean energy flows through.
 
-**You have conflicting data from two sources.** The conflict detector spots opposing claims:
+### From the Past
 
-```
-[conflict] 3 hypothesis opposition(s) detected:
-  customer_records: 2 opposing pairs (high) — Multiple opposed outcomes
-  user_profiles: 1 opposing pair (medium) — Contradictory results
-```
-
-**You need to explain to a customer what changed between data loads.** Cross-cycle diff:
+Production is down at 2am. You need to know *why*.
 
 ```bash
-cat var/tmp/evolution/knowledge-snapshot.el
-# Shows: +3 new classes, -1 removed class, ~2 changed
+cat var/tmp/experiments/*/results.tsv | grep "<target-file>"
 ```
 
-The core insight: **you don't write ontology code.** You feed the system data and get back structure, validation, and reasoning. Same engine that audits our 89-file codebase can audit your 100,000-record dataset.
+Every experiment leaves a trace: hypothesis → change → outcome → decision. Causal chains link experiments together. Impact classification marks every change as BREAKING, POTENTIAL, or SAFE. The system has already absorbed its own history — you just read it.
 
----
+### From Your Own Progress
 
-## Debugging: When You Need to Know What Happened
+The customer asks: "What did you do for us in the last two weeks?"
 
 ```bash
-# Full pipeline status
-./scripts/run-auto-workflow-cron.sh messages
-
-# Per-experiment details
-cat var/tmp/experiments/*/results.tsv | head -1  # header
-cat var/tmp/experiments/*/results.tsv | grep kept
-
-# Knowledge page quality scores
-# Logged every cycle: coverage, completeness, relation links
-# Look for messages like:
-# [evaluator] Knowledge pages: 85% coverage, 92% completeness, 60% linked
-
-# Policy violations (what the system refused to do)
-# Look for: [policy] VIOLATION: Target 'foo.el' has 12 experiments (max 10)
+ls mementum/knowledge/research-insights-*.md
 ```
+
+Each knowledge page is a chapter of your cultivation: strategies tried, targets improved, contradictions detected and resolved, meta-learning on what works. Send the markdown. The story tells itself.
 
 ---
 
-## The Pipeline
+## How the Absorption Works
+
+Every change passes through six gates. Energy that can't pass a gate is not wasted — it returns as learning for the next cycle.
 
 ```
-Research (3min)  →  Evolution (2min)  →  Auto-Workflow (1-4h)  →  Post-Evolve (2min)
-     ↓                                              ↓
-  External findings                      worktree → analyzer
-  + 18-repo prefetch                     → executor → grader
-                                         → benchmark → decide
-                                         → reviewer → staging
+Select target → Generate hypothesis → Implement fix → Run tests → AI grade → AI review → Merge or learn
+                                                                                          ↓
+                                                                              Feeds back into
+                                                                              strategy evolution
 ```
 
-Each experiment: selects target → generates hypothesis → implements fix → runs tests → grades itself → gets reviewed → merges or feeds back into learning.
+All operations in isolated git worktrees. `main` is never touched until you choose.
+
+### The Inner Compass
+
+As the system absorbs, it also *understands*. It builds a knowledge graph of its own operation:
+
+| Capability | Principle |
+|-----------|----------|
+| **Ontology generation** | Chaos becomes form — raw data yields classes, properties, relationships |
+| **Allium behavioral checking** | Internal contradictions are detected and flagged — no technique is practiced with hidden flaws |
+| **Knowledge page scoring** | Every insight is measured: coverage, completeness, coherence |
+| **Conflict detection** | Opposite approaches on the same target are exposed immediately |
+| **Impact classification** | Every change labeled: safe, dangerous, or needing caution |
+| **Causal chains** | You can trace any outcome back to its root |
+| **Cross-cycle diff** | See what was gained and what was discarded between cycles |
+| **Policy engine** | Rules prevent wasted energy — no technique practiced beyond its worth |
+
+### Four Schools, One Art
+
+Each cycle, four compilers examine the system's own practice — four masters checking your form:
+
+| Compiler | Examines | Asks |
+|----------|---------|------|
+| Nucleus EDN | Your strategy prompts | "Is this instruction clear enough to follow?" |
+| Nucleus Lambda | Your hypotheses | "What principle are you really encoding?" |
+| Allium v3 | Your research findings | "Are these internally consistent, or do they contradict?" |
+| OWL/SHACL | Your ontology | "What is the formal shape of what you've learned?" |
+
+Results flow back into the next cycle. The form sharpens itself.
 
 ---
 
-## Safety (Because You Deploy to Production)
+## Guarding the Meridians
 
-| Guard | What It Prevents |
+Cultivation without discipline is self-destruction. These safeguards ensure you absorb without breaking:
+
+| Guard | Protects Against |
 |-------|-----------------|
-| Git worktree isolation | Never touches `main` directly |
-| 89-test suite, 1800s timeout | Broken code caught before staging |
+| Git worktree isolation | `main` is never touched directly |
+| 89 tests + 1800s timeout | Corrupted energy is caught and expelled |
 | Conflict marker detection | No `<<<<<<<` in committed code |
-| 5-provider failover chain | Survives API rate limits |
-| 90-minute watchdog | Kills stuck workflows |
-| Quota awareness | Skips runs when API exhausted |
-| Policy engine | Rejects forbidden targets (packages/, var/, tests/) |
+| 5-provider failover | If one channel closes, another opens |
+| 90-minute watchdog | No technique runs forever |
+| Quota awareness | No technique practiced beyond available resources |
+| Policy engine | Forbidden paths are sealed |
 
 ---
 
-## Requirements
+## Begin Your Practice
 
-- Emacs 29.1+ on macOS or Linux
-- API keys for at least one of: MiniMax, moonshot, DashScope, DeepSeek, Cloudflare Gateway
-- Git, `gh` CLI (for repo prefetch), `timeout` (for staging verification)
+```bash
+git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d ~/.emacs.d
+cd ~/.emacs.d && ./scripts/setup-packages.sh
+./scripts/setup-eca-links.sh
 
----
+# API keys in ~/.authinfo:
+# machine api.minimaxi.com login apikey password YOUR_KEY
 
-## Key Commands
+./scripts/run-pipeline.sh
+```
+
+First run initializes itself. After that, it absorbs and improves on its own.
+
+### Commands
 
 ```elisp
-;; Manual triggers (inside Emacs)
-(gptel-auto-workflow-run-async)        ; Start workflow
-(gptel-auto-workflow-status)           ; Check status  
-(gptel-auto-workflow-run-research)     ; Run researcher now
+;; Inside Emacs — direct the flow
+(gptel-auto-workflow-run-async)        ; Channel energy now
+(gptel-auto-workflow-status)           ; Check your cultivation
+(gptel-auto-workflow-run-research)     ; Reach outward
 ```
 
 ```bash
-# From terminal
-./scripts/run-pipeline.sh              # Full pipeline
-./scripts/run-auto-workflow-cron.sh status    # Status
-./scripts/run-auto-workflow-cron.sh messages  # Recent activity
+# Terminal — observe from above
+./scripts/run-pipeline.sh              ; Full absorption cycle
+./scripts/run-auto-workflow-cron.sh messages  ; Recent activity
 ```
 
 ---
 
-## Directory Structure
-
-```
-~/.emacs.d/
-├── lisp/modules/         80+ Elisp modules (agents, tools, evolution)
-├── packages/              Git-tracked deps (gptel, nucleus, mementum)
-├── assistant/             Agent prompts, skills, 40+ evolved strategies
-├── tests/                 57 regression test files
-├── scripts/               Pipeline orchestration, cron, setup
-├── mementum/              AI memory: insights, patterns, knowledge pages
-├── var/tmp/               Runtime: experiments, traces, findings, staging
-│   └── evolution/         Auto-generated ontology, diffs, scores
-├── var/elpa/              Package state
-└── eca/                   Provider configuration
-```
-
----
-
-## Upstream
-
-Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) by James Cherti. See `README.md` for the base Emacs configuration.
-
-Key additions: AI module loading, gptel + nucleus + ECA integration, autonomous pipeline orchestration, Git-tracked packages (avoids ELPA lag), Semantica-inspired ontology and knowledge management system.
+Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Extended with gptel + nucleus + ECA, autonomous pipeline, Semantica ontology, Allium behavioral compilers. The art grows with its practitioner.
