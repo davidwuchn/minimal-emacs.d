@@ -1245,7 +1245,9 @@ Otherwise, convert using princ representation."
 (defun gptel-auto-workflow--analyzer-error-p (response)
   "Return non-nil when RESPONSE is an analyzer task failure wrapper."
   (and (stringp response)
-       (string-match-p "\\`Error:" response)))
+       (or (string-match-p "\\`Error:" response)
+           (string-match-p "gptel: API failed" response)
+           (string-match-p "Token Plan.*重试" response))))
 
 (defun gptel-auto-workflow--research-has-external-content-p (response)
   "Return non-nil when RESPONSE contains actual external research references.

@@ -72,7 +72,7 @@ the configured fallback chain is exhausted.")
 (defconst gptel-auto-experiment--shared-retryable-error-patterns
   (cons
    (cons
-    (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON") t)
+    (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON" "gptel: API failed" "请稍后重试" "请求量较高" "rate limit reached" "429" "Too Many Requests") t)
     7) ;; 7 matches in first group
    (cons
     (regexp-opt '("WebClientRequestException" "server_error" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "Malformed JSON") t)
