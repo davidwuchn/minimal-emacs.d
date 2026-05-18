@@ -23,6 +23,43 @@
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions" ())
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
+
+;; ─── Semantica AgentMemory: formalize mementum layers ───
+
+(defconst gptel-auto-workflow--agent-memory-layers
+  '((:layer "short-term" :description "In-session working memory"
+     :location "var/tmp/evolution/" :persistence nil :max-items 50)
+    (:layer "long-term" :description "Vector similarity search (git-embed)"
+     :location "git-embed index" :persistence t :backend "git-embed")
+    (:layer "structured" :description "Knowledge pages + Allium specs"
+     :location "mementum/knowledge/" :persistence t :format "markdown + allium")
+    (:layer "temporal" :description "Git-based timeline, experiment TSV history"
+     :location "git log + var/tmp/experiments/" :persistence t :format "git + tsv"))
+  "4-layer AgentMemory architecture (Semantica pattern).
+Layer 1: short-term working memory (in-session, cleared on daemon restart)
+Layer 2: long-term vector memory (git-embed semantic similarity, 840 files indexed)
+Layer 3: structured memory (knowledge pages, Allium behavioral specs, ontology)
+Layer 4: temporal index (git commit history, experiment TSV, cycle snapshots)")
+
+(defun gptel-auto-workflow--memory-status ()
+  "Report status of all memory layers. Returns plist with :layer → status."
+  (let ((status nil))
+    (dolist (layer gptel-auto-workflow--agent-memory-layers)
+      (let* ((name (plist-get layer :layer))
+             (location (plist-get layer :location))
+             (root (gptel-auto-workflow--worktree-base-root))
+             (full-path (expand-file-name location root))
+             (state (cond
+                     ((string-match-p "git-embed" location)
+                      (if (fboundp 'git-embed-search) "active" "unavailable"))
+                     ((file-directory-p full-path)
+                      (let ((count (length (directory-files full-path nil "\\`[^.]"))))
+                        (format "%d items" count)))
+                     (t "not found"))))
+        (push (list :layer name :location location :state state :description (plist-get layer :description))
+              status)))
+    (nreverse status)))
+
 (declare-function gptel-auto-experiment--allium-distill "gptel-tools-agent-prompt-build" (text &optional callback))
 (declare-function gptel-auto-experiment--allium-check "gptel-tools-agent-prompt-build" (allium-spec &optional callback))
 (declare-function gptel-auto-experiment--allium-decompile "gptel-tools-agent-prompt-build" (allium-spec &optional callback audience))
@@ -2969,41 +3006,6 @@ Checks: required frontmatter, duplicate titles, empty sections."
 
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
 
-;; ─── Semantica AgentMemory: formalize mementum layers ───
-
-(defconst gptel-auto-workflow--agent-memory-layers
-  '((:layer "short-term" :description "In-session working memory"
-     :location "var/tmp/evolution/" :persistence nil :max-items 50)
-    (:layer "long-term" :description "Vector similarity search (git-embed)"
-     :location "git-embed index" :persistence t :backend "git-embed")
-    (:layer "structured" :description "Knowledge pages + Allium specs"
-     :location "mementum/knowledge/" :persistence t :format "markdown + allium")
-    (:layer "temporal" :description "Git-based timeline, experiment TSV history"
-     :location "git log + var/tmp/experiments/" :persistence t :format "git + tsv"))
-  "4-layer AgentMemory architecture (Semantica pattern).
-Layer 1: short-term working memory (in-session, cleared on daemon restart)
-Layer 2: long-term vector memory (git-embed semantic similarity, 840 files indexed)
-Layer 3: structured memory (knowledge pages, Allium behavioral specs, ontology)
-Layer 4: temporal index (git commit history, experiment TSV, cycle snapshots)")
-
-(defun gptel-auto-workflow--memory-status ()
-  "Report status of all memory layers. Returns plist with :layer → status."
-  (let ((status nil))
-    (dolist (layer gptel-auto-workflow--agent-memory-layers)
-      (let* ((name (plist-get layer :layer))
-             (location (plist-get layer :location))
-             (root (gptel-auto-workflow--worktree-base-root))
-             (full-path (expand-file-name location root))
-             (state (cond
-                     ((string-match-p "git-embed" location)
-                      (if (fboundp 'git-embed-search) "active" "unavailable"))
-                     ((file-directory-p full-path)
-                      (let ((count (length (directory-files full-path nil "\\`[^.]"))))
-                        (format "%d items" count)))
-                     (t "not found"))))
-        (push (list :layer name :location location :state state :description (plist-get layer :description))
-              status)))
-    (nreverse status)))
 
 ;; ─── Backend Performance Optimization ───
   "Auto-reorder the fallback chain based on backend performance data.
