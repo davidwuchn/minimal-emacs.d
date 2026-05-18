@@ -1126,8 +1126,27 @@ Writes to var/tmp/evolution/findings.md."
                                     (while (re-search-forward "\n\\{3,\\}" nil t)
                                       (replace-match "\n\n"))
                                     (buffer-string)))))))
-       (when raw-findings
-         (push raw-findings recent-insights)))
+        (when raw-findings
+          (push raw-findings recent-insights)
+          (when (fboundp 'gptel-auto-workflow--allium-check-research-quality)
+            (gptel-auto-workflow--allium-check-research-quality
+             raw-findings
+             (lambda (quality-result)
+               (let ((issues (car quality-result))
+                     (severity (cdr quality-result)))
+                 (cond
+                  ((= issues 99)
+                   (message "[allium-findings] Quality gate skipped (distill unavailable)"))
+                  ((= issues 0)
+                   (message "[allium-findings] Research findings coherent (0 Allium issues)"))
+                  ((< severity 0.3)
+                   (message "[allium-findings] Research findings OK: %d minor issues" issues))
+                  ((< severity 0.6)
+                   (message "[allium-findings] Research findings WARN: %d issues (severity %.2f) — verify"
+                            issues severity))
+                  (t
+                   (message "[allium-findings] Research findings FAIL: %d issues (severity %.2f) — may be contradictory"
+                            issues severity)))))))))
      
       ;; Generate skill file
     (make-directory evolution-dir t)
@@ -1680,7 +1699,19 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (gptel-auto-workflow--evolution-record-score)
   (gptel-auto-workflow--evolution-optimize-backend-order)
   (gptel-auto-workflow--evolution-vsm-health-check)
-  (gptel-auto-workflow--audit-signal)
+  ;; Run audits and feed results back into evolution
+  (let ((flagged (gptel-auto-workflow--audit-signal)))
+    (when flagged
+      (dolist (strategy flagged)
+        (when (fboundp 'gptel-auto-workflow--evolve-strategy)
+          (message "[audit] Triggering strategy evolution for low-scoring: %s" strategy)
+          (condition-case nil
+              (gptel-auto-workflow--evolve-strategy
+               strategy
+               (format "Strategy '%s' has low structure score. Evolve it." strategy)
+               "self-correction")
+            (error
+             (message "[audit] Strategy '%s' evolution triggered but not yet available" strategy)))))))
   (gptel-auto-workflow--allium-audit-signal)
   (message "[auto-workflow] Self-evolution cycle complete.")))
 
@@ -1722,7 +1753,29 @@ Maps nucleus VSM layers to our system components:
               (when pairs
                 (message "[pair] %d minimal pair(s) found for %s:" (length pairs) first-target)
                 (dolist (p (seq-take pairs 3))
-                  (message "[pair]   %s" (cdr p)))))))
+                  (message "[pair]   %s" (cdr p)))
+                ;; Enrich top pair with Allium behavioral diff (async)
+                (when (fboundp 'gptel-auto-workflow--allium-diff-minimal-pairs)
+                  (let* ((top-pair (car pairs))
+                         (exp-a (caar top-pair))
+                         (exp-b (cdar top-pair)))
+                    (when (and exp-a exp-b)
+                      (let ((ha (plist-get exp-a :hypothesis))
+                            (hb (plist-get exp-b :hypothesis)))
+                        (when (and (stringp ha) (stringp hb)
+                                   (not (string= ha hb)))
+                          (gptel-auto-workflow--allium-diff-minimal-pairs
+                           ha hb
+                           (lambda (diff-result)
+                             (let ((issues-a (car diff-result))
+                                   (issues-b (cdr diff-result)))
+                               (if (= issues-a 99)
+                                   (message "[allium-pair] Allium diff skipped (unavailable)")
+                                 (message "[allium-pair] Allium spec diff: HA=%d issues vs HB=%d issues → %s"
+                                          issues-a issues-b
+                                          (if (< issues-a issues-b) "HA has cleaner spec"
+                                            (if (< issues-b issues-a) "HB has cleaner spec"
+                                              "equally coherent"))))))))))))))))
       (error nil))))
 
 (defun gptel-auto-workflow--detect-minimal-pairs (target)
