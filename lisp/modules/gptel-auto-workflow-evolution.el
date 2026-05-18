@@ -2759,23 +2759,22 @@ Checks: required frontmatter, duplicate titles, empty sections."
     (condition-case nil
         (with-temp-buffer
           (insert-file-contents file-path)
-          (goto-char (point-min))
           (let* ((content (buffer-string))
-                 (title (when (re-search-forward "^title: \\(.+\\)" nil t)
-                          (match-string 1)))
-                 (status (when (re-search-forward "^status: " nil t) t))
-                 (allium-issues (when (re-search-forward "^allium-issues: " nil t)
-                                  (string-to-number (or (match-string 1) "0"))))
-                 (tag-section (when (re-search-forward "^tags: " nil t) t)))
+                 (title (when (string-match "^title: \\(.+\\)" content)
+                          (match-string 1 content)))
+                 (status (when (string-match "^status: " content) t))
+                 (allium-issues (when (string-match "^allium-issues: \\([0-9]+\\)" content)
+                                  (string-to-number (match-string 1 content))))
+                 (tag-section (when (string-match "^tags: " content) t)))
             (unless title
               (push "Missing title in frontmatter" errors))
             (unless status
               (push "Missing status in frontmatter" warnings))
             (unless tag-section
               (push "Missing tags in frontmatter" warnings))
-            (when (and allium-issues (> allium-issues 0))
-              (unless (re-search-forward "^## Allium Behavioral Coherence" nil t)
-                (push "Has allium-issues >0 but missing Allium Behavioral Coherence section" errors)))
+             (when (and allium-issues (> allium-issues 0))
+               (unless (string-match "^## Allium Behavioral Coherence" content)
+                 (push "Has allium-issues >0 but missing Allium Behavioral Coherence section" errors)))
             (let ((pos 0) (title-count 0))
               (while (string-match "^# " content pos)
                 (setq title-count (1+ title-count) pos (match-end 0)))

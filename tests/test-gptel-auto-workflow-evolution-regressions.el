@@ -742,6 +742,44 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
         (should-not (plist-get r :valid))
         (should (plist-get r :errors))))))
 
+(ert-deftest regression/auto-workflow-evolution/seman-validate-page-valid ()
+  "validate-knowledge-page: valid page passes."
+  (let ((tmpfile (make-temp-file "vp-" nil ".md")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile
+            (insert "title: Test\nstatus: active\nallium-issues: 0\ntags: [a]\n---\n# Test\n"))
+          (let ((r (gptel-auto-workflow--validate-knowledge-page tmpfile)))
+            (should (plist-get r :valid))
+            (should-not (plist-get r :errors))
+            (should-not (plist-get r :warnings))))
+      (delete-file tmpfile))))
+
+(ert-deftest regression/auto-workflow-evolution/seman-validate-page-missing-title ()
+  "validate-knowledge-page: missing title → error."
+  (let ((tmpfile (make-temp-file "vp-" nil ".md")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile
+            (insert "status: active\ntags: [a]\n---\n# Section\n"))
+          (let ((r (gptel-auto-workflow--validate-knowledge-page tmpfile)))
+            (should-not (plist-get r :valid))
+            (should (plist-get r :errors))))
+      (delete-file tmpfile))))
+
+(ert-deftest regression/auto-workflow-evolution/seman-validate-page-field-order ()
+  "validate-knowledge-page: field order does NOT affect detection.
+Fixed: switched from sequential re-search-forward to string-match
+so tags before allium-issues is correctly detected."
+  (let ((tmpfile (make-temp-file "vp-" nil ".md")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile
+            (insert "title: Test\nstatus: active\ntags: [a]\nallium-issues: 0\n---\n# Test\n"))
+          (let ((r (gptel-auto-workflow--validate-knowledge-page tmpfile)))
+            (should-not (plist-get r :warnings))))
+      (delete-file tmpfile))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
