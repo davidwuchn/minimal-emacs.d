@@ -1191,7 +1191,9 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
           (allium-issues (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-guidance)
                              (gptel-auto-workflow--allium-load-issues-for-guidance)
                            ""))
-          (researcher-targets (gptel-auto-workflow--load-researcher-targets)))
+           (researcher-targets (gptel-auto-workflow--load-researcher-targets))
+          (research-priorities (gptel-auto-workflow--load-research-priorities))
+          (knowledge-summary (gptel-auto-workflow--load-knowledge-summary)))
     (format "Select optimization targets for this Emacs Lisp project.
 
 %s%sALLIUM BEHAVIORAL AUDIT (coherence gaps found in last cycle's research):
@@ -1224,6 +1226,10 @@ Do NOT choose files from packages/ or any nested git repo. Those are optimized s
 SIZE CONSTRAINT: Skip files over 1000 lines. They are too large for focused experiments.
 Example: gptel-tools-agent.el (11,481 lines) is EXCLUDED. Focus on smaller files.
 
+RESEARCH PRIORITIES (which sources produce kept experiments):
+%s
+
+WHAT WE ALREADY KNOW (avoid repeating these):
 %s
 
 PRIORITIZE: Files where external research insights can be applied.
@@ -1250,6 +1256,10 @@ OUTPUT JSON ONLY:
                 "Not available (research disabled)"
               (truncate-string-to-width research-findings 3500 nil nil "..."))
             max-targets
+            (if (string-empty-p research-priorities) "None yet — run more cycles"
+              (truncate-string-to-width research-priorities 800 nil nil "..."))
+            (if (string-empty-p knowledge-summary) "Nothing yet — first cycle"
+              (truncate-string-to-width knowledge-summary 600 nil nil "..."))
             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
                 (gptel-auto-workflow--evolution-get-knowledge)
               "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results")
