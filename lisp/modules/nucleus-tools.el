@@ -299,20 +299,28 @@ SET-NAME can be a symbol from `nucleus-toolsets' or a list of tool names.
     ((and (pred listp) t-list) t-list)
     (_ (user-error "Invalid toolset specifier: %S" set-name))))
 
+(defvar nucleus--tool-availability-cache (make-hash-table :test 'equal)
+  "Cache for tool availability checks to avoid repeated gptel-get-tool calls.")
+
+(defun nucleus--tool-available-p (tool-name)
+  "Return non-nil if TOOL-NAME is registered, with caching."
+  (or (gethash tool-name nucleus--tool-availability-cache 'unset)
+      (let* ((boundp (fboundp 'gptel-get-tool))
+             (available (if boundp
+                           (ignore-errors (gptel-get-tool tool-name))
+                         t)))
+        (puthash tool-name available nucleus--tool-availability-cache)
+        (unless available
+          (message "[nucleus] WARNING: Tool '%s' not registered" tool-name))
+        available)))
+
 (defun nucleus-get-tools (set-name)
   "Return tool list for SET-NAME, filtering out unregistered tools.
 
 SET-NAME can be a symbol from `nucleus-toolsets' or a list of tool names.
 Returns a list of currently registered tool name strings."
   (let ((tools (nucleus--declared-tools set-name)))
-    (seq-filter (lambda (tool-name)
-                  (let ((found (if (fboundp 'gptel-get-tool)
-                                   (ignore-errors (gptel-get-tool tool-name))
-                                  t)))
-                    (unless found
-                      (message "[nucleus] WARNING: Tool '%s' requested in set '%s' but not registered" tool-name set-name))
-                    found))
-                tools)))
+    (seq-filter #'nucleus--tool-available-p tools)))
 
 ;;; Tool Name Resolution
 
@@ -446,12 +454,12 @@ defers sync via idle timer to allow tool registration to complete."
 Returns non-nil if at least 50% of expected tools are available."
   (let* ((expected (alist-get toolset-key nucleus-toolsets))
          (total (length expected)))
-    (when (and expected (fboundp 'gptel-get-tool))
+    (when expected
       (let ((available 0)
             (threshold (ceiling (* 0.5 total))))
         (catch 'ready
           (dolist (tool expected)
-            (when (ignore-errors (gptel-get-tool tool))
+            (when (nucleus--tool-available-p tool)
               (cl-incf available)
               (when (>= available threshold)
                 (throw 'ready t))))
