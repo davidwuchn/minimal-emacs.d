@@ -265,6 +265,7 @@ Returns nil if called synchronously without CALLBACK (use callback pattern)."
                         (elements (gptel-auto-experiment--count-edn-elements text)))
                    (when callback (funcall callback (cons score elements)))))
      :system system-prompt
+     :timeout 30
      ))))
 
 (defun gptel-auto-experiment--decompile-score (edn-text callback)
@@ -282,6 +283,7 @@ Use for fixed-point forging: compile→decompile→compile→decompile until sta
                  (let ((text (if (stringp response) response (format "%s" response))))
                    (funcall callback text)))
      :system system-prompt
+     :timeout 30
      )))
 
 (defun gptel-auto-experiment--nucleus-compiler-prompt ()
@@ -382,6 +384,7 @@ CALLBACK receives the Allium spec string via async LLM call."
                      (let ((text (if (stringp response) response (format "%s" response))))
                        (funcall callback text)))
          :system system-prompt
+     :timeout 30
          ))
     (when callback (funcall callback nil))
     nil))
@@ -398,6 +401,7 @@ CALLBACK receives the issues list as a string via async LLM call."
                      (let ((text (if (stringp response) response (format "%s" response))))
                        (funcall callback text)))
          :system system-prompt
+     :timeout 30
          ))
     (when callback (funcall callback nil))
     nil))
@@ -417,6 +421,7 @@ CALLBACK receives the prose string via async LLM call."
                      (let ((text (if (stringp response) response (format "%s" response))))
                        (funcall callback text)))
          :system system-prompt
+     :timeout 30
          ))
     (when callback (funcall callback nil))
     nil))
@@ -488,6 +493,7 @@ CALLBACK receives the Turtle string or nil."
          :callback (lambda (response _info)
                      (funcall callback (if (stringp response) response (format "%s" response))))
          :system system-prompt
+     :timeout 30
          ))
     (when callback (funcall callback nil))
     nil))
@@ -537,6 +543,7 @@ CALLBACK receives the Turtle string or nil."
          :callback (lambda (response _info)
                      (funcall callback (if (stringp response) response (format "%s" response))))
          :system system-prompt
+     :timeout 30
          ))
     (when callback (funcall callback nil))
     nil))
