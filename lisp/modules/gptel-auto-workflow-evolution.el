@@ -1849,7 +1849,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (gptel-auto-workflow--allium-audit-signal)))
   ;; Write research priorities for next cycle's researcher (Semantica ontology feedback)
   (condition-case nil
-      (gptel-auto-workflow--write-research-priorities)
+      (progn (gptel-auto-workflow--write-research-priorities)
+             (gptel-auto-workflow--enrich-ontology-from-research))
     (error nil))
   ;; Knowledge page cross-cycle diff (Semantica set-difference pattern)
   (condition-case nil
@@ -2352,6 +2353,49 @@ Consumed by researcher daemon to focus on high-value repos."
       (insert "- For low-value sources: either research deeper files or skip until strategy changes.\n")
       (insert "- Prefer sources that produced BREAKING or POTENTIAL impact (safe = low signal).\n"))
     (message "[research-priorities] Wrote %d sources to %s" (length sources) file)))
+
+(defun gptel-auto-workflow--enrich-ontology-from-research ()
+  "Extract new techniques from research findings and merge into ontology.
+Reads research-findings.md, identifies novel patterns, adds to knowledge graph.
+Semantica pattern: continuous ontology enrichment by the research agent."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (findings-file (expand-file-name "var/tmp/research-findings.md" root))
+         (onto-file (expand-file-name "var/tmp/evolution/enriched-ontology.ttl" root))
+         (new-concepts nil))
+    (when (file-readable-p findings-file)
+      (with-temp-buffer
+        (insert-file-contents findings-file)
+        (goto-char (point-min))
+        ;; Extract technique names: headings starting with "## "
+        (while (re-search-forward "^## \\(.+\\)" nil t)
+          (let ((technique (string-trim (match-string 1))))
+            (unless (string-match-p "^Research\|^Pre-Fetched\|^Source\|^Dynamic\|^Local" technique)
+              (push technique new-concepts))))
+        ;; Check against existing knowledge pages for novelty
+        (let ((kd (expand-file-name "mementum/knowledge" root))
+              (novel nil))
+          (when (file-directory-p kd)
+            (let ((existing (mapconcat (lambda (f)
+                                         (with-temp-buffer
+                                           (insert-file-contents f)
+                                           (goto-char (point-min))
+                                           (if (re-search-forward "^title: \\(.+\\)" nil t)
+                                               (match-string 1) "")))
+                                       (directory-files kd t "research-insights-.+\\.md$")
+                                       " ")))
+              (dolist (c (nreverse new-concepts))
+                (unless (string-match-p (regexp-quote c) existing)
+                  (push c novel))))
+            (when novel
+              (message "[onto-enrich] %d new techniques discovered: %s"
+                       (length novel) (mapconcat #'identity (seq-take novel 3) ", "))
+              ;; Save enriched ontology
+              (let ((ontology (gptel-auto-workflow--generate-experiment-ontology)))
+                (when (and ontology (> (plist-get ontology :class-count) 0)
+                           (fboundp 'gptel-auto-experiment--owl-save))
+                  (gptel-auto-experiment--owl-save
+                   ontology onto-file
+                   (lambda (_ok) nil)))))))))))
 
 (defun gptel-auto-workflow--evolution-axis-stats ()
   "Analyze KIBC-M axis performance from experiment results.
