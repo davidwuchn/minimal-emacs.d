@@ -1034,7 +1034,7 @@ Returns t if page created."
                   (when (and primary (stringp primary))
                     (let ((full-path (expand-file-name primary (gptel-auto-workflow--worktree-base-root))))
                       (when (file-exists-p full-path)
-                        (condition-case nil
+    (condition-case err
                             (let ((structure (gptel-auto-workflow--extract-elisp-structure full-path)))
                               (insert "### Structure (deterministic scan)\n\n")
                               (insert (gptel-auto-workflow--summarize-elisp-structure structure))
@@ -2756,7 +2756,7 @@ Returns ((:coverage . N) (:completeness . N) (:relations . N) (:overall . N) (:i
   "Validate a knowledge page structurally. Returns validation-result plist.
 Checks: required frontmatter, duplicate titles, empty sections."
   (let ((errors nil) (warnings nil))
-    (condition-case nil
+    (condition-case err
         (with-temp-buffer
           (insert-file-contents file-path)
           (let* ((content (buffer-string))
