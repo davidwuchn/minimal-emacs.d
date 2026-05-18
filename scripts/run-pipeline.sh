@@ -253,22 +253,8 @@ PIPELINE_START_TIME="$(date +%s)"
 # Verify findings were produced
 RESEARCH_QUALITY="none"
 
-# ─── Step 0: Pre-fetch external repo content (optional — researcher can fetch on demand) ───
-PREFETCH_FILE="$DIR/var/tmp/prefetched-research.md"
-PREFETCH_SCRIPT="$DIR/scripts/prefetch-research-repos.sh"
-PREFETCH_ENABLED="${PREFETCH_ENABLED:-no}"  # off by default — researcher fetches what it needs
-if [ "$PREFETCH_ENABLED" = "yes" ] && [ -x "$PREFETCH_SCRIPT" ] && command -v gh >/dev/null 2>&1; then
-    log "=== Step 0: Pre-fetch Research Repos (broad batch) ==="
-    if "$PREFETCH_SCRIPT" "$PREFETCH_FILE" >> "$PIPELINE_LOG" 2>&1; then
-        log "  ✓ Pre-fetched repo content ($(wc -c < "$PREFETCH_FILE" 2>/dev/null || echo 0)B)"
-        export PIPELINE_PREFETCH_FILE="$PREFETCH_FILE"
-    else
-        log "  ⚠ Pre-fetch had issues — researcher will fetch on demand"
-        rm -f "$PREFETCH_FILE"
-    fi
-else
-    log "=== Step 0: Skipped (researcher fetches specific files on demand) ==="
-fi
+# ─── Step 0: Researcher fetches files on demand (no batch prefetch) ───
+log "=== Step 0: Researcher will fetch specific files on demand via gh CLI ==="
 
 # ─── Step 1: Research ───
 log "=== Step 1: Research ==="
@@ -287,26 +273,7 @@ fi
 if [ -f "$FINDINGS_FILE" ]; then
     findings_size=$(wc -c < "$FINDINGS_FILE")
     log "Research findings: ${findings_size} bytes"
-    
-    # If findings are local fallback AND we have pre-fetched content, use that instead
-    if (grep -q "Local Codebase Analysis (fallback" "$FINDINGS_FILE" 2>/dev/null || \
-        grep -q "Source type: local-fallback" "$FINDINGS_FILE" 2>/dev/null) && \
-       [ -f "$PREFETCH_FILE" ] && [ "$(wc -c < "$PREFETCH_FILE")" -gt 200 ]; then
-        log "  ⚠ Replacing local fallback with pre-fetched external content"
-        cat > "$FINDINGS_FILE" <<HEADER
-# Research Findings
 
-> Updated: $(date '+%Y-%m-%d %H:%M')
-> Source type: pre-fetched-external
-> Pre-fetched from priority repos using gh
-
-HEADER
-        cat "$PREFETCH_FILE" >> "$FINDINGS_FILE"
-        findings_size=$(wc -c < "$FINDINGS_FILE")
-        log "  ✓ Findings now ${findings_size}B with pre-fetched content"
-    fi
-
-    # Check for actual external content (URLs, techniques, not just header)
     if grep -q "https\?://" "$FINDINGS_FILE" 2>/dev/null || \
         grep -q "## .*Technique" "$FINDINGS_FILE" 2>/dev/null; then
         log "  ✓ External research content detected"

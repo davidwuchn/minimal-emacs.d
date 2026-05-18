@@ -705,15 +705,10 @@ Results feed into directive's 'Next Hypotheses' for target selection."
           (knowledge-summary (gptel-auto-workflow--load-knowledge-summary)))
     (concat (or base-prompt "")
             "\n\n"
-             (let ((prefetched (gptel-auto-workflow--load-prefetched-content)))
-               (if prefetched
-                   (concat "## Pre-Fetched Content (supplementary — fetch specific files on demand)\n\n"
-                           prefetched
-                           "\n\n")
-                 ""))
              "## Research Mission\n\n"
-             "Do NOT rely only on pre-fetched content. Use `gh api` to fetch SPECIFIC files from repos you need.\n"
+             "Use `gh api repos/davidwuchn/REPO/contents/PATH --jq '.content' | base64 -d` to fetch files you need.\n"
              "Your job: produce a structured research plan with techniques, applications, and verification methods.\n\n"
+             "## Dynamic Context\n\n"
             (if (string-empty-p skill-content)
                 ""
               (concat "### Previously Discovered Insights\n"
