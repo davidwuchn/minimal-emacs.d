@@ -148,20 +148,24 @@ This fallback is intentionally local-only and should be replaced by fresh extern
 
 (defun slr--run-single-turn (prompt completion-callback)
   "Run a single-turn research subagent call with PROMPT.
-Used as fallback when multi-turn controller is unavailable."
+Uses run-with-timer 0 to break the call stack and prevent C stack overflow
+during deeply nested subagent setup (FSM, 31 tools, preset, context init)."
   (let ((timeout 300))
-    (message "[slr] Calling subagent with %ds timeout (single-turn fallback)..." timeout)
-    (condition-case err
-        (gptel-benchmark-call-subagent
-         'researcher "External research" prompt
-         (lambda (result)
-           (let ((findings (or result "")))
-             (message "[slr] Subagent returned %d chars" (length findings))
-             (slr--finish-single-turn prompt findings completion-callback)))
-         timeout)
-      (error
-       (message "[slr] Single-turn subagent failed (%s), using local fallback" err)
-       (slr--finish-single-turn prompt (format "%s" err) completion-callback)))))
+    (message "[slr] Scheduling subagent with %ds timeout (timer-deferred)..." timeout)
+    (run-with-timer
+     0 nil
+     (lambda ()
+       (condition-case err
+           (gptel-benchmark-call-subagent
+            'researcher "External research" prompt
+            (lambda (result)
+              (let ((findings (or result "")))
+                (message "[slr] Subagent returned %d chars" (length findings))
+                (slr--finish-single-turn prompt findings completion-callback)))
+            timeout)
+         (error
+          (message "[slr] Single-turn subagent failed (%s), using local fallback" err)
+          (slr--finish-single-turn prompt (format "%s" err) completion-callback)))))))
 
 (defun slr-run-research (&optional completion-callback)
   "Run external research using subagent and save results.
