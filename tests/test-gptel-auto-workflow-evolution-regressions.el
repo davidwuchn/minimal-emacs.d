@@ -600,6 +600,68 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
         (should (> (cdar stats) 0.7))
         (should (eq :B (car (cadr stats))))))))
 
+;; ─── Semantica Pattern Tests ───
+
+(ert-deftest regression/auto-workflow-evolution/seman-opposing-add-remove ()
+  "add vs remove are opposing hypotheses."
+  (should (gptel-auto-workflow--opposing-hypotheses-p "add nil guard" "remove the nil guard")))
+
+(ert-deftest regression/auto-workflow-evolution/seman-opposing-enable-disable ()
+  "enable vs disable are opposing."
+  (should (gptel-auto-workflow--opposing-hypotheses-p "enable feature" "disable feature")))
+
+(ert-deftest regression/auto-workflow-evolution/seman-opposing-not-conflict ()
+  "Same direction hypotheses are not opposing."
+  (should-not (gptel-auto-workflow--opposing-hypotheses-p "add nil check" "add guard")))
+
+(ert-deftest regression/auto-workflow-evolution/seman-opposing-symmetric ()
+  "Opposition detection is symmetric."
+  (should (gptel-auto-workflow--opposing-hypotheses-p "remove guard" "add nil check")))
+
+(ert-deftest regression/auto-workflow-evolution/seman-opposing-nil-nonnil ()
+  "nil vs non-nil are opposing."
+  (should (gptel-auto-workflow--opposing-hypotheses-p "return nil" "return non-nil")))
+
+(ert-deftest regression/auto-workflow-evolution/seman-validation-result-valid ()
+  "validation-result with valid=t returns correct plist."
+  (let ((r (gptel-auto-workflow--validation-result t)))
+    (should (plist-get r :valid))
+    (should-not (plist-get r :errors))
+    (should-not (plist-get r :warnings))))
+
+(ert-deftest regression/auto-workflow-evolution/seman-validation-result-invalid ()
+  "validation-result with valid=nil returns errors and warnings."
+  (let ((r (gptel-auto-workflow--validation-result nil '("missing") '("deprecated"))))
+    (should-not (plist-get r :valid))
+    (should (plist-get r :errors))
+    (should (plist-get r :warnings))))
+
+(ert-deftest regression/auto-workflow-evolution/seman-ontology-generates-classes ()
+  "generate-experiment-ontology extracts strategy classes and target instances."
+  (let ((mock-results
+         (list
+          (list :strategy "strat-a" :target "lisp/foo.el" :decision "kept")
+          (list :strategy "strat-a" :target "lisp/bar.el" :decision "discarded")
+          (list :strategy "strat-b" :target "lisp/baz.el" :decision "kept"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock-results)))
+      (let ((o (gptel-auto-workflow--generate-experiment-ontology)))
+        (should (= (plist-get o :class-count) 2))
+        (should (= (plist-get o :instance-count) 3))))))
+
+(ert-deftest regression/auto-workflow-evolution/seman-causal-links-multi ()
+  "experiment-causal-links detects multi-experiment chains per target."
+  (let ((mock-results
+         (list
+          (list :target "lisp/foo.el" :score-after 0.5 :decision "kept" :hypothesis "h1" :score-before 0.0)
+          (list :target "lisp/foo.el" :score-after 0.8 :decision "kept" :hypothesis "h2" :score-before 0.5)
+          (list :target "lisp/bar.el" :score-after 0.3 :decision "discarded" :hypothesis "h3" :score-before 0.0))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock-results)))
+      (let ((causal (gptel-auto-workflow--experiment-causal-links)))
+        (should (= (length causal) 1))
+        (should (string= (caar causal) "lisp/foo.el"))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
