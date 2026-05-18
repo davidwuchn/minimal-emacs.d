@@ -47,9 +47,10 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
   (let ((workflow-active (or gptel-auto-workflow--running
                              gptel-auto-workflow--cron-job-running))
         (use-timeout (and (stringp program)
-                          (or (string= program "bash")
-                              (string= program "sh")
-                              (string= program "emacs")))))
+                           (or (string= program "bash")
+                               (string= program "sh")
+                               (string= program "emacs")
+                               (string-suffix-p ".sh" program)))))
     (when workflow-active
       (when (timerp gptel-auto-workflow--watchdog-timer)
         (cancel-timer gptel-auto-workflow--watchdog-timer))
