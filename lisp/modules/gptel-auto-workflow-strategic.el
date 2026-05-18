@@ -2171,5 +2171,6 @@ Uses gptel-auto-workflow-research-benchmark.el to:
 
 
 (provide 'gptel-auto-workflow-strategic)
+)
 
 ;;; gptel-auto-workflow-strategic.el ends here
