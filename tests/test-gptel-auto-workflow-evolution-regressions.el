@@ -519,6 +519,40 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
   "kibcm-axis function is defined."
   (should (fboundp 'gptel-auto-experiment--kibcm-axis)))
 
+(ert-deftest regression/auto-workflow-evolution/allium-read-quality-parses-file ()
+  "allium-read-quality reads count and severity from issue markdown file."
+  (let ((tmpdir (make-temp-file "arq-" t)))
+    (unwind-protect
+        (progn
+          (let ((issues-dir (expand-file-name "var/tmp/evolution/allium-issues" tmpdir)))
+            (make-directory issues-dir t)
+            (with-temp-file (expand-file-name "test-straty.md" issues-dir)
+              (insert "# Allium Check — test-straty\n\n")
+              (insert "**Issues:** 4 | **Severity:** 0.55 | **Score:** 0.30\n\n")
+              (insert "1. contradictory rule\n2. missing precondition\n3. stale traces\n4. implicit behavior\n")))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () tmpdir)))
+            (let ((result (gptel-auto-workflow--allium-read-quality "test-straty")))
+              (should result)
+              (should (= (car result) 4))
+              (should (> (cdr result) 0.5)))))
+      (delete-directory tmpdir t))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-read-quality-nil-root ()
+  "allium-read-quality returns nil when worktree root is nil."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+             (lambda () nil)))
+    (should-not (gptel-auto-workflow--allium-read-quality "test"))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-read-quality-missing-file ()
+  "allium-read-quality returns nil when issue file doesn't exist."
+  (let ((tmpdir (make-temp-file "arq2-" t)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () tmpdir)))
+          (should-not (gptel-auto-workflow--allium-read-quality "nonexistent")))
+      (delete-directory tmpdir t))))
+
 (ert-deftest regression/auto-workflow-evolution/axis-stats-with-mock ()
   "evolution-axis-stats computes per-axis keep rates from mocked results.
 :K: 3/4 kept = 0.75, :B: 2/3 kept = 0.67. Sorted descending."
