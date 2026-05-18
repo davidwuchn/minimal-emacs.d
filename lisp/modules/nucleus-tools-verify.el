@@ -10,6 +10,14 @@
 (require 'subr-x)
 (require 'nucleus-tools)
 
+(defun nucleus--extract-toolset-tools (toolsets)
+  "Extract all tool names from TOOLSETS.
+TOOLSETS should be a list of (KEYWORD . TOOLS) cons cells.
+Returns a flat list of all tool names, or nil if input is invalid."
+  (when (proper-list-p toolsets)
+    (cl-loop for (_ . tools) in toolsets
+             append tools)))
+
 (defun nucleus--verify-tools ()
   "Verify all tools in nucleus-toolsets are actually registered.
 
@@ -17,11 +25,11 @@ Returns alist of (tool-name . status) where status is:
 - 'registered: Tool is available
 - 'missing: Tool not found (module may have failed to load)
 - 'duplicate: Tool appears multiple times"
-  (let ((all-declared (cl-loop for (_ . tools) in nucleus-toolsets
-                               append tools))
-        (registered-tools (when (fboundp 'gptel-get-tool)
+  (let ((all-declared (nucleus--extract-toolset-tools nucleus-toolsets))
+        (registered-tools (when (and (fboundp 'gptel-get-tool)
+                                     (proper-list-p nucleus-toolsets))
                             (cl-loop for tool in (cl-remove-duplicates
-                                                  (cl-loop for (_ . tools) in nucleus-toolsets append tools)
+                                                  (nucleus--extract-toolset-tools nucleus-toolsets)
                                                   :test 'equal)
                                    when (ignore-errors (gptel-get-tool tool))
                                    collect tool)))

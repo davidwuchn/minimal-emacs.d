@@ -276,7 +276,7 @@ subagent callback fired, and avoids reusing a deleted worktree as
             (condition-case err
                 (with-current-buffer safe-buffer
                   (setq default-directory safe-default-directory)
-                  (run-at-time 0 nil callback result))
+                  (funcall callback result))
               (error (let* ((err-text (error-message-string err))
                             (short-err (if (> (length err-text) 300)
                                            (concat (substring err-text 0 300) "...")
