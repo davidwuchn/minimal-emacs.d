@@ -794,6 +794,12 @@ so tags before allium-issues is correctly detected."
             (should (member "Summary" (plist-get s :sections)))))
       (delete-file tmpfile))))
 
+(ert-deftest regression/auto-workflow-evolution/seman-cq-strategies-answerable ()
+  "check-competency-questions: strategies word matches Strategy class prefix."
+  (let ((results (gptel-auto-workflow--check-competency-questions)))
+    (should (= (length results) 6))
+    (should (cdr (assoc "Which strategies are effective?" results)))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
