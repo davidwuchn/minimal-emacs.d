@@ -14,7 +14,7 @@ In the classics, the Northern Divine Art (北冥神功) does one thing no other 
 
 This is the same principle, applied to software.
 
-**Every technique your pipeline absorbs — from 18 repositories, from arXiv, from GitHub — becomes a working code change in your project. Every experiment that fails teaches you what not to do. Every experiment that succeeds makes the next one stronger.**
+**Every technique your pipeline absorbs — from 18 repositories, from arXiv, from GitHub — becomes a working code change in your project. Every experiment that fails teaches you what not to do. Every experiment that succeeds feeds back into the strategy for the next one.**
 
 You are not the one writing fixes at 2am. You are the one channeling an entire research pipeline through your fingertips.
 
@@ -27,9 +27,8 @@ You are not the one writing fixes at 2am. You are the one channeling an entire r
 The system reaches out and pulls techniques from everywhere:
 
 ```
-18+ repos → research → distill → strategy → execute
-GitHub    ↗
-arXiv     ↗
+17 sources → fetch on demand → distill → strategy → execute
+via gh CLI  ↗    GitHub    ↗   arXiv    ↗
 ```
 
 A single command starts the flow:
@@ -112,6 +111,8 @@ As the system absorbs, it also *understands*. It builds a knowledge graph of its
 | **Causal chains** | You can trace any outcome back to its root |
 | **Cross-cycle diff** | See what was gained and what was discarded between cycles |
 | **Policy engine** | Rules prevent wasted energy — no technique practiced beyond its worth |
+| **KIBC-M axis classification** | Every hypothesis is typed (:K :I :B :C :M ...) — 15 operation axes from the verbum framework |
+| **Self-evolution loop** | What worked feeds back into strategies, skills, and research priorities — the art sharpens itself |
 
 ### Four Schools, One Art
 
@@ -137,7 +138,7 @@ Cultivation without discipline is self-destruction. These safeguards ensure you 
 | Git worktree isolation | `main` is never touched directly |
 | 89 tests + 1800s timeout | Corrupted energy is caught and expelled |
 | Conflict marker detection | No `<<<<<<<` in committed code |
-| 5-provider failover | If one channel closes, another opens |
+| 5-provider auto-failover | If one channel closes, another opens — rate limits detected and bypassed |
 | 90-minute watchdog | No technique runs forever |
 | Quota awareness | No technique practiced beyond available resources |
 | Policy engine | Forbidden paths are sealed |
