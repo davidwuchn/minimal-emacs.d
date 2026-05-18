@@ -807,6 +807,16 @@ so tags before allium-issues is correctly detected."
     (should (plist-get r :valid))
     (should-not (plist-get r :errors))))
 
+(ert-deftest regression/auto-workflow-evolution/pipe-required-fns-exist ()
+  "All required pipeline stages have their functions defined."
+  (let ((missing nil))
+    (dolist (s gptel-auto-workflow--pipeline-stages)
+      (when (plist-get s :required)
+        (let ((fn-name (intern (concat "gptel-auto-workflow--" (symbol-name (plist-get s :fn))))))
+          (unless (fboundp fn-name)
+            (push (cons (plist-get s :label) fn-name) missing)))))
+    (should-not missing)))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
