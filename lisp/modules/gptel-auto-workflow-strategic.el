@@ -545,7 +545,29 @@ Returns markdown string or empty."
           (error nil)))
       (if lines
           (mapconcat #'identity (nreverse lines) "\n")
-        ""))))
+         ""))))
+
+(defun gptel-auto-workflow--load-researcher-targets ()
+  "Extract researcher-suggested targets from Allium spec in findings.
+Parses Technique.created() calls for apply_to fields.
+Returns markdown string or empty."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (findings-file (expand-file-name "var/tmp/research-findings.md" root))
+         (targets nil))
+    (when (file-readable-p findings-file)
+      (with-temp-buffer
+        (insert-file-contents findings-file)
+        (goto-char (point-min))
+        ;; Parse: apply_to: "lisp/modules/xxx.el"
+        (while (re-search-forward "apply_to:\\s-*\"?\\([^\"\n,]+\\)\"?" nil t)
+          (let ((target (string-trim (match-string 1))))
+            (unless (or (string-empty-p target) (string-match-p "^lisp/modules/" target))
+              (setq target (concat "lisp/modules/" target)))
+            (when (and (> (length target) 5) (string-match-p "^lisp/" target))
+              (push target targets))))))
+    (if targets
+        (concat "- " (mapconcat #'identity (delete-dups targets) "\n- "))
+      "")))
 
 (defun gptel-auto-workflow--load-researcher-meta-learning ()
   "Load meta-learning data for researcher skill.
@@ -1168,7 +1190,8 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                               ""))
           (allium-issues (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-guidance)
                              (gptel-auto-workflow--allium-load-issues-for-guidance)
-                           "")))
+                           ""))
+          (researcher-targets (gptel-auto-workflow--load-researcher-targets)))
     (format "Select optimization targets for this Emacs Lisp project.
 
 %s%sALLIUM BEHAVIORAL AUDIT (coherence gaps found in last cycle's research):
@@ -1206,6 +1229,7 @@ Example: gptel-tools-agent.el (11,481 lines) is EXCLUDED. Focus on smaller files
 PRIORITIZE: Files where external research insights can be applied.
   Example: Research found \"async process monitoring\" → target files with process handling
   Example: Research found \"state machine pattern\" → target files with complex control flow
+%s
 AVOID: Recently-refactored files with no remaining issues.
 AVOID: Files over 1000 lines (too large for focused changes).
 HINT: External research insights suggest novel approaches. Consider targets that could benefit from these techniques even if they don't have obvious bugs.
@@ -1228,7 +1252,9 @@ OUTPUT JSON ONLY:
             max-targets
             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
                 (gptel-auto-workflow--evolution-get-knowledge)
-              "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results"))))
+              "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results")
+            (if (string-empty-p researcher-targets) ""
+              (concat "\nRESEARCHER-SUGGESTED TARGETS (from Allium spec):\n" researcher-targets "\n")))))
 
 (defun gptel-auto-workflow--ask-analyzer-with-findings (research-findings callback)
   "Ask analyzer with optional RESEARCH-FINDINGS for target selection.
