@@ -101,6 +101,12 @@
 ;; Root cause fixed: gptel-abort now defers callback to break sync recursion.
 (setq max-lisp-eval-depth 40000)
 
+;; Increase max-specpdl-size for subagent chain depth
+;; Default 1300 is too small for multi-turn subagent chains through
+;; gptel FSM → tool execution → FSM. 5000 provides headroom for
+;; 5+ nested subagent layers without C stack overflow.
+(setq max-specpdl-size 5000)
+
 (provide 'post-early-init)
 
 ;;; post-early-init.el ends here
