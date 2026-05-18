@@ -49,6 +49,7 @@
   "Temporary storage for research prompt during multi-turn research.")
 
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
+(declare-function gptel-auto-workflow--allium-load-issues-for-guidance "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
 (declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
 (declare-function gptel-auto-experiment--is-retryable-error-p "gptel-tools-agent-error" (response))
@@ -1077,13 +1078,19 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                                          (replace-regexp-in-string "^---$\\|^---\\n.*\\n---\\n" "" directive)
                                          1500 nil nil "..."))
                               ""))
-         (research-section (if (and research-skill (not (string-empty-p research-skill)))
-                               (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
-                                       (truncate-string-to-width research-skill 800 nil nil "..."))
-                             "")))
+          (research-section (if (and research-skill (not (string-empty-p research-skill)))
+                                (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
+                                        (truncate-string-to-width research-skill 800 nil nil "..."))
+                              ""))
+          (allium-issues (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-guidance)
+                             (gptel-auto-workflow--allium-load-issues-for-guidance)
+                           "")))
     (format "Select optimization targets for this Emacs Lisp project.
 
-%s%sFILES AVAILABLE:
+%s%sALLIUM BEHAVIORAL AUDIT (coherence gaps found in last cycle's research):
+%s
+
+FILES AVAILABLE:
 %s
 
 RECENT GIT HISTORY:
@@ -1123,6 +1130,8 @@ OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
             directive-section
             research-section
+            (if (string-empty-p allium-issues) ""
+              (concat "ALLIUM BEHAVIORAL AUDIT (coherence gaps found in last cycle):\n" allium-issues "\n\n"))
             (or (plist-get context :file-list) "")
             (or (plist-get context :git-history) "")
             (or (plist-get context :file-sizes) "")
