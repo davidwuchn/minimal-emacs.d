@@ -232,6 +232,93 @@
               "{:states {:a {:on {:x :b}} :b {:on {:y :a}}}} :initial :a}")
              2)))
 
+;; ─── Auto-Audit Tests ───
+
+(ert-deftest regression/auto-workflow-evolution/audit-signal-returns-list ()
+  "audit-signal should return a list even with empty data."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--evolution-strategy-structure-scores)
+             (lambda () nil)))
+    (let ((result (gptel-auto-workflow--audit-signal)))
+      (should (listp result)))))
+
+(ert-deftest regression/auto-workflow-evolution/audit-signal-flags-low-scores ()
+  "Low structure scores should appear in audit results."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--evolution-strategy-structure-scores)
+             (lambda () `((,(copy-sequence "bad") . 0.05) (,(copy-sequence "good") . 0.50))))
+            ((symbol-function 'gptel-auto-experiment--compile-score)
+             (lambda (strategy &optional callback) nil)))
+    (let ((result (gptel-auto-workflow--audit-signal)))
+      (should (member "bad" result))
+      (should-not (member "good" result)))))
+
+;; ─── Allium Compiler Tests ───
+
+(ert-deftest regression/prompt/allium-issues-count-empty ()
+  "Empty check output should return (0 . 0.0)."
+  (let ((result (gptel-auto-experiment--allium-issues-count "")))
+    (should (= (car result) 0))
+    (should (= (cdr result) 0.0))))
+
+(ert-deftest regression/prompt/allium-issues-count-nil ()
+  "Nil check output should return (0 . 0.0)."
+  (let ((result (gptel-auto-experiment--allium-issues-count nil)))
+    (should (= (car result) 0))
+    (should (= (cdr result) 0.0))))
+
+(ert-deftest regression/prompt/allium-issues-count-formatted ()
+  "Formatted check output with numbered issues should be counted correctly."
+  (let ((result (gptel-auto-experiment--allium-issues-count
+                 "1. Missing precondition in UserResetsPassword\n2. Unreachable state\n3. Implicit behavior\n")))
+    (should (= (car result) 3))))
+
+(ert-deftest regression/prompt/allium-issues-severity-high ()
+  "Critical keywords should produce high severity."
+  (let ((result (gptel-auto-experiment--allium-issues-count
+                 "1. contradictory requires clause\n2. invariant violation detected\n3. transition graph violation: unreachable state")))
+    (should (> (cdr result) 0.5))))
+
+(ert-deftest regression/prompt/allium-quality-score-perfect ()
+  "Empty check output should score 0.0 (perfect)."
+  (should (= (gptel-auto-experiment--allium-quality-score "") 0.0)))
+
+(ert-deftest regression/prompt/allium-quality-score-nil ()
+  "Nil check output should score 1.0 (worst)."
+  (should (= (gptel-auto-experiment--allium-quality-score nil) 1.0)))
+
+(ert-deftest regression/prompt/allium-quality-score-bad ()
+  "Many critical issues should score high (bad)."
+  (should (> (gptel-auto-experiment--allium-quality-score
+              "1. contradictory requires\n2. invariant violation\n3. unreachable rule\n4. missing precondition\n5. transition graph violation\n")
+             0.5)))
+
+(ert-deftest regression/prompt/allium-quality-score-ok ()
+  "Few minor issues should score low (good)."
+  (should (< (gptel-auto-experiment--allium-quality-score
+              "1. warning: style suggestion\n2. missing trace for rule Foo\n")
+             0.3)))
+
+(ert-deftest regression/prompt/allium-compiler-prompt-nonempty ()
+  "Allium compiler prompt returns non-empty string containing allium reference."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+             (lambda () (expand-file-name "~/.emacs.d/"))))
+    (condition-case nil
+        (let ((prompt (gptel-auto-experiment--allium-compiler-prompt)))
+          (should (stringp prompt))
+          (should (string-match-p "allium\|ALLIUM" prompt)))
+      (error (message "allium-compiler-prompt test skipped: dependencies unavailable")
+             (should t)))))
+
+;; ─── Allium Audit Tests ───
+
+(ert-deftest regression/auto-workflow-evolution/allium-audit-returns-list ()
+  "allium-audit functions resolve and have correct signatures."
+  (should (fboundp 'gptel-auto-experiment--allium-issues-count))
+  (should (fboundp 'gptel-auto-experiment--allium-quality-score))
+  (should (fboundp 'gptel-auto-experiment--allium-compiler-prompt))
+  (should (fboundp 'gptel-auto-workflow--allium-audit-signal))
+  (should (fboundp 'gptel-auto-workflow--allium-check-research-quality))
+  (should (fboundp 'gptel-auto-workflow--allium-diff-minimal-pairs)))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

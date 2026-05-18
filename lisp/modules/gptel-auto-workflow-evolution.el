@@ -23,6 +23,11 @@
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions" ())
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
+(declare-function gptel-auto-experiment--allium-distill "gptel-tools-agent-prompt-build" (text &optional callback))
+(declare-function gptel-auto-experiment--allium-check "gptel-tools-agent-prompt-build" (allium-spec &optional callback))
+(declare-function gptel-auto-experiment--allium-decompile "gptel-tools-agent-prompt-build" (allium-spec &optional callback audience))
+(declare-function gptel-auto-experiment--allium-issues-count "gptel-tools-agent-prompt-build" (check-output))
+(declare-function gptel-auto-experiment--allium-quality-score "gptel-tools-agent-prompt-build" (check-output))
 
 ;; ─── Helpers ───
 
@@ -1676,6 +1681,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (gptel-auto-workflow--evolution-optimize-backend-order)
   (gptel-auto-workflow--evolution-vsm-health-check)
   (gptel-auto-workflow--audit-signal)
+  (gptel-auto-workflow--allium-audit-signal)
   (message "[auto-workflow] Self-evolution cycle complete.")))
 
 ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
@@ -1828,8 +1834,9 @@ Returns list of strategies that were flagged."
       ;; Auto-audit the worst strategy (lowest structure score)
       (let ((worst (car (last needs-audit))))
         (message "[audit] Auto-compiling strategy '%s' via nucleus compiler..." worst)
-        (condition-case nil
-            (gptel-auto-experiment--compile-score
+        (catch 'compile-early-return
+          (condition-case nil
+              (gptel-auto-experiment--compile-score
              worst
              (lambda (result)
                (let ((score (car result))
@@ -1840,8 +1847,124 @@ Returns list of strategies that were flagged."
                    (message "[audit] Strategy '%s' FAILED audit: EDN richness %.2f, %d elements — review recommended"
                             worst score elements)))))
           (error
-           (message "[audit] Strategy '%s' compile audit failed (gptel-request unavailable)" worst)))))
+            (message "[audit] Strategy '%s' compile audit failed (gptel-request unavailable)" worst))))))
     needs-audit))
+
+(defun gptel-auto-workflow--allium-audit-signal ()
+  "Audit research knowledge quality via Allium behavioral spec checking.
+Distills research findings to Allium, runs check, scores spec coherence.
+Schedules async; returns list of strategy names that were audited."
+  (interactive)
+  (let* ((by-strategy (gptel-auto-workflow--research-results-by-strategy))
+         (audited nil))
+    (maphash
+     (lambda (strategy results)
+       (when (and (fboundp 'gptel-auto-experiment--allium-distill)
+                  strategy
+                  (> (length results) 0))
+         (push strategy audited)
+         (let* ((top-targets
+                 (mapcar (lambda (r) (plist-get r :target)) results))
+                (findings-summary
+                 (format "Research strategy: %s\n\n%d experiments across targets: %s\n\nKept hypotheses:\n%s\n\nDiscarded hypotheses:\n%s"
+                         strategy
+                         (length results)
+                         (string-join (cl-remove-duplicates
+                                       (seq-filter (lambda (s) (and (stringp s) (not (string-empty-p s))))
+                                                   top-targets)
+                                       :test #'string=)
+                                      ", ")
+                         (string-join
+                          (mapcar (lambda (r)
+                                    (if (equal (plist-get r :decision) "kept")
+                                        (format "- %s" (plist-get r :hypothesis))
+                                      ""))
+                                  results)
+                          "\n")
+                         (string-join
+                          (mapcar (lambda (r)
+                                    (if (equal (plist-get r :decision) "discarded")
+                                        (format "- %s" (plist-get r :hypothesis))
+                                      ""))
+                                  results)
+                          "\n"))))
+           (catch 'compile-early-return
+             (gptel-auto-experiment--allium-distill
+              findings-summary
+              (lambda (allium-spec)
+                (if (not allium-spec)
+                    (message "[allium-audit] Strategy '%s' distill failed (no spec produced)" strategy)
+                  (gptel-auto-experiment--allium-check
+                   allium-spec
+                   (lambda (issues)
+                     (let* ((count (gptel-auto-experiment--allium-issues-count issues))
+                            (issue-count (car count))
+                            (severity (cdr count))
+                            (score (gptel-auto-experiment--allium-quality-score issues)))
+                       (cond
+                        ((= issue-count 0)
+                         (message "[allium-audit] Strategy '%s' PASSED: spec is coherent (0 issues)" strategy))
+                        ((< score 0.3)
+                         (message "[allium-audit] Strategy '%s' OK: %d issues (severity %.2f, score %.2f)"
+                                  strategy issue-count severity score))
+                        ((< score 0.6)
+                         (message "[allium-audit] Strategy '%s' WARN: %d issues (severity %.2f, score %.2f) — review knowledge page"
+                                  strategy issue-count severity score))
+                        (t
+                         (message "[allium-audit] Strategy '%s' FAIL: %d issues (severity %.2f, score %.2f) — research may be incoherent"
+                                  strategy issue-count severity score))))))))))))
+      by-strategy)
+    (message "[allium-audit] Audited %d research strategies via Allium" (length audited))
+    audited)))
+
+(defun gptel-auto-workflow--allium-check-research-quality (findings-summary &optional callback)
+  "Distill FINDINGS-SUMMARY to Allium spec, check for issues, invoke CALLBACK with quality score.
+Like nucleus compile-score but for Allium: prose → spec → check → score.
+CALLBACK receives (issues-count . severity-score) where severity 0-1."
+  (unless (and (fboundp 'gptel-auto-experiment--allium-distill) callback)
+    (when callback (funcall callback (cons 99 1.0)))
+    (throw 'compile-early-return nil))
+  (gptel-auto-experiment--allium-distill
+   findings-summary
+   (lambda (allium-spec)
+     (if (not allium-spec)
+         (funcall callback (cons 99 1.0))
+       (gptel-auto-experiment--allium-check
+        allium-spec
+        (lambda (issues)
+          (funcall callback (gptel-auto-experiment--allium-issues-count issues))))))))
+
+(defun gptel-auto-workflow--allium-diff-minimal-pairs (ha hb &optional callback)
+  "Diff minimal-pair hypotheses (HA, HB) via Allium spec comparison.
+Distills both to Allium specs, then checks each for internal coherence.
+CALLBACK receives (ha-issues . hb-issues) with issue counts for each side.
+Use to determine which minimal pair has cleaner behavioral specification."
+  (unless (and (fboundp 'gptel-auto-experiment--allium-distill)
+               (fboundp 'gptel-auto-experiment--allium-check)
+               callback
+               (stringp ha) (stringp hb))
+    (when callback (funcall callback (cons 99 99)))
+    (throw 'compile-early-return nil))
+  (gptel-auto-experiment--allium-distill
+   ha
+   (lambda (spec-a)
+     (let ((result (cons 99 99)))
+       (if (not spec-a)
+           (funcall callback result)
+         (gptel-auto-experiment--allium-distill
+          hb
+          (lambda (spec-b)
+            (if (not spec-b)
+                (funcall callback result)
+              (gptel-auto-experiment--allium-check
+               spec-a
+               (lambda (issues-a)
+                 (gptel-auto-experiment--allium-check
+                  spec-b
+                  (lambda (issues-b)
+                    (funcall callback
+                             (cons (car (gptel-auto-experiment--allium-issues-count issues-a))
+                                   (car (gptel-auto-experiment--allium-issues-count issues-b))))))))))))))))
 
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
   "Auto-reorder the fallback chain based on backend performance data.

@@ -351,6 +351,115 @@ CALLBACK receives (final-prompt . rounds) when forging completes."
             (setq pos (match-end 0))))))
     count))
 
+;; ─── Allium Compiler ───
+
+(defun gptel-auto-experiment--allium-compiler-prompt ()
+  "Return the full nucleus ALLIUM.md compiler statechart as a system prompt."
+  (let ((file (expand-file-name "packages/nucleus/ALLIUM.md"
+                                (gptel-auto-workflow--worktree-base-root))))
+    (if (file-exists-p file)
+        (concat
+         (with-temp-buffer
+           (insert-file-contents file)
+           (goto-char (point-min))
+           (if (re-search-forward "^## The Prompt" nil t)
+               (let ((start (progn (forward-line 1) (point)))
+                     (end (or (re-search-forward "^```$" nil t)
+                              (point-max))))
+                 (buffer-substring start end))
+             (buffer-string))))
+      "λ bridge(x). prose ↔ Allium v3 | entities, rules, preconditions, outcomes")))
+
+(defun gptel-auto-experiment--allium-distill (text &optional callback)
+  "Distill TEXT (prose/research findings) to Allium v3 behavioral spec.
+CALLBACK receives the Allium spec string via async LLM call."
+  (unless (and (fboundp 'gptel-request) callback)
+    (when callback (funcall callback nil))
+    (throw 'compile-early-return nil))
+  (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
+         (prompt (format "distill:\n\n%s" text)))
+    (gptel-request
+     prompt
+     :callback (lambda (response _info)
+                 (let ((text (if (stringp response) response (format "%s" response))))
+                   (funcall callback text)))
+     :system system-prompt
+     :timeout 30)))
+
+(defun gptel-auto-experiment--allium-check (allium-spec &optional callback)
+  "Check ALLIUM-SPEC for issues (missing preconditions, contradictions, etc.).
+CALLBACK receives the issues list as a string via async LLM call."
+  (unless (and (fboundp 'gptel-request) callback)
+    (when callback (funcall callback nil))
+    (throw 'compile-early-return nil))
+  (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
+         (prompt (format "check:\n\n%s" allium-spec)))
+    (gptel-request
+     prompt
+     :callback (lambda (response _info)
+                 (let ((text (if (stringp response) response (format "%s" response))))
+                   (funcall callback text)))
+     :system system-prompt
+     :timeout 30)))
+
+(defun gptel-auto-experiment--allium-decompile (allium-spec &optional callback audience)
+  "Decompile ALLIUM-SPEC to natural language prose.
+AUDIENCE when non-nil targets output for a specific role (e.g. \"for a product manager\").
+CALLBACK receives the prose string via async LLM call."
+  (unless (and (fboundp 'gptel-request) callback)
+    (when callback (funcall callback nil))
+    (throw 'compile-early-return nil))
+  (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
+         (audience-str (if (and audience (stringp audience))
+                           (format " %s" audience) ""))
+         (prompt (format "decompile%s:\n\n%s" audience-str allium-spec)))
+    (gptel-request
+     prompt
+     :callback (lambda (response _info)
+                 (let ((text (if (stringp response) response (format "%s" response))))
+                   (funcall callback text)))
+     :system system-prompt
+     :timeout 30)))
+
+(defun gptel-auto-experiment--allium-issues-count (check-output)
+  "Count distinct issues from Allium check output (deterministic).
+Returns (count . severity) where severity is 0.0-1.0 weighted by issue type."
+  (let ((count 0) (severity 0.0))
+    (when (stringp check-output)
+      (let ((pos 0))
+        (while (string-match "^[0-9]+\\." check-output pos)
+          (setq count (1+ count))
+          (setq pos (match-end 0))))
+      (dolist (p '("contradictory" "invariant violation" "unreachable"
+                    "transition graph" "when-clause obligation" "absent field"
+                    "missing precondition" "missing rule"
+                    "without matching" "without outbound"))
+        (when (string-match-p p check-output)
+          (setq severity (+ severity 0.3))))
+      (dolist (p '("implicit behavior" "unused" "stale traces" "missing trace"
+                    "not captured" "without corresponding prose"
+                    "no version header" "cyclic"))
+        (when (string-match-p p check-output)
+          (setq severity (+ severity 0.15))))
+      (dolist (p '("warning" "style"))
+        (when (string-match-p p check-output)
+          (setq severity (+ severity 0.05)))))
+    (cons count (min 1.0 severity))))
+
+(defun gptel-auto-experiment--allium-quality-score (check-output)
+  "Score Allium check output quality (0.0-1.0, lower is better).
+0.0 = perfect spec, 1.0 = many critical issues."
+  (if (not (stringp check-output))
+      1.0
+    (let* ((result (gptel-auto-experiment--allium-issues-count check-output))
+           (issues (car result))
+           (severity (cdr result)))
+      (cond
+       ((= issues 0) 0.0)
+       ((> severity 0.8) (min 1.0 (/ issues 3.0)))
+       ((> severity 0.3) (min 0.8 (/ issues 5.0)))
+       (t (min 0.4 (/ issues 10.0)))))))
+
 ;;; Section A/B Testing
 
 (defvar gptel-auto-workflow--ab-test-sections
