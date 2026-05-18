@@ -1756,6 +1756,17 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (message "[impact]   BREAKING: %s (delta=%.2f, %s)"
                    (plist-get b :target) (plist-get b :delta) (plist-get b :reason))))
     (error nil))
+  ;; Competency question answerability check (Semantica pattern)
+  (condition-case nil
+      (let ((cq-results (gptel-auto-workflow--check-competency-questions)))
+        (let ((total (length cq-results))
+              (answerable (cl-count-if #'cdr cq-results)))
+          (message "[cq] Code-health ontology: %d/%d competency questions answerable"
+                   answerable total)
+          (dolist (r cq-results)
+            (unless (cdr r)
+              (message "[cq]   UNANSWERABLE: %s" (car r))))))
+    (error nil))
   ;; Run audits and feed results back into evolution
   (let ((flagged (gptel-auto-workflow--audit-signal)))
     (when flagged
@@ -1868,6 +1879,14 @@ Maps nucleus VSM layers to our system components:
                 (causal (gptel-auto-workflow--experiment-causal-links)))
             (message "[onto] Ontology: %d classes, %d instances"
                      (plist-get ontology :class-count) (plist-get ontology :instance-count))
+            (when (and (fboundp 'gptel-auto-experiment--owl-save)
+                       (> (plist-get ontology :class-count) 0))
+              (gptel-auto-experiment--owl-save
+               ontology
+               (expand-file-name "var/tmp/evolution/experiment-ontology.ttl"
+                                 (gptel-auto-workflow--worktree-base-root))
+               (lambda (ok)
+                 (when ok (message "[onto] Saved OWL/Turtle ontology")))))
             (when (> (length causal) 0)
               (message "[causal] %d targets with multi-experiment chains" (length causal)))
             ;; Knowledge page quality (Semantica evaluator)
@@ -2047,6 +2066,74 @@ Returns ImpactReport-style plist with :breaking, :potentially-breaking, :safe, :
                           :potentially-breaking (length potentially-breaking)
                           :safe (length safe)
                           :generated (format-time-string "%Y-%m-%dT%H:%M")))))
+
+;; ─── Semantica Domain: code-health ontology template ───
+
+(defconst gptel-auto-workflow--code-health-ontology
+  '(:name "CodeHealthOntology"
+    :uri "https://minimal-emacs.d/ontology/code-health/"
+    :version "1.0"
+    :classes ((:name "Strategy" :comment "A research/code-analysis strategy that generates prompts")
+              (:name "Target" :comment "A file or module targeted for optimization")
+              (:name "Experiment" :comment "A single experiment run: hypothesis → change → outcome")
+              (:name "Outcome" :comment "The result of an experiment: kept, discarded, or failed")
+              (:name "Backend" :comment "An LLM backend used to execute experiments")
+              (:name "KnowledgePage" :comment "A synthesized knowledge page from experiment results"))
+    :properties ((:name "targets" :type "object" :domain "Strategy" :range "Target"
+                    :comment "Strategy targets specific files/modules")
+                 (:name "hasOutcome" :type "object" :domain "Experiment" :range "Outcome"
+                    :comment "Experiment produces an outcome")
+                 (:name "usesBackend" :type "object" :domain "Experiment" :range "Backend"
+                    :comment "Experiment runs on a backend")
+                 (:name "producesPage" :type "object" :domain "Strategy" :range "KnowledgePage"
+                    :comment "Strategy's results synthesize into a knowledge page")
+                 (:name "keepRate" :type "data" :domain "Strategy" :range "xsd:float"
+                    :comment "Fraction of experiments that were kept")
+                 (:name "scoreDelta" :type "data" :domain "Experiment" :range "xsd:float"
+                    :comment "Score change after experiment")
+                 (:name "alliumIssues" :type "data" :domain "KnowledgePage" :range "xsd:integer"
+                    :comment "Number of Allium behavioral issues detected"))
+    :metadata (:domain "code-health"
+               :generated-by "gptel-auto-workflow-evolution"
+               :description "Formal ontology of the self-evolving code improvement pipeline"))
+  "Domain ontology template for the code-health pipeline (Semantica pattern).
+Classes: Strategy, Target, Experiment, Outcome, Backend, KnowledgePage.
+Follows OWL convention: classes use PascalCase, properties use camelCase.")
+
+(defun gptel-auto-workflow--check-competency-questions ()
+  "Check if the code-health ontology can answer standard competency questions.
+Uses Semantica's keyword-overlap heuristic: match question words >3 chars
+against class/property names. Returns ((question . answerable) ...)."
+  (let* ((questions
+          '(("Which strategies are effective?" . ("Strategy" "keepRate"))
+            ("What targets need optimization?" . ("Target" "Experiment"))
+            ("Which backends perform best?" . ("Backend" "Experiment" "usesBackend"))
+            ("Are research findings coherent?" . ("KnowledgePage" "alliumIssues"))
+            ("What caused an experiment to fail?" . ("Experiment" "Outcome" "hasOutcome"))
+            ("How do strategies relate to knowledge?" . ("Strategy" "KnowledgePage" "producesPage"))))
+         (classes (plist-get gptel-auto-workflow--code-health-ontology :classes))
+         (properties (plist-get gptel-auto-workflow--code-health-ontology :properties))
+         (class-names (mapcar (lambda (c) (plist-get c :name)) classes))
+         (prop-names (mapcar (lambda (p) (plist-get p :name)) properties))
+         (results nil))
+    (dolist (q questions)
+      (let* ((question (car q))
+             (expected (cdr q))
+             (words (seq-filter (lambda (w) (> (length w) 3))
+                                (split-string (downcase question) "[^a-z]+" t)))
+             (answerable nil))
+        (catch 'found
+          (dolist (w words)
+            (dolist (cn class-names)
+              (when (string-match-p (regexp-quote w) (downcase cn))
+                (setq answerable t)
+                (throw 'found t)))
+            (dolist (pn prop-names)
+              (when (string-match-p (regexp-quote w) (downcase pn))
+                (setq answerable t)
+                (throw 'found t)))))
+        (push (cons question answerable) results)))
+    (nreverse results)))
 
 ;; ─── Backend Performance Optimization ───
 

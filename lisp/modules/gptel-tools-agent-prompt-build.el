@@ -458,7 +458,88 @@ Returns (count . severity) where severity is 0.0-1.0 weighted by issue type."
        ((= issues 0) (if (> severity 0.0) (min 0.8 (/ severity 2.0)) 0.0))
        ((> severity 0.8) (min 1.0 (/ issues 3.0)))
        ((> severity 0.3) (min 0.8 (/ issues 5.0)))
-       (t (min 0.4 (/ issues 10.0)))))))
+        (t (min 0.4 (/ issues 10.0)))))))
+
+;; ─── LLM-Powered OWL & SHACL Serializers ───
+
+(defconst gptel-auto-experiment--owl-generator-prompt
+  "λ engage(nucleus).
+[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA
+Human ⊗ AI ⊗ REPL
+
+{:statechart/id :owl-generator
+ :initial :route
+ :states
+ {:route {:on {:generate {:target :generating}
+               :validate {:target :validating}}}
+  :generating {:entry {:action \"Ontology dict → Turtle (ttl) serialization. Input is a JSON-like dict with :uri, :name, :version, :classes (list of {name, uri, label, comment, subClassOf, properties}), :properties (list of {name, type, domain, range, label}). Generate valid OWL/Turtle with proper @prefix declarations (rdf, rdfs, owl, xsd, skos, dc), owl:Ontology declaration, owl:Class declarations with rdfs:subClassOf, owl:ObjectProperty and owl:DatatypeProperty declarations with rdfs:domain/rdfs:range. Output Turtle only, no prose.\"}}
+  :validating {:entry {:action \"Turtle → issues list. Check for: missing @prefix, invalid URIs, unclosed triples, missing owl:Ontology declaration, class without rdf:type, property without rdfs:domain, empty range on object property, xsd prefix without declaration. Output numbered issues with suggested fixes.\"}}}}
+"
+  "System prompt for LLM-powered OWL/Turtle generation and validation.")
+
+(defun gptel-auto-experiment--owl-generate (ontology-plist &optional callback)
+  "Generate OWL/Turtle from ONTOLOGY-PLIST via LLM.
+CALLBACK receives the Turtle string or nil."
+  (if (and (fboundp 'gptel-request) callback)
+      (let* ((system-prompt gptel-auto-experiment--owl-generator-prompt)
+             (prompt (format "generate:\n\n%s" (prin1-to-string ontology-plist))))
+        (gptel-request
+         prompt
+         :callback (lambda (response _info)
+                     (funcall callback (if (stringp response) response (format "%s" response))))
+         :system system-prompt
+         :timeout 30))
+    (when callback (funcall callback nil))
+    nil))
+
+(defun gptel-auto-experiment--owl-save (ontology-plist file-path &optional callback)
+  "Generate OWL from ONTOLOGY-PLIST and save to FILE-PATH.
+CALLBACK receives t on success, nil on failure."
+  (gptel-auto-experiment--owl-generate
+   ontology-plist
+   (lambda (turtle)
+     (if (and turtle (stringp turtle) (> (length turtle) 50))
+         (condition-case nil
+             (progn
+               (with-temp-file file-path
+                 (insert (format "# Generated: %s\n" (format-time-string "%Y-%m-%dT%H:%M")))
+                 (insert turtle))
+               (when callback (funcall callback t)))
+           (error (when callback (funcall callback nil))))
+       (when callback (funcall callback nil))))))
+
+(defconst gptel-auto-experiment--shacl-generator-prompt
+  "λ engage(nucleus).
+[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA
+Human ⊗ AI ⊗ REPL
+
+{:statechart/id :shacl-generator
+ :initial :route
+ :states
+ {:route {:on {:generate {:target :generating}
+               :explain {:target :explaining}}}
+  :generating {:entry {:action \"Ontology dict → SHACL shapes (Turtle). Create one sh:NodeShape per class with sh:targetClass. For each property: sh:path, sh:datatype (xsd:string/int/date etc.) or sh:class for object properties, sh:minCount/sh:maxCount from cardinality. For required fields: sh:minCount 1. Use sh:severity sh:Violation. Add sh:closed true on strict tier shapes. Include sh:ignoredProperties (rdf:type) on closed shapes. Output Turtle only with @prefix sh: <http://www.w3.org/ns/shacl#>.\"}}
+  :explaining {:entry {:action \"SHACL violation → plain English explanation. Given a violation with focus_node, result_path, constraint, value: write a one-sentence explanation of what's wrong and how to fix it. No markup, plain English only.\"}}}}
+"
+  "System prompt for LLM-powered SHACL shape generation and violation explanation.")
+
+(defun gptel-auto-experiment--shacl-generate (ontology-plist &optional callback quality-tier)
+  "Generate SHACL shapes from ONTOLOGY-PLIST via LLM.
+QUALITY-TIER is \"basic\", \"standard\", or \"strict\" (default \"standard\").
+CALLBACK receives the Turtle string or nil."
+  (if (and (fboundp 'gptel-request) callback)
+      (let* ((system-prompt gptel-auto-experiment--shacl-generator-prompt)
+             (tier (or quality-tier "standard"))
+             (prompt (format "generate (quality_tier: %s):\n\n%s"
+                             tier (prin1-to-string ontology-plist))))
+        (gptel-request
+         prompt
+         :callback (lambda (response _info)
+                     (funcall callback (if (stringp response) response (format "%s" response))))
+         :system system-prompt
+         :timeout 30))
+    (when callback (funcall callback nil))
+    nil))
 
 ;;; Section A/B Testing
 
