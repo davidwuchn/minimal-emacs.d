@@ -65,23 +65,17 @@ fetch_file() {
     echo ""
 
     content=""
-    # Try deep files first — rotate which one is picked based on day-of-year
+    # Fetch ALL deep files for this repo (not just first match)
     deep_files="${REPO_FILES[$repo]:-}"
     if [ -n "$deep_files" ]; then
-      # Convert space-separated list to array, pick index based on date for variety
-      IFS=' ' read -ra deep_arr <<< "$deep_files"
-      day_of_year=$(date +%j)
-      start_idx=$(( day_of_year % ${#deep_arr[@]} ))  # rotate daily
-      # Try from rotated start, wrapping around
-      for ((i=0; i<${#deep_arr[@]}; i++)); do
-        idx=$(( (start_idx + i) % ${#deep_arr[@]} ))
-        file="${deep_arr[$idx]}"
-        content=$(fetch_file "$repo" "$file" 300)
+      for file in $deep_files; do
+        content=$(fetch_file "$repo" "$file" 200)
         if [ -n "$content" ] && [ "$(echo "$content" | wc -l)" -gt 5 ]; then
+          echo "### $file"
+          echo ""
           echo "$content"
           echo ""
-          echo "  [fetched $repo/$file (deep, idx=$idx): $(echo "$content" | wc -c)B]" >&2
-          break
+          echo "  [fetched $repo/$file (deep): $(echo "$content" | wc -c)B]" >&2
         fi
       done
     fi

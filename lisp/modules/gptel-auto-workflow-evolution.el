@@ -1847,6 +1847,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
               (> (- now (or (symbol-value 'gptel-auto-workflow--allium-audit-last-run) 0)) 900))
       (setq gptel-auto-workflow--allium-audit-last-run now)
       (gptel-auto-workflow--allium-audit-signal)))
+  ;; Write research priorities for next cycle's researcher (Semantica ontology feedback)
+  (condition-case nil
+      (gptel-auto-workflow--write-research-priorities)
+    (error nil))
   ;; Knowledge page cross-cycle diff (Semantica set-difference pattern)
   (condition-case nil
       (let ((diff (gptel-auto-workflow--diff-knowledge-pages)))
@@ -2290,6 +2294,64 @@ Pattern from Semantica PolicyEngine.check_compliance()."
     (gptel-auto-workflow--validation-result (null errors) errors warnings)))
 
 ;; ─── Backend Performance Optimization ───
+
+;; ─── Backend Performance Optimization ───
+
+(defun gptel-auto-workflow--score-research-sources ()
+  "Score research repos by downstream experiment keep-rate.
+Returns alist of (source-repo . keep-rate) sorted by performance.
+Source repos are extracted from prefetched content patterns."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (by-source (make-hash-table :test 'equal))
+         (stats nil))
+    (dolist (r results)
+      (let* ((hash (plist-get r :research-hash))
+             (strategy (plist-get r :research-strategy))
+             (kept (equal (plist-get r :decision) "kept")))
+        (when (and (stringp strategy) (not (equal strategy "none")))
+          (let ((entry (or (gethash strategy by-source) (cons 0 0))))
+            (setcar entry (1+ (car entry)))
+            (when kept (setcdr entry (1+ (cdr entry))))
+            (puthash strategy entry by-source)))))
+    (maphash (lambda (source counts)
+               (when (> (car counts) 2)
+                 (push (cons source (/ (float (cdr counts)) (car counts))) stats)))
+             by-source)
+    (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
+
+(defun gptel-auto-workflow--write-research-priorities ()
+  "Write research-priorities.md based on historical outcomes.
+Consumed by researcher daemon to focus on high-value repos."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (file (expand-file-name "var/tmp/evolution/research-priorities.md" root))
+         (sources (gptel-auto-workflow--score-research-sources))
+         (top (seq-take sources 5))
+         (bottom (seq-take (nreverse (copy-sequence sources)) 3)))
+    (make-directory (file-name-directory file) t)
+    (with-temp-file file
+      (insert "# Research Priorities (auto-generated from experiment outcomes)\n\n")
+      (insert (format "> Updated: %s | %d total research traces analyzed\n\n"
+                      (format-time-string "%Y-%m-%d %H:%M")
+                      (length sources)))
+      (when top
+        (insert "## High-Value Research Sources (prioritize these)\n\n")
+        (dolist (s top)
+          (insert (format "- **%s**: %.0f%% keep-rate (%d experiments)\n"
+                          (car s) (* 100 (cdr s))
+                          (let ((entry (assoc (car s) sources #'string=)))
+                            (if entry (cdr entry) 0)))))
+        (insert "\n"))
+      (when bottom
+        (insert "## Low-Value Research Sources (deprioritize these)\n\n")
+        (dolist (s bottom)
+          (insert (format "- %s: %.0f%% keep-rate — consider different approach\n"
+                          (car s) (* 100 (cdr s)))))
+        (insert "\n"))
+      (insert "## Guidance\n\n")
+      (insert "- Focus on high-value sources — their techniques produced kept experiments.\n")
+      (insert "- For low-value sources: either research deeper files or skip until strategy changes.\n")
+      (insert "- Prefer sources that produced BREAKING or POTENTIAL impact (safe = low signal).\n"))
+    (message "[research-priorities] Wrote %d sources to %s" (length sources) file)))
 
 (defun gptel-auto-workflow--evolution-axis-stats ()
   "Analyze KIBC-M axis performance from experiment results.
