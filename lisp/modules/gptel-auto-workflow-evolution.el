@@ -784,12 +784,12 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
 ;;; ─── Research Evolution ───
 
 (defun gptel-auto-workflow--research-results-by-strategy ()
-  "Group experiment results by research strategy.
+  "Group experiment results by prompt strategy.
 Returns hash table mapping strategy name to list of results."
   (let ((results (gptel-auto-workflow--parse-all-results))
         (by-strategy (make-hash-table :test 'equal)))
     (dolist (r results)
-      (let ((strategy (or (plist-get r :research-strategy) "none")))
+      (let ((strategy (or (plist-get r :strategy) "template-default")))
         (unless (equal strategy "none")
           (puthash strategy (cons r (gethash strategy by-strategy)) by-strategy))))
     by-strategy))
