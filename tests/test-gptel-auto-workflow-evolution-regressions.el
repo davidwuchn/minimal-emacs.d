@@ -443,6 +443,19 @@ Single keyword 'contradictory' (severity 0.3): (min 0.8 (/ 0.3 2.0)) = 0.15."
         (should (string-match-p "contradictory rule" result))
         (should (string-match-p "prefers shorter names" result))))))
 
+(ert-deftest regression/auto-workflow-evolution/allium-persist-aborts-on-nil-root ()
+  "persist-spec returns nil and logs when worktree root is nil."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+             (lambda () nil)))
+    (should-not (gptel-auto-workflow--allium-persist-spec
+                 "test-strategy" "spec" "issues" 1 0.3 0.15))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-load-issues-nil-root ()
+  "load-issues-for-guidance returns empty string when worktree root is nil."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+             (lambda () nil)))
+    (should (string= (gptel-auto-workflow--allium-load-issues-for-guidance) ""))))
+
 (ert-deftest regression/auto-workflow-evolution/allium-load-issues-filters-short-content ()
   "load-issues-for-guidance excludes files with <=20 chars of content."
   (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)

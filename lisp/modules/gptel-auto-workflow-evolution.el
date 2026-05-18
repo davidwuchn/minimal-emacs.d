@@ -1976,84 +1976,90 @@ Schedules async; returns list of strategy names that were audited."
   "Persist ALLIUM-SPEC and check ISSUES for STRATEGY to disk.
 Saves spec to var/tmp/evolution/allium-specs/ and appends to knowledge page.
 ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
-  (let* ((safe-strategy (if (fboundp 'gptel-auto-workflow--sanitize-strategy-name-for-filename)
-                            (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy)
-                          (replace-regexp-in-string "[^[:alnum:]_-]" "-" strategy)))
-         (root (gptel-auto-workflow--worktree-base-root))
-         (specs-dir (expand-file-name "var/tmp/evolution/allium-specs" root))
-         (issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root))
-         (knowledge-dir (expand-file-name "mementum/knowledge" root))
-         (knowledge-file (expand-file-name
-                          (format "research-insights-%s.md" safe-strategy)
-                          knowledge-dir)))
-    ;; Save raw Allium spec
-    (make-directory specs-dir t)
-    (with-temp-file (expand-file-name (format "%s.allium" safe-strategy) specs-dir)
-      (insert (format "-- Allium spec for research strategy: %s\n" strategy))
-      (insert (format "-- Generated: %s\n" (format-time-string "%Y-%m-%dT%H:%M")))
-      (insert (format "-- Issues: %d, Severity: %.2f, Score: %.2f\n" issue-count severity score))
-      (insert "\n")
-      (insert allium-spec))
-    ;; Save check issues as markdown summary
-    (make-directory issues-dir t)
-    (with-temp-file (expand-file-name (format "%s.md" safe-strategy) issues-dir)
-      (insert (format "# Allium Check — %s\n\n" strategy))
-      (insert (format "**Issues:** %d | **Severity:** %.2f | **Score:** %.2f (lower=better)\n\n" issue-count severity score))
-      (when (and (stringp issues) (> (length issues) 5))
-        (insert "## Issue Details\n\n")
-        (insert issues)))
-    ;; Append Allium spec appendix to knowledge page if it exists
-    (when (file-exists-p knowledge-file)
-      (condition-case nil
-          (with-temp-buffer
-            (insert-file-contents knowledge-file)
-            (goto-char (point-max))
-            ;; Remove previous Allium sections if present
-            (save-excursion
-              (when (re-search-backward "^## Allium Behavioral Spec" nil t)
-                (delete-region (match-beginning 0) (point-max))))
-            ;; Add fresh Allium appendix
-            (insert "\n\n## Allium Behavioral Spec (auto-generated, v3)\n\n")
-            (insert (format "*%d check issues (severity %.2f). EXTRACTED from distill→check pipeline.*\n\n" issue-count severity))
-            (insert "```allium\n")
-            (insert (truncate-string-to-width allium-spec 4000 nil nil "\n-- ... truncated ..."))
-            (insert "\n```\n\n")
-            (when (and (stringp issues) (> (length issues) 5))
-              (insert "### Check Issues\n\n")
-              (insert (truncate-string-to-width issues 1500 nil nil "\n\n... (truncated)"))
-              (insert "\n"))
-            (write-region (point-min) (point-max) knowledge-file))
-        (error
-         (message "[allium-persist] Failed to update knowledge page for %s" safe-strategy))))
-    (message "[allium-persist] Saved spec + issues for '%s': %d issues, %.2f severity"
-             strategy issue-count severity)))
+  (let* ((root (gptel-auto-workflow--worktree-base-root)))
+    (if (not root)
+        (progn
+          (message "[allium-persist] Aborted: worktree root unavailable for '%s'" strategy)
+          nil)
+      (let* ((safe-strategy (if (fboundp 'gptel-auto-workflow--sanitize-strategy-name-for-filename)
+                              (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy)
+                            (replace-regexp-in-string "[^[:alnum:]_-]" "-" strategy)))
+           (specs-dir (expand-file-name "var/tmp/evolution/allium-specs" root))
+           (issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root))
+           (knowledge-dir (expand-file-name "mementum/knowledge" root))
+           (knowledge-file (expand-file-name
+                            (format "research-insights-%s.md" safe-strategy)
+                            knowledge-dir)))
+      ;; Save raw Allium spec
+      (make-directory specs-dir t)
+      (with-temp-file (expand-file-name (format "%s.allium" safe-strategy) specs-dir)
+        (insert (format "-- Allium spec for research strategy: %s\n" strategy))
+        (insert (format "-- Generated: %s\n" (format-time-string "%Y-%m-%dT%H:%M")))
+        (insert (format "-- Issues: %d, Severity: %.2f, Score: %.2f\n" issue-count severity score))
+        (insert "\n")
+        (insert allium-spec))
+      ;; Save check issues as markdown summary
+      (make-directory issues-dir t)
+      (with-temp-file (expand-file-name (format "%s.md" safe-strategy) issues-dir)
+        (insert (format "# Allium Check — %s\n\n" strategy))
+        (insert (format "**Issues:** %d | **Severity:** %.2f | **Score:** %.2f (lower=better)\n\n" issue-count severity score))
+        (when (and (stringp issues) (> (length issues) 5))
+          (insert "## Issue Details\n\n")
+          (insert issues)))
+      ;; Append Allium spec appendix to knowledge page if it exists
+      (when (file-exists-p knowledge-file)
+        (condition-case nil
+            (with-temp-buffer
+              (insert-file-contents knowledge-file)
+              (goto-char (point-max))
+              ;; Remove previous Allium sections if present
+              (save-excursion
+                (when (re-search-backward "^## Allium Behavioral Spec" nil t)
+                  (delete-region (match-beginning 0) (point-max))))
+              ;; Add fresh Allium appendix
+              (insert "\n\n## Allium Behavioral Spec (auto-generated, v3)\n\n")
+              (insert (format "*%d check issues (severity %.2f). EXTRACTED from distill→check pipeline.*\n\n" issue-count severity))
+              (insert "```allium\n")
+              (insert (truncate-string-to-width allium-spec 4000 nil nil "\n-- ... truncated ..."))
+              (insert "\n```\n\n")
+              (when (and (stringp issues) (> (length issues) 5))
+                (insert "### Check Issues\n\n")
+                (insert (truncate-string-to-width issues 1500 nil nil "\n\n... (truncated)"))
+                (insert "\n"))
+              (write-region (point-min) (point-max) knowledge-file))
+          (error
+           (message "[allium-persist] Failed to update knowledge page for %s" safe-strategy))))
+      (message "[allium-persist] Saved spec + issues for '%s': %d issues, %.2f severity"
+               strategy issue-count severity)))))
 
 (defun gptel-auto-workflow--allium-load-issues-for-guidance ()
   "Load recent Allium check issues for injection into prompt builder strategy guidance.
 Returns a markdown-formatted string of issues grouped by strategy, or empty string."
-  (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root))
-         (result nil))
-    (when (file-directory-p issues-dir)
-      (dolist (issue-file (directory-files issues-dir t "\\.md$"))
-        (condition-case nil
-            (with-temp-buffer
-              (insert-file-contents issue-file)
-              (goto-char (point-min))
-              ;; Only include files <7 days old
-              (let ((mtime (file-attribute-modification-time
-                            (file-attributes issue-file))))
-                (when (time-less-p
-                       (time-subtract (current-time) (days-to-time 7))
-                       mtime)
-                  (let ((content (buffer-string)))
-                    (when (and content (> (length content) 20))
-                      (push content result))))))
-          (error nil))))
-    (if result
-        (concat "### Allium Behavioral Audit (coherence check of last cycle's research)\n\n"
-                (mapconcat #'identity (nreverse result) "\n---\n"))
-      "")))
+  (let* ((root (gptel-auto-workflow--worktree-base-root)))
+    (if (not root)
+        ""
+      (let* ((issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root))
+             (result nil))
+        (when (file-directory-p issues-dir)
+          (dolist (issue-file (directory-files issues-dir t "\\.md$"))
+            (condition-case nil
+                (with-temp-buffer
+                  (insert-file-contents issue-file)
+                  (goto-char (point-min))
+                  ;; Only include files <7 days old
+                  (let ((mtime (file-attribute-modification-time
+                                (file-attributes issue-file))))
+                    (when (time-less-p
+                           (time-subtract (current-time) (days-to-time 7))
+                           mtime)
+                      (let ((content (buffer-string)))
+                        (when (and content (> (length content) 20))
+                          (push content result))))))
+              (error nil))))
+        (if result
+            (concat "### Allium Behavioral Audit (coherence check of last cycle's research)\n\n"
+                    (mapconcat #'identity (nreverse result) "\n---\n"))
+          "")))))
 
 (defun gptel-auto-workflow--allium-check-research-quality (findings-summary &optional callback)
   "Distill FINDINGS-SUMMARY to Allium spec, check for issues, invoke CALLBACK with quality score.
