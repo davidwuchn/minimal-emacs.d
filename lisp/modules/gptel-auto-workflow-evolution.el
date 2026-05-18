@@ -70,6 +70,9 @@ Layer 4: temporal index (git commit history, experiment TSV, cycle snapshots)")
 
 ;; ─── Helpers ───
 
+(defvar gptel-auto-workflow--allium-audit-last-run nil
+  "Timestamp of last allium-audit run. Throttles API calls to 1/15min.")
+
 (defvar gptel-auto-workflow--evolution-repo-root nil
   "Cached git repository root for self-evolution.
 Captured at load time to avoid worktree issues.")
@@ -1839,7 +1842,11 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                "self-correction")
             (error
              (message "[audit] Strategy '%s' evolution triggered but not yet available" strategy)))))))
-  (gptel-auto-workflow--allium-audit-signal)
+  (let ((now (float-time)))
+    (when (or (not (boundp 'gptel-auto-workflow--allium-audit-last-run))
+              (> (- now (or (symbol-value 'gptel-auto-workflow--allium-audit-last-run) 0)) 900))
+      (setq gptel-auto-workflow--allium-audit-last-run now)
+      (gptel-auto-workflow--allium-audit-signal)))
   ;; Knowledge page cross-cycle diff (Semantica set-difference pattern)
   (condition-case nil
       (let ((diff (gptel-auto-workflow--diff-knowledge-pages)))
