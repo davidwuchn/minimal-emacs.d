@@ -780,6 +780,20 @@ so tags before allium-issues is correctly detected."
             (should-not (plist-get r :warnings))))
       (delete-file tmpfile))))
 
+(ert-deftest regression/auto-workflow-evolution/seman-sig-extracts-sections ()
+  "knowledge-page-signature extracts frontmatter keys and section headings."
+  (let ((tmpfile (make-temp-file "sig-" nil ".md")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile
+            (insert "title: Test\nstatus: active\nallium-issues: 3\ntags: [a]\n---\n# Research\n## Summary\n## Meta\n"))
+          (let ((s (gptel-auto-workflow--knowledge-page-signature tmpfile)))
+            (should (plist-get s :name))
+            (should (= (length (plist-get s :frontmatter-keys)) 4))
+            (should (= (length (plist-get s :sections)) 2))
+            (should (member "Summary" (plist-get s :sections)))))
+      (delete-file tmpfile))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
