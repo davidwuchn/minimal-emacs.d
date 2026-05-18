@@ -455,7 +455,7 @@ Returns (count . severity) where severity is 0.0-1.0 weighted by issue type."
            (issues (car result))
            (severity (cdr result)))
       (cond
-       ((= issues 0) 0.0)
+       ((= issues 0) (if (> severity 0.0) (min 0.8 (/ severity 2.0)) 0.0))
        ((> severity 0.8) (min 1.0 (/ issues 3.0)))
        ((> severity 0.3) (min 0.8 (/ issues 5.0)))
        (t (min 0.4 (/ issues 10.0)))))))

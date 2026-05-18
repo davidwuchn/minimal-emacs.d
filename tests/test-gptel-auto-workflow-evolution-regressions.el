@@ -310,6 +310,19 @@
 
 ;; ─── Allium Audit Tests ───
 
+(ert-deftest regression/prompt/allium-quality-score-severity-no-numbered-lines ()
+  "Quality score should not be 0.0 when severity is nonzero but no numbered lines exist.
+Malformed Allium output may contain issues as prose without numbered listing."
+  (should (> (gptel-auto-experiment--allium-quality-score
+              "contradictory requires clause without matching outbound")
+             0.0)))
+
+(ert-deftest regression/prompt/allium-issues-count-severity-capped ()
+  "Severity should cap at 1.0 even with many critical keywords."
+  (let ((result (gptel-auto-experiment--allium-issues-count
+                 "1. contradictory invariant violation\n2. unreachable transition graph\n3. when-clause obligation absent field\n4. missing precondition missing rule without matching without outbound")))
+    (should (<= (cdr result) 1.0))))
+
 (ert-deftest regression/auto-workflow-evolution/allium-audit-returns-list ()
   "allium-audit functions resolve and have correct signatures."
   (should (fboundp 'gptel-auto-experiment--allium-issues-count))
