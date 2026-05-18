@@ -496,6 +496,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                           :backend actual-backend
                           :prompt-chars (length executor-prompt)
                           :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
+                           :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis)
                           :sections-included (or (and (boundp 'gptel-auto-workflow--last-prompt-sections)
                                                       gptel-auto-workflow--last-prompt-sections)
                                                 "all")
@@ -661,7 +662,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                              :retries 1
                                                                                              :backend actual-backend
                                                                                              :prompt-chars (length executor-prompt)
+                           :output-chars (length (or effective-agent-output ""))
                                                                                              :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
+                           :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis)
                                                                                              :exploration-axis (gptel-auto-experiment--extract-axis retry-output)
                                                                                               :candidate-validation (when candidate-validation
                                                                                                                       (mapcar (lambda (pair)
@@ -871,7 +874,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                 :agent-output agent-output
                                                                 :backend actual-backend
                                                                 :prompt-chars (length executor-prompt)
-                                                                :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt))))
+                           :output-chars (length (or effective-agent-output ""))
+                                                                 :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
+                                                                 :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis))))
                                                    (message "[auto-experiment] ✗ %s for %s" reason target)
                                                    (funcall log-fn
                                                             run-id exp-result)

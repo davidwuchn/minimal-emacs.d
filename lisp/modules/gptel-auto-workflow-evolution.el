@@ -23,6 +23,12 @@
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions" ())
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
+(declare-function gptel-auto-experiment--allium-distill "gptel-tools-agent-prompt-build" (text &optional callback))
+(declare-function gptel-auto-experiment--allium-check "gptel-tools-agent-prompt-build" (allium-spec &optional callback))
+(declare-function gptel-auto-experiment--allium-decompile "gptel-tools-agent-prompt-build" (allium-spec &optional callback audience))
+(declare-function gptel-auto-experiment--allium-issues-count "gptel-tools-agent-prompt-build" (check-output))
+(declare-function gptel-auto-experiment--allium-quality-score "gptel-tools-agent-prompt-build" (check-output))
+(declare-function gptel-auto-experiment--kibcm-axis "gptel-tools-agent-prompt-build" (hypothesis))
 
 ;; ─── Helpers ───
 
@@ -95,23 +101,25 @@ Uses cached value from load time, or detects from current directory."
                            (delta-str (or (nth 6 fields) "+0.00"))
                            (decision (nth 7 fields))
                             (grader-q (string-to-number (or (nth 9 fields) "0")))
-                              (prompt-chars (string-to-number (or (nth 15 fields) "0")))
-                               (research-strategy (or (nth 20 fields) "none"))
-                               (research-hash (or (nth 21 fields) "none"))
-                               (research-quality (or (nth 22 fields) "none")))
-                         (push (list :target target
-                                     :hypothesis hypothesis
-                                     :score-before score-before
-                                     :score-after score-after
-                                     :code-quality quality
-                                     :delta delta-str
-                                     :decision decision
-                                     :grader-quality grader-q
-                                     :prompt-chars prompt-chars
-                                     :research-strategy research-strategy
-                                     :research-hash research-hash
-                                     :research-quality research-quality)
-                               records))))
+                               (prompt-chars (string-to-number (or (nth 16 fields) "0")))
+                                (research-strategy (or (nth 21 fields) "none"))
+                                (research-hash (or (nth 22 fields) "none"))
+                                 (research-quality (or (nth 23 fields) "none"))
+                                 (kibcm-axis (or (nth 25 fields) "?")))
+                          (push (list :target target
+                                      :hypothesis hypothesis
+                                      :score-before score-before
+                                      :score-after score-after
+                                      :code-quality quality
+                                      :delta delta-str
+                                      :decision decision
+                                      :grader-quality grader-q
+                                      :prompt-chars prompt-chars
+                                      :research-strategy research-strategy
+                                      :research-hash research-hash
+                                      :research-quality research-quality
+                                      :kibcm-axis kibcm-axis)
+                                records))))
                 (forward-line 1)))))))
     (nreverse records)))
 
@@ -364,7 +372,30 @@ Writes runtime evolution data under var/tmp/evolution/."
                (insert "\n**Recommendations:**\n")
                (insert (format "1. Target prompt size: ~%d chars for best success rate\n" (round avg-kept-prompt)))
                (insert "2. Compress knowledge sections if prompt exceeds optimal size\n")
-               (insert "3. Remove low-value sections that increase size without improving outcomes\n"))))
+                (insert "3. Remove low-value sections that increase size without improving outcomes\n"))
+             ;; Output efficiency analysis
+             (let* ((with-output (cl-remove-if (lambda (r) (not (plist-get r :output-chars))) with-prompt-data))
+                    (kept-out (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "kept")) with-output))
+                    (discarded-out (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "discarded")) with-output)))
+               (when with-output
+                 (let* ((avg-kept-out (/ (apply #'+ (mapcar (lambda (r) (or (plist-get r :output-chars) 0)) kept-out))
+                                        (max 1 (length kept-out))))
+                        (avg-discarded-out (/ (apply #'+ (mapcar (lambda (r) (or (plist-get r :output-chars) 0)) discarded-out))
+                                             (max 1 (length discarded-out))))
+                        (avg-kept-prompt (/ (apply #'+ (mapcar (lambda (r) (or (plist-get r :prompt-chars) 0)) kept-out))
+                                           (max 1 (length kept-out))))
+                        (ratio-kept (if (> avg-kept-prompt 0) (/ avg-kept-out avg-kept-prompt) 0))
+                        (ratio-discarded (if (> avg-kept-out 0) (/ avg-discarded-out avg-kept-out) 0))
+                        (inflation (and (> ratio-kept 2.0) (< (length kept-out) 5))))
+                   (insert "\n**Output Efficiency (agent output vs prompt size):**\n")
+                   (insert (format "- Avg output (kept): %d chars (%.1fx prompt)\n" (round avg-kept-out) ratio-kept))
+                   (insert (format "- Avg output (discarded): %d chars (%.1fx kept output)\n" (round avg-discarded-out) ratio-discarded))
+                   (when inflation
+                     (insert "- ⚠ INFLATION DETECTED: output >2x prompt size with <5 kept experiments — LLM may be over-explaining\n"))
+                   (insert (format "- %s\n"
+                                   (if (> avg-discarded-out avg-kept-out)
+                                       "Discarded experiments produce longer output — verbosity ≠ quality"
+                                     "Kept experiments produce longer output — detail correlates with success"))))))))
         (insert "\n")
 
         ;; Section 2: Section A/B Test Results
@@ -951,8 +982,17 @@ Returns t if page created."
         (insert "status: active\n")
         (insert "category: knowledge\n")
         (insert (format "tags: [research, auto-workflow, %s]\n" strategy-name))
-        (insert (format "insight-quality: %.1f/10\n" (* 10 keep-rate)))
-        (insert "---\n\n")
+         (insert (format "insight-quality: %.1f/10\n" (* 10 keep-rate)))
+         (let ((aq (gptel-auto-workflow--allium-read-quality safe-strategy)))
+           (when aq
+             (insert (format "allium-issues: %d\n" (car aq)))
+             (insert (format "allium-severity: %.2f\n" (cdr aq)))
+             (insert (format "allium-status: %s\n"
+                             (cond ((= (car aq) 0) "coherent")
+                                   ((< (cdr aq) 0.3) "ok")
+                                   ((< (cdr aq) 0.6) "warning")
+                                   (t "incoherent"))))))
+         (insert "---\n\n")
         (insert (format "# Research Strategy: %s\n\n" strategy-name))
         (insert (format "*Consolidated from %d experiments (%.0f%% keep rate).*%s\n\n"
                         total
@@ -994,7 +1034,7 @@ Returns t if page created."
                   (when (and primary (stringp primary))
                     (let ((full-path (expand-file-name primary (gptel-auto-workflow--worktree-base-root))))
                       (when (file-exists-p full-path)
-                        (condition-case nil
+    (condition-case err
                             (let ((structure (gptel-auto-workflow--extract-elisp-structure full-path)))
                               (insert "### Structure (deterministic scan)\n\n")
                               (insert (gptel-auto-workflow--summarize-elisp-structure structure))
@@ -1008,7 +1048,16 @@ Returns t if page created."
               (dolist (targ (seq-take failed-targets 5))
                 (insert (format-target-with-counts targ)))
               (insert "\n"))))
-        ;; Meta-learning recommendations
+         (let ((aq (gptel-auto-workflow--allium-read-quality safe-strategy)))
+           (when (and aq (> (car aq) 0))
+             (insert "## Allium Behavioral Coherence\n\n")
+             (insert (format "*%d behavioral issues (severity %.2f). EXTRACTED from Allium v3 pipeline.*\n\n" (car aq) (cdr aq)))
+             (let ((ai-file (expand-file-name (format "%s.md" safe-strategy) (expand-file-name "var/tmp/evolution/allium-issues" (gptel-auto-workflow--worktree-base-root)))))
+               (when (file-readable-p ai-file)
+                 (with-temp-buffer (insert-file-contents ai-file)
+                   (insert (truncate-string-to-width (buffer-string) 1200 nil nil "\n\n...")))))
+             (insert "\n\n")))
+         ;; Meta-learning recommendations
         (insert "## Meta-Learning Recommendations (INFERRED — from pattern analysis)\n\n")
         (cond
          ((>= keep-rate 0.5)
@@ -1121,8 +1170,27 @@ Writes to var/tmp/evolution/findings.md."
                                     (while (re-search-forward "\n\\{3,\\}" nil t)
                                       (replace-match "\n\n"))
                                     (buffer-string)))))))
-       (when raw-findings
-         (push raw-findings recent-insights)))
+        (when raw-findings
+          (push raw-findings recent-insights)
+          (when (fboundp 'gptel-auto-workflow--allium-check-research-quality)
+            (gptel-auto-workflow--allium-check-research-quality
+             raw-findings
+             (lambda (quality-result)
+               (let ((issues (car quality-result))
+                     (severity (cdr quality-result)))
+                 (cond
+                  ((= issues 99)
+                   (message "[allium-findings] Quality gate skipped (distill unavailable)"))
+                  ((= issues 0)
+                   (message "[allium-findings] Research findings coherent (0 Allium issues)"))
+                  ((< severity 0.3)
+                   (message "[allium-findings] Research findings OK: %d minor issues" issues))
+                  ((< severity 0.6)
+                   (message "[allium-findings] Research findings WARN: %d issues (severity %.2f) — verify"
+                            issues severity))
+                  (t
+                   (message "[allium-findings] Research findings FAIL: %d issues (severity %.2f) — may be contradictory"
+                            issues severity)))))))))
      
       ;; Generate skill file
     (make-directory evolution-dir t)
@@ -1633,6 +1701,15 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (interactive)
   (cl-block gptel-auto-workflow-evolution-run-cycle
   (message "[auto-workflow] Running self-evolution cycle...")
+  ;; Pipeline validation (Semantica PipelineValidator)
+  (condition-case nil
+      (let ((v (gptel-auto-workflow--validate-pipeline)))
+        (unless (plist-get v :valid)
+          (dolist (e (plist-get v :errors))
+            (message "[pipeline] ERROR: %s" e)))
+        (dolist (w (plist-get v :warnings))
+          (message "[pipeline] WARN: %s" w)))
+    (error nil))
   (let ((new-experiments (gptel-auto-workflow--evolution-count-new))
         (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                            (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
@@ -1675,6 +1752,100 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (gptel-auto-workflow--evolution-record-score)
   (gptel-auto-workflow--evolution-optimize-backend-order)
   (gptel-auto-workflow--evolution-vsm-health-check)
+  ;; Change impact classification (Semantica ChangeLogAnalyzer pattern)
+  (condition-case nil
+      (let ((impact (gptel-auto-workflow--classify-experiment-impact)))
+        (let ((s (plist-get impact :summary)))
+          (message "[impact] %d total: %d breaking, %d potentially-breaking, %d safe"
+                   (plist-get s :total)
+                   (plist-get s :breaking)
+                   (plist-get s :potentially-breaking)
+                   (plist-get s :safe)))
+        (dolist (b (seq-take (plist-get impact :breaking) 3))
+          (message "[impact]   BREAKING: %s (delta=%.2f, %s)"
+                   (plist-get b :target) (plist-get b :delta) (plist-get b :reason))))
+    (error nil))
+  ;; Competency question answerability check (Semantica pattern)
+  (condition-case nil
+      (let ((cq-results (gptel-auto-workflow--check-competency-questions)))
+        (let ((total (length cq-results))
+              (answerable (cl-count-if #'cdr cq-results)))
+          (message "[cq] Code-health ontology: %d/%d competency questions answerable"
+                   answerable total)
+          (dolist (r cq-results)
+            (unless (cdr r)
+              (message "[cq]   UNANSWERABLE: %s" (car r))))))
+    (error nil))
+  ;; Policy check (Semantica PolicyEngine pattern)
+  (condition-case nil
+      (let* ((results (gptel-auto-workflow--parse-all-results))
+             (target (when results (plist-get (car results) :target)))
+             (strategy (when results (or (plist-get (car results) :strategy) "template-default"))))
+        (let ((policy-result (gptel-auto-workflow--check-policy target strategy)))
+          (unless (plist-get policy-result :valid)
+            (dolist (e (plist-get policy-result :errors))
+              (message "[policy] VIOLATION: %s" e)))
+          (dolist (w (plist-get policy-result :warnings))
+            (message "[policy] WARNING: %s" w))))
+    (error nil))
+  ;; Run audits and feed results back into evolution
+  (let ((flagged (gptel-auto-workflow--audit-signal)))
+    (when flagged
+      (dolist (strategy flagged)
+        (when (fboundp 'gptel-auto-workflow--evolve-strategy)
+          (message "[audit] Triggering strategy evolution for low-scoring: %s" strategy)
+          (condition-case nil
+              (gptel-auto-workflow--evolve-strategy
+               strategy
+               (format "Strategy '%s' has low structure score. Evolve it." strategy)
+               "self-correction")
+            (error
+             (message "[audit] Strategy '%s' evolution triggered but not yet available" strategy)))))))
+  (gptel-auto-workflow--allium-audit-signal)
+  ;; Knowledge page cross-cycle diff (Semantica set-difference pattern)
+  (condition-case nil
+      (let ((diff (gptel-auto-workflow--diff-knowledge-pages)))
+        (let ((added (plist-get diff :added))
+              (removed (plist-get diff :removed))
+              (changed (plist-get diff :changed)))
+          (when (or added removed changed)
+            (message "[diff] Knowledge pages: +%d added, -%d removed, ~%d changed"
+                     (length added) (length removed) (length changed))
+            (dolist (a added) (message "[diff]   + %s" a))
+            (dolist (r removed) (message "[diff]   - %s" r)))))
+    (error nil))
+  ;; Structural validation of knowledge pages (Semantica OntologyValidator)
+  (condition-case nil
+      (let* ((kd (expand-file-name "mementum/knowledge" (gptel-auto-workflow--worktree-base-root)))
+             (files (when (file-directory-p kd)
+                      (directory-files kd t "research-insights-.+\\.md$"))))
+        (when files
+          (let ((worst (car (last files))))
+            (let ((v (gptel-auto-workflow--validate-knowledge-page worst)))
+              (unless (plist-get v :valid)
+                (message "[validator] %s: %d errors, %d warnings"
+                         (file-name-nondirectory worst)
+                         (length (plist-get v :errors))
+                         (length (plist-get v :warnings))))))))
+    (error nil))
+  ;; Forward chaining + DecisionQuery (Semantica reasoning + query)
+  (condition-case nil
+      (let ((inferred (gptel-auto-workflow--forward-chain)))
+        (when inferred
+          (message "[reasoning] %d actions inferred:" (length inferred))
+          (dolist (a (seq-take inferred 3))
+            (message "[reasoning]   %s: %s (severity: %s)"
+                     (cdr (assoc 'action a))
+                     (cdr (assoc 'reason a))
+                     (cdr (assoc 'severity a))))))
+    (error nil))
+  ;; AgentMemory status log (Semantica pattern)
+  (condition-case nil
+      (let ((mem (gptel-auto-workflow--memory-status)))
+        (message "[memory] 4-layer architecture:")
+        (dolist (m mem)
+          (message "[memory]   %s: %s (%s)" (plist-get m :layer) (plist-get m :state) (plist-get m :description))))
+    (error nil))
   (message "[auto-workflow] Self-evolution cycle complete.")))
 
 ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
@@ -1689,13 +1860,18 @@ Maps nucleus VSM layers to our system components:
          (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
          (total (length results))
          (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
-         (strategies (length (gptel-auto-workflow--evolution-strategy-structure-scores)))
-         (backends (length (gptel-auto-workflow--evolution-backend-stats))))
+          (strategies (length (gptel-auto-workflow--evolution-strategy-structure-scores)))
+          (backends (length (gptel-auto-workflow--evolution-backend-stats)))
+          (axis-stats (gptel-auto-workflow--evolution-axis-stats)))
     (message "[vsm] S1-Ops: %d experiments, %.0f%% kept" total (* 100 keep-rate))
     (message "[vsm] S2-Coord: %d modules scanned, staging verify active" 89)
     (message "[vsm] S3-Control: %d backends in chain, watchdog 90min" backends)
     (message "[vsm] S4-Intel: %d strategies evolved, auto-backend-order active" strategies)
     (message "[vsm] S5-Identity: lambda notation, confidence tags, graphify patterns active")
+    (when axis-stats
+      (message "[vsm] KIBC-M Axis Performance: %s"
+               (mapconcat (lambda (a) (format "%s=%.0f%%" (car a) (* 100 (cdr a))))
+                          (seq-take axis-stats 5) " ")))
     ;; Wu Xing diagnostics
     (cond
      ((< keep-rate 0.05)
@@ -1715,7 +1891,68 @@ Maps nucleus VSM layers to our system components:
               (when pairs
                 (message "[pair] %d minimal pair(s) found for %s:" (length pairs) first-target)
                 (dolist (p (seq-take pairs 3))
-                  (message "[pair]   %s" (cdr p)))))))
+                  (message "[pair]   %s" (cdr p)))
+                ;; Enrich top pair with Allium behavioral diff (async)
+                (when (fboundp 'gptel-auto-workflow--allium-diff-minimal-pairs)
+                  (let* ((top-pair (car pairs))
+                         (exp-a (caar top-pair))
+                         (exp-b (cdar top-pair)))
+                    (when (and exp-a exp-b)
+                      (let ((ha (plist-get exp-a :hypothesis))
+                            (hb (plist-get exp-b :hypothesis)))
+                        (when (and (stringp ha) (stringp hb)
+                                   (not (string= ha hb)))
+                          (gptel-auto-workflow--allium-diff-minimal-pairs
+                           ha hb
+                           (lambda (diff-result)
+                             (let ((issues-a (car diff-result))
+                                   (issues-b (cdr diff-result)))
+                               (if (= issues-a 99)
+                                   (message "[allium-pair] Allium diff skipped (unavailable)")
+                                 (message "[allium-pair] Allium spec diff: HA=%d issues vs HB=%d issues → %s"
+                                          issues-a issues-b
+                                          (if (< issues-a issues-b) "HA has cleaner spec"
+                                            (if (< issues-b issues-a) "HB has cleaner spec"
+                                               "equally coherent"))))))))))))))))
+      ;; Conflict detection (Semantica pattern)
+      (condition-case nil
+          (let ((conflicts (gptel-auto-workflow--detect-hypothesis-conflicts)))
+            (when conflicts
+              (message "[conflict] %d hypothesis opposition(s) detected:" (length conflicts))
+              (dolist (c (seq-take conflicts 3))
+                (message "[conflict]   %s: %d opposing pairs (%s) — %s"
+                         (plist-get c :target)
+                         (length (plist-get c :opposing-pairs))
+                         (plist-get c :severity)
+                         (plist-get c :recommendation)))))
+         (error nil))
+      ;; Ontology snapshot + causal links (Semantica pattern)
+      (condition-case nil
+          (let ((ontology (gptel-auto-workflow--generate-experiment-ontology))
+                (causal (gptel-auto-workflow--experiment-causal-links)))
+            (message "[onto] Ontology: %d classes, %d instances"
+                     (plist-get ontology :class-count) (plist-get ontology :instance-count))
+            (when (and (fboundp 'gptel-auto-experiment--owl-save)
+                       (> (plist-get ontology :class-count) 0))
+              (gptel-auto-experiment--owl-save
+               ontology
+               (expand-file-name "var/tmp/evolution/experiment-ontology.ttl"
+                                 (gptel-auto-workflow--worktree-base-root))
+               (lambda (ok)
+                 (when ok (message "[onto] Saved OWL/Turtle ontology")))))
+            (when (> (length causal) 0)
+              (message "[causal] %d targets with multi-experiment chains" (length causal)))
+            ;; Knowledge page quality (Semantica evaluator)
+            (let ((scores (gptel-auto-workflow--score-knowledge-pages)))
+              (message "[evaluator] Knowledge pages: %.0f%% coverage, %.0f%% completeness, %.0f%% linked (%.0f%% overall, %d pages)"
+                       (* 100 (plist-get scores :coverage)) (* 100 (plist-get scores :completeness))
+                       (* 100 (plist-get scores :relations)) (* 100 (plist-get scores :overall))
+                       (plist-get scores :total-pages))
+              (let ((issues (plist-get scores :issues)))
+                (when issues
+                  (dolist (i (seq-take issues 3))
+                    (message "[evaluator]   issue: %s" i))))))
+        (error nil))
       (error nil))))
 
 (defun gptel-auto-workflow--detect-minimal-pairs (target)
@@ -1771,7 +2008,262 @@ Returns insights string or nil."
               delta
               (if (> delta 0) "HA" "HB")))))
 
+;; ─── Semantica Diff: cross-cycle knowledge page comparison ───
+
+(defun gptel-auto-workflow--knowledge-page-signature (file-path)
+  "Compute a structural signature of a knowledge page.
+Returns plist with :name, :sections (list of heading names), :frontmatter-keys."
+  (let ((name (file-name-nondirectory file-path))
+        (sections nil) (fm-keys nil))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file-path)
+          (goto-char (point-min))
+          (while (re-search-forward "^\\([a-z-]+\\): " nil t)
+            (push (match-string 1) fm-keys))
+          (goto-char (point-min))
+          (while (re-search-forward "^## \\(.+\\)" nil t)
+            (push (string-trim (match-string 1)) sections))
+          (list :name name
+                :sections (sort sections #'string<)
+                :frontmatter-keys (sort (delete-dups fm-keys) #'string<)))
+      (error (list :name name :sections nil :frontmatter-keys nil)))))
+
+(defun gptel-auto-workflow--diff-knowledge-pages ()
+  "Diff knowledge pages against last cycle's snapshot (Semantica set-difference pattern).
+Returns plist with :added, :removed, :changed."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (kd (expand-file-name "mementum/knowledge" root))
+         (snap-file (expand-file-name "var/tmp/evolution/knowledge-snapshot.el" root))
+         (current-pages (when (file-directory-p kd)
+                          (directory-files kd t "research-insights-.+\\.md$")))
+         (current-sigs nil)
+         (prev-sigs (condition-case nil
+                        (with-temp-buffer
+                          (insert-file-contents snap-file)
+                          (goto-char (point-min))
+                          (read (current-buffer)))
+                      (error nil)))
+         (added nil) (removed nil) (changed nil))
+    (dolist (f current-pages)
+      (let ((sig (gptel-auto-workflow--knowledge-page-signature f)))
+        (push sig current-sigs)
+        (let ((prev (assoc (plist-get sig :name) prev-sigs
+                           (lambda (a b) (equal a (plist-get b :name))))))
+          (if prev
+              (unless (and (equal (plist-get sig :sections) (plist-get prev :sections))
+                           (equal (plist-get sig :frontmatter-keys) (plist-get prev :frontmatter-keys)))
+                (push (list :page (plist-get sig :name)
+                            :prev-sections (plist-get prev :sections)
+                            :curr-sections (plist-get sig :sections)
+                            :prev-fm (plist-get prev :frontmatter-keys)
+                            :curr-fm (plist-get sig :frontmatter-keys))
+                      changed))
+            (push (plist-get sig :name) added)))))
+    (dolist (prev prev-sigs)
+      (unless (assoc (plist-get prev :name) current-sigs
+                     (lambda (a b) (equal a (plist-get b :name))))
+        (push (plist-get prev :name) removed)))
+    (make-directory (file-name-directory snap-file) t)
+    (with-temp-file snap-file
+      (prin1 current-sigs (current-buffer)))
+    (list :added added :removed removed :changed changed)))
+
+;; ─── Semantica Impact: change severity classification ───
+
+(defconst gptel-auto-workflow--impact-severity-fields
+  '((:score-before :score-after . :score-drop)
+    (:decision . :decision-flip)
+    (:hypothesis . :hypothesis-change)
+    (:target . :target-change))
+  "Fields with severity impact rules. Alist of (field . change-type).")
+
+(defun gptel-auto-workflow--classify-experiment-impact ()
+  "Classify recent experiment changes by severity (Semantica ChangeLogAnalyzer pattern).
+Returns ImpactReport-style plist with :breaking, :potentially-breaking, :safe, :summary."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (breaking nil) (potentially-breaking nil) (safe nil)
+         (total (length results)))
+    (dolist (r results)
+      (let* ((target (plist-get r :target))
+             (decision (plist-get r :decision))
+             (score-before (plist-get r :score-before))
+             (score-after (plist-get r :score-after))
+             (delta (if (and score-before score-after) (- score-after score-before) 0))
+             (impact nil))
+        (cond
+         ;; Score dropped more than 0.02 → BREAKING
+         ((< delta -0.02)
+          (setq impact "breaking")
+          (push (list :target target :decision decision :delta delta :reason "score regression") breaking))
+         ;; Discarded but had high score → POTENTIALLY_BREAKING
+         ((and (equal decision "discarded") score-after (> score-after 0.5))
+          (setq impact "potentially_breaking")
+          (push (list :target target :decision decision :delta delta :reason "discarded high-scorer") potentially-breaking))
+         ;; Kept with negative delta → POTENTIALLY_BREAKING
+         ((and (equal decision "kept") (< delta -0.01))
+          (setq impact "potentially_breaking")
+          (push (list :target target :decision decision :delta delta :reason "kept despite regression") potentially-breaking))
+         ;; Kept with improvement → safe
+         ((and (equal decision "kept") (> delta 0.01))
+          (setq impact "safe")
+          (push (list :target target :decision decision :delta delta) safe))
+         (t
+          (setq impact "safe")
+          (push (list :target target :decision decision :delta delta) safe)))))
+    (list :breaking (nreverse breaking)
+          :potentially-breaking (nreverse potentially-breaking)
+          :safe (length safe)
+          :summary (list :total total
+                          :breaking (length breaking)
+                          :potentially-breaking (length potentially-breaking)
+                          :safe (length safe)
+                          :generated (format-time-string "%Y-%m-%dT%H:%M")))))
+
+;; ─── Semantica Domain: code-health ontology template ───
+
+(defconst gptel-auto-workflow--code-health-ontology
+  '(:name "CodeHealthOntology"
+    :uri "https://minimal-emacs.d/ontology/code-health/"
+    :version "1.0"
+    :classes ((:name "Strategy" :comment "A research/code-analysis strategy that generates prompts")
+              (:name "Target" :comment "A file or module targeted for optimization")
+              (:name "Experiment" :comment "A single experiment run: hypothesis → change → outcome")
+              (:name "Outcome" :comment "The result of an experiment: kept, discarded, or failed")
+              (:name "Backend" :comment "An LLM backend used to execute experiments")
+              (:name "KnowledgePage" :comment "A synthesized knowledge page from experiment results"))
+    :properties ((:name "targets" :type "object" :domain "Strategy" :range "Target"
+                    :comment "Strategy targets specific files/modules")
+                 (:name "hasOutcome" :type "object" :domain "Experiment" :range "Outcome"
+                    :comment "Experiment produces an outcome")
+                 (:name "usesBackend" :type "object" :domain "Experiment" :range "Backend"
+                    :comment "Experiment runs on a backend")
+                 (:name "producesPage" :type "object" :domain "Strategy" :range "KnowledgePage"
+                    :comment "Strategy's results synthesize into a knowledge page")
+                 (:name "keepRate" :type "data" :domain "Strategy" :range "xsd:float"
+                    :comment "Fraction of experiments that were kept")
+                 (:name "scoreDelta" :type "data" :domain "Experiment" :range "xsd:float"
+                    :comment "Score change after experiment")
+                 (:name "alliumIssues" :type "data" :domain "KnowledgePage" :range "xsd:integer"
+                    :comment "Number of Allium behavioral issues detected"))
+    :metadata (:domain "code-health"
+               :generated-by "gptel-auto-workflow-evolution"
+               :description "Formal ontology of the self-evolving code improvement pipeline"))
+  "Domain ontology template for the code-health pipeline (Semantica pattern).
+Classes: Strategy, Target, Experiment, Outcome, Backend, KnowledgePage.
+Follows OWL convention: classes use PascalCase, properties use camelCase.")
+
+(defun gptel-auto-workflow--check-competency-questions ()
+  "Check if the code-health ontology can answer standard competency questions.
+Uses Semantica's keyword-overlap heuristic: match question words >3 chars
+against class/property names. Returns ((question . answerable) ...)."
+  (let* ((questions
+          '(("Which strategies are effective?" . ("Strategy" "keepRate"))
+            ("What targets need optimization?" . ("Target" "Experiment"))
+            ("Which backends perform best?" . ("Backend" "Experiment" "usesBackend"))
+            ("Are research findings coherent?" . ("KnowledgePage" "alliumIssues"))
+            ("What caused an experiment to fail?" . ("Experiment" "Outcome" "hasOutcome"))
+            ("How do strategies relate to knowledge?" . ("Strategy" "KnowledgePage" "producesPage"))))
+         (classes (plist-get gptel-auto-workflow--code-health-ontology :classes))
+         (properties (plist-get gptel-auto-workflow--code-health-ontology :properties))
+         (class-names (mapcar (lambda (c) (plist-get c :name)) classes))
+         (prop-names (mapcar (lambda (p) (plist-get p :name)) properties))
+         (results nil))
+    (dolist (q questions)
+      (let* ((question (car q))
+             (words (seq-filter (lambda (w) (> (length w) 3))
+                                (split-string (downcase question) "[^a-z]+" t)))
+             (answerable nil))
+        (catch 'found
+          (dolist (w words)
+            (dolist (cn class-names)
+              (let ((lc (downcase cn)))
+                (when (string-match-p (regexp-quote lc) w)
+                  (setq answerable t)
+                  (throw 'found t))
+                (when (and (> (length lc) 4)
+                           (string-prefix-p (substring lc 0 -1) w))
+                  (setq answerable t)
+                  (throw 'found t))))
+            (dolist (pn prop-names)
+              (let ((lp (downcase pn)))
+                (when (string-match-p (regexp-quote lp) w)
+                  (setq answerable t)
+                  (throw 'found t))
+                (when (and (> (length lp) 4)
+                           (string-prefix-p (substring lp 0 -1) w))
+                  (setq answerable t)
+                  (throw 'found t))))))
+        (push (cons question answerable) results)))
+    (nreverse results)))
+
+;; ─── Semantica Policy: experiment execution rules ───
+
+(defvar gptel-auto-workflow--experiment-policy
+  '(:max-experiments-per-target 10
+    :max-experiments-per-strategy 50
+    :min-keep-rate 0.05
+    :required-sections ("## Successful Targets" "## Meta-Learning")
+    :forbidden-target-patterns ("packages/" "var/" "tests/"))
+  "Policy rules gating experiment execution (Semantica PolicyEngine pattern).
+:max-experiments-per-target — reject if target exceeds this
+:max-experiments-per-strategy — reject if strategy exceeds this
+:min-keep-rate — warn if strategy keep-rate falls below
+:required-sections — knowledge pages must have these
+:forbidden-target-patterns — reject targets matching these")
+
+(defun gptel-auto-workflow--check-policy (target strategy)
+  "Check if TARGET and STRATEGY comply with experiment policy.
+Returns validation-result plist with :valid, :errors, :warnings.
+Pattern from Semantica PolicyEngine.check_compliance()."
+  (let ((errors nil) (warnings nil)
+        (policy gptel-auto-workflow--experiment-policy)
+        (results (gptel-auto-workflow--parse-all-results)))
+    (let ((max-target (plist-get policy :max-experiments-per-target))
+          (max-strategy (plist-get policy :max-experiments-per-strategy))
+          (min-keep (plist-get policy :min-keep-rate))
+          (forbidden (plist-get policy :forbidden-target-patterns)))
+      (when (and max-target (stringp target))
+        (let ((count (cl-count-if (lambda (r) (equal (plist-get r :target) target)) results)))
+          (when (> count max-target)
+            (push (format "Target '%s' has %d experiments (max %d)" target count max-target) errors))))
+      (when (and max-strategy (stringp strategy))
+        (let ((count (cl-count-if (lambda (r) (equal (plist-get r :strategy) strategy)) results)))
+          (when (> count max-strategy)
+            (push (format "Strategy '%s' has %d experiments (max %d)" strategy count max-strategy) errors))))
+      (when (and min-keep (stringp strategy))
+        (let* ((strat-results (cl-remove-if-not (lambda (r) (equal (plist-get r :strategy) strategy)) results))
+               (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) strat-results))
+               (total (length strat-results))
+               (rate (if (> total 4) (/ (float kept) total) 1.0)))
+          (when (< rate min-keep)
+            (push (format "Strategy '%s' keep-rate %.0f%% below minimum %.0f%%" strategy (* 100 rate) (* 100 min-keep)) warnings))))
+      (when forbidden
+        (dolist (pat forbidden)
+          (when (and (stringp target) (string-match-p pat target))
+            (push (format "Target '%s' matches forbidden pattern '%s'" target pat) errors)))))
+    (gptel-auto-workflow--validation-result (null errors) errors warnings)))
+
 ;; ─── Backend Performance Optimization ───
+
+(defun gptel-auto-workflow--evolution-axis-stats ()
+  "Analyze KIBC-M axis performance from experiment results.
+Returns alist of (axis . keep-rate) sorted by performance descending."
+  (let ((by-axis (make-hash-table :test 'equal))
+        (stats nil))
+    (dolist (result (gptel-auto-workflow--parse-all-results))
+      (let ((axis (or (plist-get result :kibcm-axis) "?"))
+            (kept (equal (plist-get result :decision) "kept")))
+        (unless (string= axis "?")
+          (let ((entry (or (gethash axis by-axis) (cons 0 0))))
+            (setcar entry (1+ (car entry)))
+            (when kept (setcdr entry (1+ (cdr entry))))
+            (puthash axis entry by-axis)))))
+    (maphash (lambda (axis counts)
+                (when (> (car counts) 2)
+                  (push (cons axis (/ (float (cdr counts)) (car counts))) stats)))
+              by-axis)
+    (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
 
 (defun gptel-auto-workflow--evolution-backend-stats ()
   "Analyze backend performance from all experiment results.
@@ -1811,7 +2303,706 @@ Returns alist of (strategy . avg-structure-score) for strategies with >3 experim
              by-strategy)
     (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
 
+(defun gptel-auto-workflow--audit-signal ()
+  "Audit strategies needing nucleus compile review.
+Schedules async compile-score checks for strategies with low structure scores.
+Returns list of strategies that were flagged."
+  (interactive)
+  (let ((needs-audit nil))
+    (dolist (entry (gptel-auto-workflow--evolution-strategy-structure-scores))
+      (let ((strategy (car entry))
+            (avg-score (cdr entry)))
+        (when (< avg-score 0.15)
+          (push strategy needs-audit))))
+    (when needs-audit
+      (message "[audit] %d strategies flagged for auto-compile audit" (length needs-audit))
+      ;; Auto-audit the worst strategy (lowest structure score)
+      (let ((worst (car (last needs-audit))))
+        (message "[audit] Auto-compiling strategy '%s' via nucleus compiler..." worst)
+        (catch 'compile-early-return
+          (condition-case nil
+              (gptel-auto-experiment--compile-score
+             worst
+             (lambda (result)
+               (let ((score (car result))
+                     (elements (cdr result)))
+                 (if (> score 0.3)
+                     (message "[audit] Strategy '%s' passed audit: EDN richness %.2f, %d elements"
+                              worst score elements)
+                   (message "[audit] Strategy '%s' FAILED audit: EDN richness %.2f, %d elements — review recommended"
+                            worst score elements)))))
+          (error
+            (message "[audit] Strategy '%s' compile audit failed (gptel-request unavailable)" worst))))))
+    needs-audit))
+
+(defun gptel-auto-workflow--allium-audit-strategy (strategy results)
+  "Start async Allium audit for one STRATEGY's research RESULTS."
+  (let* ((top-targets
+          (mapcar (lambda (r) (plist-get r :target)) results))
+         (findings-summary
+          (format "Research strategy: %s\n\n%d experiments across targets: %s\n\nKept hypotheses:\n%s\n\nDiscarded hypotheses:\n%s"
+                  strategy
+                  (length results)
+                  (string-join (cl-remove-duplicates
+                                (seq-filter (lambda (s) (and (stringp s) (not (string-empty-p s))))
+                                            top-targets)
+                                :test #'string=)
+                               ", ")
+                  (string-join
+                   (mapcar (lambda (r)
+                             (if (equal (plist-get r :decision) "kept")
+                                 (format "- %s" (plist-get r :hypothesis))
+                               ""))
+                           results)
+                   "\n")
+                  (string-join
+                   (mapcar (lambda (r)
+                             (if (equal (plist-get r :decision) "discarded")
+                                 (format "- %s" (plist-get r :hypothesis))
+                               ""))
+                           results)
+                   "\n"))))
+    (catch 'compile-early-return
+      (gptel-auto-experiment--allium-distill
+       findings-summary
+       (lambda (allium-spec)
+         (if (not allium-spec)
+             (message "[allium-audit] Strategy '%s' distill failed (no spec produced)" strategy)
+           (gptel-auto-experiment--allium-check
+            allium-spec
+            (lambda (issues)
+              (let* ((count (gptel-auto-experiment--allium-issues-count issues))
+                     (issue-count (car count))
+                     (severity (cdr count))
+                     (score (gptel-auto-experiment--allium-quality-score issues)))
+                (gptel-auto-workflow--allium-persist-spec
+                 strategy allium-spec issues issue-count severity score)
+                (cond
+                 ((= issue-count 0)
+                  (message "[allium-audit] Strategy '%s' PASSED: spec is coherent (0 issues)" strategy))
+                 ((< score 0.3)
+                  (message "[allium-audit] Strategy '%s' OK: %d issues (severity %.2f, score %.2f)"
+                           strategy issue-count severity score))
+                 ((< score 0.6)
+                  (message "[allium-audit] Strategy '%s' WARN: %d issues (severity %.2f, score %.2f) — review knowledge page"
+                           strategy issue-count severity score))
+                 (t
+                  (message "[allium-audit] Strategy '%s' FAIL: %d issues (severity %.2f, score %.2f) — research may be incoherent"
+                           strategy issue-count severity score))))))))))))
+
+(defun gptel-auto-workflow--allium-audit-signal ()
+  "Audit research knowledge quality via Allium behavioral spec checking.
+Distills research findings to Allium, runs check, scores spec coherence.
+Schedules async; returns list of strategy names that were audited."
+  (interactive)
+  (let* ((by-strategy (gptel-auto-workflow--research-results-by-strategy))
+         (audited nil))
+    (maphash
+     (lambda (strategy results)
+       (when (and (fboundp 'gptel-auto-experiment--allium-distill)
+                  strategy
+                  (> (length results) 0))
+         (push strategy audited)
+         (gptel-auto-workflow--allium-audit-strategy strategy results)))
+     by-strategy)
+    (message "[allium-audit] Audited %d research strategies via Allium" (length audited))
+    audited))
+
+(defun gptel-auto-workflow--allium-persist-spec (strategy allium-spec issues issue-count severity score)
+  "Persist ALLIUM-SPEC and check ISSUES for STRATEGY to disk.
+Saves spec to var/tmp/evolution/allium-specs/ and appends to knowledge page.
+ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
+  (let* ((root (gptel-auto-workflow--worktree-base-root)))
+    (if (not root)
+        (progn
+          (message "[allium-persist] Aborted: worktree root unavailable for '%s'" strategy)
+          nil)
+      (let* ((safe-strategy (if (fboundp 'gptel-auto-workflow--sanitize-strategy-name-for-filename)
+                              (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy)
+                            (replace-regexp-in-string "[^[:alnum:]_-]" "-" strategy)))
+           (specs-dir (expand-file-name "var/tmp/evolution/allium-specs" root))
+           (issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root))
+           (knowledge-dir (expand-file-name "mementum/knowledge" root))
+           (knowledge-file (expand-file-name
+                            (format "research-insights-%s.md" safe-strategy)
+                            knowledge-dir)))
+      ;; Save raw Allium spec
+      (make-directory specs-dir t)
+      (with-temp-file (expand-file-name (format "%s.allium" safe-strategy) specs-dir)
+        (insert (format "-- Allium spec for research strategy: %s\n" strategy))
+        (insert (format "-- Generated: %s\n" (format-time-string "%Y-%m-%dT%H:%M")))
+        (insert (format "-- Issues: %d, Severity: %.2f, Score: %.2f\n" issue-count severity score))
+        (insert "\n")
+        (insert allium-spec))
+      ;; Save check issues as markdown summary
+      (make-directory issues-dir t)
+      (with-temp-file (expand-file-name (format "%s.md" safe-strategy) issues-dir)
+        (insert (format "# Allium Check — %s\n\n" strategy))
+        (insert (format "**Issues:** %d | **Severity:** %.2f | **Score:** %.2f (lower=better)\n\n" issue-count severity score))
+        (when (and (stringp issues) (> (length issues) 5))
+          (insert "## Issue Details\n\n")
+          (insert issues)))
+      ;; Append Allium spec appendix to knowledge page if it exists
+      (when (file-exists-p knowledge-file)
+        (condition-case nil
+            (with-temp-buffer
+              (insert-file-contents knowledge-file)
+              (goto-char (point-max))
+              ;; Remove previous Allium sections if present
+              (save-excursion
+                (when (re-search-backward "^## Allium Behavioral Spec" nil t)
+                  (delete-region (match-beginning 0) (point-max))))
+              ;; Add fresh Allium appendix
+              (insert "\n\n## Allium Behavioral Spec (auto-generated, v3)\n\n")
+              (insert (format "*%d check issues (severity %.2f). EXTRACTED from distill→check pipeline.*\n\n" issue-count severity))
+              (insert "```allium\n")
+              (insert (truncate-string-to-width allium-spec 4000 nil nil "\n-- ... truncated ..."))
+              (insert "\n```\n\n")
+              (when (and (stringp issues) (> (length issues) 5))
+                (insert "### Check Issues\n\n")
+                (insert (truncate-string-to-width issues 1500 nil nil "\n\n... (truncated)"))
+                (insert "\n"))
+              (write-region (point-min) (point-max) knowledge-file))
+          (error
+           (message "[allium-persist] Failed to update knowledge page for %s" safe-strategy))))
+      (message "[allium-persist] Saved spec + issues for '%s': %d issues, %.2f severity"
+               strategy issue-count severity)))))
+
+(defun gptel-auto-workflow--allium-load-issues-for-guidance ()
+  "Load recent Allium check issues for injection into prompt builder strategy guidance.
+Returns a markdown-formatted string of issues grouped by strategy, or empty string."
+  (let* ((root (gptel-auto-workflow--worktree-base-root)))
+    (if (not root)
+        ""
+      (let* ((issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root))
+             (result nil))
+        (when (file-directory-p issues-dir)
+          (dolist (issue-file (directory-files issues-dir t "\\.md$"))
+            (condition-case nil
+                (with-temp-buffer
+                  (insert-file-contents issue-file)
+                  (goto-char (point-min))
+                  (let ((mtime (file-attribute-modification-time
+                                (file-attributes issue-file))))
+                    (when (time-less-p
+                           (time-subtract (current-time) (days-to-time 7))
+                           mtime)
+                      (let ((content (buffer-string)))
+                        (when (and content (> (length content) 20))
+                          (push content result))))))
+              (error nil))))
+        (if result
+            (concat "### Allium Behavioral Audit (coherence check of last cycle's research)\n\n"
+                    (mapconcat #'identity (nreverse result) "\n---\n"))
+          "")))))
+
+(defun gptel-auto-workflow--allium-read-quality (safe-strategy)
+  "Read Allium quality for SAFE-STRATEGY from disk. Returns (issues . severity) or nil."
+  (let* ((root (gptel-auto-workflow--worktree-base-root)))
+    (if (not root)
+        nil
+      (let* ((file (expand-file-name (format "%s.md" safe-strategy)
+                                     (expand-file-name "var/tmp/evolution/allium-issues" root))))
+        (when (file-readable-p file)
+          (let ((mtime (file-attribute-modification-time (file-attributes file))))
+            (when (time-less-p (time-subtract (current-time) (days-to-time 7)) mtime)
+              (with-temp-buffer
+                (insert-file-contents file)
+                (goto-char (point-min))
+                (let ((count 0) (pos 0) (severity 0.0))
+                  (while (string-match "^[0-9]+\\." (buffer-string) pos)
+                    (setq count (1+ count) pos (match-end 0)))
+                  (when (string-match "\\*\\*Severity:\\*\\* \\([0-9.]+\\)" (buffer-string))
+                    (setq severity (string-to-number (match-string 1 (buffer-string)))))
+                  (cons count severity))))))))))
+
+(defun gptel-auto-workflow--allium-check-research-quality (findings-summary &optional callback)
+  "Distill FINDINGS-SUMMARY to Allium spec, check for issues, invoke CALLBACK with quality score.
+Like nucleus compile-score but for Allium: prose → spec → check → score.
+CALLBACK receives (issues-count . severity-score) where severity 0-1."
+  (if (and (fboundp 'gptel-auto-experiment--allium-distill) callback)
+      (gptel-auto-experiment--allium-distill
+       findings-summary
+       (lambda (allium-spec)
+         (if (not allium-spec)
+             (funcall callback (cons 99 1.0))
+           (gptel-auto-experiment--allium-check
+            allium-spec
+            (lambda (issues)
+              (funcall callback (gptel-auto-experiment--allium-issues-count issues)))))))
+    (when callback (funcall callback (cons 99 1.0)))
+    nil))
+
+(defun gptel-auto-workflow--allium-diff-minimal-pairs (ha hb &optional callback)
+  "Diff minimal-pair hypotheses (HA, HB) via Allium spec comparison.
+Distills both to Allium specs, then checks each for internal coherence.
+CALLBACK receives (ha-issues . hb-issues) with issue counts for each side.
+Use to determine which minimal pair has cleaner behavioral specification."
+  (if (and (fboundp 'gptel-auto-experiment--allium-distill)
+           (fboundp 'gptel-auto-experiment--allium-check)
+           callback
+           (stringp ha) (stringp hb))
+      (gptel-auto-experiment--allium-distill
+       ha
+       (lambda (spec-a)
+         (let ((result (cons 99 99)))
+           (if (not spec-a)
+               (funcall callback result)
+             (gptel-auto-experiment--allium-distill
+              hb
+              (lambda (spec-b)
+                (if (not spec-b)
+                    (funcall callback result)
+                  (gptel-auto-experiment--allium-check
+                   spec-a
+                   (lambda (issues-a)
+                     (gptel-auto-experiment--allium-check
+                      spec-b
+                      (lambda (issues-b)
+                        (funcall callback
+                                 (cons (car (gptel-auto-experiment--allium-issues-count issues-a))
+                                       (car (gptel-auto-experiment--allium-issues-count issues-b)))))))))))))))
+    (when callback (funcall callback (cons 99 99)))
+    nil))
+
+;; ─── Semantica Ontology: experiment → class/instance structure ───
+
+(defun gptel-auto-workflow--generate-experiment-ontology ()
+  "Generate an ontology from experiment results (Semantica pattern).
+Strategies → owl:Class, targets → instances, kept/discarded → outcome properties.
+Returns ontology plist with :classes, :instances, :class-count, :instance-count."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (strategy-classes (make-hash-table :test 'equal))
+         (target-instances (make-hash-table :test 'equal)))
+    (dolist (r results)
+      (let ((strategy (or (plist-get r :strategy) "template-default"))
+            (target (plist-get r :target))
+            (decision (plist-get r :decision)))
+        (when (stringp strategy)
+          (let ((entry (or (gethash strategy strategy-classes) (list :total 0 :kept 0 :discarded 0 :failed 0))))
+            (setq entry (plist-put entry :total (1+ (plist-get entry :total))))
+            (cond
+             ((equal decision "kept")
+              (setq entry (plist-put entry :kept (1+ (plist-get entry :kept)))))
+             ((equal decision "discarded")
+              (setq entry (plist-put entry :discarded (1+ (plist-get entry :discarded)))))
+             (t
+              (setq entry (plist-put entry :failed (1+ (plist-get entry :failed))))))
+            (puthash strategy entry strategy-classes)))
+        (when (and (stringp target) (not (string-empty-p target)))
+          (let ((entry (or (gethash target target-instances) (list :total 0 :kept 0 :discarded 0))))
+            (setq entry (plist-put entry :total (1+ (plist-get entry :total))))
+            (when (equal decision "kept")
+              (setq entry (plist-put entry :kept (1+ (plist-get entry :kept)))))
+            (when (equal decision "discarded")
+              (setq entry (plist-put entry :discarded (1+ (plist-get entry :discarded)))))
+            (puthash target entry target-instances)))))
+    (let ((class-list nil) (instance-list nil))
+      (maphash (lambda (strategy counts)
+                 (let ((keep-rate (if (> (plist-get counts :total) 0)
+                                      (/ (float (plist-get counts :kept)) (plist-get counts :total))
+                                    0.0)))
+                   (push (list :name strategy :@type "Strategy"
+                               :total (plist-get counts :total) :keep-rate keep-rate
+                               :status (cond ((>= keep-rate 0.5) "effective")
+                                             ((>= keep-rate 0.3) "promising")
+                                             (t "underperforming")))
+                         class-list)))
+               strategy-classes)
+      (maphash (lambda (target counts)
+                 (let ((keep-rate (if (> (plist-get counts :total) 0)
+                                      (/ (float (plist-get counts :kept)) (plist-get counts :total))
+                                    0.0)))
+                   (push (list :name target :@type "Target"
+                               :total (plist-get counts :total) :keep-rate keep-rate
+                               :classification (cond ((>= keep-rate 0.5) "high-value")
+                                                     ((>= keep-rate 0.3) "moderate")
+                                                     (t "low-value")))
+                         instance-list)))
+               target-instances)
+      (list :generated (format-time-string "%Y-%m-%dT%H:%M")
+            :classes (sort class-list (lambda (a b) (> (plist-get a :keep-rate) (plist-get b :keep-rate))))
+            :instances (sort instance-list (lambda (a b) (> (plist-get a :total) (plist-get b :total))))
+            :class-count (hash-table-count strategy-classes)
+            :instance-count (hash-table-count target-instances)))))
+
+(defun gptel-auto-workflow--experiment-causal-links ()
+  "Build causal link graph between experiments on the same target.
+BFS over :CAUSED edges to find root experiments. Semantica decision-tracking pattern.
+Returns alist of (target . (root-experiment downstream ...))."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (by-target (make-hash-table :test 'equal))
+         (causal-graph nil))
+    (dolist (r results)
+      (let ((target (plist-get r :target)))
+        (when (and (stringp target) (not (string-empty-p target)))
+          (puthash target (cons r (gethash target by-target)) by-target))))
+    (maphash
+     (lambda (target experiments)
+       (when (> (length experiments) 1)
+         (let ((sorted (sort experiments
+                             (lambda (a b)
+                               (let ((sa (plist-get a :score-after))
+                                     (sb (plist-get b :score-after)))
+                                 (> (or sa 0) (or sb 0))))))
+               (chain nil))
+           (dolist (exp sorted)
+             (let* ((decision (plist-get exp :decision))
+                    (hyp (plist-get exp :hypothesis))
+                    (score-before (plist-get exp :score-before))
+                    (score-after (plist-get exp :score-after)))
+               (push (list :hypothesis (truncate-string-to-width (or hyp "?") 60)
+                           :decision decision
+                           :delta (if (and score-before score-after)
+                                      (- score-after score-before) 0))
+                     chain)))
+           (when chain
+             (push (cons target (nreverse chain)) causal-graph)))))
+     by-target)
+    causal-graph))
+
+;; ─── Semantica Patterns: ValidationResult + Conflict Detection ───
+
+(defun gptel-auto-workflow--validation-result (valid &optional errors warnings)
+  "Create a structured validation result plist.
+VALID is t or nil. ERRORS and WARNINGS are lists of strings.
+Pattern from Semantica: universal Valid/Errors/Warnings contract."
+  (list :valid valid
+        :errors (or errors nil)
+        :warnings (or warnings nil)))
+
+(defun gptel-auto-workflow--detect-hypothesis-conflicts ()
+  "Detect contradictory hypotheses across experiments for the same target.
+Groups experiments by target, compares hypotheses for opposite claims.
+Returns list of conflict plists with :target, :hypotheses, :severity, :recommendation.
+Pattern from Semantica: group-by-entity → value-diff → severity score."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (by-target (make-hash-table :test 'equal))
+         (conflicts nil))
+    (dolist (r results)
+      (let* ((target (plist-get r :target))
+             (hyp (plist-get r :hypothesis))
+             (decision (plist-get r :decision)))
+        (when (and (stringp target) (stringp hyp)
+                   (not (string-empty-p target)))
+          (puthash target
+                   (cons (list hyp decision) (gethash target by-target))
+                   by-target))))
+    (maphash
+     (lambda (target entries)
+       (when (> (length entries) 1)
+         (let* ((kept (cl-remove-if-not (lambda (e) (equal (cadr e) "kept")) entries))
+                (discarded (cl-remove-if-not (lambda (e) (equal (cadr e) "discarded")) entries))
+                (pairs nil))
+           ;; Compare kept vs discarded hypotheses for same-context opposition
+           (dolist (k kept)
+             (dolist (d discarded)
+               (let ((kh (car k)) (dh (car d)))
+                 (when (gptel-auto-workflow--opposing-hypotheses-p kh dh)
+                   (push (cons kh dh) pairs)))))
+           (when pairs
+             (let* ((severity (if (> (length pairs) 2) "high" "medium"))
+                    (recommendation
+                     (if (equal severity "high")
+                         "Multiple opposed outcomes — reconsider strategy"
+                       "Contradictory results — test with different approach")))
+               (push (list :target target
+                           :opposing-pairs pairs
+                           :severity severity
+                           :recommendation recommendation)
+                     conflicts))))))
+     by-target)
+    conflicts))
+
+(defun gptel-auto-workflow--opposing-hypotheses-p (h1 h2)
+  "Return non-nil if H1 and H2 are opposing claims (add vs remove, nil vs non-nil).
+Simple keyword-based opposition detection."
+  (let ((opposition-pairs
+         '(("add" . "remove") ("add" . "delete") ("adding" . "removing")
+           ("nil" . "non-nil") ("guard" . "remove guard")
+           ("simplify" . "complex")
+           ("increase" . "decrease") ("more" . "less")
+           ("before" . "after") ("enable" . "disable")
+           ("optimize" . "simple"))))
+    (catch 'found
+      (dolist (pair opposition-pairs)
+        (let ((a (car pair)) (b (cdr pair)))
+          (when (and (string-match-p (regexp-quote a) h1)
+                     (string-match-p (regexp-quote b) h2))
+            (throw 'found t))
+          (when (and (string-match-p (regexp-quote b) h1)
+                     (string-match-p (regexp-quote a) h2))
+            (throw 'found t))))
+      nil)))
+
+;; ─── Semantica Evaluator: knowledge page quality scoring ───
+
+(defun gptel-auto-workflow--score-knowledge-pages ()
+  "Score knowledge pages by coverage, completeness, and relation (Semantica evaluator pattern).
+Returns ((:coverage . N) (:completeness . N) (:relations . N) (:overall . N) (:issues . list))."
+  (let* ((dir (expand-file-name "mementum/knowledge"
+                                (gptel-auto-workflow--worktree-base-root)))
+         (files (when (file-directory-p dir)
+                  (directory-files dir t "research-insights-.+\\.md$")))
+         (coverage-score 0) (completeness-score 0) (relation-score 0)
+         (total-pages 0) (issues nil))
+    (dolist (f files)
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents f)
+            (goto-char (point-min))
+            (let* ((has-title (re-search-forward "^title: " nil t))
+                   (has-status (re-search-forward "^status: " nil t))
+                   (has-tags (re-search-forward "^tags: " nil t))
+                   (has-quality (re-search-forward "^insight-quality: " nil t))
+                   (has-allium (re-search-forward "^allium-status: " nil t))
+                   (has-targets (re-search-forward "^## Successful Targets" nil t))
+                   (has-meta (re-search-forward "^## Meta-Learning" nil t)))
+              (setq total-pages (1+ total-pages))
+              ;; Coverage: sections present (0-1)
+              (let ((cov 0) (max-sections 3))
+                (when has-targets (setq cov (1+ cov)))
+                (when has-meta (setq cov (1+ cov)))
+                (when has-allium (setq cov (1+ cov)))
+                (setq coverage-score (+ coverage-score (/ (float cov) max-sections))))
+              ;; Completeness: frontmatter fields present (0-1)
+              (let ((comp 0) (max-fields 4))
+                (when has-title (setq comp (1+ comp)))
+                (when has-status (setq comp (1+ comp)))
+                (when has-tags (setq comp (1+ comp)))
+                (when has-quality (setq comp (1+ comp)))
+                (setq completeness-score (+ completeness-score (/ (float comp) max-fields))))
+              ;; Relation: has Allium links (0-1)
+              (setq relation-score (+ relation-score (if has-allium 1.0 0.0)))
+              ;; Collect issues
+              (unless has-allium
+                (push (format "%s: missing Allium audit" (file-name-nondirectory f)) issues))
+              (unless has-targets
+                (push (format "%s: missing Successful Targets section" (file-name-nondirectory f)) issues))))
+        (error nil)))
+    (let ((n (max 1 total-pages)))
+      (list :coverage (/ coverage-score n)
+            :completeness (/ completeness-score n)
+            :relations (/ relation-score n)
+            :overall (/ (+ (/ coverage-score n) (/ completeness-score n) (/ relation-score n)) 3.0)
+            :total-pages total-pages
+            :issues (nreverse issues)))))
+
+(defun gptel-auto-workflow--validate-knowledge-page (file-path)
+  "Validate a knowledge page structurally. Returns validation-result plist.
+Checks: required frontmatter, duplicate titles, empty sections."
+  (let ((errors nil) (warnings nil))
+    (condition-case err
+        (with-temp-buffer
+          (insert-file-contents file-path)
+          (let* ((content (buffer-string))
+                 (title (when (string-match "^title: \\(.+\\)" content)
+                          (match-string 1 content)))
+                 (status (when (string-match "^status: " content) t))
+                 (allium-issues (when (string-match "^allium-issues: \\([0-9]+\\)" content)
+                                  (string-to-number (match-string 1 content))))
+                 (tag-section (when (string-match "^tags: " content) t)))
+            (unless title
+              (push "Missing title in frontmatter" errors))
+            (unless status
+              (push "Missing status in frontmatter" warnings))
+            (unless tag-section
+              (push "Missing tags in frontmatter" warnings))
+             (when (and allium-issues (> allium-issues 0))
+               (unless (string-match "^## Allium Behavioral Coherence" content)
+                 (push "Has allium-issues >0 but missing Allium Behavioral Coherence section" errors)))
+            (let ((pos 0) (title-count 0))
+              (while (string-match "^# " content pos)
+                (setq title-count (1+ title-count) pos (match-end 0)))
+              (when (= title-count 0)
+                (push "No main heading (# ) found" warnings)))))
+      (error
+       (push (format "Failed to read: %s" (error-message-string err)) errors)))
+    (gptel-auto-workflow--validation-result
+     (null errors)
+     errors
+     warnings)))
+
+;; ─── Semantica Reasoning + Query ───
+
+(defconst gptel-auto-workflow--reasoning-rules
+  '(;; Strategy health
+    (:when ((keep-rate < 0.1) (total-experiments > 8))
+     :then ((action . "deprecate-strategy") (reason . "keep-rate below 10% with sufficient data") (severity . high)))
+    (:when ((keep-rate < 0.05))
+     :then ((action . "retire-strategy") (reason . "keep-rate below 5% — no further value") (severity . critical)))
+    (:when ((keep-rate > 0.6) (total-experiments > 5))
+     :then ((action . "promote-strategy") (reason . "consistently effective — consider expanding") (severity . low)))
+    ;; Target saturation
+    (:when ((target-frequency > 8))
+     :then ((action . "mark-saturated") (reason . "target has diminishing returns") (severity . medium)))
+    (:when ((target-frequency < 2) (keep-rate > 0.5))
+     :then ((action . "mark-underutilized") (reason . "effective target — explore more") (severity . low)))
+    ;; Backend
+    (:when ((backend-keep-rate < 0.2) (backend-experiments > 10))
+     :then ((action . "deprioritize-backend") (reason . "backend underperforming") (severity . high)))
+    (:when ((backend-keep-rate > 0.7) (backend-experiments > 5))
+     :then ((action . "prioritize-backend") (reason . "backend performing well") (severity . low)))
+    ;; Token
+    (:when ((output-ratio > 3.0) (kept-experiments < 3))
+     :then ((action . "flag-inflation") (reason . "output >> prompt with low keep rate") (severity . medium))))
+  "Forward chaining rules: (:when ((field op value) ...) :then ((key . value) ...)).")
+
+(defun gptel-auto-workflow--eval-condition (condition facts)
+  (let* ((field (nth 0 condition)) (op (nth 1 condition)) (threshold (nth 2 condition))
+         (actual (cdr (assoc field facts))))
+    (and actual (numberp actual)
+         (cond ((eq op '<) (< actual threshold)) ((eq op '>) (> actual threshold))
+               ((eq op '=) (= actual threshold)) ((eq op '>=) (>= actual threshold))
+               ((eq op '<=) (<= actual threshold)) (t nil)))))
+
+(defun gptel-auto-workflow--forward-chain ()
+  "Run forward chaining over experiment facts. Returns inferred actions."
+  (let* ((results (gptel-auto-workflow--parse-all-results)) (facts nil) (inferred nil))
+    (let ((by-strategy (make-hash-table :test 'equal))
+          (by-target (make-hash-table :test 'equal))
+          (by-backend (make-hash-table :test 'equal))
+          (kept 0) (total 0) (total-output 0) (total-prompt 0))
+      (dolist (r results)
+        (let ((strategy (or (plist-get r :strategy) "template-default"))
+              (target (plist-get r :target))
+              (backend (or (plist-get r :backend) "unknown"))
+              (decision (plist-get r :decision))
+              (pc (or (plist-get r :prompt-chars) 0)) (oc (or (plist-get r :output-chars) 0)))
+          (setq total (1+ total) total-output (+ total-output oc) total-prompt (+ total-prompt pc))
+          (when (equal decision "kept") (setq kept (1+ kept)))
+          (let ((se (or (gethash strategy by-strategy) (list :kept 0 :total 0))))
+            (setq se (plist-put se :total (1+ (plist-get se :total))))
+            (when (equal decision "kept") (setq se (plist-put se :kept (1+ (plist-get se :kept)))))
+            (puthash strategy se by-strategy))
+          (when (stringp target) (puthash target (1+ (or (gethash target by-target) 0)) by-target))
+          (when (stringp backend)
+            (let ((be (or (gethash backend by-backend) (list :kept 0 :total 0))))
+              (setq be (plist-put be :total (1+ (plist-get be :total))))
+              (when (equal decision "kept") (setq be (plist-put be :kept (1+ (plist-get be :kept)))))
+              (puthash backend be by-backend)))))
+      (push (cons 'total-experiments total) facts)
+      (push (cons 'kept-experiments kept) facts)
+      (push (cons 'overall-keep-rate (if (> total 0) (/ (float kept) total) 0.0)) facts)
+      (push (cons 'output-ratio (if (> total-prompt 0) (/ (float total-output) total-prompt) 0.0)) facts)
+      (maphash (lambda (s c)
+                 (let ((rate (if (> (plist-get c :total) 0)
+                                 (/ (float (plist-get c :kept)) (plist-get c :total)) 0.0)))
+                   (push (cons 'keep-rate rate) facts)
+                   (push (cons 'total-experiments (plist-get c :total)) facts)))
+               by-strategy)
+      (maphash (lambda (t c) (push (cons 'target-frequency c) facts)) by-target)
+      (maphash (lambda (b c)
+                 (let ((rate (if (> (plist-get c :total) 0)
+                                 (/ (float (plist-get c :kept)) (plist-get c :total)) 0.0)))
+                   (push (cons 'backend-keep-rate rate) facts)
+                   (push (cons 'backend-experiments (plist-get c :total)) facts)))
+               by-backend))
+    (let ((iter 0) (changed t) (max-iter 3))
+      (while (and changed (< iter max-iter))
+        (setq changed nil iter (1+ iter))
+        (dolist (rule gptel-auto-workflow--reasoning-rules)
+          (let ((conditions (plist-get rule :when)) (all-match t))
+            (dolist (cond conditions)
+              (unless (gptel-auto-workflow--eval-condition cond facts) (setq all-match nil)))
+            (when all-match
+              (push (plist-get rule :then) inferred) (setq changed t))))))
+    (delete-dups inferred)))
+
+(defun gptel-auto-workflow--jaccard (a b)
+  "Jaccard coefficient between strings A and B (word-level)."
+  (let* ((wa (split-string (downcase (or a "")) "[^a-z0-9]+" t))
+         (wb (split-string (downcase (or b "")) "[^a-z0-9]+" t))
+         (inter (cl-intersection wa wb :test #'string=))
+         (union (cl-union wa wb :test #'string=)))
+    (if union (/ (float (length inter)) (length union)) 0.0)))
+
+(defun gptel-auto-workflow--query-experiments (query &optional max-results)
+  "Weighted multi-criteria experiment search. Semantica DecisionQuery."
+  (let* ((results (gptel-auto-workflow--parse-all-results)) (scored nil))
+    (dolist (r results)
+      (let* ((hyp (or (plist-get r :hypothesis) ""))
+             (target (or (plist-get r :target) ""))
+             (text-sim (gptel-auto-workflow--jaccard query hyp))
+             (target-sim (gptel-auto-workflow--jaccard query target))
+             (cat-score (if (equal (plist-get r :decision) "kept") 0.8 0.3))
+             (delta (max 0 (- (or (plist-get r :score-after) 0) (or (plist-get r :score-before) 0))))
+             (combined (+ (* 0.4 text-sim) (* 0.3 target-sim) (* 0.2 cat-score) (* 0.1 (min 1.0 (/ delta 0.1))))))
+        (when (> combined 0.05)
+          (push (list :target target :hypothesis hyp :score combined :decision (plist-get r :decision)) scored))))
+    (seq-take (sort scored (lambda (a b) (> (plist-get a :score) (plist-get b :score)))) (or max-results 10))))
+
+;; ─── Semantica Pipeline: stage definitions + validation ───
+
+(defconst gptel-auto-workflow--pipeline-stages
+  '((:name "synthesize" :label "Evolution Synthesize" :fn evolution-synthesize :required t)
+    (:name "generate-skill" :label "Generate Research Skill" :fn generate-research-skill :required t)
+    (:name "evolve-skills" :label "Evolve All Skills" :fn evolve-all-skills :required t)
+    (:name "strategy-evolution" :label "Strategy Evolution" :fn run-strategy-evolution :required nil)
+    (:name "governance" :label "Skill Governance" :fn skill-governance-run-cycle :required nil)
+    (:name "record-score" :label "Record Score" :fn evolution-record-score :required t)
+    (:name "optimize-backend" :label "Optimize Backend" :fn evolution-optimize-backend-order :required nil)
+    (:name "vsm-health" :label "VSM Health Check" :fn evolution-vsm-health-check :required t)
+    (:name "audit" :label "Nucleus Audit" :fn audit-signal :required t)
+    (:name "allium-audit" :label "Allium Audit" :fn allium-audit-signal :required t)
+    (:name "reasoning" :label "Forward Chain" :fn forward-chain-log :required nil)
+    (:name "diff" :label "Knowledge Diff" :fn diff-knowledge-pages :required nil))
+  "Pipeline stage definitions. Semantica PipelineBuilder pattern.")
+
+(defun gptel-auto-workflow--validate-pipeline ()
+  "Validate pipeline stages. Returns validation-result plist."
+  (let ((errors nil) (warnings nil)
+        (names (mapcar (lambda (s) (plist-get s :name)) gptel-auto-workflow--pipeline-stages))
+        (seen (make-hash-table :test 'equal)))
+    (dolist (name names)
+      (if (gethash name seen)
+          (push (format "Duplicate stage: %s" name) errors)
+        (puthash name t seen)))
+    (dolist (s gptel-auto-workflow--pipeline-stages)
+      (when (and (plist-get s :required)
+                 (not (fboundp (intern (concat "gptel-auto-workflow--" (symbol-name (plist-get s :fn)))))))
+        (push (format "Missing fn for required stage '%s'" (plist-get s :label)) warnings)))
+    (gptel-auto-workflow--validation-result (null errors) errors warnings)))
+
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
+
+;; ─── Semantica AgentMemory: formalize mementum layers ───
+
+(defconst gptel-auto-workflow--agent-memory-layers
+  '((:layer "short-term" :description "In-session working memory"
+     :location "var/tmp/evolution/" :persistence nil :max-items 50)
+    (:layer "long-term" :description "Vector similarity search (git-embed)"
+     :location "git-embed index" :persistence t :backend "git-embed")
+    (:layer "structured" :description "Knowledge pages + Allium specs"
+     :location "mementum/knowledge/" :persistence t :format "markdown + allium")
+    (:layer "temporal" :description "Git-based timeline, experiment TSV history"
+     :location "git log + var/tmp/experiments/" :persistence t :format "git + tsv"))
+  "4-layer AgentMemory architecture (Semantica pattern).
+Layer 1: short-term working memory (in-session, cleared on daemon restart)
+Layer 2: long-term vector memory (git-embed semantic similarity, 840 files indexed)
+Layer 3: structured memory (knowledge pages, Allium behavioral specs, ontology)
+Layer 4: temporal index (git commit history, experiment TSV, cycle snapshots)")
+
+(defun gptel-auto-workflow--memory-status ()
+  "Report status of all memory layers. Returns plist with :layer → status."
+  (let ((status nil))
+    (dolist (layer gptel-auto-workflow--agent-memory-layers)
+      (let* ((name (plist-get layer :layer))
+             (location (plist-get layer :location))
+             (root (gptel-auto-workflow--worktree-base-root))
+             (full-path (expand-file-name location root))
+             (state (cond
+                     ((string-match-p "git-embed" location)
+                      (if (fboundp 'git-embed-search) "active" "unavailable"))
+                     ((file-directory-p full-path)
+                      (let ((count (length (directory-files full-path nil "\\`[^.]"))))
+                        (format "%d items" count)))
+                     (t "not found"))))
+        (push (list :layer name :location location :state state :description (plist-get layer :description))
+              status)))
+    (nreverse status)))
+
+;; ─── Backend Performance Optimization ───
   "Auto-reorder the fallback chain based on backend performance data.
 Moves better-performing backends to the front of the fallback chain."
   (let* ((stats (gptel-auto-workflow--evolution-backend-stats))

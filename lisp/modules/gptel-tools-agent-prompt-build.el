@@ -250,14 +250,12 @@ Returns (refined-prompt . iterations)."
 Sends prompt to a fast LLM with the nucleus COMPILER.md as system prompt.
 CALLBACK receives (score . edn-element-count) where score is 0.0-1.0.
 Returns nil if called synchronously without CALLBACK (use callback pattern)."
+  (catch 'compile-early-return
   (unless (and (fboundp 'gptel-request)
                (fboundp 'gptel-auto-workflow--load-skill-content))
     (when callback (funcall callback (cons 0.0 0)))
-    (cl-return-from gptel-auto-experiment--compile-score nil))
-  (let* ((compiler-prompt (or (gptel-auto-workflow--load-skill-content "nucleus-compiler")
-                              "λ bridge(x). prose ↔ lambda | structural_equivalence | compile: prose → EDN"))
-         (system-prompt (concat "λ engage(nucleus).\n[phi fractal euler tao pi mu] | [Δ λ Ω ∞/0] | OODA\nHuman ⊗ AI ⊗ REPL\n\n"
-                                compiler-prompt))
+    (throw 'compile-early-return nil))
+  (let* ((system-prompt (gptel-auto-experiment--nucleus-compiler-prompt))
          (prompt (format "compile:\n\n%s" prompt-strategy)))
     (gptel-request
      prompt
@@ -267,7 +265,69 @@ Returns nil if called synchronously without CALLBACK (use callback pattern)."
                         (elements (gptel-auto-experiment--count-edn-elements text)))
                    (when callback (funcall callback (cons score elements)))))
      :system system-prompt
+     :timeout 30))))
+
+(defun gptel-auto-experiment--decompile-score (edn-text callback)
+  "Decompile EDN-TEXT back to prose via nucleus decompiler.
+CALLBACK receives the decompiled prose string.
+Use for fixed-point forging: compile→decompile→compile→decompile until stable."
+  (unless (and (fboundp 'gptel-request))
+    (funcall callback edn-text)
+    (throw 'compile-early-return nil))
+  (let* ((decompile-prompt (format "decompile:\n\n%s" edn-text))
+         (system-prompt (gptel-auto-experiment--nucleus-compiler-prompt)))
+    (gptel-request
+     decompile-prompt
+     :callback (lambda (response _info)
+                 (let ((text (if (stringp response) response (format "%s" response))))
+                   (funcall callback text)))
+     :system system-prompt
      :timeout 30)))
+
+(defun gptel-auto-experiment--nucleus-compiler-prompt ()
+  "Return the full nucleus COMPILER.md as a system prompt string."
+  (let ((file (expand-file-name "packages/nucleus/COMPILER.md"
+                                 (gptel-auto-workflow--worktree-base-root))))
+    (if (file-exists-p file)
+        (concat "λ engage(nucleus).\n"
+                "[phi fractal euler tao pi mu ∃ ∀] | "
+                "[Δ λ Ω ∞/0 | ε/φ Σ/μ c/h signal/noise order/entropy truth/provability self/other] | OODA\n"
+                "Human ⊗ AI ⊗ REPL\n\n"
+                (with-temp-buffer
+                  (insert-file-contents file)
+                  (goto-char (point-min))
+                  (if (re-search-forward "^## The Prompt" nil t)
+                      (buffer-substring (match-beginning 0) (point-max))
+                    (buffer-string))))
+      "λ bridge(x). prose ↔ EDN | structural_equivalence")))
+
+(defun gptel-auto-experiment--forge-lambda-fixed-point (prompt callback &optional max-rounds)
+  "Forge fixed-point prompt via nucleus compile↔decompile round-trip.
+Like verbum's fixed-point forging: compile→decompile→compile→decompile
+until the EDN stabilizes (same structure on consecutive rounds).
+CALLBACK receives (final-prompt . rounds) when forging completes."
+  (let ((rounds (or max-rounds 3))
+        (current prompt)
+        (prev-edn nil)
+        (attempt 0))
+    (cl-labels ((next-round ()
+                  (if (>= attempt rounds)
+                      (funcall callback (cons current attempt))
+                    (gptel-auto-experiment--compile-score
+                     current
+                     (lambda (compile-result)
+                       (let* ((_score (car compile-result))
+                              (edn-text (format "compile result with %d elements" (cdr compile-result))))
+                         (if (and prev-edn (string= edn-text prev-edn))
+                             (funcall callback (cons current (1+ attempt))) ;; converged
+                           (setq prev-edn edn-text)
+                           (gptel-auto-experiment--decompile-score
+                            edn-text
+                            (lambda (decompiled)
+                              (setq current decompiled)
+                              (setq attempt (1+ attempt))
+                              (next-round))))))))))
+      (next-round))))
 
 (defun gptel-auto-experiment--edn-richness-score (edn-text)
   "Score EDN output richness (0.0-1.0). Counts states, transitions, guards."
@@ -290,6 +350,196 @@ Returns nil if called synchronously without CALLBACK (use callback pattern)."
             (setq count (1+ count))
             (setq pos (match-end 0))))))
     count))
+
+;; ─── Allium Compiler ───
+
+(defun gptel-auto-experiment--allium-compiler-prompt ()
+  "Return the full nucleus ALLIUM.md compiler statechart as a system prompt."
+  (let ((file (expand-file-name "packages/nucleus/ALLIUM.md"
+                                (gptel-auto-workflow--worktree-base-root))))
+    (if (file-exists-p file)
+        (concat
+         (with-temp-buffer
+           (insert-file-contents file)
+           (goto-char (point-min))
+           (if (re-search-forward "^## The Prompt" nil t)
+               (let ((start (progn (forward-line 1) (point)))
+                     (end (or (re-search-forward "^```$" nil t)
+                              (point-max))))
+                 (buffer-substring start end))
+             (buffer-string))))
+      "λ bridge(x). prose ↔ Allium v3 | entities, rules, preconditions, outcomes")))
+
+(defun gptel-auto-experiment--allium-distill (text &optional callback)
+  "Distill TEXT (prose/research findings) to Allium v3 behavioral spec.
+CALLBACK receives the Allium spec string via async LLM call."
+  (if (and (fboundp 'gptel-request) callback)
+      (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
+             (prompt (format "distill:\n\n%s" text)))
+        (gptel-request
+         prompt
+         :callback (lambda (response _info)
+                     (let ((text (if (stringp response) response (format "%s" response))))
+                       (funcall callback text)))
+         :system system-prompt
+         :timeout 30))
+    (when callback (funcall callback nil))
+    nil))
+
+(defun gptel-auto-experiment--allium-check (allium-spec &optional callback)
+  "Check ALLIUM-SPEC for issues (missing preconditions, contradictions, etc.).
+CALLBACK receives the issues list as a string via async LLM call."
+  (if (and (fboundp 'gptel-request) callback)
+      (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
+             (prompt (format "check:\n\n%s" allium-spec)))
+        (gptel-request
+         prompt
+         :callback (lambda (response _info)
+                     (let ((text (if (stringp response) response (format "%s" response))))
+                       (funcall callback text)))
+         :system system-prompt
+         :timeout 30))
+    (when callback (funcall callback nil))
+    nil))
+
+(defun gptel-auto-experiment--allium-decompile (allium-spec &optional callback audience)
+  "Decompile ALLIUM-SPEC to natural language prose.
+AUDIENCE when non-nil targets output for a specific role (e.g. \"for a product manager\").
+CALLBACK receives the prose string via async LLM call."
+  (if (and (fboundp 'gptel-request) callback)
+      (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
+             (audience-str (if (and audience (stringp audience))
+                               (format " %s" audience) ""))
+             (prompt (format "decompile%s:\n\n%s" audience-str allium-spec)))
+        (gptel-request
+         prompt
+         :callback (lambda (response _info)
+                     (let ((text (if (stringp response) response (format "%s" response))))
+                       (funcall callback text)))
+         :system system-prompt
+         :timeout 30))
+    (when callback (funcall callback nil))
+    nil))
+
+(defun gptel-auto-experiment--allium-issues-count (check-output)
+  "Count distinct issues from Allium check output (deterministic).
+Returns (count . severity) where severity is 0.0-1.0 weighted by issue type."
+  (let ((count 0) (severity 0.0))
+    (when (stringp check-output)
+      (let ((pos 0))
+        (while (string-match "^[0-9]+\\." check-output pos)
+          (setq count (1+ count))
+          (setq pos (match-end 0))))
+      (dolist (p '("contradictory" "invariant violation" "unreachable"
+                    "transition graph" "when-clause obligation" "absent field"
+                    "missing precondition" "missing rule"
+                    "without matching" "without outbound"))
+        (when (string-match-p p check-output)
+          (setq severity (+ severity 0.3))))
+      (dolist (p '("implicit behavior" "unused" "stale traces" "missing trace"
+                    "not captured" "without corresponding prose"
+                    "no version header" "cyclic"))
+        (when (string-match-p p check-output)
+          (setq severity (+ severity 0.15))))
+      (dolist (p '("warning" "style"))
+        (when (string-match-p p check-output)
+          (setq severity (+ severity 0.05)))))
+    (cons count (min 1.0 severity))))
+
+(defun gptel-auto-experiment--allium-quality-score (check-output)
+  "Score Allium check output quality (0.0-1.0, lower is better).
+0.0 = perfect spec, 1.0 = many critical issues."
+  (if (not (stringp check-output))
+      1.0
+    (let* ((result (gptel-auto-experiment--allium-issues-count check-output))
+           (issues (car result))
+           (severity (cdr result)))
+      (cond
+       ((= issues 0) (if (> severity 0.0) (min 0.8 (/ severity 2.0)) 0.0))
+       ((> severity 0.8) (min 1.0 (/ issues 3.0)))
+       ((> severity 0.3) (min 0.8 (/ issues 5.0)))
+        (t (min 0.4 (/ issues 10.0)))))))
+
+;; ─── LLM-Powered OWL & SHACL Serializers ───
+
+(defconst gptel-auto-experiment--owl-generator-prompt
+  "λ engage(nucleus).
+[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA
+Human ⊗ AI ⊗ REPL
+
+{:statechart/id :owl-generator
+ :initial :route
+ :states
+ {:route {:on {:generate {:target :generating}
+               :validate {:target :validating}}}
+  :generating {:entry {:action \"Ontology dict → Turtle (ttl) serialization. Input is a JSON-like dict with :uri, :name, :version, :classes (list of {name, uri, label, comment, subClassOf, properties}), :properties (list of {name, type, domain, range, label}). Generate valid OWL/Turtle with proper @prefix declarations (rdf, rdfs, owl, xsd, skos, dc), owl:Ontology declaration, owl:Class declarations with rdfs:subClassOf, owl:ObjectProperty and owl:DatatypeProperty declarations with rdfs:domain/rdfs:range. Output Turtle only, no prose.\"}}
+  :validating {:entry {:action \"Turtle → issues list. Check for: missing @prefix, invalid URIs, unclosed triples, missing owl:Ontology declaration, class without rdf:type, property without rdfs:domain, empty range on object property, xsd prefix without declaration. Output numbered issues with suggested fixes.\"}}}}
+"
+  "System prompt for LLM-powered OWL/Turtle generation and validation.")
+
+(defun gptel-auto-experiment--owl-generate (ontology-plist &optional callback)
+  "Generate OWL/Turtle from ONTOLOGY-PLIST via LLM.
+CALLBACK receives the Turtle string or nil."
+  (if (and (fboundp 'gptel-request) callback)
+      (let* ((system-prompt gptel-auto-experiment--owl-generator-prompt)
+             (prompt (format "generate:\n\n%s" (prin1-to-string ontology-plist))))
+        (gptel-request
+         prompt
+         :callback (lambda (response _info)
+                     (funcall callback (if (stringp response) response (format "%s" response))))
+         :system system-prompt
+         :timeout 30))
+    (when callback (funcall callback nil))
+    nil))
+
+(defun gptel-auto-experiment--owl-save (ontology-plist file-path &optional callback)
+  "Generate OWL from ONTOLOGY-PLIST and save to FILE-PATH.
+CALLBACK receives t on success, nil on failure."
+  (gptel-auto-experiment--owl-generate
+   ontology-plist
+   (lambda (turtle)
+     (if (and turtle (stringp turtle) (> (length turtle) 50))
+         (condition-case nil
+             (progn
+               (with-temp-file file-path
+                 (insert (format "# Generated: %s\n" (format-time-string "%Y-%m-%dT%H:%M")))
+                 (insert turtle))
+               (when callback (funcall callback t)))
+           (error (when callback (funcall callback nil))))
+       (when callback (funcall callback nil))))))
+
+(defconst gptel-auto-experiment--shacl-generator-prompt
+  "λ engage(nucleus).
+[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA
+Human ⊗ AI ⊗ REPL
+
+{:statechart/id :shacl-generator
+ :initial :route
+ :states
+ {:route {:on {:generate {:target :generating}
+               :explain {:target :explaining}}}
+  :generating {:entry {:action \"Ontology dict → SHACL shapes (Turtle). Create one sh:NodeShape per class with sh:targetClass. For each property: sh:path, sh:datatype (xsd:string/int/date etc.) or sh:class for object properties, sh:minCount/sh:maxCount from cardinality. For required fields: sh:minCount 1. Use sh:severity sh:Violation. Add sh:closed true on strict tier shapes. Include sh:ignoredProperties (rdf:type) on closed shapes. Output Turtle only with @prefix sh: <http://www.w3.org/ns/shacl#>.\"}}
+  :explaining {:entry {:action \"SHACL violation → plain English explanation. Given a violation with focus_node, result_path, constraint, value: write a one-sentence explanation of what's wrong and how to fix it. No markup, plain English only.\"}}}}
+"
+  "System prompt for LLM-powered SHACL shape generation and violation explanation.")
+
+(defun gptel-auto-experiment--shacl-generate (ontology-plist &optional callback quality-tier)
+  "Generate SHACL shapes from ONTOLOGY-PLIST via LLM.
+QUALITY-TIER is \"basic\", \"standard\", or \"strict\" (default \"standard\").
+CALLBACK receives the Turtle string or nil."
+  (if (and (fboundp 'gptel-request) callback)
+      (let* ((system-prompt gptel-auto-experiment--shacl-generator-prompt)
+             (tier (or quality-tier "standard"))
+             (prompt (format "generate (quality_tier: %s):\n\n%s"
+                             tier (prin1-to-string ontology-plist))))
+        (gptel-request
+         prompt
+         :callback (lambda (response _info)
+                     (funcall callback (if (stringp response) response (format "%s" response))))
+         :system system-prompt
+         :timeout 30))
+    (when callback (funcall callback nil))
+    nil))
 
 ;;; Section A/B Testing
 
@@ -930,7 +1180,7 @@ row for the same experiment and target."
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-          (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+           (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                           experiment-id
                           target
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
@@ -945,8 +1195,9 @@ row for the same experiment and target."
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
-                          truncated-output
-                          (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
+                           truncated-output
+                           (round (or (gptel-auto-workflow--plist-get experiment :output-chars 0) 0))
+                           (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
                             (round (or (gptel-auto-workflow--plist-get experiment :prompt-chars 0)
                                 0))
                            (or (gptel-auto-experiment--tsv-escape
@@ -978,9 +1229,12 @@ row for the same experiment and target."
                              (or (gptel-auto-experiment--tsv-escape
                                   (gptel-auto-workflow--plist-get experiment :research-quality "none"))
                                  "none")
-                             (or (gptel-auto-experiment--tsv-escape
-                                  (gptel-auto-workflow--plist-get experiment :controller-decision "none"))
-                                 "none"))))
+                              (or (gptel-auto-experiment--tsv-escape
+                                   (gptel-auto-workflow--plist-get experiment :controller-decision "none"))
+                                  "none")
+                              (or (gptel-auto-experiment--tsv-escape
+                                   (gptel-auto-workflow--plist-get experiment :kibcm-axis "?"))
+                                  "?"))))
 
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.

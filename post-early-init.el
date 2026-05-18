@@ -98,7 +98,7 @@
 ;; "Lisp nesting exceeds max-lisp-eval-depth" errors from deeply nested
 ;; subagent async callbacks (curl sentinel → FSM → callback → next process).
 ;; Default 1600 is too low for 5+ nested subagent layers.
-;; 6-provider fallback chain + multiple subagent FSM transitions can hit 12000+.
+;; Root cause fixed: gptel-abort now defers callback to break sync recursion.
 (setq max-lisp-eval-depth 20000)
 
 (provide 'post-early-init)

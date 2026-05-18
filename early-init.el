@@ -22,6 +22,12 @@
 
 ;;; Code:
 
+;; Auto-workflow daemons can hit deep recursion in gptel process
+;; sentinel chains (gptel-abort → callback → FSM transition → handler
+;; → process → sentinel → ...). Root cause fixed: gptel-abort defers
+;; callback via run-at-time to break synchronous recursion.
+(setq max-lisp-eval-depth 20000)
+
 ;;; Internal variables
 
 ;; Backup of `gc-cons-threshold' and `gc-cons-percentage' before startup.
