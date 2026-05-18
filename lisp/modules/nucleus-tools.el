@@ -141,7 +141,8 @@ If RESULT fits within MAX-CHARS, return it unchanged.
 If too long and SHORTENED-FACTORIES is provided, try each closure
 (a zero-arg function returning a shorter string) in order until one fits.
 If none fit or no factories given, return a truncation notice."
-  (when (stringp result)
+  (if (not (stringp result))
+      result
     (let ((n-chars (length result)))
       (if (<= n-chars max-chars)
           result
@@ -150,7 +151,7 @@ If none fit or no factories given, return a truncation notice."
           (if shortened-factories
               (catch 'found
                 (dolist (factory shortened-factories)
-                  (let ((candidate (funcall factory)))
+                  (let ((candidate (if (functionp factory) (funcall factory) "")))
                     (when (and (stringp candidate)
                                (<= (length (concat too-long-msg "\n" candidate)) max-chars))
                       (throw 'found (concat too-long-msg "\n" candidate)))))
