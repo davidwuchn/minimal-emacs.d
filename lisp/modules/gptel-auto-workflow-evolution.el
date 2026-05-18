@@ -2107,47 +2107,50 @@ ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
 (defun gptel-auto-workflow--allium-load-issues-for-guidance ()
   "Load recent Allium check issues for injection into prompt builder strategy guidance.
 Returns a markdown-formatted string of issues grouped by strategy, or empty string."
-  (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root))
-         (result nil))
-    (when (file-directory-p issues-dir)
-      (dolist (issue-file (directory-files issues-dir t "\\.md$"))
-        (condition-case nil
-            (with-temp-buffer
-              (insert-file-contents issue-file)
-              (goto-char (point-min))
-              (let ((mtime (file-attribute-modification-time
-                            (file-attributes issue-file))))
-                (when (time-less-p
-                       (time-subtract (current-time) (days-to-time 7))
-                       mtime)
-                  (let ((content (buffer-string)))
-                    (when (and content (> (length content) 20))
-                      (push content result)))))
-              (setq result result))
-          (error nil))))
-    (if result
-        (concat "### Allium Behavioral Audit (coherence check of last cycle's research)\n\n"
-                (mapconcat #'identity (nreverse result) "\n---\n"))
-      "")))
+  (let* ((root (gptel-auto-workflow--worktree-base-root)))
+    (if (not root)
+        ""
+      (let* ((issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root))
+             (result nil))
+        (when (file-directory-p issues-dir)
+          (dolist (issue-file (directory-files issues-dir t "\\.md$"))
+            (condition-case nil
+                (with-temp-buffer
+                  (insert-file-contents issue-file)
+                  (goto-char (point-min))
+                  (let ((mtime (file-attribute-modification-time
+                                (file-attributes issue-file))))
+                    (when (time-less-p
+                           (time-subtract (current-time) (days-to-time 7))
+                           mtime)
+                      (let ((content (buffer-string)))
+                        (when (and content (> (length content) 20))
+                          (push content result))))))
+              (error nil))))
+        (if result
+            (concat "### Allium Behavioral Audit (coherence check of last cycle's research)\n\n"
+                    (mapconcat #'identity (nreverse result) "\n---\n"))
+          "")))))
 
 (defun gptel-auto-workflow--allium-read-quality (safe-strategy)
   "Read Allium quality for SAFE-STRATEGY from disk. Returns (issues . severity) or nil."
-  (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (file (expand-file-name (format "%s.md" safe-strategy)
-                                 (expand-file-name "var/tmp/evolution/allium-issues" root))))
-    (when (file-readable-p file)
-      (let ((mtime (file-attribute-modification-time (file-attributes file))))
-        (when (time-less-p (time-subtract (current-time) (days-to-time 7)) mtime)
-          (with-temp-buffer
-            (insert-file-contents file)
-            (goto-char (point-min))
-            (let ((count 0) (pos 0) (severity 0.0))
-              (while (string-match "^[0-9]+\\." (buffer-string) pos)
-                (setq count (1+ count) pos (match-end 0)))
-              (when (string-match "\\*\\*Severity:\\*\\* \\([0-9.]+\\)" (buffer-string))
-                (setq severity (string-to-number (match-string 1 (buffer-string)))))
-              (cons count severity))))))))
+  (let* ((root (gptel-auto-workflow--worktree-base-root)))
+    (if (not root)
+        nil
+      (let* ((file (expand-file-name (format "%s.md" safe-strategy)
+                                     (expand-file-name "var/tmp/evolution/allium-issues" root))))
+        (when (file-readable-p file)
+          (let ((mtime (file-attribute-modification-time (file-attributes file))))
+            (when (time-less-p (time-subtract (current-time) (days-to-time 7)) mtime)
+              (with-temp-buffer
+                (insert-file-contents file)
+                (goto-char (point-min))
+                (let ((count 0) (pos 0) (severity 0.0))
+                  (while (string-match "^[0-9]+\\." (buffer-string) pos)
+                    (setq count (1+ count) pos (match-end 0)))
+                  (when (string-match "\\*\\*Severity:\\*\\* \\([0-9.]+\\)" (buffer-string))
+                    (setq severity (string-to-number (match-string 1 (buffer-string)))))
+                  (cons count severity))))))))))
 
 (defun gptel-auto-workflow--allium-check-research-quality (findings-summary &optional callback)
   "Distill FINDINGS-SUMMARY to Allium spec, check for issues, invoke CALLBACK with quality score.
