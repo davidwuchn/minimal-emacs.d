@@ -344,6 +344,7 @@ Single keyword 'contradictory' (severity 0.3): (min 0.8 (/ 0.3 2.0)) = 0.15."
   (should (fboundp 'gptel-auto-experiment--allium-quality-score))
   (should (fboundp 'gptel-auto-experiment--allium-compiler-prompt))
   (should (fboundp 'gptel-auto-workflow--allium-audit-signal))
+  (should (fboundp 'gptel-auto-workflow--allium-audit-strategy))
   (should (fboundp 'gptel-auto-workflow--allium-check-research-quality))
   (should (fboundp 'gptel-auto-workflow--allium-diff-minimal-pairs)))
 
@@ -442,6 +443,19 @@ Single keyword 'contradictory' (severity 0.3): (min 0.8 (/ 0.3 2.0)) = 0.15."
         (should (string-match-p "strategy-b" result))
         (should (string-match-p "contradictory rule" result))
         (should (string-match-p "prefers shorter names" result))))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-maphash-two-args ()
+  "maphash in allium-audit-signal receives exactly 2 arguments (not 3).
+Regression test: deeply nested lambda after refactor should not confuse the evaluator."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--research-results-by-strategy)
+             (lambda () (let ((ht (make-hash-table :test 'equal)))
+                          (puthash 'test-strat nil ht)
+                          ht)))
+            ((symbol-function 'gptel-auto-experiment--allium-distill)
+             (lambda (_text callback) (funcall callback nil))))
+    (let ((result (gptel-auto-workflow--allium-audit-signal)))
+      ;; When results have length 0, audited remains nil
+      (should-not result))))
 
 (ert-deftest regression/auto-workflow-evolution/allium-persist-aborts-on-nil-root ()
   "persist-spec returns nil and logs when worktree root is nil."

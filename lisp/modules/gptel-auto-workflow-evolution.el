@@ -1903,6 +1903,61 @@ Returns list of strategies that were flagged."
             (message "[audit] Strategy '%s' compile audit failed (gptel-request unavailable)" worst))))))
     needs-audit))
 
+(defun gptel-auto-workflow--allium-audit-strategy (strategy results)
+  "Start async Allium audit for one STRATEGY's research RESULTS."
+  (let* ((top-targets
+          (mapcar (lambda (r) (plist-get r :target)) results))
+         (findings-summary
+          (format "Research strategy: %s\n\n%d experiments across targets: %s\n\nKept hypotheses:\n%s\n\nDiscarded hypotheses:\n%s"
+                  strategy
+                  (length results)
+                  (string-join (cl-remove-duplicates
+                                (seq-filter (lambda (s) (and (stringp s) (not (string-empty-p s))))
+                                            top-targets)
+                                :test #'string=)
+                               ", ")
+                  (string-join
+                   (mapcar (lambda (r)
+                             (if (equal (plist-get r :decision) "kept")
+                                 (format "- %s" (plist-get r :hypothesis))
+                               ""))
+                           results)
+                   "\n")
+                  (string-join
+                   (mapcar (lambda (r)
+                             (if (equal (plist-get r :decision) "discarded")
+                                 (format "- %s" (plist-get r :hypothesis))
+                               ""))
+                           results)
+                   "\n"))))
+    (catch 'compile-early-return
+      (gptel-auto-experiment--allium-distill
+       findings-summary
+       (lambda (allium-spec)
+         (if (not allium-spec)
+             (message "[allium-audit] Strategy '%s' distill failed (no spec produced)" strategy)
+           (gptel-auto-experiment--allium-check
+            allium-spec
+            (lambda (issues)
+              (let* ((count (gptel-auto-experiment--allium-issues-count issues))
+                     (issue-count (car count))
+                     (severity (cdr count))
+                     (score (gptel-auto-experiment--allium-quality-score issues)))
+                (gptel-auto-workflow--allium-persist-spec
+                 strategy allium-spec issues issue-count severity score)
+                (cond
+                 ((= issue-count 0)
+                  (message "[allium-audit] Strategy '%s' PASSED: spec is coherent (0 issues)" strategy))
+                 ((< score 0.3)
+                  (message "[allium-audit] Strategy '%s' OK: %d issues (severity %.2f, score %.2f)"
+                           strategy issue-count severity score))
+                 ((< score 0.6)
+                  (message "[allium-audit] Strategy '%s' WARN: %d issues (severity %.2f, score %.2f) — review knowledge page"
+                           strategy issue-count severity score))
+                 (t
+                  (message "[allium-audit] Strategy '%s' FAIL: %d issues (severity %.2f, score %.2f) — research may be incoherent"
+                           strategy issue-count severity score))))))))))))
+
 (defun gptel-auto-workflow--allium-audit-signal ()
   "Audit research knowledge quality via Allium behavioral spec checking.
 Distills research findings to Allium, runs check, scores spec coherence.
@@ -1916,61 +1971,10 @@ Schedules async; returns list of strategy names that were audited."
                   strategy
                   (> (length results) 0))
          (push strategy audited)
-         (let* ((top-targets
-                 (mapcar (lambda (r) (plist-get r :target)) results))
-                (findings-summary
-                 (format "Research strategy: %s\n\n%d experiments across targets: %s\n\nKept hypotheses:\n%s\n\nDiscarded hypotheses:\n%s"
-                         strategy
-                         (length results)
-                         (string-join (cl-remove-duplicates
-                                       (seq-filter (lambda (s) (and (stringp s) (not (string-empty-p s))))
-                                                   top-targets)
-                                       :test #'string=)
-                                      ", ")
-                         (string-join
-                          (mapcar (lambda (r)
-                                    (if (equal (plist-get r :decision) "kept")
-                                        (format "- %s" (plist-get r :hypothesis))
-                                      ""))
-                                  results)
-                          "\n")
-                         (string-join
-                          (mapcar (lambda (r)
-                                    (if (equal (plist-get r :decision) "discarded")
-                                        (format "- %s" (plist-get r :hypothesis))
-                                      ""))
-                                  results)
-                          "\n"))))
-           (catch 'compile-early-return
-             (gptel-auto-experiment--allium-distill
-              findings-summary
-              (lambda (allium-spec)
-                (if (not allium-spec)
-                    (message "[allium-audit] Strategy '%s' distill failed (no spec produced)" strategy)
-                    (gptel-auto-experiment--allium-check
-                    allium-spec
-                    (lambda (issues)
-                      (let* ((count (gptel-auto-experiment--allium-issues-count issues))
-                             (issue-count (car count))
-                             (severity (cdr count))
-                             (score (gptel-auto-experiment--allium-quality-score issues)))
-                        (gptel-auto-workflow--allium-persist-spec
-                         strategy allium-spec issues issue-count severity score)
-                        (cond
-                         ((= issue-count 0)
-                          (message "[allium-audit] Strategy '%s' PASSED: spec is coherent (0 issues)" strategy))
-                         ((< score 0.3)
-                          (message "[allium-audit] Strategy '%s' OK: %d issues (severity %.2f, score %.2f)"
-                                   strategy issue-count severity score))
-                         ((< score 0.6)
-                          (message "[allium-audit] Strategy '%s' WARN: %d issues (severity %.2f, score %.2f) — review knowledge page"
-                                   strategy issue-count severity score))
-                         (t
-                          (message "[allium-audit] Strategy '%s' FAIL: %d issues (severity %.2f, score %.2f) — research may be incoherent"
-                                   strategy issue-count severity score))))))))))))
-      by-strategy)
+         (gptel-auto-workflow--allium-audit-strategy strategy results)))
+     by-strategy)
     (message "[allium-audit] Audited %d research strategies via Allium" (length audited))
-    audited)))
+    audited))
 
 (defun gptel-auto-workflow--allium-persist-spec (strategy allium-spec issues issue-count severity score)
   "Persist ALLIUM-SPEC and check ISSUES for STRATEGY to disk.
