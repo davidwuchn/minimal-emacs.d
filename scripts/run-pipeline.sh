@@ -266,8 +266,8 @@ MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
 # Researcher daemon startup can take 90-120s (emacs init + package loading).
 # Use min_start_wait=120 to give it enough time before giving up.
 if ! wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher" 120; then
-    AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher "$SCRIPT" stop >> "$PIPELINE_LOG" 2>&1 || true
-    write_research_fallback "research daemon ended before producing findings"
+    log "Research still in progress after timeout — continuing with partial findings"
+    # Do NOT kill the daemon — let it keep working for next cycle
 fi
 
 if [ -f "$FINDINGS_FILE" ]; then
