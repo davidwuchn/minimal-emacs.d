@@ -483,6 +483,36 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
       (let ((result (gptel-auto-workflow--allium-load-issues-for-guidance)))
         (should (string= result ""))))))
 
+;; ─── KIBC-M Axis Tests ───
+
+(ert-deftest regression/prompt/kibcm-axis-nil ()
+  "Nil hypothesis returns nil axis."
+  (should (null (gptel-auto-experiment--kibcm-axis nil))))
+
+(ert-deftest regression/prompt/kibcm-axis-no-match ()
+  "Hypothesis with no pattern match returns nil."
+  (should (null (gptel-auto-experiment--kibcm-axis "do something awesome"))))
+
+(ert-deftest regression/prompt/kibcm-axis-classify-K ()
+  "validate pattern → :K axis."
+  (should (eq :K (gptel-auto-experiment--kibcm-axis "add nil check and validate input"))))
+
+(ert-deftest regression/prompt/kibcm-axis-classify-B ()
+  "extract helper pattern → :B axis."
+  (should (eq :B (gptel-auto-experiment--kibcm-axis "extract helper function for DRY pipeline"))))
+
+(ert-deftest regression/prompt/kibcm-axis-case-insensitive ()
+  "Classification is case-insensitive (Emacs default string-match)."
+  (should (eq :K (gptel-auto-experiment--kibcm-axis "VALIDATE INPUT"))))
+
+(ert-deftest regression/prompt/kibcm-axis-strongest-wins ()
+  "Strongest pattern match count determines axis."
+  (should (eq :K (gptel-auto-experiment--kibcm-axis "validate nil check guard nil safety"))))
+
+(ert-deftest regression/prompt/kibcm-axis-fboundp ()
+  "kibcm-axis function is defined."
+  (should (fboundp 'gptel-auto-experiment--kibcm-axis)))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
