@@ -1805,6 +1805,20 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (dolist (a added) (message "[diff]   + %s" a))
             (dolist (r removed) (message "[diff]   - %s" r)))))
     (error nil))
+  ;; Structural validation of knowledge pages (Semantica OntologyValidator)
+  (condition-case nil
+      (let* ((kd (expand-file-name "mementum/knowledge" (gptel-auto-workflow--worktree-base-root)))
+             (files (when (file-directory-p kd)
+                      (directory-files kd t "research-insights-.+\\.md$"))))
+        (when files
+          (let ((worst (car (last files))))
+            (let ((v (gptel-auto-workflow--validate-knowledge-page worst)))
+              (unless (plist-get v :valid)
+                (message "[validator] %s: %d errors, %d warnings"
+                         (file-name-nondirectory worst)
+                         (length (plist-get v :errors))
+                         (length (plist-get v :warnings))))))))
+    (error nil))
   (message "[auto-workflow] Self-evolution cycle complete.")))
 
 ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
