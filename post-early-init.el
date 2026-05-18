@@ -102,10 +102,10 @@
 (setq max-lisp-eval-depth 40000)
 
 ;; Increase max-specpdl-size for subagent chain depth
-;; Default 1300 is too small for multi-turn subagent chains through
-;; gptel FSM → tool execution → FSM. 5000 provides headroom for
-;; 5+ nested subagent layers without C stack overflow.
-(setq max-specpdl-size 5000)
+;; REQUIRED: 5+ nested subagent layers without C stack overflow.
+;; Researcher daemon's single-turn fallback (300s timeout) triggers
+;; deep recursion during subagent setup. 10000 provides headroom.
+(setq max-specpdl-size 10000)
 
 (provide 'post-early-init)
 
