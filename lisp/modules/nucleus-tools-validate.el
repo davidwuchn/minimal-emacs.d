@@ -23,7 +23,8 @@
       (when (numberp timestamp)
         (let ((age (- (float-time) timestamp)))
           (when (and (numberp age)
-                     (< age nucleus--validation-cache-ttl))
+                     (< age nucleus--validation-cache-ttl)
+                     (proper-list-p results))
             results))))))
 
 (defun nucleus--extract-prompt-signature (tool-name prompt-text)
