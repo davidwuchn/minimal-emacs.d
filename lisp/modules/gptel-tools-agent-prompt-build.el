@@ -373,53 +373,53 @@ CALLBACK receives (final-prompt . rounds) when forging completes."
 (defun gptel-auto-experiment--allium-distill (text &optional callback)
   "Distill TEXT (prose/research findings) to Allium v3 behavioral spec.
 CALLBACK receives the Allium spec string via async LLM call."
-  (unless (and (fboundp 'gptel-request) callback)
+  (if (and (fboundp 'gptel-request) callback)
+      (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
+             (prompt (format "distill:\n\n%s" text)))
+        (gptel-request
+         prompt
+         :callback (lambda (response _info)
+                     (let ((text (if (stringp response) response (format "%s" response))))
+                       (funcall callback text)))
+         :system system-prompt
+         :timeout 30))
     (when callback (funcall callback nil))
-    (throw 'compile-early-return nil))
-  (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
-         (prompt (format "distill:\n\n%s" text)))
-    (gptel-request
-     prompt
-     :callback (lambda (response _info)
-                 (let ((text (if (stringp response) response (format "%s" response))))
-                   (funcall callback text)))
-     :system system-prompt
-     :timeout 30)))
+    nil))
 
 (defun gptel-auto-experiment--allium-check (allium-spec &optional callback)
   "Check ALLIUM-SPEC for issues (missing preconditions, contradictions, etc.).
 CALLBACK receives the issues list as a string via async LLM call."
-  (unless (and (fboundp 'gptel-request) callback)
+  (if (and (fboundp 'gptel-request) callback)
+      (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
+             (prompt (format "check:\n\n%s" allium-spec)))
+        (gptel-request
+         prompt
+         :callback (lambda (response _info)
+                     (let ((text (if (stringp response) response (format "%s" response))))
+                       (funcall callback text)))
+         :system system-prompt
+         :timeout 30))
     (when callback (funcall callback nil))
-    (throw 'compile-early-return nil))
-  (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
-         (prompt (format "check:\n\n%s" allium-spec)))
-    (gptel-request
-     prompt
-     :callback (lambda (response _info)
-                 (let ((text (if (stringp response) response (format "%s" response))))
-                   (funcall callback text)))
-     :system system-prompt
-     :timeout 30)))
+    nil))
 
 (defun gptel-auto-experiment--allium-decompile (allium-spec &optional callback audience)
   "Decompile ALLIUM-SPEC to natural language prose.
 AUDIENCE when non-nil targets output for a specific role (e.g. \"for a product manager\").
 CALLBACK receives the prose string via async LLM call."
-  (unless (and (fboundp 'gptel-request) callback)
+  (if (and (fboundp 'gptel-request) callback)
+      (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
+             (audience-str (if (and audience (stringp audience))
+                               (format " %s" audience) ""))
+             (prompt (format "decompile%s:\n\n%s" audience-str allium-spec)))
+        (gptel-request
+         prompt
+         :callback (lambda (response _info)
+                     (let ((text (if (stringp response) response (format "%s" response))))
+                       (funcall callback text)))
+         :system system-prompt
+         :timeout 30))
     (when callback (funcall callback nil))
-    (throw 'compile-early-return nil))
-  (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
-         (audience-str (if (and audience (stringp audience))
-                           (format " %s" audience) ""))
-         (prompt (format "decompile%s:\n\n%s" audience-str allium-spec)))
-    (gptel-request
-     prompt
-     :callback (lambda (response _info)
-                 (let ((text (if (stringp response) response (format "%s" response))))
-                   (funcall callback text)))
-     :system system-prompt
-     :timeout 30)))
+    nil))
 
 (defun gptel-auto-experiment--allium-issues-count (check-output)
   "Count distinct issues from Allium check output (deterministic).

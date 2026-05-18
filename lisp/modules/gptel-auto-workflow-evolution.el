@@ -1974,50 +1974,50 @@ Schedules async; returns list of strategy names that were audited."
   "Distill FINDINGS-SUMMARY to Allium spec, check for issues, invoke CALLBACK with quality score.
 Like nucleus compile-score but for Allium: prose → spec → check → score.
 CALLBACK receives (issues-count . severity-score) where severity 0-1."
-  (unless (and (fboundp 'gptel-auto-experiment--allium-distill) callback)
+  (if (and (fboundp 'gptel-auto-experiment--allium-distill) callback)
+      (gptel-auto-experiment--allium-distill
+       findings-summary
+       (lambda (allium-spec)
+         (if (not allium-spec)
+             (funcall callback (cons 99 1.0))
+           (gptel-auto-experiment--allium-check
+            allium-spec
+            (lambda (issues)
+              (funcall callback (gptel-auto-experiment--allium-issues-count issues)))))))
     (when callback (funcall callback (cons 99 1.0)))
-    (throw 'compile-early-return nil))
-  (gptel-auto-experiment--allium-distill
-   findings-summary
-   (lambda (allium-spec)
-     (if (not allium-spec)
-         (funcall callback (cons 99 1.0))
-       (gptel-auto-experiment--allium-check
-        allium-spec
-        (lambda (issues)
-          (funcall callback (gptel-auto-experiment--allium-issues-count issues))))))))
+    nil))
 
 (defun gptel-auto-workflow--allium-diff-minimal-pairs (ha hb &optional callback)
   "Diff minimal-pair hypotheses (HA, HB) via Allium spec comparison.
 Distills both to Allium specs, then checks each for internal coherence.
 CALLBACK receives (ha-issues . hb-issues) with issue counts for each side.
 Use to determine which minimal pair has cleaner behavioral specification."
-  (unless (and (fboundp 'gptel-auto-experiment--allium-distill)
-               (fboundp 'gptel-auto-experiment--allium-check)
-               callback
-               (stringp ha) (stringp hb))
+  (if (and (fboundp 'gptel-auto-experiment--allium-distill)
+           (fboundp 'gptel-auto-experiment--allium-check)
+           callback
+           (stringp ha) (stringp hb))
+      (gptel-auto-experiment--allium-distill
+       ha
+       (lambda (spec-a)
+         (let ((result (cons 99 99)))
+           (if (not spec-a)
+               (funcall callback result)
+             (gptel-auto-experiment--allium-distill
+              hb
+              (lambda (spec-b)
+                (if (not spec-b)
+                    (funcall callback result)
+                  (gptel-auto-experiment--allium-check
+                   spec-a
+                   (lambda (issues-a)
+                     (gptel-auto-experiment--allium-check
+                      spec-b
+                      (lambda (issues-b)
+                        (funcall callback
+                                 (cons (car (gptel-auto-experiment--allium-issues-count issues-a))
+                                       (car (gptel-auto-experiment--allium-issues-count issues-b)))))))))))))))
     (when callback (funcall callback (cons 99 99)))
-    (throw 'compile-early-return nil))
-  (gptel-auto-experiment--allium-distill
-   ha
-   (lambda (spec-a)
-     (let ((result (cons 99 99)))
-       (if (not spec-a)
-           (funcall callback result)
-         (gptel-auto-experiment--allium-distill
-          hb
-          (lambda (spec-b)
-            (if (not spec-b)
-                (funcall callback result)
-              (gptel-auto-experiment--allium-check
-               spec-a
-               (lambda (issues-a)
-                 (gptel-auto-experiment--allium-check
-                  spec-b
-                  (lambda (issues-b)
-                    (funcall callback
-                             (cons (car (gptel-auto-experiment--allium-issues-count issues-a))
-                                   (car (gptel-auto-experiment--allium-issues-count issues-b))))))))))))))))
+    nil))
 
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
   "Auto-reorder the fallback chain based on backend performance data.

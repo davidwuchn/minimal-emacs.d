@@ -323,6 +323,21 @@ Malformed Allium output may contain issues as prose without numbered listing."
                  "1. contradictory invariant violation\n2. unreachable transition graph\n3. when-clause obligation absent field\n4. missing precondition missing rule without matching without outbound")))
     (should (<= (cdr result) 1.0))))
 
+(ert-deftest regression/prompt/allium-quality-score-exact-severity-only ()
+  "Quality score with severity>0 and zero numbered issues should compute correctly.
+Single keyword 'contradictory' (severity 0.3): (min 0.8 (/ 0.3 2.0)) = 0.15."
+  (should (= (gptel-auto-experiment--allium-quality-score "contradictory") 0.15)))
+
+(ert-deftest regression/prompt/allium-issues-count-non-string ()
+  "Non-string input (number) should return (0 . 0.0)."
+  (let ((result (gptel-auto-experiment--allium-issues-count 42)))
+    (should (= (car result) 0))
+    (should (= (cdr result) 0.0))))
+
+(ert-deftest regression/prompt/allium-quality-score-non-string ()
+  "Non-string input (number) should return 1.0 (worst)."
+  (should (= (gptel-auto-experiment--allium-quality-score 42) 1.0)))
+
 (ert-deftest regression/auto-workflow-evolution/allium-audit-returns-list ()
   "allium-audit functions resolve and have correct signatures."
   (should (fboundp 'gptel-auto-experiment--allium-issues-count))
@@ -331,6 +346,25 @@ Malformed Allium output may contain issues as prose without numbered listing."
   (should (fboundp 'gptel-auto-workflow--allium-audit-signal))
   (should (fboundp 'gptel-auto-workflow--allium-check-research-quality))
   (should (fboundp 'gptel-auto-workflow--allium-diff-minimal-pairs)))
+
+(ert-deftest regression/auto-workflow-evolution/allium-check-research-quality-guard-callback ()
+  "Guard clause: when allium-distill not fboundp, callback receives (99 . 1.0)."
+  (cl-letf (((symbol-function 'gptel-auto-experiment--allium-distill) nil))
+    (let ((called-p nil) (sentinel nil))
+      (gptel-auto-workflow--allium-check-research-quality
+       "test findings"
+       (lambda (r) (setq called-p t sentinel r)))
+      (should called-p)
+      (should (equal sentinel (cons 99 1.0))))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-diff-minimal-pairs-guard-callback ()
+  "Guard clause: when fboundp not met, callback receives (99 . 99)."
+  (let ((called-p nil) (sentinel nil))
+    (gptel-auto-workflow--allium-diff-minimal-pairs
+     "ha" "hb"
+     (lambda (r) (setq called-p t sentinel r)))
+    (should called-p)
+    (should (equal sentinel (cons 99 99)))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
