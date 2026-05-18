@@ -1743,6 +1743,19 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (gptel-auto-workflow--evolution-record-score)
   (gptel-auto-workflow--evolution-optimize-backend-order)
   (gptel-auto-workflow--evolution-vsm-health-check)
+  ;; Change impact classification (Semantica ChangeLogAnalyzer pattern)
+  (condition-case nil
+      (let ((impact (gptel-auto-workflow--classify-experiment-impact)))
+        (let ((s (plist-get impact :summary)))
+          (message "[impact] %d total: %d breaking, %d potentially-breaking, %d safe"
+                   (plist-get s :total)
+                   (plist-get s :breaking)
+                   (plist-get s :potentially-breaking)
+                   (plist-get s :safe)))
+        (dolist (b (seq-take (plist-get impact :breaking) 3))
+          (message "[impact]   BREAKING: %s (delta=%.2f, %s)"
+                   (plist-get b :target) (plist-get b :delta) (plist-get b :reason))))
+    (error nil))
   ;; Run audits and feed results back into evolution
   (let ((flagged (gptel-auto-workflow--audit-signal)))
     (when flagged
@@ -1757,6 +1770,18 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (error
              (message "[audit] Strategy '%s' evolution triggered but not yet available" strategy)))))))
   (gptel-auto-workflow--allium-audit-signal)
+  ;; Knowledge page cross-cycle diff (Semantica set-difference pattern)
+  (condition-case nil
+      (let ((diff (gptel-auto-workflow--diff-knowledge-pages)))
+        (let ((added (plist-get diff :added))
+              (removed (plist-get diff :removed))
+              (changed (plist-get diff :changed)))
+          (when (or added removed changed)
+            (message "[diff] Knowledge pages: +%d added, -%d removed, ~%d changed"
+                     (length added) (length removed) (length changed))
+            (dolist (a added) (message "[diff]   + %s" a))
+            (dolist (r removed) (message "[diff]   - %s" r)))))
+    (error nil))
   (message "[auto-workflow] Self-evolution cycle complete.")))
 
 ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
@@ -1844,7 +1869,17 @@ Maps nucleus VSM layers to our system components:
             (message "[onto] Ontology: %d classes, %d instances"
                      (plist-get ontology :class-count) (plist-get ontology :instance-count))
             (when (> (length causal) 0)
-              (message "[causal] %d targets with multi-experiment chains" (length causal))))
+              (message "[causal] %d targets with multi-experiment chains" (length causal)))
+            ;; Knowledge page quality (Semantica evaluator)
+            (let ((scores (gptel-auto-workflow--score-knowledge-pages)))
+              (message "[evaluator] Knowledge pages: %.0f%% coverage, %.0f%% completeness, %.0f%% linked (%.0f%% overall, %d pages)"
+                       (* 100 (plist-get scores :coverage)) (* 100 (plist-get scores :completeness))
+                       (* 100 (plist-get scores :relations)) (* 100 (plist-get scores :overall))
+                       (plist-get scores :total-pages))
+              (let ((issues (plist-get scores :issues)))
+                (when issues
+                  (dolist (i (seq-take issues 3))
+                    (message "[evaluator]   issue: %s" i))))))
         (error nil))
       (error nil))))
 
@@ -1900,6 +1935,118 @@ Returns insights string or nil."
               (or sb 0) db
               delta
               (if (> delta 0) "HA" "HB")))))
+
+;; ─── Semantica Diff: cross-cycle knowledge page comparison ───
+
+(defun gptel-auto-workflow--knowledge-page-signature (file-path)
+  "Compute a structural signature of a knowledge page.
+Returns plist with :name, :sections (list of heading names), :frontmatter-keys."
+  (let ((name (file-name-nondirectory file-path))
+        (sections nil) (fm-keys nil))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file-path)
+          (goto-char (point-min))
+          (while (re-search-forward "^\\([a-z-]+\\): " nil t)
+            (push (match-string 1) fm-keys))
+          (goto-char (point-min))
+          (while (re-search-forward "^## \\(.+\\)" nil t)
+            (push (string-trim (match-string 1)) sections))
+          (list :name name
+                :sections (sort sections #'string<)
+                :frontmatter-keys (sort (delete-dups fm-keys) #'string<)))
+      (error (list :name name :sections nil :frontmatter-keys nil)))))
+
+(defun gptel-auto-workflow--diff-knowledge-pages ()
+  "Diff knowledge pages against last cycle's snapshot (Semantica set-difference pattern).
+Returns plist with :added, :removed, :changed."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (kd (expand-file-name "mementum/knowledge" root))
+         (snap-file (expand-file-name "var/tmp/evolution/knowledge-snapshot.el" root))
+         (current-pages (when (file-directory-p kd)
+                          (directory-files kd t "research-insights-.+\\.md$")))
+         (current-sigs nil)
+         (prev-sigs (condition-case nil
+                        (with-temp-buffer
+                          (insert-file-contents snap-file)
+                          (goto-char (point-min))
+                          (read (current-buffer)))
+                      (error nil)))
+         (added nil) (removed nil) (changed nil))
+    (dolist (f current-pages)
+      (let ((sig (gptel-auto-workflow--knowledge-page-signature f)))
+        (push sig current-sigs)
+        (let ((prev (assoc (plist-get sig :name) prev-sigs
+                           (lambda (a b) (equal a (plist-get b :name))))))
+          (if prev
+              (unless (and (equal (plist-get sig :sections) (plist-get prev :sections))
+                           (equal (plist-get sig :frontmatter-keys) (plist-get prev :frontmatter-keys)))
+                (push (list :page (plist-get sig :name)
+                            :prev-sections (plist-get prev :sections)
+                            :curr-sections (plist-get sig :sections)
+                            :prev-fm (plist-get prev :frontmatter-keys)
+                            :curr-fm (plist-get sig :frontmatter-keys))
+                      changed))
+            (push (plist-get sig :name) added)))))
+    (dolist (prev prev-sigs)
+      (unless (assoc (plist-get prev :name) current-sigs
+                     (lambda (a b) (equal a (plist-get b :name))))
+        (push (plist-get prev :name) removed)))
+    (make-directory (file-name-directory snap-file) t)
+    (with-temp-file snap-file
+      (prin1 current-sigs (current-buffer)))
+    (list :added added :removed removed :changed changed)))
+
+;; ─── Semantica Impact: change severity classification ───
+
+(defconst gptel-auto-workflow--impact-severity-fields
+  '((:score-before :score-after . :score-drop)
+    (:decision . :decision-flip)
+    (:hypothesis . :hypothesis-change)
+    (:target . :target-change))
+  "Fields with severity impact rules. Alist of (field . change-type).")
+
+(defun gptel-auto-workflow--classify-experiment-impact ()
+  "Classify recent experiment changes by severity (Semantica ChangeLogAnalyzer pattern).
+Returns ImpactReport-style plist with :breaking, :potentially-breaking, :safe, :summary."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (breaking nil) (potentially-breaking nil) (safe nil)
+         (total (length results)))
+    (dolist (r results)
+      (let* ((target (plist-get r :target))
+             (decision (plist-get r :decision))
+             (score-before (plist-get r :score-before))
+             (score-after (plist-get r :score-after))
+             (delta (if (and score-before score-after) (- score-after score-before) 0))
+             (impact nil))
+        (cond
+         ;; Score dropped more than 0.02 → BREAKING
+         ((< delta -0.02)
+          (setq impact "breaking")
+          (push (list :target target :decision decision :delta delta :reason "score regression") breaking))
+         ;; Discarded but had high score → POTENTIALLY_BREAKING
+         ((and (equal decision "discarded") score-after (> score-after 0.5))
+          (setq impact "potentially_breaking")
+          (push (list :target target :decision decision :delta delta :reason "discarded high-scorer") potentially-breaking))
+         ;; Kept with negative delta → POTENTIALLY_BREAKING
+         ((and (equal decision "kept") (< delta -0.01))
+          (setq impact "potentially_breaking")
+          (push (list :target target :decision decision :delta delta :reason "kept despite regression") potentially-breaking))
+         ;; Kept with improvement → safe
+         ((and (equal decision "kept") (> delta 0.01))
+          (setq impact "safe")
+          (push (list :target target :decision decision :delta delta) safe))
+         (t
+          (setq impact "safe")
+          (push (list :target target :decision decision :delta delta) safe)))))
+    (list :breaking (nreverse breaking)
+          :potentially-breaking (nreverse potentially-breaking)
+          :safe (length safe)
+          :summary (list :total total
+                          :breaking (length breaking)
+                          :potentially-breaking (length potentially-breaking)
+                          :safe (length safe)
+                          :generated (format-time-string "%Y-%m-%dT%H:%M")))))
 
 ;; ─── Backend Performance Optimization ───
 
@@ -2391,6 +2538,95 @@ Simple keyword-based opposition detection."
                      (string-match-p (regexp-quote a) h2))
             (throw 'found t))))
       nil)))
+
+;; ─── Semantica Evaluator: knowledge page quality scoring ───
+
+(defun gptel-auto-workflow--score-knowledge-pages ()
+  "Score knowledge pages by coverage, completeness, and relation (Semantica evaluator pattern).
+Returns ((:coverage . N) (:completeness . N) (:relations . N) (:overall . N) (:issues . list))."
+  (let* ((dir (expand-file-name "mementum/knowledge"
+                                (gptel-auto-workflow--worktree-base-root)))
+         (files (when (file-directory-p dir)
+                  (directory-files dir t "research-insights-.+\\.md$")))
+         (coverage-score 0) (completeness-score 0) (relation-score 0)
+         (total-pages 0) (issues nil))
+    (dolist (f files)
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents f)
+            (goto-char (point-min))
+            (let* ((has-title (re-search-forward "^title: " nil t))
+                   (has-status (re-search-forward "^status: " nil t))
+                   (has-tags (re-search-forward "^tags: " nil t))
+                   (has-quality (re-search-forward "^insight-quality: " nil t))
+                   (has-allium (re-search-forward "^allium-status: " nil t))
+                   (has-targets (re-search-forward "^## Successful Targets" nil t))
+                   (has-meta (re-search-forward "^## Meta-Learning" nil t)))
+              (setq total-pages (1+ total-pages))
+              ;; Coverage: sections present (0-1)
+              (let ((cov 0) (max-sections 3))
+                (when has-targets (setq cov (1+ cov)))
+                (when has-meta (setq cov (1+ cov)))
+                (when has-allium (setq cov (1+ cov)))
+                (setq coverage-score (+ coverage-score (/ (float cov) max-sections))))
+              ;; Completeness: frontmatter fields present (0-1)
+              (let ((comp 0) (max-fields 4))
+                (when has-title (setq comp (1+ comp)))
+                (when has-status (setq comp (1+ comp)))
+                (when has-tags (setq comp (1+ comp)))
+                (when has-quality (setq comp (1+ comp)))
+                (setq completeness-score (+ completeness-score (/ (float comp) max-fields))))
+              ;; Relation: has Allium links (0-1)
+              (setq relation-score (+ relation-score (if has-allium 1.0 0.0)))
+              ;; Collect issues
+              (unless has-allium
+                (push (format "%s: missing Allium audit" (file-name-nondirectory f)) issues))
+              (unless has-targets
+                (push (format "%s: missing Successful Targets section" (file-name-nondirectory f)) issues))))
+        (error nil)))
+    (let ((n (max 1 total-pages)))
+      (list :coverage (/ coverage-score n)
+            :completeness (/ completeness-score n)
+            :relations (/ relation-score n)
+            :overall (/ (+ (/ coverage-score n) (/ completeness-score n) (/ relation-score n)) 3.0)
+            :total-pages total-pages
+            :issues (nreverse issues)))))
+
+(defun gptel-auto-workflow--validate-knowledge-page (file-path)
+  "Validate a knowledge page structurally. Returns validation-result plist.
+Checks: required frontmatter, duplicate titles, empty sections."
+  (let ((errors nil) (warnings nil))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file-path)
+          (goto-char (point-min))
+          (let* ((content (buffer-string))
+                 (title (when (re-search-forward "^title: \\(.+\\)" nil t)
+                          (match-string 1)))
+                 (status (when (re-search-forward "^status: " nil t) t))
+                 (allium-issues (when (re-search-forward "^allium-issues: " nil t)
+                                  (string-to-number (or (match-string 1) "0"))))
+                 (tag-section (when (re-search-forward "^tags: " nil t) t)))
+            (unless title
+              (push "Missing title in frontmatter" errors))
+            (unless status
+              (push "Missing status in frontmatter" warnings))
+            (unless tag-section
+              (push "Missing tags in frontmatter" warnings))
+            (when (and allium-issues (> allium-issues 0))
+              (unless (re-search-forward "^## Allium Behavioral Coherence" nil t)
+                (push "Has allium-issues >0 but missing Allium Behavioral Coherence section" errors)))
+            (let ((pos 0) (title-count 0))
+              (while (string-match "^# " content pos)
+                (setq title-count (1+ title-count) pos (match-end 0)))
+              (when (= title-count 0)
+                (push "No main heading (# ) found" warnings)))))
+      (error
+       (push (format "Failed to read: %s" (error-message-string err)) errors)))
+    (gptel-auto-workflow--validation-result
+     (null errors)
+     errors
+     warnings)))
 
 (defun gptel-auto-workflow--evolution-optimize-backend-order ()
   "Auto-reorder the fallback chain based on backend performance data.
