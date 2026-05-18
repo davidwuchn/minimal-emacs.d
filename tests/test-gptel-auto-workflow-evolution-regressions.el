@@ -817,6 +817,15 @@ so tags before allium-issues is correctly detected."
             (push (cons (plist-get s :label) fn-name) missing)))))
     (should-not missing)))
 
+(ert-deftest regression/auto-workflow-evolution/eval-cond-less-than ()
+  "eval-condition: < operator works correctly."
+  (should (gptel-auto-workflow--eval-condition '(keep-rate < 0.5) '((keep-rate . 0.3))))
+  (should-not (gptel-auto-workflow--eval-condition '(keep-rate < 0.5) '((keep-rate . 0.8)))))
+
+(ert-deftest regression/auto-workflow-evolution/eval-cond-missing-field ()
+  "eval-condition: missing field returns nil."
+  (should-not (gptel-auto-workflow--eval-condition '(keep-rate < 0.5) '((other . 1)))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
