@@ -20,10 +20,11 @@
              (listp nucleus--validation-cache)
              (= 2 (length nucleus--validation-cache)))
     (pcase-let ((`(,timestamp . ,results) nucleus--validation-cache))
-      (when (and (numberp timestamp)
-                 (floatp (- (float-time) timestamp))
-                 (< (- (float-time) timestamp) nucleus--validation-cache-ttl))
-        results))))
+      (when (numberp timestamp)
+        (let ((age (- (float-time) timestamp)))
+          (when (and (numberp age)
+                     (< age nucleus--validation-cache-ttl))
+            results))))))
 
 (defun nucleus--extract-prompt-signature (tool-name prompt-text)
   "Extract lambda signature for TOOL-NAME from PROMPT-TEXT.
