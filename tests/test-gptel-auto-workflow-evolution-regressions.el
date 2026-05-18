@@ -298,15 +298,21 @@
              0.3)))
 
 (ert-deftest regression/prompt/allium-compiler-prompt-nonempty ()
-  "Allium compiler prompt returns non-empty string containing allium reference."
-  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
-             (lambda () (expand-file-name "~/.emacs.d/"))))
-    (condition-case nil
-        (let ((prompt (gptel-auto-experiment--allium-compiler-prompt)))
-          (should (stringp prompt))
-          (should (string-match-p "allium\|ALLIUM" prompt)))
-      (error (message "allium-compiler-prompt test skipped: dependencies unavailable")
-             (should t)))))
+  "Allium compiler prompt returns non-empty string from ALLIUM.md."
+  (let ((tmpdir (make-temp-file "allium-prompt-test-" t)))
+    (unwind-protect
+        (progn
+          (let ((nucleus-dir (expand-file-name "packages/nucleus" tmpdir)))
+            (make-directory nucleus-dir t)
+            (with-temp-file (expand-file-name "ALLIUM.md" nucleus-dir)
+              (insert "## The Prompt\nALLIUM v3 behavioral spec compiler.\n\`\`\`\n")))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () tmpdir)))
+            (let ((prompt (gptel-auto-experiment--allium-compiler-prompt)))
+              (should (stringp prompt))
+              (should (string-match-p "ALLIUM v3" prompt))
+              (should (string-match-p "behavioral spec" prompt)))))
+      (delete-directory tmpdir t))))
 
 ;; ─── Allium Audit Tests ───
 
@@ -512,6 +518,25 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
 (ert-deftest regression/prompt/kibcm-axis-fboundp ()
   "kibcm-axis function is defined."
   (should (fboundp 'gptel-auto-experiment--kibcm-axis)))
+
+(ert-deftest regression/auto-workflow-evolution/axis-stats-with-mock ()
+  "evolution-axis-stats computes per-axis keep rates from mocked results.
+:K: 3/4 kept = 0.75, :B: 2/3 kept = 0.67. Sorted descending."
+  (let ((mock-results (list
+                       (list :decision "kept" :kibcm-axis :K)
+                       (list :decision "kept" :kibcm-axis :K)
+                       (list :decision "kept" :kibcm-axis :K)
+                       (list :decision "discarded" :kibcm-axis :K)
+                       (list :decision "kept" :kibcm-axis :B)
+                       (list :decision "kept" :kibcm-axis :B)
+                       (list :decision "discarded" :kibcm-axis :B))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock-results)))
+      (let ((stats (gptel-auto-workflow--evolution-axis-stats)))
+        (should (= (length stats) 2))
+        (should (eq :K (caar stats)))
+        (should (> (cdar stats) 0.7))
+        (should (eq :B (car (cadr stats))))))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
