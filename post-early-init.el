@@ -107,6 +107,19 @@
 ;; deep recursion during subagent setup. 10000 provides headroom.
 (setq max-specpdl-size 15000)
 
+;; HARDEN: Defer gptel curl sentinel via run-at-time 0 to break
+;; synchronous recursion chains (sentinel → FSM → HTTP → sentinel).
+;; The built-in sentinel-depth guard (10 max) prevents infinite loops
+;; but doesn't break the sync call stack — Lisp nesting still grows
+;; until it hits max-lisp-eval-depth. run-at-time breaks the chain.
+(when (daemonp)
+  (with-eval-after-load 'gptel-request
+    (advice-add 'gptel-curl--sentinel :around
+                (lambda (orig-fn process status &rest args)
+                  (if (> gptel-curl--sentinel-depth 5)
+                      (run-at-time 0 nil orig-fn process status)
+                    (apply orig-fn process status args))))))
+
 (provide 'post-early-init)
 
 ;;; post-early-init.el ends here
