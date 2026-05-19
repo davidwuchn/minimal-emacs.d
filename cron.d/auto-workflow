@@ -39,7 +39,7 @@ PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
 # Pipeline: research → digestion → auto-workflow (evolution runs internally)
 
 # Watchdog: restart daemon if unresponsive (every 30 min)
-#0 * * * * $HOME/.emacs.d/scripts/watchdog-daemon.sh
+#0 */30 * * * $HOME/.emacs.d/scripts/watchdog-daemon.sh
 
 #0 23,3,7,11,15,19 * * * $HOME/.emacs.d/scripts/run-pipeline.sh >> $HOME/.emacs.d/var/tmp/cron/pipeline.log 2>&1
 #0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
