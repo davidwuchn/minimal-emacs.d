@@ -139,7 +139,9 @@ Returns (list entry) for strings, or entry as-is for cons cells."
 (defun my/gptel--count-context-image-tokens ()
   "Count total image tokens in current `gptel-context'.
 Iterates media entries, estimates per-image token cost."
-  (cl-loop for entry in gptel-context
+  (when (null gptel-context)
+    (setq gptel-context nil))
+  (cl-loop for entry in (if (proper-list-p gptel-context) gptel-context (list gptel-context))
            for (path . props) = (my/gptel--parse-context-entry entry)
            when (and (stringp path) (plist-get props :mime))
            sum (or (plist-get props :tokens)
