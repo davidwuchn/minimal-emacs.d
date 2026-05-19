@@ -825,7 +825,8 @@ request buffer for an active workflow task."
        ((hash-table-p gptel-auto-workflow--worktree-state)
         (maphash
          (lambda (_target state)
-           (let ((candidate (plist-get state :worktree-dir)))
+           (let ((candidate (and (proper-list-p state)
+                                 (plist-get state :worktree-dir))))
              (when (and (null found)
                         (stringp candidate)
                         (my/gptel--path-within-directory-p expanded-dir candidate))
