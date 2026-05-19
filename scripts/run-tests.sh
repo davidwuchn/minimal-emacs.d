@@ -209,7 +209,7 @@ run_e2e_tests() {
         MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
         MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
         XDG_RUNTIME_DIR="$complete_runtime_dir" \
-        emacs --init-directory="$DIR" --bg-daemon="$complete_server" >"$complete_daemon_log" 2>&1 || true
+        bash -c "ulimit -s 65532 2>/dev/null; exec emacs --init-directory=\"$DIR\" --bg-daemon=\"$complete_server\"" >"$complete_daemon_log" 2>&1 || true
 
     for _ in $(seq 1 100); do
         if env XDG_RUNTIME_DIR="$complete_runtime_dir" \
@@ -305,7 +305,7 @@ run_e2e_tests() {
         MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
         MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
         XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
-        emacs --init-directory="$DIR" --bg-daemon="$live_messages_server" >/dev/null 2>&1 || true
+        bash -c "ulimit -s 65532 2>/dev/null; exec emacs --init-directory=\"$DIR\" --bg-daemon=\"$live_messages_server\"" >/dev/null 2>&1 || true
 
     for _ in $(seq 1 100); do
         if env XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
