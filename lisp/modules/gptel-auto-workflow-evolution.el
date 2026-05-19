@@ -1977,6 +1977,11 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (dolist (m mem)
           (message "[memory]   %s: %s (%s)" (plist-get m :layer) (plist-get m :state) (plist-get m :description))))
     (error nil))
+  ;; Holdout evaluation — real progress vs overfitting (AutoGo pattern)
+  (condition-case nil
+      (let ((h (gptel-auto-workflow--evaluate-holdout)))
+        (message "[holdout] avg=%.3f trend=%+.3f" (plist-get h :average) (plist-get h :trend)))
+    (error nil))
   (message "[auto-workflow] Self-evolution cycle complete.")
   ;; Emit machine-parseable RESULT for this cycle (AutoGo protocol)
   (condition-case nil
