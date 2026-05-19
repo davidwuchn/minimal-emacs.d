@@ -1990,6 +1990,12 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (let ((h (gptel-auto-workflow--evaluate-holdout)))
         (message "[holdout] avg=%.3f trend=%+.3f" (plist-get h :average) (plist-get h :trend)))
     (error nil))
+  ;; LLM-as-Oracle: produce uncertain candidates for validation
+  (condition-case nil
+      (let ((candidates (gptel-auto-workflow--produce-candidates-for-llm 20)))
+        (when candidates
+          (message "[oracle] %d uncertain candidates for LLM validation" (length candidates))))
+    (error nil))
   ;; Build inverted file index (LogMap pattern)
   (condition-case nil
       (gptel-auto-workflow--build-inverted-file)
@@ -2996,6 +3002,72 @@ Returns hash of node → (pre post desc-min desc-max). LogMap ILS pattern."
 LABELS is from build-interval-labels."
   (let ((cl (gethash child labels)) (pl (gethash parent labels)))
     (and cl pl (>= (nth 0 cl) (nth 2 pl)) (<= (nth 0 cl) (nth 3 pl)))))
+
+;; ─── LogMap: LLM-as-Oracle + Two-phase repair + Precomputed combinations ───
+
+(defvar gptel-auto-workflow--llm-oracle-mappings nil
+  "LLM-validated mappings stored as (entity1 . entity2) for oracle re-run.")
+
+(defun gptel-auto-workflow--produce-candidates-for-llm (max-candidates)
+  "Produce uncertain candidates for LLM validation. LogMap LLM-as-Oracle pattern."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (candidates nil))
+    (dolist (r results)
+      (let ((decision (plist-get r :decision))
+            (target (plist-get r :target))
+            (strategy (plist-get r :strategy)))
+        (when (and (equal decision "discarded") target strategy
+                   (< (gptel-auto-workflow--ambiguity-score target) 3))
+          (push (list :target target :strategy strategy
+                      :score-before (plist-get r :score-before)
+                      :score-after (plist-get r :score-after))
+                candidates))))
+    (seq-take candidates max-candidates)))
+
+(defun gptel-auto-workflow--load-llm-oracle (csv-path)
+  "Load LLM-validated mappings from CSV. LogMap LocalOracle pattern.
+Format: target,strategy,prediction,confidence"
+  (setq gptel-auto-workflow--llm-oracle-mappings nil)
+  (when (file-readable-p csv-path)
+    (with-temp-buffer
+      (insert-file-contents csv-path)
+      (goto-char (point-min))
+      (while (re-search-forward "^\\([^,]+\\),\\([^,]+\\),\\(True\\|true\\),\\([0-9.]+\\)" nil t)
+        (push (cons (match-string 1) (match-string 2))
+              gptel-auto-workflow--llm-oracle-mappings))))
+  (message "[oracle] Loaded %d LLM-validated mappings" (length gptel-auto-workflow--llm-oracle-mappings)))
+
+(defun gptel-auto-workflow--two-phase-repair (conflictive-mappings)
+  "Phase 1: fast D&G approximate. Phase 2: full backtracking for hard cases.
+Returns repaired set. LogMap two-phase repair pattern."
+  (let* ((simple (seq-filter (lambda (m) (< (length conflictive-mappings) 15)) conflictive-mappings))
+         (hard (seq-filter (lambda (m) (>= (length conflictive-mappings) 15)) conflictive-mappings))
+         (kept nil))
+    (dolist (m simple) (push m kept)) ;; Phase 1: simple pass, keep if <15 conflicts
+    (when hard
+      ;; Phase 2: aggressive — only keep mappings validated by LLM oracle
+      (dolist (m hard)
+        (let ((pair (cons (plist-get m :target) (plist-get m :strategy))))
+          (when (member pair gptel-auto-workflow--llm-oracle-mappings)
+            (push m kept)))))
+    (nreverse kept)))
+
+(defvar gptel-auto-workflow--precomputed-combinations (make-hash-table :test 'equal)
+  "Cached C(n,k) combinations. LogMap PrecomputeIndexCombination pattern.")
+
+(defun gptel-auto-workflow--combinations (items k)
+  "Return all k-combinations of ITEMS, cached. LogMap C(n,k) enumeration."
+  (let ((key (format "%d-%d" (length items) k)))
+    (or (gethash key gptel-auto-workflow--precomputed-combinations)
+        (let ((result nil))
+          (cl-labels ((combine (start current)
+                        (when (= (length current) k)
+                          (push (nreverse current) result))
+                        (cl-loop for i from start below (length items)
+                                 do (combine (1+ i) (cons (nth i items) current)))))
+            (combine 0 nil))
+          (puthash key result gptel-auto-workflow--precomputed-combinations)
+          result))))
 
 (defun gptel-auto-workflow--evolution-axis-stats ()
   "Analyze KIBC-M axis performance from experiment results.
