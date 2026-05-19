@@ -558,13 +558,15 @@ Returns markdown string or empty."
       (with-temp-buffer
         (insert-file-contents findings-file)
         (goto-char (point-min))
-        ;; Parse: apply_to: "lisp/modules/xxx.el"
-        (while (re-search-forward "apply_to:\\s-*\"?\\([^\"\n,]+\\)\"?" nil t)
+        ;; Parse: apply_to: "value" or apply_to: value
+        (while (re-search-forward "apply_to:\\s-*\"?\\([^\"\n,)]+\\)\"?" nil t)
           (let ((target (string-trim (match-string 1))))
-            (unless (or (string-empty-p target) (string-match-p "^lisp/modules/" target))
-              (setq target (concat "lisp/modules/" target)))
-            (when (and (> (length target) 5) (string-match-p "^lisp/" target))
-              (push target targets))))))
+            ;; Skip template variables
+            (unless (or (string-empty-p target) (string-match-p "^technique\\." target))
+              (unless (string-match-p "^lisp/modules/" target)
+                (setq target (concat "lisp/modules/" target)))
+              (when (and (> (length target) 5) (string-match-p "^lisp/" target))
+                (push target targets))))))
     (if targets
         (concat "- " (mapconcat #'identity (delete-dups targets) "\n- "))
       "")))
@@ -767,36 +769,24 @@ Results feed into directive's 'Next Hypotheses' for target selection."
              "3. **Prioritize** sources with high keep-rates (Research Priorities above).\n"
              "4. **Synthesize** each finding: source, technique, how to apply to Emacs Lisp.\n"
              "5. **Output** as a structured research plan (see format below).\n\n"
-             "### Output Format (Allium v3 Behavioral Spec)\n"
-             "Your output is a MACHINE-EXECUTABLE spec, not a prose report.\n"
-             "Output valid Allium v3 syntax:\n\n"
+             "### Output Format (Allium v3 Behavioral Spec — FILL IN REAL VALUES)\n"
+             "CRITICAL: Do NOT copy the template. Fill in ACTUAL technique names, file paths, and descriptions.\n"
+             "`technique.name` MUST be replaced with a real technique like \"Nil Safety Guard\".\n"
+             "`technique.apply_to` MUST be replaced with a real file path like \"lisp/modules/gptel-auto-workflow-evolution.el\".\n"
+             "`technique.source` MUST be replaced with a real repo/file like \"nucleus/COMPILER.md\".\n\n"
+             "Example of CORRECT output:\n\n"
              "```allium\n"
-             "-- allium: 3\n"
-             "module research-plan\n\n"
-             "entity Technique {\n"
-             "  name: String\n"
-             "  source: String\n"
-             "  description: String\n"
-             "  apply_to: String\n"
-             "  verification: String\n"
-             "  priority: high | medium | low\n"
-             "}\n\n"
-             "rule DiscoverTechnique {\n"
-             "  when: ResearchGapFound(technique)\n"
-             "  requires: not exists Technique{name: technique.name}\n"
-             "  ensures:\n"
-             "    Technique.created(\n"
-             "      name: technique.name,\n"
-             "      source: technique.source,\n"
-             "      description: technique.description,\n"
-             "      apply_to: technique.apply_to,\n"
-             "      verification: technique.verification,\n"
-             "      priority: technique.priority\n"
-             "    )\n"
-             "}\n"
+             "Technique.created(\n"
+             "  name: \"Nil Safety Guard\",\n"
+             "  source: \"nucleus/COMPILER.md\",\n"
+             "  apply_to: \"lisp/modules/gptel-auto-workflow-evolution.el\",\n"
+             "  description: \"Add nil guards to function parameters\",\n"
+             "  verification: \"Run tests, check for unhandled nil errors\",\n"
+             "  priority: high\n"
+             ")\n"
              "```\n\n"
-             "For each technique discovered, add a Technique entity and a DiscoverTechnique rule.\n"
-             "The pipeline will parse this spec and execute it.\n\n"
+             "For each technique discovered, add a Technique.created() call with REAL data.\n"
+             "The pipeline parses these calls to extract targets and guide experiments.\n\n"
              "### Recent Failure Patterns\n"
              (gptel-auto-workflow--research-topics-string)
              "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
