@@ -137,7 +137,7 @@
                                (message "[gptel] Deferred sentinel error: %S" err)
                                (when (process-live-p process)
                                  (delete-process process)))))))
-                    (apply orig-fn process status args)))))))
+                    (apply orig-fn process status args))))))
 
 (provide 'post-early-init)
 
