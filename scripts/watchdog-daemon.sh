@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Watchdog: restart auto-workflow daemon if unresponsive
+# Runs from cron every 30 min. Checks daemon socket via emacsclient.
+# If daemon doesn't respond within 15s, kill and restart.
+
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SERVER_NAME="copilot-auto-workflow"
+SOCKET_PATH="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/emacs/$SERVER_NAME"
+LOG="$DIR/var/tmp/cron/watchdog.log"
+MAX_WAIT=15
+RESTART_COOLDOWN=300  # 5 min between restarts to avoid restart loops
+
+mkdir -p "$(dirname "$LOG")"
+
+# Avoid restart loops: track last restart time
+LAST_RESTART_FILE="$DIR/var/tmp/cron/watchdog-last-restart"
+if [ -f "$LAST_RESTART_FILE" ]; then
+    last_restart=$(cat "$LAST_RESTART_FILE")
+    now=$(date +%s)
+    if [ $((now - last_restart)) -lt $RESTART_COOLDOWN ]; then
+        exit 0
+    fi
+fi
+
+# Check if socket exists
+if [ ! -S "$SOCKET_PATH" ]; then
+    echo "[$(date '+%H:%M:%S')] Socket missing, restarting daemon" >> "$LOG"
+    echo "$(date +%s)" > "$LAST_RESTART_FILE"
+    MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 EMACSNATIVELOADPATH= \
+        setsid env -u DISPLAY \
+        ulimit -s 65532 \
+        emacs --init-directory="$DIR" --fg-daemon="$SERVER_NAME" >/dev/null 2>&1 &
+    exit 0
+fi
+
+# Check if daemon responds
+if ! timeout "$MAX_WAIT" emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
+    echo "[$(date '+%H:%M:%S')] Daemon unresponsive (${MAX_WAIT}s timeout), killing" >> "$LOG"
+    # Kill all processes with this server name
+    pgrep -f "emacs.*--fg-daemon=${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+    sleep 2
+    # Clean stale socket
+    rm -f "$SOCKET_PATH" 2>/dev/null || true
+    # Restart
+    echo "$(date +%s)" > "$LAST_RESTART_FILE"
+    MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 EMACSNATIVELOADPATH= \
+        setsid env -u DISPLAY \
+        ulimit -s 65532 \
+        emacs --init-directory="$DIR" --fg-daemon="$SERVER_NAME" >/dev/null 2>&1 &
+    echo "[$(date '+%H:%M:%S')] Daemon restarted" >> "$LOG"
+fi
