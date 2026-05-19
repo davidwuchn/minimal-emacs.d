@@ -399,6 +399,9 @@ if [ "$PIPELINE_SMOKE_ONLY" = "yes" ]; then
     log "PIPELINE_SMOKE_ONLY=yes; skipping auto-workflow batch queue"
     exit 0
 fi
+# Stop researcher daemon so it doesn't hold the cron-job lock
+AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
+sleep 2
 # Queue the workflow job (daemon will be started if not running)
 # Retry if evolution is still running (returns "already-running")
 for retry in 0 1 2 3 4; do
