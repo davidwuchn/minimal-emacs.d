@@ -28,11 +28,12 @@
    ((file-symlink-p target)
     (let ((source-true (gptel-auto-workflow--safe-truename source))
           (target-true (gptel-auto-workflow--safe-truename target)))
-      (when (and source-true target-true
-                 (not (equal source-true target-true)))
-        (delete-file target)
-        (make-symbolic-link source target t))
-      (and source-true target-true)))
+      (if (and source-true target-true
+               (equal source-true target-true))
+          t
+        (ignore-errors (delete-file target))
+        (make-symbolic-link source target t)
+        t)))
    ((file-exists-p target)
     t)
    (t
