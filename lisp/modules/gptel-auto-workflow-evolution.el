@@ -2876,11 +2876,11 @@ LogMap ambiguity heuristic: count(competing_matches) per entity."
   "Filter TARGETS: discard those with too many competing strategies.
 LogMap pattern: defer high-ambiguity candidates to expert review."
   (let ((kept nil) (deferred nil))
-    (dolist (t targets)
-      (let ((amb (gptel-auto-workflow--ambiguity-score t)))
+    (dolist (target targets)
+      (let ((amb (gptel-auto-workflow--ambiguity-score target)))
         (if (> amb max-ambiguity)
-            (push (cons t amb) deferred)
-          (push t kept))))
+            (push (cons target amb) deferred)
+          (push target kept))))
     (when deferred
       (message "[ambiguity] %d targets deferred (ambiguity >%d):" (length deferred) max-ambiguity)
       (dolist (d (seq-take deferred 3))

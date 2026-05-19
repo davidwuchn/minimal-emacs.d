@@ -964,6 +964,34 @@ so tags before allium-issues is correctly detected."
             (should (= s 0.0))))
       (delete-file tmpfile))))
 
+(ert-deftest regression/auto-workflow-evolution/ambiguity-score-single-strategy ()
+  "Single strategy → score 1."
+  (let ((mock (list (list :target "lisp/foo.el" :strategy "s1"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock)))
+      (should (= (gptel-auto-workflow--ambiguity-score "lisp/foo.el") 1)))))
+
+(ert-deftest regression/auto-workflow-evolution/ambiguity-score-multiple-strategies ()
+  "Multiple strategies → count distinct."
+  (let ((mock (list
+              (list :target "lisp/foo.el" :strategy "s1")
+              (list :target "lisp/foo.el" :strategy "s2")
+              (list :target "lisp/foo.el" :strategy "s1"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock)))
+      (should (= (gptel-auto-workflow--ambiguity-score "lisp/foo.el") 2)))))
+
+(ert-deftest regression/auto-workflow-evolution/filter-by-ambiguity-keeps-low ()
+  "Low ambiguity targets are kept, high deferred."
+  (let ((mock (list (list :target "lisp/foo.el" :strategy "s1"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock)))
+      (let* ((r (gptel-auto-workflow--filter-by-ambiguity '("lisp/foo.el") 2))
+             (kept (plist-get r :kept))
+             (deferred (plist-get r :deferred)))
+        (should (member "lisp/foo.el" kept))
+        (should-not deferred)))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
