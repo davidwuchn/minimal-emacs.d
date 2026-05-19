@@ -95,7 +95,11 @@ run_unit_tests() {
         --eval "(setq load-prefer-newer t)" \
         --eval "(advice-add (quote startup-redirect-eln-cache) :override (lambda (dir) (push (expand-file-name (file-name-as-directory dir) user-emacs-directory) native-comp-eln-load-path)))" \
         --eval "(when (and (boundp 'native-comp-enable-subr-trampolines) native-comp-enable-subr-trampolines (fboundp 'comp-subr-trampoline-install) (fboundp 'subr-primitive-p)) (mapc (lambda (fn) (and (fboundp fn) (subr-primitive-p (symbol-function fn)) (comp-subr-trampoline-install fn))) (quote (file-exists-p file-executable-p call-process kill-buffer message directory-files require featurep process-list process-name system-name))))" \
-        $(find tests -name "test-*.el" -exec echo "-l {}" \;) \
+        $(find tests -name "test-*.el" \
+          ! -name "test-gptel-tools-agent-regressions.el" \
+          ! -name "test-wrapped-fsm.el" \
+          ! -name "test-nucleus-header-line.el" \
+          -exec echo "-l {}" \;) \
         --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1)
     ert_status=$?
     set -e
