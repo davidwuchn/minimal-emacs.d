@@ -1933,6 +1933,16 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (when transitive
             (message "[datalog] %d transitive causal edges discovered" (length transitive)))))
     (error nil))
+  ;; Temporal analysis — Allen relations + coverage gaps
+  (condition-case nil
+      (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
+        (when gaps
+          (message "[temporal] %d temporal gaps found (>1h between experiments)" (length gaps))
+          (dolist (g (seq-take gaps 3))
+            (message "[temporal]   %s: gap since %.0fh ago"
+                     (truncate-string-to-width (car (cdr g)) 30)
+                     (/ (- (float-time) (cdr (cdr g))) 3600)))))
+    (error nil))
   ;; AgentMemory status log (Semantica pattern)
   (condition-case nil
       (let ((mem (gptel-auto-workflow--memory-status)))
@@ -2583,6 +2593,70 @@ Uses Floyd-Warshall-style transitive closure for O(n^3) all-pairs reachability."
             (puthash (cons i j) t reachable)
             (push (cons i j) result)))))
     result))
+
+;; ─── Semantica Temporal: Allen interval algebra for experiments ───
+
+(defun gptel-auto-workflow--allen-relation (a-start a-end b-start b-end)
+  "Determine Allen interval relation between A and B.
+Returns one of: before, meets, overlaps, starts, during, finishes, equals,
+or the inverse (after, met-by, overlapped-by, started-by, contains, finished-by).
+Each arg is a float timestamp (nil = unbounded)."
+  (cond
+   ((and a-start a-end b-start b-end
+         (< a-end b-start)) 'before)
+   ((and a-start a-end b-start b-end
+         (= a-end b-start)) 'meets)
+   ((and a-start a-end b-start b-end
+         (< a-start b-start) (< a-end b-end) (> a-end b-start)) 'overlaps)
+   ((and a-start a-end b-start b-end
+         (= a-start b-start) (< a-end b-end)) 'starts)
+   ((and a-start a-end b-start b-end
+         (> a-start b-start) (< a-end b-end)) 'during)
+   ((and a-start a-end b-start b-end
+         (> a-start b-start) (= a-end b-end)) 'finishes)
+   ((and a-start a-end b-start b-end
+         (= a-start b-start) (= a-end b-end)) 'equals)
+   ;; Inverse relations
+   ((and a-start a-end b-start b-end
+         (> a-start b-end)) 'after)
+   ((and a-start a-end b-start b-end
+         (= a-start b-end)) 'met-by)
+   ((and a-start a-end b-start b-end
+         (> a-start b-start) (< a-start b-end) (> a-end b-end)) 'overlapped-by)
+   ((and a-start a-end b-start b-end
+         (= a-start b-start) (> a-end b-end)) 'started-by)
+   ((and a-start a-end b-start b-end
+         (< a-start b-start) (> a-end b-end)) 'contains)
+   ((and a-start a-end b-start b-end
+         (< a-start b-start) (= a-end b-end)) 'finished-by)
+   (t 'unknown)))
+
+(defun gptel-auto-workflow--experiment-time-gaps ()
+  "Detect temporal gaps and overlaps between experiments on the same target.
+Returns alist of (target . ((gap-start . gap-end) ...))."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (by-target (make-hash-table :test 'equal))
+         (gaps nil))
+    (dolist (r results)
+      (let ((target (plist-get r :target)))
+        (when (stringp target)
+          (push r (gethash target by-target)))))
+    (maphash (lambda (target experiments)
+               (when (> (length experiments) 1)
+                 (let ((sorted (sort (mapcar (lambda (r)
+                                               (cons (or (plist-get r :timestamp)
+                                                         (float-time (current-time)))
+                                                     r))
+                                             experiments)
+                                     (lambda (a b) (< (car a) (car b))))))
+                   (let ((prev-end nil))
+                     (dolist (entry sorted)
+                       (let ((start (car entry)))
+                         (when (and prev-end (> (- start prev-end) 3600))
+                           (push (cons target (cons prev-end start)) gaps))
+                         (setq prev-end start)))))))
+             by-target)
+    gaps))
 
 ;; ─── Backend Performance Optimization ───
 

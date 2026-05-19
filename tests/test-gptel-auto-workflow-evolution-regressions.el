@@ -915,6 +915,32 @@ so tags before allium-issues is correctly detected."
   "Transitive closure of empty input should be nil."
   (should-not (gptel-auto-workflow--datalog-transitive-chain nil)))
 
+;; ─── Temporal Reasoning Tests ───
+
+(ert-deftest regression/temporal/allen-before ()
+  "A ends before B starts → before."
+  (should (eq (gptel-auto-workflow--allen-relation 1.0 2.0 3.0 4.0) 'before)))
+
+(ert-deftest regression/temporal/allen-overlaps ()
+  "A starts before B and ends during B → overlaps."
+  (should (eq (gptel-auto-workflow--allen-relation 1.0 4.0 3.0 6.0) 'overlaps)))
+
+(ert-deftest regression/temporal/allen-equals ()
+  "Same interval → equals."
+  (should (eq (gptel-auto-workflow--allen-relation 1.0 2.0 1.0 2.0) 'equals)))
+
+(ert-deftest regression/temporal/allen-after ()
+  "A starts after B ends → after."
+  (should (eq (gptel-auto-workflow--allen-relation 5.0 6.0 1.0 2.0) 'after)))
+
+(ert-deftest regression/temporal/allen-during ()
+  "A entirely inside B → during."
+  (should (eq (gptel-auto-workflow--allen-relation 3.0 4.0 1.0 6.0) 'during)))
+
+(ert-deftest regression/temporal/allen-meets ()
+  "A ends exactly where B starts → meets."
+  (should (eq (gptel-auto-workflow--allen-relation 1.0 3.0 3.0 5.0) 'meets)))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
