@@ -1,5 +1,7 @@
 ;;; gptel-auto-workflow-strategic.el --- Strategic target selection for auto-workflow -*- no-byte-compile: t; lexical-binding: t; -*-
 
+(declare-function gptel-auto-workflow--find-surprising-modules "gptel-auto-workflow-evolution")
+
 ;;; Commentary:
 ;; LLM-first target selection for auto-workflow.
 ;; Let the analyzer decide which files to optimize.
