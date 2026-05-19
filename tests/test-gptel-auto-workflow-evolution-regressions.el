@@ -1000,6 +1000,92 @@ so tags before allium-issues is correctly detected."
   "C(3,2) = 3."
   (should (= (length (gptel-auto-workflow--combinations '(a b c) 2)) 3)))
 
+;; ─── Conflict marker guard tests ───
+(load-file (expand-file-name "../lisp/modules/gptel-tools-agent-strategy-harness.el"
+                              (file-name-directory
+                               (or load-file-name buffer-file-name default-directory))))
+
+(ert-deftest regression/conflict-guard/detects-conflict-markers-in-el-file ()
+  "File with <<<<<<< HEAD / ======= / >>>>>>> markers is detected."
+  (let ((tmp (make-temp-file "conflict-guard" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert "<<<<<<< HEAD\n(defvar test 1)\n=======\n(defvar test 2)\n>>>>>>> other\n"))
+          (should (gptel-auto-workflow--file-has-conflict-markers-p tmp)))
+      (delete-file tmp))))
+
+(ert-deftest regression/conflict-guard/detects-conflict-markers-in-md-file ()
+  "File with conflict markers in markdown body is detected."
+  (let ((tmp (make-temp-file "conflict-guard" nil ".md")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert "---\ntitle: test\n---\n# Body\n<<<<<<< HEAD\nold\n=======\nnew\n>>>>>>> main\n"))
+          (should (gptel-auto-workflow--file-has-conflict-markers-p tmp)))
+      (delete-file tmp))))
+
+(ert-deftest regression/conflict-guard/clean-file-is-not-flagged ()
+  "Normal files without conflict markers return nil."
+  (let ((tmp (make-temp-file "conflict-guard" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert "(defvar test 1)\n(message \"hello\")\n"))
+          (should-not (gptel-auto-workflow--file-has-conflict-markers-p tmp)))
+      (delete-file tmp))))
+
+(ert-deftest regression/conflict-guard/rejects-loading-conflicted-strategy-el ()
+  "gptel-auto-workflow--load-strategy signals error on conflicted .el file."
+  (let ((strategies-dir (make-temp-file "aw-strategies" t))
+        (strategy-name "conflict-guard-test"))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name (format "strategy-%s.el" strategy-name)
+                                            strategies-dir))
+          ;; Write a conflicted strategy file
+          (let ((conflict-file (expand-file-name
+                                (format "strategy-%s.el" strategy-name)
+                                strategies-dir)))
+            (with-temp-file conflict-file
+              (insert "<<<<<<< HEAD\n(defun strategy-conflict-guard-test-build-prompt (&rest _) \"test\")\n=======\n>>>>>>> main\n")))
+          (should (gptel-auto-workflow--file-has-conflict-markers-p
+                   (expand-file-name (format "strategy-%s.el" strategy-name)
+                                     strategies-dir)))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--strategies-directory)
+                     (lambda () strategies-dir)))
+            (should-error
+             (gptel-auto-workflow--load-strategy strategy-name))))
+      (delete-directory strategies-dir t))))
+
+(ert-deftest regression/conflict-guard/loads-clean-strategy-el ()
+  "gptel-auto-workflow--load-strategy succeeds on clean .el file."
+  (let ((strategies-dir (make-temp-file "aw-strategies" t))
+        (strategy-name "clean-guard-test"))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name (format "strategy-%s.el" strategy-name)
+                                            strategies-dir))
+          (let ((clean-file (expand-file-name
+                             (format "strategy-%s.el" strategy-name)
+                             strategies-dir)))
+            (with-temp-file clean-file
+              (insert (format "(defun strategy-%s-build-prompt (&rest _) \"clean\")\n" strategy-name))
+              (insert (format "(defun strategy-%s-get-metadata () (list :name '%s))\n" strategy-name strategy-name)))
+            (cl-letf (((symbol-function 'gptel-auto-workflow--strategies-directory)
+                       (lambda () strategies-dir))
+                      ((symbol-function 'gptel-auto-workflow--load-strategy-metadata)
+                       (lambda (_) t))
+                      ((symbol-function 'gptel-auto-workflow--project-root)
+                       (lambda () strategies-dir)))
+              (should (gptel-auto-workflow--load-strategy strategy-name)))))
+      (delete-directory strategies-dir t))))
+
+(ert-deftest regression/conflict-guard/non-existent-file-returns-nil ()
+  "Non-existent file should not be flagged (not readable)."
+  (should-not (gptel-auto-workflow--file-has-conflict-markers-p
+               "/tmp/conflict-guard-nonexistent-99999.el")))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

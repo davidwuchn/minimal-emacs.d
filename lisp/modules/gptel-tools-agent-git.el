@@ -595,7 +595,26 @@ remove it."
     (setf (alist-get "Agent" (cdr cat) nil 'remove #'equal) nil)))
 
 (with-eval-after-load 'gptel-agent
-  (advice-add 'gptel-agent-update :around #'my/gptel--around-agent-update))
+  (advice-add 'gptel-agent-update :around #'my/gptel--around-agent-update)
+  ;; GUARD: Prevent eval of merge conflict markers in YAML frontmatter :pre/:post keys.
+  ;; Auto-generated .md agent files can accumulate <<<<<<< markers from staging syncs.
+  ;; When found, return a safe stub result instead of letting eval explode.
+  (defun my/gptel--reject-conflicted-frontmatter (orig file-path &rest args)
+    (when (and (stringp file-path) (file-readable-p file-path))
+      (with-temp-buffer
+        (insert-file-contents file-path)
+        (goto-char (point-min))
+        (when (re-search-forward "^\\(<<<<<<< \\|>>>>>>> \\|=======\\)" nil t)
+          (message "[guard] Refusing to parse %s: unresolved merge conflict markers"
+                   (file-name-nondirectory file-path))
+          (let ((body (buffer-substring-no-properties (point-min) (point-max))))
+            ;; metadata-only is the 4th positional arg (3rd in &rest)
+            (if (nth 2 args)
+                '()
+              (list :system body))))))
+    (apply orig file-path args))
+  (advice-add 'gptel-agent-parse-markdown-frontmatter :around
+              #'my/gptel--reject-conflicted-frontmatter))
 
 
 

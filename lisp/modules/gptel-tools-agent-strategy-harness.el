@@ -195,6 +195,15 @@ Returns list of strategy names."
             (push (substring name (length "strategy-")) strategies)))))
     (nreverse strategies)))
 
+(defun gptel-auto-workflow--file-has-conflict-markers-p (file)
+  "Return non-nil if FILE contains unresolved git merge conflict markers.
+Scans for <<<<<<<, =======, or >>>>>>> patterns."
+  (when (file-readable-p file)
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (re-search-forward "^\\(<<<<<<< \\|>>>>>>> \\|=======\\)" nil t))))
+
 (defun gptel-auto-workflow--load-strategy (strategy-name)
   "Load strategy STRATEGY-NAME from filesystem.
 Also loads persisted metadata if available.
@@ -202,9 +211,14 @@ Returns t if loaded successfully."
   (let ((file (expand-file-name (format "strategy-%s.el" strategy-name)
                                  (gptel-auto-workflow--strategies-directory))))
     (if (file-exists-p file)
-        (condition-case err
-            (progn
-              (load file nil t t)
+        (progn
+          ;; GUARD: Reject files with unresolved merge conflict markers BEFORE
+          ;; the condition-case, so errors propagate to callers.
+          (when (gptel-auto-workflow--file-has-conflict-markers-p file)
+            (error "Strategy file contains unresolved merge conflict markers: %s" file))
+          (condition-case err
+              (progn
+                (load file nil t t)
               ;; Register loadable strategies even if generated code omits the
               ;; self-registration block.
               (unless (gethash strategy-name gptel-auto-workflow--strategy-registry)
@@ -222,7 +236,7 @@ Returns t if loaded successfully."
               t)
           (error
            (message "[strategy] ERROR loading %s: %s" strategy-name err)
-           nil))
+           nil)))
       (message "[strategy] Strategy file not found: %s" file)
       nil)))
 
