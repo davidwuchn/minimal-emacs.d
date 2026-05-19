@@ -1840,6 +1840,14 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (unless (cdr r)
               (message "[cq]   UNANSWERABLE: %s" (car r))))))
     (error nil))
+  ;; Competitive gating — champion league (AutoGo pattern)
+  (condition-case nil
+      (let ((gated (gptel-auto-workflow--gate-strategies)))
+        (when gated
+          (message "[gate] Strategy gating results (%d evaluated):" (length gated))
+          (dolist (g (seq-take gated 5))
+            (message "[gate]   %s: %s" (car g) (cdr g)))))
+    (error nil))
   ;; Policy check (Semantica PolicyEngine pattern)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -1969,7 +1977,16 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (dolist (m mem)
           (message "[memory]   %s: %s (%s)" (plist-get m :layer) (plist-get m :state) (plist-get m :description))))
     (error nil))
-  (message "[auto-workflow] Self-evolution cycle complete.")))
+  (message "[auto-workflow] Self-evolution cycle complete.")
+  ;; Emit machine-parseable RESULT for this cycle (AutoGo protocol)
+  (condition-case nil
+      (let* ((rate (gptel-auto-workflow--overall-keep-rate))
+             (total (gptel-auto-workflow--total-experiments)))
+        (gptel-auto-workflow--emit-result "evolution-cycle" rate
+          (- rate (or gptel-auto-workflow--champion-keep-rate 0))
+          (if (> rate 0) "keep" "skip")
+          (list :total-experiments total)))
+    (error nil))))
 
 ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
 
@@ -2489,193 +2506,144 @@ Semantica abductive reasoner pattern."
 ;; ─── Semantica Deduction: backward chaining + proof trees ───
 
 (defconst gptel-auto-workflow--deduction-rules
-  '(;; IF-THEN rules with premises → conclusion (for backward chaining)
-    ;; (:if ((premise1) (premise2) ...) :then conclusion)
-    (:if ((keep-rate < 0.1) (total-experiments > 5))
-     :then "strategy is failing")
-    (:if ((keep-rate > 0.5) (total-experiments > 5))
-     :then "strategy is effective")
-    (:if ((output-ratio > 2.0) (keep-rate < 0.3))
-     :then "LLM output is wasteful")
-    (:if ((total-experiments > 10) (keep-rate > 0.4))
-     :then "strategy has good sample size")
-    (:if ((backend-keep-rate < 0.2) (backend-experiments > 8))
-     :then "backend is unreliable"))
-  "Deduction rules: (:if (premises) :then conclusion).")
+  '((:if ((keep-rate < 0.1) (total-experiments > 5)) :then "strategy is failing")
+    (:if ((keep-rate > 0.5) (total-experiments > 5)) :then "strategy is effective")
+    (:if ((output-ratio > 2.0) (keep-rate < 0.3)) :then "LLM output is wasteful")
+    (:if ((total-experiments > 10) (keep-rate > 0.4)) :then "strategy has good sample size")
+    (:if ((backend-keep-rate < 0.2) (backend-experiments > 8)) :then "backend is unreliable"))
+  "Deduction rules for backward chaining.")
 
 (defun gptel-auto-workflow--rule-conclusion-matches-p (rule goal)
-  "Check if RULE's conclusion matches GOAL (substring match)."
-  (let ((conclusion (plist-get rule :then)))
-    (and (stringp conclusion) (stringp goal)
-         (string-match-p (regexp-quote goal) conclusion))))
+  (and (stringp (plist-get rule :then)) (stringp goal)
+       (string-match-p (regexp-quote goal) (plist-get rule :then))))
 
 (defun gptel-auto-workflow--prove (goal facts rules depth max-depth)
-  "Backward chaining: prove GOAL from FACTS using RULES at DEPTH.
-Returns proof plist with :goal, :proven, :depth, :subproofs."
+  "Backward chaining prover."
   (if (> depth max-depth)
-      (list :goal goal :proven nil :depth depth :reason "max-depth reached")
-    (let ((matching-rules
-           (cl-remove-if-not (lambda (r) (gptel-auto-workflow--rule-conclusion-matches-p r goal)) rules)))
+      (list :goal goal :proven nil :depth depth :reason "max-depth")
+    (let ((matching-rules (cl-remove-if-not (lambda (r) (gptel-auto-workflow--rule-conclusion-matches-p r goal)) rules)))
       (if (null matching-rules)
-          (list :goal goal :proven nil :depth depth :reason "no matching rules")
+          (list :goal goal :proven nil :depth depth :reason "no rules")
         (let ((best-proof nil) (best-score 0))
           (dolist (rule matching-rules)
-            (let ((premises (plist-get rule :if))
-                  (all-match t)
-                  (count 0))
+            (let ((premises (plist-get rule :if)) (all-match t) (count 0))
               (dolist (p premises)
-                (if (gptel-auto-workflow--eval-condition p facts)
-                    (setq count (1+ count))
-                  (setq all-match nil)))
+                (if (gptel-auto-workflow--eval-condition p facts) (setq count (1+ count)) (setq all-match nil)))
               (when all-match
                 (let ((confidence (/ (float count) (max 1 (length premises)))))
                   (when (> confidence best-score)
                     (setq best-score confidence
-                          best-proof (list :goal goal :proven t :depth depth
-                                           :premises-count count
-                                           :confidence confidence)))))))
-          (or best-proof
-              (list :goal goal :proven nil :depth depth :reason "premises unproven")))))))
+                          best-proof (list :goal goal :proven t :depth depth :premises-count count :confidence confidence)))))))
+          (or best-proof (list :goal goal :proven nil :depth depth :reason "premises unproven")))))))
 
-(defun gptel-auto-workflow--deductive-explain (observations)
-  "Explain OBSERVATIONS alist using deductive backward chaining.
-Returns list of proof plists for each observation."
-  (let ((proofs nil))
-    (dolist (obs observations)
-      (let* ((goal (car obs))
-             (proof (gptel-auto-workflow--prove goal (list obs) gptel-auto-workflow--deduction-rules 0 3)))
-        (when (plist-get proof :proven)
-          (push proof proofs))))
-    (nreverse proofs)))
-
-;; ─── Semantica Datalog: recursive rules + transitive closure ───
-
-(defconst gptel-auto-workflow--datalog-rules
-  '(;; Recursive rules for transitive reasoning
-    ;; (head-fn . body-conditions) where head-fn generates derived facts
-    ("transitive-cause"
-     "IF experiment A caused B AND B caused C THEN A transitively caused C"))
-  "Datalog rules with recursion support.")
-
-(defun gptel-auto-workflow--datalog-eval (rules initial-facts max-iterations)
-  "Semi-naive Datalog evaluation with delta optimization.
-RULES are recursive rule definitions, INITIAL-FACTS is an alist.
-MAX-ITERATIONS prevents infinite recursion.
-Returns all derived facts. Semantica Datalog reasoner pattern."
-  (let ((all-facts (copy-sequence initial-facts))
-        (delta (copy-sequence initial-facts))
-        (iter 0)
-        (changed t))
-    (while (and changed (< iter max-iterations))
-      (setq changed nil iter (1+ iter))
-      (let ((new-facts nil))
-        ;; Transitive cause rule: if (cause . A→B) and (cause . B→C) exist, derive (transitive-cause . A→C)
-        (dolist (rule rules)
-          (let ((rule-name (car rule)))
-            (when (string= rule-name "transitive-cause")
-              (dolist (a delta)
-                (when (eq (car a) 'cause)
-                  (dolist (b all-facts)
-                    (when (and (eq (car b) 'cause) (equal (cdr a) (car (last (split-string (cdr b) "->")))))
-                      ;; TEMP: simplified — full chain matching is O(n^3)
-                      nil)))))))
-        ;; Add new facts
-        (dolist (f new-facts)
-          (unless (member f all-facts)
-            (push f all-facts)
-            (setq changed t)))
-        (setq delta new-facts)))
-    all-facts))
+;; ─── Semantica Datalog: transitive closure ───
 
 (defun gptel-auto-workflow--datalog-transitive-chain (causal-pairs)
-  "Compute transitive closure of CAUSAL-PAIRS (alist of (cause . entity→entity)).
-Uses Floyd-Warshall-style transitive closure for O(n^3) all-pairs reachability."
-  (let* ((entities (delete-dups (append (mapcar #'car causal-pairs)
-                                        (mapcar #'cdr causal-pairs))))
-         (n (length entities))
-         (index (make-hash-table :test 'equal))
-         (reachable (make-hash-table :test 'equal))
-         (result nil))
-    ;; Build index
-    (cl-loop for e in entities for i from 0 do (puthash e i index))
-    ;; Initialize direct edges
-    (dolist (pair causal-pairs)
-      (let ((a (car pair)) (b (cdr pair)))
-        (puthash (cons a b) t reachable)))
-    ;; Floyd-Warshall transitive closure
+  "Floyd-Warshall transitive closure."
+  (let* ((entities (delete-dups (append (mapcar #'car causal-pairs) (mapcar #'cdr causal-pairs))))
+         (reachable (make-hash-table :test 'equal)) (result nil))
+    (dolist (pair causal-pairs) (puthash pair t reachable))
     (dolist (k entities)
       (dolist (i entities)
         (dolist (j entities)
-          (when (and (gethash (cons i k) reachable)
-                     (gethash (cons k j) reachable)
-                     (not (gethash (cons i j) reachable)))
-            (puthash (cons i j) t reachable)
-            (push (cons i j) result)))))
+          (when (and (gethash (cons i k) reachable) (gethash (cons k j) reachable) (not (gethash (cons i j) reachable)))
+            (puthash (cons i j) t reachable) (push (cons i j) result)))))
     result))
 
-;; ─── Semantica Temporal: Allen interval algebra for experiments ───
+;; ─── Semantica Temporal: Allen interval algebra ───
 
 (defun gptel-auto-workflow--allen-relation (a-start a-end b-start b-end)
-  "Determine Allen interval relation between A and B.
-Returns one of: before, meets, overlaps, starts, during, finishes, equals,
-or the inverse (after, met-by, overlapped-by, started-by, contains, finished-by).
-Each arg is a float timestamp (nil = unbounded)."
-  (cond
-   ((and a-start a-end b-start b-end
-         (< a-end b-start)) 'before)
-   ((and a-start a-end b-start b-end
-         (= a-end b-start)) 'meets)
-   ((and a-start a-end b-start b-end
-         (< a-start b-start) (< a-end b-end) (> a-end b-start)) 'overlaps)
-   ((and a-start a-end b-start b-end
-         (= a-start b-start) (< a-end b-end)) 'starts)
-   ((and a-start a-end b-start b-end
-         (> a-start b-start) (< a-end b-end)) 'during)
-   ((and a-start a-end b-start b-end
-         (> a-start b-start) (= a-end b-end)) 'finishes)
-   ((and a-start a-end b-start b-end
-         (= a-start b-start) (= a-end b-end)) 'equals)
-   ;; Inverse relations
-   ((and a-start a-end b-start b-end
-         (> a-start b-end)) 'after)
-   ((and a-start a-end b-start b-end
-         (= a-start b-end)) 'met-by)
-   ((and a-start a-end b-start b-end
-         (> a-start b-start) (< a-start b-end) (> a-end b-end)) 'overlapped-by)
-   ((and a-start a-end b-start b-end
-         (= a-start b-start) (> a-end b-end)) 'started-by)
-   ((and a-start a-end b-start b-end
-         (< a-start b-start) (> a-end b-end)) 'contains)
-   ((and a-start a-end b-start b-end
-         (< a-start b-start) (= a-end b-end)) 'finished-by)
-   (t 'unknown)))
+  "Determine Allen interval relation between A and B."
+  (cond ((and a-start a-end b-start b-end (< a-end b-start)) 'before)
+        ((and a-start a-end b-start b-end (= a-end b-start)) 'meets)
+        ((and a-start a-end b-start b-end (< a-start b-start) (< a-end b-end) (> a-end b-start)) 'overlaps)
+        ((and a-start a-end b-start b-end (= a-start b-start) (< a-end b-end)) 'starts)
+        ((and a-start a-end b-start b-end (> a-start b-start) (< a-end b-end)) 'during)
+        ((and a-start a-end b-start b-end (= a-start b-start) (= a-end b-end)) 'equals)
+        ((and a-start a-end b-start b-end (> a-start b-end)) 'after)
+        ((and a-start a-end b-start b-end (= a-start b-end)) 'met-by)
+        (t 'unknown)))
 
-(defun gptel-auto-workflow--experiment-time-gaps ()
-  "Detect temporal gaps and overlaps between experiments on the same target.
-Returns alist of (target . ((gap-start . gap-end) ...))."
-  (let* ((results (gptel-auto-workflow--parse-all-results))
-         (by-target (make-hash-table :test 'equal))
-         (gaps nil))
-    (dolist (r results)
-      (let ((target (plist-get r :target)))
-        (when (stringp target)
-          (push r (gethash target by-target)))))
-    (maphash (lambda (target experiments)
-               (when (> (length experiments) 1)
-                 (let ((sorted (sort (mapcar (lambda (r)
-                                               (cons (or (plist-get r :timestamp)
-                                                         (float-time (current-time)))
-                                                     r))
-                                             experiments)
-                                     (lambda (a b) (< (car a) (car b))))))
-                   (let ((prev-end nil))
-                     (dolist (entry sorted)
-                       (let ((start (car entry)))
-                         (when (and prev-end (> (- start prev-end) 3600))
-                           (push (cons target (cons prev-end start)) gaps))
-                         (setq prev-end start)))))))
-             by-target)
-    gaps))
+;; ─── AutoGo: Competitive Gating + PCR + RESULT Protocol ───
+
+(defvar gptel-auto-workflow--champion-strategy nil
+  "Current champion strategy name. New strategies must beat this to be adopted.
+AutoGo league system: incumbents must be defeated in gauntlet play.")
+
+(defvar gptel-auto-workflow--champion-keep-rate 0.0
+  "Keep-rate of the champion strategy. Threshold for challenger adoption.")
+
+(defun gptel-auto-workflow--crown-champion (strategy-name keep-rate)
+  "Crown STRATEGY-NAME as the new champion with KEEP-RATE.
+Only crowns if keep-rate exceeds current champion's by at least 0.05."
+  (when (and strategy-name keep-rate
+             (> keep-rate (+ gptel-auto-workflow--champion-keep-rate 0.05)))
+    (setq gptel-auto-workflow--champion-strategy strategy-name
+          gptel-auto-workflow--champion-keep-rate keep-rate)
+    (message "[champion] New champion: %s (%.1f%% keep-rate)"
+             strategy-name (* 100 keep-rate))))
+
+(defun gptel-auto-workflow--gate-strategies ()
+  "Gate evolved strategies against the champion. Returns list of (name . passed).
+AutoGo league pattern: challengers must beat incumbents to be adopted."
+  (let* ((scores (gptel-auto-workflow--evolution-strategy-structure-scores))
+         (axis-scores (gptel-auto-workflow--evolution-axis-stats))
+         (results nil))
+    (dolist (entry scores)
+      (let* ((name (car entry))
+             (score (cdr entry))
+             (champion gptel-auto-workflow--champion-strategy)
+             (champion-rate gptel-auto-workflow--champion-keep-rate))
+        (cond
+         ((null champion)
+          (gptel-auto-workflow--crown-champion name score)
+          (push (cons name 'first-champion) results))
+         ((> score (+ champion-rate 0.05))
+          (push (cons name 'promoted) results)
+          (gptel-auto-workflow--crown-champion name score))
+         ((> score champion-rate)
+          (push (cons name 'passed) results))
+         (t
+          (push (cons name 'rejected) results)))))
+    (dolist (entry axis-scores)
+      (let* ((axis (format "%s" (car entry)))
+             (rate (cdr entry))
+             (champion-rate gptel-auto-workflow--champion-keep-rate))
+        (when (> rate (+ champion-rate 0.1))
+          (message "[champion] Axis %s performing well (%.1f%%) — consider strategies targeting this axis"
+                   axis (* 100 rate)))))
+    results))
+
+(defconst gptel-auto-workflow--pcr-budgets
+  '((:name "quick" :weight 0.80 :sims 128)
+    (:name "medium" :weight 0.15 :sims 256)
+    (:name "deep" :weight 0.05 :sims 2000))
+  "Playout Cap Randomization budgets. 80% quick, 15% medium, 5% deep.
+AutoGo PCR pattern: randomized effort budget prevents over-specialization.")
+
+(defun gptel-auto-workflow--sample-pcr-budget ()
+  "Sample an effort budget from PCR distribution. Returns sims count."
+  (let* ((r (random 100))
+         (cumulative 0))
+    (catch 'found
+      (dolist (b gptel-auto-workflow--pcr-budgets)
+        (setq cumulative (+ cumulative (* 100 (plist-get b :weight))))
+        (when (< r cumulative)
+          (throw 'found (plist-get b :sims))))
+      (plist-get (car gptel-auto-workflow--pcr-budgets) :sims))))
+
+(defun gptel-auto-workflow--emit-result (metric-name value delta status &optional extra)
+  "Emit a machine-parseable RESULT block. AutoGo ===RESULT=== protocol.
+METRIC-NAME is the metric being measured. VALUE is current value.
+DELTA is change from baseline. STATUS is keep/discard/timeout.
+EXTRA is an optional plist of additional fields."
+  (let ((result (list :metric metric-name :value value :delta delta
+                      :status status :timestamp (format-time-string "%Y-%m-%dT%H:%M")
+                      :champion gptel-auto-workflow--champion-strategy
+                      :champion-keep-rate gptel-auto-workflow--champion-keep-rate)))
+    (when extra (setq result (append result extra)))
+    (message "===RESULT=== %s" (json-encode result))
+    result))
 
 ;; ─── Backend Performance Optimization ───
 
