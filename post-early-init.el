@@ -120,14 +120,6 @@
                       (run-at-time 0 nil orig-fn process status)
                     (apply orig-fn process status args))))))
 
-;; HARDEN: Defer worktree daemon tool loading to break C stack overflow
-;; during subagent FSM/preset setup (31 tools registered synchronously
-;; exhausts 64MB macOS C stack). run-at-time 0 splits the stack.
-(when (and (daemonp) (string-match-p "aw-complete" (daemonp)))
-  (advice-add 'nucleus--register-all-tools :around
-              (lambda (orig-fn &rest args)
-                (run-at-time 0 nil orig-fn))))
-
 (provide 'post-early-init)
 
 ;;; post-early-init.el ends here
