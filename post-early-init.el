@@ -99,13 +99,13 @@
 ;; subagent async callbacks (curl sentinel → FSM → callback → next process).
 ;; Default 1600 is too low for 5+ nested subagent layers.
 ;; Root cause fixed: gptel-abort now defers callback to break sync recursion.
-(setq max-lisp-eval-depth 40000)
+(setq max-lisp-eval-depth 80000)
 
 ;; Increase max-specpdl-size for subagent chain depth
 ;; REQUIRED: 5+ nested subagent layers without C stack overflow.
 ;; Researcher daemon's single-turn fallback (300s timeout) triggers
 ;; deep recursion during subagent setup. 10000 provides headroom.
-(setq max-specpdl-size 10000)
+(setq max-specpdl-size 15000)
 
 (provide 'post-early-init)
 
