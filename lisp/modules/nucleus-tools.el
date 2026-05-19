@@ -224,7 +224,8 @@ For use in prompt templates to conditionally include instructions."
 
 (defconst nucleus-toolset-definitions
   '((:readonly   . (:derived (:can-read) (:can-edit :plan-excluded)))
-    (:nucleus    . (:derived (:can-read :can-edit) nil))
+    (:nucleus    . (:derived (:can-read :can-edit) nil
+                              "read_memory" "list_memories" "write_memory"))
     (:executor   . (:derived (:can-read :can-edit) (:delegates)))
     (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill" "Programmatic"
                     "WebFetch" "WebSearch" "YouTube"
@@ -254,9 +255,14 @@ Subagent toolsets are hand-curated for specific roles.
 
 (defun nucleus--resolve-toolset (definition)
   "Resolve a toolset DEFINITION to a list of tool names.
-Handles both derived and explicit definitions."
+Handles both derived and explicit definitions.
+Supports (:derived INCLUDE EXCLUDE &rest EXTRA) to append extra tools."
   (if (and (consp definition) (eq (car definition) :derived))
-      (nucleus-toolset-from-markers (cadr definition) (caddr definition))
+      (let ((base (nucleus-toolset-from-markers (cadr definition) (caddr definition)))
+            (extra (cdddr definition)))
+        (if extra
+            (append base (cl-remove-if (lambda (t) (member t base)) extra))
+          base))
     definition))
 
 (defun nucleus--build-toolsets ()
