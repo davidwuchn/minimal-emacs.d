@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# Prevent C stack overflow in deeply nested subagent calls
+ulimit -s 32768 2>/dev/null || true
+
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ACTION="${1:-auto-workflow}"
 shift || true
