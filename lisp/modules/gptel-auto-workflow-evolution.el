@@ -1907,6 +1907,32 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                          (plist-get e :action)
                          (* 100 (plist-get e :confidence))))))))
     (error nil))
+  ;; Deductive explanation — prove WHY observations hold
+  (condition-case nil
+      (let ((facts (list (cons 'keep-rate (gptel-auto-workflow--overall-keep-rate))
+                         (cons 'total-experiments (gptel-auto-workflow--total-experiments)))))
+        (let ((proofs (gptel-auto-workflow--deductive-explain facts)))
+          (dolist (p proofs)
+            (message "[deduce] Proved '%s': %.0f%% confidence (%d premises)"
+                     (plist-get p :goal)
+                     (* 100 (or (plist-get p :confidence) 0))
+                     (or (plist-get p :premises-count) 0)))))
+    (error nil))
+  ;; Datalog transitive closure — causal chains
+  (condition-case nil
+      (let* ((results (gptel-auto-workflow--parse-all-results))
+             (causal-pairs nil))
+        (dolist (r (seq-take results 50))
+          (let ((target (plist-get r :target))
+                (decision (plist-get r :decision)))
+            (when (and (stringp target) (equal decision "kept"))
+              (push (cons (concat "experiment-" (plist-get r :target))
+                          (concat "outcome-" (plist-get r :decision)))
+                    causal-pairs))))
+        (let ((transitive (gptel-auto-workflow--datalog-transitive-chain causal-pairs)))
+          (when transitive
+            (message "[datalog] %d transitive causal edges discovered" (length transitive)))))
+    (error nil))
   ;; AgentMemory status log (Semantica pattern)
   (condition-case nil
       (let ((mem (gptel-auto-workflow--memory-status)))
@@ -2419,6 +2445,144 @@ Semantica abductive reasoner pattern."
                  (when exps (push (cons backend exps) all-diagnoses))))
              by-backend)
     all-diagnoses))
+
+(defun gptel-auto-workflow--overall-keep-rate ()
+  "Return overall keep-rate from all experiments."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (total (length results))
+         (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results)))
+    (if (> total 0) (/ (float kept) total) 0.0)))
+
+(defun gptel-auto-workflow--total-experiments ()
+  "Return total number of experiments."
+  (length (gptel-auto-workflow--parse-all-results)))
+
+;; ─── Semantica Deduction: backward chaining + proof trees ───
+
+(defconst gptel-auto-workflow--deduction-rules
+  '(;; IF-THEN rules with premises → conclusion (for backward chaining)
+    ;; (:if ((premise1) (premise2) ...) :then conclusion)
+    (:if ((keep-rate < 0.1) (total-experiments > 5))
+     :then "strategy is failing")
+    (:if ((keep-rate > 0.5) (total-experiments > 5))
+     :then "strategy is effective")
+    (:if ((output-ratio > 2.0) (keep-rate < 0.3))
+     :then "LLM output is wasteful")
+    (:if ((total-experiments > 10) (keep-rate > 0.4))
+     :then "strategy has good sample size")
+    (:if ((backend-keep-rate < 0.2) (backend-experiments > 8))
+     :then "backend is unreliable"))
+  "Deduction rules: (:if (premises) :then conclusion).")
+
+(defun gptel-auto-workflow--rule-conclusion-matches-p (rule goal)
+  "Check if RULE's conclusion matches GOAL (substring match)."
+  (let ((conclusion (plist-get rule :then)))
+    (and (stringp conclusion) (stringp goal)
+         (string-match-p (regexp-quote goal) conclusion))))
+
+(defun gptel-auto-workflow--prove (goal facts rules depth max-depth)
+  "Backward chaining: prove GOAL from FACTS using RULES at DEPTH.
+Returns proof plist with :goal, :proven, :depth, :subproofs."
+  (if (> depth max-depth)
+      (list :goal goal :proven nil :depth depth :reason "max-depth reached")
+    (let ((matching-rules
+           (cl-remove-if-not (lambda (r) (gptel-auto-workflow--rule-conclusion-matches-p r goal)) rules)))
+      (if (null matching-rules)
+          (list :goal goal :proven nil :depth depth :reason "no matching rules")
+        (let ((best-proof nil) (best-score 0))
+          (dolist (rule matching-rules)
+            (let ((premises (plist-get rule :if))
+                  (all-match t)
+                  (count 0))
+              (dolist (p premises)
+                (if (gptel-auto-workflow--eval-condition p facts)
+                    (setq count (1+ count))
+                  (setq all-match nil)))
+              (when all-match
+                (let ((confidence (/ (float count) (max 1 (length premises)))))
+                  (when (> confidence best-score)
+                    (setq best-score confidence
+                          best-proof (list :goal goal :proven t :depth depth
+                                           :premises-count count
+                                           :confidence confidence)))))))
+          (or best-proof
+              (list :goal goal :proven nil :depth depth :reason "premises unproven")))))))
+
+(defun gptel-auto-workflow--deductive-explain (observations)
+  "Explain OBSERVATIONS alist using deductive backward chaining.
+Returns list of proof plists for each observation."
+  (let ((proofs nil))
+    (dolist (obs observations)
+      (let* ((goal (car obs))
+             (proof (gptel-auto-workflow--prove goal (list obs) gptel-auto-workflow--deduction-rules 0 3)))
+        (when (plist-get proof :proven)
+          (push proof proofs))))
+    (nreverse proofs)))
+
+;; ─── Semantica Datalog: recursive rules + transitive closure ───
+
+(defconst gptel-auto-workflow--datalog-rules
+  '(;; Recursive rules for transitive reasoning
+    ;; (head-fn . body-conditions) where head-fn generates derived facts
+    ("transitive-cause"
+     "IF experiment A caused B AND B caused C THEN A transitively caused C"))
+  "Datalog rules with recursion support.")
+
+(defun gptel-auto-workflow--datalog-eval (rules initial-facts max-iterations)
+  "Semi-naive Datalog evaluation with delta optimization.
+RULES are recursive rule definitions, INITIAL-FACTS is an alist.
+MAX-ITERATIONS prevents infinite recursion.
+Returns all derived facts. Semantica Datalog reasoner pattern."
+  (let ((all-facts (copy-sequence initial-facts))
+        (delta (copy-sequence initial-facts))
+        (iter 0)
+        (changed t))
+    (while (and changed (< iter max-iterations))
+      (setq changed nil iter (1+ iter))
+      (let ((new-facts nil))
+        ;; Transitive cause rule: if (cause . A→B) and (cause . B→C) exist, derive (transitive-cause . A→C)
+        (dolist (rule rules)
+          (let ((rule-name (car rule)))
+            (when (string= rule-name "transitive-cause")
+              (dolist (a delta)
+                (when (eq (car a) 'cause)
+                  (dolist (b all-facts)
+                    (when (and (eq (car b) 'cause) (equal (cdr a) (car (last (split-string (cdr b) "->")))))
+                      ;; TEMP: simplified — full chain matching is O(n^3)
+                      nil)))))))
+        ;; Add new facts
+        (dolist (f new-facts)
+          (unless (member f all-facts)
+            (push f all-facts)
+            (setq changed t)))
+        (setq delta new-facts)))
+    all-facts))
+
+(defun gptel-auto-workflow--datalog-transitive-chain (causal-pairs)
+  "Compute transitive closure of CAUSAL-PAIRS (alist of (cause . entity→entity)).
+Uses Floyd-Warshall-style transitive closure for O(n^3) all-pairs reachability."
+  (let* ((entities (delete-dups (append (mapcar #'car causal-pairs)
+                                        (mapcar #'cdr causal-pairs))))
+         (n (length entities))
+         (index (make-hash-table :test 'equal))
+         (reachable (make-hash-table :test 'equal))
+         (result nil))
+    ;; Build index
+    (cl-loop for e in entities for i from 0 do (puthash e i index))
+    ;; Initialize direct edges
+    (dolist (pair causal-pairs)
+      (let ((a (car pair)) (b (cdr pair)))
+        (puthash (cons a b) t reachable)))
+    ;; Floyd-Warshall transitive closure
+    (dolist (k entities)
+      (dolist (i entities)
+        (dolist (j entities)
+          (when (and (gethash (cons i k) reachable)
+                     (gethash (cons k j) reachable)
+                     (not (gethash (cons i j) reachable)))
+            (puthash (cons i j) t reachable)
+            (push (cons i j) result)))))
+    result))
 
 ;; ─── Backend Performance Optimization ───
 

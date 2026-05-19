@@ -876,6 +876,45 @@ so tags before allium-issues is correctly detected."
       (should (plist-get r :action))
       (should (numberp (plist-get r :confidence))))))
 
+;; ─── Deductive Reasoning Tests ───
+
+(ert-deftest regression/reasoning/deduce-proves-matching-goal ()
+  "Prove should return t when goal matches a rule and premises hold."
+  (let ((facts '((keep-rate . 0.05) (total-experiments . 10))))
+    (let ((proof (gptel-auto-workflow--prove "failing" facts gptel-auto-workflow--deduction-rules 0 3)))
+      (should proof)
+      (should (plist-get proof :proven)))))
+(ert-deftest regression/reasoning/deduce-fails-unmatched-goal ()
+  "Prove should return nil when no rule conclusion matches the goal."
+  (let ((facts '((keep-rate . 0.5) (total-experiments . 1))))
+    (let ((proof (gptel-auto-workflow--prove "nonexistent" facts gptel-auto-workflow--deduction-rules 0 3)))
+      (should (not (plist-get proof :proven))))))
+
+(ert-deftest regression/reasoning/deduce-fails-missing-premise ()
+  "Prove should return nil when premises don't hold."
+  (let ((facts '((keep-rate . 0.5))))  ; missing total-experiments
+    (let ((proof (gptel-auto-workflow--prove "failing" facts gptel-auto-workflow--deduction-rules 0 3)))
+      (should (not (plist-get proof :proven))))))
+
+(ert-deftest regression/reasoning/deduce-has-depth-field ()
+  "Proof should include depth field."
+  (let ((facts '((keep-rate . 0.05) (total-experiments . 10))))
+    (let ((proof (gptel-auto-workflow--prove "failing" facts gptel-auto-workflow--deduction-rules 0 3)))
+      (should (numberp (plist-get proof :depth))))))
+
+;; ─── Datalog Tests ───
+
+(ert-deftest regression/reasoning/datalog-transitive-closure-detects-new-edges ()
+  "Transitive closure should discover indirect connections."
+  (let ((pairs '((a . b) (b . c))))
+    (let ((result (gptel-auto-workflow--datalog-transitive-chain pairs)))
+      ;; a→c should be discovered transitively
+      (should (member (cons 'a 'c) result)))))
+
+(ert-deftest regression/reasoning/datalog-empty-input-returns-nil ()
+  "Transitive closure of empty input should be nil."
+  (should-not (gptel-auto-workflow--datalog-transitive-chain nil)))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
