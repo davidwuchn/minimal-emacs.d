@@ -2647,6 +2647,55 @@ EXTRA is an optional plist of additional fields."
 
 ;; ─── Backend Performance Optimization ───
 
+
+(defun gptel-auto-workflow--evaluate-holdout ()
+  "Evaluate frozen holdout targets. Returns plist with :average :trend."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (targets (list "lisp/modules/gptel-tools-agent-error.el"
+                        "lisp/modules/gptel-auto-workflow-evolution.el"
+                        "lisp/modules/gptel-tools-agent-prompt-build.el"))
+         (total 0.0) (count 0)
+         (hf (expand-file-name "var/tmp/evolution/holdout-eval.json" root))
+         (history (condition-case nil
+                      (let ((jo (quote plist)))
+                        (with-temp-buffer (insert-file-contents hf) (json-read)))
+                    (error (list :history nil :best 0.0)))))
+    (dolist (t targets)
+      (let ((fp (expand-file-name t root)))
+        (setq total (+ total (if (file-readable-p fp)
+                                 (gptel-auto-workflow--score-holdout-target fp) 0.0))
+              count (1+ count))))
+    (let* ((avg (if (> count 0) (/ total count) 0.0))
+           (best (max avg (or (plist-get history :best) 0.0)))
+           (prev (or (plist-get history :last) avg))
+           (trend (- avg prev)))
+      (plist-put history :last avg)
+      (plist-put history :best best)
+      (plist-put history :history
+       (cons (list :t (format-time-string "%Y-%m-%dT%H:%M") :avg avg)
+             (seq-take (plist-get history :history) 10)))
+      (make-directory (file-name-directory hf) t)
+      (with-temp-file hf (insert (json-encode history)))
+      (list :average avg :trend trend :best best))))
+
+(defun gptel-auto-workflow--score-holdout-target (file-path)
+  "Score FILE-PATH on structural quality 0.0-1.0."
+  (let ((s 0.0))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file-path)
+          (let ((n (count-lines (point-min) (point-max))))
+            (when (> n 0)
+              (let ((c (buffer-string)))
+                (dolist (patt (list "when.*nil\\|unless.*nil\\|guard\\|proper-list-p"
+                                    "condition-case\\|ignore-errors"))
+                  (let ((m (cl-count-if (lambda (l) (string-match-p patt l))
+                                        (split-string c "\n"))))
+                    (setq s (+ s (min 1.0 (/ (* m 10.0) n))))))))))
+      (error nil))
+    (min 1.0 (/ s 2.0))))
+
+
 (defun gptel-auto-workflow--score-research-sources ()
   "Score research repos by downstream experiment keep-rate.
 Returns alist of (source-repo . keep-rate) sorted by performance.
