@@ -245,6 +245,10 @@ fi
 log "Stopping any existing daemons to load latest code..."
 "$SCRIPT" stop >/dev/null 2>&1 || true
 AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
+# Force-remove stale staging worktree so auto-workflow recreates from latest main
+rm -rf "$DIR/var/tmp/experiments/staging-verify" 2>/dev/null || true
+rm -rf "$DIR/var/tmp/experiments/optimize" 2>/dev/null || true
+log "Cleaned stale staging + experiment worktrees"
 sleep 2
 
 # ─── Clear stale findings to ensure fresh research ───
