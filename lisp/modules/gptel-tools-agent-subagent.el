@@ -737,7 +737,7 @@ Monthly subscription: LLM selection finds best targets each run."
   :type 'directory
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-time-budget 1200
+(defcustom gptel-auto-experiment-time-budget 2400
   "Time budget per experiment in seconds (default: 20 min).
 
 Increased to 1200s (20 min) because:
