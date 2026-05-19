@@ -72,6 +72,10 @@ Layer 4: temporal index (git commit history, experiment TSV, cycle snapshots)")
 
 (defvar gptel-auto-workflow--allium-audit-last-run nil
   "Timestamp of last allium-audit run. Throttles API calls to 1/15min.")
+(defvar gptel-auto-workflow--evolution-last-run nil
+  "Timestamp of last evolution cycle. Throttles full cycles to 1/5min.")
+(defvar gptel-auto-workflow--vsm-health-last-run nil
+  "Timestamp of last VSM health check. Throttles to 1/15min.")
 
 (defvar gptel-auto-workflow--evolution-repo-root nil
   "Cached git repository root for self-evolution.
@@ -1745,6 +1749,14 @@ Extract → Verify → Controller Evolution → Skill Evolution.
 Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (interactive)
   (cl-block gptel-auto-workflow-evolution-run-cycle
+  ;; Throttle: don't run more than once per 300s (5min) unless forced
+  (let ((now (float-time (current-time))))
+    (when (and gptel-auto-workflow--evolution-last-run
+               (< (- now gptel-auto-workflow--evolution-last-run) 300))
+      (message "[evolution] Throttled: last cycle was %.0fs ago, skipping"
+               (- now gptel-auto-workflow--evolution-last-run))
+      (cl-return-from gptel-auto-workflow-evolution-run-cycle "throttled"))
+    (setq gptel-auto-workflow--evolution-last-run now))
   (message "[auto-workflow] Running self-evolution cycle...")
   ;; Pipeline validation (Semantica PipelineValidator)
   (condition-case nil
@@ -1781,7 +1793,9 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (gptel-auto-workflow--run-autotts-evolution))
   ;; Step A.5: Controller code generation agent (AutoTTS-defining feature)
   ;; Runs LLM-driven controller design: agent writes code, tests against replay store, iterates
-  (when (fboundp 'gptel-auto-workflow--run-controller-design-agent)
+  ;; Skip when no new experiments — no data to design from
+  (when (and (fboundp 'gptel-auto-workflow--run-controller-design-agent)
+             (>= (gptel-auto-workflow--evolution-count-new) 3))
     (message "[auto-workflow] Running controller design agent...")
     (gptel-auto-workflow--run-controller-design-agent 3))
   ;; Step B: Skill evolution (TSV data → SKILL.md, uses {{strategy-guidance}} from step A)
@@ -1796,7 +1810,12 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (gptel-auto-workflow--skill-governance-run-cycle))
   (gptel-auto-workflow--evolution-record-score)
   (gptel-auto-workflow--evolution-optimize-backend-order)
-  (gptel-auto-workflow--evolution-vsm-health-check)
+  ;; Throttle VSM health check to 1x/15min (expensive: allium LLM calls)
+  (let ((now (float-time (current-time))))
+    (when (or (null gptel-auto-workflow--vsm-health-last-run)
+              (> (- now gptel-auto-workflow--vsm-health-last-run) 900))
+      (setq gptel-auto-workflow--vsm-health-last-run now)
+      (gptel-auto-workflow--evolution-vsm-health-check)))
   ;; Change impact classification (Semantica ChangeLogAnalyzer pattern)
   (condition-case nil
       (let ((impact (gptel-auto-workflow--classify-experiment-impact)))
