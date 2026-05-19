@@ -992,6 +992,14 @@ so tags before allium-issues is correctly detected."
         (should (member "lisp/foo.el" kept))
         (should-not deferred)))))
 
+(ert-deftest regression/auto-workflow-evolution/comb-c2-1 ()
+  "C(2,1) = 2."
+  (should (= (length (gptel-auto-workflow--combinations '(a b) 1)) 2)))
+
+(ert-deftest regression/auto-workflow-evolution/comb-c3-2 ()
+  "C(3,2) = 3."
+  (should (= (length (gptel-auto-workflow--combinations '(a b c) 2)) 3)))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
