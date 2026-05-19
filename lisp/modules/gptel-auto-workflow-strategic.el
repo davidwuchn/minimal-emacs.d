@@ -566,7 +566,7 @@ Returns markdown string or empty."
               (unless (string-match-p "^lisp/modules/" target)
                 (setq target (concat "lisp/modules/" target)))
               (when (and (> (length target) 5) (string-match-p "^lisp/" target))
-                (push target targets))))))
+                (push target targets)))))))
     (if targets
         (concat "- " (mapconcat #'identity (delete-dups targets) "\n- "))
       "")))
