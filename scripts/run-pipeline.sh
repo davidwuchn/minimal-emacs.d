@@ -379,11 +379,15 @@ if [ "$HAS_RESEARCH" -eq 0 ]; then
 fi
 
 # ─── Step 3: Self-Evolution (digest findings/results into skills) ───
-# Pass research quality info to evolution context
-export PIPELINE_RESEARCH_QUALITY="$RESEARCH_QUALITY"
-export PIPELINE_FINDINGS_FILE="$FINDINGS_FILE"
-export PIPELINE_INTERNAL_FILE="$INTERNAL_FILE"
-run_self_evolution "Step 3: Self-Evolution (pre-workflow)"
+if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
+    # Pass research quality info to evolution context
+    export PIPELINE_RESEARCH_QUALITY="$RESEARCH_QUALITY"
+    export PIPELINE_FINDINGS_FILE="$FINDINGS_FILE"
+    export PIPELINE_INTERNAL_FILE="$INTERNAL_FILE"
+    run_self_evolution "Step 3: Self-Evolution (pre-workflow)"
+else
+    log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="
+fi
 
 # ─── Step 4: Auto-Workflow (uses digested findings via directive) ───
 log "=== Step 4: Auto-Workflow ==="
@@ -392,12 +396,18 @@ if [ "$PIPELINE_SMOKE_ONLY" = "yes" ]; then
     exit 0
 fi
 # Queue the workflow job (daemon will be started if not running)
-auto_workflow_output="$(MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-    "$SCRIPT" auto-workflow 2>&1)"
-printf '%s\n' "$auto_workflow_output" >> "$PIPELINE_LOG"
-if printf '%s' "$auto_workflow_output" | grep -q "already-running"; then
-    log "Auto-workflow already running, waiting for completion"
-fi
+# Retry if evolution is still running (returns "already-running")
+for retry in 0 1 2 3 4; do
+    auto_workflow_output="$(MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+        "$SCRIPT" auto-workflow 2>&1)"
+    printf '%s\n' "$auto_workflow_output" >> "$PIPELINE_LOG"
+    if printf '%s' "$auto_workflow_output" | grep -q "already-running"; then
+        log "Auto-workflow already running, retry $((retry+1))/5 in 30s..."
+        sleep 30
+    else
+        break
+    fi
+done
 wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "copilot-auto-workflow" || true
 
 # Verify auto-workflow actually completed (not timed out)
