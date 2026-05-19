@@ -17,7 +17,17 @@
 (require 'init-dev)
 (require 'init-tools)
 (require 'init-org)      ; Org mode configuration
-(require 'init-ai)
+;; Defer AI module loading for workflow daemons to break C stack overflow.
+;; run-with-timer 0 processes from event loop with clean stack.
+(if (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
+    (run-at-time 0.5 nil
+      (lambda ()
+        (require 'init-ai)
+        (load (expand-file-name "lisp/modules/standalone-research.el"
+                                 minimal-emacs-user-directory) nil 'nomessage)
+        (when (fboundp 'slr-run-research)
+          (defalias 'gptel-auto-workflow-run-research 'slr-run-research))))
+  (require 'init-ai))
 
 ;; Backup and auto-save settings are configured in init-files.el
 
@@ -80,32 +90,4 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
 (unless (daemonp)
   (load-file "~/.emacs.d/lisp/theme-setting.el"))
 
-;; ─── Workflow Daemon: Use standalone research for clean execution ───
-;; Override run-research with standalone module that bypasses complex
-;; strategic.el code paths. Re-apply override when strategic files reload.
-(when (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
-  (message "[daemon-fix] Setting up standalone research override")
-  (let ((standalone-file (expand-file-name "lisp/modules/standalone-research.el"
-                                            minimal-emacs-user-directory)))
-    (when (file-exists-p standalone-file)
-      (load standalone-file nil 'nomessage)
-      (when (fboundp 'slr-run-research)
-        (message "[daemon-fix] Loaded standalone research, overriding run-research")
-        (defalias 'gptel-auto-workflow-run-research 'slr-run-research))))
-  (defun my/daemon--reapply-run-research-override (loaded-file)
-    (when (or (string-suffix-p "gptel-auto-workflow-strategic.el" loaded-file)
-              (string-suffix-p "strategic-daemon-functions.el" loaded-file))
-      (when (fboundp 'slr-run-research)
-        (defalias 'gptel-auto-workflow-run-research 'slr-run-research)
-        (message "[daemon-fix] Re-applied run-research override after %s" loaded-file))))
-  (add-hook 'after-load-functions 'my/daemon--reapply-run-research-override)
-  ;; Start periodic research timer once strategic module is loaded
-  (defun my/daemon--start-periodic-research (loaded-file)
-    (when (string-suffix-p "gptel-auto-workflow-strategic.el" loaded-file)
-      (when (and (fboundp 'gptel-auto-workflow-start-periodic-research)
-                 (not gptel-auto-workflow--research-timer))
-        (gptel-auto-workflow-start-periodic-research)
-        (message "[daemon] Auto-started periodic research timer (%ds)"
-                 gptel-auto-workflow-research-interval))
-      (remove-hook 'after-load-functions 'my/daemon--start-periodic-research)))
-  (add-hook 'after-load-functions 'my/daemon--start-periodic-research))
+;; ─── Workflow Daemon: handled by deferred init-ai loading above ───
