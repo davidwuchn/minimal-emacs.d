@@ -105,7 +105,7 @@
 ;; REQUIRED: 5+ nested subagent layers without C stack overflow.
 ;; Researcher daemon's single-turn fallback (300s timeout) triggers
 ;; deep recursion during subagent setup. 10000 provides headroom.
-(setq max-specpdl-size 15000)
+(setq max-specpdl-size 50000)
 
 ;; HARDEN: Defer gptel curl sentinel via run-at-time 0 to break
 ;; synchronous recursion chains (sentinel → FSM → HTTP → sentinel).
