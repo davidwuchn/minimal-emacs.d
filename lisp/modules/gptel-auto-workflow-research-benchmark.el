@@ -1453,7 +1453,8 @@ Called from experiment logging to link research → experiment results."
                                   (when (fboundp 'gptel-auto-workflow--run-autotts-evolution)
                                     (gptel-auto-workflow--run-autotts-evolution))
                                   (when (fboundp 'gptel-auto-workflow--evolve-all-skills)
-                                    (gptel-auto-workflow--evolve-all-skills))))
+                                     (gptel-auto-workflow--evolve-all-skills))))
+                            (run-hook-with-args 'gptel-auto-workflow--trace-outcome-hooks trace))
                             (error nil))))))
                 (error
                  (message "[autotts] Failed to update trace outcome: %s" err))))))))))
@@ -1461,6 +1462,10 @@ Called from experiment logging to link research → experiment results."
 (defvar gptel-auto-workflow--trace-outcome-hooks nil
   "List of functions to call when trace outcomes are updated.
 Each function receives the updated trace plist.")
+
+(add-hook 'gptel-auto-workflow--trace-outcome-hooks
+          (lambda (_trace)
+            (message "[autoresearch] AutoTTS hook: trace outcome updated — check for RESULT block")))
 
 (defvar gptel-auto-workflow--pending-outcome-updates 0
   "Counter of trace outcome updates since last controller evolution.
@@ -1539,8 +1544,71 @@ Ensures {{strategy-guidance}} template var has data on first load."
             (when controller-config
               (gptel-auto-workflow--update-skill-with-controller controller-config)
               (message "[autotts] Bootstrapped strategy-guidance.json from controller")))
-        (error
-         (message "[autotts] Strategy guidance bootstrap deferred: %s" err))))))
+         (error
+          (message "[autotts] Strategy guidance bootstrap deferred: %s" err))))))
+
+;; ─── AutoGo Autoresearch: commit → run → parse RESULT → keep/revert ───
+
+(defvar gptel-auto-workflow--autoresearch-best nil
+  "Running best metric value for autoresearch. nil = no best yet.")
+
+(defvar gptel-auto-workflow--autoresearch-best-commit nil
+  "Commit hash of the running best. nil = no best yet.")
+
+(defun gptel-auto-workflow--autoresearch-parse-result (output)
+  "Parse ===RESULT=== JSON from experiment OUTPUT.
+Returns plist with :metric :value :delta :status, or nil."
+  (when (stringp output)
+    (let ((start (string-match "===RESULT===" output)))
+      (when start
+        (let* ((json-str (substring output (+ start 13)))
+               (end (string-match "\n" json-str)))
+          (when end (setq json-str (substring json-str 0 end)))
+          (condition-case nil
+              (let ((json-object-type 'plist) (json-array-type 'list))
+                (json-read-from-string json-str))
+            (error nil)))))))
+
+(defun gptel-auto-workflow--autoresearch-check (result-plist &optional target-file description)
+  "Check RESULT-PLIST against running best. Implements keep/revert.
+AutoGo autoresearch pattern: if improved → commit. If regressed → revert.
+TARGET-FILE is the file that was changed. DESCRIPTION is for the commit message.
+Returns 'keep, 'discard, or 'first."
+  (let* ((metric (plist-get result-plist :metric))
+         (value (plist-get result-plist :value))
+         (status (plist-get result-plist :status))
+         (delta (plist-get result-plist :delta))
+         (direction (if (string-match-p "keep.rate\\|acc\\|win" (or metric "")) 'higher 'lower)))
+    (cond
+     ((null gptel-auto-workflow--autoresearch-best)
+      (setq gptel-auto-workflow--autoresearch-best value)
+      (message "[autoresearch] First result: %s=%.4f — establishing baseline" metric value)
+      'first)
+     ((or (and (eq direction 'higher) (> value gptel-auto-workflow--autoresearch-best))
+          (and (eq direction 'lower) (< value gptel-auto-workflow--autoresearch-best)))
+      (setq gptel-auto-workflow--autoresearch-best value)
+      (message "[autoresearch] KEEP: %s=%.4f (improved from %.4f, %+.4f)"
+               metric value gptel-auto-workflow--autoresearch-best delta)
+      (when target-file
+        (condition-case nil
+            (progn
+              (shell-command (format "git add %s" (shell-quote-argument target-file)))
+              (shell-command (format "git commit -m \"%s\""
+                                     (shell-quote-argument
+                                      (or description (format "autoresearch: %s %.4f" metric value))))))
+          (error (message "[autoresearch] Git error (non-fatal)"))))
+      'keep)
+     (t
+      (message "[autoresearch] DISCARD: %s=%.4f (worse than %.4f, %+.4f)"
+               metric value gptel-auto-workflow--autoresearch-best delta)
+      (when target-file
+        (condition-case nil
+            (progn
+              (shell-command (format "git checkout HEAD -- %s" (shell-quote-argument target-file)))
+              (shell-command (format "git commit -m \"revert: %s %.4f → %.4f\""
+                                     (shell-quote-argument (or metric "unknown")) value gptel-auto-workflow--autoresearch-best)))
+          (error (message "[autoresearch] Git error (non-fatal)"))))
+      'discard))))
 
 (provide 'gptel-auto-workflow-research-benchmark)
 
