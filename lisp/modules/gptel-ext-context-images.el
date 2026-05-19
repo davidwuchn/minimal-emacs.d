@@ -195,7 +195,9 @@ Adds metadata for image context entries."
 (defun my/gptel--sort-images-by-relevance ()
   "Sort gptel-context images by relevance (most recent first).
 Returns list of (path . props) for images only."
-  (let ((images (cl-loop for entry in gptel-context
+  (when (null gptel-context)
+    (setq gptel-context nil))
+  (let ((images (cl-loop for entry in (if (proper-list-p gptel-context) gptel-context (list gptel-context))
                          for (path . props) = (my/gptel--parse-context-entry entry)
                          when (and (stringp path) (plist-get props :mime))
                          collect (cons path props))))
