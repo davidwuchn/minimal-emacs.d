@@ -63,10 +63,9 @@ Call this when benchmark files are updated."
 (defun gptel-benchmark--get-trend-summary (name version)
   "Get benchmark summary for NAME VERSION, or nil if file doesn't exist.
 Internal helper to centralize trend data extraction logic."
-  (let* ((benchmark-file (gptel-benchmark-get-file name version)))
-    (when (file-exists-p benchmark-file)
-      (gptel-benchmark-summarize-results
-       (gptel-benchmark-read-json benchmark-file)))))
+  (let ((benchmark-data (gptel-benchmark-load-result name version)))
+    (when benchmark-data
+      (gptel-benchmark-summarize-results benchmark-data))))
 
 (defun gptel-benchmark-version-trend (name &optional versions)
   "Show trend for NAME across VERSIONS."
@@ -127,7 +126,7 @@ Internal helper to centralize version file reading logic."
           (setq version (match-string 1)))))
     (unless version
       (let ((found-versions (gptel-benchmark--scan-versions-from-dir name)))
-        (when found-versions
+        (when (and found-versions (functionp fallback-fn))
           (setq version (funcall fallback-fn found-versions)))))
     (or version default)))
 
