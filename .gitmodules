@@ -1,7 +1,3 @@
-[submodule "packages/gptel"]
-	path = packages/gptel
-	url = https://github.com/davidwuchn/gptel
-	branch = master
 [submodule "packages/gptel-agent"]
 	path = packages/gptel-agent
 	url = https://github.com/davidwuchn/gptel-agent
