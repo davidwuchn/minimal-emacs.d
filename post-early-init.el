@@ -112,13 +112,32 @@
 ;; The built-in sentinel-depth guard (10 max) prevents infinite loops
 ;; but doesn't break the sync call stack — Lisp nesting still grows
 ;; until it hits max-lisp-eval-depth. run-at-time breaks the chain.
+;;
+;; GUARD: Deferred sentinels can leak pipe FDs if the daemon blocks
+;; on another pipe read before the deferred sentinel runs. A 120s
+;; cleanup timer ensures orphaned process pipes are closed.
 (when (daemonp)
   (with-eval-after-load 'gptel-request
     (advice-add 'gptel-curl--sentinel :around
                 (lambda (orig-fn process status &rest args)
                   (if (> gptel-curl--sentinel-depth 5)
-                      (run-at-time 0 nil orig-fn process status)
-                    (apply orig-fn process status args))))))
+                      (let ((cleanup-timer
+                             (run-at-time 120 nil
+                               (lambda ()
+                                 (when (process-live-p process)
+                                   (message "[gptel] Cleaning up orphaned curl process (PID %d)"
+                                            (process-id process))
+                                   (delete-process process))))))
+                        (run-at-time 0 nil
+                          (lambda ()
+                            (cancel-timer cleanup-timer)
+                            (condition-case err
+                                (funcall orig-fn process status)
+                              (error
+                               (message "[gptel] Deferred sentinel error: %S" err)
+                               (when (process-live-p process)
+                                 (delete-process process)))))))
+                    (apply orig-fn process status args)))))))
 
 (provide 'post-early-init)
 
