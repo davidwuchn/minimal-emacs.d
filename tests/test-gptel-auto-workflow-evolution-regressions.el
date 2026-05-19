@@ -941,6 +941,29 @@ so tags before allium-issues is correctly detected."
   "A ends exactly where B starts → meets."
   (should (eq (gptel-auto-workflow--allen-relation 1.0 3.0 3.0 5.0) 'meets)))
 
+(ert-deftest regression/auto-workflow-evolution/holdout-score-guard-patterns ()
+  "score-holdout-target detects guard patterns in elisp files."
+  (let ((tmpfile (make-temp-file "holdout-" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile
+            (insert "(defun foo (x) (when x nil) (guard 'bar))\n(defun bar () (unless nil 'ok))\n"))
+          (let ((s (gptel-auto-workflow--score-holdout-target tmpfile)))
+            (should (>= s 0.0))
+            (should (<= s 1.0))
+            (should (> s 0.0))))
+      (delete-file tmpfile))))
+
+(ert-deftest regression/auto-workflow-evolution/holdout-score-empty-file ()
+  "score-holdout-target returns 0.0 for empty files."
+  (let ((tmpfile (make-temp-file "holdout-" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile (insert ""))
+          (let ((s (gptel-auto-workflow--score-holdout-target tmpfile)))
+            (should (= s 0.0))))
+      (delete-file tmpfile))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
