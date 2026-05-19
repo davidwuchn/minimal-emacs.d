@@ -165,6 +165,7 @@ Please share your configuration. It could serve as inspiration for other users.
     - [How to keep minimal-emacs.d pre-\*.el and post-\*.el files in a separate directory?](#how-to-keep-minimal-emacsd-pre-el-and-post-el-files-in-a-separate-directory)
     - [How to make *minimal-emacs.d* install packages in the early-init phase instead of the init phase?](#how-to-make-minimal-emacsd-install-packages-in-the-early-init-phase-instead-of-the-init-phase)
     - [How to compile Emacs for Performance on Linux and Unix systems?](#how-to-compile-emacs-for-performance-on-linux-and-unix-systems)
+    - [How to prevent Emacs from writing custom setting amd maintain a version controller configuration?](#how-to-prevent-emacs-from-writing-custom-setting-amd-maintain-a-version-controller-configuration)
     - [Minimal-emacs.d configurations from users](#minimal-emacsd-configurations-from-users)
   - [Features](#features)
     - [Fast Initialization and Performance](#fast-initialization-and-performance)
@@ -1067,6 +1068,8 @@ To enable `hs-minor-mode`, which is ideal for C-style languages and others that 
 (add-hook 'rust-mode-hook #'hs-minor-mode)
 (add-hook 'go-mode-hook #'hs-minor-mode)
 (add-hook 'ruby-mode-hook #'hs-minor-mode)
+(add-hook 'php-mode-hook #'hs-minor-mode)
+(add-hook 'perl-mode-hook #'hs-minor-mode)
 
 ;; Web and Frontend
 (add-hook 'js-mode-hook #'hs-minor-mode)
@@ -1152,6 +1155,7 @@ It is also recommended to install [treesit-fold](https://github.com/emacs-tree-s
 (add-hook 'rust-ts-mode-hook #'treesit-fold-mode)
 (add-hook 'go-ts-mode-hook #'treesit-fold-mode)
 (add-hook 'ruby-ts-mode-hook #'treesit-fold-mode)
+(add-hook 'php-ts-mode-hook #'treesit-fold-mode)
 
 ;; Web and Frontend
 (add-hook 'js-ts-mode-hook #'treesit-fold-mode)
@@ -2000,8 +2004,9 @@ In Emacs, customization variables modified via the UI (e.g., `M-x customize`) ar
              electric-pair-delete-pair)
   :hook (after-init . electric-pair-mode))
 
-;; Allow Emacs to upgrade built-in packages, such as Org mode
-(setq package-install-upgrade-built-in t)
+;; Set the fringes to match the pixel height of a character. This ensures the
+;; fringe is wide enough, scaling dynamically with the current font size.
+(fringe-mode (frame-char-height))
 
 ;; When Delete Selection mode is enabled, typed text replaces the selection
 ;; if the selection is active.
@@ -2130,12 +2135,14 @@ In Emacs, customization variables modified via the UI (e.g., `M-x customize`) ar
 (setq tooltip-delay 0.4)        ; Delay before showing a tooltip after mouse hover (default: 0.7)
 (setq tooltip-short-delay 0.08) ; Delay before showing a short tooltip (Default: 0.1)
 (tooltip-mode 1)
+
+;; Keep unmodified buffers A/B/C at session end
+(setq ediff-keep-variants t)
 ```
 
 It is also recommended to read the following articles:
 - [Automating Table of Contents Update for Markdown Documents (e.g., README.md)](https://www.jamescherti.com/emacs-markdown-table-of-contents-update-before-save/)
 - [Maintaining proper indentation in indentation-sensitive programming languages](https://www.jamescherti.com/elisp-code-and-emacs-packages-for-maintaining-proper-indentation-in-indentation-sensitive-languages-such-as-python-or-yaml/)
-
 
 ### File types (Yaml, Dockerfile, Lua, Jinja2, CSV, Vimrc...)
 
@@ -2832,6 +2839,16 @@ Most Linux distributions ship generic binaries compiled to run safely on a vast 
 Beyond raw hardware optimization, building from source enables dropping decades of legacy compatibility layers and embracing modern desktop technologies. For example, Wayland users can configure the build to bypass old X11 display protocols in favor of a Wayland environment, ensuring smoother rendering and better system integration...
 
 If you are interested in compiling Emacs, read: [A Technical Guide to Compiling Emacs for Performance on Linux and Unix systems](https://www.jamescherti.com/compiling-emacs/)
+
+### How to prevent Emacs from writing custom setting amd maintain a version controller configuration?
+
+If you want to maintain a strictly version-controlled, declarative configuration, you should prevent the Emacs customization interface from automatically appending custom-set-variables blocks to your files.
+
+```elisp
+;; Prevent Emacs from writing custom settings to any file
+(with-eval-after-load 'cus-edit
+  (advice-add 'custom-save-all :override #'ignore))
+```
 
 ### Minimal-emacs.d configurations from users
 
