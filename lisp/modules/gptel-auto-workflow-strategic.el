@@ -1,7 +1,5 @@
 ;;; gptel-auto-workflow-strategic.el --- Strategic target selection for auto-workflow -*- no-byte-compile: t; lexical-binding: t; -*-
 
-(declare-function gptel-auto-workflow--find-surprising-modules "gptel-auto-workflow-evolution")
-
 ;;; Commentary:
 ;; LLM-first target selection for auto-workflow.
 ;; Let the analyzer decide which files to optimize.
@@ -33,9 +31,7 @@
 (require 'gptel-tools-agent)
 (require 'gptel-benchmark-subagent nil t)
 (require 'gptel-auto-workflow-research-cache nil t)
-(condition-case nil
-    (require 'gptel-auto-workflow-research-benchmark nil t)
-  (error nil))
+(require 'gptel-auto-workflow-research-benchmark nil t)
 
 ;; Global variables to avoid closure issues in daemon environments
 ;; where lexical-binding may not be properly enabled during load
@@ -53,7 +49,6 @@
   "Temporary storage for research prompt during multi-turn research.")
 
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
-(declare-function gptel-auto-workflow--allium-load-issues-for-guidance "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
 (declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
 (declare-function gptel-auto-experiment--is-retryable-error-p "gptel-tools-agent-error" (response))
@@ -317,26 +312,13 @@ EDGE CASE: Only caches context when shell commands produce non-empty output."
         (if (and (stringp git-history) (stringp file-list-shell)
                  (not (string-empty-p git-history))
                  (not (string-empty-p file-list-shell)))
-            (let* ((module-dir (expand-file-name "lisp/modules" proj-root))
-                   (low-cohesion (gptel-auto-workflow--find-surprising-modules module-dir))
-                   (cohesion-str
-                    (if low-cohesion
-                        (mapconcat (lambda (entry)
-                                     (format "%s:%.2f"
-                                             (file-name-nondirectory (car entry))
-                                             (cdr entry)))
-                                   (seq-take low-cohesion 8) " ")
-                      ""))
-                   (context (list :git-history git-history
+            (let* ((context (list :git-history git-history
                                   :file-sizes (shell-command-to-string
                                                (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
                                                        safe-root))
                                   :todos (shell-command-to-string
                                           (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
                                                   safe-root))
-                                  :semantic-similar
-                                  (gptel-auto-workflow--semantic-similar-files proj-root)
-                                  :cohesion cohesion-str
                                   :file-list (let* ((all-files (delq nil
                                                                      (mapcar (lambda (s)
                                                                                (unless (string-empty-p s) s))
@@ -416,7 +398,7 @@ MULTI-LAYER ANALYSIS: code patterns + experiment failures + git trends."
         (let ((fix-count (cl-count-if (lambda (line) (string-match-p "^[a-f0-9]+ ⊘" line))
                                       (split-string output "\n" t)))
               (feature-count (cl-count-if (lambda (line) (string-match-p "^[a-f0-9]+ λ\\|🔁" line))
-                                         (split-string output "\n" t))))
+                                          (split-string output "\n" t))))
           (push (format "## Git Activity (last 30 commits to lisp/modules/)\n\n- **%d** bug fixes\n- **%d** feature/evolution commits\n- Focus: %s"
                         fix-count feature-count
                         (if (> fix-count feature-count) "stabilization" "feature development"))
@@ -509,71 +491,6 @@ Uses standard skill loader so humans can edit researcher-prompt/SKILL.md."
       (progn
         (message "[research] Loaded researcher skill (%d chars)" (length content))
         content))))
-
-(defun gptel-auto-workflow--load-research-priorities ()
-  "Load research priorities file (ontology-guided source scoring).
-Returns markdown string or empty."
-  (let ((file (expand-file-name "var/tmp/evolution/research-priorities.md"
-                                (gptel-auto-workflow--worktree-base-root))))
-    (if (file-readable-p file)
-        (with-temp-buffer
-          (insert-file-contents file)
-          (goto-char (point-min))
-          (buffer-string))
-      "")))
-
-(defun gptel-auto-workflow--load-knowledge-summary ()
-  "Load a compact summary of what we already know from knowledge pages.
-Returns markdown string or empty."
-  (let* ((kd (expand-file-name "mementum/knowledge"
-                               (gptel-auto-workflow--worktree-base-root)))
-         (files (when (file-directory-p kd)
-                  (directory-files kd t "research-insights-.+\\.md$")))
-         (lines nil))
-    (when files
-      (dolist (f (seq-take files 5))
-        (condition-case nil
-            (with-temp-buffer
-              (insert-file-contents f)
-              (goto-char (point-min))
-              (when (re-search-forward "^title: \\(.+\\)" nil t)
-                (let ((title (match-string 1)))
-                  (when (re-search-forward "^## Meta-Learning Recommendations" nil t)
-                    (forward-line 1)
-                    (let ((start (point)))
-                      (when (re-search-forward "^## \|\\'" nil t)
-                        (backward-char 2))
-                      (push (format "- **%s**: %s" title
-                                    (string-trim (buffer-substring start (point))))
-                            lines))))))
-          (error nil)))
-      (if lines
-          (mapconcat #'identity (nreverse lines) "\n")
-         ""))))
-
-(defun gptel-auto-workflow--load-researcher-targets ()
-  "Extract researcher-suggested targets from Allium spec in findings.
-Parses Technique.created() calls for apply_to fields.
-Returns markdown string or empty."
-  (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (findings-file (expand-file-name "var/tmp/research-findings.md" root))
-         (targets nil))
-    (when (file-readable-p findings-file)
-      (with-temp-buffer
-        (insert-file-contents findings-file)
-        (goto-char (point-min))
-        ;; Parse: apply_to: "value" or apply_to: value
-        (while (re-search-forward "apply_to:\\s-*\"?\\([^\"\n,)]+\\)\"?" nil t)
-          (let ((target (string-trim (match-string 1))))
-            ;; Skip template variables
-            (unless (or (string-empty-p target) (string-match-p "^technique\\." target))
-              (unless (string-match-p "^lisp/modules/" target)
-                (setq target (concat "lisp/modules/" target)))
-              (when (and (> (length target) 5) (string-match-p "^lisp/" target))
-                (push target targets)))))))
-    (if targets
-        (concat "- " (mapconcat #'identity (delete-dups targets) "\n- "))
-      "")))
 
 (defun gptel-auto-workflow--load-researcher-meta-learning ()
   "Load meta-learning data for researcher skill.
@@ -688,7 +605,7 @@ Returns placeholder message if TOPICS is nil or empty."
                    (format "| %s | %.0f%% | %d/%d | %s |"
                            topic (* 100 rate) kept total trend)))
                (seq-take topic-list 10)
-                "\n")))))
+               "\n")))))
 
 (defun gptel-auto-workflow--build-research-prompt ()
   "Build external research prompt by loading RESEARCHER.md skill.
@@ -705,31 +622,13 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (skill-content (gptel-auto-workflow--load-research-skill))
          (directive-content (gptel-auto-workflow--load-directive-skill))
          (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
-          ;; Load AutoTTS-style strategy guidance via {{strategy-guidance}} template injection only
-          (source-guidance (when (fboundp 'gptel-auto-workflow--apply-source-priority-to-prompt)
+         ;; Load AutoTTS-style strategy guidance via {{strategy-guidance}} template injection only
+         (source-guidance (when (fboundp 'gptel-auto-workflow--apply-source-priority-to-prompt)
                             (gptel-auto-workflow--apply-source-priority-to-prompt "")))
-          (recent-outcomes (gptel-auto-workflow--build-recent-trace-outcomes-string))
-          ;; Research priorities from ontology (Semantica: self-evolving researcher)
-          (priorities (gptel-auto-workflow--load-research-priorities))
-          (knowledge-summary (gptel-auto-workflow--load-knowledge-summary)))
+         (recent-outcomes (gptel-auto-workflow--build-recent-trace-outcomes-string)))
     (concat (or base-prompt "")
             "\n\n"
-             "## Research Mission\n\n"
-             "You are an ontology-aware research agent. Your job is to BUILD and MAINTAIN knowledge.\n\n"
-             "**Your knowledge graph:**\n"
-             "- Classes: Strategy, Technique, Target, Experiment, Outcome, KnowledgePage\n"
-             "- Properties: appliesTo (Technique→Target), improvesOn (Technique→Strategy), verifiedBy (Technique→Experiment)\n"
-             "- Existing gaps are your research targets. Fill them.\n\n"
-             "**Fetch files on demand:**\n"
-             "Use `gh api repos/davidwuchn/REPO/contents/PATH --jq '.content' | base64 -d`\n"
-             "Only fetch files that fill identified gaps in the ontology.\n\n"
-             "**Ontology enrichment (your core task):**\n"
-             "For each technique discovered:\n"
-             "1. Does it add a NEW class to the ontology? (e.g., a new pattern category)\n"
-             "2. Does it create a NEW relationship? (e.g., 'Technique X improves nil-safety in Strategy Y')\n"
-             "3. Can it answer a previously UNANSWERABLE competency question?\n"
-             "4. Does it contradict existing knowledge? Flag it.\n\n"
-             "## Dynamic Context\n\n"
+            "## Dynamic Context\n\n"
             (if (string-empty-p skill-content)
                 ""
               (concat "### Previously Discovered Insights\n"
@@ -747,53 +646,15 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                         "*Research ideas that could improve these specific modules:*\n"
                         priority-targets
                         "\n\n")
-               "")
-              (if (and source-guidance (not (string-empty-p source-guidance)))
-                 (concat "### Source Scheduling (AutoTTS)\n"
-                          source-guidance
-                          "\n\n")
-                "")
-             (if (and priorities (not (string-empty-p priorities)))
-                 (concat "### Research Priorities (Ontology-Guided)\n"
-                         "*These sources produced the best downstream experiment results. Prioritize them.*\n\n"
-                         priorities
-                         "\n\n")
-               "")
-             (if (and knowledge-summary (not (string-empty-p knowledge-summary)))
-                 (concat "### What We Already Know\n"
-                         "*Do not repeat research on these topics. Build upon or challenge these findings.*\n\n"
-                         knowledge-summary
-                         "\n\n")
-               "")
-             "### Research Method (Step-by-Step)\n"
-             "1. **Review** what we already know (above). Identify gaps — what techniques have NOT been tried?\n"
-             "2. **Fetch** specific files you need from repos using:\n"
-             "   `gh api repos/davidwuchn/REPO/contents/PATH --jq '.content' | base64 -d`\n"
-             "   Only fetch files that fill identified gaps. Do NOT batch-dump.\n"
-             "3. **Prioritize** sources with high keep-rates (Research Priorities above).\n"
-             "4. **Synthesize** each finding: source, technique, how to apply to Emacs Lisp.\n"
-             "5. **Output** as a structured research plan (see format below).\n\n"
-             "### Output Format (Allium v3 Behavioral Spec — FILL IN REAL VALUES)\n"
-             "CRITICAL: Do NOT copy the template. Fill in ACTUAL technique names, file paths, and descriptions.\n"
-             "`technique.name` MUST be replaced with a real technique like \"Nil Safety Guard\".\n"
-             "`technique.apply_to` MUST be replaced with a real file path like \"lisp/modules/gptel-auto-workflow-evolution.el\".\n"
-             "`technique.source` MUST be replaced with a real repo/file like \"nucleus/COMPILER.md\".\n\n"
-             "Example of CORRECT output:\n\n"
-             "```allium\n"
-             "Technique.created(\n"
-             "  name: \"Nil Safety Guard\",\n"
-             "  source: \"nucleus/COMPILER.md\",\n"
-             "  apply_to: \"lisp/modules/gptel-auto-workflow-evolution.el\",\n"
-             "  description: \"Add nil guards to function parameters\",\n"
-             "  verification: \"Run tests, check for unhandled nil errors\",\n"
-             "  priority: high\n"
-             ")\n"
-             "```\n\n"
-             "For each technique discovered, add a Technique.created() call with REAL data.\n"
-             "The pipeline parses these calls to extract targets and guide experiments.\n\n"
-             "### Recent Failure Patterns\n"
-             (gptel-auto-workflow--research-topics-string)
-             "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
+              "")
+            (if (and source-guidance (not (string-empty-p source-guidance)))
+                (concat "### Source Scheduling (AutoTTS)\n"
+                        source-guidance
+                        "\n\n")
+              "")
+            "### Recent Failure Patterns\n"
+            (gptel-auto-workflow--research-topics-string)
+            "Remember: Be specific. 'Use AI better' is banned. Focus on techniques we can implement in Emacs Lisp.")))
 
 (defun gptel-auto-workflow--build-recent-trace-outcomes-string ()
   "Build a compact summary of recent research trace outcomes.
@@ -810,10 +671,8 @@ Returns empty string when no trace data is available."
       (dolist (trace recent)
         (let ((source (or (plist-get trace :source) "unknown"))
               (strategy (or (plist-get trace :strategy) "unknown"))
-              (success (and (fboundp 'gptel-auto-workflow--trace-success-p)
-                            (gptel-auto-workflow--trace-success-p trace)))
-              (known (and (fboundp 'gptel-auto-workflow--trace-outcome-known-p)
-                          (gptel-auto-workflow--trace-outcome-known-p trace))))
+              (success (gptel-auto-workflow--trace-success-p trace))
+              (known (gptel-auto-workflow--trace-outcome-known-p trace)))
           (when known
             (let* ((key (format "%s via %s" source strategy))
                    (stats (gethash key source-stats '(0 0))))
@@ -822,13 +681,13 @@ Returns empty string when no trace data is available."
                        source-stats)))))
       ;; Format outcome summary.
       (cl-flet ((format-outcome (key stats)
-                 (let ((kept (nth 0 stats))
-                       (total (nth 1 stats)))
-                   (when (> total 0)
-                     (push (format "- **%s**: %d/%d kept (%.0f%%)"
-                                   key kept total
-                                   (* 100 (/ (float kept) total)))
-                           lines)))))
+                  (let ((kept (nth 0 stats))
+                        (total (nth 1 stats)))
+                    (when (> total 0)
+                      (push (format "- **%s**: %d/%d kept (%.0f%%)"
+                                    key kept total
+                                    (* 100 (/ (float kept) total)))
+                            lines)))))
         (maphash #'format-outcome source-stats))
       (if lines
           (string-join (sort lines #'string<) "\n")
@@ -981,15 +840,15 @@ usable and digestion would lose 80%+ of the content.  Only digest raw HTML dumps
    ;; Empty: nothing to do
    ((or (null raw-findings) (string-empty-p raw-findings))
     (funcall callback ""))
-    ;; Already structured external research: pass through to avoid destruction
-    ((and (> (length raw-findings) 300)
-          (or (> (length raw-findings) 500)  ; Medium+ = likely structured research
-              (string-match-p "https?://" raw-findings)
-              (string-match-p "## .*Technique\|Source type:\|Impact:\|Application:" raw-findings)
-              (string-match-p "\b\(GitHub\|arXiv\|YouTube\|Reddit\|HuggingFace\|X/Twitter\)\b" raw-findings)))
-     (message "[auto-workflow] External research already structured (%d chars), skipping digestion"
-              (length raw-findings))
-     (funcall callback raw-findings))
+   ;; Already structured external research: pass through to avoid destruction
+   ((and (> (length raw-findings) 300)
+         (or (> (length raw-findings) 500)  ; Medium+ = likely structured research
+             (string-match-p "https?://" raw-findings)
+             (string-match-p "## .*Technique\|Source type:\|Impact:\|Application:" raw-findings)
+             (string-match-p "\b\(GitHub\|arXiv\|YouTube\|Reddit\|HuggingFace\|X/Twitter\)\b" raw-findings)))
+    (message "[auto-workflow] External research already structured (%d chars), skipping digestion"
+             (length raw-findings))
+    (funcall callback raw-findings))
    ;; Local/internal patterns: pass through (already formatted by local-research-patterns)
    ((and (> (length raw-findings) 100)
          (string-match-p "Pattern:" raw-findings))
@@ -1066,20 +925,20 @@ RULES:
                      (message "[auto-workflow] Digestion complete: %d chars → %d chars"
                               (length raw-findings) (length digested))
                      ;; Update context with digested version
-                      (when (boundp 'gptel-auto-workflow--current-research-context)
-                        (setq gptel-auto-workflow--current-research-context
-                              (plist-put gptel-auto-workflow--current-research-context
-                                         :digested digested)))
+                     (when (boundp 'gptel-auto-workflow--current-research-context)
+                       (setq gptel-auto-workflow--current-research-context
+                             (plist-put gptel-auto-workflow--current-research-context
+                                        :digested digested)))
                      (funcall callback digested))))))
-        (if (fboundp 'gptel-request)
-            (gptel-request
-                digest-prompt
-              :callback digest-callback
-              :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights."
-              :timeout 60)
-          (progn
-            (message "[auto-workflow] gptel-request unavailable, using raw findings")
-               (funcall callback raw-findings)))))))))
+            (if (fboundp 'gptel-request)
+                (gptel-request
+                    digest-prompt
+                  :callback digest-callback
+                  :system "You are a research analyst specializing in AI agent architectures and Emacs Lisp tooling. You distill raw research into actionable engineering insights."
+                  :timeout 60)
+              (progn
+                (message "[auto-workflow] gptel-request unavailable, using raw findings")
+                (funcall callback raw-findings)))))))))
 
 
 (defun gptel-auto-workflow--research-patterns (callback &optional retry-count)
@@ -1098,56 +957,56 @@ BEHAVIOR: On failure, activates provider failover and retries (max 3).
 EDGE CASE: Returns empty findings if subagent unavailable.
 META-LEARNING: Feeds findings to analyzer selection and the project research cache."
   (cl-block gptel-auto-workflow--research-patterns
-  ;; Guard against concurrent research calls
-  (when gptel-auto-workflow--research-in-progress
-    (message "[auto-workflow] Research already in progress, skipping concurrent call")
-    (funcall callback "")
-    (cl-return-from gptel-auto-workflow--research-patterns))
-  (setq gptel-auto-workflow--research-in-progress t)
-  (let ((research-prompt (gptel-auto-workflow--build-research-prompt))
-        (attempt (or retry-count 0)))
-    (let ((controller-config (gptel-auto-workflow--load-autotts-controller)))
-      (message "[auto-workflow] Hunting external ideas (multi-turn controller)...")
-      (gptel-auto-workflow--reset-research-steps)
-      (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%"
-               (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
-               (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
-      (message "[debug] subagents-enabled=%s fbound=%s caller=%s attempt=%d"
-               gptel-auto-experiment-use-subagents
-               (fboundp 'gptel-benchmark-call-subagent)
-               (format-time-string "%H:%M:%S") attempt)
-      (if (and gptel-auto-experiment-use-subagents
-               (fboundp 'gptel-benchmark-call-subagent))
-          ;; Wrap callback with retry-on-failure logic
-          (gptel-auto-workflow--run-research-turn
-           research-prompt 0
-           (lambda (findings)
-             ;; If findings are empty or too short, activate failover and retry
-             (if (and (or (null findings) (string-empty-p findings)
-                         (< (length findings) 100))
-                      (< attempt 3)
-                      (fboundp 'gptel-auto-workflow--activate-provider-failover))
+    ;; Guard against concurrent research calls
+    (when gptel-auto-workflow--research-in-progress
+      (message "[auto-workflow] Research already in progress, skipping concurrent call")
+      (funcall callback "")
+      (cl-return-from gptel-auto-workflow--research-patterns))
+    (setq gptel-auto-workflow--research-in-progress t)
+    (let ((research-prompt (gptel-auto-workflow--build-research-prompt))
+          (attempt (or retry-count 0)))
+      (let ((controller-config (gptel-auto-workflow--load-autotts-controller)))
+        (message "[auto-workflow] Hunting external ideas (multi-turn controller)...")
+        (gptel-auto-workflow--reset-research-steps)
+        (message "[autotts] Controller: own-repo-priority=%.0f%%, stop-threshold=%.0f%%"
+                 (* 100 (or (plist-get controller-config :own-repo-priority) 0.7))
+                 (* 100 (or (plist-get controller-config :min-confidence-stop) 0.7)))
+        (message "[debug] subagents-enabled=%s fbound=%s caller=%s attempt=%d"
+                 gptel-auto-experiment-use-subagents
+                 (fboundp 'gptel-benchmark-call-subagent)
+                 (format-time-string "%H:%M:%S") attempt)
+        (if (and gptel-auto-experiment-use-subagents
+                 (fboundp 'gptel-benchmark-call-subagent))
+            ;; Wrap callback with retry-on-failure logic
+            (gptel-auto-workflow--run-research-turn
+             research-prompt 0
+             (lambda (findings)
+               ;; If findings are empty or too short, activate failover and retry
+               (if (and (or (null findings) (string-empty-p findings)
+                            (< (length findings) 100))
+                        (< attempt 3)
+                        (fboundp 'gptel-auto-workflow--activate-provider-failover))
+                   (progn
+                     (message "[auto-workflow] Research produced empty/short findings (%d chars, attempt %d); failover and retry"
+                              (if findings (length findings) 0) (1+ attempt))
+                     (when-let* ((preset (and (boundp 'gptel-agent-preset) gptel-agent-preset))
+                                 (backend (plist-get preset :backend)))
+                       (gptel-auto-workflow--activate-provider-failover
+                        "researcher" preset "empty research output" t))
+                     (setq gptel-auto-workflow--research-in-progress nil)
+                     (let ((cb callback)
+                           (att (1+ attempt)))
+                       (run-with-timer 0 nil
+                                       (lambda ()
+                                         (gptel-auto-workflow--research-patterns cb att)))))
+                 ;; Findings are good enough or retries exhausted
                  (progn
-                   (message "[auto-workflow] Research produced empty/short findings (%d chars, attempt %d); failover and retry"
-                            (if findings (length findings) 0) (1+ attempt))
-                   (when-let* ((preset (and (boundp 'gptel-agent-preset) gptel-agent-preset))
-                               (backend (plist-get preset :backend)))
-                     (gptel-auto-workflow--activate-provider-failover
-                      "researcher" preset "empty research output" t))
-                    (setq gptel-auto-workflow--research-in-progress nil)
-                    (let ((cb callback)
-                          (att (1+ attempt)))
-                      (run-with-timer 0 nil
-                                      (lambda ()
-                                        (gptel-auto-workflow--research-patterns cb att)))))
-               ;; Findings are good enough or retries exhausted
-               (progn
-                 (setq gptel-auto-workflow--research-in-progress nil)
-                 (funcall callback (or findings ""))))))
-        (progn
-          (message "[auto-workflow] Subagent unavailable - skipping external research")
-          (setq gptel-auto-workflow--research-in-progress nil)
-          (funcall callback "")))))))
+                   (setq gptel-auto-workflow--research-in-progress nil)
+                   (funcall callback (or findings ""))))))
+          (progn
+            (message "[auto-workflow] Subagent unavailable - skipping external research")
+            (setq gptel-auto-workflow--research-in-progress nil)
+            (funcall callback "")))))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -1180,22 +1039,13 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                                          (replace-regexp-in-string "^---$\\|^---\\n.*\\n---\\n" "" directive)
                                          1500 nil nil "..."))
                               ""))
-          (research-section (if (and research-skill (not (string-empty-p research-skill)))
-                                (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
-                                        (truncate-string-to-width research-skill 800 nil nil "..."))
-                              ""))
-          (allium-issues (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-guidance)
-                             (gptel-auto-workflow--allium-load-issues-for-guidance)
-                           ""))
-           (researcher-targets (gptel-auto-workflow--load-researcher-targets))
-          (research-priorities (gptel-auto-workflow--load-research-priorities))
-          (knowledge-summary (gptel-auto-workflow--load-knowledge-summary)))
+         (research-section (if (and research-skill (not (string-empty-p research-skill)))
+                               (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
+                                       (truncate-string-to-width research-skill 800 nil nil "..."))
+                             "")))
     (format "Select optimization targets for this Emacs Lisp project.
 
-%s%sALLIUM BEHAVIORAL AUDIT (coherence gaps found in last cycle's research):
-%s
-
-FILES AVAILABLE:
+%s%sFILES AVAILABLE:
 %s
 
 RECENT GIT HISTORY:
@@ -1204,13 +1054,7 @@ RECENT GIT HISTORY:
 FILES BY SIZE:
 %s
 
-MODULE COHESION (deterministic scan — low cohesion = needs refactoring):
-%s
-
 KNOWN ISSUES (TODOs/FIXMEs):
-%s
-
-SEMANTIC SIMILARITY (git-embed — files similar to successful targets):
 %s
 
 EXTERNAL RESEARCH FINDINGS (new ideas from internet):
@@ -1222,16 +1066,11 @@ Do NOT choose files from packages/ or any nested git repo. Those are optimized s
 SIZE CONSTRAINT: Skip files over 1000 lines. They are too large for focused experiments.
 Example: gptel-tools-agent.el (11,481 lines) is EXCLUDED. Focus on smaller files.
 
-RESEARCH PRIORITIES (which sources produce kept experiments):
-%s
-
-WHAT WE ALREADY KNOW (avoid repeating these):
 %s
 
 PRIORITIZE: Files where external research insights can be applied.
   Example: Research found \"async process monitoring\" → target files with process handling
   Example: Research found \"state machine pattern\" → target files with complex control flow
-%s
 AVOID: Recently-refactored files with no remaining issues.
 AVOID: Files over 1000 lines (too large for focused changes).
 HINT: External research insights suggest novel approaches. Consider targets that could benefit from these techniques even if they don't have obvious bugs.
@@ -1240,27 +1079,17 @@ OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
             directive-section
             research-section
-            (if (string-empty-p allium-issues) ""
-              (concat "ALLIUM BEHAVIORAL AUDIT (coherence gaps found in last cycle):\n" allium-issues "\n\n"))
             (or (plist-get context :file-list) "")
             (or (plist-get context :git-history) "")
             (or (plist-get context :file-sizes) "")
-            (or (plist-get context :cohesion) "not available")
             (or (plist-get context :todos) "")
-            (or (plist-get context :semantic-similar) "git-embed not available")
             (if (or (null research-findings) (string-empty-p research-findings))
                 "Not available (research disabled)"
               (truncate-string-to-width research-findings 3500 nil nil "..."))
             max-targets
-            (if (string-empty-p research-priorities) "None yet — run more cycles"
-              (truncate-string-to-width research-priorities 800 nil nil "..."))
-            (if (string-empty-p knowledge-summary) "Nothing yet — first cycle"
-              (truncate-string-to-width knowledge-summary 600 nil nil "..."))
             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
                 (gptel-auto-workflow--evolution-get-knowledge)
-              "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results")
-            (if (string-empty-p researcher-targets) ""
-              (concat "\nRESEARCHER-SUGGESTED TARGETS (from Allium spec):\n" researcher-targets "\n")))))
+              "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results"))))
 
 (defun gptel-auto-workflow--ask-analyzer-with-findings (research-findings callback)
   "Ask analyzer with optional RESEARCH-FINDINGS for target selection.
@@ -1296,10 +1125,10 @@ EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget 
                           (message "[auto-workflow] Retrying analyzer target selection with %s/%s"
                                    (car candidate)
                                    (cdr candidate))
-                           (gptel-auto-workflow--clear-analyzer-error-state)
-                           (let ((att (1+ attempt)))
-                             (run-with-timer 0 nil
-                                             (lambda () (request-analyzer att)))))
+                          (gptel-auto-workflow--clear-analyzer-error-state)
+                          (let ((att (1+ attempt)))
+                            (run-with-timer 0 nil
+                                            (lambda () (request-analyzer att)))))
                       (funcall callback targets))))
                 analyzer-timeout)))
           (message "[auto-workflow] Asking analyzer to select targets...")
@@ -1361,9 +1190,7 @@ Otherwise, convert using princ representation."
 (defun gptel-auto-workflow--analyzer-error-p (response)
   "Return non-nil when RESPONSE is an analyzer task failure wrapper."
   (and (stringp response)
-       (or (string-match-p "\\`Error:" response)
-           (string-match-p "gptel: API failed" response)
-           (string-match-p "Token Plan.*重试" response))))
+       (string-match-p "\\`Error:" response)))
 
 (defun gptel-auto-workflow--research-has-external-content-p (response)
   "Return non-nil when RESPONSE contains actual external research references.
@@ -1373,21 +1200,27 @@ Also treats long responses (>1000 chars) as likely external research,
 since the researcher subagent digests fetched content and may not
 include raw URLs in the summary."
   (and (stringp response)
-        (> (length response) 200)
-        (or (> (length response) 400)  ; Medium+ responses = digested external research
-            (string-match-p "https?://" response)
-            (string-match-p "\\b\\(GitHub\\|arXiv\\|YouTube\\|Reddit\\|HuggingFace\\|X/Twitter\\)\\b" response)
-            (string-match-p "\\b\\(karthink/gptel\\|hermes-agent\\|zeroclaw\\|ml-intern\\)\\b" response))))
+       (> (length response) 200)
+       (or (> (length response) 400)  ; Medium+ responses = digested external research
+           (string-match-p "https?://" response)
+           (string-match-p "\\b\\(GitHub\\|arXiv\\|YouTube\\|Reddit\\|HuggingFace\\|X/Twitter\\)\\b" response)
+           (string-match-p "\\b\\(karthink/gptel\\|hermes-agent\\|zeroclaw\\|ml-intern\\)\\b" response))))
 
 (defun gptel-auto-workflow--research-error-p (response)
-  "Return non-nil when RESPONSE is a true researcher failure (error wrapper or empty).
-Does NOT flag short but substantive responses as errors — the controller
-decides quality, not a length threshold."
+  "Return non-nil when RESPONSE is a researcher task failure wrapper.
+Treats short responses (< 500 chars) without external references as failures.
+Long responses (>1000 chars) are assumed successful and never flagged as errors.
+Only checks retryable-error patterns for short responses that look like error messages."
   (and (stringp response)
        (or (string-match-p "\\`Error:" response)
-           (< (length response) 50)
-           (and (fboundp 'gptel-auto-experiment--is-retryable-error-p)
-                (gptel-auto-experiment--is-retryable-error-p response)))))
+           ;; Only check retryable errors for short responses (<1000 chars)
+           ;; that are likely error messages, not valid research output
+           (and (< (length response) 1000)
+                (fboundp 'gptel-auto-experiment--is-retryable-error-p)
+                (gptel-auto-experiment--is-retryable-error-p response))
+           ;; Only flag as missing external content if short AND no refs
+           (and (< (length response) 500)
+                (not (gptel-auto-workflow--research-has-external-content-p response))))))
 
 (defun gptel-auto-workflow--analyzer-transient-error-p (response)
   "Return non-nil when RESPONSE reflects a transient analyzer/provider failure."
@@ -1460,58 +1293,25 @@ EDGE CASE: nil returns nil, non-list atoms return nil."
          (or (symbolp (caar value))
              (stringp (caar value))))))
 
-(defun gptel-auto-workflow--semantic-similar-files (&optional proj-root)
-  "Find files semantically similar to recent kept experiment targets.
-Uses git-embed if installed: discovers files with similar embeddings.
-Returns formatted string of similar files or empty string.
-Fails gracefully if git-embed is slow or index unavailable (10s timeout)."
-  (let ((cmd "git embed search")
-        (query nil))
-    (when (and (executable-find "git-embed")
-               (fboundp 'gptel-auto-workflow--parse-all-results)
-               ;; Quick canary: check if index exists at all before searching
-               (= 0 (call-process "timeout" nil nil nil "5" "git" "-C"
-                                  (or proj-root default-directory)
-                                  "embed" "status")))
-      (let ((results (gptel-auto-workflow--parse-all-results))
-            (kept-targets nil))
-        (dolist (r results)
-          (when (equal (plist-get r :decision) "kept")
-            (push (plist-get r :target) kept-targets)))
-        (when kept-targets
-          (setq query (car kept-targets))
-          (let* ((root (or proj-root (gptel-auto-workflow--effective-project-root)))
-                 (output (shell-command-to-string
-                          (format "cd %s && timeout 10 git embed similar %s 2>/dev/null | head -10"
-                                  (shell-quote-argument root)
-                                  (shell-quote-argument query)))))
-            (if (and (stringp output) (not (string-empty-p output))
-                     (> (length output) 20))
-                (format "Semantically similar to %s (via git-embed):\n%s" query output)
-              "")))))))
-
-(defun gptel-auto-workflow--invoke-static-fallback (reason static-targets callback)
-  "Invoke CALLBACK with STATIC-TARGETS and log REASON.
-Returns t to indicate fallback was used."
-  (message "[auto-workflow] %s; using static targets" reason)
-  (funcall callback static-targets)
-  t)
-
 (defun gptel-auto-workflow--handle-analyzer-error-state (targets static-targets callback)
   "Handle analyzer error states and invoke CALLBACK with appropriate targets.
 TARGETS is the analyzer result, STATIC-TARGETS is fallback list.
 Returns non-nil if error state was handled."
-  (unless (functionp callback)
-    (error "gptel-auto-workflow--handle-analyzer-error-state: callback must be a function"))
   (cond
    ((and gptel-auto-workflow--analyzer-quota-exhausted
          (not targets))
-    (gptel-auto-workflow--invoke-static-fallback "Analyzer quota exhausted" static-targets callback))
+    (message "[auto-workflow] Analyzer quota exhausted; using static targets")
+    (funcall callback static-targets)
+    t)
    ((and gptel-auto-workflow--analyzer-transient-failure
          (not targets))
-    (gptel-auto-workflow--invoke-static-fallback "Analyzer transient failure" static-targets callback))
+    (message "[auto-workflow] Analyzer transient failure; using static targets")
+    (funcall callback static-targets)
+    t)
    ((not targets)
-    (gptel-auto-workflow--invoke-static-fallback "Analyzer returned no targets" static-targets callback))
+    (message "[auto-workflow] Analyzer returned no targets; using static targets")
+    (funcall callback static-targets)
+    t)
    (t nil)))
 
 (defun gptel-auto-workflow--normalize-target-candidate (candidate)
@@ -1672,7 +1472,7 @@ Called during research initialization to restore evolved strategy after daemon r
   (when (and (null gptel-auto-workflow--active-strategy)
              (fboundp 'gptel-auto-workflow--worktree-base-root))
     (let ((strategy-file (expand-file-name "var/tmp/researcher-strategy.json"
-                                            (gptel-auto-workflow--worktree-base-root))))
+                                           (gptel-auto-workflow--worktree-base-root))))
       (when (file-exists-p strategy-file)
         (condition-case nil
             (let* ((json-object-type 'plist)
@@ -1819,7 +1619,7 @@ TOKENS-USED is estimated token count."
   (let* ((trace-dir gptel-auto-workflow--research-trace-dir)
          (timestamp (format-time-string "%Y%m%d-%H%M%S"))
          (trace-file (expand-file-name (format "%s-%s.json" timestamp hash)
-                                      trace-dir))
+                                       trace-dir))
          ;; Extract step-level data from output
          (parsed-steps (gptel-auto-workflow--extract-research-steps output))
          ;; Merge with any explicitly logged steps
@@ -1829,38 +1629,38 @@ TOKENS-USED is estimated token count."
                         parsed-steps)))
     (make-directory trace-dir t)
     (let ((trace-data
-            (list :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
-                  :strategy strategy
-                  :findings-hash hash
-                  :findings output
-                  :output output
-                  :prompt-length (length prompt)
+           (list :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                 :strategy strategy
+                 :findings-hash hash
+                 :findings output
+                 :output output
+                 :prompt-length (length prompt)
                  :output-length (length output)
                  :has-urls (if (string-match-p "https?://" output) t nil)
                  :has-code (if (string-match-p "```" output) t nil)
                  :has-structure (if (string-match-p "## .*\\n" output) t nil)
                  :source (if (string-match-p "davidwuchn" output) "own-repo" "external")
-                  :controller-decision (symbol-name (or controller-decision 'continue))
-                  :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
-                  :ema-conf (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
-                                     gptel-auto-workflow--research-ema-conf)
+                 :controller-decision (symbol-name (or controller-decision 'continue))
+                 :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
+                 :ema-conf (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
+                                    gptel-auto-workflow--research-ema-conf)
+                               0.0)
+                 :ema-delta (or (and (fboundp 'gptel-auto-workflow--research-ema-delta)
+                                     (gptel-auto-workflow--research-ema-delta))
                                 0.0)
-                  :ema-delta (or (and (fboundp 'gptel-auto-workflow--research-ema-delta)
-                                      (gptel-auto-workflow--research-ema-delta))
-                                 0.0)
-                  :tokens-used (or tokens-used (/ (length output) 4))
+                 :tokens-used (or tokens-used (/ (length output) 4))
                  ;; Step-level traces for AutoTTS offline evaluation
-                  :steps all-steps
-                  :step-count (length all-steps)
-                  :turn-count (or (and (boundp 'gptel-auto-workflow--research-trace-log)
-                                       (length gptel-auto-workflow--research-trace-log))
-                                  1)
-                  :trace-log (and (boundp 'gptel-auto-workflow--research-trace-log)
-                                  gptel-auto-workflow--research-trace-log)
+                 :steps all-steps
+                 :step-count (length all-steps)
+                 :turn-count (or (and (boundp 'gptel-auto-workflow--research-trace-log)
+                                      (length gptel-auto-workflow--research-trace-log))
+                                 1)
+                 :trace-log (and (boundp 'gptel-auto-workflow--research-trace-log)
+                                 gptel-auto-workflow--research-trace-log)
                  :metadata (list :tokens-estimate (/ (length output) 4)
-                                :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
-                                :step-count (length all-steps)
-                                :has-steps (if all-steps t nil)))))
+                                 :confidence (or confidence (gptel-auto-workflow--estimate-confidence output))
+                                 :step-count (length all-steps)
+                                 :has-steps (if all-steps t nil)))))
       (with-temp-file trace-file
         (insert (json-encode trace-data)))
       (when (fboundp 'gptel-auto-workflow--research-cache-index-trace-file)
@@ -1871,26 +1671,29 @@ TOKENS-USED is estimated token count."
 
 (defun gptel-auto-workflow--estimate-confidence (output)
   "Estimate confidence score (0-1) from research output.
-Heuristic based on AutoTTS confidence signals."
-  (let ((score 0.0)
-        (len (length output)))
-    ;; URLs present = credible
-    (when (string-match-p "https?://" output)
-      (setq score (+ score 0.3)))
-    ;; Structured format = organized thinking
-    (when (string-match-p "## .*\\n" output)
-      (setq score (+ score 0.2)))
-    ;; Code examples = specific
-    (when (string-match-p "```" output)
-      (setq score (+ score 0.2)))
-    ;; Length appropriate
-    (cond ((> len 3000) (setq score (+ score 0.2)))
-          ((> len 1000) (setq score (+ score 0.1)))
-          (t (setq score (+ score 0.05))))
-    ;; Actionable items
-    (when (string-match-p "\\*\\*" output)
-      (setq score (+ score 0.1)))
-    score))
+Heuristic based on AutoTTS confidence signals.
+Returns 0.0 if OUTPUT is nil or not a string."
+  (if (not (stringp output))
+      0.0
+    (let ((score 0.0)
+          (len (length output)))
+      ;; URLs present = credible
+      (when (string-match-p "https?://" output)
+        (setq score (+ score 0.3)))
+      ;; Structured format = organized thinking
+      (when (string-match-p "## .*\\n" output)
+        (setq score (+ score 0.2)))
+      ;; Code examples = specific
+      (when (string-match-p "```" output)
+        (setq score (+ score 0.2)))
+      ;; Length appropriate
+      (cond ((> len 3000) (setq score (+ score 0.2)))
+            ((> len 1000) (setq score (+ score 0.1)))
+            (t (setq score (+ score 0.05))))
+      ;; Actionable items
+      (when (string-match-p "\\*\\*" output)
+        (setq score (+ score 0.1)))
+      score)))
 
 (defun gptel-auto-workflow--detect-research-topic (output-text)
   "Detect research topic from OUTPUT-TEXT.
@@ -1935,16 +1738,16 @@ Returns float 0-1, or nil if no data."
   (when (fboundp 'gptel-auto-workflow--parse-all-results)
     (let* ((results (gptel-auto-workflow--parse-all-results))
            (topic-results (cl-remove-if-not
-                          (lambda (r)
-                            (and (equal (plist-get r :decision) "kept")
-                                 (string-match-p topic
-                                                (downcase (or (plist-get r :target) "")))))
-                          results))
+                           (lambda (r)
+                             (and (equal (plist-get r :decision) "kept")
+                                  (string-match-p topic
+                                                  (downcase (or (plist-get r :target) "")))))
+                           results))
            (all-topic (cl-remove-if-not
-                      (lambda (r)
-                        (string-match-p topic
-                                       (downcase (or (plist-get r :target) ""))))
-                      results)))
+                       (lambda (r)
+                         (string-match-p topic
+                                         (downcase (or (plist-get r :target) ""))))
+                       results)))
       (when (> (length all-topic) 0)
         (/ (float (length topic-results)) (length all-topic))))))
 
@@ -1978,17 +1781,17 @@ Uses topic-specific model if available and topic detected."
              (source-own 1) ;; Assume own-repo for current context
              (confidence (gptel-auto-workflow--estimate-confidence (or output-text "")))
              (score (+ intercept
-                      (* (or (plist-get weights :output_length) 0) output-length)
-                      (* (or (plist-get weights :has_urls) 0) has-urls)
-                      (* (or (plist-get weights :has_structure) 0) has-structure)
-                      (* (or (plist-get weights :has_code) 0) has-code)
-                      (* (or (plist-get weights :source_own) 0) source-own)
-                      (* (or (plist-get weights :confidence) 0) confidence)
-                      (* (or (plist-get weights :tokens_used) 0) (/ output-length 4))
-                      (* (or (plist-get weights :step_count) 0) 1)))
+                       (* (or (plist-get weights :output_length) 0) output-length)
+                       (* (or (plist-get weights :has_urls) 0) has-urls)
+                       (* (or (plist-get weights :has_structure) 0) has-structure)
+                       (* (or (plist-get weights :has_code) 0) has-code)
+                       (* (or (plist-get weights :source_own) 0) source-own)
+                       (* (or (plist-get weights :confidence) 0) confidence)
+                       (* (or (plist-get weights :tokens_used) 0) (/ output-length 4))
+                       (* (or (plist-get weights :step_count) 0) 1)))
              ;; Sigmoid
              (prob (/ 1.0 (+ 1.0 (exp (- score))))))
-          (max 0.0 (min 1.0 prob))))))
+        (max 0.0 (min 1.0 prob))))))
 
 ;;; Periodic Research
 
@@ -2053,11 +1856,11 @@ Findings are cached per-project."
            (or (not (stringp cached))
                (string-empty-p cached)
                (> (length file-findings) (length cached))))
-       (puthash cache-key file-findings gptel-auto-workflow--research-findings-cache)
-       (gptel-auto-workflow--ensure-research-context file-findings)
-       (message "[research] Loaded cached findings from disk for %s (%d chars)"
-                proj-root (length file-findings))
-       file-findings)
+      (puthash cache-key file-findings gptel-auto-workflow--research-findings-cache)
+      (gptel-auto-workflow--ensure-research-context file-findings)
+      (message "[research] Loaded cached findings from disk for %s (%d chars)"
+               proj-root (length file-findings))
+      file-findings)
      ((and (stringp cached) (not (string-empty-p cached)))
       (gptel-auto-workflow--ensure-research-context cached)
       (message "[research] Using in-memory findings for %s (%d chars)"
@@ -2072,9 +1875,6 @@ Findings are cached per-project."
 Findings cached for analyzer to use during target selection.
 Set `gptel-auto-workflow-research-interval' to control frequency."
   (interactive)
-  (condition-case nil
-      (require 'gptel-auto-workflow-research-benchmark nil t)
-    (error nil))
   (when (and gptel-auto-workflow-research-interval
              (> gptel-auto-workflow-research-interval 0))
     (gptel-auto-workflow-stop-periodic-research)
@@ -2083,7 +1883,7 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
                           gptel-auto-workflow-research-interval
                           #'gptel-auto-workflow-run-research))
     (message "[research] Periodic research started (interval: %ds)"
-               gptel-auto-workflow-research-interval)
+             gptel-auto-workflow-research-interval)
     ;; The one-shot cron researcher queues an explicit job immediately after
     ;; loading this file. Avoid starting a competing implicit run first.
     (unless (gptel-auto-workflow--researcher-daemon-p)
@@ -2163,8 +1963,8 @@ Uses gptel-auto-workflow-research-benchmark.el to:
           (when (file-executable-p script)
             (message "[evolve] Running Python evolution fallback...")
             (let ((output (shell-command-to-string (format "cd %s && python3 %s"
-                                                            (shell-quote-argument root)
-                                                            (shell-quote-argument script)))))
+                                                           (shell-quote-argument root)
+                                                           (shell-quote-argument script)))))
               (message "[evolve] %s" output)))))
       (message "[evolve] Strategy evolution cycle complete"))))
 
