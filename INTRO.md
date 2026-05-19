@@ -1,49 +1,104 @@
 # minimal-emacs.d + gptel-nucleus
 
-> **Absorb everything. Convert it to your own power. Grow stronger with every fight.**
->
-> Like the Northern Divine Art from the martial world — this system researches external techniques, assimilates them into working code, and learns from every outcome. You don't write fixes. You channel them.
+> **An autonomous pipeline that researches, codes, verifies, and self-evolves — built on formal reasoning.**
 
-A fork of [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Built on [gptel](https://github.com/karthink/gptel).
+A fork of [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Built on [gptel](https://github.com/karthink/gptel). Runs 3-6 improvement cycles per day inside Emacs.
 
 ---
 
-## Bei Ming Shen Gong, For Your Codebase
+## The Principle
 
-In the classics, the Northern Divine Art (北冥神功) does one thing no other art can: it absorbs the internal energy of any opponent and makes it yours. You don't need to cultivate for decades. You just need to touch them, and their power flows into you.
+```
+λ engage(emacs).
+  research(external) → compile(strategy) → execute(experiment) → verify(outcome) → learn(pattern)
+  | ∀change: isolated(worktree) ∧ verified(tests) ∧ reviewed(AI)
+  | self_referential: the system audits itself using its own ontologies
+```
 
-This is the same principle, applied to software.
+This is not a code generator. It is a **self-improving formal system** — it researches techniques from external sources, structures them into behavioral specifications, executes them as experiments in isolated environments, and feeds outcomes back into its own evolution.
 
-**Every technique your pipeline absorbs — from 18 repositories, from arXiv, from GitHub — becomes a working code change in your project. Every experiment that fails teaches you what not to do. Every experiment that succeeds feeds back into the strategy for the next one.**
-
-You are not the one writing fixes at 2am. You are the one channeling an entire research pipeline through your fingertips.
+Like the Northern Divine Art (北冥神功), it absorbs techniques from everywhere and converts them into its own capability. What worked in one codebase flows into the next. What failed becomes a guard rail. The art grows with its practitioner.
 
 ---
 
-## What You Absorb
+## The Architecture
 
-### From the Outside World
+Every cycle runs through four compilers — each examining the system's own behavior. This is the nucleus (ν) layer:
 
-The system reaches out and pulls techniques from everywhere:
+| Compiler | Input → Output | Answers |
+|----------|---------------|---------|
+| **Nucleus EDN** | Strategy prompt → statechart | "Is this instruction well-formed?" |
+| **Nucleus Lambda** | Hypothesis → λ expression | "What principle does this encode?" |
+| **Allium v3** | Research findings → behavioral spec | "Are these internally coherent?" |
+| **OWL/SHACL** | Ontology dict → Turtle/SHACL | "What is the formal shape of what we've learned?" |
+
+Results feed back into the next cycle's analyzer and strategy evolver. The compiler output is not a log — it is **input to the next iteration**.
+
+---
+
+## The Loop
 
 ```
-17 sources → fetch on demand → distill → strategy → execute
-via gh CLI  ↗    GitHub    ↗   arXiv    ↗
+Research (3min)  →  Evolution (2min)  →  Auto-Workflow (1-4h)  →  Post-Evolve (2min)
+     ↓                                              ↓
+  External findings                      Select target → Generate hypothesis
+  + on-demand repo fetch                  → Implement fix → Run 89 tests
+                                          → AI grade → AI review
+                                          → Merge or learn
 ```
 
-A single command starts the flow:
+Every experiment passes through six gates. Energy that doesn't pass a gate is not wasted — it returns as learning for the next cycle. All operations in isolated git worktrees. `main` is never touched directly.
+
+---
+
+## The Knowledge Layer
+
+The system does not just run experiments — it builds a **formal knowledge graph** of its own operation. This is the mementum (μ) layer:
+
+| Capability | Mechanism |
+|-----------|----------|
+| **Ontology generation** | Raw experiment data → classes, properties, relationships → OWL |
+| **Allium behavioral checking** | Research findings → Allium v3 spec → distill → check for contradictions |
+| **Conflict detection** | Opposing hypotheses on the same target (add vs remove) → severity-graded |
+| **Impact classification** | Every experiment: BREAKING / POTENTIALLY BREAKING / SAFE |
+| **Causal chains** | Multi-experiment sequences per target → root cause via Floyd-Warshall |
+| **Cross-cycle diff** | Set-difference on knowledge page snapshots: +added / -removed / ~changed |
+| **Policy engine** | 5 rules: max per target, min keep-rate, forbidden paths |
+| **Knowledge page scoring** | Coverage, completeness, relation-link scores per generated page |
+
+19 patterns ported from the Semantica ontology framework. The system audits itself using its own ontologies.
+
+---
+
+## The Operational Layer
+
+Every hypothesis is classified by its **operation type** — this is the verbum (φ) layer:
+
+```
+KIBC-M 15-axis taxonomy:
+  :K nil-safety    :I identity      :B composition   :C reordering    :M pattern-matching
+  :W duplication   :T type-checking  :Φ coordination  :D decomposition
+  :SCOPE visibility :SUBST substitution :WHNF normalization
+  :Y recursion      :QUOTE documentation
+```
+
+**Forward chaining** (8 rules) infers actions from system state. **Abductive reasoning** (8 rules) generates best explanations from observations. **Deductive reasoning** (5 rules) proves conclusions from premises. **Datalog transitive closure** discovers indirect causal relationships.
+
+Together: observe → diagnose → prove → act. Zero-LLM deterministic layer.
+
+---
+
+## What It Absorbs (and How You Direct It)
+
+### Research on Demand
 
 ```bash
 ./scripts/run-pipeline.sh
 ```
 
-The pipeline researches similar fixes across all sources, selects targets, generates hypotheses, implements changes, runs 89 tests, has an AI reviewer grade the work, and merges what passes. What was once scattered across the internet is now running in your codebase.
+Researches 17+ repos via `gh api`, distills techniques, produces Allium v3 behavioral specs, feeds them into the analyzer. No batch prefetch — fetches only what fills gaps in the ontology.
 
-**What you see**: a clean git diff. Before/after scores. The grader's reasoning. You approve or redirect. The power was never yours to write — only to direct.
-
-### From Customer Data
-
-A customer drops 10,000 JSON records on you. "Make sense of this."
+### Structure Customer Data
 
 ```elisp
 (let ((onto (gptel-auto-workflow--generate-experiment-ontology)))
@@ -52,7 +107,7 @@ A customer drops 10,000 JSON records on you. "Make sense of this."
            (plist-get onto :instance-count)))
 ```
 
-The system absorbs the data — detects entity types, infers relationships, types every field — and returns a formal ontology. What was chaos is now structure. Add rules to filter out the impure:
+Auto-detected entity types, inferred relationships, XSD-typed properties. Add business rules:
 
 ```elisp
 (setq gptel-auto-workflow--experiment-policy
@@ -60,121 +115,54 @@ The system absorbs the data — detects entity types, infers relationships, type
         :forbidden-values ("null" "undefined")))
 ```
 
-Violations are flagged. Only clean energy flows through.
-
-### From the Past
-
-Production is down at 2am. You need to know *why*.
+### Trace What Happened
 
 ```bash
 cat var/tmp/experiments/*/results.tsv | grep "<target-file>"
 ```
 
-Every experiment leaves a trace: hypothesis → change → outcome → decision. Causal chains link experiments together. Impact classification marks every change as BREAKING, POTENTIAL, or SAFE. The system has already absorbed its own history — you just read it.
+Every experiment: hypothesis → change → outcome → decision. Causal chains. Impact classification. The history is structured, not buried in `git log`.
 
-### From Your Own Progress
-
-The customer asks: "What did you do for us in the last two weeks?"
+### Report to Stakeholders
 
 ```bash
 ls mementum/knowledge/research-insights-*.md
 ```
 
-Each knowledge page is a chapter of your cultivation: strategies tried, targets improved, contradictions detected and resolved, meta-learning on what works. Send the markdown. The story tells itself.
+Knowledge pages per strategy: what worked, what didn't, Allium coherence checks, meta-learning recommendations. Send the markdown.
 
 ---
 
-## How the Absorption Works
+## Safety
 
-Every change passes through six gates. Energy that can't pass a gate is not wasted — it returns as learning for the next cycle.
-
-```
-Select target → Generate hypothesis → Implement fix → Run tests → AI grade → AI review → Merge or learn
-                                                                                          ↓
-                                                                              Feeds back into
-                                                                              strategy evolution
-```
-
-All operations in isolated git worktrees. `main` is never touched until you choose.
-
-### The Inner Compass
-
-As the system absorbs, it also *understands*. It builds a knowledge graph of its own operation:
-
-| Capability | Principle |
-|-----------|----------|
-| **Ontology generation** | Chaos becomes form — raw data yields classes, properties, relationships |
-| **Allium behavioral checking** | Internal contradictions are detected and flagged — no technique is practiced with hidden flaws |
-| **Knowledge page scoring** | Every insight is measured: coverage, completeness, coherence |
-| **Conflict detection** | Opposite approaches on the same target are exposed immediately |
-| **Impact classification** | Every change labeled: safe, dangerous, or needing caution |
-| **Causal chains** | You can trace any outcome back to its root |
-| **Cross-cycle diff** | See what was gained and what was discarded between cycles |
-| **Policy engine** | Rules prevent wasted energy — no technique practiced beyond its worth |
-| **KIBC-M axis classification** | Every hypothesis is typed (:K :I :B :C :M ...) — 15 operation axes from the verbum framework |
-| **Self-evolution loop** | What worked feeds back into strategies, skills, and research priorities — the art sharpens itself |
-
-### Four Schools, One Art
-
-Each cycle, four compilers examine the system's own practice — four masters checking your form:
-
-| Compiler | Examines | Asks |
-|----------|---------|------|
-| Nucleus EDN | Your strategy prompts | "Is this instruction clear enough to follow?" |
-| Nucleus Lambda | Your hypotheses | "What principle are you really encoding?" |
-| Allium v3 | Your research findings | "Are these internally consistent, or do they contradict?" |
-| OWL/SHACL | Your ontology | "What is the formal shape of what you've learned?" |
-
-Results flow back into the next cycle. The form sharpens itself.
-
----
-
-## Guarding the Meridians
-
-Cultivation without discipline is self-destruction. These safeguards ensure you absorb without breaking:
-
-| Guard | Protects Against |
-|-------|-----------------|
-| Git worktree isolation | `main` is never touched directly |
-| 89 tests + 1800s timeout | Corrupted energy is caught and expelled |
+| Guard | Prevents |
+|-------|---------|
+| Git worktree isolation | `main` never touched directly |
+| 89 tests + 1800s timeout | Broken code caught before staging |
+| 5-provider auto-failover | Rate limits detected, next backend activated |
 | Conflict marker detection | No `<<<<<<<` in committed code |
-| 5-provider auto-failover | If one channel closes, another opens — rate limits detected and bypassed |
-| 90-minute watchdog | No technique runs forever |
-| Quota awareness | No technique practiced beyond available resources |
-| Policy engine | Forbidden paths are sealed |
+| 90-minute watchdog | No technique runs indefinitely |
+| Policy engine | Forbidden paths sealed |
 
 ---
 
-## Begin Your Practice
+## Begin
 
 ```bash
 git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d ~/.emacs.d
 cd ~/.emacs.d && ./scripts/setup-packages.sh
 ./scripts/setup-eca-links.sh
-
-# API keys in ~/.authinfo:
-# machine api.minimaxi.com login apikey password YOUR_KEY
-
+# API keys in ~/.authinfo
 ./scripts/run-pipeline.sh
 ```
 
 First run initializes itself. After that, it absorbs and improves on its own.
 
-### Commands
-
 ```elisp
-;; Inside Emacs — direct the flow
 (gptel-auto-workflow-run-async)        ; Channel energy now
-(gptel-auto-workflow-status)           ; Check your cultivation
-(gptel-auto-workflow-run-research)     ; Reach outward
-```
-
-```bash
-# Terminal — observe from above
-./scripts/run-pipeline.sh              ; Full absorption cycle
-./scripts/run-auto-workflow-cron.sh messages  ; Recent activity
+(gptel-auto-workflow-status)           ; Check cultivation
 ```
 
 ---
 
-Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Extended with gptel + nucleus + ECA, autonomous pipeline, Semantica ontology, Allium behavioral compilers. The art grows with its practitioner.
+Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Extended with gptel, nucleus statecharts, mementum memory, verbum operational taxonomy, Semantica ontology, Allium behavioral compilers. The art grows with its practitioner.

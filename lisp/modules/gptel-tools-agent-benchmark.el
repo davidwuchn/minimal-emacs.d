@@ -114,10 +114,14 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
          (output-buffer (generate-new-buffer "*test-output*"))
          result)
     (unwind-protect
-        (if (not (file-executable-p test-script))
+        (if (not (file-directory-p worktree))
             (progn
-              (message "[auto-experiment] Test script not found or not executable: %s" test-script)
-              (cons t "No test script - skipping"))
+              (message "[auto-experiment] Worktree deleted, skipping tests: %s" worktree)
+              (cons t "Worktree deleted - skipping tests"))
+          (if (not (file-executable-p test-script))
+              (progn
+                (message "[auto-experiment] Test script not found or not executable: %s" test-script)
+                (cons t "No test script - skipping"))
           (let* (;; Linked worktrees need the same shared-repo hydration that
                  ;; staging uses, and fresh project-root worktrees can also
                  ;; arrive with gitlink directories that exist but are empty.
@@ -160,7 +164,7 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                                             (cdr retry-result))))))))
                 (when (car result)
                   (message "[auto-experiment] ✓ Tests passed"))
-                result))))
+                result)))))
       (when (buffer-live-p output-buffer)
         (kill-buffer output-buffer))
       (when (file-exists-p isolated-status-file)

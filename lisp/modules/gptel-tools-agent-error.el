@@ -589,17 +589,17 @@ RETRY-COUNT tracks current retry attempt."
                (memq error-type '(:timeout)))
               (inspection-thrash-failure
                (gptel-auto-experiment--inspection-thrash-result-p result))
-              (retryable-category
-               (or api-rate-limit-category
-                   (and (not hard-timeout)
-                        timeout-category)))
-              (retryable-failure
-               (and (not grader-only-failure)
-                    (or retryable-category
-                        inspection-thrash-failure
-                        (and raw-error
-                             (not hard-timeout)
-                             (gptel-auto-experiment--is-retryable-error-p raw-error)))))
+               (retryable-category
+                (or api-rate-limit-category
+                    timeout-category))
+               (retryable-failure
+                (and (not grader-only-failure)
+                     (or retryable-category
+                         inspection-thrash-failure
+                         hard-timeout  ;; retry hard timeouts with next backend
+                         (and raw-error
+                              (not hard-timeout)
+                              (gptel-auto-experiment--is-retryable-error-p raw-error)))))
               (retry-history
                (gptel-auto-experiment--retry-history previous-results result))
               (is-pressure (when raw-error
@@ -647,9 +647,16 @@ RETRY-COUNT tracks current retry attempt."
            (dolist (logged-result (nreverse attempt-logs))
              (gptel-auto-experiment-log-tsv run-id logged-result))
            (setq attempt-logs nil)
-           (when hard-timeout
-             (message "[auto-exp] Hard executor timeout during experiment %d; skipping retries"
-                      experiment-id))
+            (when hard-timeout
+              (condition-case nil
+                  (gptel-auto-workflow--maybe-activate-rate-limit-failover
+                   "executor"
+                   (gptel-auto-workflow--agent-base-preset "executor")
+                   raw-error)
+                (error nil))
+              (setq prov-attempts 0)
+              (message "[auto-exp] Executor hard timeout during experiment %d; advancing provider for retry"
+                       experiment-id))
            (when quota-exhausted
              (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
                       experiment-id))
