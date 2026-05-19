@@ -72,7 +72,9 @@ Internal helper to centralize trend data extraction logic."
   (unless (and name (stringp name) (not (string-empty-p name)))
     (signal 'wrong-type-argument (list "stringp" name)))
   (let ((trend-data '())
-        (versions-to-process (or versions (gptel-benchmark-get-all-versions name))))
+        (versions-to-process (if (proper-list-p versions)
+                                 versions
+                               (gptel-benchmark-get-all-versions name))))
     (dolist (version versions-to-process)
       (let ((summary (gptel-benchmark--get-trend-summary name version)))
         (when summary
