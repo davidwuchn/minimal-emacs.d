@@ -65,8 +65,22 @@ The system does not just run experiments — it builds a **formal knowledge grap
 | **Cross-cycle diff** | Set-difference on knowledge page snapshots: +added / -removed / ~changed |
 | **Policy engine** | 5 rules: max per target, min keep-rate, forbidden paths |
 | **Knowledge page scoring** | Coverage, completeness, relation-link scores per generated page |
+| **Inverted file index** | O(1) token → page lookup across all knowledge pages |
+| **Horn SAT consistency** | Linear-time logical contradiction detection for ontology integrity |
+| **Ambiguity filtering** | Multi-stage confidence gating — defer high-ambiguity candidates |
+| **Second-chance repair** | Soft-deleted patterns re-evaluated each cycle |
+| **I-Sub lexical similarity** | Greedy longest-common-substring — better than Jaccard for ontology terms |
+| **Interval Labelling Schema** | O(1) subsumption over pattern hierarchy via preorder/postorder |
 
-19 patterns ported from the Semantica ontology framework. The system audits itself using its own ontologies.
+30 patterns ported from Semantica, AutoGo, and LogMap. The system audits itself using its own ontologies.
+
+---
+
+## The Competitive Layer
+
+AutoGo-inspired **champion league** gates every new strategy — incumbents must be defeated in a gauntlet before being adopted. **Playout Cap Randomization** (80% quick / 15% medium / 5% deep) prevents over-specialization. Every cycle emits a machine-parseable `===RESULT===` JSON block for the **autoresearch loop**: commit → run → parse → keep/revert — now wired into AutoTTS trace outcome hooks.
+
+**Holdout evaluation** tracks real progress on a frozen set of targets — if train metrics improve but holdout doesn't, the system detects overfitting.
 
 ---
 
@@ -82,9 +96,9 @@ KIBC-M 15-axis taxonomy:
   :Y recursion      :QUOTE documentation
 ```
 
-**Forward chaining** (8 rules) infers actions from system state. **Abductive reasoning** (8 rules) generates best explanations from observations. **Deductive reasoning** (5 rules) proves conclusions from premises. **Datalog transitive closure** discovers indirect causal relationships.
+**Forward chaining** (8 rules) infers actions from system state. **Abductive reasoning** (8 rules) generates best explanations from observations. **Deductive reasoning** (5 rules) proves conclusions from premises via backward chaining. **Datalog transitive closure** (Floyd-Warshall) discovers indirect causal relationships. **Temporal Allen interval algebra** (13 relations) detects gaps and overlaps between experiments.
 
-Together: observe → diagnose → prove → act. Zero-LLM deterministic layer.
+Together: observe → diagnose → prove → act → schedule. Zero-LLM deterministic layer.
 
 ---
 
@@ -96,7 +110,7 @@ Together: observe → diagnose → prove → act. Zero-LLM deterministic layer.
 ./scripts/run-pipeline.sh
 ```
 
-Researches 17+ repos via `gh api`, distills techniques, produces Allium v3 behavioral specs, feeds them into the analyzer. No batch prefetch — fetches only what fills gaps in the ontology.
+Researches 17+ repos via `gh api`, distills techniques, produces Allium v3 behavioral specs, feeds them into the analyzer. No batch prefetch — fetches only what fills gaps in the ontology. The researcher is itself **ontology-aware and self-evolving**: it reads knowledge gaps, formulates research questions, fetches specific files on demand, and enriches the ontology with each discovery. Outcome feedback (kept/discarded) adjusts research priorities per source.
 
 ### Structure Customer Data
 
@@ -165,4 +179,4 @@ First run initializes itself. After that, it absorbs and improves on its own.
 
 ---
 
-Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Extended with gptel, nucleus statecharts, mementum memory, verbum operational taxonomy, Semantica ontology, Allium behavioral compilers. The art grows with its practitioner.
+Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Extended with gptel, nucleus statecharts, mementum memory, verbum operational taxonomy, Semantica ontology, AutoGo competitive gating, LogMap inverted indexing and repair, Allium behavioral compilers. 30 patterns across 4 frameworks. The art grows with its practitioner.
