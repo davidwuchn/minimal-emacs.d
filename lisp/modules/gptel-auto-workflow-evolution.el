@@ -2772,8 +2772,8 @@ Source repos are extracted from prefetched content patterns."
   "Find pages matching QUERY via inverted file intersection."
   (let* ((tokens (seq-filter (lambda (w) (> (length w) 2)) (split-string (downcase query) "[^a-z0-9]+" t)))
          (freq (make-hash-table :test (quote equal))))
-    (dolist (t tokens)
-      (let ((matches (gethash t gptel-auto-workflow--pattern-inverted-file)))
+    (dolist (token tokens)
+      (let ((matches (gethash token gptel-auto-workflow--pattern-inverted-file)))
         (when matches (maphash (lambda (k _v) (puthash k (1+ (or (gethash k freq) 0)) freq)) matches))))
     (let ((pairs nil))
       (maphash (lambda (k v) (push (cons k v) pairs)) freq)
