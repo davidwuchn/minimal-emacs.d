@@ -1,0 +1,3 @@
+[submodule "gptel-test"]
+	path = test
+	url = https://github.com/davidwuchn/gptel-test.git
