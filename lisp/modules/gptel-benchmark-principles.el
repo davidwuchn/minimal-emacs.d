@@ -374,12 +374,14 @@ Returns 0.5 if OUTPUT or ANTI-PATTERNS is nil/empty."
   (cdr (assoc element gptel-benchmark-controlling-cycle)))
 
 (defun gptel-benchmark-element-controlled-by (element)
-  "Get what controls ELEMENT."
-  (car (rassoc element gptel-benchmark-controlling-cycle)))
+  "Get what controls ELEMENT.
+Returns ELEMENT as fallback if not found in controlling cycle."
+  (or (car (rassoc element gptel-benchmark-controlling-cycle)) element))
 
 (defun gptel-benchmark-element-generated-by (element)
-  "Get what generates ELEMENT."
-  (car (rassoc element gptel-benchmark-generating-cycle)))
+  "Get what generates ELEMENT.
+Returns ELEMENT as fallback if not found in generating cycle."
+  (or (car (rassoc element gptel-benchmark-generating-cycle)) element))
 
 ;;; ============================================================================
 ;;; VSM - Viable System Model - see mementum/knowledge/nucleus-patterns.md
