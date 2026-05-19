@@ -42,6 +42,9 @@ render_crontab() {
         echo "# Ensure log directory exists"
         echo "@reboot mkdir -p $HOME/.emacs.d/var/tmp/cron"
         echo
+        echo "# Watchdog: restart daemon if unresponsive (every 30 min)"
+        echo "*/30 * * * * $HOME/.emacs.d/scripts/watchdog-daemon.sh"
+        echo
         # Sections: start from first '---' separator; strip env vars already emitted above
         awk -v machine="$machine" '
             /^# -{5,}/ { found=1 }

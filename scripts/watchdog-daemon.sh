@@ -9,7 +9,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_NAME="copilot-auto-workflow"
 SOCKET_PATH="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/emacs/$SERVER_NAME"
 LOG="$DIR/var/tmp/cron/watchdog.log"
-MAX_WAIT=15
+MAX_WAIT=60
 RESTART_COOLDOWN=300  # 5 min between restarts to avoid restart loops
 
 mkdir -p "$(dirname "$LOG")"
@@ -33,6 +33,17 @@ if [ ! -S "$SOCKET_PATH" ]; then
         ulimit -s 65532 \
         emacs --init-directory="$DIR" --fg-daemon="$SERVER_NAME" >/dev/null 2>&1 &
     exit 0
+fi
+
+# Check if daemon process exists
+DAEMON_PID=$(pgrep -f "emacs.*--fg-daemon=${SERVER_NAME}" 2>/dev/null || true)
+if [ -n "$DAEMON_PID" ]; then
+    # Check if daemon is actively running (not stuck on I/O)
+    PROC_STATE=$(cat /proc/$DAEMON_PID/status 2>/dev/null | grep "^State:" | awk '{print $2}' || echo "?")
+    if [ "$PROC_STATE" = "R" ]; then
+        # Actively executing — don't kill, it's busy
+        exit 0
+    fi
 fi
 
 # Check if daemon responds
