@@ -1454,7 +1454,6 @@ Called from experiment logging to link research → experiment results."
                                     (gptel-auto-workflow--run-autotts-evolution))
                                   (when (fboundp 'gptel-auto-workflow--evolve-all-skills)
                                      (gptel-auto-workflow--evolve-all-skills))))
-                            (run-hook-with-args 'gptel-auto-workflow--trace-outcome-hooks trace))
                             (error nil))))))
                 (error
                  (message "[autotts] Failed to update trace outcome: %s" err))))))))))
