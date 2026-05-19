@@ -83,6 +83,10 @@ Internal helper to centralize trend data extraction logic."
 
 (defun gptel-benchmark-compare-summaries (summary-a summary-b)
   "Compare two benchmark summaries."
+  (when (null summary-a)
+    (signal 'wrong-type-argument (list "proper-list-p" summary-a)))
+  (when (null summary-b)
+    (signal 'wrong-type-argument (list "proper-list-p" summary-b)))
   (let* ((score-a (and (proper-list-p summary-a) (plist-get summary-a :avg-overall)))
          (score-b (and (proper-list-p summary-b) (plist-get summary-b :avg-overall)))
          (improvement (- (or score-b 0) (or score-a 0))))
