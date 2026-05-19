@@ -29,7 +29,8 @@ fi
 if [ ! -S "$SOCKET_PATH" ]; then
     echo "[$(date '+%H:%M:%S')] Socket missing, restarting daemon" >> "$LOG"
     echo "$(date +%s)" > "$LAST_RESTART_FILE"
-    bash -c 'ulimit -s 65532 && exec emacs --init-directory="$0" --fg-daemon="$1" >/dev/null 2>&1' \
+    MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+        bash -c 'ulimit -s 65532 && exec emacs --init-directory="$0" --fg-daemon="$1" >/dev/null 2>&1' \
         "$DIR" "$SERVER_NAME" &
     exit 0
 fi
@@ -55,7 +56,7 @@ if ! timeout "$MAX_WAIT" emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev
     rm -f "$SOCKET_PATH" 2>/dev/null || true
     # Restart
     echo "$(date +%s)" > "$LAST_RESTART_FILE"
-    MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 EMACSNATIVELOADPATH= \
+    MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
         bash -c 'ulimit -s 65532 && exec emacs --init-directory="$0" --fg-daemon="$1" >/dev/null 2>&1' \
         "$DIR" "$SERVER_NAME" &
     echo "[$(date '+%H:%M:%S')] Daemon restarted" >> "$LOG"

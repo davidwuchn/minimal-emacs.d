@@ -120,7 +120,7 @@
   (with-eval-after-load 'gptel-request
     (advice-add 'gptel-curl--sentinel :around
                 (lambda (orig-fn process status &rest args)
-                  (if (> gptel-curl--sentinel-depth 5)
+                  (if (> gptel-curl--sentinel-depth 3)
                       (let ((cleanup-timer
                              (run-at-time 120 nil
                                (lambda ()
