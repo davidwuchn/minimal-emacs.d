@@ -1848,6 +1848,14 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (dolist (g (seq-take gated 5))
             (message "[gate]   %s: %s" (car g) (cdr g)))))
     (error nil))
+  ;; Ambiguity filtering + second-chance repair (LogMap patterns)
+  (condition-case nil
+      (let* ((results (gptel-auto-workflow--parse-all-results))
+             (targets (delete-dups (mapcar (lambda (r) (plist-get r :target)) results))))
+        (when targets
+          (gptel-auto-workflow--filter-by-ambiguity targets 3))
+        (gptel-auto-workflow--second-chance-repair))
+    (error nil))
   ;; Policy check (Semantica PolicyEngine pattern)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -2850,7 +2858,67 @@ Semantica pattern: continuous ontology enrichment by the research agent."
                            (fboundp 'gptel-auto-experiment--owl-save))
                   (gptel-auto-experiment--owl-save
                    onto (expand-file-name "var/tmp/evolution/enriched-ontology.ttl" root)
-                   (lambda (_ok) nil)))))))))))
+                    (lambda (_ok) nil)))))))))))
+
+;; ─── LogMap: Ambiguity filtering + Second-chance repair ───
+
+(defun gptel-auto-workflow--ambiguity-score (target)
+  "Count competing strategies for TARGET. High = many interpretations.
+LogMap ambiguity heuristic: count(competing_matches) per entity."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (strategies (make-hash-table :test 'equal)))
+    (dolist (r results)
+      (when (equal (plist-get r :target) target)
+        (puthash (or (plist-get r :strategy) "unknown") t strategies)))
+    (hash-table-count strategies)))
+
+(defun gptel-auto-workflow--filter-by-ambiguity (targets max-ambiguity)
+  "Filter TARGETS: discard those with too many competing strategies.
+LogMap pattern: defer high-ambiguity candidates to expert review."
+  (let ((kept nil) (deferred nil))
+    (dolist (t targets)
+      (let ((amb (gptel-auto-workflow--ambiguity-score t)))
+        (if (> amb max-ambiguity)
+            (push (cons t amb) deferred)
+          (push t kept))))
+    (when deferred
+      (message "[ambiguity] %d targets deferred (ambiguity >%d):" (length deferred) max-ambiguity)
+      (dolist (d (seq-take deferred 3))
+        (message "[ambiguity]   %s: %d competing strategies" (car d) (cdr d))))
+    (list :kept (nreverse kept) :deferred (nreverse deferred))))
+
+(defvar gptel-auto-workflow--conflictive-experiments nil
+  "Soft-deleted experiments stored for second-chance repair. LogMap pattern.")
+
+(defun gptel-auto-workflow--second-chance-repair ()
+  "Re-evaluate soft-deleted experiments. Promotes those no longer conflicting.
+LogMap second-chance pattern: periodically re-check removed mappings."
+  (let ((rehabilitated nil) (still-conflictive nil))
+    (dolist (exp gptel-auto-workflow--conflictive-experiments)
+      (let* ((target (plist-get exp :target))
+             (decision (plist-get exp :decision))
+             (changed nil))
+        ;; Check if target has been improved since discarding
+        (dolist (r (gptel-auto-workflow--parse-all-results))
+          (when (and (equal (plist-get r :target) target)
+                     (equal (plist-get r :decision) "kept")
+                     (> (or (plist-get r :score-after) 0) (or (plist-get exp :score-after) 0)))
+            (setq changed t)))
+        (if changed
+            (push exp rehabilitated)
+          (push exp still-conflictive))))
+    (setq gptel-auto-workflow--conflictive-experiments still-conflictive)
+    (when rehabilitated
+      (message "[second-chance] %d experiments rehabilitated (target improved since discard)"
+               (length rehabilitated)))
+    (list :rehabilitated rehabilitated :still-conflictive (length still-conflictive))))
+
+(defun gptel-auto-workflow--mark-conflictive (experiment)
+  "Mark EXPERIMENT as soft-deleted for future second-chance repair."
+  (push experiment gptel-auto-workflow--conflictive-experiments)
+  (when (> (length gptel-auto-workflow--conflictive-experiments) 50)
+    (setq gptel-auto-workflow--conflictive-experiments
+          (seq-take gptel-auto-workflow--conflictive-experiments 50))))
 
 (defun gptel-auto-workflow--evolution-axis-stats ()
   "Analyze KIBC-M axis performance from experiment results.
