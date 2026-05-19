@@ -64,7 +64,7 @@ Call this when benchmark files are updated."
   "Get benchmark summary for NAME VERSION, or nil if file doesn't exist.
 Internal helper to centralize trend data extraction logic."
   (let ((benchmark-data (gptel-benchmark-load-result name version)))
-    (when benchmark-data
+    (when (and benchmark-data (proper-list-p benchmark-data))
       (gptel-benchmark-summarize-results benchmark-data))))
 
 (defun gptel-benchmark-version-trend (name &optional versions)
