@@ -826,6 +826,56 @@ so tags before allium-issues is correctly detected."
   "eval-condition: missing field returns nil."
   (should-not (gptel-auto-workflow--eval-condition '(keep-rate < 0.5) '((other . 1)))))
 
+;; ─── Abductive Reasoning Tests ───
+
+(ert-deftest regression/reasoning/abduce-matches-single-rule ()
+  "Abduce should match a rule when all conditions are satisfied."
+  (let ((facts '((keep-rate . 0.05) (total-experiments . 10))))
+    (let ((result (gptel-auto-workflow--abduce facts)))
+      (should result)
+      (should (> (length result) 0))
+      (let ((best (car result)))
+        (should (stringp (plist-get best :cause)))
+        (should (stringp (plist-get best :action)))
+        (should (> (plist-get best :confidence) 0))))))
+
+(ert-deftest regression/reasoning/abduce-empty-for-no-match ()
+  "Abduce should return nil when no rule matches."
+  (let ((facts '((keep-rate . 0.5) (total-experiments . 5))))
+    (let ((result (gptel-auto-workflow--abduce facts)))
+      (should-not result))))
+
+(ert-deftest regression/reasoning/abduce-returns-multiple-explanations ()
+  "Abduce should return multiple explanations when multiple rules match."
+  (let ((facts '((keep-rate . 0.05) (total-experiments . 10))))
+    (let ((result (gptel-auto-workflow--abduce facts)))
+      ;; At least 2 rules should match (keep-rate < 0.1 AND keep-rate < 0.2)
+      (should (>= (length result) 2)))))
+
+(ert-deftest regression/reasoning/abduce-sorted-by-confidence ()
+  "Abduce results should be sorted by confidence descending."
+  (let ((facts '((keep-rate . 0.05) (total-experiments . 8))))
+    (let ((result (gptel-auto-workflow--abduce facts)))
+      (when (>= (length result) 2)
+        (should (>= (plist-get (nth 0 result) :confidence)
+                    (plist-get (nth 1 result) :confidence)))))))
+
+(ert-deftest regression/reasoning/abduce-partial-match-fails ()
+  "Abduce should NOT match when only some conditions are satisfied."
+  (let ((facts '((keep-rate . 0.05))))  ; missing total-experiments
+    (let ((result (gptel-auto-workflow--abduce facts)))
+      (should-not result))))
+
+(ert-deftest regression/reasoning/abduce-action-names-are-symbols-or-strings ()
+  "Abduce actions should have non-nil action and cause values."
+  (let* ((facts '((keep-rate . 0.05) (total-experiments . 10)))
+         (result (gptel-auto-workflow--abduce facts)))
+    (should result)
+    (dolist (r result)
+      (should (plist-get r :cause))
+      (should (plist-get r :action))
+      (should (numberp (plist-get r :confidence))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
