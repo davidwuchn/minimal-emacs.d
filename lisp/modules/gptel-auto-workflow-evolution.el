@@ -2005,10 +2005,15 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case nil
       (let* ((rate (gptel-auto-workflow--overall-keep-rate))
              (total (gptel-auto-workflow--total-experiments)))
-        (gptel-auto-workflow--emit-result "evolution-cycle" rate
-          (- rate (or gptel-auto-workflow--champion-keep-rate 0))
-          (if (> rate 0) "keep" "skip")
-          (list :total-experiments total)))
+         (gptel-auto-workflow--emit-result "evolution-cycle" rate
+           (- rate (or gptel-auto-workflow--champion-keep-rate 0))
+           (if (> rate 0) "keep" "skip")
+           (list :total-experiments total))
+         (when (fboundp 'gptel-auto-workflow--autoresearch-check)
+           (gptel-auto-workflow--autoresearch-check
+            (list :metric "evolution-cycle" :value rate
+                  :delta (- rate (or gptel-auto-workflow--champion-keep-rate 0))
+                  :status (if (> rate 0) "keep" "skip")))))
     (error nil))))
 
 ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
