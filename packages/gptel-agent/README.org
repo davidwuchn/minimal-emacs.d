@@ -1,0 +1,234 @@
+#+title: gptel-agent
+
+This is a collection of tools and prompts to use [[https://github.com/karthink/gptel][gptel]] "agentically" with any
+LLM, to autonomously perform tasks.
+
+It has access to
+- the web (via basic web search, URL fetching and YouTube video metadata),
+- local files (read/write/edit),
+- the state of Emacs (documentation and Elisp evaluation),
+- and Bash, if you are in a POSIX-y environment.
+
+By default, all actions except for web search, fetching URLs and reading local
+files require confirmation.  You can change this, add more tools and MCP servers
+etc as in regular gptel usage.
+
+gptel-agent can also delegate tasks to specialized "sub-agents" which don't
+share context with the main session.  In this demo, gptel-agent delegates a
+research task to two different sub-agents, who perform it in parallel and
+generate reports that gptel-agent uses to answer the question:
+
+https://github.com/user-attachments/assets/03585600-3bb9-4bf7-b5c8-7e02a28c7a37
+
+*** How to install
+
+gptel-agent is on MELPA, so you can run =M-x package-install= ⏎ =gptel-agent= in Emacs.
+
+#+html: </details>
+#+html: <details><summary>
+**** Manual
+#+html: </summary>
+
+Clone or download this repository and run =M-x package-install-file⏎= on the
+repository directory.
+
+Or from =use-package= (Emacs 30+):
+
+#+begin_src emacs-lisp
+(use-package gptel-agent
+  :vc ( :url "https://github.com/karthink/gptel-agent"
+        :rev :newest)
+  :config (gptel-agent-update))         ;Read files from agents directories
+#+end_src
+
+
+#+html: </details>
+#+html: <details><summary>
+**** Straight or Elpaca
+#+html: </summary>
+
+#+begin_src emacs-lisp
+(straight-use-package 'gptel-agent)
+#+end_src
+
+#+begin_src emacs-lisp
+(elpaca gptel-agent)
+#+end_src
+
+Or from =use-package=:
+
+#+begin_src emacs-lisp
+(use-package gptel-agent
+  :straight t ;use :ensure t for Elpaca
+  :config (gptel-agent-update))         ;Read files from agents directories
+#+end_src
+
+#+html: </details>
+*** How to use:
+
+- Important: ensure that gptel is up to date, and not just the latest stable release!
+
+- Set =gptel-model= and =gptel-backend= to use your preferred LLM.  See [[https://github.com/karthink/gptel][gptel's
+  README]] for details.
+
+There are two ways to use gptel-agent:
+
+**** In a dedicated session
+
+- Run M-x =gptel-agent=.  This will open a gptel buffer in the current project
+  with the agent preset loaded.  Run with a prefix arg for more options.
+
+- Use gptel as usual, calling =gptel-send= etc.
+
+- If you change the system prompt, tools or other settings in this buffer, you
+  can reset the agent configuration by (re)applying the "gptel-agent" preset
+  from gptel's menu.
+
+- You can switch between an agent preset (gptel-agent) and a planning preset
+  (gptel-plan) by applying them from gptel's menu, or clicking on the backend
+  name in the header line.
+
+  The difference between them is just in the tools available to the model -- the
+  planning preset has read-only access to the filesystem and is instructed to
+  create a systematic plan of action.
+
+**** Anywhere in Emacs
+
+Place =(gptel-agent-update)= in your config.
+
+As with gptel, you can use gptel-agent in any buffer, including read-only
+buffers and the minibuffer.
+
+- Apply the "gptel-agent" preset in the buffer from gptel's menu.
+
+- OR include =@gptel-agent= in a prompt to send only that prompt with the agent
+  capabilities.
+
+Please note: gptel-agent uses significantly more tokens than the average
+gptel LLM interaction.
+
+*** What is an "agent"?
+
+"Agent" is the (now common) parlance used to refer to a bundle of configuration,
+consisting of
+
+- a system prompt (instructions),
+- tools (functions the LLM can call)
+- and the harness used to run or call the LLM.
+
+gptel uses the term "preset" for such configurations.  A preset can specify the above and any other behavior, such as the model used, API call parameters and so on.
+
+=gptel-agent= is implemented as a preset for gptel and can be modified/extended easily.
+
+*** Using sub-agents
+
+gptel-agent can delegate tasks to "sub-agents".  Sub-agents can be specified in
+Markdown or Org files in a directory.  To see how to specify agents, examine the
+"agents" directory in this package (or see below).  You can add your directory
+of agents to =gptel-agent-dirs=, which see.
+
+Right now gptel-agent includes three sub-agents:
+- =executor= is a copy of the main LLM, directed to work autonomously and
+  noninteractively, returning a final response.
+- =researcher= is read-only and can search the web or through local files for
+  information.
+- =introspector= can examine the state of Emacs, and access or search
+  documentation from your live Emacs session.
+
+The LLM should automatically delegate tasks to them as required, but you can
+also explicitly request delegation: "/Use the researcher to find out if.../" or
+"/Use my-custom-agent to.../".
+
+#+html: <details><summary>
+**** Why?
+#+html: </summary>
+
+LLMs often run into dead-ends when trying things, and this can both bloat and
+pollute the context window.  Sub-agents don't share any context with the main
+session and return relatively concise reports that gptel-agent can refer to.
+
+Sub-agents can be provided with tools specific to their task, which improves the
+quality of the result.  They can also be restricted accordingly by, for example,
+providing read-only access to resources.
+
+Sub-agents can be configured to use specific models or other API parameters
+(like the level of reasoning) independent of gptel-agent.  They are essentially
+gptel presets.
+
+#+html: </details>
+#+html: <details><summary>
+**** Agents from Markdown files
+#+html: </summary>
+
+gptel-agent reads agent specs from files in =gptel-agent-dirs=, which you can
+customize.
+
+You can specify the agent name, description and tools used as YAML front-matter
+in a Markdown file, followed by the system prompt:
+
+#+begin_src markdown
+---
+name: arxiv-explorer
+description: Searches ArXiv and parses results
+tools: [mcp-arxiv, WebSearch]
+pre: (lambda () (gptel-mcp-connect '(arxiv) 'sync))
+---
+
+You are a specialized research agent with access to ArXiv.  Your purpose is to
+search for and gather information efficiently.
+
+<core_responsibilites> ...  </core_responsibilities>
+
+...
+#+end_src
+
+=name= defaults to the file name, so only the =description= is mandatory.
+=tools= is a list of tool names or categories.
+
+You can specify any other keys that gptel recognizes as preset keys, including a
+specific model, backend and API parameters.  See =gptel-make-preset= for
+details.
+
+In the above example, the =:pre= key is an elisp function that runs before the
+agent is called.  I am assuming a tool category named "mcp-arxiv" is provided by
+the "arxiv" MCP server.
+
+#+html: </details>
+#+html: <details><summary>
+**** Agents from Org files
+#+html: </summary>
+
+gptel-agent reads agent specs from files in =gptel-agent-dirs=, which you can customize.
+
+You can specify the agent name, description and tools used in an Org properties
+block at the top of an Org file, followed by the system prompt:
+
+#+begin_src org
+:properties:
+:name: arxiv-explorer
+:description: Searches ArXiv and parses results
+:tools: mcp-arxiv WebSearch
+:pre: (lambda () (gptel-mcp-connect '(arxiv) 'sync))
+:end:
+
+You are a specialized research agent with access to ArXiv.  Your purpose is to
+search for and gather information efficiently.
+
+<core_responsibilites>
+...
+</core_responsibilities>
+
+...
+#+end_src
+
+=name= defaults to the file name, so only the =description= is mandatory.
+=tools= is a list of tool names or categories.
+
+You can specify any other keys that gptel recognizes as preset keys -- see
+=gptel-make-preset= for details.
+
+In the above example the =:pre= key is an elisp function that runs before the
+agent is called.  I am assuming a tool category named "mcp-arxiv" is provided by
+the "arxiv" MCP server.
+
+#+html: </details>
