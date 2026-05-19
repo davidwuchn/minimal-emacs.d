@@ -2645,6 +2645,17 @@ EXTRA is an optional plist of additional fields."
     (message "===RESULT=== %s" (json-encode result))
     result))
 
+(defun gptel-auto-workflow--detect-overfitting ()
+  "Detect if train improves but holdout doesn't. Returns overfit/improving/stable.
+AutoGo holdout pattern: crosses train vs holdout trends."
+  (let* ((h (gptel-auto-workflow--evaluate-holdout))
+         (ht (plist-get h :trend))
+         (tr (gptel-auto-workflow--overall-keep-rate))
+         (tt (- tr (or gptel-auto-workflow--champion-keep-rate 0))))
+    (cond ((and (> tt 0.02) (< ht -0.02)) 'overfit)
+          ((and (> tt 0) (>= ht 0)) 'improving)
+          (t 'stable))))
+
 ;; ─── Backend Performance Optimization ───
 
 
@@ -2668,14 +2679,14 @@ EXTRA is an optional plist of additional fields."
     (let* ((avg (if (> count 0) (/ total count) 0.0))
            (best (max avg (or (plist-get history :best) 0.0)))
            (prev (or (plist-get history :last) avg))
-           (trend (- avg prev)))
-      (plist-put history :last avg)
-      (plist-put history :best best)
-      (plist-put history :history
-       (cons (list :t (format-time-string "%Y-%m-%dT%H:%M") :avg avg)
-             (seq-take (plist-get history :history) 10)))
+           (trend (- avg prev))
+           (entry (list :t (format-time-string "%Y-%m-%dT%H:%M") :avg avg)))
+      (setq history (plist-put history :last avg))
+      (setq history (plist-put history :best best))
+      (setq history (plist-put history :history
+                       (cons entry (seq-take (plist-get history :history) 10))))
       (make-directory (file-name-directory hf) t)
-      (with-temp-file hf (insert (json-encode history)))
+      (with-temp-file hf (insert (json-encode (list :history (plist-get history :history) :best best :last avg))))
       (list :average avg :trend trend :best best))))
 
 (defun gptel-auto-workflow--score-holdout-target (file-path)
