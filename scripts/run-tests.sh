@@ -82,6 +82,7 @@ run_unit_tests() {
         AUTO_WORKFLOW_EMACS_SERVER="$workflow_server" \
         XDG_RUNTIME_DIR="$runtime_dir" \
         TMPDIR="$runtime_dir" \
+        timeout 600 \
         emacs --batch -Q \
         -L "$DIR" \
         -L "$DIR/lisp" \
