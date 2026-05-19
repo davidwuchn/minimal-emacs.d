@@ -810,8 +810,10 @@ Returns empty string when no trace data is available."
       (dolist (trace recent)
         (let ((source (or (plist-get trace :source) "unknown"))
               (strategy (or (plist-get trace :strategy) "unknown"))
-              (success (gptel-auto-workflow--trace-success-p trace))
-              (known (gptel-auto-workflow--trace-outcome-known-p trace)))
+              (success (and (fboundp 'gptel-auto-workflow--trace-success-p)
+                            (gptel-auto-workflow--trace-success-p trace)))
+              (known (and (fboundp 'gptel-auto-workflow--trace-outcome-known-p)
+                          (gptel-auto-workflow--trace-outcome-known-p trace))))
           (when known
             (let* ((key (format "%s via %s" source strategy))
                    (stats (gethash key source-stats '(0 0))))
@@ -2070,6 +2072,9 @@ Findings are cached per-project."
 Findings cached for analyzer to use during target selection.
 Set `gptel-auto-workflow-research-interval' to control frequency."
   (interactive)
+  (condition-case nil
+      (require 'gptel-auto-workflow-research-benchmark nil t)
+    (error nil))
   (when (and gptel-auto-workflow-research-interval
              (> gptel-auto-workflow-research-interval 0))
     (gptel-auto-workflow-stop-periodic-research)
