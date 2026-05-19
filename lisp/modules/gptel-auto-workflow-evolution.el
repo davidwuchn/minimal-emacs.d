@@ -1982,6 +1982,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (let ((h (gptel-auto-workflow--evaluate-holdout)))
         (message "[holdout] avg=%.3f trend=%+.3f" (plist-get h :average) (plist-get h :trend)))
     (error nil))
+  ;; Build inverted file index (LogMap pattern)
+  (condition-case nil
+      (gptel-auto-workflow--build-inverted-file)
+    (error nil))
   (message "[auto-workflow] Self-evolution cycle complete.")
   ;; Emit machine-parseable RESULT for this cycle (AutoGo protocol)
   (condition-case nil
@@ -2733,6 +2737,39 @@ Source repos are extracted from prefetched content patterns."
                  (push (cons source (/ (float (cdr counts)) (car counts))) stats)))
              by-source)
     (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
+
+;; ─── LogMap: Inverted File + Horn SAT ───
+
+(defvar gptel-auto-workflow--pattern-inverted-file (make-hash-table :test (quote equal))
+  "Inverted file: token → set of page IDs. LogMap O(1) pattern lookup.")
+
+(defun gptel-auto-workflow--build-inverted-file ()
+  "Build inverted file from knowledge pages. Returns hash of token→page-ids."
+  (clrhash gptel-auto-workflow--pattern-inverted-file)
+  (let* ((kd (expand-file-name "mementum/knowledge" (gptel-auto-workflow--worktree-base-root)))
+         (files (when (file-directory-p kd) (directory-files kd t "research-insights-.+\\.md$"))))
+    (dolist (f files)
+      (let ((name (file-name-nondirectory f)))
+        (condition-case nil
+            (with-temp-buffer (insert-file-contents f)
+              (dolist (w (split-string (downcase (buffer-string)) "[^a-z0-9]+" t))
+                (unless (< (length w) 3)
+                  (let ((entry (or (gethash w gptel-auto-workflow--pattern-inverted-file) (make-hash-table :test (quote equal)))))
+                    (puthash name t entry)
+                    (puthash w entry gptel-auto-workflow--pattern-inverted-file)))))
+          (error nil)))))
+  (message "[logmap] Inverted file: %d tokens indexed" (hash-table-count gptel-auto-workflow--pattern-inverted-file)))
+
+(defun gptel-auto-workflow--query-inverted-file (query)
+  "Find pages matching QUERY via inverted file intersection."
+  (let* ((tokens (seq-filter (lambda (w) (> (length w) 2)) (split-string (downcase query) "[^a-z0-9]+" t)))
+         (freq (make-hash-table :test (quote equal))))
+    (dolist (t tokens)
+      (let ((matches (gethash t gptel-auto-workflow--pattern-inverted-file)))
+        (when matches (maphash (lambda (k _v) (puthash k (1+ (or (gethash k freq) 0)) freq)) matches))))
+    (let ((pairs nil))
+      (maphash (lambda (k v) (push (cons k v) pairs)) freq)
+      (sort pairs (lambda (a b) (> (cdr a) (cdr b)))))))
 
 (defun gptel-auto-workflow--write-research-priorities ()
   "Write research-priorities.md based on historical outcomes.
