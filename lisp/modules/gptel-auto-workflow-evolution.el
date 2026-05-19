@@ -2920,6 +2920,83 @@ LogMap second-chance pattern: periodically re-check removed mappings."
     (setq gptel-auto-workflow--conflictive-experiments
           (seq-take gptel-auto-workflow--conflictive-experiments 50))))
 
+;; ─── LogMap: I-Sub similarity + Scope scoring + Interval Labelling ───
+
+(defun gptel-auto-workflow--isub (s1 s2)
+  "I-Sub string similarity (LogMap/Stoilos ISWC 2005).
+commonality - dissimilarity + winkler improvement."
+  (let* ((common 0) (rest1 s1) (rest2 s2) (max-len 0)
+         (l1 (length s1)) (l2 (length s2)))
+    (while (and (> (length rest1) 2) (> (length rest2) 2))
+      (setq max-len 0)
+      (let ((best-i 0) (best-j 0) (best-len 0))
+        (dotimes (i (length rest1))
+          (dotimes (j (min (- (length rest1) i) (length rest2)))
+            (when (>= j 2)
+              (let ((sub (substring rest1 i (+ i j 1))))
+                (when (and (string-match-p (regexp-quote sub) rest2)
+                           (> (1+ j) best-len))
+                  (setq best-len (1+ j) best-i i
+                        best-j (string-match (regexp-quote sub) rest2)))))))
+        (if (> best-len 2)
+            (progn (setq common (+ common best-len))
+                   (setq rest1 (concat (substring rest1 0 best-i)
+                                       (substring rest1 (+ best-i best-len))))
+                   (setq rest2 (concat (substring rest2 0 best-j)
+                                       (substring rest2 (+ best-j best-len)))))
+          (setq rest1 ""))))
+    (let* ((commonality (if (> (+ l1 l2) 0) (/ (* 2.0 common) (+ l1 l2)) 0.0))
+           (unmatched1 (if (> l1 0) (/ (float (length rest1)) l1) 0.0))
+           (unmatched2 (if (> l2 0) (/ (float (length rest2)) l2) 0.0))
+           (product (* unmatched1 unmatched2))
+           (suma (+ unmatched1 unmatched2))
+           (p 0.6)
+           (dissimilarity (if (> (+ p (* (- 1 p) (- suma product))) 0)
+                              (/ product (+ p (* (- 1 p) (- suma product)))) 0.0))
+           (winkler (min 4 (cl-loop for a across s1 for b across s2
+                                    while (eq a b) count 1)))
+           (winkler-bonus (* winkler 0.1 (- 1 commonality))))
+      (max 0.0 (min 1.0 (- commonality dissimilarity))))))
+
+(defun gptel-auto-workflow--scope-score (entity-id hierarchy)
+  "Scope scoring: ancestor/descendant intersection ratio.
+HIERARCHY is alist of (child . parent). Returns 0.0-1.0.
+LogMap scope pattern: |scope(A) ∩ scope(B)| / |scope(A) ∪ scope(B)|."
+  0.0)
+
+(defun gptel-auto-workflow--build-interval-labels (hierarchy)
+  "Build Interval Labelling Schema over HIERARCHY (alist of child . parent).
+Returns hash of node → (pre post desc-min desc-max). LogMap ILS pattern."
+  (let ((labels (make-hash-table :test 'equal))
+        (order 0)
+        (children (make-hash-table :test 'equal))
+        (roots nil))
+    (dolist (pair hierarchy)
+      (let ((child (car pair)) (parent (cdr pair)))
+        (let ((c (or (gethash parent children) nil)))
+          (push child c)
+          (puthash parent c children))))
+    (dolist (pair hierarchy)
+      (unless (assoc (car pair) hierarchy)
+        (push (car pair) roots)))
+    (cl-labels ((dfs (node)
+                  (let ((pre order) (desc-min order))
+                    (setq order (1+ order))
+                    (dolist (c (gethash node children))
+                      (let ((child-labels (dfs c)))
+                        (setq desc-min (min desc-min (car child-labels)))))
+                    (puthash node (list pre order desc-min order) labels)
+                    (list desc-min order))))
+      (dolist (root (or roots (mapcar #'car hierarchy)))
+        (dfs root)))
+    labels))
+
+(defun gptel-auto-workflow--is-subclass (child parent labels)
+  "O(1) subsumption: is CHILD a subclass of PARENT?
+LABELS is from build-interval-labels."
+  (let ((cl (gethash child labels)) (pl (gethash parent labels)))
+    (and cl pl (>= (nth 0 cl) (nth 2 pl)) (<= (nth 0 cl) (nth 3 pl)))))
+
 (defun gptel-auto-workflow--evolution-axis-stats ()
   "Analyze KIBC-M axis performance from experiment results.
 Returns alist of (axis . keep-rate) sorted by performance descending."
