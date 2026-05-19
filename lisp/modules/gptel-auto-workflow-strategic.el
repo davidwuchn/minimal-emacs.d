@@ -33,7 +33,9 @@
 (require 'gptel-tools-agent)
 (require 'gptel-benchmark-subagent nil t)
 (require 'gptel-auto-workflow-research-cache nil t)
-(require 'gptel-auto-workflow-research-benchmark nil t)
+(condition-case nil
+    (require 'gptel-auto-workflow-research-benchmark nil t)
+  (error nil))
 
 ;; Global variables to avoid closure issues in daemon environments
 ;; where lexical-binding may not be properly enabled during load
