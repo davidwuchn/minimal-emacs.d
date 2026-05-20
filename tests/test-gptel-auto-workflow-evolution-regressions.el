@@ -1264,6 +1264,14 @@ before run-at-time, because the deferral breaks the dynamic scope chain."
 
 ;; ─── Sentinel Deferral Regression Tests (post-early-init.el) ───
 
+;; Ensure gptel package is on load-path (subtree under packages/gptel/)
+(let ((gptel-dir (expand-file-name "packages/gptel"
+                                   (file-name-directory
+                                    (directory-file-name
+                                     (file-name-directory
+                                      (or load-file-name buffer-file-name default-directory)))))))
+  (add-to-list 'load-path gptel-dir))
+
 (defconst test-post-early-init-file
   (expand-file-name "post-early-init.el"
                     (file-name-directory
