@@ -630,6 +630,37 @@ Returns the variant file stem (e.g. \"nil-safety\") or nil for default."
         (message "[research-variant] Selected: %s" chosen)
         chosen))))
 
+(defun gptel-auto-workflow--select-best-digest-variant ()
+  "Select a digest variant by champion league.
+Returns the variant file stem or nil for default."
+  (let* ((variants-dir (expand-file-name
+                        "assistant/strategies/digest-variants"
+                        (gptel-auto-workflow--effective-project-root)))
+         (variant-files (when (file-directory-p variants-dir)
+                          (directory-files variants-dir nil "\\.md\\'"))))
+    (when variant-files
+      (let* ((stems (mapcar (lambda (f) (file-name-sans-extension f)) variant-files))
+             (chosen (if (and (boundp 'gptel-auto-workflow--champion-strategy)
+                              gptel-auto-workflow--champion-strategy
+                              (member gptel-auto-workflow--champion-strategy stems))
+                         gptel-auto-workflow--champion-strategy
+                       (if (< (random 100) 20)
+                           (nth (random (length stems)) stems)
+                         (car stems)))))
+        (message "[digest-variant] Selected: %s" chosen)
+        chosen))))
+
+(defun gptel-auto-workflow--load-digest-variant-content (variant-name)
+  "Load DIGEST-VARIANT-NAME .md content, or nil if missing."
+  (when variant-name
+    (let ((vf (expand-file-name
+               (format "assistant/strategies/digest-variants/%s.md" variant-name)
+               (gptel-auto-workflow--effective-project-root))))
+      (when (file-exists-p vf)
+        (with-temp-buffer
+          (insert-file-contents vf)
+          (string-trim (buffer-string)))))))
+
 (defun gptel-auto-workflow--load-research-variant-content (variant-name)
   "Load RESEARCH-VARIANT-NAME .md content, or nil if missing."
   (when variant-name
@@ -896,16 +927,19 @@ usable and digestion would lose 80%+ of the content.  Only digest raw HTML dumps
              (length raw-findings))
     (funcall callback raw-findings))
    ;; Everything else: try to digest (raw HTML, unstructured text, etc.)
-   (t
-    (let* ((template (when (fboundp 'gptel-auto-workflow--load-skill-content)
-                       (gptel-auto-workflow--load-skill-content "research-digest")))
-           (digest-prompt
-            (if template
-                (gptel-auto-workflow--substitute-template
-                 template
-                 `((raw-findings . ,(truncate-string-to-width raw-findings 4000 nil nil "..."))))
-              ;; Fallback to hardcoded prompt
-              (format "You are a research digest specialist. Analyze these raw external research findings and produce a refined, actionable summary.
+    (t
+     (let* ((digest-variant (gptel-auto-workflow--select-best-digest-variant))
+            (variant-content (gptel-auto-workflow--load-digest-variant-content digest-variant))
+            (template (or variant-content
+                          (when (fboundp 'gptel-auto-workflow--load-skill-content)
+                            (gptel-auto-workflow--load-skill-content "research-digest"))))
+            (digest-prompt
+             (if template
+                 (gptel-auto-workflow--substitute-template
+                  template
+                  `((raw-findings . ,(truncate-string-to-width raw-findings 4000 nil nil "..."))))
+               ;; Fallback to hardcoded prompt
+               (format "You are a research digest specialist. Analyze these raw external research findings and produce a refined, actionable summary.
 
 RAW FINDINGS:
 %s
@@ -965,10 +999,14 @@ RULES:
                      (message "[auto-workflow] Digestion complete: %d chars → %d chars"
                               (length raw-findings) (length digested))
                      ;; Update context with digested version
-                     (when (boundp 'gptel-auto-workflow--current-research-context)
-                       (setq gptel-auto-workflow--current-research-context
-                             (plist-put gptel-auto-workflow--current-research-context
-                                        :digested digested)))
+                      (when (boundp 'gptel-auto-workflow--current-research-context)
+                        (setq gptel-auto-workflow--current-research-context
+                              (plist-put gptel-auto-workflow--current-research-context
+                                         :digested digested))
+                        (when digest-variant
+                          (setq gptel-auto-workflow--current-research-context
+                                (plist-put gptel-auto-workflow--current-research-context
+                                           :digest-variant digest-variant))))
                      (funcall callback digested))))))
             (if (fboundp 'gptel-request)
                 (gptel-request
