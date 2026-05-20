@@ -230,15 +230,15 @@ log "Cleared stale .elc files from lisp/modules/"
 
 # ─── Force-kill all stale Emacs daemons ───
 # Matches: --daemon=copilot-*, --fg-daemon=copilot-*, --bg-daemon=copilot-*
-STALE_COUNT=$(ps aux | grep -Ec "[e]macs.*(copilot-auto-workflow|copilot-researcher)" 2>/dev/null || echo 0)
-if [ "$STALE_COUNT" -gt 0 ]; then
+STALE_COUNT=$(ps aux | grep -Ec "[e]macs.*(copilot-auto-workflow|copilot-researcher)" 2>/dev/null || true)
+if [ -n "$STALE_COUNT" ] && [ "$STALE_COUNT" -gt 0 ] 2>/dev/null; then
     log "Killing $STALE_COUNT stale daemon process(es)..."
     ps aux | grep -E "[e]macs.*(copilot-auto-workflow|copilot-researcher)" | awk '{print $2}' | xargs kill -9 2>/dev/null || true
     sleep 3
 fi
 # Also clean any leftover --fg-daemon / --bg-daemon emacs processes
-STALE_BG=$(ps aux | grep -Ec "[e]macs.*(fg-daemon|bg-daemon)" 2>/dev/null || echo 0)
-if [ "$STALE_BG" -gt 0 ]; then
+STALE_BG=$(ps aux | grep -Ec "[e]macs.*(fg-daemon|bg-daemon)" 2>/dev/null || true)
+if [ -n "$STALE_BG" ] && [ "$STALE_BG" -gt 0 ] 2>/dev/null; then
     ps aux | grep -E "[e]macs.*(fg-daemon|bg-daemon)" | awk '{print $2}' | xargs kill -9 2>/dev/null || true
     sleep 2
 fi
