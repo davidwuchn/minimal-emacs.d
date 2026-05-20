@@ -135,14 +135,21 @@ EIGHT-KEYS is plist with keys from `gptel-benchmark-instincts-eight-keys'."
 OUTCOME is `validated' or `corrected'.
 EIGHT-KEYS is plist with all Eight Keys scores from benchmark.
 Accumulates in memory for batch commit."
+  (when (null protocol-file)
+    (error "gptel-benchmark-instincts-record: protocol-file cannot be nil"))
+  (when (null pattern-name)
+    (error "gptel-benchmark-instincts-record: pattern-name cannot be nil"))
+  (when (null eight-keys)
+    (error "gptel-benchmark-instincts-record: eight-keys cannot be nil"))
   (let* ((key (cons protocol-file pattern-name))
          (entry (gethash key gptel-benchmark-instincts--accumulator))
+         (entry-eight-keys (or (plist-get entry :eight-keys) '()))
          (delta (if (eq outcome 'validated)
                     gptel-benchmark-instincts-delta-positive
                   (- gptel-benchmark-instincts-delta-negative))))
     (let ((new-eight-keys '()))
       (dolist (k gptel-benchmark-instincts-eight-keys)
-        (let* ((current (or (plist-get entry k) 0.0))
+        (let* ((current (or (plist-get entry-eight-keys k) 0.0))
                (benchmark-val (or (plist-get eight-keys k) 0.5))
                (new-val (+ current (* delta (if (eq outcome 'validated)
                                                 benchmark-val
