@@ -320,22 +320,26 @@ NO-RESULT-MSG is the message when result is nil."
 (defun my/gptel-web-search-safe (tool-cb query &optional count)
   "Web search with error handling.
 Wraps `gptel-agent--web-search-eww' with better error recovery."
-  (condition-case err
-      (gptel-agent--web-search-eww
-       (gptel-tools--wrap-result-callback tool-cb "WebSearch" "WebSearch returned no results.")
-       query count)
-    (error
-     (funcall tool-cb (format "WebSearch error: %s" (error-message-string err))))))
+  (if (not (stringp query))
+      (funcall tool-cb "WebSearch error: query must be a string")
+    (condition-case err
+        (gptel-agent--web-search-eww
+         (gptel-tools--wrap-result-callback tool-cb "WebSearch" "WebSearch returned no results.")
+         query count)
+      (error
+       (funcall tool-cb (format "WebSearch error: %s" (error-message-string err)))))))
 
 (defun my/gptel-web-fetch-safe (tool-cb url)
   "Web fetch with error handling.
 Wraps `gptel-agent--read-url' with better error recovery."
-  (condition-case err
-      (gptel-agent--read-url
-       (gptel-tools--wrap-result-callback tool-cb "WebFetch" "WebFetch returned no content.")
-       url)
-    (error
-     (funcall tool-cb (format "WebFetch error: %s" (error-message-string err))))))
+  (if (not (stringp url))
+      (funcall tool-cb "WebFetch error: url must be a string")
+    (condition-case err
+        (gptel-agent--read-url
+         (gptel-tools--wrap-result-callback tool-cb "WebFetch" "WebFetch returned no content.")
+         url)
+      (error
+       (funcall tool-cb (format "WebFetch error: %s" (error-message-string err)))))))
 
 ;;; Advice for gptel-agent web search callback
 
