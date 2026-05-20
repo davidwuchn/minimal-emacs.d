@@ -786,11 +786,11 @@ Returns non-nil when at least one entry was removed."
        (string-prefix-p
         "-"
         (gptel-auto-workflow--git-cmd
-         (format "git cherry %s %s %s 2>/dev/null"
-                 (shell-quote-argument branch)
-                 (shell-quote-argument commit-hash)
-                 (shell-quote-argument (concat commit-hash "^")))
-         60))))
+          (format "git cherry %s %s %s 2>/dev/null"
+                  (shell-quote-argument branch)
+                  (shell-quote-argument commit-hash)
+                  (shell-quote-argument (concat commit-hash "^")))
+          180))))
 
 (defun gptel-auto-workflow--commit-integrated-p (commit-hash)
   "Return non-nil when COMMIT-HASH is already represented in staging or main.
