@@ -137,7 +137,9 @@ Internal helper to centralize version file reading logic."
     (unless version
       (let ((found-versions (gptel-benchmark--scan-versions-from-dir name)))
         (when (and found-versions (functionp fallback-fn))
-          (setq version (funcall fallback-fn found-versions)))))
+          (let ((fallback-result (funcall fallback-fn found-versions)))
+            (when (stringp fallback-result)
+              (setq version fallback-result))))))
     (or version default)))
 
 (defun gptel-benchmark-current-version (name)
