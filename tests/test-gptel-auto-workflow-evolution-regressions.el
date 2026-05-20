@@ -1262,6 +1262,60 @@ before run-at-time, because the deferral breaks the dynamic scope chain."
           (setq gptel-curl--sentinel-depth 0))
         (should (= gptel-curl--sentinel-depth 0))))))
 
+;; ─── Sentinel Deferral Regression Tests (post-early-init.el) ───
+
+(defconst test-post-early-init-file
+  (expand-file-name "post-early-init.el"
+                    (file-name-directory
+                     (directory-file-name
+                      (file-name-directory
+                       (or load-file-name buffer-file-name default-directory)))))
+  "Absolute path to post-early-init.el.")
+
+(defmacro with-daemon-environment (&rest body)
+  "Execute BODY with daemon-like environment variables and faked daemonp."
+  (declare (indent 0))
+  `(let ((old-allow (getenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON"))
+         (old-workflow (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON")))
+     (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" "1")
+     (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" "1")
+     (unwind-protect
+         (cl-letf (((symbol-function 'daemonp) (lambda () t))
+                   ((symbol-function 'server-running-p) (lambda () nil)))
+           ,@body)
+       (if old-allow (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" old-allow)
+         (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil))
+       (if old-workflow (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" old-workflow)
+         (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)))))
+
+(ert-deftest regression/sentinel-deferral/always-defers-at-depth-zero ()
+  "When >= 0 guard is active, even first sentinel call (depth 0) must defer.
+Ensures the advice wraps sentinel in run-at-time rather than calling directly."
+  (require 'gptel-request)
+  (let ((run-at-time-p nil))
+    (with-daemon-environment
+      (cl-letf (((symbol-function 'run-at-time)
+                 (lambda (_time _interval fn)
+                   (setq run-at-time-p t))))
+        (load-file test-post-early-init-file)
+        (should (advice--p (symbol-function 'gptel-curl--sentinel)))
+        (gptel-curl--sentinel nil nil)
+        (should run-at-time-p)))))
+
+(ert-deftest regression/sentinel-deferral/defers-even-at-depth-0 ()
+  "The >= 0 guard means even depth=0 triggers deferral.
+Verifies the core property of the always-defer fix."
+  (require 'gptel-request)
+  (let ((deferred-p nil))
+    (with-daemon-environment
+      (cl-letf (((symbol-function 'run-at-time)
+                 (lambda (_time _interval fn)
+                   (setq deferred-p t))))
+        (load-file test-post-early-init-file)
+        (let ((gptel-curl--sentinel-depth 0))
+          (gptel-curl--sentinel nil nil)
+          (should deferred-p))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
