@@ -1,1 +1,0 @@
-{"name":"axis-skills","version":"1.0","hypothesis":"Prepending skills that match the historically most successful axis focuses the model on proven reasoning patterns.","axis":"E","components":["skill-loading","axis-matching","historical-weighting"]}

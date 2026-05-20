@@ -1,1 +1,0 @@
-{"name":"failure-pattern-skill-routing","version":"1.0","hypothesis":"Matching skills to failure patterns instead of loading all skills improves guidance precision.","axis":"E","components":["skill-routing","failure-matching"]}

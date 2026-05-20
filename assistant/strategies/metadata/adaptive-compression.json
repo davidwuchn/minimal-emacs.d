@@ -1,1 +1,0 @@
-{"name":"adaptive-compression","version":"1.0","hypothesis":"Calibrating compression guidance based on file size tiers ensures large files retain critical structural context while small files are processed with full fidelity.","axis":"F","components":["compression","calibration","tiers"]}

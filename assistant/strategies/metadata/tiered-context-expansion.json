@@ -1,1 +1,0 @@
-{"name":"tiered-context-expansion","version":"1.0","hypothesis":"Tiered context expansion based on detected complexity improves prompt focus and reduces noise","axis":"B, F","components":["tiered-loading","complexity-detection"]}

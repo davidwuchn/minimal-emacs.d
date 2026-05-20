@@ -1,1 +1,0 @@
-{"name":"outcome-reasoning-chain","version":"1.0","hypothesis":"Constructing explicit causal chains from historical outcomes enables better decision-making","axis":"D","components":["outcome-clustering","reasoning-chain","causal-inference"]}

@@ -1,1 +1,0 @@
-{"name":"improvement-velocity","version":"1.0","hypothesis":"Weighting guidance by improvement velocity prioritizes insights that worked before","axis":"D","components":["velocity-computation","weighted-guidance"]}

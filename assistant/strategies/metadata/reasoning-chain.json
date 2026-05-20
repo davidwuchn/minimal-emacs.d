@@ -1,1 +1,0 @@
-{"name":"reasoning-chain","version":"1.0","hypothesis":"Explicit analysis-then-improvement reasoning improves systematic fixes","axis":"A","components":["two-stage-prompt","chain-of-thought"]}

@@ -1,1 +1,0 @@
-{"name":"critical-section-preservation","version":"1.0","hypothesis":"Protecting function definitions, docstrings, and requires during compression maintains code understanding","axis":"F","components":["structural-preservation","dependency-tracking","docstring-protection"]}

@@ -1,1 +1,0 @@
-{"name":"file-size-adaptation","version":"1.0","hypothesis":"Tailoring guidance complexity to measured file size provides better task framing","axis":"D","components":["file-metrics","size-classification","adaptive-guidance"]}

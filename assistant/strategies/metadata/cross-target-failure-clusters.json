@@ -1,1 +1,0 @@
-{"name":"cross-target-failure-clusters","version":"1.0","hypothesis":"Cross-target failure pattern analysis will surface related issues that tend to co-occur","axis":"B","components":["pattern-extraction","cooccurrence-analysis","clustering"]}

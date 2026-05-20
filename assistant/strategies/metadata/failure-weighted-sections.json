@@ -1,1 +1,0 @@
-{"name":"failure-weighted-sections","version":"1.0","hypothesis":"Prioritizing sections based on failure pattern type improves signal quality","axis":"C","components":["failure-analysis","section-weighting","dynamic-reorder"]}

@@ -1,1 +1,0 @@
-{"name":"negative-skill-filtering","version":"1.0","hypothesis":"Excluding skills irrelevant to the target code reduces noise more effectively than including only relevant ones","axis":"E","components":["negative-filtering","skill-exclusion"]}
