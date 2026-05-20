@@ -1291,7 +1291,14 @@ won't overwrite it.  The researcher-prompt/SKILL.md uses
 {{strategy-guidance}} template variable."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (data-dir (expand-file-name "assistant/skills/researcher-prompt/data" root))
-         (guidance-file (expand-file-name "strategy-guidance.json" data-dir))
+         (axis (and (boundp 'gptel-auto-workflow--current-experiment-axis)
+                    gptel-auto-workflow--current-experiment-axis
+                    (not (equal gptel-auto-workflow--current-experiment-axis "?"))
+                    (string-remove-prefix ":" (format "%s" gptel-auto-workflow--current-experiment-axis))))
+         (guidance-file (expand-file-name (if axis
+                                              (format "strategy-guidance-%s.json" axis)
+                                            "strategy-guidance.json")
+                                          data-dir))
          (own-priority (* 100 (or (plist-get controller-config :own-repo-priority) 0.7)))
          (ext-priority (* 100 (or (plist-get controller-config :external-priority) 0.15)))
          (stop-threshold (* 100 (or (plist-get controller-config :min-confidence-stop)
@@ -1322,7 +1329,7 @@ won't overwrite it.  The researcher-prompt/SKILL.md uses
     (with-temp-file guidance-file
       (insert (json-encode guidance-json)))
     (message "[autotts] Saved strategy guidance to %s (own=%.0f%% ext=%.0f%% beta=%.2f)"
-             guidance-file own-priority ext-priority beta)))
+             (file-name-nondirectory guidance-file) own-priority ext-priority beta)))
 
 ;;; ─── Offline Trace Replay Benchmark (0 LLM calls) ───
 
