@@ -436,8 +436,8 @@ Hook for `gptel-post-response-functions'."
 Helper function to avoid duplicate split-string calls.
 Returns empty list for nil or non-string input to prevent errors."
   (cond
-   ((not (stringp buffer-string)) nil)
-   ((string-empty-p buffer-string) nil)
+   ((not (stringp buffer-string)) '())
+   ((string-empty-p buffer-string) '())
    (t (split-string buffer-string "\n"))))
 
 (defun my/gptel--extract-last-task-from-lines (lines)
