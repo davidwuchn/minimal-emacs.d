@@ -1,0 +1,1 @@
+{"name":"recency-weighted-skills","version":"1.0","hypothesis":"Recent successful skill usage predicts future effectiveness","axis":"D","components":["skill-history","recency-weighting"]}
