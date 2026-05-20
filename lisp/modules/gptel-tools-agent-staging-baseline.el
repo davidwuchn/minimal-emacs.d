@@ -947,6 +947,9 @@ This prevents \='branch already used by worktree\=' errors."
          t)))))
 
 ;;;###autoload
+(defvar gptel-auto-workflow--staging-branch-message-printed nil
+  "Non-nil if the staging branch existence message has been printed this session.")
+
 ;;;###autoload
 
 (defun gptel-auto-workflow--ensure-staging-branch-exists ()
@@ -973,8 +976,10 @@ verification passes."
                             (format "git rev-parse --verify %s" staging-q)
                             60)))))
            (cond
-            (local-exists
-             (message "[auto-workflow] %s branch exists locally" staging)
+             (local-exists
+              (unless gptel-auto-workflow--staging-branch-message-printed
+                (message "[auto-workflow] %s branch exists locally" staging)
+                (setq gptel-auto-workflow--staging-branch-message-printed t))
              t)
             ((= 0 (cdr (gptel-auto-workflow--git-result
                         (format "git ls-remote --exit-code --heads %s %s"
