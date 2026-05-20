@@ -775,11 +775,12 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
 
 (defun my/gptel--agent-task-request-buffer (state)
   "Return the live request buffer tracked in STATE."
-  (let ((request-buf (plist-get state :request-buf))
-        (origin-buf (plist-get state :origin-buf)))
-    (cond
-     ((buffer-live-p request-buf) request-buf)
-     ((buffer-live-p origin-buf) origin-buf))))
+  (when (proper-list-p state)
+    (let ((request-buf (plist-get state :request-buf))
+          (origin-buf (plist-get state :origin-buf)))
+      (cond
+       ((buffer-live-p request-buf) request-buf)
+       ((buffer-live-p origin-buf) origin-buf)))))
 
 (defun my/gptel--cancel-agent-task-timers (state)
   "Cancel any active timeout and progress timers in STATE."
@@ -825,7 +826,8 @@ request buffer for an active workflow task."
        ((hash-table-p gptel-auto-workflow--worktree-state)
         (maphash
          (lambda (_target state)
-           (let ((candidate (plist-get state :worktree-dir)))
+           (let ((candidate (and (proper-list-p state)
+                                 (plist-get state :worktree-dir))))
              (when (and (null found)
                         (stringp candidate)
                         (my/gptel--path-within-directory-p expanded-dir candidate))

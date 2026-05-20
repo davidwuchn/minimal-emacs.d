@@ -64,7 +64,7 @@ Call this when benchmark files are updated."
   "Get benchmark summary for NAME VERSION, or nil if file doesn't exist.
 Internal helper to centralize trend data extraction logic."
   (let ((benchmark-data (gptel-benchmark-load-result name version)))
-    (when benchmark-data
+    (when (and benchmark-data (proper-list-p benchmark-data))
       (gptel-benchmark-summarize-results benchmark-data))))
 
 (defun gptel-benchmark-version-trend (name &optional versions)
@@ -72,7 +72,9 @@ Internal helper to centralize trend data extraction logic."
   (unless (and name (stringp name) (not (string-empty-p name)))
     (signal 'wrong-type-argument (list "stringp" name)))
   (let ((trend-data '())
-        (versions-to-process (or versions (gptel-benchmark-get-all-versions name))))
+        (versions-to-process (if (proper-list-p versions)
+                                 versions
+                               (gptel-benchmark-get-all-versions name))))
     (dolist (version versions-to-process)
       (let ((summary (gptel-benchmark--get-trend-summary name version)))
         (when summary
@@ -83,6 +85,10 @@ Internal helper to centralize trend data extraction logic."
 
 (defun gptel-benchmark-compare-summaries (summary-a summary-b)
   "Compare two benchmark summaries."
+  (when (null summary-a)
+    (signal 'wrong-type-argument (list "proper-list-p" summary-a)))
+  (when (null summary-b)
+    (signal 'wrong-type-argument (list "proper-list-p" summary-b)))
   (let* ((score-a (and (proper-list-p summary-a) (plist-get summary-a :avg-overall)))
          (score-b (and (proper-list-p summary-b) (plist-get summary-b :avg-overall)))
          (improvement (- (or score-b 0) (or score-a 0))))

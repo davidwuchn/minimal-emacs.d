@@ -341,16 +341,19 @@ connection errors, or other transient failures."
   "Return retryable/error-shaped output for a failed grade.
 Prefer GRADE-DETAILS when the grader itself failed transiently; otherwise
 fall back to an error-shaped AGENT-OUTPUT."
-  (cond
-   ((gptel-auto-experiment--normal-grade-details-p grade-details)
-    nil)
-   ((and (stringp grade-details)
-         (or (gptel-auto-experiment--agent-error-p grade-details)
-             (gptel-auto-experiment--is-retryable-error-p grade-details)
-             (gptel-auto-experiment--quota-exhausted-p grade-details)))
-    grade-details)
-   ((gptel-auto-experiment--agent-error-p agent-output)
-    agent-output)))
+  (let ((grade-msg (when (stringp grade-details) grade-details)))
+    (cond
+     ((gptel-auto-experiment--normal-grade-details-p grade-details)
+      nil)
+     ((and grade-msg
+           (or (gptel-auto-experiment--agent-error-p grade-msg)
+               (gptel-auto-experiment--is-retryable-error-p grade-msg)
+               (gptel-auto-experiment--quota-exhausted-p grade-msg)))
+      grade-msg)
+     ((and (stringp agent-output)
+           (gptel-auto-experiment--agent-error-p agent-output))
+      agent-output)
+     (t nil))))
 
 (defun gptel-auto-experiment--grader-only-failure-p (agent-output grade-error-output)
   "Return non-nil when GRADE-ERROR-OUTPUT came from the grader, not the executor."
