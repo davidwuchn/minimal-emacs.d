@@ -3074,8 +3074,9 @@ PROCESS and _STATUS are process parameters."
           (setf (alist-get process gptel--request-alist nil 'remove) nil)
           (delete-process process)
           (kill-buffer (process-buffer process))))
-    (let ((gptel-curl--sentinel-depth (1+ gptel-curl--sentinel-depth))
-          (proc-buf (process-buffer process)))
+    (condition-case sentinel-err
+        (let ((gptel-curl--sentinel-depth (1+ gptel-curl--sentinel-depth))
+              (proc-buf (process-buffer process)))
     (when-let* (((eq (process-status process) 'exit))
                 (fsm (car (alist-get process gptel--request-alist)))
                 (proc-info (gptel-fsm-info fsm))
@@ -3117,7 +3118,16 @@ PROCESS and _STATUS are process parameters."
       (gptel--fsm-transition fsm))      ;TYPE -> next
     (setf (alist-get process gptel--request-alist nil 'remove) nil)
     (delete-process process)
-    (kill-buffer proc-buf))))
+    (kill-buffer proc-buf))
+      (error
+       (message "[gptel] Sentinel error for %s: %s (depth=%d)"
+                (condition-case nil (process-name process) (error "?"))
+                sentinel-err gptel-curl--sentinel-depth)
+       (ignore-errors
+         (setf (alist-get process gptel--request-alist nil 'remove) nil)
+         (delete-process process)
+         (when (process-buffer process)
+           (kill-buffer (process-buffer process))))))))
 
 (defun gptel-curl--parse-response (proc-info)
   "Parse the buffer BUF with curl's response.
