@@ -9,9 +9,9 @@ metadata:
   category: code-quality
   language: emacs-lisp
   author: auto-workflow
-metadata:
   evolution-stats:
     total-experiments: 870
+---
 
 ## Current Performance
 
@@ -19,7 +19,6 @@ metadata:
 - Experiments using this skill: {{skill-experiments}}
 - Overall system keep rate: {{overall-keep-rate}}
 
----
 # Emacs Lisp Validator
 
 ## Overview
