@@ -473,7 +473,48 @@ ACTION is a short description used in failure messages."
       (message "[auto-workflow] %s failed: %s"
                action
                (my/gptel--sanitize-for-logging push-output 160))
-      nil))))
+       nil))))
+ 
+(defun gptel-auto-workflow--promote-staging-to-main ()
+  "Merge staging into main and push main to origin.
+Returns t on success, nil on failure.  Only runs when
+`gptel-auto-workflow--auto-promote-staging' is non-nil."
+  (when gptel-auto-workflow--auto-promote-staging
+    (let* ((staging (gptel-auto-workflow--require-staging-branch))
+           (remote (gptel-auto-workflow--shared-remote))
+           (default-directory (or (gptel-auto-workflow--project-root)
+                                  default-directory)))
+      (message "[auto-workflow] Auto-promoting staging to main...")
+      (condition-case err
+          (progn
+            ;; Fetch latest to avoid non-fast-forward
+            (gptel-auto-workflow--git-result
+             (format "git fetch %s main" remote) 180)
+            ;; Merge staging into main (main is at origin/main or local main)
+            (let ((merge-result
+                   (gptel-auto-workflow--git-result
+                    (format "git merge --ff-only %s" (shell-quote-argument staging))
+                    60)))
+              (if (/= 0 (cdr merge-result))
+                  (let ((no-ff-result
+                         (gptel-auto-workflow--git-result
+                          (format "git merge --no-edit %s" (shell-quote-argument staging))
+                          60)))
+                    (if (/= 0 (cdr no-ff-result))
+                        (progn
+                          (message "[auto-workflow] ✗ Auto-promote merge failed: %s"
+                                   (car no-ff-result))
+                          nil)
+                      t))
+                t))
+            ;; Push main to origin
+            (when (gptel-auto-workflow--git-result
+                   (format "git push --force-with-lease %s main" remote) 180)
+              (message "[auto-workflow] ✓ Staging promoted to main")
+              t))
+        (error
+         (message "[auto-workflow] ✗ Auto-promote error: %s" (error-message-string err))
+         nil)))))
 
 (defun gptel-auto-workflow--push-staging ()
    "Push staging branch to the shared remote after successful verification.
@@ -504,6 +545,10 @@ concurrent pipeline pushes to staging don't cause non-fast-forward rejection."
 
 (defvar gptel-auto-workflow--last-staging-push-output nil
   "Raw output from the most recent staging push attempt.")
+
+(defvar gptel-auto-workflow--auto-promote-staging t
+  "When non-nil, automatically merge staging into main after verification passes.
+Set to nil to require manual merge (original behavior).")
 
 (defun gptel-auto-workflow--staging-push-remote-advanced-p (output)
   "Return non-nil when OUTPUT shows the shared remote staging branch advanced."
@@ -994,6 +1039,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                          (if retried
                              "[auto-workflow] ✓ Staging pushed after refreshing remote advance."
                            "[auto-workflow] ✓ Staging pushed. Human must merge to main."))
+                        (gptel-auto-workflow--promote-staging-to-main)
                         (funcall finish t))))))
             (if (null merge-result)
                 (progn

@@ -1533,6 +1533,26 @@ The retry trigger must match this so the daemon refreshes and retries."
     (should-not (gptel-auto-workflow--staging-push-remote-advanced-p
                  "To ssh://...done"))))
 
+;; ─── Auto-promote staging → main TDD ───
+
+(load-file (expand-file-name "../lisp/modules/gptel-tools-agent-staging-merge.el"
+                              (file-name-directory
+                               (or load-file-name buffer-file-name default-directory))))
+
+(ert-deftest regression/auto-promote/flag-exists-and-defaults-to-t ()
+  "gptel-auto-workflow--auto-promote-staging exists and defaults to t."
+  (should (boundp 'gptel-auto-workflow--auto-promote-staging))
+  (should gptel-auto-workflow--auto-promote-staging))
+
+(ert-deftest regression/auto-promote/promote-function-exists ()
+  "gptel-auto-workflow--promote-staging-to-main is defined."
+  (should (fboundp 'gptel-auto-workflow--promote-staging-to-main)))
+
+(ert-deftest regression/auto-promote/skips-when-flag-nil ()
+  "promote-staging-to-main returns nil early when flag is nil."
+  (let ((gptel-auto-workflow--auto-promote-staging nil))
+    (should-not (gptel-auto-workflow--promote-staging-to-main))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
