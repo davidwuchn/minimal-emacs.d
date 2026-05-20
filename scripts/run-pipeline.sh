@@ -289,8 +289,14 @@ if [ -f "$FINDINGS_FILE" ]; then
     findings_size=$(wc -c < "$FINDINGS_FILE")
     log "Research findings: ${findings_size} bytes"
 
+    has_external=0
     if grep -q "https\?://" "$FINDINGS_FILE" 2>/dev/null || \
         grep -q "## .*Technique" "$FINDINGS_FILE" 2>/dev/null; then
+        has_external=1
+    elif grep -q "webfetch\|WebFetch\|WebSearch\|Hunting external" "$DIR/var/tmp/cron/researcher.log" 2>/dev/null; then
+        has_external=1
+    fi
+    if [ "$has_external" = "1" ]; then
         log "  ✓ External research content detected"
         RESEARCH_QUALITY="external"
     elif grep -q "Source type: local-fallback" "$FINDINGS_FILE" 2>/dev/null; then
