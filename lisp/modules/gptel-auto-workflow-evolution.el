@@ -2603,35 +2603,76 @@ AutoGo league system: incumbents must be defeated in gauntlet play.")
 (defvar gptel-auto-workflow--champion-keep-rate 0.0
   "Keep-rate of the champion strategy. Threshold for challenger adoption.")
 
-(defun gptel-auto-workflow--crown-champion (strategy-name keep-rate)
-  "Crown STRATEGY-NAME as the new champion with KEEP-RATE.
-Only crowns if keep-rate exceeds current champion's by at least 0.05."
+(defvar gptel-auto-workflow--champion-composite-score 0.0
+  "Composite benchmark score of the champion strategy.
+Combines keep rate, score delta, quality gain, and efficiency.")
+
+(defun gptel-auto-workflow--strategy-composite-score (strategy-name)
+  "Compute multi-dimensional benchmark score for STRATEGY-NAME from TSV data.
+Combines: keep_rate (0.3) + avg_score_delta (×2) + quality_gain (0.3) + efficiency (0.1)."
+  (let ((total 0) (kept 0) (score-sum 0.0) (quality-sum 0.0) (dur-sum 0)
+        (results (gptel-auto-workflow--parse-all-results)))
+    (dolist (r results)
+      (when (equal (plist-get r :strategy) strategy-name)
+        (setq total (1+ total))
+        (when (or (equal (plist-get r :decision) "kept") (equal (plist-get r :decision) t))
+          (setq kept (1+ kept)))
+        (let ((pre (or (plist-get r :score-before) 0.4))
+              (post (or (plist-get r :score-after) pre)))
+          (setq score-sum (+ score-sum (- post pre))))
+        (setq quality-sum (+ quality-sum (or (plist-get r :code-quality) (plist-get r :code_quality) 0.5)))
+        (setq dur-sum (+ dur-sum (or (plist-get r :duration) 300)))))
+    (if (= total 0)
+        0.0
+      (let* ((keep-rate (/ (float kept) total))
+             (avg-delta (/ score-sum (float total)))
+             (avg-quality (/ quality-sum (float total)))
+             (avg-dur (/ dur-sum (float total)))
+             (efficiency (/ 300.0 (+ avg-dur 300.0)))
+             (score (+ (* keep-rate 0.3) (* avg-delta 2.0) (* avg-quality 0.3) (* efficiency 0.1))))
+        (when (> total 0)
+          (message "[benchmark] %s: keep=%.0f%% delta=%+.3f quality=%.2f eff=%.0fs → score=%.3f"
+                   strategy-name (* 100 keep-rate) avg-delta avg-quality avg-dur score))
+        score))))
+
+(defun gptel-auto-workflow--crown-champion (strategy-name keep-rate &optional composite)
+  "Crown STRATEGY-NAME as the new champion with KEEP-RATE and COMPOSITE score.
+Only crowns if KEEP-RATE exceeds current champion's by at least 0.05.
+COMPOSITE is logged for diagnostics but keep-rate remains the gating threshold."
   (when (and strategy-name keep-rate
              (> keep-rate (+ gptel-auto-workflow--champion-keep-rate 0.05)))
     (setq gptel-auto-workflow--champion-strategy strategy-name
           gptel-auto-workflow--champion-keep-rate keep-rate)
-    (message "[champion] New champion: %s (%.1f%% keep-rate)"
-             strategy-name (* 100 keep-rate))))
+    (when composite
+      (setq gptel-auto-workflow--champion-composite-score composite))
+    (message "[champion] New champion: %s (keep=%.1f%% composite=%.3f)"
+             strategy-name (* 100 keep-rate) (or composite keep-rate))))
 
 (defun gptel-auto-workflow--gate-strategies ()
-  "Gate evolved strategies against the champion. Returns list of (name . passed).
+  "Gate evolved strategies against the champion. Uses multi-dimensional benchmark score.
 AutoGo league pattern: challengers must beat incumbents to be adopted."
-  (let* ((scores (gptel-auto-workflow--evolution-strategy-structure-scores))
+  (let* ((strategies (gptel-auto-workflow--discover-strategies))
+         (scores (mapcar (lambda (s) (cons s (gptel-auto-workflow--strategy-composite-score s)))
+                         strategies))
+         (scores (sort scores (lambda (a b) (> (cdr a) (cdr b)))))
          (axis-scores (gptel-auto-workflow--evolution-axis-stats))
          (results nil))
     (dolist (entry scores)
       (let* ((name (car entry))
-             (score (cdr entry))
+             (composite (cdr entry))
+             (perf (when (fboundp 'gptel-auto-workflow--get-strategy-performance)
+                     (gptel-auto-workflow--get-strategy-performance name)))
+             (keep-rate (plist-get perf :success-rate))
              (champion gptel-auto-workflow--champion-strategy)
              (champion-rate gptel-auto-workflow--champion-keep-rate))
         (cond
          ((null champion)
-          (gptel-auto-workflow--crown-champion name score)
+          (gptel-auto-workflow--crown-champion name (or keep-rate composite) composite)
           (push (cons name 'first-champion) results))
-         ((> score (+ champion-rate 0.05))
+         ((and keep-rate (> keep-rate (+ champion-rate 0.05)))
           (push (cons name 'promoted) results)
-          (gptel-auto-workflow--crown-champion name score))
-         ((> score champion-rate)
+          (gptel-auto-workflow--crown-champion name keep-rate composite))
+         ((> composite champion-rate)
           (push (cons name 'passed) results))
          (t
           (push (cons name 'rejected) results)))))
