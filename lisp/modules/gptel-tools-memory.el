@@ -72,7 +72,10 @@ Returns content string or error message."
      (t
       (with-temp-buffer
         (insert-file-contents path)
-        (buffer-string))))))
+        (let ((content (buffer-string)))
+          (if (string-blank-p content)
+              (format "Memory '%s' is empty" slug)
+            content)))))))
 
 (defun gptel-tools-memory--write (slug content &optional knowledge-p)
   "Write CONTENT to a memory file identified by SLUG.
