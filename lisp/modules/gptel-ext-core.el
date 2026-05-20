@@ -250,14 +250,15 @@ registered in nucleus-config."
 (defun my/gptel--char-problematic-p (c)
   "Return non-nil if character C is problematic for JSON serialization.
 Checks for control characters, private-use chars, and non-characters."
-  (or
-   (and (>= c 0) (<= c 8))
-   (= c 11) (= c 12)
-   (and (>= c 14) (<= c 31))
-   (and (>= c #xfdd0) (<= c #xfdef))
-   (and (>= c #xfff0) (<= c #xffff))
-   (and (>= c #xf0000) (<= c #xffffd))
-   (and (>= c #x100000) (<= c #x10fffd))))
+  (and (integerp c)
+       (or
+        (and (>= c 0) (<= c 8))
+        (= c 11) (= c 12)
+        (and (>= c 14) (<= c 31))
+        (and (>= c #xfdd0) (<= c #xfdef))
+        (and (>= c #xfff0) (<= c #xffff))
+        (and (>= c #xf0000) (<= c #xffffd))
+        (and (>= c #x100000) (<= c #x10fffd)))))
 
 (defun my/gptel--sanitize-string-for-json (string)
   "Sanitize STRING for JSON serialization.
