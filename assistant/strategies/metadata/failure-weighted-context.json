@@ -1,0 +1,1 @@
+{"name":"failure-weighted-context","version":"1.0","hypothesis":"Weighting context by failure correlation improves focus on problematic areas","axis":"D","components":["failure-analysis","context-weighting","priority-reordering"]}

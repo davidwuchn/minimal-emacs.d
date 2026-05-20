@@ -1,0 +1,1 @@
+{"name":"compression-driven-sectioning","version":"1.0","hypothesis":"Reordering sections based on compression ratio preserves critical info","axis":"A","components":["compression-ratio","adaptive-ordering"]}

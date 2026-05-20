@@ -1881,11 +1881,13 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                "self-correction")
             (error
              (message "[audit] Strategy '%s' evolution triggered but not yet available" strategy)))))))
-  (let ((now (float-time (current-time))))
-    (when (or (not (boundp 'gptel-auto-workflow--allium-audit-last-run))
-              (> (- now (or (symbol-value 'gptel-auto-workflow--allium-audit-last-run) 0)) 900))
-      (setq gptel-auto-workflow--allium-audit-last-run now)
-      (gptel-auto-workflow--allium-audit-signal)))
+  (condition-case nil
+      (let ((now (float-time (current-time))))
+        (when (or (not (boundp 'gptel-auto-workflow--allium-audit-last-run))
+                  (> (- now (or (symbol-value 'gptel-auto-workflow--allium-audit-last-run) 0)) 900))
+          (setq gptel-auto-workflow--allium-audit-last-run now)
+          (gptel-auto-workflow--allium-audit-signal)))
+    (error nil))
   ;; Write research priorities for next cycle's researcher (Semantica ontology feedback)
   (condition-case nil
       (progn (gptel-auto-workflow--write-research-priorities)
