@@ -50,6 +50,8 @@ SIGNALS an error if SLUG contains path traversal or invalid characters."
   (when (string-match-p "\\.\\./" slug)
     (error "Slug must not contain path traversal sequences"))
   (let* ((root (gptel-tools-memory--project-root))
+         (_ (when (null root)
+              (error "Project root must not be nil; check `gptel-tools-memory--project-root'")))
          (base-dir (expand-file-name
                     (if knowledge-p
                         gptel-tools-memory-knowledge-dir
