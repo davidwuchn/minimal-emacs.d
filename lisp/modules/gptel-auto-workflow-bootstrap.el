@@ -8,6 +8,8 @@
 
 ;;; Code:
 
+(require 'subr-x) ;; for proper-list-p
+
 ;; Forward declarations for external variables
 (defvar package-gnupghome-dir)
 (defvar package-archives)
@@ -73,7 +75,7 @@
                     (let ((contents (read (current-buffer))))
                       (when (and (listp contents) (eq (car contents) 1))
                         (dolist (pkg (cdr contents))
-                          (when (and (listp pkg) (symbolp (car pkg)))
+                          (when (and (proper-list-p pkg) (symbolp (car pkg)))
                             (let ((pkg-name (car pkg)))
                               (unless (assq pkg-name package-archive-contents)
                                 (push pkg package-archive-contents)))))
