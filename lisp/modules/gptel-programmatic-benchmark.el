@@ -185,11 +185,15 @@ tool round trips and transcript chatter, not necessarily raw local CPU time."
     (list :original original :edit edit-result)))
 
 (defun gptel-programmatic-benchmark--run-programmatic-workflow (program)
-  "Run PROGRAM through the Programmatic sandbox."
-  (let ((result :pending))
+  "Run PROGRAM through the Programmatic sandbox.
+Timeout after 30s to prevent infinite spin if callback never fires."
+  (let ((result :pending)
+        (deadline (+ (float-time) 30)))
     (gptel-sandbox-execute-async (lambda (value) (setq result value)) program)
-    (while (eq result :pending)
+    (while (and (eq result :pending) (< (float-time) deadline))
       (sleep-for 0.0005))
+    (when (eq result :pending)
+      (setq result :timeout))
     result))
 
 (defun gptel-programmatic-benchmark--read-only-programmatic-workflow ()

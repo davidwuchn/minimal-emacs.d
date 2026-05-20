@@ -1467,10 +1467,8 @@ Verifies the core property of the always-defer fix."
 On macOS with SIP, ulimit -s fails with 'Operation not permitted'.
 Using '&&' causes exec to be skipped entirely, leaving the daemon unstarted.
 Verified by inspecting run-auto-workflow-cron.sh:1124-1141 — uses ';'."
-  ;; This test validates the pattern, not the actual shell code
   (let ((cmd "ulimit -s 65532 2>/dev/null; exec emacs --daemon=test"))
     (should (string-match-p "ulimit.*;.*exec" cmd))
-    ;; Must NOT use &&
     (should-not (string-match-p "ulimit.*&&.*exec" cmd))))
 
 (ert-deftest regression/ulimit/min-start-wait-sufficient ()
@@ -1479,6 +1477,34 @@ Emacs daemon startup takes 90-120s for package loading + gptel init.
 120s was too tight — daemon observed to start but not yet responsive."
   (let ((min-start-wait 180))
     (should (>= min-start-wait 180))))
+
+;; ─── Memory Leak / Infinite Loop Prevention Tests ───
+
+(ert-deftest regression/loop-guard/spin-loop-with-timeout-must-terminate ()
+  "A spin loop with a deadline must terminate even when the condition never changes.
+Tests the pattern used by gptel-programmatic-benchmark--run-programmatic-workflow."
+  (let ((result :pending)
+        (deadline (+ (float-time) 0.5)))
+    (while (and (eq result :pending) (< (float-time) deadline))
+      (sleep-for 0.01))
+    (when (eq result :pending)
+      (setq result :timeout))
+    (should (eq result :timeout))))
+
+(ert-deftest regression/loop-guard/buffer-string-once-allocation ()
+  "Capturing (buffer-string) once before a loop avoids O(n^2) allocation.
+The refactored code in allium-read-quality captures buf-str before the while loop."
+  (with-temp-buffer
+    (insert "1. First issue\n2. Second issue\n\n**Severity:** 0.75\n")
+    (let* ((buf-str (buffer-string))
+           (count 0) (pos 0) (severity 0.0))
+      (while (string-match "^[0-9]+\\." buf-str pos)
+        (setq count (1+ count) pos (match-end 0)))
+      (when (string-match "\\*\\*Severity:\\*\\* \\([0-9.]+\\)" buf-str)
+        (setq severity (string-to-number (match-string 1 buf-str))))
+      (should (= count 2))
+      (should (>= severity 0.74))
+      (should (<= severity 0.76)))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 

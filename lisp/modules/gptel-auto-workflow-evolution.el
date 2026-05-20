@@ -3340,11 +3340,12 @@ Returns a markdown-formatted string of issues grouped by strategy, or empty stri
               (with-temp-buffer
                 (insert-file-contents file)
                 (goto-char (point-min))
-                (let ((count 0) (pos 0) (severity 0.0))
-                  (while (string-match "^[0-9]+\\." (buffer-string) pos)
+                (let ((count 0) (pos 0) (severity 0.0)
+                      (buf-str (buffer-string)))
+                  (while (string-match "^[0-9]+\\." buf-str pos)
                     (setq count (1+ count) pos (match-end 0)))
-                  (when (string-match "\\*\\*Severity:\\*\\* \\([0-9.]+\\)" (buffer-string))
-                    (setq severity (string-to-number (match-string 1 (buffer-string)))))
+                  (when (string-match "\\*\\*Severity:\\*\\* \\([0-9.]+\\)" buf-str)
+                    (setq severity (string-to-number (match-string 1 buf-str))))
                   (cons count severity))))))))))
 
 (defun gptel-auto-workflow--allium-check-research-quality (findings-summary &optional callback)
