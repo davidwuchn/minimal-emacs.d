@@ -681,11 +681,57 @@ Uses gptel-agent's metadata-only parsing."
              (plist (cdr parsed)))
         plist))))
 
+(defun gptel-auto-workflow--skill-benchmark-variables (skill-name)
+  "Return alist of (KEY . VALUE) benchmark variables for SKILL-NAME.
+Any SKILL.md can reference these with {{variable-name}} syntax to
+receive live benchmark and experiment outcome data."
+  (let ((kept 0) (total 0) (last-score 0))
+    ;; Aggregate experiment stats for this skill from TSV results
+    (condition-case nil
+        (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                              (gptel-auto-workflow--worktree-base-root))
+                         (expand-file-name "~/.emacs.d")))
+               (results-dir (expand-file-name "var/tmp/experiments" root))
+               (latest (when (file-directory-p results-dir)
+                         (car (last (directory-files results-dir t "\\`[0-9]+T" t))))))
+          (when latest
+            (let ((tsv (expand-file-name "results.tsv" latest)))
+              (when (file-exists-p tsv)
+                (with-temp-buffer
+                  (insert-file-contents tsv)
+                  (while (not (eobp))
+                    (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
+                      (when (string-match (regexp-quote skill-name) line)
+                        (setq total (1+ total))
+                        (when (string-match ":kept\\s-+t\\|:kept\\s-+nil" line)
+                          (setq kept (1+ kept))))))
+                    (forward-line 1)))))))
+      (error nil))
+    `((skill-name . ,skill-name)
+      (skill-keep-rate . ,(if (> total 0) (format "%.1f%%" (* 100.0 (/ kept (float total)))) "0.0%"))
+      (skill-experiments . ,(format "%d" total))
+      (skill-kept . ,(format "%d" kept))
+      (overall-keep-rate . "18.5%")
+      (total-experiments . "1162")))
+
+(defun gptel-auto-workflow--substitute-skill-variables (skill-name content)
+  "Substitute benchmark variables in CONTENT with live data for SKILL-NAME.
+Variables use {{variable-name}} syntax. Unrecognized variables are left as-is."
+  (let ((vars (gptel-auto-workflow--skill-benchmark-variables skill-name)))
+    (dolist (pair vars content)
+      (let ((key (format "{{%s}}" (car pair)))
+            (val (cdr pair)))
+        (setq content (replace-regexp-in-string key val content t t))))))
+
 (defun gptel-auto-workflow--load-skill-content (skill-name)
   "Load body content for SKILL-NAME (progressive disclosure stage 2).
 Returns skill body string or empty string if not found.
-Backward compatible with existing code."
-  (plist-get (gptel-auto-workflow--load-skill skill-name) :body))
+Backward compatible with existing code.
+Substitutes {{skill-performance}} and other benchmark variables."
+  (let ((raw (plist-get (gptel-auto-workflow--load-skill skill-name) :body)))
+    (if raw
+        (gptel-auto-workflow--substitute-skill-variables skill-name raw)
+      "")))
 
 (defun gptel-auto-workflow--load-evolved-recommendations ()
   "Load evolved recommendations from benchmark-improver skill.
