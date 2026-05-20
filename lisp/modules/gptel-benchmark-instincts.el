@@ -163,6 +163,10 @@ Accumulates in memory for batch commit."
 
 (defun gptel-benchmark-instincts-get-accumulated (protocol-file pattern-name)
   "Get accumulated Eight Keys data for PATTERN-NAME in PROTOCOL-FILE."
+  (when (null protocol-file)
+    (error "gptel-benchmark-instincts-get-accumulated: protocol-file cannot be nil"))
+  (when (null pattern-name)
+    (error "gptel-benchmark-instincts-get-accumulated: pattern-name cannot be nil"))
   (gethash (cons protocol-file pattern-name) gptel-benchmark-instincts--accumulator))
 
 (defun gptel-benchmark-instincts-clear-accumulator ()
