@@ -23,15 +23,17 @@
 (defun gptel-tools-memory--project-root ()
   "Return project root or default-directory.
 Uses caching to avoid repeated filesystem lookups."
-  (if (and gptel-tools-memory--cached-root
-           (stringp gptel-tools-memory--cached-root))
+  (if (and (stringp gptel-tools-memory--cached-root)
+           (not (string= gptel-tools-memory--cached-root "")))
       gptel-tools-memory--cached-root
-    (setq gptel-tools-memory--cached-root
-          (or (and (fboundp 'gptel-auto-workflow--project-root)
-                   (gptel-auto-workflow--project-root))
-              (and (fboundp 'project-root)
-                   (project-root (project-current)))
-              default-directory))))
+    (let ((root (or (and (fboundp 'gptel-auto-workflow--project-root)
+                         (funcall (symbol-function 'gptel-auto-workflow--project-root)))
+                    (and (fboundp 'project-root)
+                         (project-root (project-current)))
+                    default-directory)))
+      (when (stringp root)
+        (setq gptel-tools-memory--cached-root root))
+      root)))
 
 (defun gptel-tools-memory--invalidate-cache ()
   "Invalidate cached project root. Call when project changes."
