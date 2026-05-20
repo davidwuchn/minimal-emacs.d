@@ -214,8 +214,8 @@ SIGNAL: explicit assumptions - Uses lazy predicate resolution."
   "Return non-nil when OBJECT is a valid FSM.
 
 ASSUMPTION: Uses lazy predicate resolution from my/gptel--fsm-predicate-resolve.
-BEHAVPTION: Returns t if OBJECT is non-nil and passes predicate check.
-BEHAVPTION: Returns nil if OBJECT is nil or fails predicate check.
+BEHAVIOR: Returns t if OBJECT is non-nil and passes predicate check.
+BEHAVIOR: Returns nil if OBJECT is nil or fails predicate check.
 EDGE CASE: Nil OBJECT returns nil.
 EDGE CASE: Predicate check errors are suppressed.
 TEST: (my/gptel--fsm-valid-p valid-fsm) => t
@@ -471,18 +471,18 @@ TEST: Empty registry => t
 TEST: After register/unregister cycle => t
 TEST: Manual corruption => error with details
 
-INVARIANTS_CHECKED:
+INVARIANTS CHECKED:
 1. Bidirectional consistency: (gethash (gethash id R) R) == id
 2. Unique IDs: No two FSMs share the same ID
 3. ID format: All IDs match regex \"^fsm-[0-9]+-[0-9]+\\\\.[0-9]+$\"
 4. FSM coverage: Every FSM key has corresponding ID key
 
-BUILDS_ON_DISCOVERY: Validation function enables automated testing
+BUILDS ON DISCOVERY: Validation function enables automated testing
 of registry integrity after complex nested agent operations.
 
-ADAPTS_TO: Catches corruption early before wrong FSM selection occurs.
+ADAPTS TO: Catches corruption early before wrong FSM selection occurs.
 
-PROACTIVE_MITIGATION: Can be called periodically or after operations
+PROACTIVE MITIGATION: Can be called periodically or after operations
 to ensure registry remains in valid state.
 
 Returns t on success, signals error on failure."
