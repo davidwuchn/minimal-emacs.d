@@ -75,6 +75,8 @@ Returns content string or error message."
 (defun gptel-tools-memory--write (slug content &optional knowledge-p)
   "Write CONTENT to a memory file identified by SLUG.
 Returns success message or error."
+  (when (null content)
+    (error "Content must not be nil"))
   (let ((path (gptel-tools-memory--resolve-path slug knowledge-p)))
     (condition-case err
         (progn
