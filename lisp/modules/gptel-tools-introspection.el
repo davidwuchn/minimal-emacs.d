@@ -69,8 +69,9 @@
                                                     (and file (string-match-p pattern file))))
                                        (format "  %s%s (%s)" name (if (buffer-modified-p b) "*" "") (or file "")))))
                                  (buffer-list))))
-         (recs (progn (recentf-mode 1)
-                      (seq-filter (lambda (f) (string-match-p pattern (file-name-nondirectory f))) recentf-list))))
+         (recs (and (bound-and-true-p recentf-mode)
+                    (featurep 'recentf)
+                    (seq-filter (lambda (f) (string-match-p pattern (file-name-nondirectory f))) recentf-list))))
     (concat (when bufs (format "Open Buffers:\n%s\n\n" (string-join bufs "\n")))
             (when recs (format "Recent Files:\n%s" (string-join (mapcar (lambda (f) (format "  %s" f)) recs) "\n"))))))
 
