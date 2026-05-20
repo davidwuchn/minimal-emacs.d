@@ -26,6 +26,22 @@
   "Get cached value for KEY from result cache."
   (gethash key gptel-benchmark-result-cache))
 
+(defun gptel-benchmark--require-valid-name (name)
+  "Signal error if NAME is not a valid non-empty string.
+Returns NAME if valid.
+Internal helper to centralize name validation logic."
+  (unless (and name (stringp name) (not (string-empty-p name)))
+    (signal 'wrong-type-argument (list "stringp" name)))
+  name)
+
+(defun gptel-benchmark--require-valid-version (version)
+  "Signal error if VERSION is not a valid non-empty string.
+Returns VERSION if valid.
+Internal helper to centralize version validation logic."
+  (unless (and version (stringp version) (not (string-empty-p version)))
+    (signal 'wrong-type-argument (list "stringp" version)))
+  version)
+
 (defun gptel-benchmark--cache-put (key value)
   "Store KEY-VALUE pair in result cache."
   (puthash key value gptel-benchmark-result-cache))
@@ -39,8 +55,7 @@ Call this when benchmark files are updated."
 
 (defun gptel-benchmark-compare-file-versions (name version-a version-b)
   "Compare VERSION-A and VERSION-B of benchmark NAME using file-based approach."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
+  (gptel-benchmark--require-valid-name name)
   (let* ((benchmark-a (gptel-benchmark-load-result name version-a))
          (benchmark-b (gptel-benchmark-load-result name version-b)))
     (when (null benchmark-a)
@@ -57,8 +72,7 @@ Call this when benchmark files are updated."
 
 (defun gptel-benchmark-baseline-file-compare (name)
   "Compare current version of NAME against baseline using file-based approach."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
+  (gptel-benchmark--require-valid-name name)
   (let* ((current-version (gptel-benchmark-current-version name))
          (baseline-version (gptel-benchmark-baseline-version name))
          (comparison (gptel-benchmark-compare-file-versions name current-version baseline-version)))
@@ -73,8 +87,7 @@ Internal helper to centralize trend data extraction logic."
 
 (defun gptel-benchmark-version-trend (name &optional versions)
   "Show trend for NAME across VERSIONS."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
+  (gptel-benchmark--require-valid-name name)
   (let ((trend-data '())
         (versions-to-process (if (proper-list-p versions)
                                  versions
@@ -108,8 +121,8 @@ Internal helper to centralize trend data extraction logic."
   "Load benchmark result for NAME VERSION.
 Results are cached to avoid repeated file I/O for the same benchmark.
 Returns nil if the benchmark file does not exist."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
+  (gptel-benchmark--require-valid-name name)
+  (gptel-benchmark--require-valid-version version)
   (let* ((cache-key (cons name version))
          (cached (gptel-benchmark--cache-get cache-key)))
     (if cached
@@ -146,24 +159,20 @@ Internal helper to centralize version file reading logic."
   "Get current version of NAME.
 Attempts to read version from VERSION file, falls back to
 scanning benchmark files, then to hardcoded default."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
+  (gptel-benchmark--require-valid-name name)
   (gptel-benchmark--read-version-file name "VERSION" #'car "v1.1"))
 
 (defun gptel-benchmark-baseline-version (name)
   "Get baseline version of NAME for comparison.
 Attempts to read from BASELINE file, looks for v1.0 or earliest version,
 falls back to hardcoded default."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
+  (gptel-benchmark--require-valid-name name)
   (gptel-benchmark--read-version-file name "BASELINE" #'cl-last "v1.0"))
 
 (defun gptel-benchmark-get-file (name version)
   "Get benchmark file path for NAME VERSION."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
-  (unless (and version (stringp version) (not (string-empty-p version)))
-    (signal 'wrong-type-argument (list "stringp" version)))
+  (gptel-benchmark--require-valid-name name)
+  (gptel-benchmark--require-valid-version version)
   (format "./benchmarks/%s-%s-benchmark.json" name version))
 
 (defun gptel-benchmark--scan-versions-from-dir (name)
@@ -183,8 +192,7 @@ Internal helper to avoid code duplication."
 (defun gptel-benchmark-get-all-versions (name)
   "Get all available versions of NAME by scanning benchmark directory.
 Returns a list of version strings found in ./benchmarks/ directory."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
+  (gptel-benchmark--require-valid-name name)
   (or (gptel-benchmark--scan-versions-from-dir name)
       (list "v1.0" "v1.1")))
 
