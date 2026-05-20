@@ -1014,7 +1014,7 @@ Uses cache to avoid repeated file reads."
                     ;; Skip frontmatter
                     (when (looking-at "---")
                       (forward-line 1)
-                      (while (not (looking-at "---"))
+                      (while (and (not (eobp)) (not (looking-at "---")))
                         (forward-line 1))
                       (forward-line 1))
                     ;; Extract only actionable bullets

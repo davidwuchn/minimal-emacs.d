@@ -1132,6 +1132,91 @@ nucleus--project-root (defined in prompts) is available when presets calls it."
       (should (stringp result))
       (should (> (length result) 0)))))
 
+;; ─── Truncated Frontmatter Regression Tests ───
+
+(ert-deftest regression/truncated-frontmatter/load-topic-knowledge-no-hang ()
+  "gptel-auto-experiment--get-topic-knowledge must not hang on file with opening --- but no closing ---.
+Missing (eobp) guard in the frontmatter-skip while loop caused infinite loop (fixed 2026-05-20).
+The test file has a closing --- to also verify extraction works."
+  (let* ((root (make-temp-file "aw-topic" t))
+         (knowledge-dir (expand-file-name "mementum/knowledge" root)))
+    (make-directory knowledge-dir t)
+    (with-temp-file (expand-file-name "foo.md" knowledge-dir)
+      (insert "---
+title: Truncated
+---
+- DO use the eobp guard
+"))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                   (lambda () root))
+                  ((symbol-function 'gptel-auto-workflow--knowledge-cache-get)
+                   (lambda (&rest _) nil))
+                  ((symbol-function 'gptel-auto-workflow--knowledge-cache-set)
+                   (lambda (&rest _) nil)))
+          (let ((result (gptel-auto-experiment--get-topic-knowledge "lisp/modules/gptel-ext-foo.el")))
+            (should (stringp result))
+            (should (> (length result) 0))
+            (should (string-match-p "eobp guard" result))))
+      (delete-directory root t))))
+
+(ert-deftest regression/truncated-frontmatter/truncated-file-returns-empty ()
+  "With no closing ---, the function returns empty string (not hangs)."
+  (let* ((root (make-temp-file "aw-topic" t))
+         (knowledge-dir (expand-file-name "mementum/knowledge" root)))
+    (make-directory knowledge-dir t)
+    (with-temp-file (expand-file-name "foo.md" knowledge-dir)
+      (insert "---
+title: Truncated
+tags: [test]
+"))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                   (lambda () root))
+                  ((symbol-function 'gptel-auto-workflow--knowledge-cache-get)
+                   (lambda (&rest _) nil))
+                  ((symbol-function 'gptel-auto-workflow--knowledge-cache-set)
+                   (lambda (&rest _) nil)))
+          (let ((result (gptel-auto-experiment--get-topic-knowledge "lisp/modules/gptel-ext-foo.el")))
+            (should (stringp result))
+            (should (= (length result) 0))))
+      (delete-directory root t))))
+
+(ert-deftest regression/truncated-frontmatter/buffer-frontmatter-skip-terminates ()
+  "The frontmatter-skip while loop must terminate when buffer has no closing ---.
+Directly tests the (while (and (not (eobp)) (not (looking-at \"---\"))) pattern."
+  (with-temp-buffer
+    (insert "---
+title: Truncated
+no closing delimiter
+")
+    (goto-char (point-min))
+    (should (looking-at "---"))
+    (forward-line 1)
+    ;; This is the exact loop that was missing (eobp). With guard, it terminates.
+    (while (and (not (eobp)) (not (looking-at "---")))
+      (forward-line 1))
+    ;; Should have reached end of buffer, not hung
+    (should (eobp))
+    ;; Clean edge case: empty buffer after opening ---
+    (erase-buffer)
+    (insert "---\n")
+    (goto-char (point-min))
+    (should (looking-at "---"))
+    (forward-line 1)
+    (while (and (not (eobp)) (not (looking-at "---")))
+      (forward-line 1))
+    (should (eobp))
+    ;; Edge case: buffer with just "---" and nothing else
+    (erase-buffer)
+    (insert "---")
+    (goto-char (point-min))
+    (should (looking-at "---"))
+    (forward-line 1)
+    (while (and (not (eobp)) (not (looking-at "---")))
+      (forward-line 1))
+    (should (eobp))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
