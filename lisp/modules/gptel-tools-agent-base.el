@@ -24,7 +24,7 @@
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 
 ;; Ensure evolution production module is loaded for timer and hook variables
-(condition-case nil (require 'gptel-auto-workflow-production nil t) (error nil))
+(condition-case nil (require 'gptel-auto-workflow-production nil t) (ignore))
 
 ;; Forward declaration for variable defined in gptel-auto-workflow-projects.el.
 ;; Do not initialize it here, or later `defvar' initializers in the projects

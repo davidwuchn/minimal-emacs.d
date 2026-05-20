@@ -58,7 +58,7 @@
 ;; Ensure tools-agent loads first (evolution modules depend on it)
 (require 'gptel-tools-agent)
 (require 'gptel-auto-workflow-git-learning)
-(require 'gptel-auto-workflow-evolution)
+(condition-case nil (require 'gptel-auto-workflow-evolution) (error (message "[gptel-config] evolution unavailable")) nil)
 (require 'gptel-auto-workflow-mementum)
 (require 'gptel-auto-workflow-production)
 

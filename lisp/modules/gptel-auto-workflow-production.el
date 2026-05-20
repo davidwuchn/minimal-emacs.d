@@ -4,7 +4,8 @@
 ;; It runs automatically when the auto-workflow daemon is active.
 
 (require 'cl-lib)
-(require 'gptel-auto-workflow-evolution)
+;; DISABLED: evolution.el needs refactoring
+;; (require 'gptel-auto-workflow-evolution)
 
 ;; ─── Configuration ───
 
@@ -193,7 +194,7 @@ Called when research context changes or run completes."
     (run-with-idle-timer 60 nil #'gptel-auto-workflow--maybe-run-evolution)))
 
 ;; Start on load if daemon is running
-(when (and (daemonp)
+(when (and nil (daemonp)
            gptel-auto-workflow-evolution-enabled)
   (gptel-auto-workflow-evolution-auto-start))
 
