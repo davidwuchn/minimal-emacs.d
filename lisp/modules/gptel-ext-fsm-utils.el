@@ -339,7 +339,9 @@ without duplicating cycle-detection logic.
 
 PROACTIVE MITIGATION: Single traversal implementation ensures
 consistent behavior across all FSM collection operations."
-  (when (and (hash-table-p seen) (functionp fsm-callback))
+  (unless (hash-table-p seen)
+    (error "my/gptel--fsm-traverse: SEEN must be a hash-table, got %S" seen))
+  (when (functionp fsm-callback)
     (cond
      ((null object) nil)
      ((consp object)

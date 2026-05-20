@@ -39,7 +39,8 @@
    ((file-exists-p target)
     t)
    (t
-    (make-directory (file-name-directory target) t)
+    (let ((target-dir (file-name-directory target)))
+      (when target-dir (make-directory target-dir t)))
     (make-symbolic-link source target t)
     t)))
 
