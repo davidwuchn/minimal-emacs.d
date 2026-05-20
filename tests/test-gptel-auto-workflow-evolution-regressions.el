@@ -5,6 +5,11 @@
 (require 'ert)
 (require 'cl-lib)
 
+;; Ensure lisp/modules is on load-path for requires nested in load-file'd modules
+(let ((modules-dir (expand-file-name "../lisp/modules"
+                                     (file-name-directory
+                                      (or load-file-name buffer-file-name default-directory)))))
+  (add-to-list 'load-path modules-dir))
 (load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-evolution.el"
                               (file-name-directory
                                (or load-file-name buffer-file-name default-directory))))
