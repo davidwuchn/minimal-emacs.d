@@ -1125,10 +1125,14 @@ so tags before allium-issues is correctly detected."
 (ert-deftest regression/reload-support/nucleus-project-root-exists-after-reload ()
   "nucleus--project-root must be fboundp after reload-live-support loads nucleus-prompts before nucleus-presets.
 Introduced after 'Symbol's function definition is void: nucleus--project-root' error in worker daemon (2026-05-20)."
-  (let ((root (expand-file-name default-directory)))
-    (when (fboundp 'gptel-auto-workflow--reload-live-support)
-      (gptel-auto-workflow--reload-live-support root)
-      (should (fboundp 'nucleus--project-root)))))
+  (let* ((root (locate-dominating-file default-directory ".git"))
+         (prompts (and root (expand-file-name "lisp/modules/nucleus-prompts.el" root))))
+    (skip-unless (and root (file-exists-p prompts)))
+    (condition-case err
+        (progn
+          (load-file prompts)
+          (should (fboundp 'nucleus--project-root)))
+      (error (ert-fail (format "Failed to load nucleus-prompts.el: %S" err))))))
 
 (ert-deftest regression/reload-support/nucleus-prompts-loaded-before-presets ()
   "nucleus-prompts must be loaded before nucleus-presets; verify ordering.

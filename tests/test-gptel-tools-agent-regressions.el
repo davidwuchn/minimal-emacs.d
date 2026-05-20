@@ -5596,8 +5596,9 @@ with next backend. This test evaluates the old (non-retry) path."
 
 (ert-deftest regression/auto-experiment/analyze-retries-transient-timeouts ()
   "Analyzer timeout outputs should fail over and retry before falling back.
-Note: This test fails in batch mode because retry uses run-with-timer async scheduling."
-  :expected-result (if noninteractive :failed :passed)
+Fixed in noninteractive mode: call-aux-subagent-with-retry now calls
+synchronously when noninteractive (was run-with-timer async scheduling)."
+  :expected-result :passed
   (let* ((gptel-auto-experiment-use-subagents t)
          (gptel-auto-experiment-max-aux-subagent-retries 2)
          (gptel-auto-experiment-max-per-provider-attempts 1)
