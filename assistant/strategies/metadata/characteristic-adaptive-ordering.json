@@ -1,0 +1,1 @@
+{"name":"characteristic-adaptive-ordering","version":"1.0","hypothesis":"Reordering prompt sections based on code characteristics produces better-targeted guidance.","axis":"C","components":["code-analysis","dynamic-ordering"]}
