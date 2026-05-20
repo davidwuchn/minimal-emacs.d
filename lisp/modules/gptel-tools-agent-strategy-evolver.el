@@ -238,6 +238,38 @@ Returns empty list if CODE is nil or empty."
 
 ;;; Prototyping Phase
 
+(defun gptel-auto-workflow--prevalidate-prototype (code)
+  "Pre-validate strategy CODE for common LLM-generated syntax errors.
+Returns list of error strings, nil if clean. Checks: paren balance,
+let binding multi-value-forms, and ELisp-unknown function names."
+  (let ((warnings '()))
+    ;; 1. Paren balance: scan-sexps is the authoritative check
+    (condition-case err
+        (with-temp-buffer
+          (insert code)
+          (scan-sexps (point-min) (point-max)))
+      (error
+       (push (format "Unbalanced parens: %s" (error-message-string err)) warnings)))
+    ;; 2. let / let* with multiple values per binding
+    ;; Pattern: (let ((VAR VAL1 VAL2 VAL3 ...)) — match bindings with >2 value forms
+    (let ((pos 0))
+      (while (string-match "(let\\*?\\s-+((\\(\\w+\\)\\s-+\\S+\\s-+\\S+\\s-+\\S+" code pos)
+        (push (format "let binding '%s' has >2 values" (match-string 1 code)) warnings)
+        (setq pos (match-end 0))))
+    ;; 3. Known CL-only or non-ELisp function names
+    (let ((cl-only-fns '("howmany" "file" "cw" "format-t" "make-string-output-stream"
+                         "get-output-stream-string" "with-output-to-string"
+                         "pprint" "pprint-logical-block" "pprint-fill"
+                         "pprint-indent" "pprint-newline" "map-into"
+                         "reduce" "some" "every" "notevery" "notany" "mapcan" "mapcon"))
+          (start 0))
+      (while (string-match "\\_<\\(\\w+\\)\\_>" code start)
+        (let ((word (match-string 1 code)))
+          (when (member word cl-only-fns)
+            (push (format "Non-ELisp function '%s' not available" word) warnings))
+          (setq start (match-end 1)))))
+    (nreverse warnings)))
+
 (defun gptel-auto-workflow--prototype-strategy (strategy-code test-target)
   "Prototype STRATEGY-CODE against TEST-TARGET before finalizing.
 Returns plist with :valid t/nil :errors list :test-output string."
@@ -251,10 +283,14 @@ Returns plist with :valid t/nil :errors list :test-output string."
           (with-temp-file temp-file
             (insert strategy-code))
           
-          ;; Test 1: Load without errors
+          ;; Pre-validate before attempting load (catches common syntax errors)
+          (setq errors (gptel-auto-workflow--prevalidate-prototype strategy-code))
+          
+          ;; Test 1: Load without errors (only if pre-validation passed)
           ;; Guard: strip lexical-binding from prototype (avoids reader bug
           ;; with invalid-read-syntax on some Emacs 30 builds) and verify
           ;; file ends with newline (avoids end-of-file from truncated write).
+          (unless errors
           (condition-case err
               (let ((gptel-auto-workflow--suppress-strategy-metadata-persistence t)
                     (load-read-function #'read))
@@ -271,8 +307,8 @@ Returns plist with :valid t/nil :errors list :test-output string."
                       (with-temp-file temp-file
                         (insert content)))))
                 (load temp-file nil t t))
-            (error
-             (push (format "Load error: %s" err) errors)))
+             (error
+              (push (format "Load error: %s" err) errors))))
           
           ;; Test 2: Build function exists and is callable
           (unless errors

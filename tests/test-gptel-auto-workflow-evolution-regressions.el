@@ -1570,8 +1570,51 @@ must not override it to MiniMax via setq-local in subagent buffers."
   (let ((gptel-auto-workflow-persistent-headless t))
     (should (boundp 'gptel-auto-workflow-persistent-headless))
     (should gptel-auto-workflow-persistent-headless))
-  ;; Function exists
   (should (fboundp 'my/gptel--apply-plain-model)))
+
+;; ─── Strategy Prototype Pre-validation Tests ───
+
+(defconst test-strategy-evolver-file
+  (expand-file-name "lisp/modules/gptel-tools-agent-strategy-evolver.el"
+                    (file-name-directory
+                     (directory-file-name
+                      (file-name-directory
+                       (or load-file-name buffer-file-name default-directory)))))
+  "Absolute path to gptel-tools-agent-strategy-evolver.el.")
+
+(ert-deftest regression/prototype-prevalidation/valid-code-passes ()
+  "Syntactically valid strategy code must pass pre-validation with no errors."
+  (load-file test-strategy-evolver-file)
+  (let ((code "(defun my-strategy (target max-exp prev-analysis weight history)
+  \"Valid strategy.\"
+  (message \"target: %s\" target)
+  (let ((count 0) (result \"\"))
+    (when (> max-exp 0)
+      (setq count max-exp))
+    (format \"result-%d\" count)))"))
+    (should-not (gptel-auto-workflow--prevalidate-prototype code))))
+
+(ert-deftest regression/prototype-prevalidation/unbalanced-parens-detected ()
+  "A missing closing paren must be detected by pre-validation."
+  (load-file test-strategy-evolver-file)
+  (let ((code "(defun my-strategy (target max-exp)
+  (message \"target: %s\" target)"))
+    (should (gptel-auto-workflow--prevalidate-prototype code))))
+
+(ert-deftest regression/prototype-prevalidation/cl-only-function-detected ()
+  "Common Lisp functions not available in ELisp must be flagged."
+  (load-file test-strategy-evolver-file)
+  (let ((code "(defun my-strategy (target max-exp prev-analysis)
+  (howmany target))"))
+    (should (gptel-auto-workflow--prevalidate-prototype code))))
+
+(ert-deftest regression/prototype-prevalidation/let-bindings-multi-value-detected ()
+  "let bindings with more than 2 parts (var val) must be flagged."
+  (load-file test-strategy-evolver-file)
+  (let ((code "(defun my-strategy (target max-exp)
+  (let ((a 1 2 3))
+    (message \"%d\" a)))"))
+    (should (gptel-auto-workflow--prevalidate-prototype code))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
