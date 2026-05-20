@@ -476,9 +476,10 @@ ACTION is a short description used in failure messages."
       nil))))
 
 (defun gptel-auto-workflow--push-staging ()
-  "Push staging branch to the shared remote after successful verification.
+   "Push staging branch to the shared remote after successful verification.
 Unlike per-experiment optimize branches, staging is a shared integration branch,
-so this push must not rewrite remote history."
+so this push must not rewrite remote history. Use --force-with-lease so that
+concurrent pipeline pushes to staging don't cause non-fast-forward rejection."
   (let ((staging (gptel-auto-workflow--require-staging-branch))
         (remote (gptel-auto-workflow--shared-remote)))
     (message "[auto-workflow] Pushing staging to %s" remote)
@@ -490,7 +491,7 @@ so this push must not rewrite remote history."
                  (gptel-auto-workflow--with-skipped-submodule-sync
                   (lambda ()
                     (gptel-auto-workflow--git-result
-                     (format "git push %s %s"
+                     (format "git push --force-with-lease %s %s"
                              remote
                              (shell-quote-argument staging))
                      180)))))
