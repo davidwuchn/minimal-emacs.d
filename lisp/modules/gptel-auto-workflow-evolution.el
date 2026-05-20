@@ -3292,11 +3292,12 @@ ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
                 (insert "### Check Issues\n\n")
                 (insert (truncate-string-to-width issues 1500 nil nil "\n\n... (truncated)"))
                 (insert "\n"))
-              (write-region (point-min) (point-max) knowledge-file))
+               (write-region (point-min) (point-max) knowledge-file))
           (error
            (message "[allium-persist] Failed to update knowledge page for %s" safe-strategy))))
       (message "[allium-persist] Saved spec + issues for '%s': %d issues, %.2f severity"
                strategy issue-count severity)))))
+
 
 (defun gptel-auto-workflow--allium-load-issues-for-guidance ()
   "Load recent Allium check issues for injection into prompt builder strategy guidance.
