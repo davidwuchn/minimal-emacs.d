@@ -1433,8 +1433,8 @@ moonshot and others when rate-limited or unavailable."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
+  '(("moonshot" . "kimi-k2.6")
+    ("MiniMax" . "minimax-m2.7-highspeed")
     ("DashScope" . "glm-5")
     ("DeepSeek" . "deepseek-v4-pro")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
