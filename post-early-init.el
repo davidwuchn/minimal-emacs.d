@@ -120,9 +120,11 @@
   (with-eval-after-load 'gptel-request
     (advice-add 'gptel-curl--sentinel :around
                 (lambda (orig-fn process status &rest args)
-                  (if (> gptel-curl--sentinel-depth 0)
-                      ;; Already processing a sentinel — defer to prevent
-                      ;; C stack overflow from nested signal-handler frames.
+                  (if (>= gptel-curl--sentinel-depth 0)
+                      ;; Always defer sentinel processing to prevent C stack
+                      ;; overflow from nested signal-handler frames, even on
+                      ;; the first call (depth 0). The 64MB macOS stack limit
+                      ;; is too tight for synchronous sentinel bodies.
                       (run-at-time 0 nil
                         (lambda ()
                           (condition-case err

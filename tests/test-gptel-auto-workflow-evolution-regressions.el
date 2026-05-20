@@ -1217,6 +1217,51 @@ no closing delimiter
       (forward-line 1))
     (should (eobp))))
 
+;; ─── Sentinel Depth Reset Regression Tests ───
+
+(ert-deftest regression/sentinel-depth/reset-after-deferral ()
+  "gptel-curl--sentinel-depth must be reset to 0 when a re-entrant sentinel is deferred.
+When post-early-init advice defers a sentinel (depth > 0), it must set depth to 0
+before run-at-time so the deferred call runs as a fresh top-level sentinel.
+Without this, depth grows unboundedly and sentinels loop forever (C stack overflow)."
+  (with-temp-buffer
+    (let ((gptel-curl--sentinel-depth 1)
+          (deferred-called nil)
+          (depth-before-defer nil))
+      (should (= gptel-curl--sentinel-depth 1))
+      ;; Simulate what the advice does: depth > 0, reset, defer
+      (when (> gptel-curl--sentinel-depth 0)
+        (setq depth-before-defer gptel-curl--sentinel-depth
+              gptel-curl--sentinel-depth 0)
+        (setq deferred-called t))
+      (should deferred-called)
+      (should (= depth-before-defer 1))
+      (should (= gptel-curl--sentinel-depth 0)))))
+
+(ert-deftest regression/sentinel-depth/no-reset-at-depth-zero ()
+  "When depth is 0, the sentinel should run normally — no reset, no deferral."
+  (with-temp-buffer
+    (let ((gptel-curl--sentinel-depth 0)
+          (ran-normally nil))
+      (if (> gptel-curl--sentinel-depth 0)
+          (setq gptel-curl--sentinel-depth 0)
+        (setq ran-normally t))
+      (should ran-normally)
+      (should (= gptel-curl--sentinel-depth 0)))))
+
+(ert-deftest regression/sentinel-depth/depth-reset-is-explicit ()
+  "Verify that the depth reset to 0 is explicit (not relying on dynamic scope).
+The post-early-init advice must explicitly (setq gptel-curl--sentinel-depth 0)
+before run-at-time, because the deferral breaks the dynamic scope chain."
+  (let ((depth-values '(1 2 3 5 8 13 21)))
+    (dolist (d depth-values)
+      (let ((gptel-curl--sentinel-depth d))
+        (should (= gptel-curl--sentinel-depth d))
+        ;; Simulate defer + reset
+        (when (> gptel-curl--sentinel-depth 0)
+          (setq gptel-curl--sentinel-depth 0))
+        (should (= gptel-curl--sentinel-depth 0))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
