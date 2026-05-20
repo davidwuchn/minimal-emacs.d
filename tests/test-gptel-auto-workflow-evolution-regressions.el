@@ -1555,6 +1555,13 @@ The retry trigger must match this so the daemon refreshes and retries."
 
 ;; ─── Headless Backend Default Tests ───
 
+(load-file (expand-file-name "../lisp/modules/gptel-tools-agent-experiment-loop.el"
+                              (file-name-directory
+                               (or load-file-name buffer-file-name default-directory))))
+(load-file (expand-file-name "../lisp/modules/gptel-ext-core.el"
+                              (file-name-directory
+                               (or load-file-name buffer-file-name default-directory))))
+
 (ert-deftest regression/headless-backend/skips-plain-model-in-headless ()
   "my/gptel--apply-plain-model must not override backend in headless workflow.
 In headless daemon, gptel-auto-workflow-persistent-headless is t.
