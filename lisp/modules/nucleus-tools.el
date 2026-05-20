@@ -149,13 +149,12 @@ If none fit or no factories given, return a truncation notice."
         (let ((too-long-msg (format "Result too long (%d chars). Refine query or adjust max_answer_chars."
                                     n-chars)))
           (if shortened-factories
-              (catch 'found
-                (dolist (factory shortened-factories)
-                  (let ((candidate (if (functionp factory) (funcall factory) "")))
-                    (when (and (stringp candidate)
-                               (<= (length (concat too-long-msg "\n" candidate)) max-chars))
-                      (throw 'found (concat too-long-msg "\n" candidate)))))
-                too-long-msg)
+              (cl-loop for factory in shortened-factories
+                       for candidate = (if (functionp factory) (funcall factory) "")
+                       when (and (stringp candidate)
+                                 (<= (length (concat too-long-msg "\n" candidate)) max-chars))
+                       return (concat too-long-msg "\n" candidate)
+                       finally return too-long-msg)
             too-long-msg))))))
 
 ;;; Project-Level Tool Configuration
