@@ -82,11 +82,14 @@ Returns (status . message) where status is:
 
 Returns list (ok warnings errors) counts."
   (let ((ok 0) (warnings 0) (errors 0))
-    (cl-loop for (_tool-name . (status . _msg)) in results
-             do (pcase status
-                  ('ok (cl-incf ok))
-                  ('warning (cl-incf warnings))
-                  ('error (cl-incf errors))))
+    (cl-loop for result in results
+             when (and (consp result) (consp (cdr result)))
+             do (let ((entry (cdr result)))
+                  (when (consp entry)
+                    (pcase (car entry)
+                      ('ok (cl-incf ok))
+                      ('warning (cl-incf warnings))
+                      ('error (cl-incf errors))))))
     (list ok warnings errors)))
 
 (defun nucleus--validate-all-tools ()

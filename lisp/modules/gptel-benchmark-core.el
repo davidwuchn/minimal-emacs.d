@@ -328,6 +328,7 @@ Returns empty alist if TOTALS is nil to prevent nil propagation errors."
   (cond
    ((null totals) (mapcar (lambda (st) (cons st 0.0)) gptel-benchmark--score-types))
    ((not (and (listp scores-alist) (proper-list-p scores-alist))) totals)
+   ((not (proper-list-p totals)) totals)
    (t
     (cl-loop for (score-type . current) in totals
              for raw-score = (alist-get score-type scores-alist)
