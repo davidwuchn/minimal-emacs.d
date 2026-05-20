@@ -440,6 +440,17 @@ Returns empty list for nil or non-string input to prevent errors."
    ((string-empty-p buffer-string) '())
    (t (split-string buffer-string "\n"))))
 
+(defun my/gptel--user-line-prefix-p (line)
+  "Return non-nil if LINE is a user input line.
+Assumes LINE is a string. Returns t for lines matching user prefixes."
+  (and (stringp line)
+       (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line)))
+
+(defun my/gptel--strip-user-prefix (line)
+  "Strip user prefix from LINE and return the content.
+Assumes LINE is a string matching user prefix pattern."
+  (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" line))
+
 (defun my/gptel--extract-last-task-from-lines (lines)
   "Extract the most recent task/request from LINES.
 Returns a short description of what the user was asking for."
@@ -450,14 +461,11 @@ Returns a short description of what the user was asking for."
       (cl-return-from my/gptel--extract-last-task-from-lines "Continue the task"))
     (let* ((lines-list lines)
            (user-lines (and lines-list
-                            (cl-remove-if-not
-                             (lambda (line)
-                               (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
-                             lines-list)))
+                            (cl-remove-if-not #'my/gptel--user-line-prefix-p lines-list)))
            (user-list user-lines)
            (last-user (and user-list (car (last user-list))))
            (task (if (and last-user (not (string-empty-p last-user)))
-                     (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
+                     (my/gptel--strip-user-prefix last-user)
                    "Continue the task")))
       (if (string-empty-p task) "Continue the task" task))))
 
