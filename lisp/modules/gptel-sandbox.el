@@ -135,7 +135,8 @@ gptel preset.")
   '(+ - * / 1+ 1- mod max min abs
     concat format list vector append length car cdr nth
     cons assoc alist-get plist-get split-string string-join
-    string-trim string-empty-p string-match-p substring)
+    string-trim string-empty-p string-match-p substring
+    memq)
   "Data and arithmetic operators allowed in sandbox expressions.")
 
 (defconst gptel-sandbox--builtin-ops
@@ -147,6 +148,7 @@ gptel preset.")
     (assoc 2 3) (plist-get 2 3) (string-empty-p 1 1)
     (string-match-p 2 3) (format 1 nil) (split-string 1 4)
     (string-join 1 2) (string-trim 1 3) (substring 2 3)
+    (memq 2 2)
     (alist-get 2 5)
     (+ 0 nil) (- 1 nil) (* 0 nil) (/ 1 nil)
     (1+ 1 1) (1- 1 1) (mod 2 2) (max 1 nil) (min 1 nil) (abs 1 1)
