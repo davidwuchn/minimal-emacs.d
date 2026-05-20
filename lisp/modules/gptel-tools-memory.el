@@ -103,6 +103,8 @@ If TOPIC is non-nil, filter by topic match."
 (defun gptel-tools-memory--list (&optional topic)
   "List available memories, optionally filtered by TOPIC."
   (let* ((root (gptel-tools-memory--project-root))
+         (_ (when (null root)
+              (error "Project root must not be nil; check `gptel-tools-memory--project-root'")))
          (mem-dir (expand-file-name gptel-tools-memory-dir root))
          (know-dir (expand-file-name gptel-tools-memory-knowledge-dir root))
          (results (append (gptel-tools-memory--collect-dir mem-dir "memory" root topic)
