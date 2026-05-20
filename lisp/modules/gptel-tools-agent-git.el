@@ -872,7 +872,8 @@ helpers handle explicit stale-buffer discards during recreate/delete flows."
 
 (defun my/gptel--agent-task-note-activity (task-id &optional timestamp)
   "Record fresh activity for TASK-ID at TIMESTAMP or now."
-  (when-let* ((state (gethash task-id my/gptel--agent-task-state)))
+  (when-let* ((state (gethash task-id my/gptel--agent-task-state))
+              ((proper-list-p state)))
     (let ((activity-time (or timestamp (current-time))))
       (puthash task-id
                (plist-put state :last-activity-time activity-time)
