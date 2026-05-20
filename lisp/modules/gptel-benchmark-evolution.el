@@ -178,7 +178,8 @@ Map to elements, detect imbalances, identify evolution opportunity."
     (list :imbalances nil :focus-element nil :evolution-opportunity nil))
    ((not (proper-list-p observation))
     (list :imbalances nil :focus-element nil :evolution-opportunity nil))
-   ((plist-get observation :element-status)
+   ((and (plist-get observation :element-status)
+         (proper-list-p (plist-get observation :element-status)))
     (let ((deficient-elements (gptel-benchmark-evolution--extract-deficient-elements observation)))
       (list :imbalances deficient-elements
             :focus-element (car deficient-elements)
