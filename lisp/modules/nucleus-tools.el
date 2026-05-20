@@ -258,11 +258,14 @@ Subagent toolsets are hand-curated for specific roles.
 Handles both derived and explicit definitions.
 Supports (:derived INCLUDE EXCLUDE &rest EXTRA) to append extra tools."
   (if (and (consp definition) (eq (car definition) :derived))
-      (let ((base (nucleus-toolset-from-markers (cadr definition) (caddr definition)))
+      (let ((include (cadr definition))
+            (exclude (caddr definition))
             (extra (cdddr definition)))
-        (if extra
-            (append base (cl-remove-if (lambda (t) (member t base)) extra))
-          base))
+        (when (and (listp include) (listp exclude))
+          (let ((base (nucleus-toolset-from-markers include exclude)))
+            (if extra
+                (append base (cl-remove-if (lambda (t) (member t base)) extra))
+              base))))
     definition))
 
 (defun nucleus--build-toolsets ()
