@@ -25,6 +25,8 @@
     nil)
    ((not (gptel-auto-workflow--path-exists-or-symlink-p source))
     nil)
+   ((not (gptel-auto-workflow--safe-truename source))
+    nil)
    ((file-symlink-p target)
     (let ((source-true (gptel-auto-workflow--safe-truename source))
           (target-true (gptel-auto-workflow--safe-truename target)))
