@@ -324,12 +324,14 @@ Wraps `gptel-agent--web-search-eww' with better error recovery."
       (error "my/gptel-web-search-safe: tool-cb must be a function, got %S" tool-cb)
     (if (not (stringp query))
         (funcall tool-cb "WebSearch error: query must be a string")
-      (condition-case err
-          (gptel-agent--web-search-eww
-           (gptel-tools--wrap-result-callback tool-cb "WebSearch" "WebSearch returned no results.")
-           query count)
-        (error
-         (funcall tool-cb (format "WebSearch error: %s" (error-message-string err))))))))
+      (if (string-empty-p query)
+          (funcall tool-cb "WebSearch error: query cannot be empty")
+        (condition-case err
+            (gptel-agent--web-search-eww
+             (gptel-tools--wrap-result-callback tool-cb "WebSearch" "WebSearch returned no results.")
+             query count)
+          (error
+           (funcall tool-cb (format "WebSearch error: %s" (error-message-string err)))))))))
 
 (defun my/gptel-web-fetch-safe (tool-cb url)
   "Web fetch with error handling.
@@ -338,17 +340,21 @@ Wraps `gptel-agent--read-url' with better error recovery."
       (error "my/gptel-web-fetch-safe: tool-cb must be a function, got %S" tool-cb)
     (if (not (stringp url))
         (funcall tool-cb "WebFetch error: url must be a string")
-      (condition-case err
-          (gptel-agent--read-url
-           (gptel-tools--wrap-result-callback tool-cb "WebFetch" "WebFetch returned no content.")
-           url)
-        (error
-         (funcall tool-cb (format "WebFetch error: %s" (error-message-string err))))))))
+      (if (string-empty-p url)
+          (funcall tool-cb "WebFetch error: url cannot be empty")
+        (condition-case err
+            (gptel-agent--read-url
+             (gptel-tools--wrap-result-callback tool-cb "WebFetch" "WebFetch returned no content.")
+             url)
+          (error
+           (funcall tool-cb (format "WebFetch error: %s" (error-message-string err)))))))))
 
 ;;; Advice for gptel-agent web search callback
 
 (defun my/gptel--around-web-search-eww-callback (orig-fn cb)
   "Advice around `gptel-agent--web-search-eww-callback' with error handling."
+  (unless (functionp cb)
+    (error "my/gptel--around-web-search-eww-callback: cb must be a function, got %S" cb))
   (condition-case err
       (if (and (boundp 'url-http-end-of-headers)
                url-http-end-of-headers)
