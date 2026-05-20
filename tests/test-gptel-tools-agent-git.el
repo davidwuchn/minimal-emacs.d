@@ -56,5 +56,28 @@
   "Seed FSM tools function should exist."
   (should (fboundp 'my/gptel--seed-fsm-tools)))
 
+;;; Task request buffer tests
+
+(ert-deftest test-git/task-request-buffer-nil-state ()
+  "Nil state should return nil."
+  (should-not (my/gptel--agent-task-request-buffer nil)))
+
+(ert-deftest test-git/task-request-buffer-non-list-state ()
+  "Non-list state should return nil."
+  (should-not (my/gptel--agent-task-request-buffer "not-a-list")))
+
+(ert-deftest test-git/task-request-buffer-valid-state ()
+  "Valid state with dead buffers returns nil."
+  (should-not (my/gptel--agent-task-request-buffer
+               '(:request-buf nil :origin-buf nil))))
+
+(ert-deftest test-git/workflow-owned-worktree-root-nil-dir ()
+  "Nil dir should return nil."
+  (should-not (my/gptel--workflow-owned-worktree-root nil)))
+
+(ert-deftest test-git/workflow-owned-worktree-root-non-string-dir ()
+  "Non-string dir should return nil."
+  (should-not (my/gptel--workflow-owned-worktree-root 42)))
+
 (provide 'test-gptel-tools-agent-git)
 ;;; test-gptel-tools-agent-git.el ends here

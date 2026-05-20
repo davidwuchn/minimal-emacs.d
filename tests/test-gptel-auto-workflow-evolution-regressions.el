@@ -365,13 +365,29 @@ Single keyword 'contradictory' (severity 0.3): (min 0.8 (/ 0.3 2.0)) = 0.15."
       (should (equal sentinel (cons 99 1.0))))))
 
 (ert-deftest regression/auto-workflow-evolution/allium-diff-minimal-pairs-guard-callback ()
-  "Guard clause: when fboundp not met, callback receives (99 . 99)."
-  (let ((called-p nil) (sentinel nil))
-    (gptel-auto-workflow--allium-diff-minimal-pairs
-     "ha" "hb"
-     (lambda (r) (setq called-p t sentinel r)))
-    (should called-p)
-    (should (equal sentinel (cons 99 99)))))
+  "Guard clause: when fboundp not met, callback receives (99 . 99).
+When fboundp IS met (allium loaded by earlier test), the function dispatches
+to the async LLM path (tested implicitly by the real pipeline)."
+  (let ((called-p nil) (sentinel nil)
+        (distill-fn (and (fboundp 'gptel-auto-experiment--allium-distill)
+                         (symbol-function 'gptel-auto-experiment--allium-distill))))
+    (unwind-protect
+        (progn
+          ;; Temporarily remove allium fboundp to force sync fallback path
+          (when distill-fn
+            (fmakunbound 'gptel-auto-experiment--allium-distill)
+            (fmakunbound 'gptel-auto-experiment--allium-check))
+          (gptel-auto-workflow--allium-diff-minimal-pairs
+           "ha" "hb"
+           (lambda (r) (setq called-p t sentinel r)))
+          (should called-p)
+          (should (equal sentinel (cons 99 99))))
+      ;; Restore allium functions
+      (when distill-fn
+        (fset 'gptel-auto-experiment--allium-distill distill-fn)
+        (when-let ((check-fn (and (fboundp 'gptel-auto-experiment--allium-check)
+                                  (symbol-function 'gptel-auto-experiment--allium-check))))
+          (fset 'gptel-auto-experiment--allium-check check-fn))))))
 
 ;; ─── Allium Feed-Forward Tests ───
 
