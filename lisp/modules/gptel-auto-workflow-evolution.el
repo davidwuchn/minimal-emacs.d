@@ -2063,14 +2063,15 @@ Maps nucleus VSM layers to our system components:
                 (exps-dir (expand-file-name "var/tmp/experiments" root))
                 (now (float-time))
                 (pruned 0) (removed-worktrees 0) (cleaned-temp 0))
-           ;; 1. Prune experiment result dirs older than 14 days
-           (when (file-directory-p exps-dir)
-             (dolist (d (directory-files exps-dir t "\\`[0-9]+T" t))
-               (when (> (- now (float-time (file-attribute-modification-time
-                                           (file-attributes d))))
-                        (* 14 24 3600))
-                 (delete-directory d t)
-                 (setq pruned (1+ pruned)))))
+            ;; 1. Prune experiment result dirs older than 14 days
+            (when (file-directory-p exps-dir)
+              (dolist (d (directory-files exps-dir t "\\`[0-9]+T" t))
+                (let ((attrs (and d (file-attributes d))))
+                  (when (and attrs
+                             (> (- now (float-time (file-attribute-modification-time attrs)))
+                                (* 14 24 3600)))
+                    (delete-directory d t)
+                    (setq pruned (1+ pruned))))))
            ;; 2. Remove stale prunable git worktrees
            (dolist (wt (split-string (shell-command-to-string "git worktree list --porcelain") "\n" t))
              (when (string-match "prunable" wt)
@@ -2084,12 +2085,14 @@ Maps nucleus VSM layers to our system components:
                (when (string-match "[0-9]+" pid)
                  (signal-process (string-to-number pid) 'sigterm)
                  (message "[cleanup] Killed stale fg-daemon pid %s" pid))))
-           ;; 4. Clean /tmp/gptel-* files older than 2 hours
-           (dolist (f (directory-files "/tmp" t "gptel-"))
-             (when (> (- now (float-time (file-attribute-modification-time (file-attributes f))))
-                      (* 2 3600))
-               (delete-file f t)
-               (setq cleaned-temp (1+ cleaned-temp))))
+            ;; 4. Clean /tmp/gptel-* files older than 2 hours
+            (dolist (f (directory-files "/tmp" t "gptel-"))
+              (let ((attrs (and f (file-attributes f))))
+                (when (and attrs
+                           (> (- now (float-time (file-attribute-modification-time attrs)))
+                              (* 2 3600)))
+                  (delete-file f t)
+                  (setq cleaned-temp (1+ cleaned-temp)))))
            ;; 5. Truncate daemon log if >10MB (keep last 1000 lines)
            (let ((log-file (expand-file-name "var/tmp/cron/copilot-auto-workflow.log" root)))
              (when (and (file-exists-p log-file)
