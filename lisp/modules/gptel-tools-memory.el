@@ -39,7 +39,12 @@ Uses caching to avoid repeated filesystem lookups."
 
 (defun gptel-tools-memory--resolve-path (slug &optional knowledge-p)
   "Resolve SLUG to an absolute file path.
-If KNOWLEDGE-P, use knowledge directory; otherwise memories."
+If KNOWLEDGE-P, use knowledge directory; otherwise memories.
+SIGNALS an error if SLUG contains path traversal or invalid characters."
+  (when (null slug)
+    (error "Slug must not be nil"))
+  (when (string-match-p "\\.\\./" slug)
+    (error "Slug must not contain path traversal sequences"))
   (let* ((root (gptel-tools-memory--project-root))
          (base-dir (expand-file-name
                     (if knowledge-p
