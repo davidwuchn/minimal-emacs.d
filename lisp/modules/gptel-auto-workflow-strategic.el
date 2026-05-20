@@ -135,6 +135,7 @@ SOURCE defaults to external when FINDINGS look like external research."
             :findings findings
             :digested (or (plist-get trace :digested) findings)
             :source inferred-source
+            :research-variant (or (and (boundp 'research-variant) research-variant) "default")
             :controller-decision (or (plist-get trace :controller-decision) "persisted")
             :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))))
 
@@ -607,6 +608,39 @@ Returns placeholder message if TOPICS is nil or empty."
                (seq-take topic-list 10)
                "\n")))))
 
+(defun gptel-auto-workflow--select-best-research-variant ()
+  "Select a research variant by champion league (reuses strategy infrastructure).
+Returns the variant file stem (e.g. \"nil-safety\") or nil for default."
+  (let* ((variants-dir (expand-file-name
+                        "assistant/strategies/research-variants"
+                        (gptel-auto-workflow--effective-project-root)))
+         (variant-files (when (file-directory-p variants-dir)
+                          (directory-files variants-dir nil "\\.md\\'"))))
+    (when variant-files
+      (let* ((stems (mapcar (lambda (f) (file-name-sans-extension f)) variant-files))
+             (chosen (if (and (boundp 'gptel-auto-workflow--champion-strategy)
+                              gptel-auto-workflow--champion-strategy
+                              (member gptel-auto-workflow--champion-strategy stems))
+                         ;; Champion is a valid variant — use it
+                         gptel-auto-workflow--champion-strategy
+                       ;; No champion or not a variant — try PCR
+                       (if (< (random 100) 20)  ; 20% explore
+                           (nth (random (length stems)) stems)
+                         (car stems)))))  ; default to first
+        (message "[research-variant] Selected: %s" chosen)
+        chosen))))
+
+(defun gptel-auto-workflow--load-research-variant-content (variant-name)
+  "Load RESEARCH-VARIANT-NAME .md content, or nil if missing."
+  (when variant-name
+    (let ((vf (expand-file-name
+               (format "assistant/strategies/research-variants/%s.md" variant-name)
+               (gptel-auto-workflow--effective-project-root))))
+      (when (file-exists-p vf)
+        (with-temp-buffer
+          (insert-file-contents vf)
+          (string-trim (buffer-string)))))))
+
 (defun gptel-auto-workflow--build-research-prompt ()
   "Build external research prompt by loading RESEARCHER.md skill.
 
@@ -622,12 +656,18 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (skill-content (gptel-auto-workflow--load-research-skill))
          (directive-content (gptel-auto-workflow--load-directive-skill))
          (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
+         ;; Research variant selected by champion league (reuses strategy infrastructure)
+         (research-variant (gptel-auto-workflow--select-best-research-variant))
+         (variant-content (gptel-auto-workflow--load-research-variant-content research-variant))
          ;; Load AutoTTS-style strategy guidance via {{strategy-guidance}} template injection only
          (source-guidance (when (fboundp 'gptel-auto-workflow--apply-source-priority-to-prompt)
                             (gptel-auto-workflow--apply-source-priority-to-prompt "")))
          (recent-outcomes (gptel-auto-workflow--build-recent-trace-outcomes-string)))
     (concat (or base-prompt "")
             "\n\n"
+            (if variant-content
+                (concat variant-content "\n\n")
+              "")
             "## Dynamic Context\n\n"
             (if (string-empty-p skill-content)
                 ""
