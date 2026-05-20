@@ -766,15 +766,28 @@ Returns empty string when no trace data is available."
 
 (defun gptel-auto-workflow--load-strategy-guidance-json ()
   "Load strategy guidance JSON from data/ directory.
+When `gptel-auto-workflow--current-experiment-axis' is set, tries the
+axis-specific file first (strategy-guidance-K.json), falling back to global.
 Returns plist with beta, own-priority, etc, or nil if not found."
   (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data"
                                      (gptel-auto-workflow--effective-project-root)))
-         (file (expand-file-name "strategy-guidance.json" data-dir)))
+         (axis (and (boundp 'gptel-auto-workflow--current-experiment-axis)
+                    gptel-auto-workflow--current-experiment-axis
+                    (not (equal gptel-auto-workflow--current-experiment-axis "?"))
+                    (format "%s" gptel-auto-workflow--current-experiment-axis)))
+         (axis-file (when axis
+                      (expand-file-name (format "strategy-guidance-%s.json"
+                                                (string-remove-prefix ":" axis)) data-dir)))
+         (file (if (and axis-file (file-exists-p axis-file))
+                   axis-file
+                 (expand-file-name "strategy-guidance.json" data-dir))))
     (when (file-exists-p file)
       (condition-case err
           (let ((json-object-type 'plist)
                 (json-key-type 'keyword))
-            (json-read-file file))
+            (prog1 (json-read-file file)
+              (when (and axis-file (file-exists-p axis-file))
+                (message "[autotts] Using per-axis guidance for %s" axis))))
         (error
          (message "[research] Failed to load strategy guidance: %s" err)
          nil)))))
