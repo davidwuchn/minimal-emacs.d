@@ -2055,8 +2055,25 @@ Maps nucleus VSM layers to our system components:
       (message "[vsm] 相克: Metal(S2) weak → Fire(S4) should coordinate backends"))
      (t
       (message "[vsm] 相生: All layers balanced — generating cycle active")))
-    ;; Minimal pair detection (verbum probe pattern)
-    (condition-case nil
+     ;; Prune experiment directories older than 14 days to prevent disk fill
+     (condition-case nil
+         (let* ((root (gptel-auto-workflow--worktree-base-root))
+                (exps-dir (and root (expand-file-name "var/tmp/experiments" root)))
+                (cutoff (* 14 24 3600))
+                (now (float-time))
+                (pruned 0))
+           (when (and exps-dir (file-directory-p exps-dir))
+             (dolist (d (directory-files exps-dir t "\\`[0-9]+T" t))
+               (when (> (- now (float-time (file-attribute-modification-time
+                                           (file-attributes d))))
+                        cutoff)
+                 (delete-directory d t)
+                 (setq pruned (1+ pruned))))
+             (when (> pruned 0)
+               (message "[cleanup] Pruned %d experiment dirs older than 14 days" pruned))))
+       (error nil))
+     ;; Minimal pair detection (verbum probe pattern)
+     (condition-case nil
         (let* ((results (gptel-auto-workflow--parse-all-results))
                (first-target (when results (plist-get (car results) :target))))
           (when first-target
