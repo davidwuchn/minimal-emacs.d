@@ -4042,21 +4042,6 @@ Used by skill-governance to select candidates for A/B testing."
            (fboundp 'gptel-auto-workflow--evolution-repo-root))
   (gptel-auto-workflow--evolution-repo-root))
 
+)
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-)
