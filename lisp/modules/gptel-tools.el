@@ -304,6 +304,8 @@ START-LINE and END-LINE specify the line range to return."
 TOOL-CB is the callback to invoke with processed results.
 TOOL-NAME is the tool name for error messages.
 NO-RESULT-MSG is the message when result is nil."
+  (unless (functionp tool-cb)
+    (error "gptel-tools--wrap-result-callback: tool-cb must be a function, got %S" tool-cb))
   (lambda (result)
     (cond
      ((null result)
