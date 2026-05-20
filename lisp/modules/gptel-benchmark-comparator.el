@@ -42,14 +42,18 @@ Call this when benchmark files are updated."
   (unless (and name (stringp name) (not (string-empty-p name)))
     (signal 'wrong-type-argument (list "stringp" name)))
   (let* ((benchmark-a (gptel-benchmark-load-result name version-a))
-         (benchmark-b (gptel-benchmark-load-result name version-b))
-         (summary-a (gptel-benchmark-summarize-results benchmark-a))
-         (summary-b (gptel-benchmark-summarize-results benchmark-b)))
-    (list :version-a version-a
-          :version-b version-b
-          :summary-a summary-a
-          :summary-b summary-b
-          :comparison (gptel-benchmark-compare-summaries summary-a summary-b))))
+         (benchmark-b (gptel-benchmark-load-result name version-b)))
+    (when (null benchmark-a)
+      (signal 'user-error (format "Benchmark file not found for %s version %s" name version-a)))
+    (when (null benchmark-b)
+      (signal 'user-error (format "Benchmark file not found for %s version %s" name version-b)))
+    (let* ((summary-a (gptel-benchmark-summarize-results benchmark-a))
+           (summary-b (gptel-benchmark-summarize-results benchmark-b)))
+      (list :version-a version-a
+            :version-b version-b
+            :summary-a summary-a
+            :summary-b summary-b
+            :comparison (gptel-benchmark-compare-summaries summary-a summary-b)))))
 
 (defun gptel-benchmark-baseline-file-compare (name)
   "Compare current version of NAME against baseline using file-based approach."
