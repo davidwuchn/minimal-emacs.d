@@ -1,1 +1,0 @@
-{"name":"progressive-detail","version":"1.0","hypothesis":"Escalating detail level based on experiment progress (high early, compressed late) optimizes token usage without sacrificing improvement quality","axis":"F","components":["phase-detection","adaptive-compression"]}

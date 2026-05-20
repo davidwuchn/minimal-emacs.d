@@ -1,1 +1,0 @@
-{"name":"adaptive-section-reorder","version":"1.0","hypothesis":"Dynamically reordering prompt sections based on past experiment impact scores improves effectiveness.","axis":"C","components":["section-ordering","experiment-analysis","impact-scoring"]}

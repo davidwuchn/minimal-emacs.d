@@ -1,1 +1,0 @@
-{"name":"outcome-reasoning-context","version":"1.0","hypothesis":"Retrieving context based on similar outcomes (improvements/regressions) is more effective than file similarity","axis":"B","components":["outcome-categorization","backward-reasoning","improvement-patterns"]}

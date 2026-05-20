@@ -1,1 +1,0 @@
-{"name":"strategy-failure-driven-prioritization","version":"1.0","hypothesis":"Reordering guidance by observed failure frequency improves fix accuracy.","axis":"C","components":["failure-frequency","section-reorder"]}

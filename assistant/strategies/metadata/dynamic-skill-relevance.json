@@ -1,1 +1,0 @@
-{"name":"dynamic-skill-relevance","version":"1.0","hypothesis":"Analyzing code patterns to dynamically prioritize skills improves targeting.","axis":"E","components":["pattern-detection","skill-scoring","dynamic-guidance"]}

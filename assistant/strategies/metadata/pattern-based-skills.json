@@ -1,1 +1,0 @@
-{"name":"pattern-based-skills","version":"1.0","hypothesis":"Dynamically selecting skills based on detected code patterns improves skill relevance.","axis":"E","components":["pattern-detection","dynamic-skills"]}

@@ -1,1 +1,0 @@
-{"name":"failure-driven-skill-selection","version":"1.0","hypothesis":"Loading skills dynamically based on detected failure pattern signatures will yield more targeted improvements","axis":"E","components":["failure-pattern-analysis","dynamic-skill-loading"]}

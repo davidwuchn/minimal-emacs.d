@@ -1,1 +1,0 @@
-{"name":"domain-section-reorder","version":"1.0","hypothesis":"Different file domains need different section priorities for optimal results","axis":"C","components":["domain-detection","section-prioritization","domain-guidance"]}

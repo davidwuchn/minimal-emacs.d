@@ -1,1 +1,0 @@
-{"name":"complementary-section-optimization","version":"1.0","hypothesis":"Selecting complementary non-redundant sections maximizes unique coverage per token","axis":"C,A","components":["complementary-selection","coverage-optimization","section-pruning"]}

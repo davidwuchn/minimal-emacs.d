@@ -10,6 +10,8 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'gptel-tools-agent-error)
+(require 'gptel-tools-agent-prompt-analyze)
+(require 'gptel-tools-agent-experiment-loop)
 
 ;;; Pattern matching tests
 
@@ -79,6 +81,47 @@
 (ert-deftest test-error/aborted-output-p-normal ()
   "Normal output should not be aborted."
   (should-not (gptel-auto-experiment--aborted-agent-output-p "Task completed successfully")))
+
+;;; Grade-failure-error-output tests
+
+(ert-deftest test-error/grade-failure-error-output-normal ()
+  "Normal grade details (matching rubric pattern) should return nil."
+  (let ((result (gptel-auto-experiment--grade-failure-error-output
+                 "Grader result for task: Grade output\nSUMMARY: SCORE: 4/4"
+                 "Some agent output")))
+    (should (null result))))
+
+(ert-deftest test-error/grade-failure-error-output-retryable-string ()
+  "Retryable string grade details should return the string."
+  (let ((result (gptel-auto-experiment--grade-failure-error-output
+                 "operation timed out" "Some output")))
+    (should (stringp result))
+    (should (string-match-p "timed out" result))))
+
+(ert-deftest test-error/grade-failure-error-output-both-nil ()
+  "Both nil should return nil."
+  (let ((result (gptel-auto-experiment--grade-failure-error-output nil nil)))
+    (should (null result))))
+
+(ert-deftest test-error/grade-failure-error-output-non-retryable-string ()
+  "Non-retryable string grade-details should fall through to agent output."
+  (let ((result (gptel-auto-experiment--grade-failure-error-output
+                 "success" "Error: timeout")))
+    (should (stringp result))
+    (should (string-match-p "Error" result))))
+
+(ert-deftest test-error/grade-failure-error-output-agent-output-format ()
+  "Agent output starting with Error: should be used when grade-details is nil."
+  (let ((result (gptel-auto-experiment--grade-failure-error-output
+                 nil "Error: curl failed")))
+    (should (stringp result))
+    (should (string-match-p "curl" result))))
+
+(ert-deftest test-error/grade-failure-error-output-agent-output-non-error ()
+  "Agent output without Error: prefix should return nil with nil grade-details."
+  (let ((result (gptel-auto-experiment--grade-failure-error-output
+                 nil "Task completed")))
+    (should (null result))))
 
 (provide 'test-gptel-tools-agent-error)
 ;;; test-gptel-tools-agent-error.el ends here

@@ -339,6 +339,7 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/gptel-ext-fsm-utils.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-ext-retry.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-ext-tool-sanitize.el" root))
+    (load-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
     (condition-case nil (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)) (error (message "[reload] strategic.el skipped (load error)")))
     (condition-case nil (load-file (expand-file-name "lisp/modules/strategic-daemon-functions.el" root)) (error (message "[reload] daemon-functions.el skipped (load error)")))

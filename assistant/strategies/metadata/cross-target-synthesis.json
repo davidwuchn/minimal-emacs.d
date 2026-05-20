@@ -1,1 +1,0 @@
-{"name":"cross-target-synthesis","version":"1.0","hypothesis":"Cross-pollinating patterns from other targets accelerates discovery of effective improvements","axis":"D","components":["cross-target-patterns","success-synthesis","failure-aggregation"]}

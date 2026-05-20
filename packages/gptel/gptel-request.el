@@ -1039,7 +1039,9 @@ MODE-SYM is typically a major-mode symbol."
          `(("content-type" . ,content-type) ,@headers)))
     (with-current-buffer (url-retrieve-synchronously url 'silent)
       (goto-char url-http-end-of-headers)
-      (gptel--json-read))))
+      (condition-case nil
+          (gptel--json-read)
+        (error nil)))))
 
 (defsubst gptel-prompt-prefix-string ()
   "Prefix before user prompts in `gptel-mode'."
@@ -2927,7 +2929,10 @@ PROCESS and _STATUS are process parameters."
           (if (not (search-backward (plist-get info :uuid) nil t))
               (plist-put info :error "Could not parse Curl response")
             (backward-char)
-            (pcase-let* ((`(,_ . ,header-size) (read (current-buffer)))
+            (pcase-let* ((`(,_ . ,header-size)
+                          (condition-case nil
+                              (read (current-buffer))
+                            (error '(0 . 0))))
                          (response (progn (goto-char header-size)
                                           (condition-case nil (gptel--json-read)
                                             (error 'json-read-error))))
@@ -3069,8 +3074,9 @@ PROCESS and _STATUS are process parameters."
           (setf (alist-get process gptel--request-alist nil 'remove) nil)
           (delete-process process)
           (kill-buffer (process-buffer process))))
-    (let ((gptel-curl--sentinel-depth (1+ gptel-curl--sentinel-depth))
-          (proc-buf (process-buffer process)))
+    (condition-case sentinel-err
+        (let ((gptel-curl--sentinel-depth (1+ gptel-curl--sentinel-depth))
+              (proc-buf (process-buffer process)))
     (when-let* (((eq (process-status process) 'exit))
                 (fsm (car (alist-get process gptel--request-alist)))
                 (proc-info (gptel-fsm-info fsm))
@@ -3112,7 +3118,16 @@ PROCESS and _STATUS are process parameters."
       (gptel--fsm-transition fsm))      ;TYPE -> next
     (setf (alist-get process gptel--request-alist nil 'remove) nil)
     (delete-process process)
-    (kill-buffer proc-buf))))
+    (kill-buffer proc-buf))
+      (error
+       (message "[gptel] Sentinel error for %s: %s (depth=%d)"
+                (condition-case nil (process-name process) (error "?"))
+                sentinel-err gptel-curl--sentinel-depth)
+       (ignore-errors
+         (setf (alist-get process gptel--request-alist nil 'remove) nil)
+         (delete-process process)
+         (when (process-buffer process)
+           (kill-buffer (process-buffer process))))))))
 
 (defun gptel-curl--parse-response (proc-info)
   "Parse the buffer BUF with curl's response.
@@ -3123,7 +3138,10 @@ PROC-INFO is a plist with contextual information."
     (if (not (search-backward uuid nil t))
         (list nil nil nil "Could not parse curl response.")
       (backward-char)
-      (pcase-let* ((`(,_ . ,header-size) (read (current-buffer))))
+      (pcase-let* ((`(,_ . ,header-size)
+                    (condition-case nil
+                        (read (current-buffer))
+                      (error '(0 . 0)))))
         (goto-char (point-min))
         (if-let* ((http-msg (string-trim
                              (buffer-substring (line-beginning-position)

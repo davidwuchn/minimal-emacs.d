@@ -1,1 +1,0 @@
-{"name":"cyclomatic-weighted-guidance","version":"1.0","hypothesis":"Weighting improvement guidance by cyclomatic complexity focuses attention on high-risk code sections","axis":"D","components":["complexity-metrics","risk-weighting"]}

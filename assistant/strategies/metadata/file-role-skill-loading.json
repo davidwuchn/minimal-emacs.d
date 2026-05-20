@@ -1,1 +1,0 @@
-{"name":"file-role-skill-loading","version":"1.0","hypothesis":"Loading role-specific skill subsets based on file type (test vs source vs config) improves targeted code improvements.","axis":"E","components":["file-role","role-based-skills"]}

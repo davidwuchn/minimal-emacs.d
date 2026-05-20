@@ -1,1 +1,0 @@
-{"name":"topic-knowledge-amplification","version":"1.0","hypothesis":"Amplifying topic knowledge for detected domains improves domain-specific code improvements.","axis":"B","components":["domain-detection","knowledge-amplification"]}

@@ -1,1 +1,0 @@
-{"name":"adaptive-skill-routing","version":"1.0","hypothesis":"Dynamically routing skills based on detected code patterns improves relevance","axis":"E","components":["pattern-detection","skill-routing","dynamic-loading"]}

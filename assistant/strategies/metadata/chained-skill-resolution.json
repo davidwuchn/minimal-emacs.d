@@ -1,1 +1,0 @@
-{"name":"chained-skill-resolution","version":"1.0","hypothesis":"Sequential skill loading with accumulated context produces more coherent and layered guidance","axis":"E","components":["skill-chaining","context-accumulation","dependency-ordering"]}

@@ -1,1 +1,0 @@
-{"name":"context-cascade","version":"1.0","hypothesis":"Prepending domain topic knowledge and appending cross-target patterns improves contextual relevance.","axis":"B","components":["context-retrieval","cross-target"]}

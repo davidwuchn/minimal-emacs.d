@@ -1,1 +1,0 @@
-{"name":"failure-trajectory-tracking","version":"1.0","hypothesis":"Tracking failure trajectories across experiments prevents redundant exploration","axis":"D","components":["trajectory-analysis","failure-patterns"]}

@@ -1,1 +1,0 @@
-{"name":"severity-weighted-skills","version":"1.0","hypothesis":"Loading skills weighted by detected pattern severity produces more focused solutions","axis":"E","components":["skill-weighting","severity-scoring"]}

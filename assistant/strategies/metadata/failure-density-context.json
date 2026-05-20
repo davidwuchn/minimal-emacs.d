@@ -1,1 +1,0 @@
-{"name":"failure-density-context","version":"1.0","hypothesis":"Prioritizing context from code regions with high historical failure density improves AI targeting.","axis":"B/D","components":["risk-weighting","failure-density","context-prioritization"]}

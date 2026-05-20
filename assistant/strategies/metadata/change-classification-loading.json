@@ -1,1 +1,0 @@
-{"name":"change-classification-loading","version":"1.0","hypothesis":"Classifying changes as refactor/bugfix/feature and loading targeted skills/context produces better alignment with improvement goals.","axis":"E","components":["change-classification","type-specific-skills","type-specific-context"]}

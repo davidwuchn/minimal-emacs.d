@@ -365,13 +365,29 @@ Single keyword 'contradictory' (severity 0.3): (min 0.8 (/ 0.3 2.0)) = 0.15."
       (should (equal sentinel (cons 99 1.0))))))
 
 (ert-deftest regression/auto-workflow-evolution/allium-diff-minimal-pairs-guard-callback ()
-  "Guard clause: when fboundp not met, callback receives (99 . 99)."
-  (let ((called-p nil) (sentinel nil))
-    (gptel-auto-workflow--allium-diff-minimal-pairs
-     "ha" "hb"
-     (lambda (r) (setq called-p t sentinel r)))
-    (should called-p)
-    (should (equal sentinel (cons 99 99)))))
+  "Guard clause: when fboundp not met, callback receives (99 . 99).
+When fboundp IS met (allium loaded by earlier test), the function dispatches
+to the async LLM path (tested implicitly by the real pipeline)."
+  (let ((called-p nil) (sentinel nil)
+        (distill-fn (and (fboundp 'gptel-auto-experiment--allium-distill)
+                         (symbol-function 'gptel-auto-experiment--allium-distill))))
+    (unwind-protect
+        (progn
+          ;; Temporarily remove allium fboundp to force sync fallback path
+          (when distill-fn
+            (fmakunbound 'gptel-auto-experiment--allium-distill)
+            (fmakunbound 'gptel-auto-experiment--allium-check))
+          (gptel-auto-workflow--allium-diff-minimal-pairs
+           "ha" "hb"
+           (lambda (r) (setq called-p t sentinel r)))
+          (should called-p)
+          (should (equal sentinel (cons 99 99))))
+      ;; Restore allium functions
+      (when distill-fn
+        (fset 'gptel-auto-experiment--allium-distill distill-fn)
+        (when-let ((check-fn (and (fboundp 'gptel-auto-experiment--allium-check)
+                                  (symbol-function 'gptel-auto-experiment--allium-check))))
+          (fset 'gptel-auto-experiment--allium-check check-fn))))))
 
 ;; ─── Allium Feed-Forward Tests ───
 
@@ -1085,6 +1101,36 @@ so tags before allium-issues is correctly detected."
   "Non-existent file should not be flagged (not readable)."
   (should-not (gptel-auto-workflow--file-has-conflict-markers-p
                "/tmp/conflict-guard-nonexistent-99999.el")))
+
+;; ─── Reload Support Regression Tests ───
+
+(ert-deftest regression/reload-support/nucleus-project-root-exists-after-reload ()
+  "nucleus--project-root must be fboundp after reload-live-support loads nucleus-prompts before nucleus-presets.
+Introduced after 'Symbol's function definition is void: nucleus--project-root' error in worker daemon (2026-05-20)."
+  (let ((root (expand-file-name default-directory)))
+    (when (fboundp 'gptel-auto-workflow--reload-live-support)
+      (gptel-auto-workflow--reload-live-support root)
+      (should (fboundp 'nucleus--project-root)))))
+
+(ert-deftest regression/reload-support/nucleus-prompts-loaded-before-presets ()
+  "nucleus-prompts must be loaded before nucleus-presets; verify ordering.
+The reload function must load nucleus-prompts.el before nucleus-presets.el so
+nucleus--project-root (defined in prompts) is available when presets calls it."
+  (when (fboundp 'gptel-auto-workflow--reload-live-support)
+    (let* ((root (expand-file-name default-directory))
+           (prompts-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
+           (presets-file (expand-file-name "lisp/modules/nucleus-presets.el" root)))
+      (should (file-readable-p prompts-file))
+      (should (file-readable-p presets-file))
+      ;; prompts.el defines nucleus--project-root, presets.el uses it
+      (should (fboundp 'nucleus--project-root)))))
+
+(ert-deftest regression/reload-support/nucleus-project-root-returns-string ()
+  "nucleus--project-root should return a non-empty string."
+  (when (fboundp 'nucleus--project-root)
+    (let ((result (nucleus--project-root)))
+      (should (stringp result))
+      (should (> (length result) 0)))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 

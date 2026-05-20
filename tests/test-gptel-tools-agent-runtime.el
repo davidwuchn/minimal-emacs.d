@@ -50,5 +50,30 @@
   "Link should return nil for missing source."
   (should-not (gptel-auto-workflow--link-shared-runtime-path "/nonexistent/source" "/tmp/target")))
 
+(ert-deftest test-runtime/link-shared-symlink-same-target ()
+  "Link should return t when symlink already points to source."
+  (let* ((real-file (make-temp-file "runtime-real"))
+         (link-file (make-temp-file "runtime-link")))
+    (delete-file link-file)
+    (make-symbolic-link real-file link-file)
+    (should (gptel-auto-workflow--link-shared-runtime-path real-file link-file))
+    (delete-file link-file)
+    (delete-file real-file)))
+
+(ert-deftest test-runtime/link-shared-symlink-different-target ()
+  "Link should replace symlink pointing to a different target."
+  (let* ((real-file (make-temp-file "runtime-real"))
+         (other-file (make-temp-file "runtime-other"))
+         (link-file (make-temp-file "runtime-link")))
+    (delete-file link-file)
+    (make-symbolic-link other-file link-file)
+    (should (gptel-auto-workflow--link-shared-runtime-path real-file link-file))
+    ;; After link, link should point to real-file
+    (should (file-symlink-p link-file))
+    (should (string= (file-truename link-file) (file-truename real-file)))
+    (delete-file link-file)
+    (delete-file real-file)
+    (delete-file other-file)))
+
 (provide 'test-gptel-tools-agent-runtime)
 ;;; test-gptel-tools-agent-runtime.el ends here

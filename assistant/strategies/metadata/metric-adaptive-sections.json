@@ -1,1 +1,0 @@
-{"name":"metric-adaptive-sections","version":"1.0","hypothesis":"Section ordering should adapt to file characteristics for optimal context delivery","axis":"C","components":["metric-computation","adaptive-ordering"]}
