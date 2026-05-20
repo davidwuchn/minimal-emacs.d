@@ -30,13 +30,13 @@ if [ ! -S "$SOCKET_PATH" ]; then
     echo "[$(date '+%H:%M:%S')] Socket missing, restarting daemon" >> "$LOG"
     echo "$(date +%s)" > "$LAST_RESTART_FILE"
     MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-        bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null >/dev/null 2>&1' \
+        bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --fg-daemon="$1" </dev/null >/dev/null 2>&1' \
         "$DIR" "$SERVER_NAME" &
     exit 0
 fi
 
 # Check if daemon process exists
-DAEMON_PID=$(pgrep -f "emacs.*--daemon=${SERVER_NAME}" 2>/dev/null || true)
+DAEMON_PID=$(pgrep -f "emacs.*--fg-daemon=${SERVER_NAME}" 2>/dev/null || true)
 if [ -n "$DAEMON_PID" ]; then
     # Check if daemon is actively running (not stuck on I/O)
     PROC_STATE=$(cat /proc/$DAEMON_PID/status 2>/dev/null | grep "^State:" | awk '{print $2}' || echo "?")
@@ -53,7 +53,7 @@ if [ -n "$DAEMON_PID" ]; then
         rm -f "$SOCKET_PATH" 2>/dev/null || true
         echo "$(date +%s)" > "$LAST_RESTART_FILE"
         MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null >/dev/null 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --fg-daemon="$1" </dev/null >/dev/null 2>&1' \
             "$DIR" "$SERVER_NAME" &
         echo "[$(date '+%H:%M:%S')] Daemon restarted after pipe stuck" >> "$LOG"
         exit 0
@@ -71,7 +71,7 @@ if ! timeout "$MAX_WAIT" emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev
     # Restart
     echo "$(date +%s)" > "$LAST_RESTART_FILE"
     MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-        bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null >/dev/null 2>&1' \
+        bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --fg-daemon="$1" </dev/null >/dev/null 2>&1' \
         "$DIR" "$SERVER_NAME" &
     echo "[$(date '+%H:%M:%S')] Daemon restarted" >> "$LOG"
 fi

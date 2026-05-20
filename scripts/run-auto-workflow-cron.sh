@@ -319,8 +319,8 @@ stale_active_snapshot_recoverable() {
 
 worker_daemon_pids() {
     ps -eo pid=,args= | awk -v bg="--bg-daemon=$SERVER_NAME" \
-        -v d="--daemon=$SERVER_NAME" \
-        -v fg="--daemon=$SERVER_NAME" '
+        -v d="--fg-daemon=$SERVER_NAME" \
+        -v fg="--fg-daemon=$SERVER_NAME" '
         tolower($2) ~ /(^|\/)emacs/ && (index($0, bg) || index($0, d) || index($0, fg)) { print $1 }
     '
 }
@@ -1128,7 +1128,7 @@ ensure_worker_daemon() {
             MINIMAL_EMACS_WORKFLOW_ROLE="$ACTION" \
             MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
             MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" </dev/null >>"$3" 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --fg-daemon="$2" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     else
         env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
@@ -1137,7 +1137,7 @@ ensure_worker_daemon() {
             MINIMAL_EMACS_WORKFLOW_ROLE="$ACTION" \
             MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
             MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" </dev/null >>"$3" 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --fg-daemon="$2" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     fi
     for _ in $(seq 1 50); do
