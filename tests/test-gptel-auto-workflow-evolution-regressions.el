@@ -1262,6 +1262,87 @@ before run-at-time, because the deferral breaks the dynamic scope chain."
           (setq gptel-curl--sentinel-depth 0))
         (should (= gptel-curl--sentinel-depth 0))))))
 
+;; ─── TSV Utility Function Tests ───
+
+(ert-deftest regression/tsv-utilities/escape-handles-all-types ()
+  "gptel-auto-experiment--tsv-escape must handle nil, strings, and non-strings."
+  (should (not (gptel-auto-experiment--tsv-escape nil)))
+  (should (string= "hello" (gptel-auto-experiment--tsv-escape "hello")))
+  (should (string= "1" (gptel-auto-experiment--tsv-escape 1)))
+  (should (string= "a | b" (gptel-auto-experiment--tsv-escape "a\nb")))
+  (should (string= "a | b" (gptel-auto-experiment--tsv-escape "a\tb")))
+  (should (string= "a | b | c" (gptel-auto-experiment--tsv-escape "a\nb\rc"))))
+
+(ert-deftest regression/tsv-utilities/decision-token-normalization ()
+  "gptel-auto-experiment--tsv-decision-token must normalize :prefix tokens."
+  (should (string= "kept" (gptel-auto-experiment--tsv-decision-token ":kept")))
+  (should (string= "discarded" (gptel-auto-experiment--tsv-decision-token "discarded")))
+  (should (string= nil (gptel-auto-experiment--tsv-decision-token nil)))
+  (should (string= nil (gptel-auto-experiment--tsv-decision-token "")))
+  (should (string= nil (gptel-auto-experiment--tsv-decision-token "Has spaces"))))
+
+(ert-deftest regression/tsv-utilities/decision-label-extraction ()
+  "gptel-auto-experiment--tsv-decision-label must prefer :kept over fallbacks."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--plist-get)
+             (lambda (plist key &optional default)
+               (or (plist-get plist key) default)))
+            ((symbol-function 'gptel-auto-experiment--inspection-thrash-result-p)
+             (lambda (_) nil)))
+    (should (string= "kept" (gptel-auto-experiment--tsv-decision-label
+                             (list :kept t :comparator-reason "discarded"))))
+    (should (string= "discarded" (gptel-auto-experiment--tsv-decision-label
+                                  (list :comparator-reason ":discarded"))))
+    (should (string= "discarded" (gptel-auto-experiment--tsv-decision-label
+                                  (list :decision "discarded"))))
+    (should (string= "discarded" (gptel-auto-experiment--tsv-decision-label
+                                  (list :grader-reason "discarded"))))
+    (should (string= "discarded" (gptel-auto-experiment--tsv-decision-label
+                                  (list :unknown "val"))))))
+
+(ert-deftest regression/tsv-utilities/staging-pending-plist ()
+  "gptel-auto-experiment--staging-pending-result must set :kept nil and decision staging-pending."
+  (let* ((original (list :kept t :score 0.5 :target "foo.el"))
+         (pending (gptel-auto-experiment--staging-pending-result original)))
+    (should (not (plist-get pending :kept)))
+    (should (string= "staging-pending" (plist-get pending :decision)))
+    (should (string= "staging-pending" (plist-get pending :comparator-reason)))
+    ;; Original should be unchanged
+    (should (plist-get original :kept))))
+
+;; ─── Tool Recovery Tests (gptel-ext-tool-sanitize.el) ───
+
+(defconst test-tool-sanitize-file
+  (expand-file-name "lisp/modules/gptel-ext-tool-sanitize.el"
+                    (file-name-directory
+                     (directory-file-name
+                      (file-name-directory
+                       (or load-file-name buffer-file-name default-directory)))))
+  "Absolute path to gptel-ext-tool-sanitize.el.")
+
+(ert-deftest regression/tool-recovery/normalize-tool-name ()
+  "my/gptel--normalize-tool-name must normalize case, underscores, hyphens."
+  (load-file test-tool-sanitize-file)
+  (should (string= "read" (my/gptel--normalize-tool-name "Read")))
+  (should (string= "read" (my/gptel--normalize-tool-name "READ")))
+  (should (string= "codeinspect" (my/gptel--normalize-tool-name "Code_Inspect")))
+  (should (string= "codeinspect" (my/gptel--normalize-tool-name "Code-Inspect")))
+  (should (not (my/gptel--normalize-tool-name nil)))
+  (should (string= "" (my/gptel--normalize-tool-name ""))))
+
+(ert-deftest regression/tool-recovery/find-tool-by-name ()
+  "my/gptel--find-tool-by-name must find tools by exact and fuzzy name."
+  (require 'gptel)
+  (load-file test-tool-sanitize-file)
+  (let* ((mock-tool (gptel-make-tool :name "Read" :func (lambda (_) nil)))
+         (tools (list mock-tool)))
+    (should (my/gptel--find-tool-by-name tools "Read"))
+    (should (not (my/gptel--find-tool-by-name tools "Write")))
+    ;; Fuzzy: case-insensitive
+    (should (my/gptel--find-tool-fuzzy "read" tools))
+    (should (my/gptel--find-tool-fuzzy "READ" tools))
+    ;; Fuzzy: underscore normalization — "Code_Inspect" is not "Read"
+    (should (not (my/gptel--find-tool-fuzzy "Code_Inspect" tools)))))
+
 ;; ─── Sentinel Deferral Regression Tests (post-early-init.el) ───
 
 ;; Ensure gptel package is on load-path (subtree under packages/gptel/)

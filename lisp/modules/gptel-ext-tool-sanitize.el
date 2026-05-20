@@ -212,16 +212,18 @@ RunAgent was registered, leaving it out of the buffer's tool list."
           (cond
            (matched-tool
             (my/gptel--repair-tool-call tc (gptel-tool-name matched-tool)))
-           ((or direct-tool fuzzy-match)
-            (let* ((global-tool (or direct-tool fuzzy-match))
-                   (correct-name (gptel-tool-name global-tool))
-                   (new-tools (append tools (list global-tool))))
-              (my/gptel--repair-tool-call tc correct-name)
-              (message "gptel: recovering tool call %S not in FSM tools \
-(preset misconfiguration); injecting from global registry" name)
-              (setq info (plist-put info :tools new-tools))
-              (setf (gptel-fsm-info fsm) info)
-              (setq tools new-tools)))
+            ((or direct-tool fuzzy-match)
+             (let* ((global-tool (or direct-tool fuzzy-match))
+                    (correct-name (gptel-tool-name global-tool))
+                    (new-tools (append tools (list global-tool))))
+               (my/gptel--repair-tool-call tc correct-name)
+               ;; Log only the first time a tool is injected (avoid noise
+               ;; from repeated injections of the same tool in a session).
+               (unless (my/gptel--find-tool-by-name tools correct-name)
+                 (message "gptel: recovered tool %S (preset misconfiguration)" name))
+               (setq info (plist-put info :tools new-tools))
+               (setf (gptel-fsm-info fsm) info)
+               (setq tools new-tools)))
            (t
             (when (not (plist-get tc :result))
               (message "gptel: skipping malformed tool call \
