@@ -10,6 +10,16 @@
                                      (file-name-directory
                                       (or load-file-name buffer-file-name default-directory)))))
   (add-to-list 'load-path modules-dir))
+;; Ensure gptel subtree is on load-path
+(let ((gptel-dir (expand-file-name "../packages/gptel"
+                                   (file-name-directory
+                                    (or load-file-name buffer-file-name default-directory)))))
+  (add-to-list 'load-path gptel-dir))
+;; Ensure gptel-agent subtree is on load-path
+(let ((gptel-agent-dir (expand-file-name "../packages/gptel-agent"
+                                         (file-name-directory
+                                          (or load-file-name buffer-file-name default-directory)))))
+  (add-to-list 'load-path gptel-agent-dir))
 (load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-evolution.el"
                               (file-name-directory
                                (or load-file-name buffer-file-name default-directory))))
