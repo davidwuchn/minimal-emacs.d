@@ -133,7 +133,28 @@
                              (message "[gptel] Deferred sentinel error: %S" err)
                              (when (process-live-p process)
                                (delete-process process))))))
-                    (apply orig-fn process status args))))))
+                    (apply orig-fn process status args)))))
+  ;; ZOMBIE REAPER: Periodic cleanup of orphaned gptel curl processes.
+  ;; Even with sentinel condition-case guards, a process pipe can become
+  ;; orphaned (e.g. if Emacs's self-pipe blocks before the sentinel fires).
+  ;; This timer runs every 60s to kill any curl process not in the active
+  ;; request alist, preventing the self-pipe (fd 7) from blocking forever.
+  (run-at-time 60 60
+               (lambda ()
+                 (when (boundp 'gptel--request-alist)
+                   (let ((active-procs (mapcar #'car gptel--request-alist))
+                         (reaped 0))
+                     (dolist (proc (process-list))
+                       (when (and (process-live-p proc)
+                                  (string-match-p "curl" (process-name proc))
+                                  (not (memq proc active-procs)))
+                         (condition-case nil
+                             (progn
+                               (delete-process proc)
+                               (setq reaped (1+ reaped)))
+                           (error nil))))
+                     (when (> reaped 0)
+                       (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))))
 
 (provide 'post-early-init)
 
