@@ -659,29 +659,79 @@ Searches:
   "Variant name selected by champion league for the current skill load.
 Nil when the base SKILL.md is used. Set during `gptel-auto-workflow--load-skill'.")
 
-(defun gptel-auto-workflow--select-skill-variant (skill-dir skill-name)
-  "Select a champion variant for SKILL-NAME from SKILL-DIR/variants/.
+(defvar gptel-auto-workflow--current-experiment-axis nil
+  "KIBC-M axis (:K/:I/:B/:C/:M) of the experiment being set up.
+Used by variant selection to pick the axis-specific champion.")
+
+(defvar gptel-auto-workflow--variant-axis-champions (make-hash-table :test 'equal)
+  "Hash table \"skill::axis\" → variant-name for per-axis champion tracking.
+Each (skill, axis) pair has its own champion variant. Populated by
+`gptel-auto-workflow--refresh-variant-axis-champions' from TSV data.")
+
+(defun gptel-auto-workflow--refresh-variant-axis-champions ()
+  "Populate per-axis variant champions from all experiment results.
+Scans TSV for (:strategy :kibcm-axis :decision) triples and crowns
+the best variant per (skill, axis) pair. Called during evolution cycle."
+  (clrhash gptel-auto-workflow--variant-axis-champions)
+  (let ((by-key (make-hash-table :test 'equal)))
+    ;; Group by (strategy, axis) and count kept/total
+    (dolist (result (gptel-auto-workflow--parse-all-results))
+      (let* ((strategy (or (plist-get result :strategy) "template-default"))
+             (axis (or (plist-get result :kibcm-axis) "?"))
+             (key (format "%s::%s" strategy axis))
+             (kept (or (equal (plist-get result :decision) "kept")
+                       (eq (plist-get result :decision) t)))
+             (entry (or (gethash key by-key) (cons 0 0))))
+        (setcar entry (1+ (car entry)))
+        (when kept (setcdr entry (1+ (cdr entry))))
+        (puthash key entry by-key)))
+    ;; Crown champion per (strategy, axis) with ≥3 experiments
+    (maphash (lambda (key counts)
+               (let ((total (car counts))
+                     (kept (cdr counts)))
+                 (when (>= total 3)
+                   (let* ((rate (/ (float kept) total))
+                          (current (gethash key gptel-auto-workflow--variant-axis-champions))
+                          (current-rate (cdr current)))
+                     (unless (and current-rate (<= rate current-rate))
+                       (puthash key (cons (car (split-string key "::")) rate)
+                                gptel-auto-workflow--variant-axis-champions))))))
+             by-key)
+    (when (> (hash-table-count gptel-auto-workflow--variant-axis-champions) 0)
+      (message "[axis-champion] Loaded %d per-axis variant champions"
+               (hash-table-count gptel-auto-workflow--variant-axis-champions)))))
+
+(defun gptel-auto-workflow--best-variant-for-axis (variant-stems skill-name &optional axis)
+  "Return the best variant stem for SKILL-NAME on AXIS from VARIANT-STEMS.
+When AXIS is nil, returns the overall champion. Falls back to PCR exploration."
+  (let* ((key (format "%s::%s" skill-name (or axis "*")))
+         (champion (gethash key gptel-auto-workflow--variant-axis-champions)))
+    (when (and champion (member champion variant-stems))
+      champion)))
+
+(defun gptel-auto-workflow--select-skill-variant (skill-dir skill-name &optional axis)
+  "Select a champion variant for SKILL-NAME on AXIS from SKILL-DIR/variants/.
+AXIS is one of :K, :I, :B, :C, :M or nil for axis-agnostic.
 Returns variant stem or nil to use base SKILL.md."
   (setq gptel-auto-workflow--selected-skill-variant nil)
   (let ((variants-dir (when (and skill-dir (file-directory-p skill-dir))
                         (expand-file-name "variants" skill-dir))))
     (when (and variants-dir (file-directory-p variants-dir))
-      (let ((files (directory-files variants-dir nil "\\.md\\'"))
-            (stems nil))
-        (dolist (f files)
-          (let ((stem (file-name-sans-extension f)))
-            (push stem stems)))
+      (let* ((files (directory-files variants-dir nil "\\.md\\'"))
+             (stems (mapcar #'file-name-sans-extension files)))
         (when stems
-          (let* ((champion (and (boundp 'gptel-auto-workflow--champion-strategy)
+          (let* ((axis-champion (gptel-auto-workflow--best-variant-for-axis stems skill-name axis))
+                 (champion (and (boundp 'gptel-auto-workflow--champion-strategy)
                                 gptel-auto-workflow--champion-strategy
                                 (member gptel-auto-workflow--champion-strategy stems)
                                 gptel-auto-workflow--champion-strategy))
-                 (chosen (or champion
+                 (chosen (or axis-champion champion
                              (if (< (random 100) 20)
                                  (nth (random (length stems)) stems)
                                (car stems)))))
             (setq gptel-auto-workflow--selected-skill-variant chosen)
-            (message "[skill-variant] %s → %s" skill-name chosen)
+            (message "[skill-variant] %s%s → %s" skill-name
+                     (if axis (format " on %s" axis) "") chosen)
             chosen))))))
 
 (defun gptel-auto-workflow--load-skill (skill-name)

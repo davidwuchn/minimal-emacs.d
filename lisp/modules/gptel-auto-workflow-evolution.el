@@ -2038,6 +2038,9 @@ Maps nucleus VSM layers to our system components:
     (message "[vsm] S3-Control: %d backends in chain, watchdog 90min" backends)
     (message "[vsm] S4-Intel: %d strategies evolved, auto-backend-order active" strategies)
     (message "[vsm] S5-Identity: lambda notation, confidence tags, graphify patterns active")
+    ;; Refresh per-axis variant champions from TSV data
+    (when (fboundp 'gptel-auto-workflow--refresh-variant-axis-champions)
+      (gptel-auto-workflow--refresh-variant-axis-champions))
     (when axis-stats
       (message "[vsm] KIBC-M Axis Performance: %s"
                (mapconcat (lambda (a) (format "%s=%.0f%%" (car a) (* 100 (cdr a))))
