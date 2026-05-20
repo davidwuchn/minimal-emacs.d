@@ -462,6 +462,8 @@ The controlling element provides the remedy.")
 (defun gptel-benchmark-detect-anti-patterns (results)
   "Detect anti-patterns in RESULTS using 相克 cycle.
 Returns list of detected anti-patterns with remedies."
+  (when (and results (not (proper-list-p results)))
+    (setq results nil))
   (let ((detected '()))
     (dolist (ap gptel-benchmark-anti-patterns)
       (let* ((detection-fn (plist-get (cdr ap) :detection)))
