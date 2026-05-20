@@ -252,8 +252,24 @@ Returns plist with :valid t/nil :errors list :test-output string."
             (insert strategy-code))
           
           ;; Test 1: Load without errors
+          ;; Guard: strip lexical-binding from prototype (avoids reader bug
+          ;; with invalid-read-syntax on some Emacs 30 builds) and verify
+          ;; file ends with newline (avoids end-of-file from truncated write).
           (condition-case err
-              (let ((gptel-auto-workflow--suppress-strategy-metadata-persistence t))
+              (let ((gptel-auto-workflow--suppress-strategy-metadata-persistence t)
+                    (load-read-function #'read))
+                (with-temp-buffer
+                  (insert-file-contents temp-file)
+                  (save-excursion
+                    (goto-char (point-min))
+                    (when (re-search-forward
+                           "-\\*-.*lexical-binding: t[^-]*-\\*-" (line-end-position) t)
+                      (replace-match "-*- lexical-binding: nil -*-")))
+                  (let ((content (buffer-string)))
+                    (unless (string-suffix-p "\n" content)
+                      (setq content (concat content "\n"))
+                      (with-temp-file temp-file
+                        (insert content)))))
                 (load temp-file nil t t))
             (error
              (push (format "Load error: %s" err) errors)))
