@@ -16,6 +16,9 @@
 (load-file (expand-file-name "../lisp/modules/gptel-tools-agent-prompt-build.el"
                               (file-name-directory
                                (or load-file-name buffer-file-name default-directory))))
+(load-file (expand-file-name "../lisp/modules/gptel-tools-agent-base.el"
+                              (file-name-directory
+                               (or load-file-name buffer-file-name default-directory))))
 
 (ert-deftest regression/auto-workflow-evolution/insufficient-data-returns-skip-message ()
   "Pipeline callers should see a textual skip reason, not bare nil."
@@ -1409,6 +1412,43 @@ Verifies the core property of the always-defer fix."
         (let ((gptel-curl--sentinel-depth 0))
           (gptel-curl--sentinel nil nil)
           (should deferred-p))))))
+
+;; ─── Shell Command Timeout Tests ───
+
+(ert-deftest regression/shell-timeout/echo-success ()
+  "gptel-auto-workflow--shell-command-with-timeout must return output for fast commands."
+  (let* ((result (gptel-auto-workflow--shell-command-with-timeout "echo hello" 10))
+         (output (car result))
+         (exit-code (cdr result)))
+    (should (string-match-p "hello" output))
+    (should (= exit-code 0))))
+
+(ert-deftest regression/shell-timeout/command-times-out ()
+  "gptel-auto-workflow--shell-command-with-timeout must time out slow commands."
+  (let* ((start (current-time))
+         (result (gptel-auto-workflow--shell-command-with-timeout "sleep 30" 2))
+         (output (car result))
+         (exit-code (cdr result))
+         (elapsed (float-time (time-subtract (current-time) start))))
+    (should (string-match-p "timed out" output))
+    (should (= exit-code -1))
+    ;; Should complete within 5 seconds (2s timeout + overhead)
+    (should (< elapsed 10))))
+
+(ert-deftest regression/shell-timeout/no-command-returns-error ()
+  "gptel-auto-workflow--shell-command-with-timeout must handle empty/nil commands."
+  (should-error (gptel-auto-workflow--shell-command-with-timeout nil))
+  (should-error (gptel-auto-workflow--shell-command-with-timeout "")))
+
+(ert-deftest regression/shell-timeout/register-and-terminate ()
+  "Registered shell processes must be tracked and terminable."
+  (let* ((process (start-process-shell-command "test-proc" nil "sleep 30"))
+         (registered (gptel-auto-workflow--register-shell-process process)))
+    (should (process-live-p registered))
+    (gptel-auto-workflow--terminate-process-tree registered)
+    (should (not (process-live-p registered)))
+    ;; Clean up tracking
+    (gptel-auto-workflow--unregister-shell-process registered)))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
