@@ -121,16 +121,10 @@
     (advice-add 'gptel-curl--sentinel :around
                 (lambda (orig-fn process status &rest args)
                   (if (> gptel-curl--sentinel-depth 3)
-                      (let ((cleanup-timer
-                             (run-at-time 120 nil
-                               (lambda ()
-                                 (when (process-live-p process)
-                                   (message "[gptel] Cleaning up orphaned curl process (PID %d)"
-                                            (process-id process))
-                                   (delete-process process))))))
+                      (progn
+                        (setq gptel-curl--sentinel-depth 0)
                         (run-at-time 0 nil
                           (lambda ()
-                            (cancel-timer cleanup-timer)
                             (condition-case err
                                 (funcall orig-fn process status)
                               (error
