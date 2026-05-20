@@ -49,6 +49,8 @@
 Staging verification runs repository scripts with WORKTREE as the init
 directory, so ignored package/cache assets must be visible there even though
 they are not tracked by Git."
+  (when (null worktree)
+    (error "gptel-auto-workflow--seed-worktree-runtime-var: worktree must be non-nil"))
   (let* ((base-root-raw (gptel-auto-workflow--worktree-base-root))
          (base-root (and (stringp base-root-raw)
                          (not (string-empty-p base-root-raw))
