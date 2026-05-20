@@ -56,7 +56,7 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
         (cancel-timer gptel-auto-workflow--watchdog-timer))
       (setq gptel-auto-workflow--watchdog-timer nil))
     (unwind-protect
-        (if use-timeout
+        (if (and use-timeout (not noninteractive))
             (apply #'call-process "timeout" infile destination display
                    (number-to-string gptel-auto-workflow--process-timeout-secs)
                    program args)

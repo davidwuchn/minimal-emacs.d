@@ -47,7 +47,7 @@ load-file call."
 the seed-load-path function should still be called on every invocation."
   (let ((seed-called 0))
     (cl-letf (((symbol-function 'gptel-auto-workflow-bootstrap--seed-load-path)
-               (lambda (root) (cl-incf seed-called)))
+               (lambda (_root) (cl-incf seed-called)))
               ((symbol-function 'load-file)
                (lambda (file)
                  (when (string-match-p "gptel-auto-workflow-bootstrap" file)

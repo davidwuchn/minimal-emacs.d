@@ -620,10 +620,13 @@ on the current provider."
                    (cb callback)
                    (next-att (1+ attempt))
                    (next-prov (if should-advance 0 (1+ prov-attempts))))
-               (run-with-timer 0 nil
-                               (lambda ()
-                                 (gptel-auto-experiment--call-aux-subagent-with-retry
-                                  at inv cb next-att next-prov)))))
+               (if noninteractive
+                    (gptel-auto-experiment--call-aux-subagent-with-retry
+                     at inv cb next-att next-prov)
+                  (run-with-timer 0 nil
+                                  (lambda ()
+                                    (gptel-auto-experiment--call-aux-subagent-with-retry
+                                     at inv cb next-att next-prov))))))
          (funcall callback result))))))
 
 (defun gptel-auto-experiment-analyze (previous-results callback)
