@@ -132,6 +132,16 @@ subagent context for a single dispatch.")
 Calls CALLBACK with result when complete.
 TIMEOUT overrides the default benchmark subagent timeout.
 Auto-applies LLM backend failover when current provider is rate-limited."
+  ;; GUARD: Ensure required nucleus tools are loaded before launching subagent.
+  ;; In deferred-init daemons, tool modules may not be loaded yet when the
+  ;; first subagent fires. Force-require gptel-tools to warm the registry.
+  (when (and (fboundp 'gptel-get-tool)
+             (not (ignore-errors (gptel-get-tool "Bash"))))
+    (condition-case nil
+        (progn
+          (require 'gptel-tools)
+          (message "[subagent] Warmed nucleus tool registry for %s" type))
+      (error (message "[subagent] Could not warm tool registry for %s" type))))
   (if (and gptel-benchmark-use-subagents
            (fboundp 'gptel-agent--task))
       (let* ((agent-type (symbol-name type))
