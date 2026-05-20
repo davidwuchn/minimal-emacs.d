@@ -655,18 +655,54 @@ Searches:
                 ((file-exists-p flat) (setq found flat))))))
     found))
 
+(defvar gptel-auto-workflow--selected-skill-variant nil
+  "Variant name selected by champion league for the current skill load.
+Nil when the base SKILL.md is used. Set during `gptel-auto-workflow--load-skill'.")
+
+(defun gptel-auto-workflow--select-skill-variant (skill-dir skill-name)
+  "Select a champion variant for SKILL-NAME from SKILL-DIR/variants/.
+Returns variant stem or nil to use base SKILL.md."
+  (setq gptel-auto-workflow--selected-skill-variant nil)
+  (let ((variants-dir (when (and skill-dir (file-directory-p skill-dir))
+                        (expand-file-name "variants" skill-dir))))
+    (when (and variants-dir (file-directory-p variants-dir))
+      (let ((files (directory-files variants-dir nil "\\.md\\'"))
+            (stems nil))
+        (dolist (f files)
+          (let ((stem (file-name-sans-extension f)))
+            (push stem stems)))
+        (when stems
+          (let* ((champion (and (boundp 'gptel-auto-workflow--champion-strategy)
+                                gptel-auto-workflow--champion-strategy
+                                (member gptel-auto-workflow--champion-strategy stems)
+                                gptel-auto-workflow--champion-strategy))
+                 (chosen (or champion
+                             (if (< (random 100) 20)
+                                 (nth (random (length stems)) stems)
+                               (car stems)))))
+            (setq gptel-auto-workflow--selected-skill-variant chosen)
+            (message "[skill-variant] %s → %s" skill-name chosen)
+            chosen))))))
+
 (defun gptel-auto-workflow--load-skill (skill-name)
   "Load SKILL-NAME following agentskills.io standard.
-Returns plist with :name :metadata :body :skill-dir.
+Checks for variants/ directory — if present, champion league selects
+the best variant. Returns plist with :name :metadata :body :skill-dir.
 Reuses gptel-agent's `gptel-agent-read-file' for frontmatter parsing."
-  (let ((skill-file (gptel-auto-workflow--find-skill-file skill-name)))
+  (let ((skill-file (gptel-auto-workflow--find-skill-file skill-name))
+        (gptel-auto-workflow--selected-skill-variant nil))
     (if (not skill-file)
-        (list :name skill-name :metadata nil :body "" :skill-dir nil)
-      (let* ((parsed (gptel-agent-read-file skill-file))
+        (progn (setq gptel-auto-workflow--selected-skill-variant nil)
+               (list :name skill-name :metadata nil :body "" :skill-dir nil))
+      (let* ((skill-dir (file-name-directory skill-file))
+             (variant (gptel-auto-workflow--select-skill-variant skill-dir skill-name))
+             (load-file (if variant
+                            (expand-file-name (format "variants/%s.md" variant) skill-dir)
+                          skill-file))
+             (parsed (gptel-agent-read-file load-file))
              (name (car parsed))
-             (plist (cdr parsed))
-             (skill-dir (file-name-directory skill-file)))
-        (list :name name
+             (plist (cdr parsed)))
+        (list :name (or name skill-name)
               :metadata (cl-remove-if (lambda (k) (eq k :system)) plist)
               :body (or (plist-get plist :system) "")
               :skill-dir skill-dir)))))
