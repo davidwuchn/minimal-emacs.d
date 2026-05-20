@@ -15,7 +15,7 @@
   "Return PATH's truename, or nil when PATH cannot be resolved."
   (condition-case nil
       (file-truename path)
-    (error nil)))
+    (ignore)))
 
 (defun gptel-auto-workflow--link-shared-runtime-path (source target)
   "Link SOURCE to TARGET when TARGET is absent or a stale symlink."

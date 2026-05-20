@@ -1016,7 +1016,7 @@ strategy as the parent for evolution."
                               (puthash entry-axis
                                        (1+ (gethash entry-axis axis-perf 0))
                                        axis-perf)))
-                        (error nil)))
+                        (ignore)))
                     (forward-line 1))))))
           ;; Find least explored axis
           (let ((min-count most-positive-fixnum)

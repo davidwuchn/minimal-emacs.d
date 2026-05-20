@@ -645,7 +645,7 @@ RETRY-COUNT tracks current retry attempt."
                       "executor"
                       (gptel-auto-workflow--agent-base-preset "executor")
                       raw-error)
-                   (error nil)))
+                   (ignore)))
                (setq attempt-logs nil)
                (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay%s"
                         experiment-id (1+ retries) gptel-auto-experiment-max-retries
@@ -678,7 +678,7 @@ RETRY-COUNT tracks current retry attempt."
                    "executor"
                    (gptel-auto-workflow--agent-base-preset "executor")
                    raw-error)
-                (error nil))
+                (ignore))
               (setq prov-attempts 0)
               (message "[auto-exp] Executor hard timeout during experiment %d; advancing provider for retry"
                        experiment-id))

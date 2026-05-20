@@ -1084,7 +1084,7 @@ Returns t if page created."
                               (insert "### Structure (deterministic scan)\n\n")
                               (insert (gptel-auto-workflow--summarize-elisp-structure structure))
                               (insert "\n\n"))
-                          (error nil))))))))
+                          (ignore))))))))
           ;; Extract failed targets with patterns
           (let ((failed-targets (targets-for-decision "validation-failed")))
             (when failed-targets
@@ -1343,7 +1343,7 @@ Returns output string or nil on failure."
 (defun gptel-auto-workflow--generate-source-effectiveness-section ()
   "Generate markdown section showing source effectiveness from traces.
 Returns string with table of source → keep rate."
-  (let* ((traces (condition-case nil (gptel-auto-workflow--load-research-traces) (error nil)))
+  (let* ((traces (condition-case nil (gptel-auto-workflow--load-research-traces) (ignore)))
          (own-repo-kept 0) (own-repo-total 0)
          (external-kept 0) (external-total 0)
          (content ""))
@@ -1379,7 +1379,7 @@ Returns string with table of source → keep rate."
   "Generate markdown section with controller config and topic models.
 Returns string with controller guidance."
   (let ((content "## Controller Guidance\n\n")
-        (controller (condition-case nil (gptel-auto-workflow--load-autotts-controller) (error nil))))
+        (controller (condition-case nil (gptel-auto-workflow--load-autotts-controller) (ignore))))
     (if controller
         (progn
           (setq content (concat content "Current controller configuration (evolved from trace outcomes):\n\n"))
@@ -1404,7 +1404,7 @@ Returns string with controller guidance."
 (defun gptel-auto-workflow--generate-dynamic-instructions ()
   "Generate markdown section with dynamic instructions based on trace outcomes.
 Returns string with source strategy and controller awareness."
-  (let* ((traces (condition-case nil (gptel-auto-workflow--load-research-traces) (error nil)))
+  (let* ((traces (condition-case nil (gptel-auto-workflow--load-research-traces) (ignore)))
          (own-repo-kept 0) (own-repo-total 0)
          (external-kept 0) (external-total 0)
          (content "## Instructions\n\n"))
@@ -1766,7 +1766,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (message "[pipeline] ERROR: %s" e)))
         (dolist (w (plist-get v :warnings))
           (message "[pipeline] WARN: %s" w)))
-    (error nil))
+    (ignore))
   (let ((new-experiments (gptel-auto-workflow--evolution-count-new))
         (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                            (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
@@ -1828,7 +1828,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (dolist (b (seq-take (plist-get impact :breaking) 3))
           (message "[impact]   BREAKING: %s (delta=%.2f, %s)"
                    (plist-get b :target) (plist-get b :delta) (plist-get b :reason))))
-    (error nil))
+    (ignore))
   ;; Competency question answerability check (Semantica pattern)
   (condition-case nil
       (let ((cq-results (gptel-auto-workflow--check-competency-questions)))
@@ -1839,7 +1839,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (dolist (r cq-results)
             (unless (cdr r)
               (message "[cq]   UNANSWERABLE: %s" (car r))))))
-    (error nil))
+    (ignore))
   ;; Competitive gating — champion league (AutoGo pattern)
   (condition-case nil
       (let ((gated (gptel-auto-workflow--gate-strategies)))
@@ -1847,7 +1847,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (message "[gate] Strategy gating results (%d evaluated):" (length gated))
           (dolist (g (seq-take gated 5))
             (message "[gate]   %s: %s" (car g) (cdr g)))))
-    (error nil))
+    (ignore))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -1855,7 +1855,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (when targets
           (gptel-auto-workflow--filter-by-ambiguity targets 3))
         (gptel-auto-workflow--second-chance-repair))
-    (error nil))
+    (ignore))
   ;; Policy check (Semantica PolicyEngine pattern)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -1867,7 +1867,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
               (message "[policy] VIOLATION: %s" e)))
           (dolist (w (plist-get policy-result :warnings))
             (message "[policy] WARNING: %s" w))))
-    (error nil))
+    (ignore))
   ;; Run audits and feed results back into evolution
   (let ((flagged (gptel-auto-workflow--audit-signal)))
     (when flagged
@@ -1887,12 +1887,12 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                   (> (- now (or (symbol-value 'gptel-auto-workflow--allium-audit-last-run) 0)) 900))
           (setq gptel-auto-workflow--allium-audit-last-run now)
           (gptel-auto-workflow--allium-audit-signal)))
-    (error nil))
+    (ignore))
   ;; Write research priorities for next cycle's researcher (Semantica ontology feedback)
   (condition-case nil
       (progn (gptel-auto-workflow--write-research-priorities)
              (gptel-auto-workflow--enrich-ontology-from-research))
-    (error nil))
+    (ignore))
   ;; Knowledge page cross-cycle diff (Semantica set-difference pattern)
   (condition-case nil
       (let ((diff (gptel-auto-workflow--diff-knowledge-pages)))
@@ -1904,7 +1904,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                      (length added) (length removed) (length changed))
             (dolist (a added) (message "[diff]   + %s" a))
             (dolist (r removed) (message "[diff]   - %s" r)))))
-    (error nil))
+    (ignore))
   ;; Structural validation of knowledge pages (Semantica OntologyValidator)
   (condition-case nil
       (let* ((kd (expand-file-name "mementum/knowledge" (gptel-auto-workflow--worktree-base-root)))
@@ -1918,7 +1918,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                          (file-name-nondirectory worst)
                          (length (plist-get v :errors))
                          (length (plist-get v :warnings))))))))
-    (error nil))
+    (ignore))
   ;; Forward chaining + DecisionQuery (Semantica reasoning + query)
   (condition-case nil
       (let ((inferred (gptel-auto-workflow--forward-chain)))
@@ -1929,7 +1929,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                      (cdr (assoc 'action a))
                      (cdr (assoc 'reason a))
                      (cdr (assoc 'severity a))))))
-    (error nil))
+    (ignore))
   ;; Abductive diagnosis — best explanations for system state
   (condition-case nil
       (let ((diagnoses (gptel-auto-workflow--abductive-diagnose)))
@@ -1943,7 +1943,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                          (plist-get e :cause)
                          (plist-get e :action)
                          (* 100 (plist-get e :confidence))))))))
-    (error nil))
+    (ignore))
   ;; Deductive explanation — prove WHY observations hold
   (condition-case nil
       (let ((facts (list (cons 'keep-rate (gptel-auto-workflow--overall-keep-rate))
@@ -1954,7 +1954,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                      (plist-get p :goal)
                      (* 100 (or (plist-get p :confidence) 0))
                      (or (plist-get p :premises-count) 0)))))
-    (error nil))
+    (ignore))
   ;; Datalog transitive closure — causal chains
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -1969,7 +1969,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (let ((transitive (gptel-auto-workflow--datalog-transitive-chain causal-pairs)))
           (when transitive
             (message "[datalog] %d transitive causal edges discovered" (length transitive)))))
-    (error nil))
+    (ignore))
   ;; Temporal analysis — Allen relations + coverage gaps
   (condition-case nil
       (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
@@ -1979,29 +1979,29 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (message "[temporal]   %s: gap since %.0fh ago"
                      (truncate-string-to-width (car (cdr g)) 30)
                      (/ (- (float-time) (cdr (cdr g))) 3600)))))
-    (error nil))
+    (ignore))
   ;; AgentMemory status log (Semantica pattern)
   (condition-case nil
       (let ((mem (gptel-auto-workflow--memory-status)))
         (message "[memory] 4-layer architecture:")
         (dolist (m mem)
           (message "[memory]   %s: %s (%s)" (plist-get m :layer) (plist-get m :state) (plist-get m :description))))
-    (error nil))
+    (ignore))
   ;; Holdout evaluation — real progress vs overfitting (AutoGo pattern)
   (condition-case nil
       (let ((h (gptel-auto-workflow--evaluate-holdout)))
         (message "[holdout] avg=%.3f trend=%+.3f" (plist-get h :average) (plist-get h :trend)))
-    (error nil))
+    (ignore))
   ;; LLM-as-Oracle: produce uncertain candidates for validation
   (condition-case nil
       (let ((candidates (gptel-auto-workflow--produce-candidates-for-llm 20)))
         (when candidates
           (message "[oracle] %d uncertain candidates for LLM validation" (length candidates))))
-    (error nil))
+    (ignore))
   ;; Build inverted file index (LogMap pattern)
   (condition-case nil
       (gptel-auto-workflow--build-inverted-file)
-    (error nil))
+    (ignore))
   (message "[auto-workflow] Self-evolution cycle complete.")
   ;; Emit machine-parseable RESULT for this cycle (AutoGo protocol)
   (condition-case nil
@@ -2016,7 +2016,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (list :metric "evolution-cycle" :value rate
                   :delta (- rate (or gptel-auto-workflow--champion-keep-rate 0))
                   :status (if (> rate 0) "keep" "skip")))))
-    (error nil))))
+    (ignore))))
 
 ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
 
@@ -2131,7 +2131,7 @@ Maps nucleus VSM layers to our system components:
              (message "[cleanup] Removed %d stale worktrees" removed-worktrees))
            (when (> cleaned-temp 0)
              (message "[cleanup] Cleaned %d stale temp files" cleaned-temp)))
-       (error nil))
+       (ignore)
      ;; Minimal pair detection (verbum probe pattern)
      (condition-case nil
         (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -2179,7 +2179,7 @@ Maps nucleus VSM layers to our system components:
                          (length (plist-get c :opposing-pairs))
                          (plist-get c :severity)
                          (plist-get c :recommendation)))))
-         (error nil))
+         (ignore))
       ;; Ontology snapshot + causal links (Semantica pattern)
       (condition-case nil
           (let ((ontology (gptel-auto-workflow--generate-experiment-ontology))
@@ -2206,8 +2206,8 @@ Maps nucleus VSM layers to our system components:
                 (when issues
                   (dolist (i (seq-take issues 3))
                     (message "[evaluator]   issue: %s" i))))))
-        (error nil))
-      (error nil))))
+        (ignore))
+      (ignore))))
 
 (defun gptel-auto-workflow--detect-minimal-pairs (target)
   "Detect minimal pair experiments for TARGET from TSV history.
@@ -2297,7 +2297,7 @@ Returns plist with :added, :removed, :changed."
                           (insert-file-contents snap-file)
                           (goto-char (point-min))
                           (read (current-buffer)))
-                      (error nil)))
+                      (ignore)))
          (added nil) (removed nil) (changed nil))
     (dolist (f current-pages)
       (let ((sig (gptel-auto-workflow--knowledge-page-signature f)))
@@ -2854,7 +2854,7 @@ AutoGo holdout pattern: crosses train vs holdout trends."
                   (let ((m (cl-count-if (lambda (l) (string-match-p patt l))
                                         (split-string c "\n"))))
                     (setq s (+ s (min 1.0 (/ (* m 10.0) n))))))))))
-      (error nil))
+      (ignore))
     (min 1.0 (/ s 2.0))))
 
 
@@ -2899,7 +2899,7 @@ Source repos are extracted from prefetched content patterns."
                   (let ((entry (or (gethash w gptel-auto-workflow--pattern-inverted-file) (make-hash-table :test (quote equal)))))
                     (puthash name t entry)
                     (puthash w entry gptel-auto-workflow--pattern-inverted-file)))))
-          (error nil)))))
+          (ignore)))))
   (message "[logmap] Inverted file: %d tokens indexed" (hash-table-count gptel-auto-workflow--pattern-inverted-file)))
 
 (defun gptel-auto-workflow--query-inverted-file (query)
@@ -3442,7 +3442,7 @@ Returns a markdown-formatted string of issues grouped by strategy, or empty stri
                       (let ((content (buffer-string)))
                         (when (and content (> (length content) 20))
                           (push content result))))))
-              (error nil))))
+              (ignore))))
         (if result
             (concat "### Allium Behavioral Audit (coherence check of last cycle's research)\n\n"
                     (mapconcat #'identity (nreverse result) "\n---\n"))
@@ -3732,7 +3732,7 @@ Returns ((:coverage . N) (:completeness . N) (:relations . N) (:overall . N) (:i
                 (push (format "%s: missing Allium audit" (file-name-nondirectory f)) issues))
               (unless has-targets
                 (push (format "%s: missing Successful Targets section" (file-name-nondirectory f)) issues))))
-        (error nil)))
+        (ignore)))
     (let ((n (max 1 total-pages)))
       (list :coverage (/ coverage-score n)
             :completeness (/ completeness-score n)
@@ -4037,7 +4037,7 @@ Used by skill-governance to select candidates for A/B testing."
 ;; ─── Init ───
 
 ;; Cache repo root at load time to avoid worktree issues later
-(when (and (null gptel-auto-workflow--evolution-repo-root)
+(when nil (when (and (null gptel-auto-workflow--evolution-repo-root)
            (fboundp 'gptel-auto-workflow--evolution-repo-root))
   (gptel-auto-workflow--evolution-repo-root))
 

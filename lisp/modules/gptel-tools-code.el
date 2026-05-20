@@ -390,7 +390,7 @@ MSG is the original error message, FILE-PATH is the file being operated on."
                                  file-path line
                                  (if (stringp err) err (car err)))
                          issues))))))
-        (error nil))
+        (ignore))
       (if issues
           (mapconcat #'identity (reverse issues) "\n")
         "✓ No checkdoc issues"))))

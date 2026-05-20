@@ -792,7 +792,7 @@ receive live benchmark and experiment outcome data."
                         (when (string-match ":kept\\s-+t\\|:kept\\s-+nil" line)
                           (setq kept (1+ kept))))))
                     (forward-line 1)))))))
-      (error nil))
+      (ignore))
     `((skill-name . ,skill-name)
       (skill-keep-rate . ,(if (> total 0) (format "%.1f%%" (* 100.0 (/ kept (float total)))) "0.0%"))
       (skill-experiments . ,(format "%d" total))

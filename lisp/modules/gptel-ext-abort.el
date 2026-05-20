@@ -179,7 +179,7 @@ START and END are the response region positions passed by
                                     (buffer-local-value 'gptel--fsm-last (current-buffer))))
                               (info (and fsm (gptel-fsm-info fsm))))
                         (plist-get info :error))
-                    (error nil))))
+                    (ignore))))
     (save-excursion
       (goto-char end)
       ;; Only add marker if not already present at EOB

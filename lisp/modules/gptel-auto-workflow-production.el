@@ -162,7 +162,7 @@ Called when research context changes or run completes."
                               (plist-get facts :historical-merges)))
               (insert (format "  Merge rate: %.1f%%\n\n" 
                               (* 100 (plist-get facts :active-merge-rate)))))
-          (error nil)))
+          (ignore)))
       
       ;; Benchmark stats
       (when (fboundp 'gptel-auto-experiment--parse-all-results)
@@ -176,7 +176,7 @@ Called when research context changes or run completes."
               (insert (format "  Total experiments: %d\n" total))
               (insert (format "  Kept: %d (%.1f%%)\n\n" 
                               kept (* 100.0 (/ (float kept) (max total 1))))))
-          (error nil)))
+          (ignore)))
       
       (insert "\nPress q to quit\n")
       (goto-char (point-min))

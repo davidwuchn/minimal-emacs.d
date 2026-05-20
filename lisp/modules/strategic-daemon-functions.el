@@ -483,7 +483,7 @@ Returns the decision from the first matching rule, or nil if no rules exist."
                         (plist-get rule :when))))
                   (when (gptel-auto-workflow--eval-rule-sandbox normalized-expr signals-env)
                     (throw 'rule-matched (plist-get rule :then))))
-              (error nil))))))))
+              (ignore))))))))
 
 (defun gptel-auto-workflow--alist-to-sandbox-env (alist)
   "Convert ALIST to Programmatic sandbox hash-table environment."

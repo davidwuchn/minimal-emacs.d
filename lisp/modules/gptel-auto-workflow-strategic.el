@@ -114,7 +114,7 @@ Reset after each run.")
                       (insert-file-contents file)
                       (setq trace (json-read)))
                     (throw 'found trace))
-                (error nil))))))
+                (ignore))))))
       trace)))
 
 (defun gptel-auto-workflow--research-context-from-findings (findings &optional source)
@@ -377,7 +377,7 @@ MULTI-LAYER ANALYSIS: code patterns + experiment failures + git trends."
                     (when (and (>= (length fields) 2)
                                (member (nth 1 fields) '("validation-failed" "discarded" "timeout")))
                       (push (nth 0 fields) recent-failures)))))
-            (error nil))))
+            (ignore))))
       (when recent-failures
         (let ((top-failures (seq-take (sort (cl-remove-duplicates recent-failures :test #'string=)
                                             (lambda (a b)
@@ -476,7 +476,7 @@ Returns formatted string for research prompt."
                   (when (> (length lines) 3)
                     (format "\nRecent failure patterns: %d validation/timeout errors in last 10 commits"
                             (length lines)))))
-            (error nil))))
+            (ignore))))
     (concat (mapconcat (lambda (topic) (concat "- " topic)) topics "\n")
             (or failure-patterns ""))))
 
@@ -733,7 +733,7 @@ Shows which strategies/sources produced kept vs discarded downstream experiments
 Returns empty string when no trace data is available."
   (let* ((traces (condition-case nil
                      (gptel-auto-workflow--load-research-traces)
-                   (error nil)))
+                   (ignore)))
          (recent (and traces
                       (seq-take traces (min 20 (length traces)))))
          (source-stats (make-hash-table :test 'equal))
@@ -1579,7 +1579,7 @@ Called during research initialization to restore evolved strategy after daemon r
                       (plist-get data :active-strategy))
                 (message "[autotts] Restored active strategy: %s"
                          gptel-auto-workflow--active-strategy)))
-          (error nil))))))
+          (ignore))))))
 
 (defvar gptel-auto-workflow--research-steps nil
   "List of step-level traces for current research session.
@@ -1684,7 +1684,7 @@ Since we can't instrument subagent internals, we reconstruct from output."
                                            ((string= (plist-get metadata :confidence) "medium") 0.6)
                                            (t 0.3)))
                         steps))
-              (error nil))))))
+              (ignore))))))
     ;; If we found explicit steps, prefer those over parsed ones
     (reverse steps)))
 

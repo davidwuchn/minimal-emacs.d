@@ -103,7 +103,7 @@ Set to 0 to disable the split and use all targets for both.")
     (condition-case nil
         (eq 0 (call-process "git" nil nil nil "ls-files" "--error-unmatch"
                             (file-relative-name file default-directory)))
-      (error nil))))
+      (ignore))))
 
 (defun gptel-auto-workflow--fresh-start-strategies ()
   "Clear generated strategies and reset logs for a fresh run.
@@ -271,7 +271,7 @@ Returns plist or nil if not found."
         (insert-file-contents metadata-file)
         (condition-case nil
             (json-read-from-string (buffer-string))
-          (error nil))))))
+          (ignore))))))
 
 (defun gptel-auto-workflow--get-strategy-build-fn (name)
   "Get the build function for strategy NAME."
@@ -349,7 +349,7 @@ Returns plist with :total :kept :success-rate :avg-score."
                                           (or (cdr (assoc 'score entry)) 0)))
                       (when (equal (cdr (assoc 'outcome entry)) "kept")
                         (setq kept (1+ kept)))))
-                (error nil)))
+                (ignore)))
             (forward-line 1)))))
     (list :total total
           :kept kept

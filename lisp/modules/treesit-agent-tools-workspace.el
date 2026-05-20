@@ -63,7 +63,7 @@ Uses ripgrep to find candidate files, then extracts the exact AST blocks."
                           (push (format "==== %s ====\n%s" (file-relative-name file root) node-text) results))))
                   (when (buffer-live-p buf)
                     (kill-buffer buf)))))
-          (error nil))))
+          (ignore))))
     
     (if results
         (string-join (nreverse results) "\n\n")
