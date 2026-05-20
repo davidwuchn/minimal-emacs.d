@@ -1,0 +1,1 @@
+{"name":"entropy-adaptive-context","version":"1.0","hypothesis":"High Shannon entropy in code sections indicates complexity requiring additional AI context","axis":"F","components":["entropy-analysis","complexity-detection"]}

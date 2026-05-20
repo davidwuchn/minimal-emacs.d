@@ -1,0 +1,1 @@
+{"name":"complexity-tiered-compression","version":"1.0","hypothesis":"Different compression strategies based on file complexity tiers produce better prompts than uniform compression.","axis":"D/F","components":["complexity-metrics","tiered-compression"]}

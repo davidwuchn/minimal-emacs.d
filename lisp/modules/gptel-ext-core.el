@@ -91,11 +91,13 @@ Set to nil to use the global `gptel-model' default."
   "Set plain-gptel model/backend for buffers without an active preset.
 Runs deferred after gptel-mode activates so gptel-agent has had a chance
 to apply its preset (the system message is already pinned buffer-locally
-by `my/gptel--mode-hook-setup' before this runs)."
+by `my/gptel--mode-hook-setup' before this runs).
+Skip in headless workflow to preserve the bootstrap default (moonshot)."
   (when (and (bound-and-true-p gptel-mode)
              (not (bound-and-true-p gptel--preset))
              my/gptel-plain-model
-             (boundp 'gptel--minimax))
+             (boundp 'gptel--minimax)
+             (not (bound-and-true-p gptel-auto-workflow-persistent-headless)))
     (setq-local gptel-model my/gptel-plain-model)
     (setq-local gptel-backend gptel--minimax)))
 

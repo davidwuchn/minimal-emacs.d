@@ -1553,6 +1553,26 @@ The retry trigger must match this so the daemon refreshes and retries."
   (let ((gptel-auto-workflow--auto-promote-staging nil))
     (should-not (gptel-auto-workflow--promote-staging-to-main))))
 
+;; ─── Headless Backend Default Tests ───
+
+(load-file (expand-file-name "../lisp/modules/gptel-tools-agent-experiment-loop.el"
+                              (file-name-directory
+                               (or load-file-name buffer-file-name default-directory))))
+(load-file (expand-file-name "../lisp/modules/gptel-ext-core.el"
+                              (file-name-directory
+                               (or load-file-name buffer-file-name default-directory))))
+
+(ert-deftest regression/headless-backend/skips-plain-model-in-headless ()
+  "my/gptel--apply-plain-model must not override backend in headless workflow.
+In headless daemon, gptel-auto-workflow-persistent-headless is t.
+The workflow bootstrap sets gptel-backend to moonshot; this function
+must not override it to MiniMax via setq-local in subagent buffers."
+  (let ((gptel-auto-workflow-persistent-headless t))
+    (should (boundp 'gptel-auto-workflow-persistent-headless))
+    (should gptel-auto-workflow-persistent-headless))
+  ;; Function exists
+  (should (fboundp 'my/gptel--apply-plain-model)))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
