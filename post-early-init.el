@@ -121,16 +121,19 @@
     (advice-add 'gptel-curl--sentinel :around
                 (lambda (orig-fn process status &rest args)
                   (if (> gptel-curl--sentinel-depth 0)
-                      ;; Already processing a sentinel — defer to prevent
-                      ;; C stack overflow from nested signal-handler frames.
-                      (run-at-time 0 nil
-                        (lambda ()
-                          (condition-case err
-                              (funcall orig-fn process status)
-                            (error
-                             (message "[gptel] Deferred sentinel error: %S" err)
-                             (when (process-live-p process)
-                               (delete-process process))))))
+                      ;; Already processing a sentinel — defer to break the
+                      ;; C-stack chain. Reset depth so the deferred call runs
+                      ;; as a fresh top-level sentinel.
+                      (progn
+                        (setq gptel-curl--sentinel-depth 0)
+                        (run-at-time 0 nil
+                          (lambda ()
+                            (condition-case err
+                                (funcall orig-fn process status)
+                              (error
+                               (message "[gptel] Deferred sentinel error: %S" err)
+                               (when (process-live-p process)
+                                 (delete-process process)))))))
                     (apply orig-fn process status args))))))
 
 (provide 'post-early-init)
