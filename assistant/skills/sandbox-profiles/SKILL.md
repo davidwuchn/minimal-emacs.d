@@ -15,6 +15,12 @@ metadata:
 ---
 # Sandbox Tool Profiles
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## Overview
 
 Different execution contexts require different tool permissions:

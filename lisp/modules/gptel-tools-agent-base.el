@@ -237,7 +237,8 @@ it when the current transient implementation is too old."
          (bootstrap (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el" root))
          (dirs nil))
     (when (file-readable-p bootstrap)
-      (load-file bootstrap)
+      (unless (featurep 'gptel-auto-workflow-bootstrap)
+        (load-file bootstrap))
       (when (fboundp 'gptel-auto-workflow-bootstrap--seed-load-path)
         (gptel-auto-workflow-bootstrap--seed-load-path root)))
     (setq dirs

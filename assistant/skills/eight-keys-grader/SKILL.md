@@ -15,6 +15,12 @@ metadata:
 ---
 # Eight Keys Grader
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## The Eight Keys
 
 ### φ Vitality (Water 水)

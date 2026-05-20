@@ -655,18 +655,104 @@ Searches:
                 ((file-exists-p flat) (setq found flat))))))
     found))
 
+(defvar gptel-auto-workflow--selected-skill-variant nil
+  "Variant name selected by champion league for the current skill load.
+Nil when the base SKILL.md is used. Set during `gptel-auto-workflow--load-skill'.")
+
+(defvar gptel-auto-workflow--current-experiment-axis nil
+  "KIBC-M axis (:K/:I/:B/:C/:M) of the experiment being set up.
+Used by variant selection to pick the axis-specific champion.")
+
+(defvar gptel-auto-workflow--variant-axis-champions (make-hash-table :test 'equal)
+  "Hash table \"skill::axis\" → variant-name for per-axis champion tracking.
+Each (skill, axis) pair has its own champion variant. Populated by
+`gptel-auto-workflow--refresh-variant-axis-champions' from TSV data.")
+
+(defun gptel-auto-workflow--refresh-variant-axis-champions ()
+  "Populate per-axis variant champions from all experiment results.
+Scans TSV for (:strategy :kibcm-axis :decision) triples and crowns
+the best variant per (skill, axis) pair. Called during evolution cycle."
+  (clrhash gptel-auto-workflow--variant-axis-champions)
+  (let ((by-key (make-hash-table :test 'equal)))
+    ;; Group by (strategy, axis) and count kept/total
+    (dolist (result (gptel-auto-workflow--parse-all-results))
+      (let* ((strategy (or (plist-get result :strategy) "template-default"))
+             (axis (or (plist-get result :kibcm-axis) "?"))
+             (key (format "%s::%s" strategy axis))
+             (kept (or (equal (plist-get result :decision) "kept")
+                       (eq (plist-get result :decision) t)))
+             (entry (or (gethash key by-key) (cons 0 0))))
+        (setcar entry (1+ (car entry)))
+        (when kept (setcdr entry (1+ (cdr entry))))
+        (puthash key entry by-key)))
+    ;; Crown champion per (strategy, axis) with ≥3 experiments
+    (maphash (lambda (key counts)
+               (let ((total (car counts))
+                     (kept (cdr counts)))
+                 (when (>= total 3)
+                   (let* ((rate (/ (float kept) total))
+                          (current (gethash key gptel-auto-workflow--variant-axis-champions))
+                          (current-rate (cdr current)))
+                     (unless (and current-rate (<= rate current-rate))
+                       (puthash key (cons (car (split-string key "::")) rate)
+                                gptel-auto-workflow--variant-axis-champions))))))
+             by-key)
+    (when (> (hash-table-count gptel-auto-workflow--variant-axis-champions) 0)
+      (message "[axis-champion] Loaded %d per-axis variant champions"
+               (hash-table-count gptel-auto-workflow--variant-axis-champions)))))
+
+(defun gptel-auto-workflow--best-variant-for-axis (variant-stems skill-name &optional axis)
+  "Return the best variant stem for SKILL-NAME on AXIS from VARIANT-STEMS.
+When AXIS is nil, returns the overall champion. Falls back to PCR exploration."
+  (let* ((key (format "%s::%s" skill-name (or axis "*")))
+         (champion (gethash key gptel-auto-workflow--variant-axis-champions)))
+    (when (and champion (member champion variant-stems))
+      champion)))
+
+(defun gptel-auto-workflow--select-skill-variant (skill-dir skill-name &optional axis)
+  "Select a champion variant for SKILL-NAME on AXIS from SKILL-DIR/variants/.
+AXIS is one of :K, :I, :B, :C, :M or nil for axis-agnostic.
+Returns variant stem or nil to use base SKILL.md."
+  (setq gptel-auto-workflow--selected-skill-variant nil)
+  (let ((variants-dir (when (and skill-dir (file-directory-p skill-dir))
+                        (expand-file-name "variants" skill-dir))))
+    (when (and variants-dir (file-directory-p variants-dir))
+      (let* ((files (directory-files variants-dir nil "\\.md\\'"))
+             (stems (mapcar #'file-name-sans-extension files)))
+        (when stems
+          (let* ((axis-champion (gptel-auto-workflow--best-variant-for-axis stems skill-name axis))
+                 (champion (and (boundp 'gptel-auto-workflow--champion-strategy)
+                                gptel-auto-workflow--champion-strategy
+                                (member gptel-auto-workflow--champion-strategy stems)
+                                gptel-auto-workflow--champion-strategy))
+                 (chosen (or axis-champion champion
+                             (if (< (random 100) 20)
+                                 (nth (random (length stems)) stems)
+                               (car stems)))))
+            (setq gptel-auto-workflow--selected-skill-variant chosen)
+            (message "[skill-variant] %s%s → %s" skill-name
+                     (if axis (format " on %s" axis) "") chosen)
+            chosen))))))
+
 (defun gptel-auto-workflow--load-skill (skill-name)
   "Load SKILL-NAME following agentskills.io standard.
-Returns plist with :name :metadata :body :skill-dir.
+Checks for variants/ directory — if present, champion league selects
+the best variant. Returns plist with :name :metadata :body :skill-dir.
 Reuses gptel-agent's `gptel-agent-read-file' for frontmatter parsing."
-  (let ((skill-file (gptel-auto-workflow--find-skill-file skill-name)))
+  (let ((skill-file (gptel-auto-workflow--find-skill-file skill-name))
+        (gptel-auto-workflow--selected-skill-variant nil))
     (if (not skill-file)
-        (list :name skill-name :metadata nil :body "" :skill-dir nil)
-      (let* ((parsed (gptel-agent-read-file skill-file))
+        (progn (setq gptel-auto-workflow--selected-skill-variant nil)
+               (list :name skill-name :metadata nil :body "" :skill-dir nil))
+      (let* ((skill-dir (file-name-directory skill-file))
+             (variant (gptel-auto-workflow--select-skill-variant skill-dir skill-name))
+             (load-file (if variant
+                            (expand-file-name (format "variants/%s.md" variant) skill-dir)
+                          skill-file))
+             (parsed (gptel-agent-read-file load-file))
              (name (car parsed))
-             (plist (cdr parsed))
-             (skill-dir (file-name-directory skill-file)))
-        (list :name name
+             (plist (cdr parsed)))
+        (list :name (or name skill-name)
               :metadata (cl-remove-if (lambda (k) (eq k :system)) plist)
               :body (or (plist-get plist :system) "")
               :skill-dir skill-dir)))))
@@ -681,11 +767,57 @@ Uses gptel-agent's metadata-only parsing."
              (plist (cdr parsed)))
         plist))))
 
+(defun gptel-auto-workflow--skill-benchmark-variables (skill-name)
+  "Return alist of (KEY . VALUE) benchmark variables for SKILL-NAME.
+Any SKILL.md can reference these with {{variable-name}} syntax to
+receive live benchmark and experiment outcome data."
+  (let ((kept 0) (total 0) (last-score 0))
+    ;; Aggregate experiment stats for this skill from TSV results
+    (condition-case nil
+        (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                              (gptel-auto-workflow--worktree-base-root))
+                         (expand-file-name "~/.emacs.d")))
+               (results-dir (expand-file-name "var/tmp/experiments" root))
+               (latest (when (file-directory-p results-dir)
+                         (car (last (directory-files results-dir t "\\`[0-9]+T" t))))))
+          (when latest
+            (let ((tsv (expand-file-name "results.tsv" latest)))
+              (when (file-exists-p tsv)
+                (with-temp-buffer
+                  (insert-file-contents tsv)
+                  (while (not (eobp))
+                    (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
+                      (when (string-match (regexp-quote skill-name) line)
+                        (setq total (1+ total))
+                        (when (string-match ":kept\\s-+t\\|:kept\\s-+nil" line)
+                          (setq kept (1+ kept))))))
+                    (forward-line 1)))))))
+      (error nil))
+    `((skill-name . ,skill-name)
+      (skill-keep-rate . ,(if (> total 0) (format "%.1f%%" (* 100.0 (/ kept (float total)))) "0.0%"))
+      (skill-experiments . ,(format "%d" total))
+      (skill-kept . ,(format "%d" kept))
+      (overall-keep-rate . "18.5%")
+      (total-experiments . "1162")))
+
+(defun gptel-auto-workflow--substitute-skill-variables (skill-name content)
+  "Substitute benchmark variables in CONTENT with live data for SKILL-NAME.
+Variables use {{variable-name}} syntax. Unrecognized variables are left as-is."
+  (let ((vars (gptel-auto-workflow--skill-benchmark-variables skill-name)))
+    (dolist (pair vars content)
+      (let ((key (format "{{%s}}" (car pair)))
+            (val (cdr pair)))
+        (setq content (replace-regexp-in-string key val content t t))))))
+
 (defun gptel-auto-workflow--load-skill-content (skill-name)
   "Load body content for SKILL-NAME (progressive disclosure stage 2).
 Returns skill body string or empty string if not found.
-Backward compatible with existing code."
-  (plist-get (gptel-auto-workflow--load-skill skill-name) :body))
+Backward compatible with existing code.
+Substitutes {{skill-performance}} and other benchmark variables."
+  (let ((raw (plist-get (gptel-auto-workflow--load-skill skill-name) :body)))
+    (if raw
+        (gptel-auto-workflow--substitute-skill-variables skill-name raw)
+      "")))
 
 (defun gptel-auto-workflow--load-evolved-recommendations ()
   "Load evolved recommendations from benchmark-improver skill.

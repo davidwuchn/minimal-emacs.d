@@ -135,6 +135,7 @@ SOURCE defaults to external when FINDINGS look like external research."
             :findings findings
             :digested (or (plist-get trace :digested) findings)
             :source inferred-source
+            :research-variant (or (and (boundp 'research-variant) research-variant) "default")
             :controller-decision (or (plist-get trace :controller-decision) "persisted")
             :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))))
 
@@ -607,6 +608,70 @@ Returns placeholder message if TOPICS is nil or empty."
                (seq-take topic-list 10)
                "\n")))))
 
+(defun gptel-auto-workflow--select-best-research-variant ()
+  "Select a research variant by champion league (reuses strategy infrastructure).
+Returns the variant file stem (e.g. \"nil-safety\") or nil for default."
+  (let* ((variants-dir (expand-file-name
+                        "assistant/strategies/research-variants"
+                        (gptel-auto-workflow--effective-project-root)))
+         (variant-files (when (file-directory-p variants-dir)
+                          (directory-files variants-dir nil "\\.md\\'"))))
+    (when variant-files
+      (let* ((stems (mapcar (lambda (f) (file-name-sans-extension f)) variant-files))
+             (chosen (if (and (boundp 'gptel-auto-workflow--champion-strategy)
+                              gptel-auto-workflow--champion-strategy
+                              (member gptel-auto-workflow--champion-strategy stems))
+                         ;; Champion is a valid variant — use it
+                         gptel-auto-workflow--champion-strategy
+                       ;; No champion or not a variant — try PCR
+                       (if (< (random 100) 20)  ; 20% explore
+                           (nth (random (length stems)) stems)
+                         (car stems)))))  ; default to first
+        (message "[research-variant] Selected: %s" chosen)
+        chosen))))
+
+(defun gptel-auto-workflow--select-best-digest-variant ()
+  "Select a digest variant by champion league.
+Returns the variant file stem or nil for default."
+  (let* ((variants-dir (expand-file-name
+                        "assistant/strategies/digest-variants"
+                        (gptel-auto-workflow--effective-project-root)))
+         (variant-files (when (file-directory-p variants-dir)
+                          (directory-files variants-dir nil "\\.md\\'"))))
+    (when variant-files
+      (let* ((stems (mapcar (lambda (f) (file-name-sans-extension f)) variant-files))
+             (chosen (if (and (boundp 'gptel-auto-workflow--champion-strategy)
+                              gptel-auto-workflow--champion-strategy
+                              (member gptel-auto-workflow--champion-strategy stems))
+                         gptel-auto-workflow--champion-strategy
+                       (if (< (random 100) 20)
+                           (nth (random (length stems)) stems)
+                         (car stems)))))
+        (message "[digest-variant] Selected: %s" chosen)
+        chosen))))
+
+(defun gptel-auto-workflow--load-digest-variant-content (variant-name)
+  "Load DIGEST-VARIANT-NAME .md content, or nil if missing."
+  (when variant-name
+    (let ((vf (expand-file-name
+               (format "assistant/strategies/digest-variants/%s.md" variant-name)
+               (gptel-auto-workflow--effective-project-root))))
+      (when (file-exists-p vf)
+        (with-temp-buffer
+          (insert-file-contents vf)
+          (string-trim (buffer-string)))))))
+
+(defun gptel-auto-workflow--load-research-variant-content (variant-name)
+  "Load RESEARCH-VARIANT-NAME .md content, or nil if missing."
+  (when variant-name
+    (let ((vf (expand-file-name
+               (format "assistant/strategies/research-variants/%s.md" variant-name)
+               (gptel-auto-workflow--effective-project-root))))
+      (when (file-exists-p vf)
+        (with-temp-buffer
+          (insert-file-contents vf)
+          (string-trim (buffer-string)))))))
+
 (defun gptel-auto-workflow--build-research-prompt ()
   "Build external research prompt by loading RESEARCHER.md skill.
 
@@ -622,12 +687,18 @@ Results feed into directive's 'Next Hypotheses' for target selection."
          (skill-content (gptel-auto-workflow--load-research-skill))
          (directive-content (gptel-auto-workflow--load-directive-skill))
          (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
+         ;; Research variant selected by champion league (reuses strategy infrastructure)
+         (research-variant (gptel-auto-workflow--select-best-research-variant))
+         (variant-content (gptel-auto-workflow--load-research-variant-content research-variant))
          ;; Load AutoTTS-style strategy guidance via {{strategy-guidance}} template injection only
          (source-guidance (when (fboundp 'gptel-auto-workflow--apply-source-priority-to-prompt)
                             (gptel-auto-workflow--apply-source-priority-to-prompt "")))
          (recent-outcomes (gptel-auto-workflow--build-recent-trace-outcomes-string)))
     (concat (or base-prompt "")
             "\n\n"
+            (if variant-content
+                (concat variant-content "\n\n")
+              "")
             "## Dynamic Context\n\n"
             (if (string-empty-p skill-content)
                 ""
@@ -695,15 +766,28 @@ Returns empty string when no trace data is available."
 
 (defun gptel-auto-workflow--load-strategy-guidance-json ()
   "Load strategy guidance JSON from data/ directory.
+When `gptel-auto-workflow--current-experiment-axis' is set, tries the
+axis-specific file first (strategy-guidance-K.json), falling back to global.
 Returns plist with beta, own-priority, etc, or nil if not found."
   (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data"
                                      (gptel-auto-workflow--effective-project-root)))
-         (file (expand-file-name "strategy-guidance.json" data-dir)))
+         (axis (and (boundp 'gptel-auto-workflow--current-experiment-axis)
+                    gptel-auto-workflow--current-experiment-axis
+                    (not (equal gptel-auto-workflow--current-experiment-axis "?"))
+                    (format "%s" gptel-auto-workflow--current-experiment-axis)))
+         (axis-file (when axis
+                      (expand-file-name (format "strategy-guidance-%s.json"
+                                                (string-remove-prefix ":" axis)) data-dir)))
+         (file (if (and axis-file (file-exists-p axis-file))
+                   axis-file
+                 (expand-file-name "strategy-guidance.json" data-dir))))
     (when (file-exists-p file)
       (condition-case err
           (let ((json-object-type 'plist)
                 (json-key-type 'keyword))
-            (json-read-file file))
+            (prog1 (json-read-file file)
+              (when (and axis-file (file-exists-p axis-file))
+                (message "[autotts] Using per-axis guidance for %s" axis))))
         (error
          (message "[research] Failed to load strategy guidance: %s" err)
          nil)))))
@@ -856,16 +940,19 @@ usable and digestion would lose 80%+ of the content.  Only digest raw HTML dumps
              (length raw-findings))
     (funcall callback raw-findings))
    ;; Everything else: try to digest (raw HTML, unstructured text, etc.)
-   (t
-    (let* ((template (when (fboundp 'gptel-auto-workflow--load-skill-content)
-                       (gptel-auto-workflow--load-skill-content "research-digest")))
-           (digest-prompt
-            (if template
-                (gptel-auto-workflow--substitute-template
-                 template
-                 `((raw-findings . ,(truncate-string-to-width raw-findings 4000 nil nil "..."))))
-              ;; Fallback to hardcoded prompt
-              (format "You are a research digest specialist. Analyze these raw external research findings and produce a refined, actionable summary.
+    (t
+     (let* ((digest-variant (gptel-auto-workflow--select-best-digest-variant))
+            (variant-content (gptel-auto-workflow--load-digest-variant-content digest-variant))
+            (template (or variant-content
+                          (when (fboundp 'gptel-auto-workflow--load-skill-content)
+                            (gptel-auto-workflow--load-skill-content "research-digest"))))
+            (digest-prompt
+             (if template
+                 (gptel-auto-workflow--substitute-template
+                  template
+                  `((raw-findings . ,(truncate-string-to-width raw-findings 4000 nil nil "..."))))
+               ;; Fallback to hardcoded prompt
+               (format "You are a research digest specialist. Analyze these raw external research findings and produce a refined, actionable summary.
 
 RAW FINDINGS:
 %s
@@ -925,10 +1012,14 @@ RULES:
                      (message "[auto-workflow] Digestion complete: %d chars → %d chars"
                               (length raw-findings) (length digested))
                      ;; Update context with digested version
-                     (when (boundp 'gptel-auto-workflow--current-research-context)
-                       (setq gptel-auto-workflow--current-research-context
-                             (plist-put gptel-auto-workflow--current-research-context
-                                        :digested digested)))
+                      (when (boundp 'gptel-auto-workflow--current-research-context)
+                        (setq gptel-auto-workflow--current-research-context
+                              (plist-put gptel-auto-workflow--current-research-context
+                                         :digested digested))
+                        (when digest-variant
+                          (setq gptel-auto-workflow--current-research-context
+                                (plist-put gptel-auto-workflow--current-research-context
+                                           :digest-variant digest-variant))))
                      (funcall callback digested))))))
             (if (fboundp 'gptel-request)
                 (gptel-request

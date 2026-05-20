@@ -13,6 +13,12 @@ metadata:
   evolution-stats:
     total-experiments: 870
 
+## Current Performance
+
+- Keep rate when validated by this skill: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
+
 ---
 # Emacs Lisp Validator
 
