@@ -2132,7 +2132,8 @@ Maps nucleus VSM layers to our system components:
            (when (> cleaned-temp 0)
              (message "[cleanup] Cleaned %d stale temp files" cleaned-temp)))
        (ignore)
-     ;; Minimal pair detection (verbum probe pattern)
+     (ignore-errors
+;; Minimal pair detection (verbum probe pattern)
      (condition-case nil
         (let* ((results (gptel-auto-workflow--parse-all-results))
                (first-target (when results (plist-get (car results) :target))))
@@ -2207,7 +2208,7 @@ Maps nucleus VSM layers to our system components:
                   (dolist (i (seq-take issues 3))
                     (message "[evaluator]   issue: %s" i))))))
         (ignore))
-      (ignore))))
+      (ignore)))
 
 (defun gptel-auto-workflow--detect-minimal-pairs (target)
   "Detect minimal pair experiments for TARGET from TSV history.
@@ -4043,3 +4044,19 @@ Used by skill-governance to select candidates for A/B testing."
 
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+)
