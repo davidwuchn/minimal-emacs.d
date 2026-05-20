@@ -907,9 +907,9 @@ When nil, follow the local `main' branch's configured remote and fall back to
   "Retry count for transient reviewer transport failures.")
 (defvar gptel-auto-workflow--review-max-retries 2
   "Maximum retries when review is blocked. 0 = no retry.")
-(defvar gptel-auto-workflow--staging-push-max-retries 2
-  "Maximum refresh-and-retry attempts after shared staging advances mid-run.
-Counts retry publishes after the initial failed push. 0 disables replay.")
+ (defvar gptel-auto-workflow--staging-push-max-retries 5
+   "Maximum refresh-and-retry attempts after shared staging advances mid-run.
+ Counts retry publishes after the initial failed push. 0 disables replay.")
 
 (defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal)
   "Hash table for per-target worktree state. Keyed by target.
