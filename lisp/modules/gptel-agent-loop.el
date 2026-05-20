@@ -1067,6 +1067,7 @@ Returns empty string if RESULT is nil or not a string (defensive guard)."
   (cond ((stringp result)
          (replace-regexp-in-string "\\[RUNAGENT_INCOMPLETE:[0-9]+ steps\\(?:, [0-9]+ continuations\\)?\\]\\s-*" "" result))
         ((null result) "")
+        ((not (stringp result)) "")
         (t "")))
 
 (gptel-agent-loop--ensure-patterns-compiled)

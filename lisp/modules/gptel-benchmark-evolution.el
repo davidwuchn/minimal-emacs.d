@@ -178,7 +178,8 @@ Map to elements, detect imbalances, identify evolution opportunity."
     (list :imbalances nil :focus-element nil :evolution-opportunity nil))
    ((not (proper-list-p observation))
     (list :imbalances nil :focus-element nil :evolution-opportunity nil))
-   ((plist-get observation :element-status)
+   ((and (plist-get observation :element-status)
+         (proper-list-p (plist-get observation :element-status)))
     (let ((deficient-elements (gptel-benchmark-evolution--extract-deficient-elements observation)))
       (list :imbalances deficient-elements
             :focus-element (car deficient-elements)
@@ -462,6 +463,8 @@ The controlling element provides the remedy.")
 (defun gptel-benchmark-detect-anti-patterns (results)
   "Detect anti-patterns in RESULTS using 相克 cycle.
 Returns list of detected anti-patterns with remedies."
+  (when (and results (not (proper-list-p results)))
+    (setq results nil))
   (let ((detected '()))
     (dolist (ap gptel-benchmark-anti-patterns)
       (let* ((detection-fn (plist-get (cdr ap) :detection)))
@@ -572,7 +575,7 @@ Returns list of deficient element keywords."
   "Find evolution opportunity from OBSERVATION.
 Returns element keyword if opportunity found, nil otherwise."
   (when (and (proper-list-p observation)
-             (plist-get observation :element-status))
+             (proper-list-p (plist-get observation :element-status)))
     (let* ((deficient (plist-get observation :element-status))
            (found (and (proper-list-p deficient)
                        (cl-find-if #'gptel-benchmark-evolution--deficient-p deficient))))

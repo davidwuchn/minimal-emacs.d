@@ -520,7 +520,7 @@ Relative paths are resolved from the project root."
 
 (defun gptel-auto-workflow--status-active-p (status)
   "Return non-nil when STATUS reflects an active workflow snapshot."
-  (and (listp status)
+  (and (proper-list-p status)
        (or (plist-get status :running)
            (let ((phase (plist-get status :phase)))
              (and (stringp phase)

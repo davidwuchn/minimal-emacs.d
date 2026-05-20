@@ -149,13 +149,12 @@ If none fit or no factories given, return a truncation notice."
         (let ((too-long-msg (format "Result too long (%d chars). Refine query or adjust max_answer_chars."
                                     n-chars)))
           (if shortened-factories
-              (catch 'found
-                (dolist (factory shortened-factories)
-                  (let ((candidate (if (functionp factory) (funcall factory) "")))
-                    (when (and (stringp candidate)
-                               (<= (length (concat too-long-msg "\n" candidate)) max-chars))
-                      (throw 'found (concat too-long-msg "\n" candidate)))))
-                too-long-msg)
+              (cl-loop for factory in shortened-factories
+                       for candidate = (if (functionp factory) (funcall factory) "")
+                       when (and (stringp candidate)
+                                 (<= (length (concat too-long-msg "\n" candidate)) max-chars))
+                       return (concat too-long-msg "\n" candidate)
+                       finally return too-long-msg)
             too-long-msg))))))
 
 ;;; Project-Level Tool Configuration
@@ -258,11 +257,14 @@ Subagent toolsets are hand-curated for specific roles.
 Handles both derived and explicit definitions.
 Supports (:derived INCLUDE EXCLUDE &rest EXTRA) to append extra tools."
   (if (and (consp definition) (eq (car definition) :derived))
-      (let ((base (nucleus-toolset-from-markers (cadr definition) (caddr definition)))
+      (let ((include (cadr definition))
+            (exclude (caddr definition))
             (extra (cdddr definition)))
-        (if extra
-            (append base (cl-remove-if (lambda (t) (member t base)) extra))
-          base))
+        (when (and (listp include) (listp exclude))
+          (let ((base (nucleus-toolset-from-markers include exclude)))
+            (if extra
+                (append base (cl-remove-if (lambda (t) (member t base)) extra))
+              base))))
     definition))
 
 (defun nucleus--build-toolsets ()
@@ -720,8 +722,9 @@ CONSTRAINTS may include :minimum, :maximum, :exclusiveMinimum, :exclusiveMaximum
 (defun nucleus-tools--validate-array (val arg-name constraints)
   "Validate array VAL against CONSTRAINTS.
 CONSTRAINTS may include :minItems, :maxItems, :items."
-  (unless (or (vectorp val) (and (listp val) (proper-list-p val)))
-    (nucleus-tools--validation-error arg-name :type "an array" val))
+  (let ((is-proper-list (ignore-errors (and (listp val) (proper-list-p val)))))
+    (unless (or (vectorp val) is-proper-list)
+      (nucleus-tools--validation-error arg-name :type "an array" val)))
   
   (let ((len (length val)))
     (when-let ((min-items (plist-get constraints :minItems)))

@@ -135,14 +135,21 @@ EIGHT-KEYS is plist with keys from `gptel-benchmark-instincts-eight-keys'."
 OUTCOME is `validated' or `corrected'.
 EIGHT-KEYS is plist with all Eight Keys scores from benchmark.
 Accumulates in memory for batch commit."
+  (when (null protocol-file)
+    (error "gptel-benchmark-instincts-record: protocol-file cannot be nil"))
+  (when (null pattern-name)
+    (error "gptel-benchmark-instincts-record: pattern-name cannot be nil"))
+  (when (null eight-keys)
+    (error "gptel-benchmark-instincts-record: eight-keys cannot be nil"))
   (let* ((key (cons protocol-file pattern-name))
          (entry (gethash key gptel-benchmark-instincts--accumulator))
+         (entry-eight-keys (or (plist-get entry :eight-keys) '()))
          (delta (if (eq outcome 'validated)
                     gptel-benchmark-instincts-delta-positive
                   (- gptel-benchmark-instincts-delta-negative))))
     (let ((new-eight-keys '()))
       (dolist (k gptel-benchmark-instincts-eight-keys)
-        (let* ((current (or (plist-get entry k) 0.0))
+        (let* ((current (or (plist-get entry-eight-keys k) 0.0))
                (benchmark-val (or (plist-get eight-keys k) 0.5))
                (new-val (+ current (* delta (if (eq outcome 'validated)
                                                 benchmark-val
@@ -156,6 +163,10 @@ Accumulates in memory for batch commit."
 
 (defun gptel-benchmark-instincts-get-accumulated (protocol-file pattern-name)
   "Get accumulated Eight Keys data for PATTERN-NAME in PROTOCOL-FILE."
+  (when (null protocol-file)
+    (error "gptel-benchmark-instincts-get-accumulated: protocol-file cannot be nil"))
+  (when (null pattern-name)
+    (error "gptel-benchmark-instincts-get-accumulated: pattern-name cannot be nil"))
   (gethash (cons protocol-file pattern-name) gptel-benchmark-instincts--accumulator))
 
 (defun gptel-benchmark-instincts-clear-accumulator ()
@@ -333,9 +344,10 @@ Returns number of files updated."
           (files-updated 0))
     (maphash
      (lambda (key entry)
-       (let ((file (car key))
-             (pattern (cdr key)))
-         (push (cons pattern entry) (gethash file updates-by-file))))
+       (when (and (consp key) (listp entry) (plist-member entry :eight-keys))
+         (let ((file (car key))
+               (pattern (cdr key)))
+           (push (cons pattern entry) (gethash file updates-by-file)))))
      gptel-benchmark-instincts--accumulator)
 
     (maphash

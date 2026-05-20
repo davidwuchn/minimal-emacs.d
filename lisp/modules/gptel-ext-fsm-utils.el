@@ -338,7 +338,7 @@ without duplicating cycle-detection logic.
 
 PROACTIVE MITIGATION: Single traversal implementation ensures
 consistent behavior across all FSM collection operations."
-  (when (functionp fsm-callback)
+  (when (and (hash-table-p seen) (functionp fsm-callback))
     (cond
      ((null object) nil)
      ((consp object)

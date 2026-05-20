@@ -183,7 +183,7 @@ Extracts tool calls from the FSM's :tool-use plist and records them."
                 ((listp info))
                 (tool-use (plist-get info :tool-use)))
       (dolist (call (if (listp tool-use) tool-use (list tool-use)))
-        (when (plistp call)
+        (when (and (listp call) (not (numberp call)))
           (let* ((tool-name (plist-get call :name))
                  (args (plist-get call :args)))
             (when (and tool-name (or (symbolp tool-name) (stringp tool-name)))
@@ -475,21 +475,14 @@ Uses phase trace timestamps to determine time window."
          (phase-tools '()))
     (when (and phase-start (> phase-start 0))
       (dolist (tc tool-calls)
-        (let* ((tc-time (cond
-                         ((numberp tc) tc)
-                         ((listp tc) (nth 2 tc))
-                         ((plistp tc) (plist-get tc :timestamp))
-                         (t nil)))
-               (tool (cond
-                      ((numberp tc) tc)
-                      ((listp tc) (car tc))
-                      ((plistp tc) (plist-get tc :tool))
-                      (t nil))))
-          (when (and tc-time tool
-                     (>= tc-time phase-start)
-                     (or (null phase-end) (<= tc-time phase-end)))
-            (push (if (symbolp tool) (symbol-name tool) tool)
-                  phase-tools)))))
+        (when (and (listp tc) (not (numberp tc)))
+          (let* ((tc-time (plist-get tc :timestamp))
+                 (tool (plist-get tc :tool)))
+            (when (and tc-time tool
+                       (>= tc-time phase-start)
+                       (or (null phase-end) (<= tc-time phase-end)))
+              (push (if (symbolp tool) (symbol-name tool) tool)
+                    phase-tools))))))
     phase-tools))
 
 (defun gptel-workflow--score-tools (run tools-cfg)
