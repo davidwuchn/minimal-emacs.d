@@ -60,7 +60,7 @@
 (defun gptel-test-context--assert-member (ctx expr item)
   "Assert in CTX that ITEM is a member of EXPR list."
   (gptel-test-context--ensure ctx)
-  (when (not (and (listp expr) (member item expr)))
+  (when (not (and (proper-list-p expr) (member item expr)))
     (gptel-test-context--add-error
      ctx (format "expected %S in result %S" item expr))))
 
