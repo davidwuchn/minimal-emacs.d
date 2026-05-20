@@ -897,7 +897,9 @@ Return nil on failure."
                        (format "git -C %s rev-parse HEAD"
                                (shell-quote-argument target))
                        60)))
-         (hash (and result (string-trim (car result)))))
+         (hash (and (consp result)
+                    (car result)
+                    (string-trim (car result)))))
     (when (and result
                (= 0 (cdr result))
                (string-match-p "^[a-f0-9]\\{40\\}$" hash))
@@ -920,7 +922,8 @@ typechanges."
                              (format "git update-index --cacheinfo 160000 %s %s"
                                      (shell-quote-argument commit)
                                      (shell-quote-argument path))
-                             60))))
+                             60)))
+               (result-output (and (consp result) (car result))))
           (cond
            ((not commit)
             (setq failure
@@ -929,7 +932,7 @@ typechanges."
             (setq failure
                   (format "Failed to restage %s as gitlink: %s"
                           path
-                          (car result))))))))
+                          (or result-output "unknown error"))))))))
     (if failure
         (progn
           (message "[auto-workflow] Failed to preserve submodule gitlinks: %s"
