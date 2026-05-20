@@ -340,9 +340,10 @@ Returns number of files updated."
           (files-updated 0))
     (maphash
      (lambda (key entry)
-       (let ((file (car key))
-             (pattern (cdr key)))
-         (push (cons pattern entry) (gethash file updates-by-file))))
+       (when (and (consp key) (listp entry) (plist-member entry :eight-keys))
+         (let ((file (car key))
+               (pattern (cdr key)))
+           (push (cons pattern entry) (gethash file updates-by-file)))))
      gptel-benchmark-instincts--accumulator)
 
     (maphash
