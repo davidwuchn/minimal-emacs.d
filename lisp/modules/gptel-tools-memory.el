@@ -43,6 +43,8 @@ If KNOWLEDGE-P, use knowledge directory; otherwise memories.
 SIGNALS an error if SLUG contains path traversal or invalid characters."
   (when (null slug)
     (error "Slug must not be nil"))
+  (when (string= slug "")
+    (error "Slug must not be empty"))
   (when (string-match-p "\\.\\./" slug)
     (error "Slug must not contain path traversal sequences"))
   (let* ((root (gptel-tools-memory--project-root))
