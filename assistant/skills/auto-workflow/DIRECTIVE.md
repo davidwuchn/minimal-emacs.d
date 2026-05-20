@@ -2,8 +2,8 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.20
-total-experiments: 1827
-total-kept: 354
+total-experiments: 1149
+total-kept: 219
 ---
 
 # Auto-Workflow Program
@@ -17,16 +17,16 @@ total-kept: 354
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-ext-core.el` | 40% | 20 | 8 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-integrate.el` | 40% | 15 | 6 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-memory.el` | 40% | 5 | 2 | ✅ High yield |
-| `lisp/modules/gptel-tools.el` | 38% | 8 | 3 | ✅ High yield |
-| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 35% | 26 | 9 | ✅ High yield |
-| `lisp/modules/gptel-ext-context.el` | 29% | 31 | 9 | 🟡 Active |
-| `lisp/modules/gptel-auto-workflow-git-learning.el` | 29% | 7 | 2 | 🟡 Active |
-| `lisp/modules/gptel-tools-memory.el` | 29% | 7 | 2 | 🟡 Active |
-| `lisp/modules/gptel-ext-fsm-utils.el` | 25% | 136 | 34 | 🟡 Active |
-| `lisp/modules/gptel-benchmark-evolution.el` | 25% | 24 | 6 | 🟡 Active |
+| `lisp/modules/gptel-tools-memory.el` | 60% | 5 | 3 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-staging-baseline.el` | 33% | 3 | 1 | ✅ High yield |
+| `lisp/modules/gptel-agent-loop.el` | 32% | 63 | 20 | ✅ High yield |
+| `lisp/modules/nucleus-tools.el` | 31% | 13 | 4 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-core.el` | 29% | 59 | 17 | 🟡 Active |
+| `lisp/modules/gptel-ext-abort.el` | 25% | 4 | 1 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-memory.el` | 25% | 12 | 3 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-tests.el` | 25% | 8 | 2 | 🟡 Active |
+| `lisp/modules/nucleus-tools-validate.el` | 24% | 17 | 4 | 🟡 Active |
+| `lisp/modules/gptel-ext-retry.el` | 23% | 52 | 12 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -39,22 +39,22 @@ total-kept: 354
 
 <!-- AUTO-UPDATED: From mementum insights -->
 
-- Offline simulation functions diverge from live controller logic. (seen 1×)
-- Multiple cron jobs using the same Emacs daemon server name cause "already running" errors. (seen 1×)
-- Merged experiment worktrees should be cleaned up to prevent accumulation. (seen 1×)
 - Direct path is more efficient than full cycle for simple tasks. (seen 1×)
+- Offline simulation functions diverge from live controller logic. (seen 1×)
 - Guard nil values before passing to functions expecting number-or-marker. (seen 1×)
 - Use `(file-name-as-directory (expand-file-name dir))` to ensure trailing slash. (seen 1×)
+- Multiple cron jobs using the same Emacs daemon server name cause "already running" errors. (seen 1×)
+- Merged experiment worktrees should be cleaned up to prevent accumulation. (seen 1×)
 
 ## 🛡️ Error Mitigation
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (1383×): Investigate root cause
-- **timeout** (273×): Add smaller batch sizes or chunked processing
-- **test-failure** (104×): Run tests before committing experiments
-- **api-limit** (32×): Implement provider fallback or rate limit handling
-- **validation-failed** (24×): Improve pre-grade validation prompts
+- **other** (991×): Investigate root cause
+- **validation-failed** (90×): Improve pre-grade validation prompts
+- **timeout** (34×): Add smaller batch sizes or chunked processing
+- **api-limit** (20×): Implement provider fallback or rate limit handling
+- **test-failure** (11×): Run tests before committing experiments
 
 ## Success Patterns
 
@@ -71,11 +71,11 @@ total-kept: 354
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-integrate.el**: Apply Offline simulation functions diverge from live controller logic. (keep rate: 40%)
-- **lisp/modules/gptel-ext-core.el**: Apply Offline simulation functions diverge from live controller logic. (keep rate: 40%)
-- **lisp/modules/gptel-benchmark-memory.el**: Apply Offline simulation functions diverge from live controller logic. (keep rate: 40%)
-- **lisp/modules/gptel-tools-agent-base.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-tools-agent-error.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-memory.el**: Apply Direct path is more efficient than full cycle for simple tasks. (keep rate: 60%)
+- **lisp/modules/gptel-tools-agent-staging-baseline.el**: Apply Direct path is more efficient than full cycle for simple tasks. (keep rate: 33%)
+- **lisp/modules/gptel-agent-loop.el**: Apply Direct path is more efficient than full cycle for simple tasks. (keep rate: 32%)
+- **lisp/modules/gptel-ext-tool-sanitize.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-ext-fsm.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -101,4 +101,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1827 experiments (354 kept locally across 1827 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1149 experiments (219 kept locally across 1149 local records). It evolves every self-evolution cycle.*
