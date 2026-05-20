@@ -116,7 +116,8 @@ introspector tasks that may be running. Safe to call even when no
 request is active."
   (interactive)
   ;; Bump generation so async tool sentinels can self-cancel.
-  (setq-local my/gptel--abort-generation (1+ my/gptel--abort-generation))
+  (when (boundp 'my/gptel--abort-generation)
+    (setq-local my/gptel--abort-generation (1+ my/gptel--abort-generation)))
 
   ;; Abort main gptel request
   (when (fboundp 'gptel-abort)
