@@ -285,9 +285,10 @@ requires string values. Recursively processes nested :properties and :items."
 
 (defun my/gptel--sanitize-type-symbol (plist)
   "If PLIST has a :type that is a symbol, convert it to a string in place."
-  (let ((type-val (plist-get plist :type)))
-    (when (and type-val (symbolp type-val))
-      (setf (plist-get plist :type) (symbol-name type-val)))))
+  (when (listp plist)
+    (let ((type-val (plist-get plist :type)))
+      (when (and type-val (symbolp type-val))
+        (setf (plist-get plist :type) (symbol-name type-val))))))
 
 (defun my/gptel--sanitize-tool-props (props)
   "Recursively sanitize :type symbols in tool properties PROPS."
