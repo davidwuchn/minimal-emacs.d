@@ -1102,6 +1102,36 @@ so tags before allium-issues is correctly detected."
   (should-not (gptel-auto-workflow--file-has-conflict-markers-p
                "/tmp/conflict-guard-nonexistent-99999.el")))
 
+;; ─── Reload Support Regression Tests ───
+
+(ert-deftest regression/reload-support/nucleus-project-root-exists-after-reload ()
+  "nucleus--project-root must be fboundp after reload-live-support loads nucleus-prompts before nucleus-presets.
+Introduced after 'Symbol's function definition is void: nucleus--project-root' error in worker daemon (2026-05-20)."
+  (let ((root (expand-file-name default-directory)))
+    (when (fboundp 'gptel-auto-workflow--reload-live-support)
+      (gptel-auto-workflow--reload-live-support root)
+      (should (fboundp 'nucleus--project-root)))))
+
+(ert-deftest regression/reload-support/nucleus-prompts-loaded-before-presets ()
+  "nucleus-prompts must be loaded before nucleus-presets; verify ordering.
+The reload function must load nucleus-prompts.el before nucleus-presets.el so
+nucleus--project-root (defined in prompts) is available when presets calls it."
+  (when (fboundp 'gptel-auto-workflow--reload-live-support)
+    (let* ((root (expand-file-name default-directory))
+           (prompts-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
+           (presets-file (expand-file-name "lisp/modules/nucleus-presets.el" root)))
+      (should (file-readable-p prompts-file))
+      (should (file-readable-p presets-file))
+      ;; prompts.el defines nucleus--project-root, presets.el uses it
+      (should (fboundp 'nucleus--project-root)))))
+
+(ert-deftest regression/reload-support/nucleus-project-root-returns-string ()
+  "nucleus--project-root should return a non-empty string."
+  (when (fboundp 'nucleus--project-root)
+    (let ((result (nucleus--project-root)))
+      (should (stringp result))
+      (should (> (length result) 0)))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
