@@ -460,7 +460,7 @@ Returns a short description of what the user was asking for."
     (unless (proper-list-p lines)
       (cl-return-from my/gptel--extract-last-task-from-lines "Continue the task"))
     (let* ((lines-list lines)
-           (user-lines (and lines-list
+           (user-lines (and (listp lines-list)
                             (cl-remove-if-not #'my/gptel--user-line-prefix-p lines-list)))
            (user-list user-lines)
            (last-user (and user-list (car (last user-list))))
