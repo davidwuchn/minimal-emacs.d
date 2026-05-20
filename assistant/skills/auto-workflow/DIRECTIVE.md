@@ -1,9 +1,9 @@
 ---
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
-version: 2026.05.18
-total-experiments: 907
-total-kept: 197
+version: 2026.05.20
+total-experiments: 1827
+total-kept: 354
 ---
 
 # Auto-Workflow Program
@@ -17,50 +17,44 @@ total-kept: 197
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-tools-agent-experiment-loop.el` | 40% | 5 | 2 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-evolution.el` | 40% | 10 | 4 | ✅ High yield |
-| `lisp/modules/gptel-agent-loop.el` | 33% | 87 | 29 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-git.el` | 33% | 6 | 2 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-worktree.el` | 33% | 9 | 3 | ✅ High yield |
-| `lisp/modules/gptel-auto-workflow-bootstrap.el` | 33% | 3 | 1 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-core.el` | 30% | 46 | 14 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-validation.el` | 30% | 10 | 3 | ✅ High yield |
-| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 29% | 21 | 6 | 🟡 Active |
-| `lisp/modules/gptel-workflow-benchmark.el` | 29% | 7 | 2 | 🟡 Active |
+| `lisp/modules/gptel-ext-core.el` | 40% | 20 | 8 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-integrate.el` | 40% | 15 | 6 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-memory.el` | 40% | 5 | 2 | ✅ High yield |
+| `lisp/modules/gptel-tools.el` | 38% | 8 | 3 | ✅ High yield |
+| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 35% | 26 | 9 | ✅ High yield |
+| `lisp/modules/gptel-ext-context.el` | 29% | 31 | 9 | 🟡 Active |
+| `lisp/modules/gptel-auto-workflow-git-learning.el` | 29% | 7 | 2 | 🟡 Active |
+| `lisp/modules/gptel-tools-memory.el` | 29% | 7 | 2 | 🟡 Active |
+| `lisp/modules/gptel-ext-fsm-utils.el` | 25% | 136 | 34 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-evolution.el` | 25% | 24 | 6 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **extract-helper-function** (9× from git)
-- **error-handling** (7× from git)
-- **unless-guard** (4× from git)
-- **Applicability** (2× from mementum)
 - **Key insight** (2× from mementum)
-- **manual-fix** (2× from git)
-- **add-variable** (2× from git)
 
 ## 🛠️ Effective Techniques
 
 <!-- AUTO-UPDATED: From mementum insights -->
 
-- Multi-layer validation stack (seen 1×)
-- ACP (Agent Client Protocol) - standardized agent communication (seen 1×)
 - Offline simulation functions diverge from live controller logic. (seen 1×)
 - Multiple cron jobs using the same Emacs daemon server name cause "already running" errors. (seen 1×)
 - Merged experiment worktrees should be cleaned up to prevent accumulation. (seen 1×)
 - Direct path is more efficient than full cycle for simple tasks. (seen 1×)
+- Guard nil values before passing to functions expecting number-or-marker. (seen 1×)
+- Use `(file-name-as-directory (expand-file-name dir))` to ensure trailing slash. (seen 1×)
 
 ## 🛡️ Error Mitigation
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (727×): Investigate root cause
-- **timeout** (87×): Add smaller batch sizes or chunked processing
-- **test-failure** (41×): Run tests before committing experiments
-- **validation-failed** (27×): Improve pre-grade validation prompts
-- **api-limit** (19×): Implement provider fallback or rate limit handling
+- **other** (1383×): Investigate root cause
+- **timeout** (273×): Add smaller batch sizes or chunked processing
+- **test-failure** (104×): Run tests before committing experiments
+- **api-limit** (32×): Implement provider fallback or rate limit handling
+- **validation-failed** (24×): Improve pre-grade validation prompts
 
 ## Success Patterns
 
@@ -77,11 +71,11 @@ total-kept: 197
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-evolution.el**: Apply Multi-layer validation stack (keep rate: 40%)
-- **lisp/modules/gptel-tools-agent-experiment-loop.el**: Apply Multi-layer validation stack (keep rate: 40%)
-- **lisp/modules/gptel-agent-loop.el**: Apply Multi-layer validation stack (keep rate: 33%)
-- **lisp/modules/nucleus-tools.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-benchmark-integrate.el**: Apply Offline simulation functions diverge from live controller logic. (keep rate: 40%)
+- **lisp/modules/gptel-ext-core.el**: Apply Offline simulation functions diverge from live controller logic. (keep rate: 40%)
+- **lisp/modules/gptel-benchmark-memory.el**: Apply Offline simulation functions diverge from live controller logic. (keep rate: 40%)
+- **lisp/modules/gptel-tools-agent-base.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-agent-error.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -107,4 +101,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 907 experiments (197 kept locally across 907 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1827 experiments (354 kept locally across 1827 local records). It evolves every self-evolution cycle.*
