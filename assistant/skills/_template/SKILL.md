@@ -1,6 +1,7 @@
 ---
 name: template-skill
 description: >
+evolve-script: evolve_generic.py
   Template skill demonstrating best practices.
   Use this as starting point for new skills.
   Modify name, description, and content for your use case.

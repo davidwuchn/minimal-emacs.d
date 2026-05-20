@@ -1,6 +1,7 @@
 ---
 name: skill-eval
 description: >
+evolve-script: evolve_generic.py
   Meta-skill for validating skills through controlled A/B experiments.
   Measures whether a skill actually changes AI behavior (not just provides
   information). Gates skill evolution on measurable improvement.

@@ -1,6 +1,7 @@
 ---
 name: clojure-expert
 description: Writing/generating Clojure code with REPL-first methodology. Use when Clojure REPL tools available.
+evolve-script: evolve_generic.py
 version: 2.0.0
 summary: Write idiomatic Clojure using REPL-first development with verification gates.
 author: David Wu

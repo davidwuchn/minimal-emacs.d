@@ -1,6 +1,7 @@
 ---
 name: elisp-discover
 description: >
+evolve-script: evolve_generic.py
   Systematic Emacs Lisp API discovery before implementation.
   Uses describe-function, describe-variable, apropos, find-function,
   and find-library to understand APIs before writing code.

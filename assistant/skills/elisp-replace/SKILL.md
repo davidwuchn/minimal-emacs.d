@@ -1,6 +1,7 @@
 ---
 name: elisp-replace
 description: >
+evolve-script: evolve_generic.py
   Structural Emacs Lisp code replacement based on S-expression equivalence.
   Use instead of naive text matching when Edit/ApplyPatch fails due to
   formatting differences (whitespace, indentation, line breaks).

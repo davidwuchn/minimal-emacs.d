@@ -1,6 +1,7 @@
 ---
 name: elisp-debug
 description: >
+evolve-script: evolve_generic.py
   Interactive Emacs Lisp debugging via REPL inspection instead of println/logging.
   Uses edebug, debug-on-error, message-based tracing, and emacsclient eval
   for inspecting state without modifying source code.

@@ -1,6 +1,7 @@
 ---
 name: elisp-expert
 description: Writing/generating Emacs Lisp code with dangerous pattern awareness. Use when editing .el files or implementing features in Emacs packages.
+evolve-script: evolve_generic.py
 metadata:
   version: "1.0.0"
   λ: edit.byte-compile.verify

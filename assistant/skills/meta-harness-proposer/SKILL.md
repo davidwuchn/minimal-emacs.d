@@ -1,6 +1,7 @@
 ---
 name: meta-harness-proposer
 description: Run one iteration of prompt-building strategy evolution. Proposes 3 new strategy candidates based on prior results.
+evolve-script: evolve_generic.py
 version: 1.0
 metadata:
   evolution-stats:

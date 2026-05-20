@@ -1,6 +1,7 @@
 ---
 name: seo-geo
 description: SEO & GEO (Generative Engine Optimization) for websites. Analyze keywords, generate schema markup, optimize for AI search engines (ChatGPT, Perplexity, Gemini, Copilot, Claude) and traditional search (Google, Bing). Use when user wants to improve search visibility, search optimization, search ranking, AI visibility, ChatGPT ranking, Google AI Overview, indexing, JSON-LD, meta tags, or keyword research.
+evolve-script: evolve_generic.py
 version: 1.0.0
 summary: Optimize websites for SEO and AI search engine visibility with schema markup.
 author: David Wu

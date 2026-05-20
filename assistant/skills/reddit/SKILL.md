@@ -1,6 +1,7 @@
 ---
 name: reddit
 description: Search and retrieve content from Reddit. Get posts, comments, subreddit info, and user profiles via the public JSON API. Use when user mentions Reddit, a subreddit, or r/ links.
+evolve-script: evolve_generic.py
 version: 1.0.0
 summary: Interact with Reddit via public JSON API for posts, comments, and user profiles.
 author: David Wu

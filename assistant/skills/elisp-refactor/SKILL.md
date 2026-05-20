@@ -1,6 +1,7 @@
 ---
 name: elisp-refactor
 description: >
+evolve-script: evolve_generic.py
   Design improvement for Emacs Lisp by separating mechanism from policy.
   Identifies coupled concerns (what vs how), suggests extraction patterns
   (defcustom for policy, defun for mechanism), and guides toward more
