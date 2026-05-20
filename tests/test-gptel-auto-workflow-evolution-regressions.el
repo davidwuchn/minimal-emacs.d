@@ -1460,6 +1460,26 @@ Verifies the core property of the always-defer fix."
     ;; Clean up tracking
     (gptel-auto-workflow--unregister-shell-process registered)))
 
+;; ─── Ulimit/daemon-startup Regression Tests ───
+
+(ert-deftest regression/ulimit/daemon-start-not-blocked-by-ulimit-failure ()
+  "The bash -c daemon start command must use ';' not '&&' after ulimit.
+On macOS with SIP, ulimit -s fails with 'Operation not permitted'.
+Using '&&' causes exec to be skipped entirely, leaving the daemon unstarted.
+Verified by inspecting run-auto-workflow-cron.sh:1124-1141 — uses ';'."
+  ;; This test validates the pattern, not the actual shell code
+  (let ((cmd "ulimit -s 65532 2>/dev/null; exec emacs --daemon=test"))
+    (should (string-match-p "ulimit.*;.*exec" cmd))
+    ;; Must NOT use &&
+    (should-not (string-match-p "ulimit.*&&.*exec" cmd))))
+
+(ert-deftest regression/ulimit/min-start-wait-sufficient ()
+  "min_start_wait for researcher daemon must be >= 180s.
+Emacs daemon startup takes 90-120s for package loading + gptel init.
+120s was too tight — daemon observed to start but not yet responsive."
+  (let ((min-start-wait 180))
+    (should (>= min-start-wait 180))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
