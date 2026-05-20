@@ -29,6 +29,7 @@
 
 ;; Variables defined in companion modules to silence byte-compiler.
 (defvar gptel-auto-workflow--rate-limited-backends)
+(defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
 (defvar gptel-auto-experiment-retry-delay)
 (defvar gptel-auto-experiment-rate-limit-max-retry-delay)
 (defvar gptel-auto-experiment--api-error-threshold)
@@ -153,6 +154,22 @@ Returns PRESET unchanged if CANDIDATE is nil or malformed."
                              max-output))))
         override))))
 
+(defun gptel-auto-workflow--demote-backend-in-fallback-chain (backend-name)
+  "Move BACKEND-NAME to the end of `gptel-auto-workflow-executor-rate-limit-fallbacks'.
+Does nothing when BACKEND-NAME is not in the chain."
+  (when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+             gptel-auto-workflow-executor-rate-limit-fallbacks
+             (stringp backend-name))
+    (let* ((entry (assoc backend-name
+                         gptel-auto-workflow-executor-rate-limit-fallbacks
+                         #'string=))
+           (rest (cl-remove (car entry)
+                            gptel-auto-workflow-executor-rate-limit-fallbacks
+                            :key #'car :test #'string=)))
+      (when entry
+        (setq gptel-auto-workflow-executor-rate-limit-fallbacks
+              (append rest (list entry)))))))
+
 (defun gptel-auto-workflow--activate-provider-failover (agent-type preset &optional reason skip-blacklist)
   "Mark PRESET's backend unavailable for this run and fail AGENT-TYPE over.
 
@@ -172,7 +189,12 @@ switch to a fallback without blacklisting (used for transient errors)."
         (unless skip-blacklist
           (cl-pushnew current-backend
                       gptel-auto-workflow--rate-limited-backends
-                      :test #'string=))
+                      :test #'string=)
+          ;; Move failed backend to end of fallback chain so subsequent
+          ;; subagent calls try working providers first.
+          (when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                     (fboundp 'gptel-auto-workflow--demote-backend-in-fallback-chain))
+            (gptel-auto-workflow--demote-backend-in-fallback-chain current-backend)))
         (setq candidate
               (if skip-blacklist
                   (gptel-auto-workflow--first-available-provider-candidate
