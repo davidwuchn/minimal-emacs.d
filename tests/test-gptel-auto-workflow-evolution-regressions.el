@@ -1616,6 +1616,54 @@ must not override it to MiniMax via setq-local in subagent buffers."
     (message \"%d\" a)))"))
     (should (gptel-auto-workflow--prevalidate-prototype code))))
 
+;; ─── Prototype Error Self-Evolution Tests ───
+
+(ert-deftest regression/prototype-error/classify-void-function ()
+  "void-function errors must be classified as undefined-function."
+  (load-file test-strategy-evolver-file)
+  (let ((result (gptel-auto-workflow--classify-prototype-error "(void-function howmany)")))
+    (should result)
+    (should (equal (plist-get result :type) "undefined-function"))))
+
+(ert-deftest regression/prototype-error/classify-wrong-arity ()
+  "wrong-number-of-arguments errors must be classified as wrong-arity."
+  (load-file test-strategy-evolver-file)
+  (let ((result (gptel-auto-workflow--classify-prototype-error "(wrong-number-of-arguments #<lambda>)")))
+    (should result)
+    (should (equal (plist-get result :type) "wrong-arity"))))
+
+(ert-deftest regression/prototype-error/classify-unbalanced-parens ()
+  "Unbalanced parens errors must be classified as unbalanced-parens."
+  (load-file test-strategy-evolver-file)
+  (let ((result (gptel-auto-workflow--classify-prototype-error "Unbalanced parens: ...")))
+    (should result)
+    (should (equal (plist-get result :type) "unbalanced-parens"))))
+
+(ert-deftest regression/prototype-error/classify-let-multi-value ()
+  "let binding >2 values error must be classified."
+  (load-file test-strategy-evolver-file)
+  (let ((result (gptel-auto-workflow--classify-prototype-error "let binding 'a' has >2 values")))
+    (should result)
+    (should (equal (plist-get result :type) "let-multi-value"))))
+
+(ert-deftest regression/prototype-error/classify-unknown-returns-nil ()
+  "Unrecognized error strings must return nil."
+  (load-file test-strategy-evolver-file)
+  (should-not (gptel-auto-workflow--classify-prototype-error "Unknown error")))
+
+(ert-deftest regression/prototype-error/record-and-format ()
+  "Recorded errors must be formatted into the prompt section."
+  (load-file test-strategy-evolver-file)
+  (setq gptel-auto-workflow--prototype-error-patterns nil)
+  (gptel-auto-workflow--record-prototype-error "test" "(void-function howmany)")
+  (gptel-auto-workflow--record-prototype-error "test" "(void-function howmany)")
+  (gptel-auto-workflow--record-prototype-error "test" "(wrong-number-of-arguments #<lambda>)")
+  (let ((insights (gptel-auto-workflow--format-prototype-error-insights)))
+    (should (string-match-p "Prototype Error Patterns" insights))
+    (should (string-match-p "undefined-function" insights))
+    (should (string-match-p "wrong-arity" insights))
+    (should (string-match-p "67%" insights))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

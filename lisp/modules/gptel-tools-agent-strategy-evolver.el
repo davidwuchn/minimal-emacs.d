@@ -236,6 +236,66 @@ Returns empty list if CODE is nil or empty."
        (gptel-auto-workflow--extract-matches valid-code "\\b[0-9]+\\b" 0))
     '()))
 
+;; ─── Prototype Error Tracking (Self-Evolution) ───
+
+(defvar gptel-auto-workflow--prototype-error-log nil
+  "List of (strategy-name . error-string) pairs from failed prototypes.")
+(defvar gptel-auto-workflow--prototype-error-patterns nil
+  "Persistent alist of ((:type :description) . count) from prototype failures.")
+
+(defun gptel-auto-workflow--classify-prototype-error (error-string)
+  "Classify ERROR-STRING into (:type :description) plist, or nil."
+  (cond
+   ((string-match-p "void-function" error-string)
+    '(:type "undefined-function" :description "LLM called undefined function"))
+   ((string-match-p "void-variable" error-string)
+    '(:type "undefined-variable" :description "LLM referenced nonexistent variable"))
+   ((string-match-p "wrong-number-of-arguments" error-string)
+    '(:type "wrong-arity" :description "Lambda/call with wrong argument count"))
+   ((string-match-p "wrong-type-argument" error-string)
+    '(:type "wrong-type" :description "Wrong data type passed to function"))
+   ((string-match-p "invalid-read-syntax" error-string)
+    '(:type "syntax-error" :description "Unbalanced parens or invalid syntax"))
+   ((string-match-p "Eager macro-expansion failure" error-string)
+    '(:type "macro-expansion" :description "Macro expansion failure"))
+   ((string-match-p "Unbalanced parens" error-string)
+    '(:type "unbalanced-parens" :description "Unbalanced parentheses"))
+   ((string-match-p "let binding.*>2 values" error-string)
+    '(:type "let-multi-value" :description "Let binding with >1 value form"))
+   ((string-match-p "Non-ELisp function" error-string)
+    '(:type "cl-function" :description "CL-only function not in Emacs Lisp"))
+   (t nil)))
+
+(defun gptel-auto-workflow--record-prototype-error (strategy-name error-string)
+  "Record a prototype error, updating the persistent pattern counter."
+  (let ((pattern (gptel-auto-workflow--classify-prototype-error error-string)))
+    (when pattern
+      (let ((cell (assoc pattern gptel-auto-workflow--prototype-error-patterns)))
+        (if cell
+            (setcdr cell (1+ (cdr cell)))
+          (push (cons pattern 1) gptel-auto-workflow--prototype-error-patterns))))))
+
+(defun gptel-auto-workflow--format-prototype-error-insights ()
+  "Format top-5 prototype error patterns into prompt text, or empty string."
+  (let* ((sorted (sort (copy-sequence gptel-auto-workflow--prototype-error-patterns)
+                       (lambda (a b) (> (cdr a) (cdr b)))))
+         (top5 (seq-take sorted (min 5 (length sorted))))
+         (total (apply #'+ (mapcar #'cdr top5))))
+    (if (= total 0) ""
+      (concat "\n## Prototype Error Patterns (Self-Evolution)\n"
+              "Avoid these mistakes found in recent prototypes:\n"
+              (mapconcat
+               (lambda (e)
+                 (format "- %s (%.0f%%): %s"
+                         (plist-get (car e) :type)
+                         (* 100 (/ (float (cdr e)) total))
+                         (plist-get (car e) :description)))
+               top5 "\n") "\n"))))
+
+(defun gptel-auto-workflow--clear-prototype-error-log ()
+  "Clear the prototype error log for a new evolution cycle."
+  (setq gptel-auto-workflow--prototype-error-log nil))
+
 ;;; Prototyping Phase
 
 (defun gptel-auto-workflow--prevalidate-prototype (code)
@@ -362,6 +422,9 @@ Returns plist with :valid t/nil :errors list :test-output string."
                                          ", "))
                       errors))))
 
+          ;; Record errors for self-evolution
+          (dolist (err errors)
+            (gptel-auto-workflow--record-prototype-error "prototype" err))
           (list :valid (null errors)
                  :errors (nreverse errors)
                  :output test-output))
@@ -529,6 +592,8 @@ Parent strategy code:
 
 {{failure-analysis}}
 
+{{prototype-errors}}
+
 {{allium-findings}}
 
 ## Anti-Overfitting Rules
@@ -641,6 +706,7 @@ CANDIDATE_3:
                 (avg-score . ,(format "%.2f" (plist-get parent-perf :avg-score)))
                 (parent-code . ,(or parent-code "(baseline strategy)"))
                 (failure-analysis . ,(or failure-analysis ""))
+                (prototype-errors . ,(gptel-auto-workflow--format-prototype-error-insights))
                 (allium-findings . ,(if (string-empty-p allium-findings) "" (concat "## Allium Behavioral Audit (coherence gaps from last cycle)\n\n" allium-findings)))
                 (axis . ,(format "%s" axis))
                 (axis-desc . ,axis-desc)))))
