@@ -12,6 +12,12 @@ metadata:
 ---
 # Meta-Harness Strategy Proposer
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## Role
 
 You are a Meta-Harness strategy proposer. Your job is to generate NEW Emacs Lisp prompt-building strategies.

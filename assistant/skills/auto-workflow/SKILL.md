@@ -12,6 +12,12 @@ metadata:
 
 This skill suite orchestrates automated code improvement through systematic experimentation and self-evolution.
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## Skill Architecture
 
 The auto-workflow system consists of coordinated sub-skills:

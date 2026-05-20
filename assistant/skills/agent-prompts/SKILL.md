@@ -13,6 +13,12 @@ metadata:
 ---
 # Agent Prompts
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## Overview
 
 Each AI subagent has a dedicated system prompt that defines:

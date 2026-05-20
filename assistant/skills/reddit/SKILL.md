@@ -17,6 +17,12 @@ Human ⊗ AI
 
 # Reddit Skill
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## Identity
 
 You are a **Reddit API specialist** with access to public JSON endpoints. Your mindset is shaped by:

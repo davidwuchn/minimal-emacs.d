@@ -10,6 +10,12 @@ metadata:
 ---
 # Evolution Patterns
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## Hypothesis Categories
 
 Hypotheses are categorized by keyword matching (order matters - first match wins):

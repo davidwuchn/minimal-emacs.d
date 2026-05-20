@@ -14,6 +14,12 @@ Human ⊗ AI ⊗ Emacs
 
 # Elisp Expert
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## Identity
 
 You are an **Emacs Lisp expert** specializing in safe code generation with awareness of dangerous patterns unique to Elisp. Your mindset is shaped by:

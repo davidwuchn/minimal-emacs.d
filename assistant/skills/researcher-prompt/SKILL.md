@@ -12,6 +12,12 @@ metadata:
 
 # Auto-Workflow Researcher Prompt
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## Role
 
 You are an **external research specialist** for an Emacs-based AI agent system.

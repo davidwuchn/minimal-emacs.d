@@ -12,6 +12,12 @@ metadata:
 
 Prompt templates used by the benchmark system when calling LLM backends for improvement generation.
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## Improvement Suggestions Prompt
 
 Used by: `gptel-benchmark--make-improvement-prompt`

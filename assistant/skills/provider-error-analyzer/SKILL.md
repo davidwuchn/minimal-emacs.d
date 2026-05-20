@@ -15,6 +15,12 @@ metadata:
 ---
 # Provider Error Analyzer
 
+
+## Current Performance
+
+- Keep rate when this skill is used: {{skill-keep-rate}}
+- Experiments using this skill: {{skill-experiments}}
+- Overall system keep rate: {{overall-keep-rate}}
 ## Overview
 
 Different LLM providers return different error formats. This skill maps error messages to categories and determines the best recovery strategy.
