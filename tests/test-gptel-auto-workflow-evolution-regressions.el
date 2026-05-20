@@ -1506,6 +1506,33 @@ The refactored code in allium-read-quality captures buf-str before the while loo
       (should (>= severity 0.74))
       (should (<= severity 0.76)))))
 
+;; ─── Staging Push Detection Tests ───
+
+(ert-deftest regression/staging-push/remote-advanced-detects-force-with-lease-rejection ()
+  "staging-push-remote-advanced-p must detect --force-with-lease 'stale' rejection.
+When another pipeline run pushes staging between our fetch and push,
+--force-with-lease rejects with '[rejected] staging -> staging (stale info)'.
+The retry trigger must match this so the daemon refreshes and retries."
+  (when (fboundp 'gptel-auto-workflow--staging-push-remote-advanced-p)
+    (should (gptel-auto-workflow--staging-push-remote-advanced-p
+             " ! [rejected] staging -> staging (stale info)\nerror: failed to push"))
+    ;; Must also match bare [rejected]
+    (should (gptel-auto-workflow--staging-push-remote-advanced-p
+             "[rejected] staging -> staging"))
+    ;; Existing patterns still work
+    (should (gptel-auto-workflow--staging-push-remote-advanced-p
+             "fetch first"))
+    (should (gptel-auto-workflow--staging-push-remote-advanced-p
+             "non-fast-forward"))))
+
+(ert-deftest regression/staging-push/remote-advanced-returns-nil-for-success ()
+  "Successful push output must not trigger remote-advanced detection."
+  (when (fboundp 'gptel-auto-workflow--staging-push-remote-advanced-p)
+    (should-not (gptel-auto-workflow--staging-push-remote-advanced-p
+                 "Everything up-to-date"))
+    (should-not (gptel-auto-workflow--staging-push-remote-advanced-p
+                 "To ssh://...done"))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

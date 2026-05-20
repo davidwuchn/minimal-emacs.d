@@ -499,7 +499,7 @@ concurrent pipeline pushes to staging don't cause non-fast-forward rejection."
            (if (= 0 (cdr push-result))
                t
              (message "[auto-workflow] Push staging failed: %s"
-                      (my/gptel--sanitize-for-logging (car push-result) 160))
+                       (my/gptel--sanitize-for-logging (car push-result) 300))
              nil)))))))
 
 (defvar gptel-auto-workflow--last-staging-push-output nil
@@ -511,7 +511,9 @@ concurrent pipeline pushes to staging don't cause non-fast-forward rejection."
    (rx (or "fetch first"
            "non-fast-forward"
            "failed to push some refs"
-           "remote contains work that you do not have locally"))
+           "remote contains work that you do not have locally"
+           "stale"           ; --force-with-lease rejection: stale reference
+           "[rejected]"))     ; generic push rejection
    (or output "")))
 
 (defun gptel-auto-workflow--retry-staging-publish-after-remote-advance (optimize-branch &optional retries-remaining)

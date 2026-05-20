@@ -2,7 +2,7 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.20
-total-experiments: 1832
+total-experiments: 1835
 total-kept: 357
 ---
 
@@ -21,8 +21,8 @@ total-kept: 357
 | `lisp/modules/gptel-benchmark-integrate.el` | 40% | 15 | 6 | ✅ High yield |
 | `lisp/modules/gptel-benchmark-memory.el` | 40% | 5 | 2 | ✅ High yield |
 | `lisp/modules/gptel-tools.el` | 38% | 8 | 3 | ✅ High yield |
-| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 35% | 26 | 9 | ✅ High yield |
 | `lisp/modules/gptel-benchmark-instincts.el` | 33% | 9 | 3 | ✅ High yield |
+| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 33% | 27 | 9 | ✅ High yield |
 | `lisp/modules/gptel-ext-context.el` | 29% | 31 | 9 | 🟡 Active |
 | `lisp/modules/gptel-tools-memory.el` | 29% | 7 | 2 | 🟡 Active |
 | `lisp/modules/gptel-ext-fsm-utils.el` | 25% | 136 | 34 | 🟡 Active |
@@ -34,6 +34,7 @@ total-kept: 357
 *These patterns were automatically extracted from successful experiments.*
 
 - **Key insight** (2× from mementum)
+- **manual-fix** (2× from git)
 
 ## 🛠️ Effective Techniques
 
@@ -50,11 +51,11 @@ total-kept: 357
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (1388×): Investigate root cause
+- **other** (1389×): Investigate root cause
 - **timeout** (273×): Add smaller batch sizes or chunked processing
-- **test-failure** (104×): Run tests before committing experiments
+- **test-failure** (105×): Run tests before committing experiments
 - **api-limit** (32×): Implement provider fallback or rate limit handling
-- **validation-failed** (24×): Improve pre-grade validation prompts
+- **validation-failed** (25×): Improve pre-grade validation prompts
 
 ## Success Patterns
 
@@ -101,4 +102,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1832 experiments (357 kept locally across 1832 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1835 experiments (357 kept locally across 1835 local records). It evolves every self-evolution cycle.*

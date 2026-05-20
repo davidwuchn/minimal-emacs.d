@@ -11,9 +11,9 @@ allium-status: ok
 
 # Research Strategy: template-default
 
-*Consolidated from 1832 experiments (19% keep rate).*
+*Consolidated from 1835 experiments (19% keep rate).*
 
-**Performance:** 357 kept / 1041 discarded / 23 failed (EXTRACTED — from TSV)
+**Performance:** 357 kept / 1041 discarded / 24 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
@@ -42,11 +42,11 @@ declares: gptel-mementum-weekly-job
 
 These targets may need different research patterns or the research findings were misleading.
 
+- `lisp/modules/gptel-auto-workflow-git-learning.el` (2 kept / 6 discarded / 1 failed)
 - `lisp/modules/gptel-benchmark-principles.el` (1 kept / 1 discarded / 2 failed)
 - `lisp/modules/gptel-auto-workflow-strategic.el` (11 kept / 37 discarded / 3 failed)
 - `lisp/modules/gptel-tools-agent.el` (61 kept / 156 discarded / 1 failed)
 - `lisp/modules/gptel-ext-tool-sanitize.el` (39 kept / 72 discarded / 5 failed)
-- `lisp/modules/gptel-tools-agent-validation.el` (1 kept / 3 discarded / 1 failed)
 
 ## Allium Behavioral Coherence
 
