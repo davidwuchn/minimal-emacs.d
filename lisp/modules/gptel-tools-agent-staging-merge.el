@@ -51,6 +51,8 @@
 (defvar gptel-auto-experiment-max-changed-files)
 (defvar gptel-auto-experiment-retry-delay)
 (defvar gptel-auto-workflow-git-timeout)
+(defvar gptel-auto-workflow--auto-promote-staging t
+  "Non-nil to automatically promote verified staging to main.")
 (defvar gptel-auto-workflow--last-staging-push-output)
 (defvar gptel-auto-workflow--review-error-retry-count)
 (defvar gptel-auto-workflow--review-max-retries)
@@ -565,10 +567,6 @@ concurrent pipeline pushes to staging don't cause non-fast-forward rejection."
 
 (defvar gptel-auto-workflow--last-staging-push-output nil
   "Raw output from the most recent staging push attempt.")
-
-(defvar gptel-auto-workflow--auto-promote-staging t
-  "When non-nil, automatically merge staging into main after verification passes.
-Set to nil to require manual merge (original behavior).")
 
 (defun gptel-auto-workflow--staging-push-remote-advanced-p (output)
   "Return non-nil when OUTPUT shows the shared remote staging branch advanced."
