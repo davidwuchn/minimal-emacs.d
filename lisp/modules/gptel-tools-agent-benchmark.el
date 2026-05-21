@@ -431,15 +431,16 @@ resume from buffers outside the original project context."
   (when previous-results
     (mapconcat
      (lambda (result)
-       (let* ((experiment-id (gptel-auto-workflow--plist-get result :id "?"))
-              (decision (gptel-auto-experiment--tsv-decision-label result))
+       (when (and (proper-list-p result) (plist-get result :hypothesis))
+         (let* ((experiment-id (gptel-auto-workflow--plist-get result :id "?"))
+                (decision (gptel-auto-experiment--tsv-decision-label result))
               (hypothesis
                (truncate-string-to-width
                 (gptel-auto-experiment--tsv-escape
                  (gptel-auto-workflow--plist-get result :hypothesis "unknown"))
                 220 nil nil "...")))
-         (format "- Experiment %s: %s - %s"
-                 experiment-id decision hypothesis)))
+          (format "- Experiment %s: %s - %s"
+                  experiment-id decision hypothesis))))
      previous-results
      "\n")))
 
@@ -451,26 +452,29 @@ resume from buffers outside the original project context."
             recommendations)
       (when (cl-some
              (lambda (result)
-               (string= (gptel-auto-experiment--tsv-decision-label result)
-                        "discarded"))
+               (and (proper-list-p result)
+                    (string= (gptel-auto-experiment--tsv-decision-label result)
+                             "discarded")))
              previous-results)
         (push "At least one prior attempt was discarded as no improvement; pivot to a different function, defect, or improvement type."
               recommendations))
       (when (cl-some
              (lambda (result)
-               (member (gptel-auto-experiment--tsv-decision-label result)
-                       '("tests-failed"
-                         "validation-failed"
-                         "inspection-thrash"
-                         "repeated-focus-symbol"
-                         "retry-grade-failed")))
+               (and (proper-list-p result)
+                    (member (gptel-auto-experiment--tsv-decision-label result)
+                            '("tests-failed"
+                              "validation-failed"
+                              "inspection-thrash"
+                              "repeated-focus-symbol"
+                              "retry-grade-failed"))))
              previous-results)
         (push "At least one prior attempt failed validation/tests; avoid editing the same code path again unless the new change directly fixes that failure."
               recommendations))
-      (list :patterns (gptel-auto-experiment--summarize-previous-results
-                       previous-results)
+      (list :patterns nil
             :issues nil
-            :recommendations (nreverse (delete-dups recommendations))))))
+            :recommendations (nreverse (delete-dups recommendations))
+            :previous-summary (gptel-auto-experiment--summarize-previous-results
+                                previous-results)))))
 
 (defun gptel-auto-experiment--merge-analysis (analysis previous-results)
   "Merge ANALYSIS with deterministic history from PREVIOUS-RESULTS."
@@ -491,10 +495,12 @@ resume from buffers outside the original project context."
                     (gptel-auto-workflow--plist-get fallback :recommendations nil))))))
     (when (or (gptel-auto-experiment--analysis-value-present-p patterns)
               (gptel-auto-experiment--analysis-value-present-p issues)
-              recommendations)
+              recommendations
+              (gptel-auto-workflow--plist-get fallback :previous-summary nil))
       (list :patterns patterns
             :issues issues
-            :recommendations recommendations))))
+            :recommendations recommendations
+            :previous-summary (gptel-auto-workflow--plist-get fallback :previous-summary nil)))))
 
 (defcustom gptel-auto-experiment-repeat-focus-threshold 3
   "Prior non-kept attempts on the same changed symbol before
@@ -526,7 +532,7 @@ least `gptel-auto-experiment-repeat-focus-threshold' previous attempts."
       (let ((counts (make-hash-table :test 'equal))
             matches)
         (dolist (result previous-results)
-          (when (and result (not (gptel-auto-workflow--plist-get result :kept nil)))
+          (when (and (proper-list-p result) (not (gptel-auto-workflow--plist-get result :kept nil)))
             (dolist (symbol
                      (gptel-auto-experiment--extract-focus-symbols
                       (gptel-auto-workflow--plist-get result :agent-output "")))
