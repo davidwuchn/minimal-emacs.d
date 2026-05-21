@@ -9,8 +9,8 @@
 ;; Core requires
 (require 'cl-lib)
 (require 'subr-x)
-(require 'gptel)
-(require 'gptel-agent)
+(condition-case nil (require 'gptel) (ignore))
+(condition-case nil (require 'gptel-agent) (ignore))
 (require 'magit-git nil t)
 
 ;; Split modules.  Load source files explicitly so cron `load-file' hot-reloads

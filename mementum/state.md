@@ -1,7 +1,33 @@
 # Mementum State
 
-> Last session: 2026-05-18
+> Last session: 2026-05-21
+> Session focus: Sync with remote, resolve daemon mode ping-pong, TDD verification
 > Last session goal: TDD — test all new Semantica/Allium/KIBC-M functions, fix bugs
+> 
+> ## 2026-05-21 Session
+> 
+> ### Decisions Made
+> 1. **Daemon mode**: `--daemon` (standard), not `--fg-daemon`. Both work; real fixes are zombie reaper + sentinel deferral + soft requires.
+> 2. **Soft requires**: `condition-case` wrappers on gptel/gptel-agent in base.el AND gptel-tools-agent.el. Prevents daemon startup crash from deferred init-ai race.
+> 3. **Force-push ping-pong resolved**: Documented root causes, committed decision to prevent future reversions.
+> 
+> ### Verified (TDD)
+> - 171/171 tests pass (was 89 last session, up to 171 via pipeline auto-evolution)
+> - `--daemon` pipeline: daemon alive >120s, workflow running, no socket conflicts
+> - No regressions: evolution-fix.el (145 lines), ontology-strategy (157 lines), cq-evolution (70 lines), pruned test, stringp guard, fboundp guards — all preserved
+> 
+> ### Current State
+> - Daemon: running (`--daemon`), phase "selecting", run-id active
+> - Branch: main @ `6fbdd87d` (synced with origin)
+> - Uncommitted: gptel-tools-agent.el soft requires, benchmark stringp guard, daemon flag standardization, mementum memory
+> 
+> ### Key Files Touched
+> - scripts/run-auto-workflow-cron.sh, scripts/watchdog-daemon.sh
+> - lisp/modules/gptel-tools-agent-base.el, lisp/modules/gptel-tools-agent.el
+> - lisp/modules/gptel-workflow-benchmark.el
+> - mementum/memories/pipeline-daemon-mode-selection.md
+> 
+> ## Previous Session (2026-05-18)
 > 
 > ## Session Results
 > 

@@ -319,8 +319,8 @@ stale_active_snapshot_recoverable() {
 
 worker_daemon_pids() {
     ps -eo pid=,args= | awk -v bg="--bg-daemon=$SERVER_NAME" \
-        -v d="--fg-daemon=$SERVER_NAME" \
-        -v fg="--fg-daemon=$SERVER_NAME" '
+        -v d="--daemon=$SERVER_NAME" \
+        -v fg="--daemon=$SERVER_NAME" '
         tolower($2) ~ /(^|\/)emacs/ && (index($0, bg) || index($0, d) || index($0, fg)) { print $1 }
     '
 }
@@ -1113,11 +1113,11 @@ ensure_worker_daemon() {
     ensure_ssh_keys_loaded
     
     # Keep the dedicated workflow daemon truly headless and detached.
-    # Use `--daemon` (background fork) with setsid for session isolation
-    # and ulimit for C stack protection.  The pid remains observable via
-    # `ps` because setsid forks a new session, not because of --fg-daemon.
-    # --fg-daemon causes blocking pipe_read on the internal self-pipe
-    # when stdin is /dev/null, making emacsclient time out.
+    # Use `--daemon` (background fork) for session isolation and ulimit
+    # for C stack protection.  `--fg-daemon` is avoided — it can cause
+    # blocking pipe_read on the internal self-pipe when stdin is /dev/null.
+    # Self-pipe blocks from async HTTP calls are handled by the zombie
+    # reaper (60s timer in post-early-init.el) + sentinel >=0 deferral.
     hydrate_missing_worktree_submodules
     seed_worker_daemon_shared_var
     # Disable native compilation for workflow daemon to avoid stale cache issues
@@ -1128,7 +1128,7 @@ ensure_worker_daemon() {
             MINIMAL_EMACS_WORKFLOW_ROLE="$ACTION" \
             MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
             MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --fg-daemon="$2" </dev/null >>"$3" 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     else
         env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
@@ -1137,7 +1137,7 @@ ensure_worker_daemon() {
             MINIMAL_EMACS_WORKFLOW_ROLE="$ACTION" \
             MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
             MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --fg-daemon="$2" </dev/null >>"$3" 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     fi
     for _ in $(seq 1 50); do
