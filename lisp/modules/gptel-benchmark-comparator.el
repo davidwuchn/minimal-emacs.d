@@ -112,6 +112,10 @@ Internal helper to centralize trend data extraction logic."
       (signal 'wrong-type-argument (list "expected :avg-overall key in plist" summary-a)))
     (unless score-b
       (signal 'wrong-type-argument (list "expected :avg-overall key in plist" summary-b)))
+    (unless (numberp score-a)
+      (signal 'wrong-type-argument (list "numberp" score-a)))
+    (unless (numberp score-b)
+      (signal 'wrong-type-argument (list "numberp" score-b)))
     (let* ((improvement (- score-b score-a)))
       (list :improvement improvement
             :score-a score-a
@@ -182,12 +186,14 @@ falls back to hardcoded default."
 (defun gptel-benchmark--scan-versions-from-dir (name)
   "Scan benchmarks directory for NAME and return sorted version strings.
 Internal helper to avoid code duplication."
+  (unless (and name (stringp name) (not (string-empty-p name)))
+    (signal 'wrong-type-argument (list "stringp" name)))
   (let ((benchmark-dir "./benchmarks/")
         (versions '()))
     (when (file-exists-p benchmark-dir)
-      (let ((files (directory-files benchmark-dir nil (format "%s-.*-benchmark\\.json$" name))))
+      (let ((files (directory-files benchmark-dir nil (format "%s-.*-benchmark\\.json$" (regexp-quote name)))))
         (dolist (file files)
-          (when (string-match (format "%s-\\(.*\\)-benchmark\\.json$" name) file)
+          (when (string-match (format "%s-\\(.*\\)-benchmark\\.json$" (regexp-quote name)) file)
             (push (match-string 1 file) versions)))))
     (if versions
         (sort versions 'string<)
