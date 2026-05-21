@@ -174,16 +174,32 @@
 ;; suppressed from *Messages* (message-log-max 0 blocks message_dolog).
 (setq message-log-max 0)
 
-(defvar mw--message-log-file
-  (expand-file-name "var/log/messages.log" minimal-emacs-user-directory))
+(defvar mw--message-log-file nil
+  "Path to OS-atomic message log file. Computed lazily on first use.")
+
+(defvar mw--message-log-dir-created nil
+  "Non-nil when the message log directory has been created.")
+
+(defun mw-message--ensure-log-file ()
+  "Lazily init the message log file path and ensure its directory exists."
+  (unless mw--message-log-file
+    (setq mw--message-log-file
+          (expand-file-name "var/log/messages.log"
+                            (if (boundp 'minimal-emacs-user-directory)
+                                minimal-emacs-user-directory
+                              user-emacs-directory))))
+  (unless mw--message-log-dir-created
+    (setq mw--message-log-dir-created t)
+    (condition-case nil
+        (make-directory (file-name-directory mw--message-log-file) t)
+      (ignore))))
 
 ;; Ensure log directory exists before first message write
-(condition-case nil
-    (make-directory (file-name-directory mw--message-log-file) t)
-  (ignore))
+(mw-message--ensure-log-file)
 
 (defun mw-message--file-log (format-string &rest args)
   "Log message to file as OS-atomic append (no *Messages* interleaving)."
+  (mw-message--ensure-log-file)
   (let ((msg (format "%s %s\n"
                      (format-time-string "%Y-%m-%dT%H:%M:%S")
                      (apply #'format-message format-string args))))
