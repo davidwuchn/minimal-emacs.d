@@ -112,6 +112,10 @@ Internal helper to centralize trend data extraction logic."
       (signal 'wrong-type-argument (list "expected :avg-overall key in plist" summary-a)))
     (unless score-b
       (signal 'wrong-type-argument (list "expected :avg-overall key in plist" summary-b)))
+    (unless (numberp score-a)
+      (signal 'wrong-type-argument (list "numberp" score-a)))
+    (unless (numberp score-b)
+      (signal 'wrong-type-argument (list "numberp" score-b)))
     (let* ((improvement (- score-b score-a)))
       (list :improvement improvement
             :score-a score-a
