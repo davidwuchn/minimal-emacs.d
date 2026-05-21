@@ -188,34 +188,32 @@
 - Auto-workflow: ✅ Running (--fg-daemon=copilot-auto-workflow)
 - Not restarted; config changes take effect on next workflow cycle
 
-## Current Session: Sync + Evolution Fix
+## Current Session: Sync + Evolution Fix + Daemon Restart
 
-**Status:** Complete. Synced with remote, fixed void-function error.
+**Status:** Complete. Synced with remote, fixed errors, restarted daemon.
 
 **Remote Changes Pulled:**
-- `e3e62ad2` — ⊘ Fix ontology workflow regressions (docstring cleanup, forward declarations)
-- `0d21c298` — ◈ Optimize gptel-tools-agent-error.el experiments (4 optimize branches)
-- `87addb31` — ◈ Merge optimize/memory-neopi5-r190408z703b-exp1 (knowledge-p boolean validation)
+- `2b71b6e5` — ⊘ Fix rule-eval comparison crash + holdout-eval alist/plist mismatch
+- `f803b2ee` — ⊘ Merge main into staging worktree before verification tests
+- `1bc0435a` — ⊘ Fix staging→main force-push wipes external commits
+- `b3e11167` — ⊘ Fix fsm-utils regression + remove stale evolution-fix + TDD tests
 
 **Fixes Applied:**
-1. `gptel-auto-workflow--experiment-time-gaps` void-function:
-   - Called at evolution.el:1977, defined at :2659 but never loaded due to paren imbalance
-   - Added fallback definition to `evolution-fix.el`
-2. Corrupted `evolution-scores.json`:
-   - Nested arrays caused `Wrong type argument: plistp` error
-   - Backed up corrupted file; daemon will recreate on next cycle
+1. **Force-push fix** — `gptel-auto-workflow--promote-staging-to-main` now:
+   - Fast-forwards local main to origin/main FIRST (preserves external commits)
+   - Then merges staging
+   - Then does regular push (no --force-with-lease on main)
+2. **Void-function fix** — `gptel-auto-workflow--experiment-time-gaps` now defined in evolution.el (parens balanced)
+3. **Corrupted scores** — `evolution-scores.json` had nested arrays causing plistp error; backed up and daemon recreated clean
+4. **Rule-eval crash** — Mixed string/numeric comparisons in AutoTTS rule evaluator fixed
 
 **Test Results:**
-- Evolution: 172/172 ✅
+- Evolution: 195/195 ✅ (+23 new tests: auto-promote safety, time-gaps, rule-eval, holdout)
 - Ontology: 51/51 ✅
 
-**Commits:**
-- `f4d4d979` — ⊘ Fix void-function gptel-auto-workflow--experiment-time-gaps
-- `8025f037` — ◈ Update state.md
-
 **Daemon Status:**
-- Auto-workflow: ✅ Running (PID 3016326, started 19:03)
-- Current step: Auto-Workflow (since 19:04, max 4h)
+- Auto-workflow: ✅ Restarted (PID 3113587, started 20:18)
+- All fixes loaded: promote-fn ✅, time-gaps-fn ✅, auto-promote ✅
 
 **Prior Sessions:**
 - Backend Performance Analysis + Ontology Router

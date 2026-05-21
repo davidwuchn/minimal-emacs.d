@@ -485,11 +485,16 @@ Returns plist with :strategy and :context keys."
     (let* ((lines (my/gptel--buffer-lines buffer-string))
            (total-lines (length lines))
            (recent-lines (last lines (min 50 total-lines)))
-           (has-tool-results (cl-some
-                              (lambda (line)
-                                (string-match-p "tool_result\\|tool-result\\|Tool result" line))
-                              recent-lines)))
+           (has-tool-results (when recent-lines
+                              (cl-some
+                               (lambda (line)
+                                 (string-match-p "tool_result\\|tool-result\\|Tool result" line))
+                               recent-lines))))
       (cond
+       ((null recent-lines)
+        (list :strategy 'task-only
+              :context (or last-task "Continue the task")
+              :reason "Empty buffer"))
        ((and has-tool-results (< total-lines 100))
         (list :strategy 'recent-history
               :context (string-join recent-lines "\n")
