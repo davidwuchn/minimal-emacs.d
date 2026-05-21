@@ -1734,6 +1734,25 @@ The retry trigger must match this so the daemon refreshes and retries."
   (let ((gptel-auto-workflow--auto-promote-staging nil))
     (should-not (gptel-auto-workflow--promote-staging-to-main))))
 
+(ert-deftest regression/auto-promote/no-force-push-to-main ()
+  "promote-staging-to-main must never force-push main.
+The docstring documents the safety policy.  Human-pushed commits to main
+must survive daemon auto-promotion cycles."
+  (should (fboundp 'gptel-auto-workflow--promote-staging-to-main))
+  (let ((doc (or (documentation 'gptel-auto-workflow--promote-staging-to-main) "")))
+    (should (string-match-p "Never force-pushes main" doc))))
+
+(ert-deftest regression/auto-promote/fast-forwards-origin-main-first ()
+  "promote-staging-to-main must merge origin/main into local main before staging.
+This ensures external commits are integrated, not dropped."
+  (let ((fn-body
+         (with-temp-buffer
+           (insert-file-contents
+            (expand-file-name "lisp/modules/gptel-tools-agent-staging-merge.el"
+                              (or (getenv "GIT_WORK_TREE") default-directory)))
+           (buffer-string))))
+    (should (string-match-p "git merge --ff-only.*main" fn-body))))
+
 ;; ─── Headless Backend Default Tests ───
 
 (load-file (expand-file-name "../lisp/modules/gptel-tools-agent-experiment-loop.el"
