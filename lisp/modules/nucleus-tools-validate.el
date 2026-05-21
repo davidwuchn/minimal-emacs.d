@@ -84,14 +84,15 @@ Returns (status . message) where status is:
 
 Returns list (ok warnings errors) counts."
   (let ((ok 0) (warnings 0) (errors 0))
-    (cl-loop for result in results
-             when (and (consp result) (consp (cdr result)))
-             do (let ((entry (cdr result)))
-                  (when (consp entry)
-                    (pcase (car entry)
-                      ('ok (cl-incf ok))
-                      ('warning (cl-incf warnings))
-                      ('error (cl-incf errors))))))
+    (when (proper-list-p results)
+      (cl-loop for result in results
+               when (and (consp result) (consp (cdr result)))
+               do (let ((entry (cdr result)))
+                    (when (consp entry)
+                      (pcase (car entry)
+                        ('ok (cl-incf ok))
+                        ('warning (cl-incf warnings))
+                        ('error (cl-incf errors)))))))
     (list ok warnings errors)))
 
 (defun nucleus--validate-all-tools ()
@@ -101,7 +102,9 @@ Returns alist of (tool-name status . message). Results are cached
 for `nucleus--validation-cache-ttl' seconds."
   (or (nucleus--get-cached-validation)
       (let ((results '()))
-        (when (and (boundp 'nucleus-tool-prompts) nucleus-tool-prompts)
+        (when (and (boundp 'nucleus-tool-prompts)
+                   (proper-list-p nucleus-tool-prompts)
+                   nucleus-tool-prompts)
           (cl-loop for (tool-name . prompt-text) in nucleus-tool-prompts
                    do (push (cons tool-name (nucleus--validate-tool tool-name prompt-text))
                             results)))
