@@ -195,11 +195,15 @@
 **Remote Changes Pulled:**
 - `e3e62ad2` — ⊘ Fix ontology workflow regressions (docstring cleanup, forward declarations)
 - `0d21c298` — ◈ Optimize gptel-tools-agent-error.el experiments (4 optimize branches)
+- `87addb31` — ◈ Merge optimize/memory-neopi5-r190408z703b-exp1 (knowledge-p boolean validation)
 
-**Fix Applied:**
-- `gptel-auto-workflow--experiment-time-gaps` was void (called at evolution.el:1977, defined at :2659 but never loaded due to paren imbalance)
-- Added fallback definition to `evolution-fix.el`
-- Fixes self-evolution step error in daemon pipeline
+**Fixes Applied:**
+1. `gptel-auto-workflow--experiment-time-gaps` void-function:
+   - Called at evolution.el:1977, defined at :2659 but never loaded due to paren imbalance
+   - Added fallback definition to `evolution-fix.el`
+2. Corrupted `evolution-scores.json`:
+   - Nested arrays caused `Wrong type argument: plistp` error
+   - Backed up corrupted file; daemon will recreate on next cycle
 
 **Test Results:**
 - Evolution: 172/172 ✅
@@ -207,6 +211,11 @@
 
 **Commits:**
 - `f4d4d979` — ⊘ Fix void-function gptel-auto-workflow--experiment-time-gaps
+- `8025f037` — ◈ Update state.md
+
+**Daemon Status:**
+- Auto-workflow: ✅ Running (PID 3016326, started 19:03)
+- Current step: Auto-Workflow (since 19:04, max 4h)
 
 **Prior Sessions:**
 - Backend Performance Analysis + Ontology Router
