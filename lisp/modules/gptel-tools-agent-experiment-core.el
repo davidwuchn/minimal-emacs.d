@@ -153,7 +153,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
             (gptel-auto-experiment--call-in-context
              experiment-buffer experiment-worktree
              (lambda ()
-                (let* ((patterns (when analysis (plist-get analysis :patterns)))
+                 (let* ((patterns (when (proper-list-p analysis) (plist-get analysis :patterns)))
                        ;; Select prompt-building strategy based on historical performance
                        (strategy-name (if (and (boundp 'gptel-auto-workflow--strategy-evolution-enabled)
                                                gptel-auto-workflow--strategy-evolution-enabled
