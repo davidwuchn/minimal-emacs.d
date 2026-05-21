@@ -221,7 +221,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
            (bytes-saved 0))
-      (when (and messages (> (length messages) 0))
+      (when (and (vectorp messages) (> (length messages) 0))
         (let ((tool-indices
                (my/gptel--collect-message-indices
                 messages
@@ -338,7 +338,7 @@ Returns the number of messages whose reasoning_content was stripped."
                      (truncate raw-keep)
                    0))
            (stripped 0))
-      (when (and messages (> (length messages) 0))
+      (when (and (vectorp messages) (> (length messages) 0))
         (let ((reasoning-indices
                (my/gptel--collect-message-indices
                 messages
@@ -404,7 +404,7 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
          (struct-tools (plist-get info :tools))            ; list of gptel-tool structs
          (used-names (make-hash-table :test #'equal))
          (removed 0))
-    (when (and messages data-tools (> (length data-tools) 0))
+    (when (and (vectorp messages) data-tools (> (length data-tools) 0))
       ;; Pass 1: collect all tool names referenced in tool_calls
       (dotimes (i (length messages))
         (let* ((msg (aref messages i))
@@ -488,7 +488,8 @@ ASSUMPTION: Role values are strings, compared with `equal'."
 PREDICATE is a function that takes a message plist and returns non-nil if it matches.
 Returns a list of indices in ascending order, or nil if PREDICATE is not a function.
 ASSUMPTION: PREDICATE is a valid function; nil or non-function returns nil immediately.
-EDGE CASE: Non-function predicate returns nil (no runtime error)."
+EDGE CASE: Non-function predicate returns nil (no runtime error).
+EDGE CASE: messages must be a vector (not list) for indexed access via `aref'."
   (when (and (functionp predicate)
              (vectorp messages)
              (> (length messages) 0))
@@ -523,7 +524,7 @@ Returns the number of image parts removed, or 0 if nothing was done."
                                         when (eq (aref part i) :type)
                                         return (aref part (1+ i))))))
                    (equal type "image_url"))))))
-    (when (and messages (> (length messages) 0))
+    (when (and (vectorp messages) (> (length messages) 0))
       (dotimes (i (length messages))
         (let* ((msg (aref messages i))
                (content (plist-get msg :content)))

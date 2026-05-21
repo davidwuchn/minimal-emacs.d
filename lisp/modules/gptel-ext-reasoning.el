@@ -154,7 +154,7 @@ many proxies crash with 400 Bad Request. We inject a dummy to satisfy validation
   (when-let* ((data  (plist-get info :data))
               (msgs  (plist-get data :messages)))
     (let* ((tools (plist-get data :tools))
-           (has-tools (and tools (> (length tools) 0))))
+           (has-tools (and (sequencep tools) (> (length tools) 0))))
       (unless has-tools
         (let ((has-history-tools nil))
           (cl-loop for msg across msgs

@@ -512,12 +512,13 @@ Returns nil if data not available."
             (when (and topics (hash-table-p topics))
               (let ((total-exp (gethash "total_experiments" data 0))
                     (total-kept 0))
-                 ;; Calculate total kept across all topics
-                 ;; Use lambda directly — cl-flet closures can cause
-                 ;; "maphash corruption" with some Emacs builds.
-                 (maphash (lambda (_topic stats)
-                            (setq total-kept (+ total-kept (gethash "kept" stats 0))))
-                          topics)
+                  ;; Calculate total kept across all topics.
+                  ;; Avoid maphash due to corruption issues in some Emacs builds.
+                  ;; Use manual key iteration instead.
+                  (dolist (topic-key (hash-table-keys topics))
+                    (let ((stats (gethash topic-key topics)))
+                      (when (hash-table-p stats)
+                        (setq total-kept (+ total-kept (gethash "kept" stats 0))))))
                 (list :effectiveness (if (> total-exp 0)
                                          (round (/ (* 100.0 total-kept) total-exp))
                                        0)
@@ -590,15 +591,16 @@ Returns placeholder message if TOPICS is nil or empty."
           (zerop (hash-table-count topics)))
       "*No topic performance data available.*"
     (let ((topic-list nil))
-      ;; Use lambda directly — cl-flet closures can cause
-      ;; "maphash corruption" with some Emacs builds.
-      (maphash (lambda (topic stats)
-                 (let ((success-rate (gethash "success_rate" stats 0))
-                       (total (gethash "total_experiments" stats 0))
-                       (kept (gethash "kept" stats 0))
-                       (trend (gethash "trend" stats "stable")))
-                   (push (list topic success-rate total kept trend) topic-list)))
-               topics)
+      ;; Avoid maphash due to corruption issues in some Emacs builds.
+      ;; Use manual key iteration instead.
+      (dolist (topic-key (hash-table-keys topics))
+        (let ((stats (gethash topic-key topics)))
+          (when (hash-table-p stats)
+            (let ((success-rate (gethash "success_rate" stats 0))
+                  (total (gethash "total_experiments" stats 0))
+                  (kept (gethash "kept" stats 0))
+                  (trend (gethash "trend" stats "stable")))
+              (push (list topic-key success-rate total kept trend) topic-list)))))
       (setq topic-list (sort topic-list (lambda (a b) (> (nth 1 a) (nth 1 b)))))
       ;; Format as markdown
       (concat "| Topic | Success Rate | Kept/Total | Trend |\n"
@@ -758,17 +760,18 @@ Returns empty string when no trace data is available."
                                  (1+ (nth 1 stats)))
                        source-stats)))))
       ;; Format outcome summary.
-      ;; Use lambda directly — cl-flet closures can cause
-      ;; "maphash corruption" with some Emacs builds.
-      (maphash (lambda (key stats)
-                 (let ((kept (nth 0 stats))
-                       (total (nth 1 stats)))
-                   (when (> total 0)
-                     (push (format "- **%s**: %d/%d kept (%.0f%%)"
-                                   key kept total
-                                   (* 100 (/ (float kept) total)))
-                           lines))))
-               source-stats)
+      ;; Avoid maphash due to corruption issues in some Emacs builds.
+      ;; Use manual key iteration instead.
+      (dolist (key (hash-table-keys source-stats))
+        (let ((stats (gethash key source-stats)))
+          (when stats
+            (let ((kept (nth 0 stats))
+                  (total (nth 1 stats)))
+              (when (> total 0)
+                (push (format "- **%s**: %d/%d kept (%.0f%%)"
+                              key kept total
+                              (* 100 (/ (float kept) total)))
+                      lines))))))
       (if lines
           (string-join (sort lines #'string<) "\n")
         ""))))
