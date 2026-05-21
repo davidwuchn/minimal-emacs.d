@@ -1945,7 +1945,7 @@ must not override it to MiniMax via setq-local in subagent buffers."
   (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
              (lambda ()
                (list '(:target "test-a" :timestamp 1000)
-                     '(:target "test-b" :timestamp 10000)))))  ;; gap = 9000s > 3600s
+                     '(:target "test-b" :timestamp 10000)))))
     (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
       (should gaps)
       (should (= 1 (length gaps)))
@@ -1957,10 +1957,8 @@ must not override it to MiniMax via setq-local in subagent buffers."
   (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
              (lambda ()
                (list '(:target "test-a" :timestamp 1000)
-                     '(:target "test-b" :timestamp 5000)))))  ;; gap = 4000s
-    ;; With 1hr threshold (3600s), gap of 4000s should be detected
+                     '(:target "test-b" :timestamp 5000)))))
     (should (gptel-auto-workflow--experiment-time-gaps 3600))
-    ;; With 2hr threshold (7200s), gap of 4000s should NOT be detected
     (should-not (gptel-auto-workflow--experiment-time-gaps 7200))))
 
 (ert-deftest tdd/experiment-time-gaps/multiple-gaps ()
@@ -1968,9 +1966,9 @@ must not override it to MiniMax via setq-local in subagent buffers."
   (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
              (lambda ()
                (list '(:target "a" :timestamp 1000)
-                     '(:target "b" :timestamp 10000)   ;; gap: 9000
-                     '(:target "c" :timestamp 11000)   ;; gap: 1000 (below)
-                     '(:target "d" :timestamp 20000))))) ;; gap: 9000
+                     '(:target "b" :timestamp 10000)
+                     '(:target "c" :timestamp 11000)
+                     '(:target "d" :timestamp 20000)))))
     (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
       (should (= 2 (length gaps)))
       (should (equal "b" (caar gaps)))
@@ -1980,12 +1978,10 @@ must not override it to MiniMax via setq-local in subagent buffers."
   "experiment-time-gaps handles unsorted results correctly."
   (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
              (lambda ()
-               ;; delivered out of order
                (list '(:target "b" :timestamp 10000)
                      '(:target "a" :timestamp 1000)
                      '(:target "c" :timestamp 11000)))))
     (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
-      ;; gap from a→b is 9000s, b→c is 1000s; only a→b qualifies
       (should (= 1 (length gaps)))
       (should (equal "b" (caar gaps))))))
 
