@@ -1859,6 +1859,158 @@ must not override it to MiniMax via setq-local in subagent buffers."
      (void-variable (equal (cadr err) 'pruned))
      (error nil))))
 
+
+;; ─── TDD: deductive-explain ───
+
+(ert-deftest tdd/deductive-explain/keep-rate-only ()
+  "deductive-explain with keep-rate only returns keep-rate-observed proof."
+  (let ((result (gptel-auto-workflow--deductive-explain '((keep-rate . 0.75)))))
+    (should (= 1 (length result)))
+    (should (equal "keep-rate-observed" (plist-get (car result) :goal)))
+    (should (= 0.75 (plist-get (car result) :confidence)))
+    (should (= 1 (plist-get (car result) :premises-count)))))
+
+(ert-deftest tdd/deductive-explain/experiments-only ()
+  "deductive-explain with total-experiments returns experiments-conducted proof."
+  (let ((result (gptel-auto-workflow--deductive-explain '((total-experiments . 50)))))
+    (should (= 1 (length result)))
+    (should (equal "experiments-conducted" (plist-get (car result) :goal)))
+    (should (= 0.5 (plist-get (car result) :confidence)))
+    (should (= 1 (plist-get (car result) :premises-count)))))
+
+(ert-deftest tdd/deductive-explain/confidence-capped-at-1 ()
+  "deductive-explain caps experiments-conducted confidence at 1.0."
+  (let ((result (gptel-auto-workflow--deductive-explain '((total-experiments . 200)))))
+    (should (<= (plist-get (car result) :confidence) 1.0))))
+
+(ert-deftest tdd/deductive-explain/both-facts ()
+  "deductive-explain with both keep-rate and total-experiments returns two proofs."
+  (let ((result (gptel-auto-workflow--deductive-explain
+                 '((keep-rate . 0.60) (total-experiments . 42)))))
+    (should (= 2 (length result)))
+    (should (equal "keep-rate-observed" (plist-get (nth 0 result) :goal)))
+    (should (equal "experiments-conducted" (plist-get (nth 1 result) :goal)))))
+
+(ert-deftest tdd/deductive-explain/zero-experiments-no-proof ()
+  "deductive-explain with total-experiments 0 must not produce experiments proof."
+  (let ((result (gptel-auto-workflow--deductive-explain '((total-experiments . 0)))))
+    (should-not (cl-find "experiments-conducted" result
+                         :test #'equal :key (lambda (p) (plist-get p :goal))))))
+
+(ert-deftest tdd/deductive-explain/empty-facts-fallback ()
+  "deductive-explain with empty facts returns system-operational fallback."
+  (let ((result (gptel-auto-workflow--deductive-explain nil)))
+    (should (= 1 (length result)))
+    (should (equal "system-operational" (plist-get (car result) :goal)))
+    (should (= 0.5 (plist-get (car result) :confidence)))
+    (should (= 0 (plist-get (car result) :premises-count)))))
+
+(ert-deftest tdd/deductive-explain/irrelevant-facts-fallback ()
+  "deductive-explain with irrelevant facts returns system-operational fallback."
+  (let ((result (gptel-auto-workflow--deductive-explain '((foo . bar) (baz . 123)))))
+    (should (equal "system-operational" (plist-get (car result) :goal)))))
+
+(ert-deftest tdd/deductive-explain/return-type-is-list-of-plists ()
+  "deductive-explain returns a list where each element is a plist with required keys."
+  (let ((result (gptel-auto-workflow--deductive-explain '((keep-rate . 0.5)))))
+    (should (listp result))
+    (should (plist-get (car result) :goal))
+    (should (numberp (plist-get (car result) :confidence)))
+    (should (integerp (plist-get (car result) :premises-count)))))
+
+;; ─── TDD: experiment-time-gaps ───
+
+(ert-deftest tdd/experiment-time-gaps/no-results ()
+  "experiment-time-gaps returns nil when there are no results."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda () nil)))
+    (should-not (gptel-auto-workflow--experiment-time-gaps))))
+
+(ert-deftest tdd/experiment-time-gaps/single-result-no-gap ()
+  "experiment-time-gaps with a single result returns nil."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda () (list '(:target "test-a" :timestamp 1000)))))
+    (should-not (gptel-auto-workflow--experiment-time-gaps))))
+
+(ert-deftest tdd/experiment-time-gaps/within-threshold-no-gap ()
+  "experiment-time-gaps returns nil when all results are within the threshold."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list '(:target "test-a" :timestamp 1000)
+                     '(:target "test-b" :timestamp 3000)))))
+    (should-not (gptel-auto-workflow--experiment-time-gaps))))
+
+(ert-deftest tdd/experiment-time-gaps/exceeds-default-threshold ()
+  "experiment-time-gaps detects gap >3600s (default threshold)."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list '(:target "test-a" :timestamp 1000)
+                     '(:target "test-b" :timestamp 10000)))))  ;; gap = 9000s > 3600s
+    (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
+      (should gaps)
+      (should (= 1 (length gaps)))
+      (should (equal "test-b" (caar gaps)))
+      (should (= 10000 (cdar gaps))))))
+
+(ert-deftest tdd/experiment-time-gaps/custom-threshold ()
+  "experiment-time-gaps respects custom THRESHOLD-SECONDS argument."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list '(:target "test-a" :timestamp 1000)
+                     '(:target "test-b" :timestamp 5000)))))  ;; gap = 4000s
+    ;; With 1hr threshold (3600s), gap of 4000s should be detected
+    (should (gptel-auto-workflow--experiment-time-gaps 3600))
+    ;; With 2hr threshold (7200s), gap of 4000s should NOT be detected
+    (should-not (gptel-auto-workflow--experiment-time-gaps 7200))))
+
+(ert-deftest tdd/experiment-time-gaps/multiple-gaps ()
+  "experiment-time-gaps returns all gaps exceeding the threshold."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list '(:target "a" :timestamp 1000)
+                     '(:target "b" :timestamp 10000)   ;; gap: 9000
+                     '(:target "c" :timestamp 11000)   ;; gap: 1000 (below)
+                     '(:target "d" :timestamp 20000))))) ;; gap: 9000
+    (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
+      (should (= 2 (length gaps)))
+      (should (equal "b" (caar gaps)))
+      (should (equal "d" (caadr gaps))))))
+
+(ert-deftest tdd/experiment-time-gaps/unsorted-results-handled ()
+  "experiment-time-gaps handles unsorted results correctly."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               ;; delivered out of order
+               (list '(:target "b" :timestamp 10000)
+                     '(:target "a" :timestamp 1000)
+                     '(:target "c" :timestamp 11000)))))
+    (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
+      ;; gap from a→b is 9000s, b→c is 1000s; only a→b qualifies
+      (should (= 1 (length gaps)))
+      (should (equal "b" (caar gaps))))))
+
+(ert-deftest tdd/experiment-time-gaps/no-timestamp-filtered ()
+  "experiment-time-gaps filters out results without numeric :timestamp."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list '(:target "a" :timestamp "not-a-number")
+                     '(:target "b" :timestamp 1000)
+                     '(:target "c" :timestamp 10000)))))
+    (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
+      (should (= 1 (length gaps)))
+      (should (equal "c" (caar gaps))))))
+
+(ert-deftest tdd/experiment-time-gaps/return-type-is-alist ()
+  "experiment-time-gaps returns alist of (target . timestamp) pairs."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list '(:target "a" :timestamp 1000)
+                     '(:target "b" :timestamp 10000)))))
+    (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
+      (should (consp (car gaps)))
+      (should (stringp (caar gaps)))
+      (should (numberp (cdar gaps))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
