@@ -2091,6 +2091,114 @@ must not override it to MiniMax via setq-local in subagent buffers."
       (should (stringp (caar gaps)))
       (should (numberp (cdar gaps))))))
 
+;; ─── TDD: backend head-to-head comparison ───
+
+(ert-deftest tdd/backend-h2h/same-backend-no-shared-targets ()
+  "head-to-head with same backend returns 0 shared targets."
+  (when (fboundp 'gptel-auto-workflow--backend-head-to-head-stats)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list '(:target "a.el" :backend "MiniMax" :decision "kept")
+                       '(:target "a.el" :backend "MiniMax" :decision "kept")
+                       '(:target "a.el" :backend "MiniMax" :decision "discarded")
+                       '(:target "b.el" :backend "DeepSeek" :decision "kept")
+                       '(:target "b.el" :backend "DeepSeek" :decision "kept")
+                       '(:target "b.el" :backend "DeepSeek" :decision "discarded")))))
+      (let ((result (gptel-auto-workflow--backend-head-to-head-stats "MiniMax" "DeepSeek")))
+        ;; No target has >=3 experiments for BOTH backends
+        (should (= 0 (plist-get result :shared-targets)))))))
+
+(ert-deftest tdd/backend-h2h/clear-winner ()
+  "head-to-head correctly identifies the higher keep-rate backend."
+  (when (fboundp 'gptel-auto-workflow--backend-head-to-head-stats)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list '(:target "shared.el" :backend "MiniMax" :decision "kept")
+                       '(:target "shared.el" :backend "MiniMax" :decision "kept")
+                       '(:target "shared.el" :backend "MiniMax" :decision "kept")
+                       '(:target "shared.el" :backend "MiniMax" :decision "discarded")
+                       '(:target "shared.el" :backend "DeepSeek" :decision "kept")
+                       '(:target "shared.el" :backend "DeepSeek" :decision "discarded")
+                       '(:target "shared.el" :backend "DeepSeek" :decision "discarded")
+                       '(:target "shared.el" :backend "DeepSeek" :decision "discarded")))))
+      (let ((result (gptel-auto-workflow--backend-head-to-head-stats "MiniMax" "DeepSeek")))
+        (should (= 1 (plist-get result :shared-targets)))
+        (should (> (plist-get result :a-rate) (plist-get result :b-rate)))
+        (should (equal "MiniMax" (plist-get result :winner)))))))
+
+(ert-deftest tdd/backend-h2h/tie-when-close ()
+  "head-to-head returns 'tie when keep-rates are within 3%."
+  (when (fboundp 'gptel-auto-workflow--backend-head-to-head-stats)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list '(:target "shared.el" :backend "MiniMax" :decision "kept")
+                       '(:target "shared.el" :backend "MiniMax" :decision "kept")
+                       '(:target "shared.el" :backend "MiniMax" :decision "discarded")
+                       '(:target "shared.el" :backend "DeepSeek" :decision "kept")
+                       '(:target "shared.el" :backend "DeepSeek" :decision "kept")
+                       '(:target "shared.el" :backend "DeepSeek" :decision "discarded")))))
+      (let ((result (gptel-auto-workflow--backend-head-to-head-stats "MiniMax" "DeepSeek")))
+        (should (= 1 (plist-get result :shared-targets)))
+        (should (eq 'tie (plist-get result :winner)))))))
+
+(ert-deftest tdd/backend-h2h/multiple-shared-targets ()
+  "head-to-head aggregates across multiple shared targets."
+  (when (fboundp 'gptel-auto-workflow--backend-head-to-head-stats)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list '(:target "a.el" :backend "MiniMax" :decision "kept")
+                       '(:target "a.el" :backend "MiniMax" :decision "kept")
+                       '(:target "a.el" :backend "MiniMax" :decision "discarded")
+                       '(:target "a.el" :backend "DeepSeek" :decision "kept")
+                       '(:target "a.el" :backend "DeepSeek" :decision "discarded")
+                       '(:target "a.el" :backend "DeepSeek" :decision "discarded")
+                       '(:target "b.el" :backend "MiniMax" :decision "kept")
+                       '(:target "b.el" :backend "MiniMax" :decision "kept")
+                       '(:target "b.el" :backend "MiniMax" :decision "kept")
+                       '(:target "b.el" :backend "DeepSeek" :decision "kept")
+                       '(:target "b.el" :backend "DeepSeek" :decision "discarded")
+                       '(:target "b.el" :backend "DeepSeek" :decision "discarded")))))
+      (let ((result (gptel-auto-workflow--backend-head-to-head-stats "MiniMax" "DeepSeek")))
+        (should (= 2 (plist-get result :shared-targets)))
+        (should (> (plist-get result :a-rate) 0.5))))))
+
+(ert-deftest tdd/backend-h2h/insufficient-data-below-3 ()
+  "head-to-head requires >=3 experiments per backend per target."
+  (when (fboundp 'gptel-auto-workflow--backend-head-to-head-stats)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list '(:target "shared.el" :backend "MiniMax" :decision "kept")
+                       '(:target "shared.el" :backend "MiniMax" :decision "kept")
+                       '(:target "shared.el" :backend "DeepSeek" :decision "kept")
+                       '(:target "shared.el" :backend "DeepSeek" :decision "kept")))))
+      (let ((result (gptel-auto-workflow--backend-head-to-head-stats "MiniMax" "DeepSeek")))
+        ;; Only 2 experiments each → below 3 threshold
+        (should (= 0 (plist-get result :shared-targets)))))))
+
+(ert-deftest tdd/backend-h2h/unknown-backends-no-crash ()
+  "head-to-head with backends not in data returns empty results."
+  (when (fboundp 'gptel-auto-workflow--backend-head-to-head-stats)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () nil)))
+      (let ((result (gptel-auto-workflow--backend-head-to-head-stats "FooAI" "BarAI")))
+        (should (= 0 (plist-get result :shared-targets)))
+        (should (eq 'tie (plist-get result :winner)))))))
+
+;; ─── TDD: backend comparison report ───
+
+(ert-deftest tdd/backend-comparison/report-generates-markdown ()
+  "evolution-backend-comparison-report produces markdown with heading."
+  (when (fboundp 'gptel-auto-workflow--evolution-backend-comparison-report)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--evolution-backend-stats)
+               (lambda () '(("MiniMax" . 0.20) ("DeepSeek" . 0.19)
+                            ("moonshot" . 0.15) ("CF-Gateway" . 0.12)))))
+      (let ((report (gptel-auto-workflow--evolution-backend-comparison-report)))
+        (should (stringp report))
+        (should (string-match-p "^# Backend" report))
+        (should (string-match-p "Generated:" report))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

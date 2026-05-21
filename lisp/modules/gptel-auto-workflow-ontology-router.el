@@ -257,9 +257,9 @@ Reorders fallback chain before each experiment based on historical performance."
       ;; Reset to static order after experiment
       (gptel-auto-workflow--reset-fallback-order))))
 
-;; ;; Uncomment to enable ontology-aware fallback reordering
-;; (advice-add 'gptel-auto-experiment-run
-;;             :around #'gptel-auto-workflow--ontology-fallback-advice)
+;; Enabled: ontology-aware fallback reordering on every experiment
+(advice-add 'gptel-auto-experiment-run
+            :around #'gptel-auto-workflow--ontology-fallback-advice)
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here

@@ -236,5 +236,69 @@
       (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
                      gptel-auto-workflow-headless-subagent-fallbacks)))))
 
+;; ─── Advice Integration Tests ───
+
+(ert-deftest tdd/ontology-router/advice-is-active ()
+  "Ontology fallback advice must be active on gptel-auto-experiment-run."
+  (should (advice-member-p #'gptel-auto-workflow--ontology-fallback-advice
+                           'gptel-auto-experiment-run)))
+
+(ert-deftest tdd/ontology-router/apply-reorders-fallbacks ()
+  "apply-ontology-fallback-order reorders executor fallbacks for a target.
+Guards against missing runtime dependencies (worktree-base-root)."
+  (when (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+             (fboundp 'gptel-auto-workflow--parse-all-results))
+    (let ((original gptel-auto-workflow-executor-rate-limit-fallbacks))
+      (unwind-protect
+          (condition-case nil
+              (progn
+                (gptel-auto-workflow--apply-ontology-fallback-order
+                 nil "lisp/modules/gptel-fsm.el")
+                (should gptel-auto-workflow-executor-rate-limit-fallbacks)
+                (should (cl-every #'consp gptel-auto-workflow-executor-rate-limit-fallbacks)))
+            (error nil))
+        (setq gptel-auto-workflow-executor-rate-limit-fallbacks original)))))
+
+(ert-deftest tdd/ontology-router/reset-restores-static-order ()
+  "reset-fallback-order restores the static headless fallback list."
+  (let ((original gptel-auto-workflow-executor-rate-limit-fallbacks))
+    (unwind-protect
+        (progn
+          (setq gptel-auto-workflow-executor-rate-limit-fallbacks
+                '(("CustomBackend" . "custom-model")))
+          (gptel-auto-workflow--reset-fallback-order)
+          (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
+                         gptel-auto-workflow-headless-subagent-fallbacks)))
+      (setq gptel-auto-workflow-executor-rate-limit-fallbacks original))))
+
+(ert-deftest tdd/ontology-router/categorize-programming-targets ()
+  "categorize-target returns :programming for .el source files."
+  (when (fboundp 'gptel-auto-workflow--categorize-target)
+    (should (eq :programming (gptel-auto-workflow--categorize-target
+                              "lisp/modules/gptel-fsm.el")))
+    (should (eq :programming (gptel-auto-workflow--categorize-target
+                              "lisp/modules/gptel-ext-code.el")))
+    ;; gptel-ext-* modules are :programming (code-processing tools)
+    (should (eq :programming (gptel-auto-workflow--categorize-target
+                              "lisp/modules/gptel-ext-bash.el")))))
+
+(ert-deftest tdd/ontology-router/categorize-tool-call-targets ()
+  "categorize-target returns :tool-calls for sandbox/tool-execution modules."
+  (when (fboundp 'gptel-auto-workflow--categorize-target)
+    (should (eq :tool-calls (gptel-auto-workflow--categorize-target
+                              "lisp/modules/gptel-tools-sandbox.el")))
+    (should (eq :tool-calls (gptel-auto-workflow--categorize-target
+                              "lisp/modules/gptel-tools-bash.el")))
+    (should (eq :tool-calls (gptel-auto-workflow--categorize-target
+                              "lisp/modules/gptel-tools-grep.el")))))
+
+(ert-deftest tdd/ontology-router/categorize-agentic-targets ()
+  "categorize-target returns :agentic for workflow/evolution/agent modules."
+  (when (fboundp 'gptel-auto-workflow--categorize-target)
+    (should (eq :agentic (gptel-auto-workflow--categorize-target
+                           "lisp/modules/gptel-tools-agent.el")))
+    (should (eq :agentic (gptel-auto-workflow--categorize-target
+                           "lisp/modules/gptel-auto-workflow-evolution.el")))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

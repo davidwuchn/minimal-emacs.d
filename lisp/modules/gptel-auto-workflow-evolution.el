@@ -1812,6 +1812,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (gptel-auto-workflow--skill-governance-run-cycle))
   (gptel-auto-workflow--evolution-record-score)
   (gptel-auto-workflow--evolution-optimize-backend-order)
+  ;; Step C.5: Head-to-head backend comparison (data-driven, no LLM calls)
+  (gptel-auto-workflow--evolution-persist-backend-comparison)
   ;; Throttle VSM health check to 1x/15min (expensive: allium LLM calls)
   (let ((now (float-time (current-time))))
     (when (or (null gptel-auto-workflow--vsm-health-last-run)
@@ -3921,6 +3923,116 @@ Moves better-performing backends to the front of the fallback chain."
       (insert (format ";; Generated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
       (insert (format "(setq gptel-auto-workflow-executor-rate-limit-fallbacks\n      '%S)\n"
                       chain)))))
+
+;; ─── Head-to-Head Backend Comparison ───
+
+(defun gptel-auto-workflow--backend-head-to-head-stats (backend-a backend-b)
+  "Compare BACKEND-A vs BACKEND-B on shared targets.
+Only considers targets where BOTH backends have >=3 experiments.
+Returns plist with :winner, :a-rate, :b-rate, :shared-targets, :a-wins, :b-wins."
+  (let* ((by-both (make-hash-table :test 'equal))
+         (results (gptel-auto-workflow--parse-all-results)))
+    (dolist (r results)
+      (let ((backend (or (plist-get r :backend) "unknown"))
+            (target (or (plist-get r :target) "unknown"))
+            (kept (equal (plist-get r :decision) "kept")))
+        (when (or (string= backend backend-a) (string= backend backend-b))
+          (let ((entry (or (gethash target by-both)
+                           (list :a-kept 0 :a-total 0 :b-kept 0 :b-total 0))))
+            (if (string= backend backend-a)
+                (progn (cl-incf (plist-get entry :a-total))
+                       (when kept (cl-incf (plist-get entry :a-kept))))
+              (cl-incf (plist-get entry :b-total))
+              (when kept (cl-incf (plist-get entry :b-kept))))
+            (puthash target entry by-both)))))
+    (let ((shared 0) (a-wins 0) (b-wins 0) (ties 0)
+          (a-total-kept 0) (a-total-exp 0)
+          (b-total-kept 0) (b-total-exp 0))
+      (maphash
+       (lambda (target entry)
+         (let ((a-total (plist-get entry :a-total))
+               (b-total (plist-get entry :b-total)))
+           (when (and (>= a-total 3) (>= b-total 3))
+             (cl-incf shared)
+             (cl-incf a-total-kept (plist-get entry :a-kept))
+             (cl-incf a-total-exp a-total)
+             (cl-incf b-total-kept (plist-get entry :b-kept))
+             (cl-incf b-total-exp b-total)
+             (let* ((a-rate (/ (float (plist-get entry :a-kept)) a-total))
+                    (b-rate (/ (float (plist-get entry :b-kept)) b-total))
+                    (diff (- a-rate b-rate)))
+               (cond ((> diff 0.05) (cl-incf a-wins))
+                     ((< diff -0.05) (cl-incf b-wins))
+                     (t (cl-incf ties)))))))
+       by-both)
+      (let* ((a-rate (if (> a-total-exp 0) (/ (float a-total-kept) a-total-exp) 0.0))
+             (b-rate (if (> b-total-exp 0) (/ (float b-total-kept) b-total-exp) 0.0))
+             (winner (cond ((> (- a-rate b-rate) 0.03) backend-a)
+                           ((> (- b-rate a-rate) 0.03) backend-b)
+                           (t 'tie))))
+        (list :winner (if (eq winner 'tie) 'tie winner)
+              :a-rate a-rate :b-rate b-rate
+              :shared-targets shared
+              :a-wins a-wins :b-wins b-wins :ties ties
+              :a-name backend-a :b-name backend-b)))))
+
+(defun gptel-auto-workflow--evolution-backend-comparison-report ()
+  "Generate head-to-head report for all backend pairs with sufficient data.
+Like promptfoo's comparison view: side-by-side backend evaluation.
+Returns a formatted string suitable for mementum/skill guidance."
+  (let* ((stats (gptel-auto-workflow--evolution-backend-stats))
+         (backends (mapcar #'car stats))
+         (pairs nil) (lines nil))
+    ;; Build all unique pairs with sufficient data
+    (let ((seen (make-hash-table :test 'equal)))
+      (dolist (a backends)
+        (dolist (b backends)
+          (when (and (not (equal a b))
+                     (not (gethash (list b a) seen)))
+            (puthash (list a b) t seen)
+            (let ((h2h (gptel-auto-workflow--backend-head-to-head-stats a b)))
+              (when (>= (plist-get h2h :shared-targets) 1)
+                (push (cons (cons a b) h2h) pairs)))))))
+    (setq pairs (sort pairs (lambda (x y)
+                              (> (plist-get (cdr x) :shared-targets)
+                                 (plist-get (cdr y) :shared-targets)))))
+    (push "# Backend Head-to-Head Comparison\n" lines)
+    (push (format "> Auto-generated from %d experiments across %d backends\n\n"
+                  (length (gptel-auto-workflow--parse-all-results))
+                  (length backends))
+          lines)
+    (dolist (pair pairs)
+      (let* ((h2h (cdr pair))
+             (a (plist-get h2h :a-name))
+             (b (plist-get h2h :b-name))
+             (winner (plist-get h2h :winner))
+             (a-rate (plist-get h2h :a-rate))
+             (b-rate (plist-get h2h :b-rate))
+             (shared (plist-get h2h :shared-targets)))
+        (push (format "## %s vs %s (winner: **%s**)\n" a b
+                      (if (eq winner 'tie) "tie" winner))
+              lines)
+        (push (format "- %s: %.1f%% keep-rate\n" a (* 100 a-rate)) lines)
+        (push (format "- %s: %.1f%% keep-rate\n" b (* 100 b-rate)) lines)
+        (push (format "- Shared targets: %d | %s won %d, %s won %d, ties %d\n\n"
+                      shared a (plist-get h2h :a-wins)
+                      b (plist-get h2h :b-wins)
+                      (plist-get h2h :ties))
+              lines)))
+    (push (format "\n*Generated: %s*\n" (format-time-string "%Y-%m-%d %H:%M")) lines)
+    (apply #'concat (nreverse lines))))
+
+(defun gptel-auto-workflow--evolution-persist-backend-comparison ()
+  "Save head-to-head backend comparison to mementum."
+  (let ((report (gptel-auto-workflow--evolution-backend-comparison-report))
+        (file (expand-file-name "mementum/knowledge/backend-comparison.md"
+                                (gptel-auto-workflow--worktree-base-root))))
+    (when report
+      (make-directory (file-name-directory file) t)
+      (with-temp-file file (insert report))
+      (let ((pairs (length (split-string report "## " t))))
+        (message "[evolution] Backend comparison: %d pair(s) analyzed → mementum"
+                 (max 0 (1- pairs)))))))
 
 ;; ─── Evolution Quality Gates ───
 
