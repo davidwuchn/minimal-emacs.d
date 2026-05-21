@@ -144,9 +144,10 @@ request is active."
                      ;; gptel's internal curl process is named "gptel-curl".
                      (string= (process-name proc) "gptel-curl")
                      ;; Also match by process buffer name.
-                     (and (process-buffer proc)
-                          (buffer-name (process-buffer proc))
-                          (string-match-p "gptel-curl" (buffer-name (process-buffer proc))))
+                     (let ((proc-buf (process-buffer proc)))
+                       (and proc-buf
+                            (stringp (buffer-name proc-buf))
+                            (string-match-p "gptel-curl" (buffer-name proc-buf))))
                      ;; Generic catch: gptel tool processes we create are named gptel-...
                      (string-prefix-p "gptel-" (process-name proc))))
         (cl-incf killed)
