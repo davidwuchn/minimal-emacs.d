@@ -27,17 +27,20 @@
     nil)
    ((not (gptel-auto-workflow--path-exists-or-symlink-p source))
     nil)
-   ((not (gptel-auto-workflow--safe-truename source))
-    nil)
    ((file-symlink-p target)
-    (let ((source-true (gptel-auto-workflow--safe-truename source))
-          (target-true (gptel-auto-workflow--safe-truename target)))
-      (if (and source-true target-true
-               (equal source-true target-true))
-          t
+    (let* ((source-true (gptel-auto-workflow--safe-truename source))
+           (target-true (gptel-auto-workflow--safe-truename target)))
+      (cond
+       ((not source-true) nil)
+       ((not target-true)
         (ignore-errors (delete-file target))
         (make-symbolic-link source target t)
-        t)))
+        t)
+       ((equal source-true target-true) t)
+       (t
+        (ignore-errors (delete-file target))
+        (make-symbolic-link source target t)
+        t))))
    ((file-exists-p target)
     t)
    (t
