@@ -42,10 +42,14 @@
   :group 'gptel-auto-workflow)
 
 (defcustom gptel-auto-workflow--router-backends
-  '(("moonshot" . (:model "kimi-k2.6" :strengths (complex reasoning) :cost 0.02))
-    ("openai" . (:model "gpt-4o" :strengths (general balanced) :cost 0.03))
-    ("minimax" . (:model "minimax-m2.7" :strengths (speed simple) :cost 0.005)))
-  "Available backends with metadata."
+  '(("moonshot" . (:model "kimi-k2.6" :strengths (complex reasoning long-context) :cost 0.02))
+    ("MiniMax" . (:model "minimax-m2.7-highspeed" :strengths (speed simple fast) :cost 0.005))
+    ("DashScope" . (:model "glm-5" :strengths (general balanced) :cost 0.01))
+    ("DeepSeek" . (:model "deepseek-v4-flash" :strengths (coding reasoning fast) :cost 0.015))
+    ("CF-Gateway" . (:model "@cf/openai/gpt-oss-120b" :strengths (fast-reasoning long-context) :cost 0.008)))
+  "Available backends from headless LLM fallback list.
+ONLY these backends/models are used for smart routing.
+Source: `gptel-auto-workflow-headless-subagent-fallbacks`."
   :type 'alist
   :group 'gptel-auto-workflow)
 

@@ -91,7 +91,7 @@
          (list
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")
-          (list :backend "minimax" :decision "discarded"))))
+          (list :backend "MiniMax" :decision "discarded"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                (lambda () mock-results)))
       (let ((perfs (gptel-auto-workflow--get-all-backend-performances)))
@@ -110,8 +110,8 @@
                 :decision "kept")
           (list :backend "moonshot" :strategy "strat" :target "lisp/foo.el"
                 :decision "kept")
-          (list :backend "minimax" :strategy "strat" :target "lisp/foo.el"
-                :decision "discarded"))))
+           (list :backend "MiniMax" :strategy "strat" :target "lisp/foo.el"
+                 :decision "discarded"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                (lambda () mock-results))
               ;; Force no exploration
