@@ -275,7 +275,55 @@
 - Will create fresh baselines from local main (with test fixes)
 - 3 pending experiment branches to verify: mementum-exp1, utils-exp1, validate-exp1
 
-**Prior Sessions:**
+## Current Session: Git-Embed Semantic Similarity Integration
+
+**Status:** Complete. Committed and pushed to origin/main (`82eaeb88`).
+
+**Changes:**
+1. **Semantic Similarity Functions** (`evolution.el`)
+   - `semantic-similarity-edges` — Queries git-embed for files similar to kept targets
+   - `semantic-relationship-report` — Generates markdown report
+   - `evolution-persist-semantic-relationships` — Persists to mementum/knowledge (Step C.7)
+2. **Ontology Router Integration** (`ontology-router.el`)
+   - `semantic-target-suggestions` — Suggests targets based on semantic similarity
+   - `semantic-targets-for-category` — Filters by ontology category
+3. **Strategic Target Selection** (`strategic.el`)
+   - `semantic-target-augmentation` — Augments target list when ≤3 targets
+   - Integrated into both analyzer and static selection paths
+4. **TDD Tests** — 10 new tests (all passing)
+   - Evolution: 6 semantic similarity tests
+   - Ontology: 4 semantic suggestion tests
+
+**Fixes During Commit:**
+- `lambda (t)` → `lambda (x)` (t is special constant)
+- `\s+` → `[ \t]+` (Emacs syntax class quirk)
+- `u003e=` → `>=` (unicode artifact from `pp`)
+
+**Validation:**
+- 213/213 evolution tests pass
+- 26/26 ontology tests pass
+- End-to-end: Found 20 semantic edges from kept targets (scores 0.88-0.93)
+
+## Current Session: Sync + Review Remote Changes
+
+**Status:** Synced with origin/main.
+
+**Remote Changes (`6fcce349`):**
+1. **New Strategy:** `strategy-failure-memory.el` — Cross-experiment failure pattern mining
+   - Mines recurring failure patterns across all previous experiments
+   - Injects anticipatory guidance to prevent recurring failures
+   - Analyzes complexity and domain signatures
+2. **Guard Fix (`8645b359`):** `proper-list-p` check on `previous-results` in strategy builders
+   - Prevents crashes when previous-results contains non-list elements
+   - Applied to: `failure-weighted-guidance`, `outcome-driven-sections`, `recency-weighted-skills`
+
+**Data Quality Issue Detected:**
+- Backend comparison shows corrupted backend names: "0", "18656", "19094" (look like PIDs/ports)
+- Model comparison similarly affected
+- Root cause: TSV field misalignment or corrupted `:backend` field in experiment logs
+- Experiment count grew from 1061 → 1366, but data quality degraded
+
+**Prior Sessions:
 - Sync + Staging-Main Sync + New Strategy
 - Backend Performance Analysis + Ontology Router
 - Pipeline E2E Fixes + Policy Reminder

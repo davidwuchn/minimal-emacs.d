@@ -271,6 +271,7 @@ Returns the message string or nil."
   "Return non-nil when ERROR-OUTPUT matches shared transient retry rules."
   (let ((msg (gptel-auto-experiment--error-message error-output)))
     (and (stringp msg)
+         (not (string-empty-p msg))
          (not (gptel-auto-experiment--aborted-agent-output-p msg))
          (fboundp 'my/gptel--transient-error-p)
          (my/gptel--transient-error-p msg nil))))

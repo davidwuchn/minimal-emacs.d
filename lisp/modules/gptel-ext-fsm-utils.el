@@ -188,7 +188,7 @@ EDGE CASE: Missing accessors handled gracefully."
            ((and (fboundp 'gptel-fsm-p) (fboundp 'gptel-fsm-state))
             #'gptel-fsm-p)
            ((fboundp 'gptel-fsm-state)
-            (lambda (obj) (ignore-errors (gptel-fsm-state obj) t)))
+            (lambda (obj) (ignore-errors (and (gptel-fsm-state obj) t))))
            (t
             (lambda (_obj) nil)))))
   my/gptel--fsm-predicate-fn)
