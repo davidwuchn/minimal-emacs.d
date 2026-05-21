@@ -132,8 +132,10 @@ request is active."
     (setq-local my/gptel--abort-generation (1+ my/gptel--abort-generation)))
 
   ;; Abort main gptel request
-  (when (fboundp 'gptel-abort)
-    (ignore-errors (gptel-abort (current-buffer))))
+  (when-let ((buf (current-buffer)))
+    (when (and (fboundp 'gptel-abort)
+               (buffer-live-p buf))
+      (ignore-errors (gptel-abort buf))))
   ;; Kill all gptel-related sub-processes.
   ;; Prefer the explicit tag `my/gptel-managed`, but also catch gptel's own curl
   ;; process (buffer is typically named " *gptel-curl*" with a leading space).
