@@ -244,6 +244,18 @@ pre-early-init.el, and post-early-init.el.")
 (when minimal-emacs-debug
   (setq message-log-max 16384))
 
+;; In daemon mode, increase message-log-max to prevent *Messages* buffer
+;; from truncating mid-message during concurrent loading. Default 1000
+;; lines overflows quickly during startup, producing "*ERROR*: Unknown
+;; message:" corruption from interleaved load writes.
+;; Also suppress load-verbose to eliminate the interleaving source.
+;; NOTE: (daemonp) returns nil during early-init; --daemon is stripped
+;; from command-line-args. Use our workflow daemon env var instead.
+(when (or (daemonp)
+          (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1"))
+  (setq message-log-max 65536)
+  (setq load-verbose nil))
+
 ;; Disable warnings from the legacy advice API. They aren't useful.
 (setq ad-redefinition-action 'accept)
 

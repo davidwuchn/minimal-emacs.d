@@ -486,7 +486,7 @@ Note: This will move the cursor."
     (condition-case nil
         (with-selected-window win
           (scroll-up-command))
-      (error nil))))
+      (error (ignore)))))
 
 (defun gptel-beginning-of-response (&optional beg _end arg)
   "Move point to BEG, or to the beginning of the LLM response ARG times."

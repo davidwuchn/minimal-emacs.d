@@ -1041,7 +1041,7 @@ MODE-SYM is typically a major-mode symbol."
       (goto-char url-http-end-of-headers)
       (condition-case nil
           (gptel--json-read)
-        (error nil)))))
+        (error (ignore))))))
 
 (defsubst gptel-prompt-prefix-string ()
   "Prefix before user prompts in `gptel-mode'."
