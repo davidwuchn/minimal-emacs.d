@@ -127,11 +127,12 @@
     (let ((mock-result '(:overall-score 0.85 :efficiency-score 0.9)))
       (gptel-benchmark-daily--wrap-skill-run
        (lambda (&rest _args) mock-result)
-       'test-skill 'test-001))
-    (should (= (length gptel-benchmark-daily-runs) 1))
-    (should (eq (plist-get (car gptel-benchmark-daily-runs) :type) 'skill))
-    (should (equal (plist-get (car gptel-benchmark-daily-runs) :results)
-                   '(:overall-score 0.85 :efficiency-score 0.9)))))
+       'test-skill 'test-001)
+      (should (consp gptel-benchmark-daily-runs))
+      (should (= (length gptel-benchmark-daily-runs) 1))
+      (should (eq (plist-get (car gptel-benchmark-daily-runs) :type) 'skill))
+      (should (equal (plist-get (car gptel-benchmark-daily-runs) :results)
+                     '(:overall-score 0.85 :efficiency-score 0.9))))))
 
 (ert-deftest gptel-benchmark-test-maybe-evolve-after-interval ()
   "Test that maybe-evolve triggers after interval runs."
@@ -139,7 +140,8 @@
     (setq gptel-benchmark-daily-runs nil
           gptel-benchmark-daily-run-count 0
           gptel-benchmark-daily-evolution-interval 3
-          gptel-benchmark-daily-auto-collect t)
+          gptel-benchmark-daily-auto-collect t
+          gptel-benchmark-evolution-triggered nil)
     (let ((evolve-called nil))
       (advice-add 'gptel-benchmark-evolution-cycle :before
                   (lambda (&rest _) (setq evolve-called t))

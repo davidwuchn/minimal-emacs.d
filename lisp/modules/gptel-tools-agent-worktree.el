@@ -371,8 +371,8 @@ diverged local state does not leak into workflow branches."
         (if (string= main-hash remote-hash)
             "main"
           (let* ((status-result (gptel-auto-workflow--git-result
-                                 "git status --porcelain"
-                                 60))
+                                  "git status --porcelain --untracked-files=no"
+                                  60))
                  (clean-main (and (= 0 (cdr status-result))
                                   (string-empty-p (string-trim (car status-result)))))
                  (ahead-result (and clean-main
