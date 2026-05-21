@@ -19,8 +19,9 @@
   "Compute skill effectiveness scores based on recency and success in PREVIOUS-RESULTS."
   (let ((skill-scores (make-hash-table :test #'equal)))
     (dolist (result (reverse previous-results) skill-scores)
-      (let* ((score (or (plist-get result :score) 0.5))
-             (timestamp (or (plist-get result :experiment-id) 0))
+      (when (proper-list-p result)
+        (let* ((score (or (plist-get result :score) 0.5))
+               (timestamp (or (plist-get result :experiment-id) 0))
              (recency-weight (exp (/ (- (float timestamp)) 10.0)))
              (used-skills (plist-get result :skills)))
         (dolist (skill (if (listp used-skills) used-skills (list used-skills)))

@@ -27,7 +27,8 @@
           (puthash ptype freq priorities))))
     ;; Boost priorities based on recent failures
     (dolist (result previous-results)
-      (when (plist-get result :failed-patterns)
+      (when (and (proper-list-p result)
+                 (plist-get result :failed-patterns))
         (dolist (fp (plist-get result :failed-patterns))
           (let ((current (gethash fp priorities 0)))
             (puthash fp (+ current 0.5) priorities)))))

@@ -8,8 +8,9 @@
   "Compute importance weights for pattern types based on failure history."
   (let ((pattern-stats '()))
     (dolist (result previous-results)
-      (let ((patterns (plist-get result :failure-patterns))
-            (outcome (plist-get result :outcome)))
+      (when (proper-list-p result)
+        (let ((patterns (plist-get result :failure-patterns))
+              (outcome (plist-get result :outcome)))
         (when patterns
           (dolist (pattern patterns)
             (let ((entry (assoc pattern pattern-stats)))
