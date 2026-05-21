@@ -139,11 +139,18 @@
 
 ;; ─── Graphify Pattern Tests ───
 
+(defun test--project-root ()
+  "Find project root relative to this test file."
+  (let ((this-file (or load-file-name
+                       buffer-file-name
+                       (expand-file-name "test-gptel-auto-workflow-evolution-regressions.el"))))
+    (expand-file-name ".." (file-name-directory this-file))))
+
 (ert-deftest regression/auto-workflow-evolution/extract-elisp-structure-returns-plist ()
   "Extraction should return a plist with expected keys."
   (let ((result (gptel-auto-workflow--extract-elisp-structure
                  (expand-file-name "lisp/modules/gptel-auto-workflow-evolution.el"
-                                   default-directory))))
+                                   (test--project-root)))))
     (should (plist-get result :defuns))
     (should (plist-get result :defvars))
     (should (plist-get result :requires))
@@ -153,7 +160,7 @@
   "Structure summary should produce a markdown code block."
   (let* ((structure (gptel-auto-workflow--extract-elisp-structure
                      (expand-file-name "lisp/modules/gptel-auto-workflow-evolution.el"
-                                       default-directory)))
+                                       (test--project-root))))
          (summary (gptel-auto-workflow--summarize-elisp-structure structure)))
     (should (string-match-p "```elisp-structure" summary))
     (should (string-match-p "defuns:" summary))
