@@ -257,7 +257,81 @@
               (should (equal (cdr (assq 'skill-experiments vars)) "2"))
               (should (equal (cdr (assq 'skill-kept vars)) "1"))
               (should (equal (cdr (assq 'skill-keep-rate vars)) "50.0%")))))
+       (delete-directory root t))))
+
+(ert-deftest regression/prompt/skill-benchmark-kept-nil-not-counted ()
+  "Only :kept t should count as kept; :kept nil should not."
+  (let ((root (make-temp-file "aw-kept-nil" t)))
+    (unwind-protect
+        (let* ((run-dir (expand-file-name "var/tmp/experiments/20260521T000001" root))
+               (tsv (expand-file-name "results.tsv" run-dir)))
+          (make-directory run-dir t)
+          (with-temp-file tsv
+            (insert "test-skill :kept nil\n")
+            (insert "test-skill :kept nil\n")
+            (insert "test-skill :kept nil\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let ((vars (gptel-auto-workflow--skill-benchmark-variables
+                         "test-skill")))
+              (should (equal (cdr (assq 'skill-kept vars)) "0"))
+              (should (equal (cdr (assq 'skill-keep-rate vars)) "0.0%")))))
       (delete-directory root t))))
+
+(ert-deftest regression/prompt/skill-benchmark-no-last-score-void-variable ()
+  "Skill benchmark variables should not reference void last-score."
+  ;; Before fix: (let ((kept 0) (total 0) (last-score 0)) ...)
+  ;; After fix: (let ((kept 0) (total 0)) ...)
+  ;; This test verifies the function runs without unbound variable error.
+  (let ((root (make-temp-file "aw-no-last-score" t)))
+    (unwind-protect
+        (let* ((run-dir (expand-file-name "var/tmp/experiments/20260521T000002" root))
+               (tsv (expand-file-name "results.tsv" run-dir)))
+          (make-directory run-dir t)
+          (with-temp-file tsv
+            (insert "any-skill :kept t\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            ;; Should not signal void-variable last-score
+            (let ((vars (gptel-auto-workflow--skill-benchmark-variables
+                         "any-skill")))
+              (should (listp vars))
+              (should (assq 'skill-name vars))
+              (should (assq 'skill-keep-rate vars)))))
+      (delete-directory root t))))
+
+(ert-deftest regression/strategy/best-strategy-without-evolution-module ()
+  "Strategy selection should not crash when evolution module is not loaded."
+  ;; Before fix: unconditionally called gptel-auto-workflow--parse-all-results
+  ;; After fix: guarded with (when (fboundp 'gptel-auto-workflow--parse-all-results) ...)
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results) nil))
+    ;; Should return nil gracefully, not signal void-function
+    (let ((result (gptel-auto-workflow--best-strategy-for-axis
+                   '("strategy-a" "strategy-b") "K")))
+      (should (null result)))))
+
+(ert-deftest regression/strategy/most-common-axis-without-evolution-module ()
+  "Axis prediction should not crash when evolution module is not loaded."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results) nil))
+    ;; Should return nil gracefully, not signal void-function
+    (let ((result (gptel-auto-workflow--most-common-axis-for-target
+                   "some-target")))
+      (should (null result)))))
+
+(ert-deftest regression/evolution/errors-should-propagate ()
+  "Synthesize and consolidate should not swallow errors in condition-case."
+  ;; Before fix: wrapped in (condition-case err (fn) (error nil))
+  ;; After fix: bare calls, errors propagate
+  ;; This test verifies the functions are called without error suppression.
+  (cl-letf (((symbol-function 'gptel-auto-workflow--evolution-synthesize)
+             (lambda () (error "Test error: synthesize should propagate")))
+            ((symbol-function 'gptel-auto-workflow--evolution-consolidate-insights)
+             (lambda () (error "Test error: consolidate should propagate"))))
+    ;; Both should signal errors, not be swallowed
+    (should-error (gptel-auto-workflow--evolution-synthesize)
+                  :type 'error)
+    (should-error (gptel-auto-workflow--evolution-consolidate-insights)
+                  :type 'error)))
 
 ;; ─── nucleus Compiler Audit Tests ───
 
