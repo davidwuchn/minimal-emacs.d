@@ -358,48 +358,53 @@ Returns non-nil if compaction was initiated."
         :buffer buf
         :callback
         (lambda (response _info)
-          (condition-case err
-              (with-current-buffer buf
-                (cond
-                 ((not (equal my/gptel-auto-compact-request-id request-id))
-                  (setq my/gptel-auto-compact-running nil)
-                  (message "[compact] Skipping stale callback (race condition)"))
-                 ((not (stringp response))
-                  (setq my/gptel-auto-compact-running nil)
-                  (setq my/gptel-auto-compact-last-run (current-time))
-                  (message "[compact] Error: No valid response"))
-                 (t
-                  (setq my/gptel-auto-compact-running nil)
-                  (setq my/gptel-auto-compact-last-run (current-time))
-                  (cl-incf my/gptel-auto-compact-attempts)
-                  (let* ((inhibit-read-only t)
-                         (point-before (point))
-                         (backup (buffer-string)))
-                    (if use-preview
-                        (progn
-                          (goto-char (point-max))
-                          (insert "\n\n")
-                          (insert (propertize "═══════════════════════════════════════════════════════════════\n"
-                                              'face '(:foreground "yellow" :weight bold)))
-                          (insert (propertize response 'face '(:foreground "cyan")))
-                          (insert (propertize (format "\nCOMPACTED: %s\n"
-                                                      (my/gptel--format-compaction-stats chars-before tokens-before))
-                                              'face '(:foreground "green" :weight bold)))
-                          (insert (propertize "═══════════════════════════════════════════════════════════════\n"
-                                              'face '(:foreground "yellow" :weight bold)))
-                          (message "[compact] Preview appended (original kept)"))
-                      (kill-new backup)
-                      (erase-buffer)
-                      (insert response)
-                      (goto-char (min point-before (point-max)))
-                      (message "[compact] Done: %s [backup in kill-ring]"
-                               (my/gptel--format-compaction-stats chars-before tokens-before)))))))
+          (condition-case err-sym
+              (prog1
+                  (with-current-buffer buf
+                    (cond
+                     ((not (equal my/gptel-auto-compact-request-id request-id))
+                      (setq my/gptel-auto-compact-running nil)
+                      (message "[compact] Skipping stale callback (race condition)"))
+                     ((not (stringp response))
+                      (setq my/gptel-auto-compact-running nil)
+                      (setq my/gptel-auto-compact-last-run (current-time))
+                      (message "[compact] Error: No valid response"))
+                     (t
+                      (setq my/gptel-auto-compact-running nil)
+                      (setq my/gptel-auto-compact-last-run (current-time))
+                      (cl-incf my/gptel-auto-compact-attempts)
+                      (let* ((inhibit-read-only t)
+                             (point-before (point))
+                             (backup (buffer-string)))
+                        (if use-preview
+                            (progn
+                              (goto-char (point-max))
+                              (insert "\n\n")
+                              (insert (propertize "═══════════════════════════════════════════════════════════════\n"
+                                                  'face '(:foreground "yellow" :weight bold)))
+                              (insert (propertize response 'face '(:foreground "cyan")))
+                              (insert (propertize (format "\nCOMPACTED: %s\n"
+                                                          (my/gptel--format-compaction-stats chars-before tokens-before))
+                                                  'face '(:foreground "green" :weight bold)))
+                              (insert (propertize "═══════════════════════════════════════════════════════════════\n"
+                                                  'face '(:foreground "yellow" :weight bold)))
+                              (message "[compact] Preview appended (original kept)"))
+                          (kill-new backup)
+                          (erase-buffer)
+                          (insert response)
+                          (goto-char (min point-before (point-max)))
+                          (message "[compact] Done: %s [backup in kill-ring]"
+                                   (my/gptel--format-compaction-stats chars-before tokens-before)))))))
+                (when (buffer-live-p buf)
+                  (with-current-buffer buf
+                    (setq my/gptel-auto-compact-running nil))))
             (error
-             (when (buffer-live-p buf)
-               (with-current-buffer buf
-                 (setq my/gptel-auto-compact-running nil)))
-             (message "[compact] Error: %s" (error-message-string err))))))
-        t))))
+             (prog1
+                 (message "[compact] Error: %s" (error-message-string err-sym))
+               (when (buffer-live-p buf)
+                 (with-current-buffer buf
+                   (setq my/gptel-auto-compact-running nil)))))))
+        t)))))
 
 (defun my/gptel-manual-compact (&optional arg)
   "Manually compact current gptel buffer.
