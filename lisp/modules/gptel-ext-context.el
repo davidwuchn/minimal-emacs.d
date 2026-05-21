@@ -454,7 +454,9 @@ Assumes LINE is a string. Returns t for lines matching user prefixes."
 (defun my/gptel--strip-user-prefix (line)
   "Strip user prefix from LINE and return the content.
 Assumes LINE is a string matching user prefix pattern."
-  (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" line))
+  (if (stringp line)
+      (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" line)
+    line))
 
 (defun my/gptel--extract-last-task-from-lines (lines)
   "Extract the most recent task/request from LINES.
