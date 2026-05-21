@@ -11,43 +11,43 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 1891 experiments (19% keep rate).*
+*Consolidated from 1212 experiments (19% keep rate).*
 
-**Performance:** 366 kept / 1076 discarded / 27 failed (EXTRACTED — from TSV)
+**Performance:** 232 kept / 650 discarded / 90 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-memory.el` (3 kept / 9 discarded)
-- `lisp/modules/gptel-ext-core.el` (10 kept / 12 discarded / 1 failed)
-- `lisp/modules/gptel-tools.el` (5 kept / 8 discarded)
-- `lisp/modules/gptel-ext-fsm-utils.el` (37 kept / 70 discarded / 1 failed)
-- `lisp/modules/gptel-tools-agent-experiment-loop.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-benchmark-instincts.el` (3 kept / 6 discarded)
-- `lisp/modules/gptel-benchmark-principles.el` (1 kept / 1 discarded / 2 failed)
-- `lisp/modules/gptel-benchmark-core.el` (20 kept / 48 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (11 kept / 37 discarded / 3 failed)
-- `lisp/modules/gptel-tools-agent.el` (61 kept / 156 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 3 discarded)
+- `lisp/modules/gptel-ext-abort.el` (2 kept / 4 discarded / 2 failed)
+- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
+- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 13 discarded / 1 failed)
+- `lisp/modules/gptel-tools-memory.el` (6 kept / 7 discarded)
+- `lisp/modules/gptel-ext-context.el` (7 kept / 14 discarded)
+- `lisp/modules/nucleus-tools.el` (6 kept / 12 discarded / 3 failed)
+- `lisp/modules/gptel-ext-fsm-utils.el` (9 kept / 23 discarded / 6 failed)
+- `lisp/modules/gptel-benchmark-evolution.el` (7 kept / 14 discarded / 2 failed)
+- `lisp/modules/gptel-benchmark-principles.el` (3 kept / 3 discarded / 1 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-tools-memory--project-root, gptel-tools-memory--invalidate-cache, gptel-tools-memory--resolve-path, gptel-tools-memory--read, gptel-tools-memory--write, gptel-tools-memory--collect-dir, gptel-tools-memory--list, gptel-tools-memory-register
-defvars: gptel-tools-memory-dir, gptel-tools-memory-knowledge-dir, gptel-tools-memory--cached-root
-requires: cl-lib, subr-x
-provides: gptel-tools-memory
-errors: error, error, error, error, error, error, error, error, error
-handlers: err
+defuns: gptel-auto-workflow--path-exists-or-symlink-p, gptel-auto-workflow--safe-truename, gptel-auto-workflow--link-shared-runtime-path, gptel-auto-workflow--seed-worktree-runtime-var
+requires: cl-lib
+provides: gptel-tools-agent-runtime
+declares: gptel-auto-workflow--worktree-base-root, gptel-auto-workflow--worktree-base-repo-root
+errors: error
+handlers: nil
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-ext-reasoning.el` (1 failed)
-- `lisp/modules/gptel-ext-fsm-utils.el` (37 kept / 70 discarded / 1 failed)
-- `lisp/modules/gptel-ext-core.el` (10 kept / 12 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-git-learning.el` (2 kept / 6 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-principles.el` (1 kept / 1 discarded / 2 failed)
+- `lisp/modules/nucleus-tools.el` (6 kept / 12 discarded / 3 failed)
+- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent.el` (8 kept / 22 discarded / 4 failed)
+- `lisp/modules/gptel-benchmark-core.el` (17 kept / 25 discarded / 5 failed)
+- `lisp/modules/gptel-ext-fsm-utils.el` (9 kept / 23 discarded / 6 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 

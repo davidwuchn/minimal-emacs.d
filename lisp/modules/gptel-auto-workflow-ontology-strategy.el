@@ -18,7 +18,8 @@
 ;; ─── Target Prioritization ───
 
 (defun gptel-auto-workflow--ontology-target-value (target)
-  "Return ontology classification for TARGET: high-value, moderate, low-value, or unknown.
+  "Return ontology classification for TARGET.
+The value is high-value, moderate, low-value, or unknown.
 Queries the live experiment ontology for target keep-rate."
   (let ((ontology (gptel-auto-workflow--generate-experiment-ontology)))
     (catch 'found
@@ -45,7 +46,8 @@ Preserves all targets - just reorders by predicted value."
 ;; ─── Strategy Selection Enhancement ───
 
 (defun gptel-auto-workflow--ontology-strategy-status (strategy)
-  "Return ontology status for STRATEGY: effective, promising, underperforming, or unknown."
+  "Return ontology status for STRATEGY.
+The value is effective, promising, underperforming, or unknown."
   (let ((ontology (gptel-auto-workflow--generate-experiment-ontology)))
     (catch 'found
       (dolist (cls (plist-get ontology :classes))
@@ -64,7 +66,7 @@ Preserves all targets - just reorders by predicted value."
 
 (defun gptel-auto-workflow--select-best-strategy-with-ontology (strategies target)
   "Select best strategy using both historical TSV and ontology classification.
-Prefers strategies classified as 'effective' in ontology, then 'promising'.
+Prefers strategies classified as `effective', then `promising'.
 Falls back to standard selection for unknown strategies."
   (let ((best nil)
         (best-score -1.0))
@@ -87,6 +89,7 @@ Falls back to standard selection for unknown strategies."
 (defun gptel-auto-workflow--ontology-recommend-backend (strategy target)
   "Recommend backend based on ontology data for STRATEGY + TARGET combination.
 Returns backend name or nil if no data."
+  (ignore target)
   ;; TODO: Track backend performance per strategy-target in ontology
   ;; For now, use strategy-level backend performance
   (let ((results (gptel-auto-workflow--parse-all-results)))
@@ -125,9 +128,9 @@ Triggers skill evolution for knowledge-management when gaps found."
       (let ((strategy (plist-get r :strategy))
             (knowledge (plist-get r :knowledge-hash)))
         (when strategy
-          (add-to-list 'all-strategies strategy)
+          (cl-pushnew strategy all-strategies :test #'string=)
           (when (and knowledge (not (string= knowledge "none")))
-            (add-to-list 'strategies-with-knowledge strategy)))))
+            (cl-pushnew strategy strategies-with-knowledge :test #'string=)))))
     ;; Find gaps
     (let ((gaps (cl-set-difference all-strategies strategies-with-knowledge :test 'string=)))
       (when gaps

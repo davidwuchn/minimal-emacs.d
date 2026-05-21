@@ -16,6 +16,23 @@
 
 (defvar gptel-send--transitions)
 (declare-function gptel--transform-add-context "gptel-request" (callback fsm))
+(declare-function gptel-auto-workflow--log-conflict "gptel-tools-agent-git")
+(declare-function gptel-auto-workflow--with-staging-worktree
+                  "gptel-tools-agent-experiment-loop")
+(declare-function gptel-auto-workflow--ensure-merge-source-ref
+                  "gptel-tools-agent-staging-baseline")
+(declare-function gptel-auto-workflow--shared-remote-branch
+                  "gptel-tools-agent-worktree")
+(declare-function gptel-auto-workflow--git-cmd
+                  "gptel-tools-agent-experiment-loop")
+(declare-function gptel-auto-workflow--git-result
+                  "gptel-tools-agent-experiment-loop")
+(declare-function gptel-auto-workflow--get-worktree-dir
+                  "gptel-tools-agent-subagent")
+(declare-function gptel-auto-workflow--project-root
+                  "gptel-tools-agent-benchmark")
+(declare-function package-desc-version "package")
+(declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git")
 (declare-function gptel-benchmark-llm-synthesize-knowledge "gptel-benchmark-llm"
                   (topic memories &optional callback))
 (declare-function gptel-benchmark-llm-synthesize-knowledge-sync "gptel-benchmark-llm"
@@ -33,9 +50,14 @@
 (defvar gptel-auto-workflow--worktree-buffers)
 (defvar gptel-auto-workflow--current-project nil)
 (defvar gptel-auto-workflow--run-project-root nil)
+(defvar gptel-auto-workflow--current-target)
+(defvar gptel-auto-workflow--running)
 (defvar gptel-auto-workflow--project-root-override)
+(defvar gptel-auto-workflow-worktree-base)
+(defvar gptel-auto-workflow-staging-branch)
 (defvar gptel-agent-loop--bypass nil)
 (defvar gptel-benchmark--subagent-files nil)
+(defvar package-archive-contents)
 
 ;;; Shell Command with Timeout
 
@@ -62,10 +84,10 @@ Helper for validation in callback-based functions."
 
 
 (defun gptel-auto-workflow--plist-get (plist key &optional default)
-  "Get value from PLIST for KEY, returning DEFAULT if not found or nil.
+  "Get value from PLIST for KEY.
+Return DEFAULT if KEY is not found or has nil value.
 Reduces duplication of `(or (plist-get ...) default-value)` patterns.
-Handles the common case where a key exists in the plist but has a nil value,
-which would otherwise cause format specifier errors when passed to format strings."
+Handles keys present with nil values before passing values to `format'."
   (if (proper-list-p plist)
       (if (plist-member plist key)
           (let ((value (plist-get plist key)))
@@ -75,7 +97,7 @@ which would otherwise cause format specifier errors when passed to format string
 
 (defun gptel-auto-workflow--state-active-p (state)
   "Return t if STATE is non-nil and not marked as done.
-Reduces duplication of `(when (and state (not (plist-get state :done)))` patterns."
+Reduces duplication of common state plist guards."
   (and state (not (plist-get state :done))))
 
 (defun gptel-auto-workflow--hash-get-bound (var-sym key)
@@ -95,7 +117,7 @@ Reduces duplication of `(when (and state (not (plist-get state :done)))` pattern
 (defun gptel-auto-workflow--truncate-hash (hash &optional length)
   "Truncate HASH to LENGTH characters (default 7) if longer.
 Returns original hash if shorter than LENGTH.
-Reduces duplication of `(if (>= (length hash) 7) (substring hash 0 7) hash)` patterns."
+Reduces duplication of common hash-shortening patterns."
   (let ((len (or length 7)))
     (if (and (stringp hash) (>= (length hash) len))
         (substring hash 0 len)
@@ -149,9 +171,10 @@ Signals user-error if either dependency fails to load."
 
 (defun gptel-auto-workflow--default-dir ()
   "Return default directory for git operations.
-Uses `gptel-auto-workflow--project-root' if available, falls back to ~/.emacs.d/.
-Reduces duplication of `(or (gptel-auto-workflow--project-root) (expand-file-name \"~/.emacs.d/\"))` patterns."
-  (or (gptel-auto-workflow--project-root)
+Use `gptel-auto-workflow--project-root' if available.
+Fall back to ~/.emacs.d/."
+  (or (and (fboundp 'gptel-auto-workflow--project-root)
+           (ignore-errors (gptel-auto-workflow--project-root)))
       (expand-file-name "~/.emacs.d/")))
 
 (defun gptel-auto-workflow--elpa-package-dir (proj-root package)
@@ -738,7 +761,8 @@ Returns non-nil when the ref exists after the call."
 (defun gptel-auto-workflow--untrack-commit (commit-hash &optional run-id-or-file)
   "Remove COMMIT-HASH from tracking ledgers.
 When RUN-ID-OR-FILE is nil, remove the hash from all readable ledgers.
-When it is an absolute path, use that ledger directly. Otherwise treat it as a run id.
+When it is an absolute path, use that ledger directly.
+Otherwise treat it as a run id.
 Returns non-nil when at least one entry was removed."
   (when (gptel-auto-workflow--non-empty-string-p commit-hash)
     (let ((tracking-files
@@ -794,9 +818,8 @@ Returns non-nil when at least one entry was removed."
           180))))
 
 (defun gptel-auto-workflow--commit-integrated-p (commit-hash)
-  "Return non-nil when COMMIT-HASH is already represented in staging or main.
-Checks both local and remote refs because cron resets the local staging branch to
-the workflow base before scanning tracked ledgers."
+  "Return non-nil when COMMIT-HASH is in staging or main.
+Check local and remote refs before scanning tracked ledgers."
   (when (gptel-auto-workflow--non-empty-string-p commit-hash)
     (let* ((remote-main (gptel-auto-workflow--shared-remote-branch "main"))
            (remote-staging
@@ -836,7 +859,7 @@ the workflow base before scanning tracked ledgers."
            commit-hash))))
 
 (defun gptel-auto-workflow--optimize-branch-integrated-p (optimize-branch)
-  "Return non-nil when OPTIMIZE-BRANCH tip is already represented in staging or main."
+  "Return non-nil when OPTIMIZE-BRANCH tip is in staging or main."
   (let* ((optimize-ref (gptel-auto-workflow--ensure-merge-source-ref optimize-branch))
          (commit-hash (gptel-auto-workflow--resolve-ref-commit-hash optimize-ref)))
     (and commit-hash

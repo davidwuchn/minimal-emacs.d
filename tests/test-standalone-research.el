@@ -58,6 +58,7 @@
       (slr--run-single-turn "research prompt"
                             (lambda (findings)
                               (setq callback-findings findings)))
+      (sleep-for 0.5)  ; let run-with-timer 0 fire in batch mode
       (should (slr--usable-findings-p saved))
       (should (equal saved recorded))
       (should (equal saved callback-findings))

@@ -64,6 +64,8 @@
 (condition-case nil (require 'gptel-auto-workflow-cq-evolution) (error (message "[gptel-config] cq-evolution unavailable")) nil)
 ;; Ontology-aware strategy and target selection
 (condition-case nil (require 'gptel-auto-workflow-ontology-strategy) (error (message "[gptel-config] ontology-strategy unavailable")) nil)
+;; Ontology-based experiment outcome prediction
+(condition-case nil (require 'gptel-auto-workflow-ontology-predict) (error (message "[gptel-config] ontology-predict unavailable")) nil)
 (require 'gptel-auto-workflow-mementum)
 (require 'gptel-auto-workflow-production)
 

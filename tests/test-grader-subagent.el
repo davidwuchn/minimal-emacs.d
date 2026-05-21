@@ -354,10 +354,10 @@ Result: Tests pass."))
   (should (boundp 'gptel-auto-workflow-targets)))
 
 (ert-deftest grader/experiment-time-budget-reasonable ()
-  "Time budget should be between 1-30 minutes."
+  "Time budget should be between 1-60 minutes."
   (require 'gptel-tools-agent)
   (should (>= gptel-auto-experiment-time-budget 60))    ; at least 1 minute
-  (should (<= gptel-auto-experiment-time-budget 1800))) ; at most 30 minutes
+  (should (<= gptel-auto-experiment-time-budget 3600))) ; at most 60 minutes
 
 (ert-deftest grader/experiment-max-per-target-reasonable ()
   "Max experiments per target should be between 1-50."
@@ -496,9 +496,9 @@ Result: Tests pass."))
 ;;; Test 41: Experiment Timeout Handling
 
 (ert-deftest grader/experiment-timeout-default ()
-  "Default experiment time budget should be 1200s (increased for slow providers)."
+  "Default experiment time budget should be 2400s (40 min for slow providers)."
   (require 'gptel-tools-agent)
-  (should (= gptel-auto-experiment-time-budget 1200)))
+  (should (= gptel-auto-experiment-time-budget 2400)))
 
 (ert-deftest grader/grade-timeout-default ()
   "Default grade timeout should be 180s."

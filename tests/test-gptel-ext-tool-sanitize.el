@@ -277,11 +277,11 @@
   "Inspection thrash should abort once same-file read-only exploration crosses threshold."
   (require 'gptel-ext-tool-sanitize)
   (let* ((tc '(:name "Code_Inspect"
-               :args (:file_path "/tmp/test.el" :node_name "third-node")))
+               :args (:file_path "/tmp/nonexistent-test-file.el" :node_name "third-node")))
          (request-buffer (generate-new-buffer " *inspection-thrash-abort*"))
          (info (list :tool-use (list tc)
                      :buffer request-buffer
-                     :inspection-thrash-state (list :file "/tmp/test.el" :count 2)))
+                     :inspection-thrash-state (list :file "/tmp/nonexistent-test-file.el" :count 2)))
          (fsm (gptel-make-fsm :info info))
          logged-message
          callback-message
@@ -304,7 +304,7 @@
                          (setq logged-message (apply #'format fmt args)))))
               (my/gptel--detect-inspection-thrash fsm)))
           (should (string-match-p "inspection-thrash detected" logged-message))
-          (should (string-match-p "/tmp/test\\.el" logged-message))
+          (should (string-match-p "/tmp/nonexistent-test-file\\.el" logged-message))
           (should (string-match-p "3 consecutive read-only inspections" callback-message))
           (should (eq aborted-buffer request-buffer))
           (should (eq transition 'DONE)))

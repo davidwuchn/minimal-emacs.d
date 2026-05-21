@@ -93,9 +93,9 @@ message, even when the model produced no visible reasoning for that turn.
 
 (defun my/gptel--fallback-reasoning-value (tool-calls reasoning-alist)
   "Return stored reasoning for TOOL-CALLS from REASONING-ALIST, or empty string."
-  (let* ((tc (and (vectorp tool-calls)
-                  (> (length tool-calls) 0)
-                  (aref tool-calls 0)))
+  (let* ((tc (when (and (vectorp tool-calls)
+                        (cl-plusp (length tool-calls)))
+               (aref tool-calls 0)))
          (id (and tc (plist-get tc :id)))
          (stored (if (and reasoning-alist id)
                      (alist-get id reasoning-alist :absent nil #'equal)
