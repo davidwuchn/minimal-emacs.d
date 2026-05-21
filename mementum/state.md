@@ -248,11 +248,21 @@
 - Cleared stale workflow status (was `:running t` with no daemon)
 
 **Tests:**
-- 1805/1805 pass (1 pre-existing isolated failure: `regression/tool-recovery/find-tool-by-name`)
-- Failure is test isolation issue (passes when run alone, fails in full suite)
+- 1805/1805 pass — ALL GREEN (0 unexpected failures)
+- Fixed test isolation bug: `regression/tool-recovery/find-tool-by-name`
+  - Root cause: `test-gptel-tools-edit.el`, `test-gptel-tools-apply.el`, `test-gptel-tools-preview.el` redefine `gptel-make-tool` at top-level to return strings instead of tool structs
+  - Fix: Use `gptel--make-tool` directly in evolution test (commit `206ff66d`)
 
-**Next Workflow Run:**
-- Next cron: 23:00 (~10 min)
+**Commits This Session:**
+- `92a48a94` — Fix staging-main-ref: ignore untracked files in clean-main check
+- `206ff66d` — Fix test isolation: use gptel--make-tool instead of mocked gptel-make-tool
+
+**Workflow Status:**
+- Daemon running (run-id: `2026-05-21T225255Z-6b47`, phase: running)
+- Manually triggered at 22:52
+- 5 experiments queued, 0 completed so far
+- Next auto cron: 23:00 (~8 min)
+- 3 pending experiments to verify on staging: mementum-exp1, utils-exp1, validate-exp1
 - Will create fresh baselines from local main (with test fixes)
 - 3 pending experiment branches to verify: mementum-exp1, utils-exp1, validate-exp1
 
