@@ -585,7 +585,7 @@ Returns corrective action or nil."
         (threshold gptel-auto-workflow--controller-doom-loop-threshold))
     (when (and history (>= (length history) threshold))
       (let ((recent (seq-take history threshold)))
-        (when (seq-every-p (lambda (x) (equal x (car recent))) recent)
+        (when (seq-every-p (lambda (x) (and (consp x) (equal x (car recent)))) recent)
           (let* ((stuck (car (car recent)))
                  (corrective (if (eq stuck 'continue) 'branch 'stop)))
             (message "[autotts] Doom loop: %s × %d → forcing %s"
