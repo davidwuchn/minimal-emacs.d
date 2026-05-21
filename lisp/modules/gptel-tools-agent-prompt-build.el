@@ -1379,7 +1379,7 @@ row for the same experiment and target."
                                    (gptel-auto-workflow--plist-get experiment :model "unknown"))
                                   "unknown")))))
 
-       (write-region (point-min) (point-max) file))
+       (write-region (point-min) (point-max) file)
     ;; Keep strategy metrics independent from the per-run TSV.
     (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)
       (condition-case err
@@ -1421,7 +1421,7 @@ row for the same experiment and target."
                  (run-with-idle-timer 30 nil #'gptel-auto-workflow-evolution-run-cycle))))
         (error
          (message "[auto-workflow] Evolution hook error: %s" err))))
-    (gptel-auto-workflow--sync-live-kept-count run-id file))
+    (gptel-auto-workflow--sync-live-kept-count run-id file)))
 
 (defun gptel-auto-experiment--make-kept-result-callback (run-id exp-result log-fn callback)
   "Return idempotent callback that finalizes EXP-RESULT after optional staging.
