@@ -47,6 +47,8 @@ SIGNALS an error if SLUG contains path traversal or invalid characters."
     (error "Slug must not be nil"))
   (when (string= slug "")
     (error "Slug must not be empty"))
+  (when (and knowledge-p (not (booleanp knowledge-p)))
+    (error "Knowledge-p must be a boolean, got: %S" knowledge-p))
   (when (string-match-p "\\.\\./" slug)
     (error "Slug must not contain path traversal sequences"))
   (let* ((root (gptel-tools-memory--project-root))
