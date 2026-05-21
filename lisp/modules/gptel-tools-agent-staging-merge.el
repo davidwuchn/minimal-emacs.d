@@ -179,15 +179,23 @@ Uses the staging worktree instead of switching branches in the root repo."
           (progn
             (message "[auto-workflow] Missing merge source branch: %s" optimize-branch)
             nil)
-        (message "[auto-workflow] Cherry-picking %s to %s" optimize-branch staging)
-        (gptel-auto-workflow--with-staging-worktree
-         (lambda ()
-           (let ((reset-target staging)
-                 (worktree gptel-auto-workflow--staging-worktree-dir)
-                 (git-state nil))
-             (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
-                           (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
-                 nil
+         ;; Sync staging with main first so test fixes are included
+         (let ((sync-result (gptel-auto-workflow--git-result
+                             (format "git merge %s/main --no-ff -m %s" "origin" (shell-quote-argument "Sync staging with main before experiment"))
+                             180)))
+           (if (= 0 (cdr sync-result))
+               (message "[auto-workflow] Synced staging with main before cherry-pick")
+             (message "[auto-workflow] Staging sync with main skipped: %s"
+                      (my/gptel--sanitize-for-logging (car sync-result) 160))))
+         (message "[auto-workflow] Cherry-picking %s to %s" optimize-branch staging)
+         (gptel-auto-workflow--with-staging-worktree
+          (lambda ()
+            (let ((reset-target staging)
+                  (worktree gptel-auto-workflow--staging-worktree-dir)
+                  (git-state nil))
+              (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                            (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
+                  nil
                (let* ((commit-hash-raw (car-safe
                                         (gptel-auto-workflow--git-result
                                          (format "git rev-parse %s"
@@ -330,12 +338,24 @@ Returns (success-p . output)."
          (verify-script (and worktree (expand-file-name "scripts/verify-nucleus.sh" worktree)))
          (output-buffer (generate-new-buffer "*staging-verify*"))
          result)
-    (if (not (and worktree (file-exists-p worktree)))
-        (progn
-          (message "[auto-workflow] Staging worktree not found")
-          (cons nil "Staging worktree not found"))
-      (message "[auto-workflow] Verifying staging...")
-      (let* ((default-directory worktree)
+     (if (not (and worktree (file-exists-p worktree)))
+         (progn
+           (message "[auto-workflow] Staging worktree not found")
+           (cons nil "Staging worktree not found"))
+       ;; Merge latest main so staging tests include recent fixes
+       (message "[auto-workflow] About to merge main into staging worktree...")
+       (let ((default-directory worktree))
+         (let ((main-merge (gptel-auto-workflow--git-result
+                            (format "git merge -X theirs %s --no-ff -m %s"
+                                    (shell-quote-argument "main")
+                                    (shell-quote-argument "Sync main into staging for verification"))
+                            180)))
+           (if (= 0 (cdr main-merge))
+               (message "[auto-workflow] Merged main into staging worktree SUCCESS")
+             (message "[auto-workflow] Main merge into staging failed (non-fatal)")
+             (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60)))))
+       (message "[auto-workflow] Verifying staging...")
+       (let* ((default-directory worktree)
              (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
              (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
              (submodule-pass (and syntax-pass (= 0 (cdr submodules))))

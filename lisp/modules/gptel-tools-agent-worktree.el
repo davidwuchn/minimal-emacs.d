@@ -627,11 +627,13 @@ Returns worktree path or nil on failure."
                 (format "git worktree remove --force %s" worktree-q)
                 180))
              (ignore-errors (delete-directory worktree-dir t)))
-           (make-directory (file-name-directory worktree-dir) t)
-           (let ((add-result
-                  (gptel-auto-workflow--git-result
-                   (format "git worktree add --force %s %s" worktree-q branch-q)
-                   180)))
+            ;; Fetch latest staging from origin before creating worktree
+            (gptel-auto-workflow--git-cmd "git fetch origin staging" 60)
+            (make-directory (file-name-directory worktree-dir) t)
+            (let ((add-result
+                   (gptel-auto-workflow--git-result
+                    (format "git worktree add --force %s %s" worktree-q branch-q)
+                    180)))
              (unless (= 0 (cdr add-result))
                (error "git worktree add failed: %s" (car add-result))))
             ;; Merge latest main so staging includes recent test fixes

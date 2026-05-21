@@ -1017,9 +1017,20 @@ is set but the path doesn't exist, recreates the worktree."
   (let ((worktree (or (and gptel-auto-workflow--staging-worktree-dir
                            (file-exists-p gptel-auto-workflow--staging-worktree-dir)
                            gptel-auto-workflow--staging-worktree-dir)
-                      (gptel-auto-workflow--create-staging-worktree))))
+                       (gptel-auto-workflow--create-staging-worktree))))
     (when (and worktree (file-exists-p worktree))
       (let ((default-directory worktree))
+        ;; Merge latest main so staging tests include recent fixes
+        (let ((main-merge (gptel-auto-workflow--git-result
+                           (format "git merge -X theirs %s --no-ff -m %s"
+                                   (shell-quote-argument "main")
+                                   (shell-quote-argument "Sync main into staging for verification"))
+                           180)))
+          (if (= 0 (cdr main-merge))
+              (message "[auto-workflow] Merged main into staging worktree")
+            (message "[auto-workflow] Main merge into staging failed (non-fatal): %s"
+                     (my/gptel--sanitize-for-logging (car main-merge) 160))
+            (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))))
         (funcall fn)))))
 
 

@@ -1,0 +1,1 @@
+{"name":"outcome-driven-sections","version":"1.0","hypothesis":"Prioritizing sections addressing common failures improves resolution","axis":"C","components":["section-ordering","failure-prioritization","outcome-tracking"]}
