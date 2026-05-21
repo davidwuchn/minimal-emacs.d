@@ -226,7 +226,38 @@
 - Auto-workflow: Running (PID 3113587, started 20:18)
 - ⚠️ Restart needed to pick up enabled ontology routing advice
 
+## Current Session: Staging Verification Baseline Fix
+
+**Status:** Complete. Root cause fixed and pushed.
+
+**Problem:**
+- Staging verification intermittently failed because baseline worktree used stale `origin/main`
+- Untracked auto-generated files (strategy artifacts) made `git status --porcelain` non-empty
+- This caused `gptel-auto-workflow--staging-main-ref` to fall back to `origin/main` even when local `main` had test fixes
+- Baseline lacked test fixes → false staging failures
+
+**Fix:**
+- `lisp/modules/gptel-tools-agent-worktree.el`: `git status --porcelain` → `git status --porcelain --untracked-files=no`
+- Ignores untracked files in clean-main check
+- Committed: `92a48a94` — pushed to origin/main and upstream/main
+
+**Cleanup:**
+- Removed stale baseline worktree `main-baseline-14179` (commit `3eaaff74`, missing test fixes)
+- Removed stale copilot session baseline worktree
+- Removed stale daemon socket `/tmp/emacs.../copilot-auto-workflow`
+- Cleared stale workflow status (was `:running t` with no daemon)
+
+**Tests:**
+- 1805/1805 pass (1 pre-existing isolated failure: `regression/tool-recovery/find-tool-by-name`)
+- Failure is test isolation issue (passes when run alone, fails in full suite)
+
+**Next Workflow Run:**
+- Next cron: 23:00 (~10 min)
+- Will create fresh baselines from local main (with test fixes)
+- 3 pending experiment branches to verify: mementum-exp1, utils-exp1, validate-exp1
+
 **Prior Sessions:**
+- Sync + Staging-Main Sync + New Strategy
 - Backend Performance Analysis + Ontology Router
 - Pipeline E2E Fixes + Policy Reminder
 - TDD Coverage + Staging Merge + Test Suite Fix
