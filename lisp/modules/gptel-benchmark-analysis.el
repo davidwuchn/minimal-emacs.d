@@ -58,6 +58,20 @@ failures."
         (error (list :raw result)))
     (list :raw (format "%S" result))))
 
+;;; Common Utilities
+
+(defun gptel-benchmark--find-tests-by-predicate (benchmark-file predicate-fn)
+  "Find test IDs in BENCHMARK-FILE where PREDICATE-FN returns non-nil on results.
+PREDICATE-FN should accept a list of benchmark results for a single test-id."
+  (let* ((data (gptel-benchmark-read-json benchmark-file))
+         (test-results (gptel-benchmark--group-by-test-id data))
+         (found '()))
+    (maphash (lambda (test-id results)
+               (when (funcall predicate-fn results)
+                 (push test-id found)))
+             test-results)
+    found))
+
 ;;; Flaky Test Detection
 
 (defun gptel-benchmark--group-by-test-id (data)
@@ -88,14 +102,8 @@ RESULTS is a list of benchmark results for a single test-id."
 
 (defun gptel-benchmark-find-flaky-tests (benchmark-file)
   "Identify tests that sometimes pass and sometimes fail in BENCHMARK-FILE."
-  (let* ((data (gptel-benchmark-read-json benchmark-file))
-         (test-results (gptel-benchmark--group-by-test-id data))
-         (flaky-tests '()))
-    (cl-flet ((scan-flaky (test-id results)
-               (when (gptel-benchmark--flaky-test-p results)
-                 (push test-id flaky-tests))))
-      (maphash #'scan-flaky test-results))
-    flaky-tests))
+  (gptel-benchmark--find-tests-by-predicate
+   benchmark-file #'gptel-benchmark--flaky-test-p))
 
 ;;; Non-Discriminating Test Detection
 
@@ -112,14 +120,8 @@ RESULTS is a list of benchmark results for a single test-id."
 
 (defun gptel-benchmark-find-non-discriminating (benchmark-file)
   "Find tests that don't effectively differentiate between skill levels."
-  (let* ((data (gptel-benchmark-read-json benchmark-file))
-         (test-results (gptel-benchmark--group-by-test-id data))
-         (non-discriminating '()))
-    (cl-flet ((scan-nondiscriminating (test-id results)
-               (when (gptel-benchmark--non-discriminating-p results)
-                 (push test-id non-discriminating))))
-      (maphash #'scan-nondiscriminating test-results))
-    non-discriminating))
+  (gptel-benchmark--find-tests-by-predicate
+   benchmark-file #'gptel-benchmark--non-discriminating-p))
 
 ;;; Systematic Failure Detection
 
@@ -136,14 +138,8 @@ RESULTS is a list of benchmark results for a single test-id."
 
 (defun gptel-benchmark-find-systematic-failures (benchmark-file)
   "Identify tests that consistently fail across different skills."
-  (let* ((data (gptel-benchmark-read-json benchmark-file))
-         (test-results (gptel-benchmark--group-by-test-id data))
-         (systematic-failures '()))
-    (cl-flet ((scan-systematic (test-id results)
-               (when (gptel-benchmark--systematic-failure-p results)
-                 (push test-id systematic-failures))))
-      (maphash #'scan-systematic test-results))
-    systematic-failures))
+  (gptel-benchmark--find-tests-by-predicate
+   benchmark-file #'gptel-benchmark--systematic-failure-p))
 
 ;;; Summary Generation
 
