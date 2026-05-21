@@ -146,7 +146,10 @@
   "Find project root relative to this test file."
   (let ((this-file (or load-file-name
                        buffer-file-name
-                       (expand-file-name "tests/test-gptel-auto-workflow-evolution-regressions.el")
+                       (and (file-exists-p "test-gptel-auto-workflow-evolution-regressions.el")
+                            (expand-file-name "test-gptel-auto-workflow-evolution-regressions.el"))
+                       (and (file-exists-p "tests/test-gptel-auto-workflow-evolution-regressions.el")
+                            (expand-file-name "tests/test-gptel-auto-workflow-evolution-regressions.el"))
                        (expand-file-name "test-gptel-auto-workflow-evolution-regressions.el"))))
     (expand-file-name ".." (file-name-directory this-file))))
 
