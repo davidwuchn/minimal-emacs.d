@@ -307,5 +307,63 @@ Guards against missing runtime dependencies (worktree-base-root)."
     (should (eq :agentic (gptel-auto-workflow--categorize-target
                            "lisp/modules/gptel-auto-workflow-evolution.el")))))
 
+;; ─── Semantic Similarity Target Discovery Tests ───
+
+(ert-deftest tdd/semantic-suggestions/returns-nil-when-no-function ()
+  "semantic-target-suggestions returns nil when function not bound."
+  (when (fboundp 'gptel-auto-workflow--semantic-target-suggestions)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+               (lambda (&optional _) nil)))
+      (should (null (gptel-auto-workflow--semantic-target-suggestions))))))
+
+(ert-deftest tdd/semantic-suggestions/filters-by-threshold-and-max ()
+  "semantic-target-suggestions respects max-suggestions and min-score."
+  (when (fboundp 'gptel-auto-workflow--semantic-target-suggestions)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+               (lambda (&optional _)
+                 '((:target "a.el" :score 0.75)
+                   (:target "b.el" :score 0.82)
+                   (:target "c.el" :score 0.65)
+                   (:target "d.el" :score 0.90))))
+              ((symbol-function 'file-exists-p)
+               (lambda (_) t)))
+      (let ((suggestions (gptel-auto-workflow--semantic-target-suggestions 2 0.70)))
+         (should (= 2 (length suggestions)))
+         (should (member "a.el" suggestions))
+         (should (member "b.el" suggestions))
+         (should-not (member "c.el" suggestions))))))
+
+(ert-deftest tdd/semantic-suggestions/dedup-and-file-check ()
+  "semantic-target-suggestions deduplicates and checks file existence."
+  (when (fboundp 'gptel-auto-workflow--semantic-target-suggestions)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+               (lambda (&optional _)
+                 '((:target "a.el" :score 0.75)
+                   (:target "a.el" :score 0.75)
+                   (:target "nonexistent.el" :score 0.80))))
+              ((symbol-function 'file-exists-p)
+               (lambda (f) (not (string= f "nonexistent.el")))))
+      (let ((suggestions (gptel-auto-workflow--semantic-target-suggestions)))
+        (should (= 1 (length suggestions)))
+        (should (string= "a.el" (car suggestions)))))))
+
+(ert-deftest tdd/semantic-suggestions/category-filter ()
+  "semantic-targets-for-category filters by category."
+  (when (fboundp 'gptel-auto-workflow--semantic-targets-for-category)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-target-suggestions)
+               (lambda (&optional _ _)
+                 '("lisp/modules/gptel-ext-code.el"
+                   "lisp/modules/gptel-tools-sandbox.el"
+                   "lisp/modules/gptel-auto-workflow-evolution.el"))))
+      (let ((programming (gptel-auto-workflow--semantic-targets-for-category :programming))
+            (tool-calls (gptel-auto-workflow--semantic-targets-for-category :tool-calls))
+            (agentic (gptel-auto-workflow--semantic-targets-for-category :agentic)))
+        (should (= 1 (length programming)))
+        (should (string-match-p "gptel-ext-code" (car programming)))
+        (should (= 1 (length tool-calls)))
+        (should (string-match-p "sandbox" (car tool-calls)))
+        (should (= 1 (length agentic)))
+        (should (string-match-p "evolution" (car agentic)))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
