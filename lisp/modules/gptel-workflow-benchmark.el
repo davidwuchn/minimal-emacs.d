@@ -253,11 +253,12 @@ Indicators: grep/read tools used, no edit/write yet."
 P2 = refine (plan created, updates made)
 Indicators: plan file mentioned, Updates in output, or edit tools used."
   (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
-    (when (or (string-match-p "[Pp]lan" output)
-              (string-match-p "[Uu]pdates" output)
-              (memq 'edit tools)
-              (memq 'Edit tools)
-              (cl-member "edit" tools :test #'equal :key #'symbol-name))
+    (when (and (stringp output)
+               (or (string-match-p "[Pp]lan" output)
+                   (string-match-p "[Uu]pdates" output)
+                   (memq 'edit tools)
+                   (memq 'Edit tools)
+                   (cl-member "edit" tools :test #'equal :key #'symbol-name)))
       (list :phase 'P2
             :entered t
             :timestamp (float-time)
