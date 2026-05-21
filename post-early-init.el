@@ -144,10 +144,12 @@
                  (when (boundp 'gptel--request-alist)
                    (let ((active-procs (mapcar #'car gptel--request-alist))
                          (reaped 0))
-                     (dolist (proc (process-list))
-                       (when (and (process-live-p proc)
-                                  (string-match-p "curl" (process-name proc))
-                                  (not (memq proc active-procs)))
+                      (dolist (proc (process-list))
+                        (when (and (process-live-p proc)
+                                   (let ((pname (process-name proc)))
+                                     (and (stringp pname)
+                                          (string-match-p "curl" pname)))
+                                   (not (memq proc active-procs)))
                          (condition-case nil
                              (progn
                                (delete-process proc)
@@ -181,13 +183,17 @@
   "Non-nil when the message log directory has been created.")
 
 (defun mw-message--ensure-log-file ()
-  "Lazily init the message log file path and ensure its directory exists."
+  "Lazily init the message log file path and ensure its directory exists.
+Uses per-instance naming to avoid log interleaving when multiple Emacs
+daemons share the same config directory."
   (unless mw--message-log-file
-    (setq mw--message-log-file
-          (expand-file-name "var/log/messages.log"
-                            (if (boundp 'minimal-emacs-user-directory)
-                                minimal-emacs-user-directory
-                              user-emacs-directory))))
+    (let* ((base (if (boundp 'minimal-emacs-user-directory)
+                     minimal-emacs-user-directory
+                   user-emacs-directory))
+           (instance (format "emacs-%d" (emacs-pid)))
+           (log-dir (expand-file-name "var/log" base)))
+      (setq mw--message-log-file
+            (expand-file-name (format "%s.log" instance) log-dir))))
   (unless mw--message-log-dir-created
     (setq mw--message-log-dir-created t)
     (condition-case nil
@@ -199,10 +205,9 @@
 
 (defun mw-message--file-log (format-string &rest args)
   "Log message to file as OS-atomic append (no *Messages* interleaving)."
-  (mw-message--ensure-log-file)
-  (let ((msg (format "%s %s\n"
-                     (format-time-string "%Y-%m-%dT%H:%M:%S")
-                     (apply #'format-message format-string args))))
+  (let* ((msg (format "%s %s\n"
+                      (format-time-string "%Y-%m-%dT%H:%M:%S")
+                      (apply #'format-message format-string args))))
     (condition-case nil
         (write-region msg nil mw--message-log-file 'append 'quiet)
       (ignore))))
