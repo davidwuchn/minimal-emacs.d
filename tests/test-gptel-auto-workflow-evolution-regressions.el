@@ -2199,6 +2199,75 @@ must not override it to MiniMax via setq-local in subagent buffers."
         (should (string-match-p "^# Backend" report))
         (should (string-match-p "Generated:" report))))))
 
+;; ─── TDD: model-level comparison ───
+
+(ert-deftest tdd/model-h2h/clear-winner ()
+  "model-head-to-head-stats identifies the higher keep-rate model."
+  (when (fboundp 'gptel-auto-workflow--model-head-to-head-stats)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list '(:target "a.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")
+                       '(:target "a.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")
+                       '(:target "a.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "discarded")
+                       '(:target "a.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept")
+                       '(:target "a.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "discarded")
+                       '(:target "a.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "discarded")))))
+      (let ((result (gptel-auto-workflow--model-head-to-head-stats
+                     "DeepSeek/deepseek-v4-pro" "DeepSeek/deepseek-v4-flash")))
+        (should (= 1 (plist-get result :shared-targets)))
+        (should (> (plist-get result :a-rate) (plist-get result :b-rate)))
+        (should (equal "DeepSeek/deepseek-v4-pro" (plist-get result :winner)))))))
+
+(ert-deftest tdd/model-h2h/same-backend-different-models ()
+  "model comparison distinguishes models from the same backend."
+  (when (fboundp 'gptel-auto-workflow--model-head-to-head-stats)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list '(:target "a.el" :backend "MiniMax" :model "minimax-m2.7-highspeed" :decision "kept")
+                       '(:target "a.el" :backend "MiniMax" :model "minimax-m2.7-highspeed" :decision "kept")
+                       '(:target "a.el" :backend "MiniMax" :model "minimax-m2.7-highspeed" :decision "kept")
+                       '(:target "a.el" :backend "MiniMax" :model "minimax-m2.7-pro" :decision "kept")
+                       '(:target "a.el" :backend "MiniMax" :model "minimax-m2.7-pro" :decision "discarded")
+                       '(:target "a.el" :backend "MiniMax" :model "minimax-m2.7-pro" :decision "discarded")))))
+      (let ((result (gptel-auto-workflow--model-head-to-head-stats
+                     "MiniMax/minimax-m2.7-highspeed" "MiniMax/minimax-m2.7-pro")))
+        (should (= 1 (plist-get result :shared-targets)))
+        (should (equal "MiniMax/minimax-m2.7-highspeed" (plist-get result :winner)))))))
+
+(ert-deftest tdd/model-h2h/different-backends-different-models ()
+  "model comparison works across different backends."
+  (when (fboundp 'gptel-auto-workflow--model-head-to-head-stats)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list '(:target "a.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")
+                       '(:target "a.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")
+                       '(:target "a.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "discarded")
+                       '(:target "a.el" :backend "moonshot" :model "kimi-k2.6" :decision "kept")
+                       '(:target "a.el" :backend "moonshot" :model "kimi-k2.6" :decision "discarded")
+                       '(:target "a.el" :backend "moonshot" :model "kimi-k2.6" :decision "discarded")))))
+      (let ((result (gptel-auto-workflow--model-head-to-head-stats
+                     "DeepSeek/deepseek-v4-pro" "moonshot/kimi-k2.6")))
+        (should (= 1 (plist-get result :shared-targets)))
+        (should (> (plist-get result :a-rate) (plist-get result :b-rate)))))))
+
+(ert-deftest tdd/model-comparison/report-generates-markdown ()
+  "evolution-model-comparison-report produces markdown with model rankings."
+  (when (fboundp 'gptel-auto-workflow--evolution-model-comparison-report)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--evolution-model-stats)
+               (lambda () '(("MiniMax/minimax-m2.7-highspeed" . 0.20)
+                            ("DeepSeek/deepseek-v4-pro" . 0.19)
+                            ("moonshot/kimi-k2.6" . 0.15)))))
+      (let ((report (gptel-auto-workflow--evolution-model-comparison-report)))
+        (should (stringp report))
+        (should (string-match-p "Model-Level" report))
+        (should (string-match-p "Model Rankings" report))
+        (should (string-match-p "minimax-m2.7" report))
+        (should (string-match-p "deepseek-v4-pro" report))
+        (should (string-match-p "kimi-k2.6" report))
+        (should (string-match-p "Generated:" report))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

@@ -149,24 +149,28 @@ Uses cached value from load time, or detects from current directory."
                            (delta-str (or (nth 6 fields) "+0.00"))
                            (decision (nth 7 fields))
                             (grader-q (string-to-number (or (nth 9 fields) "0")))
-                               (prompt-chars (string-to-number (or (nth 16 fields) "0")))
+                                 (prompt-chars (string-to-number (or (nth 16 fields) "0")))
+                                 (backend (or (nth 15 fields) "unknown"))
                                 (research-strategy (or (nth 21 fields) "none"))
-                                (research-hash (or (nth 22 fields) "none"))
+                                 (research-hash (or (nth 22 fields) "none"))
                                  (research-quality (or (nth 23 fields) "none"))
-                                 (kibcm-axis (or (nth 25 fields) "?")))
-                          (push (list :target target
-                                      :hypothesis hypothesis
-                                      :score-before score-before
-                                      :score-after score-after
-                                      :code-quality quality
-                                      :delta delta-str
-                                      :decision decision
-                                      :grader-quality grader-q
-                                      :prompt-chars prompt-chars
-                                      :research-strategy research-strategy
-                                      :research-hash research-hash
-                                      :research-quality research-quality
-                                      :kibcm-axis kibcm-axis)
+                                  (kibcm-axis (or (nth 25 fields) "?"))
+                                  (model (or (nth 26 fields) "unknown")))
+                           (push (list :target target
+                                       :hypothesis hypothesis
+                                       :score-before score-before
+                                       :score-after score-after
+                                       :code-quality quality
+                                       :delta delta-str
+                                       :decision decision
+                                       :grader-quality grader-q
+                                       :prompt-chars prompt-chars
+                                       :backend backend
+                                       :research-strategy research-strategy
+                                       :research-hash research-hash
+                                       :research-quality research-quality
+                                       :kibcm-axis kibcm-axis
+                                       :model model)
                                 records))))
                 (forward-line 1)))))))
     (nreverse records)))
@@ -1814,6 +1818,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (gptel-auto-workflow--evolution-optimize-backend-order)
   ;; Step C.5: Head-to-head backend comparison (data-driven, no LLM calls)
   (gptel-auto-workflow--evolution-persist-backend-comparison)
+  ;; Step C.6: Model-level comparison (backend/model granularity)
+  (gptel-auto-workflow--evolution-persist-model-comparison)
   ;; Throttle VSM health check to 1x/15min (expensive: allium LLM calls)
   (let ((now (float-time (current-time))))
     (when (or (null gptel-auto-workflow--vsm-health-last-run)
@@ -4033,6 +4039,144 @@ Returns a formatted string suitable for mementum/skill guidance."
       (let ((pairs (length (split-string report "## " t))))
         (message "[evolution] Backend comparison: %d pair(s) analyzed → mementum"
                  (max 0 (1- pairs)))))))
+
+;; ─── Model-Level Head-to-Head Comparison ───
+
+(defun gptel-auto-workflow--evolution-model-stats ()
+  "Analyze model (backend+model) performance from all experiment results.
+Returns alist of (\"Backend/model\" . keep-rate) sorted by performance descending.
+Like promptfoo's model-specific comparison: which exact model performs best."
+  (let ((by-model (make-hash-table :test 'equal))
+        (stats nil))
+    (dolist (result (gptel-auto-workflow--parse-all-results))
+      (let* ((backend (or (plist-get result :backend) "unknown"))
+             (model (or (plist-get result :model) "unknown"))
+             (key (format "%s/%s" backend model))
+             (kept (equal (plist-get result :decision) "kept")))
+        (let ((entry (or (gethash key by-model) (cons 0 0))))
+          (setcar entry (1+ (car entry)))
+          (when kept (setcdr entry (1+ (cdr entry))))
+          (puthash key entry by-model))))
+    (maphash (lambda (key counts)
+               (when (> (car counts) 5)
+                 (push (cons key (/ (float (cdr counts)) (car counts))) stats)))
+             by-model)
+    (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
+
+(defun gptel-auto-workflow--model-head-to-head-stats (model-a model-b)
+  "Compare MODEL-A vs MODEL-B on shared targets.
+MODEL-A and MODEL-B are \"Backend/model\" strings (e.g. \"MiniMax/minimax-m2.7-highspeed\").
+Only considers targets where BOTH models have >=3 experiments.
+Returns plist with :winner, :a-rate, :b-rate, :shared-targets, :a-wins, :b-wins."
+  (let* ((by-both (make-hash-table :test 'equal))
+         (results (gptel-auto-workflow--parse-all-results)))
+    (dolist (r results)
+      (let* ((backend (or (plist-get r :backend) "unknown"))
+             (model (or (plist-get r :model) "unknown"))
+             (key (format "%s/%s" backend model))
+             (target (or (plist-get r :target) "unknown"))
+             (kept (equal (plist-get r :decision) "kept")))
+        (when (or (string= key model-a) (string= key model-b))
+          (let ((entry (or (gethash target by-both)
+                           (list :a-kept 0 :a-total 0 :b-kept 0 :b-total 0))))
+            (if (string= key model-a)
+                (progn (cl-incf (plist-get entry :a-total))
+                       (when kept (cl-incf (plist-get entry :a-kept))))
+              (cl-incf (plist-get entry :b-total))
+              (when kept (cl-incf (plist-get entry :b-kept))))
+            (puthash target entry by-both)))))
+    (let ((shared 0) (a-wins 0) (b-wins 0) (ties 0)
+          (a-total-kept 0) (a-total-exp 0)
+          (b-total-kept 0) (b-total-exp 0))
+      (maphash
+       (lambda (_target entry)
+         (let ((a-total (plist-get entry :a-total))
+               (b-total (plist-get entry :b-total)))
+           (when (and (>= a-total 3) (>= b-total 3))
+             (cl-incf shared)
+             (cl-incf a-total-kept (plist-get entry :a-kept))
+             (cl-incf a-total-exp a-total)
+             (cl-incf b-total-kept (plist-get entry :b-kept))
+             (cl-incf b-total-exp b-total)
+             (let* ((a-rate (/ (float (plist-get entry :a-kept)) a-total))
+                    (b-rate (/ (float (plist-get entry :b-kept)) b-total))
+                    (diff (- a-rate b-rate)))
+               (cond ((> diff 0.05) (cl-incf a-wins))
+                     ((< diff -0.05) (cl-incf b-wins))
+                     (t (cl-incf ties)))))))
+       by-both)
+      (let* ((a-rate (if (> a-total-exp 0) (/ (float a-total-kept) a-total-exp) 0.0))
+             (b-rate (if (> b-total-exp 0) (/ (float b-total-kept) b-total-exp) 0.0))
+             (winner (cond ((> (- a-rate b-rate) 0.03) model-a)
+                           ((> (- b-rate a-rate) 0.03) model-b)
+                           (t 'tie))))
+        (list :winner (if (eq winner 'tie) 'tie winner)
+              :a-rate a-rate :b-rate b-rate
+              :shared-targets shared
+              :a-wins a-wins :b-wins b-wins :ties ties
+              :a-name model-a :b-name model-b)))))
+
+(defun gptel-auto-workflow--evolution-model-comparison-report ()
+  "Generate head-to-head report for all model pairs with sufficient data.
+Compares specific models (e.g. DeepSeek/deepseek-v4-pro vs DeepSeek/deepseek-v4-flash)."
+  (let* ((stats (gptel-auto-workflow--evolution-model-stats))
+         (models (mapcar #'car stats))
+         (pairs nil) (lines nil))
+    (let ((seen (make-hash-table :test 'equal)))
+      (dolist (a models)
+        (dolist (b models)
+          (when (and (not (equal a b))
+                     (not (gethash (list b a) seen)))
+            (puthash (list a b) t seen)
+            (let ((h2h (gptel-auto-workflow--model-head-to-head-stats a b)))
+              (when (>= (plist-get h2h :shared-targets) 1)
+                (push (cons (cons a b) h2h) pairs)))))))
+    (setq pairs (sort pairs (lambda (x y)
+                              (> (plist-get (cdr x) :shared-targets)
+                                 (plist-get (cdr y) :shared-targets)))))
+    (push "# Model-Level Head-to-Head Comparison\n" lines)
+    (push (format "> Auto-generated from %d experiments across %d models\n\n"
+                  (length (gptel-auto-workflow--parse-all-results))
+                  (length models))
+          lines)
+    (let ((model-ranks (gptel-auto-workflow--evolution-model-stats)))
+      (push "## Model Rankings (by keep-rate)\n\n" lines)
+      (dolist (entry model-ranks)
+        (push (format "- **%s**: %.1f%%\n" (car entry) (* 100 (cdr entry))) lines))
+      (push "\n" lines))
+    (dolist (pair pairs)
+      (let* ((h2h (cdr pair))
+             (a (plist-get h2h :a-name))
+             (b (plist-get h2h :b-name))
+             (winner (plist-get h2h :winner))
+             (a-rate (plist-get h2h :a-rate))
+             (b-rate (plist-get h2h :b-rate))
+             (shared (plist-get h2h :shared-targets)))
+        (push (format "## %s vs %s (winner: **%s**)\n" a b
+                      (if (eq winner 'tie) "tie" winner))
+              lines)
+        (push (format "- %s: %.1f%% keep-rate\n" a (* 100 a-rate)) lines)
+        (push (format "- %s: %.1f%% keep-rate\n" b (* 100 b-rate)) lines)
+        (push (format "- Shared targets: %d | won %d, won %d, ties %d\n\n"
+                      shared (plist-get h2h :a-wins)
+                      (plist-get h2h :b-wins)
+                      (plist-get h2h :ties))
+              lines)))
+    (push (format "\n*Generated: %s*\n" (format-time-string "%Y-%m-%d %H:%M")) lines)
+    (apply #'concat (nreverse lines))))
+
+(defun gptel-auto-workflow--evolution-persist-model-comparison ()
+  "Save model-level head-to-head comparison to mementum."
+  (let ((report (gptel-auto-workflow--evolution-model-comparison-report))
+        (file (expand-file-name "mementum/knowledge/model-comparison.md"
+                                (gptel-auto-workflow--worktree-base-root))))
+    (when report
+      (make-directory (file-name-directory file) t)
+      (with-temp-file file (insert report))
+      (let ((pairs (length (split-string report "## " t))))
+        (message "[evolution] Model comparison: %d model(s), %d pair(s) → mementum"
+                 (length (gptel-auto-workflow--evolution-model-stats))
+                 (max 0 (- pairs 2)))))))  ;; -2 for header + rankings section
 
 ;; ─── Evolution Quality Gates ───
 
