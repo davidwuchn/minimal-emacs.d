@@ -70,7 +70,8 @@ ADAPTS TO: Explicit state validation catches real FSM issues.
 
 PROACTIVE MITIGATION: Distinguishes nil state from error state."
   (when (and (my/gptel--fsm-p fsm)
-             (proper-list-p info) (plist-member info :buffer))
+             (proper-list-p info)
+             (plist-member info :buffer))
     (let* ((fsm-buffer (plist-get info :buffer))
            (error-msg (plist-get info :error))
            (stop-reason (plist-get info :stop-reason))
@@ -119,14 +120,20 @@ Only operates on FSMs with a live buffer."
                           (error
                            (message "[gptel-fsm] Failed to get FSM info: %s"
                                     (error-message-string err))
-                           nil)))))
+                           nil))))
     (when (my/gptel--fsm-needs-recovery-p fsm info)
       (cl-incf my/gptel--recovery-count)
       (when (> my/gptel--recovery-count 3)
         (message "[gptel-fsm] WARNING: %d FSM recoveries this session"
                  my/gptel--recovery-count))
-      (setf (gptel-fsm-state fsm) 'DONE)
-      (force-mode-line-update t))))
+      (when (and (my/gptel--fsm-p fsm)
+                 (fboundp 'gptel-fsm-state))
+        (condition-case err
+            (setf (gptel-fsm-state fsm) 'DONE)
+          (error
+           (message "[gptel-fsm] Failed to set FSM state to DONE: %s"
+                    (error-message-string err))))
+        (force-mode-line-update t))))))
 
 (add-hook 'gptel-post-response-functions #'my/gptel--recover-fsm-on-error)
 
