@@ -219,9 +219,9 @@ ARGS: (target experiment-id max-experiments ...)."
                              :skipped t)))))
         nil))))
 
-;; ;; Uncomment to enable pre-flight checks
-;; (advice-add 'gptel-auto-experiment-run
-;;             :around #'gptel-auto-workflow--experiment-preflight-advice)
+;; Enable pre-flight checks
+(advice-add 'gptel-auto-experiment-run
+            :around #'gptel-auto-workflow--experiment-preflight-advice)
 
 (provide 'gptel-auto-workflow-ontology-predict)
 ;;; gptel-auto-workflow-ontology-predict.el ends here
