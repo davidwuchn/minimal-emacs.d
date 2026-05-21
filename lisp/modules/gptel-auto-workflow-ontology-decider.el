@@ -169,13 +169,15 @@ ARGS are decision-specific parameters."
   "Track ontology vs LLM decisions for analysis.")
 
 (defun gptel-auto-workflow--record-decision (decision-type result &optional reason)
-  "Record decision for analysis."
-  (let* ((current (gethash decision-type gptel-auto-workflow--decision-stats
+  "Record decision for analysis.
+RESULT should be 'ontology, 'llm, or 'hybrid."
+  (let* ((key (if (keywordp result) result (intern (concat ":" (symbol-name result)))))
+         (current (gethash decision-type gptel-auto-workflow--decision-stats
                             (list :ontology 0 :llm 0 :hybrid 0 :total 0)))
          (total (or (plist-get current :total) 0))
-         (count (or (plist-get current result) 0)))
+         (count (or (plist-get current key) 0)))
     (setq current (plist-put current :total (1+ total)))
-    (setq current (plist-put current result (1+ count)))
+    (setq current (plist-put current key (1+ count)))
     (puthash decision-type current gptel-auto-workflow--decision-stats)))
 
 (defun gptel-auto-workflow--decision-stats-report ()
