@@ -794,7 +794,8 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
 Routed worktree agent buffers outrank generic fallback buffers like
 `*scratch*' so later low-fidelity registrations cannot clobber the real
 request buffer for an active workflow task."
-  (if (not (buffer-live-p buffer))
+  (if (or (not (proper-list-p state))
+          (not (buffer-live-p buffer)))
       0
     (let* ((buffer-name (buffer-name buffer))
            (activity-dir (plist-get state :activity-dir))
