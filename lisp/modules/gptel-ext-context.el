@@ -548,7 +548,8 @@ ORIG-FN is `gptel-request'. PROMPT and ARGS are passed through."
                (my/gptel--delegate-threshold-exceeded-p))
           (let* ((tokens (my/gptel--current-tokens))
                  (window (my/gptel--context-window))
-                 (callback (plist-get args :callback)))
+                 (callback (and (proper-list-p args)
+                                (plist-get args :callback))))
             (message "[auto-delegate] Threshold exceeded: %d/%d tokens (%.0f%%)"
                      (round tokens) (round window)
                      (if (and (numberp window) (integerp window) (> window 0) (numberp tokens) (>= tokens 0))
