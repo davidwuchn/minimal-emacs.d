@@ -188,16 +188,18 @@
 - Auto-workflow: ✅ Running (--fg-daemon=copilot-auto-workflow)
 - Not restarted; config changes take effect on next workflow cycle
 
-## Current Session: Sync + Smart Backend Routing Enabled
+## Current Session: Sync + Comparator Nil Guard
 
-**Status:** Complete. Ontology router now ACTIVE on every experiment.
+**Status:** Complete. Small nil guard fix from staging.
 
 **Remote Changes Pulled:**
-- `8dcdbd8b` — ⊘ Silence byte-compile warning
-- `f9004734` — Merge branch 'staging'
+- `e8e52ac5` — Merge branch 'staging' (comparator nil guard)
+- `6c0fcdc8` — Merge optimize/comparator-imacpro.taila8bdd.ts.net-r204614z08bb-exp1
+- `7e9040d5` — ◈ Update state.md: smart backend routing enabled
 - `3a7c3a04` — λ Smart backend routing + head-to-head comparison + ontology advice ENABLED
-- `527af7b8` — Merge optimize/fsm-onepi5-r201341zd5b9-exp2
-- `f603a6f7` — Merge optimize/context-riven-r201936ze21b-exp1
+
+**Fix:**
+- `gptel-benchmark-comparator.el` — nil guard: added `proper-list-p` check before calling `fallback-fn` (prevented crash when `found-versions` was non-nil but not a proper list)
 
 **New Features:**
 1. **Ontology routing ACTIVE** — Advice on `gptel-auto-experiment-run` now enabled
