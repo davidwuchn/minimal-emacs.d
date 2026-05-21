@@ -2775,9 +2775,21 @@ AutoGo holdout pattern: crosses train vs holdout trends."
          (total 0.0) (count 0)
           (hf (expand-file-name "var/tmp/evolution/holdout-eval.json" root))
           (history (condition-case nil
-                       (with-temp-buffer
-                         (insert-file-contents hf)
-                         (json-read))
+                       (let ((raw (with-temp-buffer
+                                    (insert-file-contents hf)
+                                    (json-read))))
+                         (if (and (listp raw) (not (keywordp (car raw))))
+                             (let ((plist nil))
+                               (dolist (pair raw plist)
+                                 (when (consp pair)
+                                   (let* ((k (car pair))
+                                          (key (cond
+                                                ((keywordp k) k)
+                                                ((stringp k) (intern (concat ":" k)))
+                                                (t (intern (concat ":" (symbol-name k)))))))
+                                     (setq plist (plist-put plist key (cdr pair))))))
+                               plist)
+                           raw))
                      (error (list :history nil :best 0.0)))))
     (dolist (target targets)
       (let ((fp (expand-file-name target root)))

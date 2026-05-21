@@ -634,10 +634,22 @@ Returns worktree path or nil on failure."
                    180)))
              (unless (= 0 (cdr add-result))
                (error "git worktree add failed: %s" (car add-result))))
-           (gptel-auto-workflow--seed-worktree-runtime-var worktree-dir)
-           (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
-           (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
-           worktree-dir))))))
+            ;; Merge latest main so staging includes recent test fixes
+            (let ((default-directory worktree-dir))
+              (let ((main-merge (gptel-auto-workflow--git-result
+                                 (format "git merge -X theirs %s --no-ff -m %s"
+                                         (shell-quote-argument "main")
+                                         (shell-quote-argument "Sync main into staging for verification"))
+                                 180)))
+                (if (= 0 (cdr main-merge))
+                    (message "[auto-workflow] Merged main into staging worktree")
+                  (message "[auto-workflow] Main merge into staging failed (non-fatal): %s"
+                           (my/gptel--sanitize-for-logging (car main-merge) 160))
+                  (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60)))))
+            (gptel-auto-workflow--seed-worktree-runtime-var worktree-dir)
+            (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
+            (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
+            worktree-dir))))))
 
 
 

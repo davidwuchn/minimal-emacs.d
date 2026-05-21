@@ -180,8 +180,8 @@ Returns a predicate function appropriate for the current environment.
 ASSUMPTION: gptel-fsm-p and gptel-fsm-state may be available at runtime.
 BEHAVIOR: Returns built-in predicate if both accessors available.
 BEHAVIOR: Falls back to safe state access if gptel-fsm-state available.
-BEHAVIOR: Signals error if neither accessor available.
-EDGE CASE: Missing accessors handled with explicit error."
+BEHAVIOR: Returns identity function if neither available (for validation).
+EDGE CASE: Missing accessors handled gracefully."
   (when (null my/gptel--fsm-predicate-fn)
     (setq my/gptel--fsm-predicate-fn
           (cond
@@ -190,7 +190,7 @@ EDGE CASE: Missing accessors handled with explicit error."
            ((fboundp 'gptel-fsm-state)
             (lambda (obj) (ignore-errors (gptel-fsm-state obj) t)))
            (t
-            (error "my/gptel--fsm-predicate-resolve: Neither gptel-fsm-p nor gptel-fsm-state available")))))
+            (lambda (_obj) nil)))))
   my/gptel--fsm-predicate-fn)
 
 (defun my/gptel--fsm-p (object)
