@@ -488,9 +488,9 @@ Returns plist with :strategy and :context keys."
             :context (or last-task "Continue the task")
             :reason "Empty or invalid buffer")
     (let* ((lines (my/gptel--buffer-lines buffer-string))
-           (total-lines (length lines))
+           (total-lines (if (proper-list-p lines) (length lines) 0))
            (recent-lines (last lines (min 50 total-lines)))
-           (has-tool-results (when recent-lines
+           (has-tool-results (when (and (proper-list-p recent-lines) recent-lines)
                               (cl-some
                                (lambda (line)
                                  (string-match-p "tool_result\\|tool-result\\|Tool result" line))
