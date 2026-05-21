@@ -3949,7 +3949,7 @@ Returns plist with :winner, :a-rate, :b-rate, :shared-targets, :a-wins, :b-wins.
           (a-total-kept 0) (a-total-exp 0)
           (b-total-kept 0) (b-total-exp 0))
       (maphash
-       (lambda (target entry)
+       (lambda (_target entry)
          (let ((a-total (plist-get entry :a-total))
                (b-total (plist-get entry :b-total)))
            (when (and (>= a-total 3) (>= b-total 3))
