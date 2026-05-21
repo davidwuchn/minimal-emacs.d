@@ -1034,6 +1034,7 @@ BASE-PROMPT is the original research prompt.
 PREVIOUS-DECISION is the controller decision from the previous turn."
   (let* ((ema-conf gptel-auto-workflow--research-ema-conf)
          (ema-delta (gptel-auto-workflow--research-ema-delta))
+         (accumulated-findings (or accumulated-findings ""))
          (controller-guidance 
           (cond
            ;; BRANCH: Previous approach was stagnant, try different angle
