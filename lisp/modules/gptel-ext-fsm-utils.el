@@ -360,11 +360,14 @@ Returns (LIST . MOST-RECENT) dotted pair where MOST-RECENT is the last FSM found
 Uses single traversal pass for performance optimization.
 
 ASSUMPTION: OBJECT may be atom, cons cell, or nested structure.
+ASSUMPTION: SEEN is a pre-allocated hash table with eq test (for internal use).
 BEHAVIOR: Returns (FSMS . LAST-FSM) dotted pair.
 EDGE CASE: No FSMs returns (nil . nil)."
   (let ((seen (make-hash-table :test 'eq))
         (result nil)
         (last-fsm nil))
+    (unless (hash-table-p seen)
+      (error "my/gptel--fsm-collect-list: SEEN must be a hash-table, got %S" seen))
     (cl-labels ((collect-and-track (fsm)
                   (push fsm result)
                   (setq last-fsm fsm)))
