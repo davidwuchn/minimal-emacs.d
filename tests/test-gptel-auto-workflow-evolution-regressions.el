@@ -229,8 +229,28 @@
 (ert-deftest regression/prompt/structure-score-has-sections ()
   "Prompt with sections should score higher than empty."
   (should (> (gptel-auto-experiment--prompt-structure-score
-              "## Sections\ncontent\n## More\nhere")
-             (gptel-auto-experiment--prompt-structure-score ""))))
+               "## Sections\ncontent\n## More\nhere")
+              (gptel-auto-experiment--prompt-structure-score ""))))
+
+(ert-deftest regression/prompt/skill-benchmark-variables-are-in-scope ()
+  "Skill benchmark variables should return live counts without void variables."
+  (let ((root (make-temp-file "aw-skill-vars" t)))
+    (unwind-protect
+        (let* ((run-dir (expand-file-name "var/tmp/experiments/20260521T000000" root))
+               (tsv (expand-file-name "results.tsv" run-dir)))
+          (make-directory run-dir t)
+          (with-temp-file tsv
+            (insert "evolution-patterns :kept t\n")
+            (insert "evolution-patterns :kept nil\n")
+            (insert "other-skill :kept t\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let ((vars (gptel-auto-workflow--skill-benchmark-variables
+                         "evolution-patterns")))
+              (should (equal (cdr (assq 'skill-experiments vars)) "2"))
+              (should (equal (cdr (assq 'skill-kept vars)) "1"))
+              (should (equal (cdr (assq 'skill-keep-rate vars)) "50.0%")))))
+      (delete-directory root t))))
 
 ;; ─── nucleus Compiler Audit Tests ───
 

@@ -2109,7 +2109,7 @@ Maps nucleus VSM layers to our system components:
              (let* ((obj-dir (expand-file-name "objects" git-dir))
                     (loose (condition-case nil
                                (length (directory-files obj-dir nil "^[0-9a-f]\\{38\\}$" t))
-                             0)))
+                             (error 0))))
                (when (> loose 5000)
                  (shell-command "git gc --auto --quiet" 0)
                  (message "[cleanup] Ran git gc (loose objects >5k, was %d)" loose))))

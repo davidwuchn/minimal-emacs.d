@@ -40,6 +40,7 @@
 (require 'subr-x)
 
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-base" ())
+(declare-function gptel-auto-workflow--parse-all-results "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--results-file-path "gptel-tools-agent-base" (&optional run-id))
 
 ;;; Strategy Registry
@@ -358,44 +359,46 @@ Returns plist with :total :kept :success-rate :avg-score."
 
 ;;; Strategy Selection
 
-  (defun gptel-auto-workflow--best-strategy-for-axis (strategies axis)
+(defun gptel-auto-workflow--best-strategy-for-axis (strategies axis)
   "Return strategy name best for AXIS, or nil.
 Scans TSV results for per-axis strategy performance."
-  (let ((by-strategy (make-hash-table :test 'equal)))
-    (dolist (r (gptel-auto-workflow--parse-all-results))
-      (let* ((s (plist-get r :strategy))
-             (a (plist-get r :kibcm-axis))
-             (kept (or (equal (plist-get r :decision) "kept")
-                       (eq (plist-get r :decision) t))))
-        (when (and s (member s strategies) (equal a axis))
-          (let ((entry (or (gethash s by-strategy) (cons 0 0))))
-            (setcar entry (1+ (car entry)))
-            (when kept (setcdr entry (1+ (cdr entry))))
-            (puthash s entry by-strategy)))))
-    (let ((best nil) (best-rate 0.0))
-      (maphash (lambda (s counts)
-                 (let ((rate (/ (float (cdr counts)) (car counts))))
-                   (when (and (>= (car counts) 3) (> rate best-rate))
-                     (setq best s best-rate rate))))
-               by-strategy)
-      (when best
-        (message "[strategy-axis] Best for %s: %s (%.0f%%)" axis best (* 100 best-rate))
-        best))))
+  (when (fboundp 'gptel-auto-workflow--parse-all-results)
+    (let ((by-strategy (make-hash-table :test 'equal)))
+      (dolist (r (gptel-auto-workflow--parse-all-results))
+        (let* ((s (plist-get r :strategy))
+               (a (plist-get r :kibcm-axis))
+               (kept (or (equal (plist-get r :decision) "kept")
+                         (eq (plist-get r :decision) t))))
+          (when (and s (member s strategies) (equal a axis))
+            (let ((entry (or (gethash s by-strategy) (cons 0 0))))
+              (setcar entry (1+ (car entry)))
+              (when kept (setcdr entry (1+ (cdr entry))))
+              (puthash s entry by-strategy)))))
+      (let ((best nil) (best-rate 0.0))
+        (maphash (lambda (s counts)
+                   (let ((rate (/ (float (cdr counts)) (car counts))))
+                     (when (and (>= (car counts) 3) (> rate best-rate))
+                       (setq best s best-rate rate))))
+                 by-strategy)
+        (when best
+          (message "[strategy-axis] Best for %s: %s (%.0f%%)" axis best (* 100 best-rate))
+          best)))))
 
 (defun gptel-auto-workflow--most-common-axis-for-target (target)
   "Return the most frequent KIBC-M axis for TARGET from past experiments.
 Used to predict which axis this experiment will target before the
 hypothesis is generated, enabling per-axis strategy selection."
-  (let ((counts (make-hash-table :test 'equal)))
-    (dolist (r (gptel-auto-workflow--parse-all-results))
-      (let* ((tgt (plist-get r :target))
-             (axis (plist-get r :kibcm-axis)))
-        (when (and tgt axis (not (equal axis "?"))
-                   (string-match (regexp-quote (or target "")) tgt))
-          (puthash axis (1+ (gethash axis counts 0)) counts))))
-    (let ((best nil) (best-n 0))
-      (maphash (lambda (a n) (when (> n best-n) (setq best a best-n n))) counts)
-      best)))
+  (when (fboundp 'gptel-auto-workflow--parse-all-results)
+    (let ((counts (make-hash-table :test 'equal)))
+      (dolist (r (gptel-auto-workflow--parse-all-results))
+        (let* ((tgt (plist-get r :target))
+               (axis (plist-get r :kibcm-axis)))
+          (when (and tgt axis (not (equal axis "?"))
+                     (string-match (regexp-quote (or target "")) tgt))
+            (puthash axis (1+ (gethash axis counts 0)) counts))))
+      (let ((best nil) (best-n 0))
+        (maphash (lambda (a n) (when (> n best-n) (setq best a best-n n))) counts)
+        best))))
 
 (defun gptel-auto-workflow--select-best-strategy (&optional target)
   "Select the best strategy for TARGET based on historical performance.

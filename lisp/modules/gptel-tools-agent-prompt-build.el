@@ -771,7 +771,8 @@ Uses gptel-agent's metadata-only parsing."
   "Return alist of (KEY . VALUE) benchmark variables for SKILL-NAME.
 Any SKILL.md can reference these with {{variable-name}} syntax to
 receive live benchmark and experiment outcome data."
-  (let ((kept 0) (total 0) (last-score 0))
+  (let ((kept 0)
+        (total 0))
     ;; Aggregate experiment stats for this skill from TSV results
     (condition-case nil
         (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
@@ -789,8 +790,8 @@ receive live benchmark and experiment outcome data."
                     (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
                       (when (string-match (regexp-quote skill-name) line)
                         (setq total (1+ total))
-                        (when (string-match ":kept\\s-+t\\|:kept\\s-+nil" line)
-                          (setq kept (1+ kept))))))
+                        (when (string-match ":kept\\s-+t" line)
+                          (setq kept (1+ kept)))))
                     (forward-line 1)))))))
       (ignore))
     `((skill-name . ,skill-name)
@@ -798,7 +799,7 @@ receive live benchmark and experiment outcome data."
       (skill-experiments . ,(format "%d" total))
       (skill-kept . ,(format "%d" kept))
       (overall-keep-rate . "18.5%")
-      (total-experiments . "1162")))
+      (total-experiments . "1162"))))
 
 (defun gptel-auto-workflow--substitute-skill-variables (skill-name content)
   "Substitute benchmark variables in CONTENT with live data for SKILL-NAME.
