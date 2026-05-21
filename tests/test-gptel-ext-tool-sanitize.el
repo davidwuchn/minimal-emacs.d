@@ -13,6 +13,17 @@
 (require 'ert)
 (require 'cl-lib)
 
+;; Ensure lisp/modules is on load-path for (require 'gptel-ext-tool-sanitize)
+(let ((modules-dir (expand-file-name "../lisp/modules"
+                                     (file-name-directory
+                                      (or load-file-name buffer-file-name default-directory)))))
+  (add-to-list 'load-path modules-dir))
+;; Ensure gptel subtree is on load-path
+(let ((gptel-dir (expand-file-name "../packages/gptel"
+                                   (file-name-directory
+                                    (or load-file-name buffer-file-name default-directory)))))
+  (add-to-list 'load-path gptel-dir))
+
 ;;; Mock variables
 
 (defvar gptel-mode nil)

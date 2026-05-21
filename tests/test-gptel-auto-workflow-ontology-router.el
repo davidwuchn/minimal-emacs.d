@@ -10,6 +10,13 @@
 
 (require 'ert)
 
+;; Ensure lisp/modules is on load-path for requires in loaded modules
+(let ((base (file-name-directory
+             (or load-file-name buffer-file-name default-directory))))
+  (add-to-list 'load-path (expand-file-name "../lisp/modules" base))
+  (add-to-list 'load-path (expand-file-name "../packages/gptel" base))
+  (add-to-list 'load-path (expand-file-name "../packages/gptel-agent" base)))
+
 ;; Mock the existing fallback configuration
 (defvar gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")

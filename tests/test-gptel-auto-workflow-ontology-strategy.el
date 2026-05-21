@@ -9,6 +9,13 @@
 
 (require 'ert)
 
+;; Ensure lisp/modules and subtrees are on load-path
+(let ((base (file-name-directory
+             (or load-file-name buffer-file-name default-directory))))
+  (add-to-list 'load-path (expand-file-name "../lisp/modules" base))
+  (add-to-list 'load-path (expand-file-name "../packages/gptel" base))
+  (add-to-list 'load-path (expand-file-name "../packages/gptel-agent" base)))
+
 (load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-ontology-strategy.el"
                               (file-name-directory
                                (or load-file-name buffer-file-name default-directory))))

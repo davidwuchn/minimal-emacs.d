@@ -20,13 +20,18 @@
 ;; Defer AI module loading for workflow daemons to break C stack overflow.
 ;; run-with-timer 0 processes from event loop with clean stack.
 (if (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
+    ;; Defer AI loading to break C stack overflow. Wrap in with-temp-message
+    ;; to serialize all message writes — prevents *Messages* buffer corruption
+    ;; from interleaved load/init messages during concurrent module initialization.
     (run-at-time 0.5 nil
       (lambda ()
-        (require 'init-ai)
-        (load (expand-file-name "lisp/modules/standalone-research.el"
-                                 minimal-emacs-user-directory) nil 'nomessage)
-        (when (fboundp 'slr-run-research)
-          (defalias 'gptel-auto-workflow-run-research 'slr-run-research))))
+        (with-temp-message ""
+          (let ((load-verbose nil))
+            (require 'init-ai)
+            (load (expand-file-name "lisp/modules/standalone-research.el"
+                                     minimal-emacs-user-directory) nil 'nomessage)
+            (when (fboundp 'slr-run-research)
+              (defalias 'gptel-auto-workflow-run-research 'slr-run-research))))))
   (require 'init-ai))
 
 ;; Backup and auto-save settings are configured in init-files.el

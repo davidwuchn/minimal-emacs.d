@@ -966,7 +966,7 @@ workflow_action_elisp() {
         *) return 1 ;;
     esac
 
-    printf '(let ((root (file-name-as-directory "%s"))) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)) (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root)) %s)' \
+    printf '(let ((root (file-name-as-directory "%s"))) (let ((load-verbose nil)) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root))) (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root)) %s)' \
            "$ROOT_LISP" "$dispatch"
 }
 
