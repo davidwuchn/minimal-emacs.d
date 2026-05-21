@@ -182,12 +182,14 @@ falls back to hardcoded default."
 (defun gptel-benchmark--scan-versions-from-dir (name)
   "Scan benchmarks directory for NAME and return sorted version strings.
 Internal helper to avoid code duplication."
+  (unless (and name (stringp name) (not (string-empty-p name)))
+    (signal 'wrong-type-argument (list "stringp" name)))
   (let ((benchmark-dir "./benchmarks/")
         (versions '()))
     (when (file-exists-p benchmark-dir)
-      (let ((files (directory-files benchmark-dir nil (format "%s-.*-benchmark\\.json$" name))))
+      (let ((files (directory-files benchmark-dir nil (format "%s-.*-benchmark\\.json$" (regexp-quote name)))))
         (dolist (file files)
-          (when (string-match (format "%s-\\(.*\\)-benchmark\\.json$" name) file)
+          (when (string-match (format "%s-\\(.*\\)-benchmark\\.json$" (regexp-quote name)) file)
             (push (match-string 1 file) versions)))))
     (if versions
         (sort versions 'string<)
