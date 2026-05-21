@@ -156,6 +156,59 @@
                      (when (> reaped 0)
                        (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))))
 
+;; ═══════════════════════════════════════════════════════════════════════════
+;; Async-safe message: prevent *Messages* buffer corruption
+;; ═══════════════════════════════════════════════════════════════════════════
+;;
+;; Emacs's message_dolog (C) writes bytes non-atomically to *Messages*.
+;; When concurrent sentinel/timer callbacks call (message ...) or C internals
+;; call message_with_string simultaneously, byte writes interleave, producing
+;; "Unknown message" errors and garbled text.
+;;
+;; Fix: disable *Messages* buffer entirely (message-log-max 0 prevents all
+;; message_dolog calls at the C level). Redirect all (message ...) output to
+;; a file via :after advice — each write-region call is OS-atomic, so no
+;; interleaving is possible regardless of concurrency.
+;;
+;; C-level message_with_string (from load, save-buffer, etc.) is also
+;; suppressed from *Messages* (message-log-max 0 blocks message_dolog).
+(setq message-log-max 0)
+
+(defvar mw--message-log-file nil
+  "Path to OS-atomic message log file. Computed lazily on first use.")
+
+(defvar mw--message-log-dir-created nil
+  "Non-nil when the message log directory has been created.")
+
+(defun mw-message--ensure-log-file ()
+  "Lazily init the message log file path and ensure its directory exists."
+  (unless mw--message-log-file
+    (setq mw--message-log-file
+          (expand-file-name "var/log/messages.log"
+                            (if (boundp 'minimal-emacs-user-directory)
+                                minimal-emacs-user-directory
+                              user-emacs-directory))))
+  (unless mw--message-log-dir-created
+    (setq mw--message-log-dir-created t)
+    (condition-case nil
+        (make-directory (file-name-directory mw--message-log-file) t)
+      (ignore))))
+
+;; Ensure log directory exists before first message write
+(mw-message--ensure-log-file)
+
+(defun mw-message--file-log (format-string &rest args)
+  "Log message to file as OS-atomic append (no *Messages* interleaving)."
+  (mw-message--ensure-log-file)
+  (let ((msg (format "%s %s\n"
+                     (format-time-string "%Y-%m-%dT%H:%M:%S")
+                     (apply #'format-message format-string args))))
+    (condition-case nil
+        (write-region msg nil mw--message-log-file 'append 'quiet)
+      (ignore))))
+
+(advice-add 'message :after #'mw-message--file-log)
+
 (provide 'post-early-init)
 
 ;;; post-early-init.el ends here

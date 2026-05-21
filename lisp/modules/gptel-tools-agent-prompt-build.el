@@ -1377,9 +1377,8 @@ row for the same experiment and target."
                                   "?")
                               (or (gptel-auto-experiment--tsv-escape
                                    (gptel-auto-workflow--plist-get experiment :model "unknown"))
-                                  "unknown")))))
-
-       (write-region (point-min) (point-max) file)
+                                  "unknown"))))
+        (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.
     (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)
       (condition-case err

@@ -1535,7 +1535,12 @@ before run-at-time, because the deferral breaks the dynamic scope chain."
   "my/gptel--find-tool-by-name must find tools by exact and fuzzy name."
   (require 'gptel)
   (load-file test-tool-sanitize-file)
-  (let* ((mock-tool (gptel-make-tool :name "Read" :func (lambda (_) nil)))
+  ;; Use gptel--make-tool directly because other test files redefine
+  ;; gptel-make-tool to return strings instead of tool structs.
+  (let* ((mock-tool (gptel--make-tool :name "Read"
+                                      :function (lambda (_) nil)
+                                      :description "Mock tool for testing"
+                                      :args nil))
          (tools (list mock-tool)))
     (should (my/gptel--find-tool-by-name tools "Read"))
     (should (not (my/gptel--find-tool-by-name tools "Write")))

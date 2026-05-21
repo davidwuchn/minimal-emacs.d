@@ -226,7 +226,48 @@
 - Auto-workflow: Running (PID 3113587, started 20:18)
 - ⚠️ Restart needed to pick up enabled ontology routing advice
 
+## Current Session: Staging Verification Baseline Fix
+
+**Status:** Complete. Root cause fixed and pushed.
+
+**Problem:**
+- Staging verification intermittently failed because baseline worktree used stale `origin/main`
+- Untracked auto-generated files (strategy artifacts) made `git status --porcelain` non-empty
+- This caused `gptel-auto-workflow--staging-main-ref` to fall back to `origin/main` even when local `main` had test fixes
+- Baseline lacked test fixes → false staging failures
+
+**Fix:**
+- `lisp/modules/gptel-tools-agent-worktree.el`: `git status --porcelain` → `git status --porcelain --untracked-files=no`
+- Ignores untracked files in clean-main check
+- Committed: `92a48a94` — pushed to origin/main and upstream/main
+
+**Cleanup:**
+- Removed stale baseline worktree `main-baseline-14179` (commit `3eaaff74`, missing test fixes)
+- Removed stale copilot session baseline worktree
+- Removed stale daemon socket `/tmp/emacs.../copilot-auto-workflow`
+- Cleared stale workflow status (was `:running t` with no daemon)
+
+**Tests:**
+- 1805/1805 pass — ALL GREEN (0 unexpected failures)
+- Fixed test isolation bug: `regression/tool-recovery/find-tool-by-name`
+  - Root cause: `test-gptel-tools-edit.el`, `test-gptel-tools-apply.el`, `test-gptel-tools-preview.el` redefine `gptel-make-tool` at top-level to return strings instead of tool structs
+  - Fix: Use `gptel--make-tool` directly in evolution test (commit `206ff66d`)
+
+**Commits This Session:**
+- `92a48a94` — Fix staging-main-ref: ignore untracked files in clean-main check
+- `206ff66d` — Fix test isolation: use gptel--make-tool instead of mocked gptel-make-tool
+
+**Workflow Status:**
+- Daemon running (run-id: `2026-05-21T225255Z-6b47`, phase: running)
+- Manually triggered at 22:52
+- 5 experiments queued, 0 completed so far
+- Next auto cron: 23:00 (~8 min)
+- 3 pending experiments to verify on staging: mementum-exp1, utils-exp1, validate-exp1
+- Will create fresh baselines from local main (with test fixes)
+- 3 pending experiment branches to verify: mementum-exp1, utils-exp1, validate-exp1
+
 **Prior Sessions:**
+- Sync + Staging-Main Sync + New Strategy
 - Backend Performance Analysis + Ontology Router
 - Pipeline E2E Fixes + Policy Reminder
 - TDD Coverage + Staging Merge + Test Suite Fix
