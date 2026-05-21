@@ -31,6 +31,8 @@
   "Extract lambda signature for TOOL-NAME from PROMPT-TEXT.
 
 Returns alist of param names, or nil if no signature found."
+  (when (null prompt-text)
+    (error "nucleus--extract-prompt-signature: prompt-text cannot be nil"))
   (let ((regex (format "^λ(\\([^)]*\\))\\. %s" (regexp-quote (symbol-name tool-name)))))
     (when (or (string-match regex prompt-text)
               (string-match "^λ(\\([^)]*\\))" prompt-text))
