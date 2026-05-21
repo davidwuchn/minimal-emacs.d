@@ -242,6 +242,42 @@ Call this before experiment runs."
           gptel-auto-workflow-headless-subagent-fallbacks)
     (message "[onto-router] Reset to static fallback order")))
 
+;; ─── Semantic Similarity Target Discovery ───
+
+(defun gptel-auto-workflow--semantic-target-suggestions (&optional max-suggestions min-score)
+  "Suggest experiment targets based on semantic similarity to kept targets.
+Queries git-embed for files similar to recently kept experiment targets.
+Returns list of target file paths (strings) or nil.
+MAX-SUGGESTIONS limits results (default 5).
+MIN-SCORE is similarity threshold (default 0.60)."
+  (let ((suggestions nil)
+        (count 0)
+        (max (or max-suggestions 5))
+        (threshold (or min-score 0.60)))
+    (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+      (let ((edges (gptel-auto-workflow--semantic-similarity-edges threshold)))
+        (dolist (edge edges)
+          (when (< count max)
+            (let ((target (plist-get edge :target)))
+              (when (and target
+                         (not (member target suggestions))
+                         (file-exists-p target))
+                (push target suggestions)
+                (setq count (1+ count))))))
+        (nreverse suggestions)))))
+
+(defun gptel-auto-workflow--semantic-targets-for-category (category &optional max-suggestions)
+  "Suggest targets in CATEGORY based on semantic similarity.
+Returns list of target paths that are semantically similar to kept targets
+AND match CATEGORY.
+MAX-SUGGESTIONS limits results (default 5)."
+  (let ((suggestions (gptel-auto-workflow--semantic-target-suggestions max-suggestions))
+        (filtered nil))
+    (dolist (target suggestions)
+      (when (eq (gptel-auto-workflow--categorize-target target) category)
+        (push target filtered)))
+    (nreverse filtered)))
+
 ;; ─── Advice Integration ───
 
 (defun gptel-auto-workflow--ontology-fallback-advice (orig-fun &rest args)

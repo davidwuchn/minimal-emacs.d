@@ -1,0 +1,1 @@
+{"name":"failure-weighted-guidance","version":"1.0","hypothesis":"Prioritizing guidance based on historical failure patterns is more effective than uniform guidance.","axis":"D","components":["failure-analysis","weighted-prioritization"]}
