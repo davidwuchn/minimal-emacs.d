@@ -119,3 +119,38 @@
 **Prior Sessions:**
 - Retry depth fixes + pipeline verification
 - 2 HIGH plist-put bugs fixed + 18 dead functions removed
+
+## Current Session: Pipeline E2E Fixes + Policy Reminder
+
+**Status:** Running. Auto-workflow daemon active (PID 82694). Researcher daemon needs restart.
+
+**Commits This Session:**
+- `4337a51d` — ⚒ Define gptel-auto-workflow--deductive-explain in evolution-fix
+- `5750b7db` — Merge optimize/benchmark-onepi5-r110502ze1ca-exp1 for verification
+- `7d8fd1ee` — ⊘ Fix test--project-root for both project-root and tests/ cwd
+- `c9c40edc` — λ Wire ontology competency questions into skill evolution
+
+**Key Fixes Applied:**
+1. **Hash-table guard**: `gptel-auto-workflow--ensure-buffer-tables` called at `run-all-projects` entry (line 313) before `normalized-projects` — prevents nil hash-tables crashing maphash
+2. **void-variable pruned**: Evolution.el line 2127 had 6 `)` closing outer `let*` prematurely. Fix: `evolution-fix.el` redefines the function after main file loads (safer than editing 4047-line file with fragile parens)
+3. **void-function deductive-explain**: Added fallback implementation in `evolution-fix.el` that returns proof plists from keep-rate/total-experiments facts
+4. **Script interface verified**: `evolve_skills.py` expects `--skills` (comma-separated). Both callers use correct args
+5. **Test batch-mode path**: `test--project-root` checks both `test-...` and `tests/test-...` with `file-exists-p` before defaulting
+
+**Policy Reinforced:**
+- ⚠️ **NEVER force-push**. Origin force-pushed `main` during distributed pipeline (commits lost). Recovery: `fetch --all` → `rebase` → `push`. Always prefer `--force-with-lease` when necessary.
+- Auto-generated artifacts (DIRECTIVE.md, strategy-guidance.json, research-insights-*.md) cause merge conflicts during auto-promote. Revert them unless explicitly asked.
+
+**Daemon Status:**
+- Auto-workflow: ✅ Running (--fg-daemon=copilot-auto-workflow, PID 82694)
+- Researcher: ❌ Not running (needs restart)
+
+**Experiment Results (run-id: 2026-05-21T110321Z-cc6e):**
+- exp1: validation-failed
+- exp2: ✅ KEPT (quality 0.69→0.88, cl-plusp improvement in reasoning.el)
+- exp3: In progress (3/9)
+
+**Prior Sessions:**
+- TDD Coverage + Staging Merge + Test Suite Fix
+- Retry depth fixes + pipeline verification
+- 2 HIGH plist-put bugs fixed + 18 dead functions removed
