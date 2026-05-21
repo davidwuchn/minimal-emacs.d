@@ -253,6 +253,15 @@
   - Root cause: `test-gptel-tools-edit.el`, `test-gptel-tools-apply.el`, `test-gptel-tools-preview.el` redefine `gptel-make-tool` at top-level to return strings instead of tool structs
   - Fix: Use `gptel--make-tool` directly in evolution test (commit `206ff66d`)
 
+**Remote Sync (2026-05-21 23:15):**
+- `f59f9131` — Δ message-log-max 0 + file-based logging: prevents *Messages* corruption
+  - Blocks C-level message_dolog, redirects (message ...) to file via :after advice
+  - Fixes "Unknown message" errors (~20+ per cycle)
+- `7ddafb4c` — 💡 Add backend + model comparison reports (evolution cycle output)
+  - Auto-generated from 1061 experiments
+- `cba0d8f7` — ⊘ Fix test regression: defer mw--message-log-file to runtime
+  - minimal-emacs-user-directory not bound when tests load post-early-init.el directly
+
 **Commits This Session:**
 - `92a48a94` — Fix staging-main-ref: ignore untracked files in clean-main check
 - `206ff66d` — Fix test isolation: use gptel--make-tool instead of mocked gptel-make-tool
