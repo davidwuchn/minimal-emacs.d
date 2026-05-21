@@ -13,6 +13,8 @@
 
 (defun gptel-auto-workflow--safe-truename (path)
   "Return PATH's truename, or nil when PATH cannot be resolved."
+  (when (null path)
+    nil)
   (condition-case nil
       (file-truename path)
     (ignore)))
@@ -75,7 +77,8 @@ they are not tracked by Git."
       (make-directory target-var t)
       (let ((source-elpa (expand-file-name "elpa" source-var))
             (target-elpa (expand-file-name "elpa" target-var)))
-        (when (file-directory-p source-elpa)
+        (when (and (file-directory-p source-elpa)
+                   (proper-list-p (directory-files source-elpa t directory-files-no-dot-files-regexp)))
           (make-directory target-elpa t)
           (dolist (source (directory-files source-elpa t directory-files-no-dot-files-regexp))
             (when (gptel-auto-workflow--link-shared-runtime-path
