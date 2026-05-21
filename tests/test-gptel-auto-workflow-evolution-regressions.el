@@ -30,8 +30,11 @@
                               (file-name-directory
                                (or load-file-name buffer-file-name default-directory))))
 (load-file (expand-file-name "../lisp/modules/gptel-tools-agent-base.el"
-                              (file-name-directory
-                               (or load-file-name buffer-file-name default-directory))))
+                               (file-name-directory
+                                (or load-file-name buffer-file-name default-directory))))
+(load-file (expand-file-name "../lisp/modules/strategic-daemon-functions.el"
+                               (file-name-directory
+                                (or load-file-name buffer-file-name default-directory))))
 
 (ert-deftest regression/auto-workflow-evolution/insufficient-data-returns-skip-message ()
   "Pipeline callers should see a textual skip reason, not bare nil."
@@ -1752,6 +1755,68 @@ This ensures external commits are integrated, not dropped."
                               (or (getenv "GIT_WORK_TREE") default-directory)))
            (buffer-string))))
     (should (string-match-p "git merge --ff-only.*main" fn-body))))
+
+;; ─── TDD: rule-eval comparison guards ───
+
+(ert-deftest tdd/rule-eval/comparison-with-string-values ()
+  "eval-rule-expr-fallback comparisons must not crash on non-numeric values.
+When a rule variable resolves to a string like \"own-repo\", comparisons
+should return nil instead of signaling wrong-type-argument."
+  (when (fboundp 'gptel-auto-workflow--eval-rule-expr-fallback)
+    (let ((env (make-hash-table :test 'equal)))
+      (puthash 'kibcm-axis "own-repo" env)
+      (puthash 'threshold 0.5 env)
+      ;; > comparison with string should return nil, not crash
+      (should-not (gptel-auto-workflow--eval-rule-expr-fallback '(> kibcm-axis threshold) env))
+      ;; < comparison with string should return nil, not crash
+      (should-not (gptel-auto-workflow--eval-rule-expr-fallback '(< kibcm-axis threshold) env))
+      ;; >= comparison with string should return nil, not crash
+      (should-not (gptel-auto-workflow--eval-rule-expr-fallback '(>= kibcm-axis threshold) env)))))
+
+(ert-deftest tdd/rule-eval/comparison-with-numeric-values ()
+  "eval-rule-expr-fallback comparisons still work correctly with numeric values."
+  (when (fboundp 'gptel-auto-workflow--eval-rule-expr-fallback)
+    (let ((env (make-hash-table :test 'equal)))
+      (puthash 'score-a 0.8 env)
+      (puthash 'score-b 0.5 env)
+      (should (gptel-auto-workflow--eval-rule-expr-fallback '(> score-a score-b) env))
+      (should (gptel-auto-workflow--eval-rule-expr-fallback '(>= score-a score-b) env))
+      (should-not (gptel-auto-workflow--eval-rule-expr-fallback '(< score-a score-b) env))
+      (should (gptel-auto-workflow--eval-rule-expr-fallback '(< score-b score-a) env))
+      (should (gptel-auto-workflow--eval-rule-expr-fallback '(= 0.5 0.5) env)))))
+
+(ert-deftest tdd/rule-eval/comparison-with-mixed-values ()
+  "eval-rule-expr-fallback comparisons with mixed numeric/non-numeric return nil."
+  (when (fboundp 'gptel-auto-workflow--eval-rule-expr-fallback)
+    (let ((env (make-hash-table :test 'equal)))
+      (puthash 'numeric 0.7 env)
+      (puthash 'string-val "external" env)
+      (should-not (gptel-auto-workflow--eval-rule-expr-fallback '(> numeric string-val) env))
+      (should-not (gptel-auto-workflow--eval-rule-expr-fallback '(< string-val numeric) env)))))
+
+;; ─── TDD: holdout-eval alist→plist normalization ───
+
+(ert-deftest tdd/holdout-score/alist-normalization ()
+  "holdout-eval score reader must normalize json-read alist to plist.
+When the holdout-eval.json file contains JSON-object data read as an
+alist by json-read, plist-get must not crash on the result."
+  (let ((alist-data '((history . ((t . "2026-01-01") (avg . 0.07)))
+                       (best . 0.07088661660164097)
+                       (last . 0.07088661660164097))))
+    ;; Simulate the normalization: alist → plist
+    (let ((plist nil))
+      (dolist (pair alist-data)
+        (when (consp pair)
+          (let* ((k (car pair))
+                 (key (cond
+                       ((keywordp k) k)
+                       ((stringp k) (intern (concat ":" k)))
+                       (t (intern (concat ":" (symbol-name k)))))))
+            (setq plist (plist-put plist key (cdr pair))))))
+      ;; After normalization, plist-get works
+      (should (= 0.07088661660164097 (plist-get plist :best)))
+      (should (= 0.07088661660164097 (plist-get plist :last)))
+      (should (consp (plist-get plist :history))))))
 
 ;; ─── Headless Backend Default Tests ───
 

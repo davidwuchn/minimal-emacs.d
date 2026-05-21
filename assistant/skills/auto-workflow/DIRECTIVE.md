@@ -2,8 +2,8 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.21
-total-experiments: 1212
-total-kept: 232
+total-experiments: 1051
+total-kept: 182
 ---
 
 # Auto-Workflow Program
@@ -17,16 +17,16 @@ total-kept: 232
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
+| `lisp/modules/gptel-tools-agent-experiment-loop.el` | 40% | 5 | 2 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-comparator.el` | 39% | 36 | 14 | ✅ High yield |
+| `lisp/modules/gptel-workflow-benchmark.el` | 33% | 27 | 9 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-staging-baseline.el` | 33% | 3 | 1 | ✅ High yield |
-| `lisp/modules/gptel-tools-memory.el` | 32% | 19 | 6 | ✅ High yield |
-| `lisp/modules/gptel-agent-loop.el` | 31% | 64 | 20 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-core.el` | 29% | 59 | 17 | 🟡 Active |
-| `lisp/modules/nucleus-tools.el` | 29% | 21 | 6 | 🟡 Active |
-| `lisp/modules/gptel-ext-context.el` | 27% | 26 | 7 | 🟡 Active |
-| `lisp/modules/gptel-ext-abort.el` | 25% | 8 | 2 | 🟡 Active |
-| `lisp/modules/gptel-benchmark-tests.el` | 25% | 8 | 2 | 🟡 Active |
-| `lisp/modules/nucleus-tools-validate.el` | 24% | 21 | 5 | 🟡 Active |
-| `lisp/modules/gptel-ext-retry.el` | 23% | 52 | 12 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-runtime.el` | 29% | 17 | 5 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-worktree.el` | 29% | 24 | 7 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-git.el` | 27% | 37 | 10 | 🟡 Active |
+| `lisp/modules/gptel-agent-loop.el` | 26% | 34 | 9 | 🟡 Active |
+| `lisp/modules/gptel-ext-context-images.el` | 25% | 20 | 5 | 🟡 Active |
+| `lisp/modules/gptel-ext-context-cache.el` | 23% | 84 | 19 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -35,33 +35,33 @@ total-kept: 232
 
 - **Application for us** (24× from mementum)
 - **How it works** (18× from mementum)
-- **manual-fix** (10× from git)
+- **manual-fix** (9× from git)
 - **Key Pattern** (8× from mementum)
+- **How it applies** (6× from mementum)
 - **unless-guard** (6× from git)
 - **error-handling** (4× from git)
-- **Agent Design Pattern Catalogue (arXiv:2405.10467)** (2× from mementum)
-- **MetaAgent Self-Evolving Paradigm (arXiv:2508.00271)** (2× from mementum)
+- **1. Nucleus - Mathematical Attention Magnets & λ Notation** (2× from mementum)
 
 ## 🛠️ Effective Techniques
 
 <!-- AUTO-UPDATED: From mementum insights -->
 
+- Zero client-side intelligence. Claude decides, Efrit executes. Includes (seen 2×)
+- Session continuity via git-backed memory. Three (seen 2×)
 - Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (seen 2×)
 - Use mathematical constants (φ, ψ, Δ, λ) as "attention magnets" to prime LLMs toward formal reasoning patterns (seen 2×)
 - Zero client-side intelligence; AI decides, client executes. (seen 2×)
 - 35+ structured tools with circuit breakers, automatic retry, and security controls (seen 2×)
-- Programmatic verification before trust; self-modification loop. (seen 2×)
-- [PLAN] + [EXPECT] with P(success) confidence scoring based on prior outcomes (seen 2×)
 
 ## 🛡️ Error Mitigation
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (1052×): Investigate root cause
-- **validation-failed** (90×): Improve pre-grade validation prompts
-- **timeout** (34×): Add smaller batch sizes or chunked processing
-- **api-limit** (20×): Implement provider fallback or rate limit handling
-- **test-failure** (13×): Run tests before committing experiments
+- **other** (864×): Investigate root cause
+- **timeout** (110×): Add smaller batch sizes or chunked processing
+- **validation-failed** (48×): Improve pre-grade validation prompts
+- **api-limit** (19×): Implement provider fallback or rate limit handling
+- **test-failure** (10×): Run tests before committing experiments
 
 ## Success Patterns
 
@@ -78,11 +78,11 @@ total-kept: 232
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-tools-agent-staging-baseline.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
-- **lisp/modules/gptel-tools-memory.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 32%)
-- **lisp/modules/gptel-agent-loop.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 31%)
-- **lisp/modules/gptel-ext-tool-sanitize.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-fsm.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-agent-experiment-loop.el**: Apply Zero client-side intelligence. Claude decides, Efrit executes. Includes (keep rate: 40%)
+- **lisp/modules/gptel-benchmark-comparator.el**: Apply Zero client-side intelligence. Claude decides, Efrit executes. Includes (keep rate: 39%)
+- **lisp/modules/gptel-workflow-benchmark.el**: Apply Zero client-side intelligence. Claude decides, Efrit executes. Includes (keep rate: 33%)
+- **lisp/modules/gptel-sandbox.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1212 experiments (232 kept locally across 1212 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1051 experiments (182 kept locally across 1051 local records). It evolves every self-evolution cycle.*
