@@ -103,11 +103,11 @@ Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running ca
 
 (defun my/gptel--goto-prompt-marker-end ()
   "Move point to end of prompt marker at EOB if present."
-  (when (my/gptel--prompt-marker-value)
+  (when-let ((regexp (my/gptel--prompt-marker-regexp)))
     (goto-char (point-max))
     (skip-chars-backward " \t\n")
     (beginning-of-line)
-    (when (looking-at-p (my/gptel--prompt-marker-regexp))
+    (when (looking-at-p regexp)
       (goto-char (match-end 0)))))
 
 
@@ -143,14 +143,16 @@ request is active."
       (when (and (process-live-p proc)
                  (or (process-get proc 'my/gptel-managed)
                      ;; gptel's internal curl process is named "gptel-curl".
-                     (string= (process-name proc) "gptel-curl")
+                     (let ((proc-name (process-name proc)))
+                       (and proc-name
+                            (or (string= proc-name "gptel-curl")
+                                ;; Generic catch: gptel tool processes we create are named gptel-...
+                                (string-prefix-p "gptel-" proc-name))))
                      ;; Also match by process buffer name.
                      (let ((proc-buf (process-buffer proc)))
                        (and proc-buf
                             (stringp (buffer-name proc-buf))
-                            (string-match-p "gptel-curl" (buffer-name proc-buf))))
-                     ;; Generic catch: gptel tool processes we create are named gptel-...
-                     (string-prefix-p "gptel-" (process-name proc))))
+                            (string-match-p "gptel-curl" (buffer-name proc-buf))))))
         (cl-incf killed)
         (message "Killing gptel/subagent process: %s" (process-name proc))
         ;; Prevent sentinels/filters from writing into buffers after abort.
@@ -188,10 +190,10 @@ START and END are the response region positions passed by
              ;; In some buffers/sentinels, `gptel--fsm' may not be bound.
              ;; Never error from a post-response hook.
              (not (condition-case nil
-                       (let* ((fsm (my/gptel--coerce-fsm
-                                    (buffer-local-value 'gptel--fsm-last (current-buffer))))
-                              (info (and fsm (gptel-fsm-info fsm))))
-                        (plist-get info :error))
+                       (when-let* ((fsm (my/gptel--coerce-fsm
+                                          (buffer-local-value 'gptel--fsm-last (current-buffer))))
+                                   (info (gptel-fsm-info fsm)))
+                         (plist-get info :error))
                     (ignore))))
     (save-excursion
       (goto-char end)
