@@ -90,6 +90,8 @@ Returns content string or error message."
 Returns success message or error."
   (when (null content)
     (error "Content must not be nil"))
+  (when (string-blank-p content)
+    (error "Content must not be empty or whitespace-only"))
   (let ((path (gptel-tools-memory--resolve-path slug knowledge-p)))
     (condition-case err
         (progn
