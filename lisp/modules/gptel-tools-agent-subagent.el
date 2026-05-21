@@ -740,9 +740,9 @@ Monthly subscription: LLM selection finds best targets each run."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-experiment-time-budget 2400
-  "Time budget per experiment in seconds (default: 20 min).
+  "Time budget per experiment in seconds (default: 40 min).
 
-Increased to 1200s (20 min) because:
+Increased to 2400s (40 min) because:
 1. Executor subagents make multiple sequential LLM calls (analyze → plan
    → implement → verify) that can exceed 800s when providers are slow
 2. Provider rate-limiting stretches total wall-clock time

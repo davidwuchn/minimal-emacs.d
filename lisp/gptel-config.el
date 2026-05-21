@@ -59,8 +59,6 @@
 (require 'gptel-tools-agent)
 (require 'gptel-auto-workflow-git-learning)
 (condition-case nil (require 'gptel-auto-workflow-evolution) (error (message "[gptel-config] evolution unavailable")) nil)
-;; Fix void-variable pruned bug in VSM health check
-(condition-case nil (require 'gptel-auto-workflow-evolution-fix) (error nil))
 (condition-case nil (require 'gptel-auto-workflow-cq-evolution) (error (message "[gptel-config] cq-evolution unavailable")) nil)
 ;; Ontology-aware strategy and target selection
 (condition-case nil (require 'gptel-auto-workflow-ontology-strategy) (error (message "[gptel-config] ontology-strategy unavailable")) nil)
