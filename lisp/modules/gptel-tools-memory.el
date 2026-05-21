@@ -69,6 +69,8 @@ Returns content string or error message."
     (cond
      ((not (file-exists-p path))
       (format "Memory '%s' not found at %s" slug path))
+     ((not (file-regular-p path))
+      (format "Memory '%s' is not a regular file" slug))
      ((not (file-readable-p path))
       (format "Memory '%s' exists but is not readable" slug))
      (t
