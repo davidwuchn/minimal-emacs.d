@@ -1272,7 +1272,8 @@ Requires at least MIN-TRACES (default: 20) cached traces."
 (defun gptel-auto-workflow--apply-source-priority-to-prompt (prompt &optional _findings)
   "Enhance PROMPT with source priority scheduling.
 If FINDINGS provided, classifies sources and adds scheduling guidance."
-  (let ((source-guidance (gptel-auto-workflow--generate-source-priority-guidance)))
+  (let* ((prompt (or prompt ""))
+         (source-guidance (gptel-auto-workflow--generate-source-priority-guidance)))
     (if (> (hash-table-count gptel-auto-workflow--source-effectiveness-table) 0)
         (format "%s\n\n%s" prompt source-guidance)
       prompt)))
