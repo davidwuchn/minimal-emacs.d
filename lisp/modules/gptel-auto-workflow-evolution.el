@@ -1785,8 +1785,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (message "[evolution] External research available: controller thresholds optimized")))
     (when findings-file
       (message "[evolution] Findings file: %s" findings-file)))
-  (gptel-auto-workflow--evolution-synthesize)
-  (gptel-auto-workflow--evolution-consolidate-insights)
+  (condition-case err (gptel-auto-workflow--evolution-synthesize) (error (message "[evolution] synthesize error: %S" err)))
+  (condition-case err (gptel-auto-workflow--evolution-consolidate-insights) (error (message "[evolution] consolidate error: %S" err)))
   ;; Step A: Controller evolution (traces → strategy-guidance.json)
   (when (fboundp 'gptel-auto-workflow--run-autotts-evolution)
     (message "[auto-workflow] Running controller evolution from traces...")
