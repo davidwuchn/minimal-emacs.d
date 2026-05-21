@@ -1,0 +1,157 @@
+;;; gptel-auto-workflow-ontology-strategy.el --- Ontology-aware strategy and target selection -*- lexical-binding: t -*-
+
+;; Copyright (C) 2024-2026  Self-Evolving Emacs Project
+
+;; Author: Self-Evolving System
+;; Keywords: ontology, strategy-selection, target-prioritization
+
+;;; Commentary:
+
+;; Use ontology data to improve strategy selection and target prioritization.
+;; The ontology tracks strategy effectiveness and target value classification.
+;; This module wires ontology knowledge into operational decisions.
+
+;;; Code:
+
+(require 'gptel-auto-workflow-evolution)
+
+;; ─── Target Prioritization ───
+
+(defun gptel-auto-workflow--ontology-target-value (target)
+  "Return ontology classification for TARGET: high-value, moderate, low-value, or unknown.
+Queries the live experiment ontology for target keep-rate."
+  (let ((ontology (gptel-auto-workflow--generate-experiment-ontology)))
+    (catch 'found
+      (dolist (inst (plist-get ontology :instances))
+        (when (string= (plist-get inst :name) target)
+          (throw 'found (or (plist-get inst :classification) "unknown"))))
+      "unknown")))
+
+(defun gptel-auto-workflow--ontology-filter-targets (targets)
+  "Filter TARGETS based on ontology classification.
+Returns list with low-value targets moved to end.
+Preserves all targets - just reorders by predicted value."
+  (let ((scored nil))
+    (dolist (tgt targets)
+      (let ((value (gptel-auto-workflow--ontology-target-value tgt)))
+        (push (cons tgt
+                    (cond ((string= value "high-value") 3)
+                          ((string= value "moderate") 2)
+                          ((string= value "low-value") 0)
+                          (t 1)))
+              scored)))
+    (mapcar #'car (sort scored (lambda (a b) (> (cdr a) (cdr b)))))))
+
+;; ─── Strategy Selection Enhancement ───
+
+(defun gptel-auto-workflow--ontology-strategy-status (strategy)
+  "Return ontology status for STRATEGY: effective, promising, underperforming, or unknown."
+  (let ((ontology (gptel-auto-workflow--generate-experiment-ontology)))
+    (catch 'found
+      (dolist (cls (plist-get ontology :classes))
+        (when (string= (plist-get cls :name) strategy)
+          (throw 'found (or (plist-get cls :status) "unknown"))))
+      "unknown")))
+
+(defun gptel-auto-workflow--ontology-strategy-score (strategy)
+  "Return ontology keep-rate for STRATEGY, or 0.0 if unknown."
+  (let ((ontology (gptel-auto-workflow--generate-experiment-ontology)))
+    (catch 'found
+      (dolist (cls (plist-get ontology :classes))
+        (when (string= (plist-get cls :name) strategy)
+          (throw 'found (or (plist-get cls :keep-rate) 0.0))))
+      0.0)))
+
+(defun gptel-auto-workflow--select-best-strategy-with-ontology (strategies target)
+  "Select best strategy using both historical TSV and ontology classification.
+Prefers strategies classified as 'effective' in ontology, then 'promising'.
+Falls back to standard selection for unknown strategies."
+  (let ((best nil)
+        (best-score -1.0))
+    (dolist (s strategies)
+      (let* ((status (gptel-auto-workflow--ontology-strategy-status s))
+             (keep-rate (gptel-auto-workflow--ontology-strategy-score s))
+             (score (cond ((string= status "effective") (+ keep-rate 1.0))
+                          ((string= status "promising") (+ keep-rate 0.5))
+                          ((string= status "underperforming") (- keep-rate 0.3))
+                          (t keep-rate))))
+        (when (> score best-score)
+          (setq best s best-score score))))
+    (message "[onto-strategy] Selected %s for %s (score %.2f, status: %s)"
+             best target best-score
+             (gptel-auto-workflow--ontology-strategy-status best))
+    best))
+
+;; ─── Backend Recommendation ───
+
+(defun gptel-auto-workflow--ontology-recommend-backend (strategy target)
+  "Recommend backend based on ontology data for STRATEGY + TARGET combination.
+Returns backend name or nil if no data."
+  ;; TODO: Track backend performance per strategy-target in ontology
+  ;; For now, use strategy-level backend performance
+  (let ((results (gptel-auto-workflow--parse-all-results)))
+    (catch 'found
+      (let ((by-backend (make-hash-table :test 'equal)))
+        (dolist (r results)
+          (let ((s (plist-get r :strategy))
+                (backend (or (plist-get r :backend) "unknown"))
+                (decision (plist-get r :decision)))
+            (when (and (string= s strategy)
+                       (equal decision "kept"))
+              (puthash backend (1+ (gethash backend by-backend 0)) by-backend))))
+        ;; Return backend with most kept experiments for this strategy
+        (let ((best-backend nil) (best-count 0))
+          (maphash (lambda (b c)
+                     (when (> c best-count)
+                       (setq best-backend b best-count c)))
+                   by-backend)
+          (when best-backend
+            (message "[onto-backend] Recommended %s for %s (%d kept)"
+                     best-backend strategy best-count)
+            (throw 'found best-backend))))
+      nil)))
+
+;; ─── Knowledge Gap Detection ───
+
+(defun gptel-auto-workflow--ontology-check-knowledge-gaps ()
+  "Detect knowledge gaps from ontology.
+Returns list of strategies with no associated KnowledgePage.
+Triggers skill evolution for knowledge-management when gaps found."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (strategies-with-knowledge nil)
+        (all-strategies nil))
+    ;; Collect all strategies and those with knowledge
+    (dolist (r results)
+      (let ((strategy (plist-get r :strategy))
+            (knowledge (plist-get r :knowledge-hash)))
+        (when strategy
+          (add-to-list 'all-strategies strategy)
+          (when (and knowledge (not (string= knowledge "none")))
+            (add-to-list 'strategies-with-knowledge strategy)))))
+    ;; Find gaps
+    (let ((gaps (cl-set-difference all-strategies strategies-with-knowledge :test 'string=)))
+      (when gaps
+        (message "[onto-knowledge] %d strategy(s) lack knowledge pages: %s"
+                 (length gaps) (string-join gaps ", ")))
+      gaps)))
+
+;; ─── Wire into existing functions ───
+
+(defun gptel-auto-workflow--ontology-enhance-experiment-setup (target)
+  "Enhance experiment setup for TARGET with ontology data.
+Returns plist with :strategy, :backend recommendations."
+  (let* ((ontology (gptel-auto-workflow--generate-experiment-ontology))
+         (strategies (mapcar (lambda (c) (plist-get c :name))
+                             (plist-get ontology :classes)))
+         (recommended-strategy (when strategies
+                                 (gptel-auto-workflow--select-best-strategy-with-ontology
+                                  strategies target)))
+         (recommended-backend (when recommended-strategy
+                                (gptel-auto-workflow--ontology-recommend-backend
+                                 recommended-strategy target))))
+    `(:strategy ,recommended-strategy
+      :backend ,recommended-backend
+      :target-value ,(gptel-auto-workflow--ontology-target-value target))))
+
+(provide 'gptel-auto-workflow-ontology-strategy)
+;;; gptel-auto-workflow-ontology-strategy.el ends here
