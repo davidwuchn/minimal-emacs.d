@@ -995,6 +995,23 @@ so tags before allium-issues is correctly detected."
       (should (member "experiment-core" evolved))
       (should (member "benchmark" evolved)))))
 
+(ert-deftest regression/auto-workflow-evolution/cq-evolution-without-project-root ()
+  "CQ evolution should not require benchmark project-root helpers to be loaded."
+  (let ((default-directory (file-name-as-directory temporary-file-directory))
+        (evolved nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () (error "project-root helper should not be required")))
+              ((symbol-function 'gptel-auto-workflow--run-evolution-script)
+               (lambda (script-name &rest args)
+                 (let ((skill-pos (cl-position "--skills" args :test #'string=)))
+                   (when skill-pos
+                     (push (nth (1+ skill-pos) args) evolved)))
+                 "mock-output")))
+      (should (file-name-absolute-p (gptel-auto-workflow--worktree-base-root)))
+      (gptel-auto-workflow--evolve-skills-from-unanswerable-cqs
+       '(("Are research findings coherent?" . nil)))
+      (should (equal evolved '("researcher-prompt"))))))
+
 (ert-deftest regression/auto-workflow-evolution/pipe-validate-no-duplicates ()
   "validate-pipeline detects no duplicate stage names."
   (let ((r (gptel-auto-workflow--validate-pipeline)))

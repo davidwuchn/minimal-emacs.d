@@ -18,11 +18,14 @@
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
+(declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness" ())
 
 ;; AutoTTS-style research evolution via benchmark system
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions" ())
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
+
+(defvar gptel-auto-workflow--champion-keep-rate)
 
 ;; ─── Semantica AgentMemory: formalize mementum layers ───
 
@@ -35,11 +38,11 @@
      :location "mementum/knowledge/" :persistence t :format "markdown + allium")
     (:layer "temporal" :description "Git-based timeline, experiment TSV history"
      :location "git log + var/tmp/experiments/" :persistence t :format "git + tsv"))
-  "4-layer AgentMemory architecture (Semantica pattern).
-Layer 1: short-term working memory (in-session, cleared on daemon restart)
-Layer 2: long-term vector memory (git-embed semantic similarity, 840 files indexed)
-Layer 3: structured memory (knowledge pages, Allium behavioral specs, ontology)
-Layer 4: temporal index (git commit history, experiment TSV, cycle snapshots)")
+  "Four-layer AgentMemory architecture.
+Layer 1: short-term working memory.
+Layer 2: long-term vector memory.
+Layer 3: structured knowledge pages, specs, and ontology.
+Layer 4: temporal git and experiment index.")
 
 (defun gptel-auto-workflow--memory-status ()
   "Report status of all memory layers. Returns plist with :layer → status."
@@ -855,7 +858,7 @@ Each result must have :target (non-empty string) and :decision (string)."
 
 (defun gptel-auto-workflow--results-cache-key (results)
   "Return a SHA1 hash of RESULTS for cache comparison.
-Like graphify's file_hash(): deterministic content-based key for incremental processing."
+The key is deterministic for incremental processing."
   (secure-hash 'sha1 (format "%S" (sort (copy-sequence results)
                                         (lambda (a b)
                                           (string< (or (plist-get a :target) "")
@@ -948,9 +951,8 @@ Reduces full file content to a one-paragraph structure overview (no LLM cost)."
 
 (defun gptel-auto-workflow--module-cohesion (file-path)
   "Score how cohesive an Elisp module is (0.0-1.0).
-Like graphify's cohesion_score(): ratio of internal references to total.
 High cohesion: most defun calls target other defuns in the same file.
-Low cohesion: module is a grab-bag of unrelated functions — candidate for refactoring."
+Low cohesion: unrelated functions may need refactoring."
   (let* ((structure (gptel-auto-workflow--extract-elisp-structure file-path))
          (defuns (plist-get structure :defuns))
          (requires (plist-get structure :requires))
@@ -1928,7 +1930,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (message "[reasoning]   %s: %s (severity: %s)"
                      (cdr (assoc 'action a))
                      (cdr (assoc 'reason a))
-                     (cdr (assoc 'severity a))))))
+                      (cdr (assoc 'severity a))))))
     (ignore))
   ;; Abductive diagnosis — best explanations for system state
   (condition-case nil
@@ -2021,31 +2023,25 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
 ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
 
 (defun gptel-auto-workflow--evolution-vsm-health-check ()
-  "Score VSM layer health and log diagnostics.
-Maps nucleus VSM layers to our system components:
-  S5 (Identity): AGENTS.md principles active | S4 (Intelligence): strategy evolution
-  S3 (Control): quotas/timeouts/watchdog | S2 (Coordination): modules + staging
-  S1 (Operations): experiments executing | Wu Xing: generating/controlling cycles."
+  "Score VSM layer health and log diagnostics."
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
          (total (length results))
          (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
-          (strategies (length (gptel-auto-workflow--evolution-strategy-structure-scores)))
-          (backends (length (gptel-auto-workflow--evolution-backend-stats)))
-          (axis-stats (gptel-auto-workflow--evolution-axis-stats)))
+         (strategies (length (gptel-auto-workflow--evolution-strategy-structure-scores)))
+         (backends (length (gptel-auto-workflow--evolution-backend-stats)))
+         (axis-stats (gptel-auto-workflow--evolution-axis-stats)))
     (message "[vsm] S1-Ops: %d experiments, %.0f%% kept" total (* 100 keep-rate))
     (message "[vsm] S2-Coord: %d modules scanned, staging verify active" 89)
     (message "[vsm] S3-Control: %d backends in chain, watchdog 90min" backends)
     (message "[vsm] S4-Intel: %d strategies evolved, auto-backend-order active" strategies)
     (message "[vsm] S5-Identity: lambda notation, confidence tags, graphify patterns active")
-    ;; Refresh per-axis variant champions from TSV data
     (when (fboundp 'gptel-auto-workflow--refresh-variant-axis-champions)
       (gptel-auto-workflow--refresh-variant-axis-champions))
     (when axis-stats
       (message "[vsm] KIBC-M Axis Performance: %s"
                (mapconcat (lambda (a) (format "%s=%.0f%%" (car a) (* 100 (cdr a))))
                           (seq-take axis-stats 5) " ")))
-    ;; Wu Xing diagnostics
     (cond
      ((< keep-rate 0.05)
       (message "[vsm] 相克: Wood(S1) weak → check Earth(S3) controls (timeouts too tight?)"))
@@ -2055,160 +2051,84 @@ Maps nucleus VSM layers to our system components:
       (message "[vsm] 相克: Metal(S2) weak → Fire(S4) should coordinate backends"))
      (t
       (message "[vsm] 相生: All layers balanced — generating cycle active")))
-     ;; Housekeeping: full autonomous maintenance
-     (condition-case nil
-         (let* ((root (or (gptel-auto-workflow--worktree-base-root)
-                          (expand-file-name default-directory)))
-                (git-dir (expand-file-name ".git" root))
-                (exps-dir (expand-file-name "var/tmp/experiments" root))
-                (now (float-time))
-                (pruned 0) (removed-worktrees 0) (cleaned-temp 0))
-            ;; 1. Prune experiment result dirs older than 14 days
-            (when (file-directory-p exps-dir)
-              (dolist (d (directory-files exps-dir t "\\`[0-9]+T" t))
-                (let ((attrs (and d (file-attributes d))))
-                  (when (and attrs
-                             (> (- now (float-time (file-attribute-modification-time attrs)))
-                                (* 14 24 3600)))
-                    (delete-directory d t)
-                    (setq pruned (1+ pruned))))))
-           ;; 2. Remove stale prunable git worktrees
-           (dolist (wt (split-string (shell-command-to-string "git worktree list --porcelain") "\n" t))
-             (when (string-match "prunable" wt)
-               (let ((wt-path (car (split-string wt "\n" t))))
-                 (when (and wt-path (file-directory-p wt-path))
-                   (shell-command (format "git worktree remove --force %s" (shell-quote-argument wt-path)) 0)
-                   (setq removed-worktrees (1+ removed-worktrees))))))
-           ;; 3. Kill stale --fg-daemon processes (old daemon mode, replaced by --daemon)
-           (let ((pids (shell-command-to-string "pgrep -f 'emacs.*--fg-daemon' 2>/dev/null || true")))
-             (dolist (pid (split-string pids "\n" t))
-               (when (string-match "[0-9]+" pid)
-                 (signal-process (string-to-number pid) 'sigterm)
-                 (message "[cleanup] Killed stale fg-daemon pid %s" pid))))
-            ;; 4. Clean /tmp/gptel-* files older than 2 hours
-            (dolist (f (directory-files "/tmp" t "gptel-"))
-              (let ((attrs (and f (file-attributes f))))
+    ;; Housekeeping: full autonomous maintenance
+    (condition-case nil
+        (let* ((root (or (gptel-auto-workflow--worktree-base-root)
+                         (expand-file-name default-directory)))
+               (git-dir (expand-file-name ".git" root))
+               (exps-dir (expand-file-name "var/tmp/experiments" root))
+               (now (float-time))
+               (pruned 0) (removed-worktrees 0) (cleaned-temp 0))
+          ;; 1. Prune experiment result dirs older than 14 days
+          (when (file-directory-p exps-dir)
+            (dolist (d (directory-files exps-dir t "\\`[0-9]+T" t))
+              (let ((attrs (and d (file-attributes d))))
                 (when (and attrs
                            (> (- now (float-time (file-attribute-modification-time attrs)))
-                              (* 2 3600)))
-                  (delete-file f t)
-                  (setq cleaned-temp (1+ cleaned-temp)))))
-           ;; 5. Truncate daemon log if >10MB (keep last 1000 lines)
-           (let ((log-file (expand-file-name "var/tmp/cron/copilot-auto-workflow.log" root)))
-             (when (and (file-exists-p log-file)
-                        (> (file-attribute-size (file-attributes log-file)) (* 10 1024 1024)))
-               (shell-command (format "tail -n 1000 %s > %s.tmp && mv %s.tmp %s"
-                                      (shell-quote-argument log-file)
-                                      (shell-quote-argument log-file)
-                                      (shell-quote-argument log-file)
-                                      (shell-quote-argument log-file)) 0)
-               (message "[cleanup] Truncated daemon log (>10MB)")))
-           ;; 6. Run git gc --auto when too many loose objects
-           (when (and (file-directory-p git-dir)
-                      (file-directory-p (expand-file-name "objects" git-dir)))
-             (let* ((obj-dir (expand-file-name "objects" git-dir))
-                    (loose (condition-case nil
-                               (length (directory-files obj-dir nil "^[0-9a-f]\\{38\\}$" t))
-                             (error 0))))
-               (when (> loose 5000)
-                 (shell-command "git gc --auto --quiet" 0)
-                 (message "[cleanup] Ran git gc (loose objects >5k, was %d)" loose))))
-           ;; 7. Remove stale git locks
-           (dolist (lock (directory-files root t "\\.lock$"))
-             (when (file-directory-p lock)
-               (delete-directory lock t)
-               (message "[cleanup] Removed stale lock: %s" (file-name-nondirectory lock))))
-           ;; 8. Dedup crontab entries (simple: remove duplicate lines via sort -u)
-           (let* ((cron-out (shell-command-to-string "crontab -l 2>/dev/null | sort -u || true"))
-                  (original-count (length (split-string cron-out "\n" t)))
-                  (deduped-count (length (delete-dups (split-string cron-out "\n" t)))))
-             (when (< deduped-count original-count)
-               (shell-command (format "crontab -l 2>/dev/null | sort -u | crontab -") 0)
-               (message "[cleanup] Deduped crontab (%d unique lines)" deduped-count))))))
-           (when (> pruned 0)
-             (message "[cleanup] Pruned %d experiment dirs >14d" pruned))
-           (when (> removed-worktrees 0)
-             (message "[cleanup] Removed %d stale worktrees" removed-worktrees))
-           (when (> cleaned-temp 0)
-             (message "[cleanup] Cleaned %d stale temp files" cleaned-temp)))
-       (ignore)
-     (ignore-errors
-;; Minimal pair detection (verbum probe pattern)
-     (condition-case nil
-        (let* ((results (gptel-auto-workflow--parse-all-results))
-               (first-target (when results (plist-get (car results) :target))))
-          (when first-target
-            (let ((pairs (gptel-auto-workflow--detect-minimal-pairs first-target)))
-              (when pairs
-                (message "[pair] %d minimal pair(s) found for %s:" (length pairs) first-target)
-                (dolist (p (seq-take pairs 3))
-                  (message "[pair]   %s" (cdr p)))
-                ;; Enrich top pair with Allium behavioral diff (async, throttled)
-                (when (and (fboundp 'gptel-auto-workflow--allium-diff-minimal-pairs)
-                           (or (not (boundp 'gptel-auto-workflow--allium-audit-last-run))
-                               (> (- (float-time (current-time))
-                                     (or (symbol-value 'gptel-auto-workflow--allium-audit-last-run) 0))
-                                  900)))
-                  (let* ((top-pair (car pairs))
-                         (exp-a (caar top-pair))
-                         (exp-b (cdar top-pair)))
-                    (when (and exp-a exp-b)
-                      (let ((ha (plist-get exp-a :hypothesis))
-                            (hb (plist-get exp-b :hypothesis)))
-                        (when (and (stringp ha) (stringp hb)
-                                   (not (string= ha hb)))
-                          (gptel-auto-workflow--allium-diff-minimal-pairs
-                           ha hb
-                           (lambda (diff-result)
-                             (let ((issues-a (car diff-result))
-                                   (issues-b (cdr diff-result)))
-                               (if (= issues-a 99)
-                                   (message "[allium-pair] Allium diff skipped (unavailable)")
-                                 (message "[allium-pair] Allium spec diff: HA=%d issues vs HB=%d issues → %s"
-                                          issues-a issues-b
-                                          (if (< issues-a issues-b) "HA has cleaner spec"
-                                            (if (< issues-b issues-a) "HB has cleaner spec"
-                                               "equally coherent"))))))))))))))))
-      ;; Conflict detection (Semantica pattern)
-      (condition-case nil
-          (let ((conflicts (gptel-auto-workflow--detect-hypothesis-conflicts)))
-            (when conflicts
-              (message "[conflict] %d hypothesis opposition(s) detected:" (length conflicts))
-              (dolist (c (seq-take conflicts 3))
-                (message "[conflict]   %s: %d opposing pairs (%s) — %s"
-                         (plist-get c :target)
-                         (length (plist-get c :opposing-pairs))
-                         (plist-get c :severity)
-                         (plist-get c :recommendation)))))
-         (ignore))
-      ;; Ontology snapshot + causal links (Semantica pattern)
-      (condition-case nil
-          (let ((ontology (gptel-auto-workflow--generate-experiment-ontology))
-                (causal (gptel-auto-workflow--experiment-causal-links)))
-            (message "[onto] Ontology: %d classes, %d instances"
-                     (plist-get ontology :class-count) (plist-get ontology :instance-count))
-            (when (and (fboundp 'gptel-auto-experiment--owl-save)
-                       (> (plist-get ontology :class-count) 0))
-              (gptel-auto-experiment--owl-save
-               ontology
-               (expand-file-name "var/tmp/evolution/experiment-ontology.ttl"
-                                 (gptel-auto-workflow--worktree-base-root))
-               (lambda (ok)
-                 (when ok (message "[onto] Saved OWL/Turtle ontology")))))
-            (when (> (length causal) 0)
-              (message "[causal] %d targets with multi-experiment chains" (length causal)))
-            ;; Knowledge page quality (Semantica evaluator)
-            (let ((scores (gptel-auto-workflow--score-knowledge-pages)))
-              (message "[evaluator] Knowledge pages: %.0f%% coverage, %.0f%% completeness, %.0f%% linked (%.0f%% overall, %d pages)"
-                       (* 100 (plist-get scores :coverage)) (* 100 (plist-get scores :completeness))
-                       (* 100 (plist-get scores :relations)) (* 100 (plist-get scores :overall))
-                       (plist-get scores :total-pages))
-              (let ((issues (plist-get scores :issues)))
-                (when issues
-                  (dolist (i (seq-take issues 3))
-                    (message "[evaluator]   issue: %s" i))))))
-        (ignore))
-      (ignore)))
+                              (* 14 24 3600)))
+                  (delete-directory d t)
+                  (setq pruned (1+ pruned))))))
+          ;; 2. Remove stale prunable git worktrees
+          (dolist (wt (split-string (shell-command-to-string "git worktree list --porcelain") "\n" t))
+            (when (string-match "prunable" wt)
+              (let ((wt-path (car (split-string wt "\n" t))))
+                (when (and wt-path (file-directory-p wt-path))
+                  (shell-command (format "git worktree remove --force %s" (shell-quote-argument wt-path)) 0)
+                  (setq removed-worktrees (1+ removed-worktrees))))))
+          ;; 3. Kill stale --fg-daemon processes
+          (let ((pids (shell-command-to-string "pgrep -f 'emacs.*--fg-daemon' 2>/dev/null || true")))
+            (dolist (pid (split-string pids "\n" t))
+              (when (string-match "[0-9]+" pid)
+                (signal-process (string-to-number pid) 'sigterm)
+                (message "[cleanup] Killed stale fg-daemon pid %s" pid))))
+          ;; 4. Clean /tmp/gptel-* files older than 2 hours
+          (dolist (f (directory-files "/tmp" t "gptel-"))
+            (let ((attrs (and f (file-attributes f))))
+              (when (and attrs
+                         (> (- now (float-time (file-attribute-modification-time attrs)))
+                            (* 2 3600)))
+                (delete-file f t)
+                (setq cleaned-temp (1+ cleaned-temp)))))
+          ;; 5. Truncate daemon log if >10MB
+          (let ((log-file (expand-file-name "var/tmp/cron/copilot-auto-workflow.log" root)))
+            (when (and (file-exists-p log-file)
+                       (> (file-attribute-size (file-attributes log-file)) (* 10 1024 1024)))
+              (shell-command (format "tail -n 1000 %s > %s.tmp && mv %s.tmp %s"
+                                     (shell-quote-argument log-file)
+                                     (shell-quote-argument log-file)
+                                     (shell-quote-argument log-file)
+                                     (shell-quote-argument log-file)) 0)
+              (message "[cleanup] Truncated daemon log (>10MB)")))
+          ;; 6. Run git gc --auto when too many loose objects
+          (when (and (file-directory-p git-dir)
+                     (file-directory-p (expand-file-name "objects" git-dir)))
+            (let* ((obj-dir (expand-file-name "objects" git-dir))
+                   (loose (condition-case nil
+                              (length (directory-files obj-dir nil "^[0-9a-f]\\{38\\}$" t))
+                            (error 0))))
+              (when (> loose 5000)
+                (shell-command "git gc --auto --quiet" 0)
+                (message "[cleanup] Ran git gc (loose objects >5k, was %d)" loose))))
+          ;; 7. Remove stale git locks
+          (dolist (lock (directory-files root t "\\.lock$"))
+            (when (file-directory-p lock)
+              (delete-directory lock t)
+              (message "[cleanup] Removed stale lock: %s" (file-name-nondirectory lock))))
+          ;; 8. Dedup crontab entries
+          (let* ((cron-out (shell-command-to-string "crontab -l 2>/dev/null | sort -u || true"))
+                 (original-count (length (split-string cron-out "\n" t)))
+                 (deduped-count (length (delete-dups (split-string cron-out "\n" t)))))
+            (when (< deduped-count original-count)
+              (shell-command (format "crontab -l 2>/dev/null | sort -u | crontab -") 0)
+              (message "[cleanup] Deduped crontab (%d unique lines)" deduped-count)))
+          ;; Log cleanup results inside let* so counters stay in scope.
+          (when (> pruned 0)
+            (message "[cleanup] Pruned %d experiment dirs >14d" pruned))
+          (when (> removed-worktrees 0)
+            (message "[cleanup] Removed %d stale worktrees" removed-worktrees))
+          (when (> cleaned-temp 0)
+            (message "[cleanup] Cleaned %d stale temp files" cleaned-temp)))
+      (ignore))))
 
 (defun gptel-auto-workflow--detect-minimal-pairs (target)
   "Detect minimal pair experiments for TARGET from TSV history.
@@ -2239,8 +2159,7 @@ Returns list of ((exp-a . exp-b) . insight-string) for pairs found."
     (cl-remove-duplicates pairs :test (lambda (x y) (equal (cdr x) (cdr y))))))
 
 (defun gptel-auto-workflow--similar-except-one-var-p (ha hb)
-  "Return non-nil if HA and HB are similar hypotheses differing by one concept.
-Compares after stripping common prefixes like 'Adding nil validation to X will...'"
+  "Return non-nil if HA and HB differ by one concept."
   (let* ((wa (split-string ha "[ \t]+"))
          (wb (split-string hb "[ \t]+"))
          (diff 0))
@@ -2285,7 +2204,7 @@ Returns plist with :name, :sections (list of heading names), :frontmatter-keys."
       (error (list :name name :sections nil :frontmatter-keys nil)))))
 
 (defun gptel-auto-workflow--diff-knowledge-pages ()
-  "Diff knowledge pages against last cycle's snapshot (Semantica set-difference pattern).
+  "Diff knowledge pages against the last cycle snapshot.
 Returns plist with :added, :removed, :changed."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (kd (expand-file-name "mementum/knowledge" root))
@@ -2334,8 +2253,8 @@ Returns plist with :added, :removed, :changed."
   "Fields with severity impact rules. Alist of (field . change-type).")
 
 (defun gptel-auto-workflow--classify-experiment-impact ()
-  "Classify recent experiment changes by severity (Semantica ChangeLogAnalyzer pattern).
-Returns ImpactReport-style plist with :breaking, :potentially-breaking, :safe, :summary."
+  "Classify recent experiment changes by severity.
+Returns an ImpactReport-style plist."
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (breaking nil) (potentially-breaking nil) (safe nil)
          (total (length results)))
@@ -2689,8 +2608,7 @@ AutoGo league system: incumbents must be defeated in gauntlet play.")
 Combines keep rate, score delta, quality gain, and efficiency.")
 
 (defun gptel-auto-workflow--strategy-composite-score (strategy-name)
-  "Compute multi-dimensional benchmark score for STRATEGY-NAME from TSV data.
-Combines: keep_rate (0.3) + avg_score_delta (×2) + quality_gain (0.3) + efficiency (0.1)."
+  "Compute composite benchmark score for STRATEGY-NAME from TSV data."
   (let ((total 0) (kept 0) (score-sum 0.0) (quality-sum 0.0) (dur-sum 0)
         (results (gptel-auto-workflow--parse-all-results)))
     (dolist (r results)
@@ -2698,8 +2616,8 @@ Combines: keep_rate (0.3) + avg_score_delta (×2) + quality_gain (0.3) + efficie
         (setq total (1+ total))
         (when (or (equal (plist-get r :decision) "kept") (equal (plist-get r :decision) t))
           (setq kept (1+ kept)))
-        (let ((pre (or (plist-get r :score-before) 0.4))
-              (post (or (plist-get r :score-after) pre)))
+        (let* ((pre (or (plist-get r :score-before) 0.4))
+               (post (or (plist-get r :score-after) pre)))
           (setq score-sum (+ score-sum (- post pre))))
         (setq quality-sum (+ quality-sum (or (plist-get r :code-quality) (plist-get r :code_quality) 0.5)))
         (setq dur-sum (+ dur-sum (or (plist-get r :duration) 300)))))
@@ -2716,6 +2634,44 @@ Combines: keep_rate (0.3) + avg_score_delta (×2) + quality_gain (0.3) + efficie
                    strategy-name (* 100 keep-rate) avg-delta avg-quality avg-dur score))
         score))))
 
+(defun gptel-auto-workflow--deductive-explain (facts)
+  "Generate simple deductive proofs from FACTS alist."
+  (let ((proofs nil)
+        (keep-rate (cdr (assq 'keep-rate facts)))
+        (total-experiments (cdr (assq 'total-experiments facts))))
+    (when keep-rate
+      (push (list :goal "keep-rate-observed"
+                  :confidence keep-rate
+                  :premises-count 1)
+            proofs))
+    (when (and total-experiments (> total-experiments 0))
+      (push (list :goal "experiments-conducted"
+                  :confidence (min 1.0 (/ (float total-experiments) 100))
+                  :premises-count 1)
+            proofs))
+    (unless proofs
+      (push (list :goal "system-operational"
+                  :confidence 0.5
+                  :premises-count 0)
+            proofs))
+    (nreverse proofs)))
+
+(defun gptel-auto-workflow--experiment-time-gaps (&optional threshold-seconds)
+  "Return experiment gaps larger than THRESHOLD-SECONDS."
+  (let* ((threshold (or threshold-seconds 3600))
+         (results (sort (cl-remove-if-not (lambda (r) (numberp (plist-get r :timestamp)))
+                                           (gptel-auto-workflow--parse-all-results))
+                        (lambda (a b) (< (plist-get a :timestamp)
+                                         (plist-get b :timestamp)))))
+         (previous nil)
+         (gaps nil))
+    (dolist (r results)
+      (let ((timestamp (plist-get r :timestamp)))
+        (when (and previous (> (- timestamp (car previous)) threshold))
+          (push (cons (plist-get r :target) timestamp) gaps))
+        (setq previous (cons timestamp r))))
+    (nreverse gaps)))
+
 (defun gptel-auto-workflow--crown-champion (strategy-name keep-rate &optional composite)
   "Crown STRATEGY-NAME as the new champion with KEEP-RATE and COMPOSITE score.
 Only crowns if KEEP-RATE exceeds current champion's by at least 0.05.
@@ -2730,8 +2686,7 @@ COMPOSITE is logged for diagnostics but keep-rate remains the gating threshold."
              strategy-name (* 100 keep-rate) (or composite keep-rate))))
 
 (defun gptel-auto-workflow--gate-strategies ()
-  "Gate evolved strategies against the champion. Uses multi-dimensional benchmark score.
-AutoGo league pattern: challengers must beat incumbents to be adopted."
+  "Gate evolved strategies against the champion."
   (let* ((strategies (gptel-auto-workflow--discover-strategies))
          (scores (mapcar (lambda (s) (cons s (gptel-auto-workflow--strategy-composite-score s)))
                          strategies))
@@ -2818,11 +2773,12 @@ AutoGo holdout pattern: crosses train vs holdout trends."
                         "lisp/modules/gptel-auto-workflow-evolution.el"
                         "lisp/modules/gptel-tools-agent-prompt-build.el"))
          (total 0.0) (count 0)
-         (hf (expand-file-name "var/tmp/evolution/holdout-eval.json" root))
-         (history (condition-case nil
-                      (let ((jo (quote plist)))
-                        (with-temp-buffer (insert-file-contents hf) (json-read)))
-                    (error (list :history nil :best 0.0)))))
+          (hf (expand-file-name "var/tmp/evolution/holdout-eval.json" root))
+          (history (condition-case nil
+                       (with-temp-buffer
+                         (insert-file-contents hf)
+                         (json-read))
+                     (error (list :history nil :best 0.0)))))
     (dolist (target targets)
       (let ((fp (expand-file-name target root)))
         (setq total (+ total (if (file-readable-p fp)
@@ -2867,8 +2823,7 @@ Source repos are extracted from prefetched content patterns."
          (by-source (make-hash-table :test 'equal))
          (stats nil))
     (dolist (r results)
-      (let* ((hash (plist-get r :research-hash))
-             (strategy (plist-get r :research-strategy))
+      (let* ((strategy (plist-get r :research-strategy))
              (kept (equal (plist-get r :decision) "kept")))
         (when (and (stringp strategy) (not (equal strategy "none")))
           (let ((entry (or (gethash strategy by-source) (cons 0 0))))
@@ -3031,7 +2986,6 @@ LogMap second-chance pattern: periodically re-check removed mappings."
   (let ((rehabilitated nil) (still-conflictive nil))
     (dolist (exp gptel-auto-workflow--conflictive-experiments)
       (let* ((target (plist-get exp :target))
-             (decision (plist-get exp :decision))
              (changed nil))
         ;; Check if target has been improved since discarding
         (dolist (r (gptel-auto-workflow--parse-all-results))
@@ -3060,10 +3014,9 @@ LogMap second-chance pattern: periodically re-check removed mappings."
 (defun gptel-auto-workflow--isub (s1 s2)
   "I-Sub string similarity (LogMap/Stoilos ISWC 2005).
 commonality - dissimilarity + winkler improvement."
-  (let* ((common 0) (rest1 s1) (rest2 s2) (max-len 0)
+  (let* ((common 0) (rest1 s1) (rest2 s2)
          (l1 (length s1)) (l2 (length s2)))
     (while (and (> (length rest1) 2) (> (length rest2) 2))
-      (setq max-len 0)
       (let ((best-i 0) (best-j 0) (best-len 0))
         (dotimes (i (length rest1))
           (dotimes (j (min (- (length rest1) i) (length rest2)))
@@ -3091,12 +3044,13 @@ commonality - dissimilarity + winkler improvement."
            (winkler (min 4 (cl-loop for a across s1 for b across s2
                                     while (eq a b) count 1)))
            (winkler-bonus (* winkler 0.1 (- 1 commonality))))
-      (max 0.0 (min 1.0 (- commonality dissimilarity))))))
+      (max 0.0 (min 1.0 (+ (- commonality dissimilarity) winkler-bonus))))))
 
 (defun gptel-auto-workflow--scope-score (entity-id hierarchy)
   "Scope scoring: ancestor/descendant intersection ratio.
 HIERARCHY is alist of (child . parent). Returns 0.0-1.0.
 LogMap scope pattern: |scope(A) ∩ scope(B)| / |scope(A) ∪ scope(B)|."
+  (ignore entity-id hierarchy)
   0.0)
 
 (defun gptel-auto-workflow--build-interval-labels (hierarchy)
@@ -3169,8 +3123,8 @@ Format: target,strategy,prediction,confidence"
 (defun gptel-auto-workflow--two-phase-repair (conflictive-mappings)
   "Phase 1: fast D&G approximate. Phase 2: full backtracking for hard cases.
 Returns repaired set. LogMap two-phase repair pattern."
-  (let* ((simple (seq-filter (lambda (m) (< (length conflictive-mappings) 15)) conflictive-mappings))
-         (hard (seq-filter (lambda (m) (>= (length conflictive-mappings) 15)) conflictive-mappings))
+  (let* ((simple (and (< (length conflictive-mappings) 15) conflictive-mappings))
+         (hard (and (>= (length conflictive-mappings) 15) conflictive-mappings))
          (kept nil))
     (dolist (m simple) (push m kept)) ;; Phase 1: simple pass, keep if <15 conflicts
     (when hard
@@ -3238,7 +3192,7 @@ Like promptfoo's model comparison: data-driven backend selection."
 
 (defun gptel-auto-workflow--evolution-strategy-structure-scores ()
   "Analyze prompt structure scores per strategy from experiment results.
-Returns alist of (strategy . avg-structure-score) for strategies with >3 experiments."
+Return alist of strategy to average structure score."
   (let ((by-strategy (make-hash-table :test 'equal))
         (stats nil))
     (dolist (result (gptel-auto-workflow--parse-all-results))
@@ -3422,8 +3376,8 @@ ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
 
 
 (defun gptel-auto-workflow--allium-load-issues-for-guidance ()
-  "Load recent Allium check issues for injection into prompt builder strategy guidance.
-Returns a markdown-formatted string of issues grouped by strategy, or empty string."
+  "Load recent Allium check issues for prompt guidance.
+Returns markdown grouped by strategy, or an empty string."
   (let* ((root (gptel-auto-workflow--worktree-base-root)))
     (if (not root)
         ""
@@ -3450,7 +3404,7 @@ Returns a markdown-formatted string of issues grouped by strategy, or empty stri
           "")))))
 
 (defun gptel-auto-workflow--allium-read-quality (safe-strategy)
-  "Read Allium quality for SAFE-STRATEGY from disk. Returns (issues . severity) or nil."
+  "Read Allium quality for SAFE-STRATEGY from disk."
   (let* ((root (gptel-auto-workflow--worktree-base-root)))
     (if (not root)
         nil
@@ -3471,9 +3425,7 @@ Returns a markdown-formatted string of issues grouped by strategy, or empty stri
                   (cons count severity))))))))))
 
 (defun gptel-auto-workflow--allium-check-research-quality (findings-summary &optional callback)
-  "Distill FINDINGS-SUMMARY to Allium spec, check for issues, invoke CALLBACK with quality score.
-Like nucleus compile-score but for Allium: prose → spec → check → score.
-CALLBACK receives (issues-count . severity-score) where severity 0-1."
+  "Distill FINDINGS-SUMMARY to Allium spec and invoke CALLBACK."
   (if (and (fboundp 'gptel-auto-experiment--allium-distill) callback)
       (gptel-auto-experiment--allium-distill
        findings-summary
@@ -3523,8 +3475,7 @@ Use to determine which minimal pair has cleaner behavioral specification."
 
 (defun gptel-auto-workflow--generate-experiment-ontology ()
   "Generate an ontology from experiment results (Semantica pattern).
-Strategies → owl:Class, targets → instances, kept/discarded → outcome properties.
-Returns ontology plist with :classes, :instances, :class-count, :instance-count."
+Returns ontology plist with class and instance counts."
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (strategy-classes (make-hash-table :test 'equal))
          (target-instances (make-hash-table :test 'equal)))
@@ -3582,7 +3533,6 @@ Returns ontology plist with :classes, :instances, :class-count, :instance-count.
 
 (defun gptel-auto-workflow--experiment-causal-links ()
   "Build causal link graph between experiments on the same target.
-BFS over :CAUSED edges to find root experiments. Semantica decision-tracking pattern.
 Returns alist of (target . (root-experiment downstream ...))."
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (by-target (make-hash-table :test 'equal))
@@ -3628,8 +3578,7 @@ Pattern from Semantica: universal Valid/Errors/Warnings contract."
 (defun gptel-auto-workflow--detect-hypothesis-conflicts ()
   "Detect contradictory hypotheses across experiments for the same target.
 Groups experiments by target, compares hypotheses for opposite claims.
-Returns list of conflict plists with :target, :hypotheses, :severity, :recommendation.
-Pattern from Semantica: group-by-entity → value-diff → severity score."
+Returns list of conflict plists."
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (by-target (make-hash-table :test 'equal))
          (conflicts nil))
@@ -3692,8 +3641,7 @@ Simple keyword-based opposition detection."
 ;; ─── Semantica Evaluator: knowledge page quality scoring ───
 
 (defun gptel-auto-workflow--score-knowledge-pages ()
-  "Score knowledge pages by coverage, completeness, and relation (Semantica evaluator pattern).
-Returns ((:coverage . N) (:completeness . N) (:relations . N) (:overall . N) (:issues . list))."
+  "Score knowledge pages by coverage, completeness, and relation."
   (let* ((dir (expand-file-name "mementum/knowledge"
                                 (gptel-auto-workflow--worktree-base-root)))
          (files (when (file-directory-p dir)
@@ -3800,7 +3748,7 @@ Checks: required frontmatter, duplicate titles, empty sections."
     ;; Token
     (:when ((output-ratio > 3.0) (kept-experiments < 3))
      :then ((action . "flag-inflation") (reason . "output >> prompt with low keep rate") (severity . medium))))
-  "Forward chaining rules: (:when ((field op value) ...) :then ((key . value) ...)).")
+  "Forward chaining rules for experiment facts.")
 
 (defun gptel-auto-workflow--eval-condition (condition facts)
   (let* ((field (nth 0 condition)) (op (nth 1 condition)) (threshold (nth 2 condition))

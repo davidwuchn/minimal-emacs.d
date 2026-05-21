@@ -5,6 +5,8 @@
 ;; The original function has unbalanced parens that place cleanup logging
 ;; outside the let* that binds pruned, removed-worktrees, cleaned-temp.
 
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
+
 (defun gptel-auto-workflow--evolution-vsm-health-check ()
   "Score VSM layer health and log diagnostics."
   (let* ((results (gptel-auto-workflow--parse-all-results))

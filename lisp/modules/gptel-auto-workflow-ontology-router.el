@@ -18,9 +18,12 @@
 
 (require 'gptel-auto-workflow-evolution)
 
+(defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
+(defvar gptel-auto-workflow-headless-subagent-fallbacks)
+
 (defcustom gptel-auto-workflow--ontology-reorder-min-samples 3
   "Minimum experiments before reordering fallback chain.
-Below this, use the static order from `gptel-auto-workflow-headless-subagent-fallbacks'."
+Below this, use the static headless fallback order."
   :type 'integer
   :group 'gptel-auto-workflow)
 
@@ -61,7 +64,8 @@ Returns float 0.0-1.0 or nil if no data."
 ;; ─── Target Categorization ───
 
 (defun gptel-auto-workflow--categorize-target (target)
-  "Categorize TARGET into :programming, :tool-calls, :agentic, or :natural-language.
+  "Categorize TARGET for backend routing.
+Return :programming, :tool-calls, :agentic, or :natural-language.
 Categories based on module purpose from historical experiment analysis."
   (when target
     (let ((basename (file-name-nondirectory target)))
@@ -110,7 +114,8 @@ Categories based on module purpose from historical experiment analysis."
 ;; ─── Category-Level Performance Aggregation ───
 
 (defun gptel-auto-workflow--get-category-performance-stats (backend category &optional strategy)
-  "Get performance stats for BACKEND on CATEGORY targets, optionally filtered by STRATEGY.
+  "Get BACKEND performance stats on CATEGORY targets.
+Optionally filter by STRATEGY.
 Aggregates across all targets matching CATEGORY.
 Returns plist with :kept :total :keep-rate."
   (let ((results (gptel-auto-workflow--parse-all-results))
@@ -142,7 +147,7 @@ Returns plist with :kept :total :keep-rate."
     (:agentic         . nil))          ; MiniMax baseline — no override needed
   "Category→preferred backend mapping.
 Programming → DeepSeek (higher keep rate on code/benchmark targets).
-Tool-calls → nil (MiniMax highspeed default — CF-Gateway advantage not statistically significant yet).
+Tool-calls → nil (use MiniMax highspeed default).
 Natural-language → DeepSeek (strong NL reasoning).
 Agentic → nil (use default ontology ordering, MiniMax is baseline).")
 

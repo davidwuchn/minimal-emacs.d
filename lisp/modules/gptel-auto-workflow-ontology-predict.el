@@ -15,6 +15,8 @@
 
 (require 'gptel-auto-workflow-evolution)
 
+(declare-function gptel-auto-experiment-run "gptel-tools-agent-experiment-core")
+
 (defcustom gptel-auto-workflow--prediction-threshold 0.15
   "Minimum predicted success probability to run an experiment.
 Experiments below this threshold are skipped to save LLM tokens."
@@ -218,10 +220,6 @@ ARGS: (target experiment-id max-experiments ...)."
                              :predicted (gptel-auto-workflow--predict-outcome strategy target)
                              :skipped t)))))
         nil))))
-
-;; Enable pre-flight checks
-(advice-add 'gptel-auto-experiment-run
-            :around #'gptel-auto-workflow--experiment-preflight-advice)
 
 (provide 'gptel-auto-workflow-ontology-predict)
 ;;; gptel-auto-workflow-ontology-predict.el ends here

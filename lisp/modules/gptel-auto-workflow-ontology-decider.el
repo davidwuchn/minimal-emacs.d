@@ -21,6 +21,18 @@
 
 ;;; Code:
 
+(declare-function gptel-auto-experiment-run "gptel-tools-agent-experiment-core")
+(declare-function gptel-auto-workflow--experiment-preflight-advice
+                  "gptel-auto-workflow-ontology-predict")
+(declare-function gptel-auto-workflow--experiment-preflight
+                  "gptel-auto-workflow-ontology-predict")
+(declare-function gptel-auto-workflow--predict-outcome
+                  "gptel-auto-workflow-ontology-predict")
+(declare-function gptel-auto-workflow--ontology-filter-targets
+                  "gptel-auto-workflow-ontology-strategy")
+(declare-function gptel-auto-workflow--select-best-strategy-with-ontology
+                  "gptel-auto-workflow-ontology-strategy")
+
 (defcustom gptel-auto-workflow--ontology-decision-log t
   "Log ontology vs LLM decisions for analysis."
   :type 'boolean
@@ -170,7 +182,8 @@ ARGS are decision-specific parameters."
 
 (defun gptel-auto-workflow--record-decision (decision-type result &optional reason)
   "Record decision for analysis.
-RESULT should be 'ontology, 'llm, or 'hybrid."
+RESULT should be `ontology', `llm', or `hybrid'."
+  (ignore reason)
   (let* ((key (if (keywordp result) result (intern (concat ":" (symbol-name result)))))
          (current (gethash decision-type gptel-auto-workflow--decision-stats
                             (list :ontology 0 :llm 0 :hybrid 0 :total 0)))
@@ -199,10 +212,12 @@ RESULT should be 'ontology, 'llm, or 'hybrid."
 (defun gptel-auto-workflow--install-ontology-guards ()
   "Install ontology guards on key decision points."
   ;; Guard experiment pre-flight
-  (unless (advice-member-p #'gptel-auto-workflow--experiment-preflight-advice
-                           #'gptel-auto-experiment-run)
-    (advice-add 'gptel-auto-experiment-run
-                :around #'gptel-auto-workflow--experiment-preflight-advice))
+  (when (and (fboundp 'gptel-auto-experiment-run)
+             (fboundp 'gptel-auto-workflow--experiment-preflight-advice))
+    (unless (advice-member-p #'gptel-auto-workflow--experiment-preflight-advice
+                             #'gptel-auto-experiment-run)
+      (advice-add 'gptel-auto-experiment-run
+                  :around #'gptel-auto-workflow--experiment-preflight-advice)))
   
   ;; Guard strategy selection
   (when (fboundp 'gptel-auto-workflow--select-best-strategy)
