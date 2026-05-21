@@ -186,21 +186,23 @@ request is active."
 
 START and END are the response region positions passed by
 `gptel-post-response-functions'."
-  (when (and gptel-mode
-             ;; In some buffers/sentinels, `gptel--fsm' may not be bound.
-             ;; Never error from a post-response hook.
-             (not (condition-case nil
-                       (when-let* ((fsm (my/gptel--coerce-fsm
-                                          (buffer-local-value 'gptel--fsm-last (current-buffer))))
-                                   (info (gptel-fsm-info fsm)))
-                         (plist-get info :error))
-                    (ignore))))
-    (save-excursion
-      (goto-char end)
-      ;; Only add marker if not already present at EOB
-      (my/gptel--insert-prompt-marker-at-eob))
-    ;; Move cursor to end for immediate typing
-    (my/gptel--goto-prompt-marker-end)))
+  (when gptel-mode
+    ;; Check for error state; if error, skip adding marker.
+    (let ((has-no-error
+           (or (not (boundp 'gptel--fsm-last))
+               (condition-case nil
+                   (when-let* ((fsm (my/gptel--coerce-fsm
+                                      (buffer-local-value 'gptel--fsm-last (current-buffer))))
+                               (info (gptel-fsm-info fsm)))
+                     (null (plist-get info :error)))
+                 (error nil)))))
+      (when has-no-error
+        (save-excursion
+          (goto-char end)
+          ;; Only add marker if not already present at EOB
+          (my/gptel--insert-prompt-marker-at-eob))
+        ;; Move cursor to end for immediate typing
+        (my/gptel--goto-prompt-marker-end)))))
 
 ;; --- Keybindings & Hooks ---
 (with-eval-after-load 'gptel
