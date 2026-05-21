@@ -177,20 +177,21 @@ request is active."
 ;; --- Prompt Marker After Response ---
 ;; When gptel-agent finishes, add ### marker and position cursor for next prompt
 
+(defun my/gptel--has-fsm-error-p ()
+  "Return non-nil if current buffer's FSM has an error.
+Returns nil if no FSM, not a plist, or no error."
+  (let* ((fsm-val (buffer-local-value 'gptel--fsm-last (current-buffer)))
+         (fsm (and fsm-val (my/gptel--coerce-fsm fsm-val)))
+         (info (and fsm (gptel-fsm-info fsm))))
+    (and (listp info) (plist-get info :error))))
+
 (defun my/gptel-add-prompt-marker (_start end)
   "Add a prompt marker after the response and move point there.
 
 START and END are the response region positions passed by
 `gptel-post-response-functions'."
   (when (and gptel-mode
-             ;; In some buffers/sentinels, `gptel--fsm' may not be bound.
-             ;; Never error from a post-response hook.
-             (not (condition-case nil
-                       (let* ((fsm (my/gptel--coerce-fsm
-                                    (buffer-local-value 'gptel--fsm-last (current-buffer))))
-                              (info (and fsm (gptel-fsm-info fsm))))
-                        (plist-get info :error))
-                    (ignore))))
+             (not (my/gptel--has-fsm-error-p)))
     (save-excursion
       (goto-char end)
       ;; Only add marker if not already present at EOB
