@@ -153,8 +153,8 @@
                                (delete-process proc)
                                (setq reaped (1+ reaped)))
                            (error nil))))
-                     (when (> reaped 0)
-                       (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))))
+                      (when (> reaped 0)
+                        (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; Async-safe message: prevent *Messages* buffer corruption
