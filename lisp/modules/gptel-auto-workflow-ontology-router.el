@@ -58,6 +58,94 @@ Returns plist with :kept :total :keep-rate."
 Returns float 0.0-1.0 or nil if no data."
   (plist-get (gptel-auto-workflow--get-backend-performance-stats backend strategy target) :keep-rate))
 
+;; ─── Target Categorization ───
+
+(defun gptel-auto-workflow--categorize-target (target)
+  "Categorize TARGET into :programming, :tool-calls, :agentic, or :natural-language.
+Categories based on module purpose from historical experiment analysis."
+  (when target
+    (let ((basename (file-name-nondirectory target)))
+      (cond
+       ;; Natural-language: context, prompts, chat, conversation, text processing
+       ((or (string-match-p "context" basename)
+            (string-match-p "prompt" basename)
+            (string-match-p "chat" basename)
+            (string-match-p "conversation" basename)
+            (string-match-p "language" basename)
+            (string-match-p "text" basename)
+            (string-match-p "summarize" basename)
+            (string-match-p "stream" basename)
+            (member basename '("gptel-ext-context.el" "gptel-ext-context-images.el"
+                              "gptel-ext-context-cache.el" "gptel-ext-streaming.el"
+                              "gptel-ext-transient.el")))
+        :natural-language)
+       ;; Programming: code, benchmarks, FSM, tests, reasoning, compilation
+       ((or (string-match-p "benchmark" basename)
+            (string-match-p "fsm" basename)
+            (string-match-p "retry" basename)
+            (string-match-p "reasoning" basename)
+            (string-match-p "introspection" basename)
+            (string-match-p "test" basename)
+            (string-match-p "code" basename)
+            (string-match-p "compile" basename)
+            (string-match-p "\\`gptel-ext-" basename))
+        :programming)
+       ;; Tool-calls: sandbox, tool execution, bash, grep, glob
+       ((or (string-match-p "sandbox" basename)
+            (string-match-p "\\`gptel-tools-[^a]" basename)  ; tools-* but not tools-agent*
+            (member basename '("gptel-tools-bash.el" "gptel-tools-grep.el"
+                              "gptel-tools-glob.el" "gptel-tools-edit.el"
+                              "gptel-tools-apply.el" "gptel-tools-preview.el"
+                              "gptel-tools-programmatic.el")))
+        :tool-calls)
+       ;; Agentic: agent orchestration, workflow, evolution, strategy
+       ((or (string-match-p "agent" basename)
+            (string-match-p "workflow" basename)
+            (string-match-p "strategy" basename)
+            (string-match-p "evolution" basename))
+        :agentic)
+       ;; Default: natural-language (conservative, many gptel features are NL)
+       (t :natural-language)))))
+
+;; ─── Category-Level Performance Aggregation ───
+
+(defun gptel-auto-workflow--get-category-performance-stats (backend category &optional strategy)
+  "Get performance stats for BACKEND on CATEGORY targets, optionally filtered by STRATEGY.
+Aggregates across all targets matching CATEGORY.
+Returns plist with :kept :total :keep-rate."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (kept 0)
+        (total 0))
+    (dolist (r results)
+      (let ((r-backend (or (plist-get r :backend) "unknown"))
+            (r-target (plist-get r :target))
+            (r-strategy (plist-get r :strategy))
+            (r-decision (plist-get r :decision)))
+        (when (and (string= r-backend backend)
+                   (eq (gptel-auto-workflow--categorize-target r-target) category)
+                   (or (null strategy) (string= r-strategy strategy)))
+          (setq total (1+ total))
+          (when (equal r-decision "kept")
+            (setq kept (1+ kept))))))
+    (list :kept kept
+          :total total
+          :keep-rate (if (> total 0) (/ (float kept) total) nil))))
+
+;; ─── Category Overrides (from 1,204 experiments) ───
+
+(defconst gptel-auto-workflow--category-backend-overrides
+  ;; Source: 1,204 experiments analyzed 2026-05-21
+  ;; Category where specific backend outperforms MiniMax baseline (20.5%)
+  '((:programming     . "DeepSeek")   ; FSM 40%, benchmark-memory 33.3%, tests 25%, retry 25%, introspection 20%
+    (:tool-calls      . nil)           ; MiniMax highspeed baseline — CF-Gateway data inconclusive (25% sandbox n=small)
+    (:natural-language . "DeepSeek")  ; context, prompts, streaming — NL reasoning
+    (:agentic         . nil))          ; MiniMax baseline — no override needed
+  "Category→preferred backend mapping.
+Programming → DeepSeek (higher keep rate on code/benchmark targets).
+Tool-calls → nil (MiniMax highspeed default — CF-Gateway advantage not statistically significant yet).
+Natural-language → DeepSeek (strong NL reasoning).
+Agentic → nil (use default ontology ordering, MiniMax is baseline).")
+
 ;; ─── Fallback Chain Reordering ───
 
 (defun gptel-auto-workflow--reorder-fallbacks-by-ontology (&optional strategy target)
@@ -68,16 +156,21 @@ STRATEGY and TARGET filter the performance data."
                                gptel-auto-workflow-headless-subagent-fallbacks
                              '(("MiniMax" . "minimax-m2.7-highspeed")
                                ("moonshot" . "kimi-k2.6")
-                               ("DashScope" . "glm-5")
+                               ("DashScope" . "qwen3.6-plus")
                                ("DeepSeek" . "deepseek-v4-flash")
                                ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+         (category (when target (gptel-auto-workflow--categorize-target target)))
+         (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
          (scored nil))
     
     ;; Score each backend from static list
     (dolist (entry static-fallbacks)
       (let* ((backend (car entry))
              (model (cdr entry))
-             (stats (gptel-auto-workflow--get-backend-performance-stats backend strategy target))
+             ;; Use category-level stats if available, otherwise target-level
+             (stats (if category
+                        (gptel-auto-workflow--get-category-performance-stats backend category strategy)
+                      (gptel-auto-workflow--get-backend-performance-stats backend strategy target)))
              (keep-rate (plist-get stats :keep-rate))
              (total (plist-get stats :total))
              (score (if keep-rate
@@ -85,6 +178,16 @@ STRATEGY and TARGET filter the performance data."
                            (if (> total 0) 1 0))
                       -1)))  ; No data = low priority
         (push (list :backend backend :model model :score score :rate keep-rate :total total) scored)))
+    
+    ;; Apply category override if available
+    (when category-override
+      (setq scored (mapcar (lambda (s)
+                             (if (string= (plist-get s :backend) category-override)
+                                 (plist-put s :score 9999.0)  ; Boost to top
+                               s))
+                           scored))
+      (message "[onto-router] CATEGORY OVERRIDE: %s (%s) → %s"
+               category target category-override))
     
     ;; Sort by score descending
     (setq scored (sort scored (lambda (a b) (> (plist-get a :score) (plist-get b :score)))))

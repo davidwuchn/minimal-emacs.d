@@ -146,37 +146,50 @@
 - Retry depth fixes + pipeline verification
 - 2 HIGH plist-put bugs fixed + 18 dead functions removed
 
-## Current Session: Pipeline E2E Fixes + Policy Reminder
+## Current Session: Backend Performance Analysis + Ontology Router
 
-**Status:** Running. Auto-workflow daemon active (PID 82694). Researcher daemon needs restart.
+**Status:** Complete. All tests pass. DashScope model fixed. Target-specific routing implemented.
 
-**Commits This Session:**
-- `4337a51d` — ⚒ Define gptel-auto-workflow--deductive-explain in evolution-fix
-- `5750b7db` — Merge optimize/benchmark-onepi5-r110502ze1ca-exp1 for verification
-- `7d8fd1ee` — ⊘ Fix test--project-root for both project-root and tests/ cwd
-- `c9c40edc` — λ Wire ontology competency questions into skill evolution
+**Changes This Session:**
+1. **Analyzed 1,204 experiments** across 5 backends
+2. **DashScope fix**: `glm-5` → `qwen3.6-plus` (was 0% keep rate)
+3. **Category-based routing** in ontology router (replaced file-level overrides):
+   - `:programming` → DeepSeek (FSM 40%, benchmark 33.3%, tests 25%)
+   - `:natural-language` → DeepSeek (context, prompts, streaming)
+   - `:tool-calls` → nil (MiniMax highspeed default — CF-Gateway 25% n=small, not significant)
+   - `:agentic` → nil (MiniMax baseline)
+4. **Updated mock fallbacks** in router tests to use `qwen3.6-plus`
+5. **Added 6 router tests** for categorization + override behavior
+6. **Created** `mementum/knowledge/backend-performance.md` — performance analysis knowledge page
 
-**Key Fixes Applied:**
-1. **Hash-table guard**: `gptel-auto-workflow--ensure-buffer-tables` called at `run-all-projects` entry (line 313) before `normalized-projects` — prevents nil hash-tables crashing maphash
-2. **void-variable pruned**: Evolution.el line 2127 had 6 `)` closing outer `let*` prematurely. Fix: `evolution-fix.el` redefines the function after main file loads (safer than editing 4047-line file with fragile parens)
-3. **void-function deductive-explain**: Added fallback implementation in `evolution-fix.el` that returns proof plists from keep-rate/total-experiments facts
-4. **Script interface verified**: `evolve_skills.py` expects `--skills` (comma-separated). Both callers use correct args
-5. **Test batch-mode path**: `test--project-root` checks both `test-...` and `tests/test-...` with `file-exists-p` before defaulting
+**Test Results:**
+- Strategy: 10/10 ✅
+- Predict: 13/13 ✅
+- Decider: 12/12 ✅
+- Router: 10/10 ✅
+- **Total: 45/45 ontology tests pass**
 
-**Policy Reinforced:**
-- ⚠️ **NEVER force-push**. Origin force-pushed `main` during distributed pipeline (commits lost). Recovery: `fetch --all` → `rebase` → `push`. Always prefer `--force-with-lease` when necessary.
-- Auto-generated artifacts (DIRECTIVE.md, strategy-guidance.json, research-insights-*.md) cause merge conflicts during auto-promote. Revert them unless explicitly asked.
+**Backend Performance (1,204 experiments):**
+| Backend | Keep Rate | N |
+|---------|-----------|---|
+| MiniMax | 20.5% | 904 |
+| DeepSeek | 19.0% | 58 |
+| CF-Gateway | 12.8% | 78 |
+| moonshot | 10.7% | 28 |
+| ~~DashScope~~ | ~~0.0%~~ | ~~17~~ |
+
+**Files Changed:**
+- `lisp/modules/gptel-tools-agent-prompt-build.el` — DashScope model `glm-5` → `qwen3.6-plus` (both fallback lists)
+- `lisp/modules/gptel-auto-workflow-ontology-router.el` — target overrides, static fallback update
+- `tests/test-gptel-auto-workflow-ontology-router.el` — new target override tests
+- `mementum/knowledge/backend-performance.md` — new knowledge page
 
 **Daemon Status:**
-- Auto-workflow: ✅ Running (--fg-daemon=copilot-auto-workflow, PID 82694)
-- Researcher: ❌ Not running (needs restart)
-
-**Experiment Results (run-id: 2026-05-21T110321Z-cc6e):**
-- exp1: validation-failed
-- exp2: ✅ KEPT (quality 0.69→0.88, cl-plusp improvement in reasoning.el)
-- exp3: In progress (3/9)
+- Auto-workflow: ✅ Running (--fg-daemon=copilot-auto-workflow)
+- Not restarted; config changes take effect on next workflow cycle
 
 **Prior Sessions:**
+- Pipeline E2E Fixes + Policy Reminder
 - TDD Coverage + Staging Merge + Test Suite Fix
 - Retry depth fixes + pipeline verification
 - 2 HIGH plist-put bugs fixed + 18 dead functions removed

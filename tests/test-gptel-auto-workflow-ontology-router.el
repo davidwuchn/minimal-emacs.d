@@ -14,7 +14,7 @@
 (defvar gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("moonshot" . "kimi-k2.6")
-    ("DashScope" . "glm-5")
+    ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))
   "Mock headless fallback list for testing.")
@@ -118,6 +118,100 @@
         (should (= 2 (length (cl-intersection (mapcar #'car reordered)
                                                '("moonshot" "MiniMax")
                                                :test #'string=))))))))
+
+;; ─── Target Categorization Tests ───
+
+(ert-deftest regression/ontology-router/categorize-programming ()
+  "FSM, benchmark, test, retry files should be :programming."
+  (should (eq :programming (gptel-auto-workflow--categorize-target "lisp/modules/gptel-ext-fsm.el")))
+  (should (eq :programming (gptel-auto-workflow--categorize-target "lisp/modules/gptel-benchmark-memory.el")))
+  (should (eq :programming (gptel-auto-workflow--categorize-target "lisp/modules/gptel-benchmark-tests.el")))
+  (should (eq :programming (gptel-auto-workflow--categorize-target "lisp/modules/gptel-ext-retry.el")))
+  (should (eq :programming (gptel-auto-workflow--categorize-target "lisp/modules/gptel-tools-introspection.el"))))
+
+(ert-deftest regression/ontology-router/categorize-tool-calls ()
+  "Sandbox and tool files should be :tool-calls."
+  (should (eq :tool-calls (gptel-auto-workflow--categorize-target "lisp/modules/gptel-sandbox.el")))
+  (should (eq :tool-calls (gptel-auto-workflow--categorize-target "lisp/modules/gptel-tools-bash.el")))
+  (should (eq :tool-calls (gptel-auto-workflow--categorize-target "lisp/modules/gptel-tools-grep.el"))))
+
+(ert-deftest regression/ontology-router/categorize-agentic ()
+  "Agent, workflow, strategy files should be :agentic."
+  (should (eq :agentic (gptel-auto-workflow--categorize-target "lisp/modules/gptel-tools-agent.el")))
+  (should (eq :agentic (gptel-auto-workflow--categorize-target "lisp/modules/gptel-auto-workflow-strategic.el")))
+  (should (eq :agentic (gptel-auto-workflow--categorize-target "lisp/modules/gptel-tools-agent-strategy-harness.el"))))
+
+(ert-deftest regression/ontology-router/categorize-natural-language ()
+  "Context, streaming, prompt files should be :natural-language."
+  (should (eq :natural-language (gptel-auto-workflow--categorize-target "lisp/modules/gptel-ext-context.el")))
+  (should (eq :natural-language (gptel-auto-workflow--categorize-target "lisp/modules/gptel-ext-streaming.el")))
+  (should (eq :natural-language (gptel-auto-workflow--categorize-target "lisp/modules/gptel-ext-context-cache.el"))))
+
+;; ─── Category Override Tests ───
+
+(ert-deftest regression/ontology-router/category-override-programming ()
+  "Programming targets should prefer DeepSeek."
+  (let ((mock-results
+         (list
+          (list :backend "moonshot" :target "lisp/modules/gptel-ext-fsm.el" :decision "kept")
+          (list :backend "moonshot" :target "lisp/modules/gptel-ext-fsm.el" :decision "kept")
+          (list :backend "moonshot" :target "lisp/modules/gptel-ext-fsm.el" :decision "kept")
+          (list :backend "MiniMax"  :target "lisp/modules/gptel-ext-fsm.el" :decision "discarded")
+          (list :backend "MiniMax"  :target "lisp/modules/gptel-ext-fsm.el" :decision "discarded"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock-results))
+              ((symbol-function 'random) (lambda (_) 999)))
+      ;; FSM is :programming, which overrides to DeepSeek
+      (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology nil "lisp/modules/gptel-ext-fsm.el")))
+        (should (string= "DeepSeek" (caar reordered)))
+        (should (string= "deepseek-v4-flash" (cdar reordered)))))))
+
+(ert-deftest regression/ontology-router/category-override-tool-calls ()
+  "Tool-call targets have no override — use ontology ordering (MiniMax default)."
+  (let ((mock-results
+         (list
+          (list :backend "moonshot" :target "lisp/modules/gptel-sandbox.el" :decision "kept")
+          (list :backend "moonshot" :target "lisp/modules/gptel-sandbox.el" :decision "kept")
+          (list :backend "moonshot" :target "lisp/modules/gptel-sandbox.el" :decision "kept")
+          (list :backend "MiniMax"  :target "lisp/modules/gptel-sandbox.el" :decision "discarded"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock-results))
+              ((symbol-function 'random) (lambda (_) 999)))
+      ;; Sandbox is :tool-calls, which has no override — uses normal performance ordering
+      (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology nil "lisp/modules/gptel-sandbox.el")))
+        (should (string= "moonshot" (caar reordered)))))))
+
+(ert-deftest regression/ontology-router/category-override-natural-language ()
+  "Natural-language targets should prefer DeepSeek."
+  (let ((mock-results
+         (list
+          (list :backend "moonshot" :target "lisp/modules/gptel-ext-context.el" :decision "kept")
+          (list :backend "moonshot" :target "lisp/modules/gptel-ext-context.el" :decision "kept")
+          (list :backend "moonshot" :target "lisp/modules/gptel-ext-context.el" :decision "kept")
+          (list :backend "MiniMax"  :target "lisp/modules/gptel-ext-context.el" :decision "discarded"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock-results))
+              ((symbol-function 'random) (lambda (_) 999)))
+      ;; gptel-ext-context.el is :natural-language, which overrides to DeepSeek
+      (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology nil "lisp/modules/gptel-ext-context.el")))
+        (should (string= "DeepSeek" (caar reordered)))
+        (should (string= "deepseek-v4-flash" (cdar reordered)))))))
+
+(ert-deftest regression/ontology-router/category-override-agentic ()
+  "Agentic targets have no override — use ontology ordering."
+  (let ((mock-results
+         (list
+          (list :backend "CF-Gateway" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
+          (list :backend "CF-Gateway" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
+          (list :backend "CF-Gateway" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
+          (list :backend "MiniMax"     :target "lisp/modules/gptel-tools-agent.el" :decision "discarded"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () mock-results))
+              ((symbol-function 'random) (lambda (_) 999)))
+      ;; gptel-tools-agent.el is :agentic, which has no override (nil)
+      ;; So it should use normal performance ordering
+      (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology nil "lisp/modules/gptel-tools-agent.el")))
+        (should (string= "CF-Gateway" (caar reordered)))))))
 
 ;; ─── Integration Tests ───
 

@@ -1538,7 +1538,7 @@ exhaustion.")
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("moonshot" . "kimi-k2.6")
-    ("DashScope" . "glm-5")
+    ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
@@ -1568,7 +1568,7 @@ moonshot and others when rate-limited or unavailable."
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("moonshot" . "kimi-k2.6")
     ("MiniMax" . "minimax-m2.7-highspeed")
-    ("DashScope" . "glm-5")
+    ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-pro")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
