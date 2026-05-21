@@ -528,7 +528,7 @@ Relative paths are resolved from the project root."
 
 (defun gptel-auto-workflow--status-placeholder-p (status)
   "Return non-nil when STATUS is only an idle placeholder snapshot."
-  (and (listp status)
+  (and (proper-list-p status)
        (not (plist-get status :running))
        (equal (plist-get status :phase) "idle")
        (zerop (or (plist-get status :kept) 0))
@@ -536,7 +536,7 @@ Relative paths are resolved from the project root."
 
 (defun gptel-auto-workflow--status-owned-by-current-run-p (status)
   "Return non-nil when STATUS belongs to the current workflow run."
-  (and (listp status)
+  (and (proper-list-p status)
        (stringp gptel-auto-workflow--run-id)
        (not (string-empty-p gptel-auto-workflow--run-id))
        (equal (plist-get status :run-id)
