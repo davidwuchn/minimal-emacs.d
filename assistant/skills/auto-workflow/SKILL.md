@@ -12,7 +12,6 @@ metadata:
 
 This skill suite orchestrates automated code improvement through systematic experimentation and self-evolution.
 
-
 ## Current Performance
 
 - Keep rate when this skill is used: {{skill-keep-rate}}

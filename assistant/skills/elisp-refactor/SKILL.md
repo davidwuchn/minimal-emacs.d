@@ -32,7 +32,6 @@ Human ⊗ AI ⊗ Emacs
 **Instead of** accepting code structure as-is, identify where mechanism (what
 the code does) and policy (how it's configured) are coupled, then separate them.
 
-
 ## Current Performance
 
 - Keep rate when this skill is used: {{skill-keep-rate}}

@@ -32,7 +32,6 @@ Human ⊗ AI ⊗ Emacs
 A structural code replacement directive that improves on text-based matching by
 comparing Elisp S-expressions rather than literal character sequences.
 
-
 ## Current Performance
 
 - Keep rate when this skill is used: {{skill-keep-rate}}

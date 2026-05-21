@@ -814,23 +814,31 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
                       (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
                  (setq remaining (cdr remaining))
                  (message "[research] Processing project: %s" project-root)
-                 (condition-case err
-                     (progn
-                       ;; Set current project context for subagents.
-                       (setq gptel-auto-workflow--current-project project-root)
-                       (with-current-buffer project-buf
-                         (hack-dir-local-variables-non-file-buffer)
-                         (gptel-auto-workflow-run-research
-                          (lambda (&rest _args)
-                            (push (cons project-root 'success) results)
-                            (message "[research] ✓ Completed: %s" project-root)
-                            (setq gptel-auto-workflow--current-project nil)
-                            (run-next)))))
-                   (error
-                    (push (cons project-root (format "error: %s" err)) results)
-                    (message "[research] ✗ Failed: %s - %s" project-root err)
-                    (setq gptel-auto-workflow--current-project nil)
-                    (run-next)))))))
+                  (condition-case err
+                      (progn
+                        ;; Set current project context for subagents.
+                        (setq gptel-auto-workflow--current-project project-root)
+                        (with-current-buffer project-buf
+                          (hack-dir-local-variables-non-file-buffer)
+                          (gptel-auto-workflow-run-research
+                           (lambda (&rest _args)
+                             (push (cons project-root 'success) results)
+                             (message "[research] ✓ Completed: %s" project-root)
+                             (setq gptel-auto-workflow--current-project nil)
+                             (run-next)))))
+                    (error
+                     (let ((err-msg (format "%s" err))
+                           (bt (with-output-to-string (backtrace))))
+                       (when (string-match "void-variable total" err-msg)
+                         (message "[research] DEBUG void-variable total backtrace:")
+                         (message "%s" bt)
+                         (with-temp-file (expand-file-name "var/tmp/research-total-backtrace.txt"
+                                                           (gptel-auto-workflow--worktree-base-root))
+                           (insert bt))))
+                     (push (cons project-root (format "error: %s" err)) results)
+                     (message "[research] ✗ Failed: %s - %s" project-root err)
+                     (setq gptel-auto-workflow--current-project nil)
+                     (run-next)))))))
         (run-next)))))
 
 (defun gptel-auto-workflow--shutdown-researcher-daemon-after-job (&rest _args)

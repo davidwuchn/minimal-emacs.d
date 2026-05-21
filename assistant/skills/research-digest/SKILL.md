@@ -12,7 +12,6 @@ metadata:
 
 Used by: `gptel-auto-workflow--digest-research-findings`
 
-
 ## Current Performance
 
 - Keep rate when this skill is used: {{skill-keep-rate}}

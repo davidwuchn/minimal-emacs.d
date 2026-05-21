@@ -33,7 +33,6 @@ A meta-skill that validates other skills through controlled experiments.
 Instead of vague claims ("skill X helps"), it measures whether and how much
 a skill changes AI behavior on identical development tasks.
 
-
 ## Current Performance
 
 - Keep rate when this skill is used: {{skill-keep-rate}}

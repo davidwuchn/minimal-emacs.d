@@ -12,7 +12,6 @@ metadata:
 ---
 # Meta-Harness Strategy Proposer
 
-
 ## Current Performance
 
 - Keep rate when this skill is used: {{skill-keep-rate}}

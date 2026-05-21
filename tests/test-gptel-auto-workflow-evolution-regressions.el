@@ -1769,6 +1769,20 @@ must not override it to MiniMax via setq-local in subagent buffers."
     (should (string-match-p "wrong-arity" insights))
     (should (string-match-p "67%" insights))))
 
+(ert-deftest regression/vsm-health-check/pruned-not-void ()
+  "VSM health check must not signal void-variable pruned."
+  ;; The original function had a paren nesting bug that placed cleanup
+  ;; logging outside the let* that binds pruned. The fix redefines
+  ;; the function to keep logging inside the let*.
+  (should (fboundp 'gptel-auto-workflow--evolution-vsm-health-check))
+  (should-not
+   (condition-case err
+       (progn
+         (gptel-auto-workflow--evolution-vsm-health-check)
+         nil)
+     (void-variable (equal (cadr err) 'pruned))
+     (error nil))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

@@ -13,7 +13,6 @@ metadata:
 ---
 # Agent Prompts
 
-
 ## Current Performance
 
 - Keep rate when this skill is used: {{skill-keep-rate}}

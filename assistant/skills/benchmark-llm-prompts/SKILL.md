@@ -12,7 +12,6 @@ metadata:
 
 Prompt templates used by the benchmark system when calling LLM backends for improvement generation.
 
-
 ## Current Performance
 
 - Keep rate when this skill is used: {{skill-keep-rate}}

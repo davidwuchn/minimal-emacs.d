@@ -33,7 +33,6 @@ Human ⊗ AI ⊗ Emacs
 introspection tools to systematically understand any symbol before
 implementing against it.
 
-
 ## Current Performance
 
 - Keep rate when this skill is used: {{skill-keep-rate}}
