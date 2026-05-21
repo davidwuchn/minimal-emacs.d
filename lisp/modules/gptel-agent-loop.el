@@ -650,8 +650,10 @@ Extracted from duplicate abort handling patterns."
 
 (defun gptel-agent-loop--should-retry-p (state error-data)
   "Return non-nil when STATE should retry after ERROR-DATA.
-Retries when error is transient and retry budget remains."
-  (and (gptel-agent-loop--transient-error-p error-data)
+Retries when error is transient and retry budget remains.
+ASSUMPTION: STATE is a valid task struct; nil state returns nil."
+  (and (gptel-agent-loop--task-p state)
+       (gptel-agent-loop--transient-error-p error-data)
        (or (null gptel-agent-loop-max-retries)
            (< (gptel-agent-loop--retries state)
               gptel-agent-loop-max-retries))))
