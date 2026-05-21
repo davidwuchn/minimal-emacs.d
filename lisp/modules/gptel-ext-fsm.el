@@ -114,7 +114,12 @@ preventing inconsistent access patterns."
 START and END are the response positions (ignored).
 Only operates on FSMs with a live buffer."
   (let* ((fsm (my/gptel--get-active-fsm))
-         (info (and fsm (gptel-fsm-info fsm))))
+         (info (and fsm (condition-case err
+                            (gptel-fsm-info fsm)
+                          (error
+                           (message "[gptel-fsm] Failed to get FSM info: %s"
+                                    (error-message-string err))
+                           nil)))))
     (when (my/gptel--fsm-needs-recovery-p fsm info)
       (cl-incf my/gptel--recovery-count)
       (when (> my/gptel--recovery-count 3)
