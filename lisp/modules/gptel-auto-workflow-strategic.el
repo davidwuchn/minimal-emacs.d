@@ -512,10 +512,12 @@ Returns nil if data not available."
             (when (and topics (hash-table-p topics))
               (let ((total-exp (gethash "total_experiments" data 0))
                     (total-kept 0))
-                ;; Calculate total kept across all topics
-                (cl-flet ((sum-kept (_topic stats)
-                            (setq total-kept (+ total-kept (gethash "kept" stats 0)))))
-                  (maphash #'sum-kept topics))
+                 ;; Calculate total kept across all topics
+                 ;; Use lambda directly — cl-flet closures can cause
+                 ;; "maphash corruption" with some Emacs builds.
+                 (maphash (lambda (_topic stats)
+                            (setq total-kept (+ total-kept (gethash "kept" stats 0))))
+                          topics)
                 (list :effectiveness (if (> total-exp 0)
                                          (round (/ (* 100.0 total-kept) total-exp))
                                        0)
