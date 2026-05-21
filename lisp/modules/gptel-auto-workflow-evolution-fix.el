@@ -143,5 +143,23 @@ Fallback implementation when full deductive engine not loaded."
             proofs))
     (nreverse proofs)))
 
+;; Define missing experiment-time-gaps function to prevent void-function errors
+;; during evolution self-check (original is inside unclosed paren block)
+(defun gptel-auto-workflow--experiment-time-gaps (&optional threshold-seconds)
+  "Return experiment gaps larger than THRESHOLD-SECONDS."
+  (let* ((threshold (or threshold-seconds 3600))
+         (results (sort (cl-remove-if-not (lambda (r) (numberp (plist-get r :timestamp)))
+                                           (gptel-auto-workflow--parse-all-results))
+                        (lambda (a b) (< (plist-get a :timestamp)
+                                         (plist-get b :timestamp)))))
+         (previous nil)
+         (gaps nil))
+    (dolist (r results)
+      (let ((timestamp (plist-get r :timestamp)))
+        (when (and previous (> (- timestamp (car previous)) threshold))
+          (push (cons (plist-get r :target) timestamp) gaps))
+        (setq previous (cons timestamp r))))
+    (nreverse gaps)))
+
 (provide 'gptel-auto-workflow-evolution-fix)
 ;;; gptel-auto-workflow-evolution-fix.el ends here
