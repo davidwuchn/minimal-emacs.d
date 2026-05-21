@@ -21,8 +21,11 @@
                                           (or load-file-name buffer-file-name default-directory)))))
   (add-to-list 'load-path gptel-agent-dir))
 (load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-evolution.el"
-                              (file-name-directory
-                               (or load-file-name buffer-file-name default-directory))))
+                               (file-name-directory
+                                (or load-file-name buffer-file-name default-directory))))
+(load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-cq-evolution.el"
+                               (file-name-directory
+                                (or load-file-name buffer-file-name default-directory))))
 (load-file (expand-file-name "../lisp/modules/gptel-tools-agent-prompt-build.el"
                               (file-name-directory
                                (or load-file-name buffer-file-name default-directory))))
@@ -936,6 +939,58 @@ so tags before allium-issues is correctly detected."
   (let ((results (gptel-auto-workflow--check-competency-questions)))
     (should (= (length results) 6))
     (should (cdr (assoc "Which strategies are effective?" results)))))
+
+(ert-deftest regression/auto-workflow-evolution/cq-evolution-triggers-for-unanswerable ()
+  "Unanswerable competency questions should trigger skill evolution."
+  (let ((mock-results
+         '(("Which strategies are effective?" . t)
+           ("What targets need optimization?" . nil)
+           ("Which backends perform best?" . nil))))
+    (let ((evolved nil))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--run-evolution-script)
+                 (lambda (script-name &rest args)
+                   ;; args: ("--skills" SKILL "--root" ".")
+                   (let ((skill-pos (cl-position "--skills" args :test 'string=)))
+                     (when skill-pos
+                       (push (nth (1+ skill-pos) args) evolved)))
+                   "mock-output")))
+        (gptel-auto-workflow--evolve-skills-from-unanswerable-cqs mock-results)
+        (should (member "experiment-core" evolved))
+        (should (member "benchmark" evolved))
+        (should (member "backend-fallback" evolved))
+        (should (member "retry" evolved))
+        ;; Answered question should NOT trigger evolution
+        (should-not (member "strategy-proposer" evolved))))))
+
+(ert-deftest regression/auto-workflow-evolution/cq-evolution-returns-empty-when-all-answerable ()
+  "When all CQs are answerable, no skills should be triggered."
+  (let ((mock-results
+         '(("Which strategies are effective?" . t)
+           ("What targets need optimization?" . t))))
+    (let ((evolved nil))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--run-evolution-script)
+                 (lambda (&rest args)
+                   (push "should-not-happen" evolved)
+                   "mock-output")))
+        (gptel-auto-workflow--evolve-skills-from-unanswerable-cqs mock-results)
+        (should-not evolved)))))
+
+(ert-deftest regression/auto-workflow-evolution/cq-advice-triggers-evolution ()
+  "Advice around check-competency-questions triggers evolution for unanswerable."
+  (let ((evolved nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--check-competency-questions)
+               (lambda () '(("What targets need optimization?" . nil))))
+              ((symbol-function 'gptel-auto-workflow--run-evolution-script)
+               (lambda (script-name &rest args)
+                 ;; args: ("--skills" SKILL "--root" ".")
+                 (let ((skill-pos (cl-position "--skills" args :test 'string=)))
+                   (when skill-pos
+                     (push (nth (1+ skill-pos) args) evolved)))
+                 "mock-output")))
+      (gptel-auto-workflow--cq-evolution-advice
+       #'gptel-auto-workflow--check-competency-questions)
+      (should (member "experiment-core" evolved))
+      (should (member "benchmark" evolved)))))
 
 (ert-deftest regression/auto-workflow-evolution/pipe-validate-no-duplicates ()
   "validate-pipeline detects no duplicate stage names."

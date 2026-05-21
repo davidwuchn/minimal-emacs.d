@@ -61,6 +61,7 @@
 (condition-case nil (require 'gptel-auto-workflow-evolution) (error (message "[gptel-config] evolution unavailable")) nil)
 ;; Fix void-variable pruned bug in VSM health check
 (condition-case nil (require 'gptel-auto-workflow-evolution-fix) (error nil))
+(condition-case nil (require 'gptel-auto-workflow-cq-evolution) (error (message "[gptel-config] cq-evolution unavailable")) nil)
 (require 'gptel-auto-workflow-mementum)
 (require 'gptel-auto-workflow-production)
 
