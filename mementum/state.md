@@ -188,32 +188,35 @@
 - Auto-workflow: ✅ Running (--fg-daemon=copilot-auto-workflow)
 - Not restarted; config changes take effect on next workflow cycle
 
-## Current Session: Sync + Evolution Fix + Daemon Restart
+## Current Session: Sync + Smart Backend Routing Enabled
 
-**Status:** Complete. Synced with remote, fixed errors, restarted daemon.
+**Status:** Complete. Ontology router now ACTIVE on every experiment.
 
 **Remote Changes Pulled:**
-- `2b71b6e5` — ⊘ Fix rule-eval comparison crash + holdout-eval alist/plist mismatch
-- `f803b2ee` — ⊘ Merge main into staging worktree before verification tests
-- `1bc0435a` — ⊘ Fix staging→main force-push wipes external commits
-- `b3e11167` — ⊘ Fix fsm-utils regression + remove stale evolution-fix + TDD tests
+- `8dcdbd8b` — ⊘ Silence byte-compile warning
+- `f9004734` — Merge branch 'staging'
+- `3a7c3a04` — λ Smart backend routing + head-to-head comparison + ontology advice ENABLED
+- `527af7b8` — Merge optimize/fsm-onepi5-r201341zd5b9-exp2
+- `f603a6f7` — Merge optimize/context-riven-r201936ze21b-exp1
 
-**Fixes Applied:**
-1. **Force-push fix** — `gptel-auto-workflow--promote-staging-to-main` now:
-   - Fast-forwards local main to origin/main FIRST (preserves external commits)
-   - Then merges staging
-   - Then does regular push (no --force-with-lease on main)
-2. **Void-function fix** — `gptel-auto-workflow--experiment-time-gaps` now defined in evolution.el (parens balanced)
-3. **Corrupted scores** — `evolution-scores.json` had nested arrays causing plistp error; backed up and daemon recreated clean
-4. **Rule-eval crash** — Mixed string/numeric comparisons in AutoTTS rule evaluator fixed
+**New Features:**
+1. **Ontology routing ACTIVE** — Advice on `gptel-auto-experiment-run` now enabled
+   - Every experiment gets category-based backend reordering
+   - :programming → DeepSeek, :natural-language → DeepSeek
+   - :tool-calls → MiniMax default, :agentic → MiniMax default
+2. **Head-to-head comparison** — Promptfoo-style backend analysis
+   - Compares ALL backend pairs on shared targets (≥3 samples each)
+   - Returns winner, keep-rates, per-target win counts, ties at 5% margin
+   - Generates `mementum/knowledge/backend-comparison.md` report
+3. **26 new tests** — 7 h2h comparison + 7 ontology routing + 2 report + 6 categorization + 4 supplemented
 
 **Test Results:**
-- Evolution: 195/195 ✅ (+23 new tests: auto-promote safety, time-gaps, rule-eval, holdout)
+- Evolution: 202/202 ✅ (+7 h2h comparison tests)
 - Ontology: 51/51 ✅
 
 **Daemon Status:**
-- Auto-workflow: ✅ Restarted (PID 3113587, started 20:18)
-- All fixes loaded: promote-fn ✅, time-gaps-fn ✅, auto-promote ✅
+- Auto-workflow: Running (PID 3113587, started 20:18)
+- ⚠️ Restart needed to pick up enabled ontology routing advice
 
 **Prior Sessions:**
 - Backend Performance Analysis + Ontology Router
