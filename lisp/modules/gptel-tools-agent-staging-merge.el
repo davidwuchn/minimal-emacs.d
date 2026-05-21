@@ -478,7 +478,13 @@ ACTION is a short description used in failure messages."
 (defun gptel-auto-workflow--promote-staging-to-main ()
   "Merge staging into main and push main to origin.
 Returns t on success, nil on failure.  Only runs when
-`gptel-auto-workflow--auto-promote-staging' is non-nil."
+`gptel-auto-workflow--auto-promote-staging' is non-nil.
+
+SAFETY: Never force-pushes main.  First fast-forwards local main to
+origin/main to integrate any external (e.g. human-pushed) commits,
+then merges staging, then does a regular fast-forward push.  If
+origin/main advanced since the daemon last synced, the external
+commits are preserved."
   (when gptel-auto-workflow--auto-promote-staging
     (let* ((staging (gptel-auto-workflow--require-staging-branch))
            (remote (gptel-auto-workflow--shared-remote))
@@ -487,10 +493,19 @@ Returns t on success, nil on failure.  Only runs when
       (message "[auto-workflow] Auto-promoting staging to main...")
       (condition-case err
           (progn
-            ;; Fetch latest to avoid non-fast-forward
+            ;; Fetch latest to get any external commits on main
             (gptel-auto-workflow--git-result
              (format "git fetch %s main" remote) 180)
-            ;; Merge staging into main (main is at origin/main or local main)
+            ;; Fast-forward local main to origin/main first, so external
+            ;; (e.g. human-pushed) commits are never dropped.
+            (let ((ff-remote-result
+                   (gptel-auto-workflow--git-result
+                    (format "git merge --ff-only %s/main" remote) 60)))
+              (unless (= 0 (cdr ff-remote-result))
+                (message "[auto-workflow] Cannot fast-forward to origin/main (may have diverged): %s"
+                         (car ff-remote-result))
+                (error "Auto-promote blocked: local main must match origin/main before merging staging")))
+            ;; Merge staging into main (main is now at origin/main)
             (let ((merge-result
                    (gptel-auto-workflow--git-result
                     (format "git merge --ff-only %s" (shell-quote-argument staging))
@@ -507,9 +522,11 @@ Returns t on success, nil on failure.  Only runs when
                           nil)
                       t))
                 t))
-            ;; Push main to origin
+            ;; Push main to origin — regular push, never force.
+            ;; Because we fast-forwarded to origin/main above, this is
+            ;; always a clean fast-forward.
             (when (gptel-auto-workflow--git-result
-                   (format "git push --force-with-lease %s main" remote) 180)
+                   (format "git push %s main" remote) 180)
               (message "[auto-workflow] ✓ Staging promoted to main")
               t))
         (error
