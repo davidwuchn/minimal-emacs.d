@@ -113,9 +113,12 @@ RESEARCH-RESULT is a plist with :findings :targets :kept-count :total-count
 :strategy :hash."
   (when gptel-auto-workflow-mementum-enabled
     (let* ((strategy (or (plist-get research-result :strategy) "default"))
+           (findings (or (plist-get research-result :findings) ""))
            (hash (or (plist-get research-result :hash)
-                     (sha1 (or (plist-get research-result :findings) ""))))
-           (slug (format "research-%s-%s" strategy (substring hash 0 8)))
+                     (when (and (fboundp 'sha1) (not (string-empty-p findings)))
+                       (sha1 findings))))
+           (hash-str (or hash "no-data"))
+           (slug (format "research-%s-%s" strategy (substring hash-str 0 (min 8 (length hash-str)))))
            (targets (plist-get research-result :targets))
            (kept-count (or (plist-get research-result :kept-count) 0))
            (total-count (or (plist-get research-result :total-count) 0))
@@ -167,10 +170,13 @@ Updates auto-workflow-evolution.md with patterns from recent experiments."
            (knowledge-dir (expand-file-name gptel-auto-workflow-mementum-knowledge-dir
                                             (gptel-auto-workflow--worktree-base-root)))
            (knowledge-file (expand-file-name "auto-workflow-evolution.md" knowledge-dir))
-            ;; Get git stats for synthesis
-            (git-commits (gptel-auto-workflow--git-experiment-commits))
-           (target-stats (gptel-auto-workflow--git-compute-target-stats git-commits))
-           (category-stats (gptel-auto-workflow--git-compute-category-stats git-commits)))
+            ;; Get git stats for synthesis (with nil guard)
+            (git-commits (when (fboundp 'gptel-auto-workflow--git-experiment-commits)
+                           (gptel-auto-workflow--git-experiment-commits)))
+           (target-stats (when git-commits
+                           (gptel-auto-workflow--git-compute-target-stats git-commits)))
+           (category-stats (when git-commits
+                             (gptel-auto-workflow--git-compute-category-stats git-commits))))
 
       (make-directory knowledge-dir t)
 
