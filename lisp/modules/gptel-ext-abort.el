@@ -71,32 +71,43 @@ Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running ca
 (defvar my/gptel-prompt-marker "### "
   "Prompt marker inserted at end of a gptel buffer.")
 
-(defun my/gptel--prompt-marker-present-at-eob-p ()
-  "Return non-nil if the last non-blank line at EOB is a prompt marker."
+(defun my/gptel--prompt-marker-regexp ()
+  "Return compiled regexp for prompt marker line, or nil if marker is invalid."
   (when (and (boundp 'my/gptel-prompt-marker)
              (stringp my/gptel-prompt-marker)
              (not (string-empty-p my/gptel-prompt-marker)))
+    (concat "^" (regexp-quote my/gptel-prompt-marker))))
+
+(defun my/gptel--prompt-marker-present-at-eob-p ()
+  "Return non-nil if the last non-blank line at EOB is a prompt marker."
+  (when-let ((regexp (my/gptel--prompt-marker-regexp)))
     (save-excursion
       (goto-char (point-max))
       (skip-chars-backward " \t\n")
       (beginning-of-line)
-      (looking-at-p (concat "^" (regexp-quote my/gptel-prompt-marker))))))
+      (looking-at-p regexp))))
 
 (defun my/gptel--insert-prompt-marker-at-eob ()
-  "Insert a single prompt marker at end of buffer." 
-  (unless (my/gptel--prompt-marker-present-at-eob-p)
-    (goto-char (point-max))
-    ;; Keep exactly one marker line; no extra blank line.
-    (unless (bolp) (insert "\n"))
-    (insert my/gptel-prompt-marker)))
+  "Insert a single prompt marker at end of buffer."
+  (when-let ((marker (and (boundp 'my/gptel-prompt-marker)
+                          my/gptel-prompt-marker
+                          (stringp my/gptel-prompt-marker)
+                          (not (string-empty-p my/gptel-prompt-marker))
+                          my/gptel-prompt-marker)))
+    (unless (my/gptel--prompt-marker-present-at-eob-p)
+      (goto-char (point-max))
+      ;; Keep exactly one marker line; no extra blank line.
+      (unless (bolp) (insert "\n"))
+      (insert marker))))
 
 (defun my/gptel--goto-prompt-marker-end ()
   "Move point to end of prompt marker at EOB if present."
-  (goto-char (point-max))
-  (skip-chars-backward " \t\n")
-  (beginning-of-line)
-  (when (looking-at-p (concat "^" (regexp-quote my/gptel-prompt-marker)))
-    (goto-char (match-end 0))))
+  (when-let ((regexp (my/gptel--prompt-marker-regexp)))
+    (goto-char (point-max))
+    (skip-chars-backward " \t\n")
+    (beginning-of-line)
+    (when (looking-at-p regexp)
+      (goto-char (match-end 0)))))
 
 
 

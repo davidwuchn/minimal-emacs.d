@@ -1,0 +1,1 @@
+{"name":"pattern-driven-skills","version":"1.0","hypothesis":"Dynamic skill selection based on detected code patterns yields more targeted improvements.","axis":"E","components":["pattern-detection","dynamic-skill-loading"]}
