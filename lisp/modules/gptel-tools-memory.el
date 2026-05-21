@@ -22,7 +22,8 @@
 
 (defun gptel-tools-memory--project-root ()
   "Return project root or default-directory.
-Uses caching to avoid repeated filesystem lookups."
+Uses caching to avoid repeated filesystem lookups.
+SIGNALS an error if no valid root can be determined."
   (if (and (stringp gptel-tools-memory--cached-root)
            (not (string= gptel-tools-memory--cached-root "")))
       gptel-tools-memory--cached-root
@@ -31,8 +32,11 @@ Uses caching to avoid repeated filesystem lookups."
                     (and (fboundp 'project-root)
                          (project-root (project-current)))
                     default-directory)))
-      (when (stringp root)
-        (setq gptel-tools-memory--cached-root root))
+      (unless (stringp root)
+        (error "gptel-tools-memory: Could not determine project root; all fallback methods returned nil"))
+      (when (string= root "")
+        (error "gptel-tools-memory: Project root resolved to empty string"))
+      (setq gptel-tools-memory--cached-root root)
       root)))
 
 (defun gptel-tools-memory--invalidate-cache ()
