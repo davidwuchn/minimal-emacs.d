@@ -25,13 +25,17 @@
     ;; from interleaved load/init messages during concurrent module initialization.
     (run-at-time 0.5 nil
       (lambda ()
-        (with-temp-message ""
-          (let ((load-verbose nil))
-            (require 'init-ai)
-            (load (expand-file-name "lisp/modules/standalone-research.el"
-                                     minimal-emacs-user-directory) nil 'nomessage)
-            (when (fboundp 'slr-run-research)
-              (defalias 'gptel-auto-workflow-run-research 'slr-run-research))))))
+        (condition-case err
+            (let ((load-verbose nil)
+                  (inhibit-message t))
+              (require 'init-ai)
+              (load (expand-file-name "lisp/modules/standalone-research.el"
+                                       minimal-emacs-user-directory) nil 'nomessage)
+              (when (fboundp 'slr-run-research)
+                (defalias 'gptel-auto-workflow-run-research 'slr-run-research)))
+          (error
+           (message "[init-daemon] Deferred init-ai loading error: %s"
+                    (error-message-string err))))))
   (require 'init-ai))
 
 ;; Backup and auto-save settings are configured in init-files.el

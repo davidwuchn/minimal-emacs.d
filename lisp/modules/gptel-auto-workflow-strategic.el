@@ -1510,6 +1510,19 @@ Returns list of validated file paths."
         (gptel-auto-workflow--filter-valid-targets
          (nreverse candidates) proj-root max-targets)))))
 
+(defun gptel-auto-workflow--semantic-target-augmentation (targets)
+  "Augment TARGETS with semantically similar files from git-embed.
+Returns augmented list with up to 2 semantic suggestions appended.
+Does not duplicate existing targets."
+  (when (and (fboundp 'gptel-auto-workflow--semantic-target-suggestions)
+             (<= (length targets) 3))  ; Only augment when we have few targets
+    (let ((semantic (gptel-auto-workflow--semantic-target-suggestions 2)))
+      (dolist (s semantic)
+        (unless (member s targets)
+          (setq targets (append targets (list s)))
+          (message "[auto-workflow] Semantic suggestion: %s" s)))))
+  targets)
+
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
 CALLBACK receives list of target files.
@@ -1533,29 +1546,32 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
                (if (null targets)
                    (progn
                      (message "[auto-workflow] Analyzer returned no targets; using static targets")
-                     (funcall callback static-targets))
+                     (let ((augmented (gptel-auto-workflow--semantic-target-augmentation static-targets)))
+                       (funcall callback augmented)))
                  (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
                         (final-targets (if (and filtered-targets (listp filtered-targets))
                                            filtered-targets
-                                         targets)))
+                                         targets))
+                        (augmented (gptel-auto-workflow--semantic-target-augmentation final-targets)))
                    (unless (or (null filtered-targets) (listp filtered-targets))
                      (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                               filtered-targets))
                    (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
                             (length targets) (length final-targets))
-                   (funcall callback final-targets))))))
+                   (funcall callback augmented))))))
         (let* ((filtered-targets (if static-targets
                                      (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
                                    nil))
                (final-targets (if (and filtered-targets (listp filtered-targets))
                                   filtered-targets
-                                static-targets)))
+                                static-targets))
+               (augmented (gptel-auto-workflow--semantic-target-augmentation final-targets)))
           (unless (or (null filtered-targets) (listp filtered-targets))
             (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                      filtered-targets))
           (message "[auto-workflow] Static: %d targets, %d after frontier filtering"
                    (length static-targets) (length final-targets))
-          (funcall callback final-targets))))))
+          (funcall callback augmented))))))
 
 ;;; ─── AutoTTS Trace Collection & Controller ───
 
