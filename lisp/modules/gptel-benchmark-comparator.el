@@ -107,13 +107,17 @@ Internal helper to centralize trend data extraction logic."
   (when (null summary-b)
     (signal 'wrong-type-argument (list "proper-list-p" summary-b)))
   (let* ((score-a (and (proper-list-p summary-a) (plist-get summary-a :avg-overall)))
-         (score-b (and (proper-list-p summary-b) (plist-get summary-b :avg-overall)))
-         (improvement (- (or score-b 0) (or score-a 0))))
-    (list :improvement improvement
-          :score-a score-a
-          :score-b score-b
-          :better (> (or score-b 0) (or score-a 0))
-          :regression (< (or score-b 0) (or score-a 0)))))
+         (score-b (and (proper-list-p summary-b) (plist-get summary-b :avg-overall))))
+    (when (null score-a)
+      (signal 'wrong-type-argument (list "expected :avg-overall key in plist" summary-a)))
+    (when (null score-b)
+      (signal 'wrong-type-argument (list "expected :avg-overall key in plist" summary-b)))
+    (let* ((improvement (- score-b score-a)))
+      (list :improvement improvement
+            :score-a score-a
+            :score-b score-b
+            :better (> score-b score-a)
+            :regression (< score-b score-a)))))
 
 ;;; File/Version Helpers
 
