@@ -454,7 +454,9 @@ Assumes LINE is a string. Returns t for lines matching user prefixes."
 (defun my/gptel--strip-user-prefix (line)
   "Strip user prefix from LINE and return the content.
 Assumes LINE is a string matching user prefix pattern."
-  (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" line))
+  (if (stringp line)
+      (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" line)
+    line))
 
 (defun my/gptel--extract-last-task-from-lines (lines)
   "Extract the most recent task/request from LINES.
@@ -479,6 +481,13 @@ Returns a short description of what the user was asking for."
 Returns a short description of what the user was asking for."
   (my/gptel--extract-last-task-from-lines (my/gptel--buffer-lines buffer-string)))
 
+(defun my/gptel--safe-list-length (lst)
+  "Return length of LST if it's a proper list, else 0.
+Prevents incorrect length calculations from dotted lists or circular lists."
+  (if (proper-list-p lst)
+      (length lst)
+    0))
+
 (defun my/gptel--smart-delegate-context (buffer-string last-task)
   "Build context for subagent delegation.
 BUFFER-STRING is the full conversation. LAST-TASK is the extracted task.
@@ -488,13 +497,14 @@ Returns plist with :strategy and :context keys."
             :context (or last-task "Continue the task")
             :reason "Empty or invalid buffer")
     (let* ((lines (my/gptel--buffer-lines buffer-string))
-           (total-lines (length lines))
+           (total-lines (my/gptel--safe-list-length lines))
            (recent-lines (last lines (min 50 total-lines)))
-           (has-tool-results (when recent-lines
-                              (cl-some
-                               (lambda (line)
-                                 (string-match-p "tool_result\\|tool-result\\|Tool result" line))
-                               recent-lines))))
+           (has-tool-results (when (and (proper-list-p recent-lines) recent-lines)
+                               (cl-some
+                                (lambda (line)
+                                  (when (stringp line)
+                                    (string-match-p "tool_result\\|tool-result\\|Tool result" line)))
+                                recent-lines))))
       (cond
        ((null recent-lines)
         (list :strategy 'task-only

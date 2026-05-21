@@ -27,13 +27,14 @@
         (dolist (skill (if (listp used-skills) used-skills (list used-skills)))
           (when (stringp skill)
             (let ((current (gethash skill skill-scores 0)))
-               (puthash skill (+ current (* score recency-weight)) skill-scores))))))
-    skill-scores)))
+               (puthash skill (+ current (* score recency-weight)) skill-scores)))))))
+    skill-scores))
 
 (defun strategy-recency-weighted-skills--select-top-skills (skill-scores)
   "Select top 5 skills by weighted score from SKILL-SCORES."
   (let ((sorted '()))
-    (maphash (lambda (skill score) (push (cons skill score) sorted)) skill-scores)
+    (dolist (skill (hash-table-keys skill-scores))
+      (push (cons skill (gethash skill skill-scores 0)) sorted))
     (setf sorted (cl-sort sorted #'> :key #'cdr))
     (cl-subseq sorted 0 (min 5 (length sorted)))))
 

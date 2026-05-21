@@ -65,7 +65,8 @@ Returns alist of (pattern . count)."
                    (1+ (gethash (format "domain:%s" domain) counts 0))
                    counts))))
     (let ((result '()))
-      (maphash (lambda (k v) (push (cons k v) result)) counts)
+      (dolist (k (hash-table-keys counts))
+        (push (cons k (gethash k counts 0)) result))
       result)))
 
 (defun strategy-failure-memory--format-failure-guidance (top-patterns)
