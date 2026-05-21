@@ -188,30 +188,33 @@
 - Auto-workflow: ✅ Running (--fg-daemon=copilot-auto-workflow)
 - Not restarted; config changes take effect on next workflow cycle
 
-## Current Session: Sync + Model-Level Comparison + Backend Parser Fix
+## Current Session: Sync + Staging-Main Sync + New Strategy
 
-**Status:** Complete. Major model tracking + dead code fix.
+**Status:** Complete. Staging now merges main before verification.
 
 **Remote Changes Pulled:**
-- `02eb075c` — λ Model-level backend comparison + TSV model tracking + fix missing :backend
-- `e8e52ac5` — Merge branch 'staging' (comparator nil guard)
-- `6c0fcdc8` — Merge optimize/comparator-imacpro.taila8bdd.ts.net-r204614z08bb-exp1
+- `14da1bdd` — ⊘ Sync staging with main before verification + fetch origin staging in worktree
+- `61f6096d` — Merge origin/main: void-variable fixes
+- `57c9d1c5` — ⊘ Fix void-variable gptel-auto-workflow--auto-promote-staging
+- `d50eaf68` — ⊘ Fix premature let* close in log-tsv
 
-**Fix (Critical):**
-- `parse-all-results` was NOT extracting `:backend` field (field 15) — backend stats were dead code!
-- Now extracts both `:backend` and `:model` (field 26, new) from TSV
+**Fixes:**
+1. **Staging-main sync** — Before verification, staging worktree now merges latest main
+   - Ensures test fixes on main are included in staging verification
+   - Prevents false failures from stale staging branch
+   - Applied in 3 locations: cherry-pick, verify-staging, experiment-loop
+2. **Void-variable** — `gptel-auto-workflow--auto-promote-staging` moved to forward declarations
+3. **Premature let* close** — Extra `)` after `write-region` was closing let* early
 
-**New Features:**
-1. **Model-level comparison** — Compares specific models, not just backends
-   - `MiniMax/minimax-m2.7-highspeed` vs `moonshot/kimi-k2.6`
-   - `DeepSeek/deepseek-v4-pro` vs `DeepSeek/deepseek-v4-flash`
-   - Generates `mementum/knowledge/model-comparison.md`
-2. **TSV model tracking** — New column (field 26) captures exact model per experiment
-3. **10 new tests** — 4 model h2h + 1 model report + 5 supplemented
+**New Strategy:**
+- `outcome-driven-sections` — New prompt builder strategy (55 lines)
 
 **Test Results:**
-- Evolution: 206/206 ✅ (+4 model comparison tests)
+- Evolution: 206/206 ✅
 - Ontology: 51/51 ✅
+
+**Daemon Status:**
+- Auto-workflow: Running (PID 3182240, started 21:26)
 
 **Prior Sessions:**
 
