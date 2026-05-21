@@ -35,7 +35,7 @@ total-kept: 366
 
 - **Application for us** (24× from mementum)
 - **How it works** (18× from mementum)
-- **manual-fix** (9× from git)
+- **manual-fix** (10× from git)
 - **Key Pattern** (8× from mementum)
 - **unless-guard** (6× from git)
 - **error-handling** (4× from git)
