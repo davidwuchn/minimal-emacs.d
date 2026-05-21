@@ -188,29 +188,32 @@
 - Auto-workflow: ✅ Running (--fg-daemon=copilot-auto-workflow)
 - Not restarted; config changes take effect on next workflow cycle
 
-## Current Session: Sync + Comparator Nil Guard
+## Current Session: Sync + Model-Level Comparison + Backend Parser Fix
 
-**Status:** Complete. Small nil guard fix from staging.
+**Status:** Complete. Major model tracking + dead code fix.
 
 **Remote Changes Pulled:**
+- `02eb075c` — λ Model-level backend comparison + TSV model tracking + fix missing :backend
 - `e8e52ac5` — Merge branch 'staging' (comparator nil guard)
 - `6c0fcdc8` — Merge optimize/comparator-imacpro.taila8bdd.ts.net-r204614z08bb-exp1
-- `7e9040d5` — ◈ Update state.md: smart backend routing enabled
-- `3a7c3a04` — λ Smart backend routing + head-to-head comparison + ontology advice ENABLED
 
-**Fix:**
-- `gptel-benchmark-comparator.el` — nil guard: added `proper-list-p` check before calling `fallback-fn` (prevented crash when `found-versions` was non-nil but not a proper list)
+**Fix (Critical):**
+- `parse-all-results` was NOT extracting `:backend` field (field 15) — backend stats were dead code!
+- Now extracts both `:backend` and `:model` (field 26, new) from TSV
 
 **New Features:**
-1. **Ontology routing ACTIVE** — Advice on `gptel-auto-experiment-run` now enabled
-   - Every experiment gets category-based backend reordering
-   - :programming → DeepSeek, :natural-language → DeepSeek
-   - :tool-calls → MiniMax default, :agentic → MiniMax default
-2. **Head-to-head comparison** — Promptfoo-style backend analysis
-   - Compares ALL backend pairs on shared targets (≥3 samples each)
-   - Returns winner, keep-rates, per-target win counts, ties at 5% margin
-   - Generates `mementum/knowledge/backend-comparison.md` report
-3. **26 new tests** — 7 h2h comparison + 7 ontology routing + 2 report + 6 categorization + 4 supplemented
+1. **Model-level comparison** — Compares specific models, not just backends
+   - `MiniMax/minimax-m2.7-highspeed` vs `moonshot/kimi-k2.6`
+   - `DeepSeek/deepseek-v4-pro` vs `DeepSeek/deepseek-v4-flash`
+   - Generates `mementum/knowledge/model-comparison.md`
+2. **TSV model tracking** — New column (field 26) captures exact model per experiment
+3. **10 new tests** — 4 model h2h + 1 model report + 5 supplemented
+
+**Test Results:**
+- Evolution: 206/206 ✅ (+4 model comparison tests)
+- Ontology: 51/51 ✅
+
+**Prior Sessions:**
 
 **Test Results:**
 - Evolution: 202/202 ✅ (+7 h2h comparison tests)

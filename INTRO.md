@@ -10,9 +10,10 @@ A fork of [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Bui
 
 ```
 λ engage(emacs).
-  research(external) → compile(strategy) → execute(experiment) → verify(outcome) → learn(pattern)
+  research(external) → compile(strategy) → route(ontology) → execute(experiment) → verify(outcome) → learn(pattern)
   | ∀change: isolated(worktree) ∧ verified(tests) ∧ reviewed(AI)
   | self_referential: the system audits itself using its own ontologies
+  | route(ontology) ≡ categorize(target) → select(backend) by historical keep-rate
 ```
 
 This is not a code generator. It is a **self-improving formal system** — it researches techniques from external sources, structures them into behavioral specifications, executes them as experiments in isolated environments, and feeds outcomes back into its own evolution.
@@ -31,6 +32,7 @@ Every cycle runs through four compilers — each examining the system's own beha
 | **Nucleus Lambda** | Hypothesis → λ expression | "What principle does this encode?" |
 | **Allium v3** | Research findings → behavioral spec | "Are these internally coherent?" |
 | **OWL/SHACL** | Ontology dict → Turtle/SHACL | "What is the formal shape of what we've learned?" |
+| **Ontology Router** | Target file → category → backend ranking | "Which backend has the best keep-rate for this target type?" |
 
 Results feed back into the next cycle's analyzer and strategy evolver. The compiler output is not a log — it is **input to the next iteration**.
 
@@ -41,8 +43,8 @@ Results feed back into the next cycle's analyzer and strategy evolver. The compi
 ```
 Research (3min)  →  Evolution (2min)  →  Auto-Workflow (1-4h)  →  Post-Evolve (2min)
      ↓                                              ↓
-  External findings                      Select target → Generate hypothesis
-  + on-demand repo fetch                  → Implement fix → Run 89 tests
+  External findings                      Select target → Categorize → Route backend
+  + on-demand repo fetch                  → Generate hypothesis → Run 206+ tests
                                           → AI grade → AI review
                                           → Merge or learn
 ```
@@ -71,6 +73,10 @@ The system does not just run experiments — it builds a **formal knowledge grap
 | **Second-chance repair** | Soft-deleted patterns re-evaluated each cycle |
 | **I-Sub lexical similarity** | Greedy longest-common-substring — better than Jaccard for ontology terms |
 | **Interval Labelling Schema** | O(1) subsumption over pattern hierarchy via preorder/postorder |
+| **Backend performance analysis** | 1,200+ experiments tracked per backend/model → keep-rate statistics |
+| **Pre-flight prediction** | Anti-pattern detection (3+ consecutive failures), target saturation (≥10), prediction threshold (0.15) |
+| **Ontology vs LLM decider** | Formal decision framework: data-availability × complexity → ontology or LLM |
+| **Category-based routing** | Targets classified as :programming, :tool-calls, :agentic, :natural-language → backend override |
 
 30 patterns ported from Semantica, AutoGo, and LogMap. The system audits itself using its own ontologies.
 
@@ -79,6 +85,8 @@ The system does not just run experiments — it builds a **formal knowledge grap
 ## The Competitive Layer
 
 AutoGo-inspired **champion league** gates every new strategy — incumbents must be defeated in a gauntlet before being adopted. **Playout Cap Randomization** (80% quick / 15% medium / 5% deep) prevents over-specialization. Every cycle emits a machine-parseable `===RESULT===` JSON block for the **autoresearch loop**: commit → run → parse → keep/revert — now wired into AutoTTS trace outcome hooks.
+
+**Head-to-head comparison** (promptfoo-style): every backend/model pair compared on shared targets (≥3 samples each) with 5% tie margin. Generates `mementum/knowledge/backend-comparison.md` and `model-comparison.md`.
 
 **Holdout evaluation** tracks real progress on a frozen set of targets — if train metrics improve but holdout doesn't, the system detects overfitting.
 
@@ -141,9 +149,10 @@ Every experiment: hypothesis → change → outcome → decision. Causal chains.
 
 ```bash
 ls mementum/knowledge/research-insights-*.md
+ls mementum/knowledge/*-comparison.md
 ```
 
-Knowledge pages per strategy: what worked, what didn't, Allium coherence checks, meta-learning recommendations. Send the markdown.
+Knowledge pages per strategy: what worked, what didn't, Allium coherence checks, meta-learning recommendations. Backend and model comparison reports for data-driven provider selection. Send the markdown.
 
 ---
 
@@ -153,7 +162,8 @@ Knowledge pages per strategy: what worked, what didn't, Allium coherence checks,
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
 | 89 tests + 1800s timeout | Broken code caught before staging |
-| 5-provider auto-failover | Rate limits detected, next backend activated |
+| Ontology-aware provider routing | Reorders 5-provider fallback chain by historical keep-rate per target category |
+| Force-push protection | Fast-forwards origin/main before merge; never force-pushes shared main |
 | Conflict marker detection | No `<<<<<<<` in committed code |
 | 90-minute watchdog | No technique runs indefinitely |
 | Policy engine | Forbidden paths sealed |
