@@ -275,26 +275,36 @@ BEHAVIOR: Uses direct slot access to avoid redundant task-p check on hot path."
                   (unless (string-suffix-p "\n" text) "\n")))))
 
 (defun gptel-agent-loop--result-prefix (state)
-  "Return the standard result prefix for STATE."
-  (let ((id (gptel-agent-loop--task-identity state)))
-    (format "%s result for task: %s\n\n"
-            (capitalize (car id))
-            (cdr id))))
+  "Return the standard result prefix for STATE.
+Returns empty prefix if STATE is nil or invalid (defensive guard)."
+  (if (gptel-agent-loop--task-p state)
+      (let ((id (gptel-agent-loop--task-identity state)))
+        (format "%s result for task: %s\n\n"
+                (capitalize (car id))
+                (cdr id)))
+    ""))
 
 (defun gptel-agent-loop--build-final-result (state tail)
   "Build final response text for STATE ending with TAIL.
-TAIL should be a string; non-strings are coerced to empty string."
-  (concat (gptel-agent-loop--result-prefix state)
-          (gptel-agent-loop--safe-accumulated-output state)
-          (if (stringp tail) tail "")))
+TAIL should be a string; non-strings are coerced to empty string.
+Returns empty string if STATE is nil or invalid (defensive guard)."
+  (if (gptel-agent-loop--task-p state)
+      (concat (gptel-agent-loop--result-prefix state)
+              (gptel-agent-loop--safe-accumulated-output state)
+              (if (stringp tail) tail ""))
+    ""))
 
 (defun gptel-agent-loop--build-incomplete-result (state resp)
   "Build incomplete result message for STATE with RESP.
 RESP should be a string; non-strings are coerced to empty string.
-Used when task stops but work remains to be done."
-  (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-          (gptel-agent-loop--build-final-result state (if (stringp resp) resp ""))
-          (gptel-agent-loop--step-count state)))
+Used when task stops but work remains to be done.
+Returns empty string if STATE is nil or invalid (defensive guard)."
+  (if (and (gptel-agent-loop--task-p state)
+           (integerp (gptel-agent-loop--step-count state)))
+      (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
+              (gptel-agent-loop--build-final-result state (if (stringp resp) resp ""))
+              (gptel-agent-loop--step-count state))
+    ""))
 
 (defun gptel-agent-loop--transient-error-p (error-data)
   "Check if ERROR-DATA represents a transient/retryable error.
@@ -650,8 +660,10 @@ Extracted from duplicate abort handling patterns."
 
 (defun gptel-agent-loop--should-retry-p (state error-data)
   "Return non-nil when STATE should retry after ERROR-DATA.
-Retries when error is transient and retry budget remains."
-  (and (gptel-agent-loop--transient-error-p error-data)
+Retries when error is transient and retry budget remains.
+ASSUMPTION: STATE is a valid task struct; nil state returns nil."
+  (and (gptel-agent-loop--task-p state)
+       (gptel-agent-loop--transient-error-p error-data)
        (or (null gptel-agent-loop-max-retries)
            (< (gptel-agent-loop--retries state)
               gptel-agent-loop-max-retries))))

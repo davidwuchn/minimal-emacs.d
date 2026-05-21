@@ -1535,7 +1535,12 @@ before run-at-time, because the deferral breaks the dynamic scope chain."
   "my/gptel--find-tool-by-name must find tools by exact and fuzzy name."
   (require 'gptel)
   (load-file test-tool-sanitize-file)
-  (let* ((mock-tool (gptel-make-tool :name "Read" :func (lambda (_) nil)))
+  ;; Use gptel--make-tool directly because other test files redefine
+  ;; gptel-make-tool to return strings instead of tool structs.
+  (let* ((mock-tool (gptel--make-tool :name "Read"
+                                      :function (lambda (_) nil)
+                                      :description "Mock tool for testing"
+                                      :args nil))
          (tools (list mock-tool)))
     (should (my/gptel--find-tool-by-name tools "Read"))
     (should (not (my/gptel--find-tool-by-name tools "Write")))
@@ -2267,6 +2272,102 @@ must not override it to MiniMax via setq-local in subagent buffers."
         (should (string-match-p "deepseek-v4-pro" report))
         (should (string-match-p "kimi-k2.6" report))
         (should (string-match-p "Generated:" report))))))
+
+;; ─── Semantic Similarity (git-embed) ───
+
+(ert-deftest tdd/semantic-similarity/returns-nil-when-no-executable ()
+  "semantic-similarity-edges returns nil if git-embed not found."
+  (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+    (cl-letf (((symbol-function 'executable-find)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () nil)))
+      (should (null (gptel-auto-workflow--semantic-similarity-edges))))))
+
+(ert-deftest tdd/semantic-similarity/returns-nil-when-no-kept-targets ()
+  "semantic-similarity-edges returns nil when no kept targets exist."
+  (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+    (cl-letf (((symbol-function 'executable-find)
+               (lambda (_) t))
+              ((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () '((:decision "discarded" :target "a.el")
+                            (:decision "discarded" :target "b.el")))))
+      (should (null (gptel-auto-workflow--semantic-similarity-edges))))))
+
+(ert-deftest tdd/semantic-similarity/filters-by-threshold ()
+  "semantic-similarity-edges filters edges below threshold."
+  (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+    (cl-letf (((symbol-function 'executable-find)
+               (lambda (_) t))
+              ((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () '((:decision "kept" :target "a.el"))))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () "/tmp"))
+               ((symbol-function 'shell-command-to-string)
+                (lambda (_) "0.7  lisp/modules/b.el\n0.3  lisp/modules/c.el\n0.8  lisp/modules/d.el")))
+      (let ((edges (gptel-auto-workflow--semantic-similarity-edges 0.6)))
+        (should (= 2 (length edges)))
+        (should (= 0.7 (plist-get (car edges) :score)))
+        (should (= 0.8 (plist-get (cadr edges) :score)))))))
+
+(ert-deftest tdd/semantic-similarity/skips-self-matches ()
+  "semantic-similarity-edges excludes source-target matching itself."
+  (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+    (cl-letf (((symbol-function 'executable-find)
+               (lambda (_) t))
+              ((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () '((:decision "kept" :target "a.el"))))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () "/tmp"))
+              ((symbol-function 'shell-command-to-string)
+               (lambda (_) "0.7  a.el")))
+      (should (null (gptel-auto-workflow--semantic-similarity-edges))))))
+
+(ert-deftest tdd/semantic-similarity/filters-lisp-modules-only ()
+  "semantic-similarity-edges only includes files matching lisp/modules/."
+  (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+    (cl-letf (((symbol-function 'executable-find)
+               (lambda (_) t))
+              ((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () '((:decision "kept" :target "a.el"))))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () "/tmp"))
+              ((symbol-function 'shell-command-to-string)
+               (lambda (_) "0.7  lisp/modules/b.el\n0.8  README.md\n0.9  lisp/modules/c.el")))
+      (let ((edges (gptel-auto-workflow--semantic-similarity-edges)))
+        (should (= 2 (length edges)))
+        (should (string-match-p "lisp/modules/b.el" (plist-get (car edges) :target)))
+        (should (string-match-p "lisp/modules/c.el" (plist-get (cadr edges) :target)))))))
+
+(ert-deftest tdd/semantic-similarity/report-generates-markdown ()
+  "semantic-relationship-report produces markdown with edge table."
+  (when (fboundp 'gptel-auto-workflow--semantic-relationship-report)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+               (lambda (&optional _) '((:source "a.el" :target "b.el" :score 0.75)
+                                      (:source "a.el" :target "c.el" :score 0.82)))))
+      (let ((report (gptel-auto-workflow--semantic-relationship-report)))
+        (should (stringp report))
+        (should (string-match-p "Semantic File Relationships" report))
+        (should (string-match-p "a.el" report))
+        (should (string-match-p "b.el" report))
+        (should (string-match-p "0.750" report))))))
+
+(ert-deftest tdd/semantic-similarity/persist-creates-knowledge-file ()
+  "evolution-persist-semantic-relationships writes to mementum/knowledge."
+  (when (fboundp 'gptel-auto-workflow--evolution-persist-semantic-relationships)
+    (let ((root (make-temp-file "aw-evolution" t)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-relationship-report)
+                     (lambda () "# Semantic File Relationships\n\nTest content."))
+                    ((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (gptel-auto-workflow--evolution-persist-semantic-relationships)
+            (let ((knowledge-file (expand-file-name "mementum/knowledge/semantic-relationships.md" root)))
+              (should (file-exists-p knowledge-file))
+              (with-temp-buffer
+                (insert-file-contents knowledge-file)
+                (should (string-match-p "Semantic File Relationships" (buffer-string))))))
+        (delete-directory root t)))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 

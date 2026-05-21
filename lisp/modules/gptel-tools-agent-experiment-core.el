@@ -140,7 +140,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
           (executor-prompt nil)
           (executor-callback nil)
           (validation-retry-active nil)
-          (experiment-backend nil))
+          (experiment-backend nil)
+          (experiment-model nil))
     (if (not worktree)
         (funcall callback (list :target target :error "Failed to create worktree" :backend "none"))
       (gptel-auto-experiment--call-in-context
@@ -200,6 +201,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                         (fboundp 'gptel-backend-name))
                                    (gptel-backend-name gptel-backend)
                                  experiment-backend))
+                              (actual-model
+                               (or (and (boundp 'gptel-model) gptel-model)
+                                   experiment-model))
                               (candidate-validation
                                (when (fboundp 'gptel-auto-experiment--batch-validate-candidates)
                                  (condition-case err
@@ -245,7 +249,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                              :comparator-reason "repeated-focus-symbol"
                                              :analyzer-patterns (format "%s" patterns)
                                              :agent-output effective-agent-output
-                                             :backend actual-backend)))
+                                             :backend actual-backend
+                          :model actual-model)))
                                 (setq finished t)
                                 (let ((default-directory experiment-worktree))
                                   (message "[auto-exp] Repeated focus on %s after %d prior non-kept attempts; discarding without grading"
@@ -334,7 +339,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                      :analyzer-patterns (format "%s" patterns)
                                                                      :agent-output effective-agent-output
                                                                      :validation-error validation-error
-                                                                     :backend actual-backend)))
+                                                                     :backend actual-backend
+                          :model actual-model)))
                                                          (setq finished t)
                                                          (cl-incf gptel-auto-experiment--no-improvement-count)
                                                          (funcall log-fn run-id retry-exp-result)
@@ -364,7 +370,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                         :analyzer-patterns (format "%s" patterns)
                                                         :agent-output effective-agent-output
                                                         :validation-error validation-error
-                                                        :backend actual-backend)))
+                                                        :backend actual-backend
+                          :model actual-model)))
                                            (setq finished t)
                                            (cl-incf gptel-auto-experiment--no-improvement-count)
                                            (funcall log-fn run-id exp-result)
@@ -439,7 +446,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                        (symbol-name (or error-category :unknown))))
                                                                       :analyzer-patterns (format "%s" patterns)
                                                                       :agent-output effective-agent-output
-                                                                      :backend actual-backend)))
+                                                                      :backend actual-backend
+                          :model actual-model)))
                                                (when grade-error-output
                                                  (setq exp-result
                                                        (plist-put exp-result :error grade-error-output)))
@@ -494,6 +502,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 												          (format "%s" patterns) :agent-output
 												          effective-agent-output
                           :backend actual-backend
+                          :model actual-model
                           :prompt-chars (length executor-prompt)
                           :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
                            :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis)
@@ -660,7 +669,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                              :analyzer-patterns (format "%s" patterns)
                                                                                              :agent-output retry-output
                                                                                              :retries 1
-                                                                                             :backend actual-backend
+                          :backend actual-backend
+                          :model actual-model
+                          :model actual-model
                                                                                              :prompt-chars (length executor-prompt)
                            :output-chars (length (or effective-agent-output ""))
                                                                                              :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
@@ -774,7 +785,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                    :agent-output retry-output
                                                                                     :retries 1
                                                                                     :validation-error retry-validation-error
-                                                                                    :backend actual-backend)))
+                                                                                    :backend actual-backend
+                          :model actual-model)))
                                                                        (funcall log-fn
                                                                                 run-id exp-result)
                                                                        (gptel-auto-workflow--drop-provisional-commit
@@ -826,7 +838,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                              :analyzer-patterns (format "%s" patterns)
                                                                               :agent-output retry-output
                                                                               :retries 1
-                                                                              :backend actual-backend)))
+                                                                              :backend actual-backend
+                          :model actual-model)))
                                                                  (when retry-grade-error-output
                                                                    (setq exp-result
                                                                          (plist-put exp-result :error retry-grade-error-output)))
@@ -873,6 +886,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                 :analyzer-patterns (format "%s" patterns)
                                                                 :agent-output agent-output
                                                                 :backend actual-backend
+                          :model actual-model
                                                                 :prompt-chars (length executor-prompt)
                            :output-chars (length (or effective-agent-output ""))
                                                                  :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)

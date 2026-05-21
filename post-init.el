@@ -96,3 +96,25 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
   (load-file "~/.emacs.d/lisp/theme-setting.el"))
 
 ;; ─── Workflow Daemon: handled by deferred init-ai loading above ───
+
+;; ─── Server socket self-healing ───
+;; During long gptel-curl LLM calls, the emacs server socket can be lost
+;; (network timeout, pipe break) while the Emacs process survives.  Instead
+;; of requiring an external watchdog to SIGKILL and restart (losing all
+;; in-progress experiment work), recreate the socket in-process every 30s.
+(when (and (daemonp) server-process (process-live-p server-process))
+  (run-at-time 30 30
+               (lambda ()
+                 (when (and (boundp 'server-name) (stringp server-name)
+                            (boundp 'server-socket-dir) (stringp server-socket-dir))
+                   (let ((sock (expand-file-name server-name server-socket-dir)))
+                     (unless (file-exists-p sock)
+                       (when server-process
+                         (condition-case nil (delete-process server-process) (error nil))
+                         (setq server-process nil))
+                       (condition-case err
+                           (progn (server-start)
+                                  (message "[server] Self-healed socket %s" sock))
+                         (error
+                          (message "[server] Self-heal failed: %s"
+                                   (error-message-string err))))))))))

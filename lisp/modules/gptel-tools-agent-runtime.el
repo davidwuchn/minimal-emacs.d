@@ -13,6 +13,8 @@
 
 (defun gptel-auto-workflow--safe-truename (path)
   "Return PATH's truename, or nil when PATH cannot be resolved."
+  (when (null path)
+    nil)
   (condition-case nil
       (file-truename path)
     (ignore)))
@@ -25,17 +27,20 @@
     nil)
    ((not (gptel-auto-workflow--path-exists-or-symlink-p source))
     nil)
-   ((not (gptel-auto-workflow--safe-truename source))
-    nil)
    ((file-symlink-p target)
-    (let ((source-true (gptel-auto-workflow--safe-truename source))
-          (target-true (gptel-auto-workflow--safe-truename target)))
-      (if (and source-true target-true
-               (equal source-true target-true))
-          t
+    (let* ((source-true (gptel-auto-workflow--safe-truename source))
+           (target-true (gptel-auto-workflow--safe-truename target)))
+      (cond
+       ((not source-true) nil)
+       ((not target-true)
         (ignore-errors (delete-file target))
         (make-symbolic-link source target t)
-        t)))
+        t)
+       ((equal source-true target-true) t)
+       (t
+        (ignore-errors (delete-file target))
+        (make-symbolic-link source target t)
+        t))))
    ((file-exists-p target)
     t)
    (t
@@ -70,12 +75,13 @@ they are not tracked by Git."
     (when (and (stringp worktree)
                (file-directory-p worktree)
                (file-directory-p source-var)
-               (not (equal (file-truename worktree)
-                           (file-truename source-root))))
+               (not (equal (gptel-auto-workflow--safe-truename worktree)
+                           (gptel-auto-workflow--safe-truename source-root))))
       (make-directory target-var t)
       (let ((source-elpa (expand-file-name "elpa" source-var))
             (target-elpa (expand-file-name "elpa" target-var)))
-        (when (file-directory-p source-elpa)
+        (when (and (file-directory-p source-elpa)
+                   (proper-list-p (directory-files source-elpa t directory-files-no-dot-files-regexp)))
           (make-directory target-elpa t)
           (dolist (source (directory-files source-elpa t directory-files-no-dot-files-regexp))
             (when (gptel-auto-workflow--link-shared-runtime-path

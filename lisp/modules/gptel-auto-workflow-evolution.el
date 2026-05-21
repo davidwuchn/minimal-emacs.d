@@ -1820,6 +1820,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (gptel-auto-workflow--evolution-persist-backend-comparison)
   ;; Step C.6: Model-level comparison (backend/model granularity)
   (gptel-auto-workflow--evolution-persist-model-comparison)
+  ;; Step C.7: Semantic relationship discovery (git-embed ontology enrichment)
+  (gptel-auto-workflow--evolution-persist-semantic-relationships)
   ;; Throttle VSM health check to 1x/15min (expensive: allium LLM calls)
   (let ((now (float-time (current-time))))
     (when (or (null gptel-auto-workflow--vsm-health-last-run)
@@ -4233,6 +4235,111 @@ Saves to var/tmp/evolution-scores.json."
          (current (length results)))
     (- current (or (ignore-errors (float last-total)) 0))))
 
+(defun gptel-auto-workflow--semantic-similarity-edges
+    (&optional threshold)
+  "Discover semantic relationships between files via git-embed."
+  (let ((min-score (or threshold 0.55)) (edges nil))
+    (when
+	(and (executable-find "git-embed")
+	     (fboundp 'gptel-auto-workflow--parse-all-results))
+      (let*
+	  ((results (gptel-auto-workflow--parse-all-results))
+	   (kept-targets
+	    (cl-remove-if-not (lambda (x) (stringp x))
+			      (delete-dups
+			       (mapcar
+				(lambda (r) (plist-get r :target))
+				(cl-remove-if-not
+				 (lambda (r)
+				   (equal (plist-get r :decision)
+					  "kept"))
+				 results))))))
+	(dolist (source-target kept-targets)
+	  (condition-case nil
+	      (let*
+		  ((default-directory
+		    (or (gptel-auto-workflow--worktree-base-root)
+			default-directory))
+		   (output
+		    (shell-command-to-string
+		     (format "git embed similar %s 2>/dev/null"
+			     (shell-quote-argument source-target))))
+		   (lines (split-string output "\n" t)))
+		(dolist (line lines)
+		  (when
+		      (string-match "\\([0-9.]+\\)[ \\t]+\\(.+\\)"
+				    line)
+		    (let
+			((score
+			  (string-to-number (match-string 1 line)))
+			 (similar-file (match-string 2 line)))
+		      (when
+			  (and (>= score min-score)
+			       (not
+				(string= source-target similar-file))
+			       (string-match-p "lisp/modules/"
+					       similar-file))
+			(push
+			 (list :source source-target :target
+			       similar-file :score score :method
+			       "git-embed-nomic")
+			 edges))))))
+	    (error nil)))))
+    (nreverse edges)))
+
+
+(defun gptel-auto-workflow--semantic-relationship-report nil
+  "Generate markdown report of semantic file relationships."
+  (let ((edges (gptel-auto-workflow--semantic-similarity-edges)))
+    (when edges
+      (let
+	  ((report-buffer (generate-new-buffer " *semantic-report*")))
+	(with-current-buffer report-buffer
+	  (insert "# Semantic File Relationships\\n\\n")
+	  (insert "Generated: " (format-time-string "%Y-%m-%dT%H:%M")
+		  "\\n\\n")
+	  (insert
+	   "## Files Semantically Similar to Kept Experiment Targets\\n\\n")
+	  (insert "| Source (kept target) | Similar File | Score |\\n")
+	  (insert "|---------------------|--------------|-------|\\n")
+	  (dolist (edge edges)
+	    (insert
+	     (format "| %s | %s | %.3f |\\n" (plist-get edge :source)
+		     (plist-get edge :target) (plist-get edge :score))))
+	  (insert "\\n## Ontology Implications\\n\\n")
+	  (insert
+	   "- Files with high semantic similarity (>0.60) may benefit from similar fixes\\n")
+	  (insert
+	   "- Consider clustering similar files for batch optimization\\n")
+	  (insert
+	   "- Semantic edges supplement structural (import/require) relationships\\n")
+	  (buffer-string))))))
+
+
+(defun gptel-auto-workflow--evolution-persist-semantic-relationships
+    nil
+  "Generate and save semantic relationship knowledge page."
+  (condition-case err
+      (let
+	  ((report (gptel-auto-workflow--semantic-relationship-report)))
+	(when report
+	  (let
+	      ((knowledge-dir
+		(expand-file-name "mementum/knowledge"
+				  (or
+				   (gptel-auto-workflow--worktree-base-root)
+				   default-directory)))
+	       (knowledge-file "semantic-relationships.md"))
+	    (make-directory knowledge-dir t)
+	    (with-temp-file
+		(expand-file-name knowledge-file knowledge-dir)
+	      (insert report))
+	    (message
+	     "[evolution] Semantic relationships → mementum/knowledge/%s"
+	     knowledge-file))))
+    (error
+     (message "[evolution] Semantic relationships error: %s"
+	      (error-message-string err)))))
 ;; ─── Skill Governance Integration ───
 
 (defun gptel-auto-workflow--evolution-get-recently-evolved-skills ()

@@ -738,10 +738,11 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
       (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
       (cons :unknown (format "Error pattern: %s" snippet))))
-   (t
-    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
-      (message "[auto-experiment] No error pattern found, snippet: %s" (my/gptel--sanitize-for-logging snippet))
-      (cons :unknown "Unknown error")))))
+    (t
+     ;; Normal output — no error pattern match, don't log noise.
+     ;; Only errors should produce log output; benign agent output
+     ;; (e.g. "result two", "review ok") is expected and not actionable.
+     (cons :ok nil))))
 
 (defun gptel-auto-experiment--should-reduce-experiments-p ()
   "Check if we should reduce experiment count due to API issues."
