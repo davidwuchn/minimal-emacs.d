@@ -1,10 +1,10 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 1058 experiments across 2 backends
+> Auto-generated from 1976 experiments across 2 backends
 
-## MiniMax vs CF-Gateway (winner: **MiniMax**)
-- MiniMax: 29.9% keep-rate
-- CF-Gateway: 0.0% keep-rate
-- Shared targets: 2 | MiniMax won 2, CF-Gateway won 0, ties 0
+## MiniMax vs ChatGPT (winner: **MiniMax**)
+- MiniMax: 5.9% keep-rate
+- ChatGPT: 0.0% keep-rate
+- Shared targets: 1 | MiniMax won 1, ChatGPT won 0, ties 0
 
 
-*Generated: 2026-05-22 09:49*
+*Generated: 2026-05-22 13:59*
