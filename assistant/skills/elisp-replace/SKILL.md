@@ -1,5 +1,4 @@
 ---
-last-evolution: 2026-05-16 21:00
 name: elisp-replace
 description: >
   Structural Emacs Lisp code replacement based on S-expression equivalence.

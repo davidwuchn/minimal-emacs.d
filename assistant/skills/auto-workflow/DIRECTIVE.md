@@ -1,9 +1,9 @@
 ---
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
-version: 2026.05.16
-total-experiments: 910
-total-kept: 156
+version: 2026.05.23
+total-experiments: 1985
+total-kept: 385
 ---
 
 # Auto-Workflow Program
@@ -17,48 +17,51 @@ total-kept: 156
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-benchmark-comparator.el` | 42% | 12 | 5 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-runtime.el` | 38% | 8 | 3 | ✅ High yield |
-| `lisp/modules/gptel-workflow-benchmark.el` | 35% | 23 | 8 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-staging-baseline.el` | 33% | 3 | 1 | ✅ High yield |
-| `lisp/modules/gptel-ext-context-images.el` | 33% | 9 | 3 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-worktree.el` | 29% | 24 | 7 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-error.el` | 29% | 28 | 8 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-git.el` | 28% | 29 | 8 | 🟡 Active |
-| `lisp/modules/gptel-agent-loop.el` | 25% | 32 | 8 | 🟡 Active |
-| `lisp/modules/gptel-ext-abort.el` | 25% | 4 | 1 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-strategy-harness.el` | 40% | 5 | 2 | ✅ High yield |
+| `lisp/modules/gptel-tools.el` | 38% | 13 | 5 | ✅ High yield |
+| `lisp/modules/gptel-ext-core.el` | 34% | 29 | 10 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-instincts.el` | 33% | 9 | 3 | ✅ High yield |
+| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 33% | 27 | 9 | ✅ High yield |
+| `lisp/modules/gptel-ext-context.el` | 30% | 44 | 13 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-integrate.el` | 26% | 23 | 6 | 🟡 Active |
+| `lisp/modules/gptel-ext-fsm-utils.el` | 25% | 147 | 37 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-evolution.el` | 25% | 28 | 7 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-memory.el` | 25% | 8 | 2 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **extract-helper-function** (11× from git)
-- **unless-guard** (9× from git)
-- **add-variable** (6× from git)
-- **Applicability** (2× from mementum)
-- **Key insight** (2× from mementum)
+- **Application for us** (24× from mementum)
+- **Source type** (24× from mementum)
+- **Description** (24× from mementum)
+- **Application** (20× from mementum)
+- **Implementation sketch** (20× from mementum)
+- **How it works** (18× from mementum)
+- **Apply to us** (16× from mementum)
+- **Emacs application** (14× from mementum)
 
 ## 🛠️ Effective Techniques
 
 <!-- AUTO-UPDATED: From mementum insights -->
 
-- Removing Defensive JSON Key Lookups (seen 2×)
-- Schema Validation + Type Checking Gap (seen 1×)
-- commit `0b3a4da` (seen 1×)
-- Correct parentheses balance" (seen 1×)
-- define marker traits on tools, derive all classification lists from markers at load time. (seen 1×)
-- Repetition Guard (seen 1×)
+- Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (seen 2×)
+- Use mathematical constants (φ, ψ, Δ, λ) as "attention magnets" to prime LLMs toward formal reasoning patterns (seen 2×)
+- Zero client-side intelligence; AI decides, client executes. (seen 2×)
+- 35+ structured tools with circuit breakers, automatic retry, and security controls (seen 2×)
+- Programmatic verification before trust; self-modification loop. (seen 2×)
+- [PLAN] + [EXPECT] with P(success) confidence scoring based on prior outcomes (seen 2×)
 
 ## 🛡️ Error Mitigation
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (741×): Investigate root cause
-- **timeout** (105×): Add smaller batch sizes or chunked processing
-- **validation-failed** (38×): Improve pre-grade validation prompts
-- **api-limit** (18×): Implement provider fallback or rate limit handling
-- **test-failure** (8×): Run tests before committing experiments
+- **other** (1521×): Investigate root cause
+- **timeout** (274×): Add smaller batch sizes or chunked processing
+- **test-failure** (106×): Run tests before committing experiments
+- **validation-failed** (39×): Improve pre-grade validation prompts
+- **api-limit** (33×): Implement provider fallback or rate limit handling
 
 ## Success Patterns
 
@@ -75,11 +78,11 @@ total-kept: 156
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-comparator.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 42%)
-- **lisp/modules/gptel-tools-agent-runtime.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 38%)
-- **lisp/modules/gptel-workflow-benchmark.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 35%)
-- **lisp/modules/gptel-sandbox.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-agent-strategy-harness.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 40%)
+- **lisp/modules/gptel-tools.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 38%)
+- **lisp/modules/gptel-ext-core.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 34%)
+- **lisp/modules/gptel-ext-reasoning.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-agent-validation.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -105,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 910 experiments (156 kept locally across 910 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1985 experiments (385 kept locally across 1985 local records). It evolves every self-evolution cycle.*

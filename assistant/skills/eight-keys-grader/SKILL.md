@@ -1,5 +1,4 @@
 ---
-last-evolution: 2026-05-16 21:00
 name: eight-keys-grader
 description: |
   Grading rubric based on Eight Keys (φ vitality, fractal clarity, ε purpose, τ wisdom, π synthesis, μ directness, ∃ truth, ∀ vigilance) and Wu Xing (Five Elements) framework. Use when evaluating AI-generated code quality, experiment results, or improvement proposals.

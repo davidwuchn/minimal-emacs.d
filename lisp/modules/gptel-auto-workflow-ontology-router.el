@@ -367,6 +367,66 @@ Call this before experiment runs."
 
 ;; ─── Semantic Similarity Target Discovery ───
 
+(defvar gptel-auto-workflow--semantic-edges-cache nil
+  "Cached semantic similarity edges.  Computed once per evolution cycle.
+Format: list of plists (:source :target :score).")
+
+(defvar gptel-auto-workflow--semantic-edges-cache-time nil
+  "Time when semantic edges cache was last computed.")
+
+(defun gptel-auto-workflow--semantic-similarity-edges (&optional threshold)
+  "Compute file semantic similarity edges using git-embed vector embeddings.
+Queries the git-embed binary for files similar to kept experiment targets.
+Returns list of plists (:source :target :score) with similarity >= THRESHOLD
+(default 0.60).  Sorted by score descending.  Cached for 1 hour.
+pi-Synthesis: drives semantic-cluster-targets, semantic-target-suggestions,
+and the semantic-relationships knowledge page."
+  (let ((threshold (or threshold 0.60))
+        (now (float-time)))
+    (when (and gptel-auto-workflow--semantic-edges-cache
+               gptel-auto-workflow--semantic-edges-cache-time
+               (< (- now gptel-auto-workflow--semantic-edges-cache-time) 3600))
+      (cl-return-from gptel-auto-workflow--semantic-similarity-edges
+        (cl-remove-if (lambda (e) (< (plist-get e :score) threshold))
+                      gptel-auto-workflow--semantic-edges-cache)))
+    (let* ((root (gptel-auto-workflow--worktree-base-root))
+           (git-embed-bin (expand-file-name "bin/git-embed" root))
+           (kept-targets nil)
+           (edges nil)
+           (seen (make-hash-table :test 'equal)))
+      (when (and (file-executable-p git-embed-bin)
+                 (fboundp 'gptel-auto-workflow--parse-all-results))
+        (dolist (r (gptel-auto-workflow--parse-all-results))
+          (when (equal (plist-get r :decision) "kept")
+            (let ((target (plist-get r :target)))
+              (when (and target (not (gethash target seen)))
+                (puthash target t seen)
+                (push target kept-targets))))))
+      (when kept-targets
+        (dolist (source kept-targets)
+          (condition-case nil
+              (with-temp-buffer
+                (let ((default-directory root))
+                  (call-process git-embed-bin nil t nil
+                                "search" source "-n" "10" "--dims" "256"))
+                (goto-char (point-min))
+                (while (re-search-forward
+                        "^\\([0-9.]+\\)[ \t]+\\(.+\\)$" nil t)
+                  (let ((score (string-to-number (match-string 1)))
+                        (target (string-trim (match-string 2))))
+                    (when (and (>= score threshold)
+                               (not (string= target source))
+                               (string-match-p "\\`lisp/modules/.*\\.el\\'" target))
+                      (push (list :source source :target target :score score)
+                            edges)))))
+            (error nil))))
+      (setq edges (sort edges (lambda (a b) (> (plist-get a :score) (plist-get b :score))))
+            gptel-auto-workflow--semantic-edges-cache edges
+            gptel-auto-workflow--semantic-edges-cache-time now)
+      (message "[semantic] git-embed: %d similarity edges computed (threshold=%.2f)"
+               (length edges) threshold)
+      edges)))
+
 (defun gptel-auto-workflow--semantic-target-suggestions (&optional max-suggestions min-score)
   "Suggest experiment targets based on semantic similarity to kept targets.
 Queries git-embed for files similar to recently kept experiment targets.
