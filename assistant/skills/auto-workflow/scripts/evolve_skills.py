@@ -181,6 +181,12 @@ def generate_skill(skill_name, skill_info, analysis_path, root_dir, patterns_pat
             "--root", root_dir
         ]
         
+        # Pass skill-file for generic evolve script
+        if script_name == 'evolve_generic.py':
+            skill_file = skills_dir / "SKILL.md"
+            if skill_file.exists():
+                cmd.extend(["--skill-file", str(skill_file)])
+        
         # Pass patterns if available and script supports it
         if patterns_path and script_name == 'generate_directive.py':
             cmd.extend(["--patterns", str(patterns_path)])

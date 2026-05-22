@@ -163,6 +163,8 @@ Skips entries with missing :grade or :percentage fields."
 
 (defun gptel-benchmark-generate-improvement-plan (analysis)
   "Generate improvement plan based on ANALYSIS."
+  (unless (proper-list-p analysis)
+    (error "Analysis is not a plist: %S" analysis))
   (let* ((flaky-tests (plist-get analysis :flaky-tests))
          (non-discriminating (plist-get analysis :non-discriminating-tests))
          (systematic-failures (plist-get analysis :systematic-failures))
