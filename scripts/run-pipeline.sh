@@ -245,10 +245,15 @@ if [ -n "$STALE_BG" ]; then
     echo "$STALE_BG" | xargs kill -9 2>/dev/null || true
     sleep 2
 fi
-# Clean default server socket (blocks --daemon startup)
-if [ -S /var/folders/*/*/*/emacs*/server ]; then
-    rm -f /var/folders/*/*/*/emacs*/server 2>/dev/null || true
-    log "Cleared stale default server socket"
+# Clean default server sockets (blocks --daemon startup)
+# Linux: /tmp/emacsUID/server; macOS: /var/folders/*/*/*/emacs*/server
+if [ -S /tmp/emacs"$(id -u)"/server ]; then
+    rm -f /tmp/emacs"$(id -u)"/server 2>/dev/null || true
+    log "Cleared stale default server socket (linux)"
+fi
+if [ -S /tmp/emacs"$(id -u)"/copilot-auto-workflow ]; then
+    rm -f /tmp/emacs"$(id -u)"/copilot-auto-workflow 2>/dev/null || true
+    log "Cleared stale copilot-auto-workflow socket"
 fi
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
@@ -405,6 +410,22 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     export PIPELINE_FINDINGS_FILE="$FINDINGS_FILE"
     export PIPELINE_INTERNAL_FILE="$INTERNAL_FILE"
     run_self_evolution "Step 3: Self-Evolution (pre-workflow)"
+    # Verify cross-subsystem state was persisted
+    STATE_FILE="$DIR/var/tmp/cross-subsystem-state.json"
+    if [ -f "$STATE_FILE" ]; then
+        state_size=$(wc -c < "$STATE_FILE")
+        if [ "$state_size" -gt 10 ]; then
+            log "  ✓ cross-subsystem-state.json: $state_size bytes"
+        else
+            log "  ⚠ cross-subsystem-state.json too small: $state_size bytes"
+        fi
+    else
+        log "  ⚠ cross-subsystem-state.json not created — next cycle starts with amnesia"
+    fi
+    # Restart daemon to pick up any evolved code changes
+    log "Restarting daemon to load evolved code..."
+    "$SCRIPT" stop >/dev/null 2>&1 || true
+    sleep 2
 else
     log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="
 fi

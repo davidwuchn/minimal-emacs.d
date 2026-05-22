@@ -1999,21 +1999,21 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (gptel-auto-workflow--allium-audit-signal)))
     (ignore))
   ;; Allium BDD gate: behavioral spec coherence check on Ouroboros invariants
-  (condition-case nil
+  (condition-case err
       (gptel-auto-workflow--allium-bdd-gate)
-    (ignore))
+    (error (message "[bdd-gate] BDD check failed: %s" (error-message-string err))))
   ;; Allium minimal-pair diffing: compare competing hypotheses from this cycle
-  (condition-case nil
+  (condition-case err
       (when (fboundp 'gptel-auto-workflow--allium-diff-minimal-pairs)
         (gptel-auto-workflow--allium-diff-opposing-hypotheses))
-    (ignore))
+    (error (message "[allium-diff] Hypothesis diffing failed: %s" (error-message-string err))))
   ;; Write research priorities for next cycle's researcher (Semantica ontology feedback)
-  (condition-case nil
+  (condition-case err
       (progn (gptel-auto-workflow--write-research-priorities)
              (gptel-auto-workflow--enrich-ontology-from-research))
-    (ignore))
+    (error (message "[research-feedback] Priority write failed: %s" (error-message-string err))))
   ;; Knowledge page cross-cycle diff (Semantica set-difference pattern)
-  (condition-case nil
+  (condition-case err
       (let ((diff (gptel-auto-workflow--diff-knowledge-pages)))
         (let ((added (plist-get diff :added))
               (removed (plist-get diff :removed))
@@ -2023,7 +2023,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                      (length added) (length removed) (length changed))
             (dolist (a added) (message "[diff]   + %s" a))
             (dolist (r removed) (message "[diff]   - %s" r)))))
-    (ignore))
+    (error (message "[knowledge-diff] Diff failed: %s" (error-message-string err))))
   ;; Structural validation of knowledge pages (Semantica OntologyValidator)
   (condition-case nil
       (let* ((kd (expand-file-name "mementum/knowledge" (gptel-auto-workflow--worktree-base-root)))
