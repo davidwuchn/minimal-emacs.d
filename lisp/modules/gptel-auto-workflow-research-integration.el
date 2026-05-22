@@ -19,31 +19,21 @@
   "Parse ===RESULT=== JSON blocks from research OUTPUT.
 Returns list of trace plists with :phase, :confidence, :tokens, :decision.
 AutoTTS: research sessions emit structured trace blocks for token-optimal stopping."
-   (let ((traces-cell (list nil))
-         (pos 0))
-     (while (string-match "===RESULT===" output pos)
-       (let* ((after-marker (match-end 0))
-              (brace-pos (string-match "{" output after-marker)))
-         (when brace-pos
-           (let ((json-end (condition-case nil
-                               (with-temp-buffer
-                                 (insert (substring output brace-pos))
-                                 (goto-char (point-min))
-                                 (forward-sexp)
-                                 (point))
-                             (error nil))))
-             (when json-end
-               (let ((json-str (substring output brace-pos (+ brace-pos json-end)))
-                     (json-object-type 'plist)
-                     (json-array-type 'list)
-                     (json-key-type 'keyword))
-                 (condition-case nil
-                     (let ((trace (json-read-from-string json-str)))
-                       (when (plist-get trace :phase)
-                         (setcar traces-cell (cons trace (car traces-cell)))))
-                   (error nil))))
-             (setq pos (if json-end (+ brace-pos json-end) (1+ brace-pos))))))
-     (reverse (car traces-cell)))))
+  (let ((traces nil)
+        (pos 0))
+    (while (string-match "===RESULT===" output pos)
+      (let ((brace-pos (string-match "{" output (match-end 0))))
+        (when brace-pos
+          (let* ((json-object-type 'plist)
+                 (json-array-type 'list)
+                 (json-key-type 'keyword))
+            (condition-case nil
+                (let ((trace (json-read-from-string (substring output brace-pos))))
+                  (when (plist-get trace :phase)
+                    (push trace traces)))
+              (error nil)))
+          (setq pos (match-end 0)))))
+    (nreverse traces)))
 
 (defun gptel-auto-workflow--research-autotts-stop-early-p (traces)
   "Return non-nil if research should STOP early based on TRACE analysis.

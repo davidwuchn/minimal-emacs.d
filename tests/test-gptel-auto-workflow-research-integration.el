@@ -28,7 +28,7 @@
   (let* ((output "Some text\n===RESULT===\n{\"phase\":\"explore\",\"confidence\":0.8,\"tokens\":150,\"insights_count\":3}\nMore text")
          (traces (gptel-auto-workflow--parse-research-autotts-traces output)))
     (should (= 1 (length traces)))
-    (should (eq :explore (plist-get (car traces) :phase)))
+    (should (string= "explore" (plist-get (car traces) :phase)))
     (should (= 0.8 (plist-get (car traces) :confidence)))
     (should (= 3 (plist-get (car traces) :insights_count)))))
 
@@ -42,8 +42,8 @@
   (let* ((output "===RESULT===\n{\"phase\":\"P1\",\"confidence\":0.5}\n===RESULT===\n{\"phase\":\"P2\",\"confidence\":0.9}")
          (traces (gptel-auto-workflow--parse-research-autotts-traces output)))
     (should (= 2 (length traces)))
-    (should (eq :P1 (plist-get (car traces) :phase)))
-    (should (eq :P2 (plist-get (cadr traces) :phase)))))
+    (should (string= "P1" (plist-get (car traces) :phase)))
+    (should (string= "P2" (plist-get (cadr traces) :phase)))))
 
 (ert-deftest tdd/research-integration/autotts-stop-early-p-true ()
   "research-autotts-stop-early-p returns t when confidence > 0.7 and 2+ insights."
@@ -183,9 +183,11 @@
   "propose-research-strategy adds new strategy to proposed list."
   (let ((gptel-auto-workflow--proposed-research-strategies nil)
         (gptel-auto-workflow--research-strategies '("existing")))
-    (gptel-auto-workflow--propose-research-strategy "new-strat" "Test strategy" nil)
-    (should (member "new-strat" gptel-auto-workflow--proposed-research-strategies))
-    (should-not (member "new-strat" gptel-auto-workflow--research-strategies))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () (make-temp-file "test" t))))
+      (gptel-auto-workflow--propose-research-strategy "new-strat" "Test strategy" nil)
+      (should (member "new-strat" gptel-auto-workflow--proposed-research-strategies))
+      (should-not (member "new-strat" gptel-auto-workflow--research-strategies)))))
 
 (ert-deftest tdd/research-integration/propose-strategy-duplicate ()
   "propose-research-strategy ignores duplicates."
