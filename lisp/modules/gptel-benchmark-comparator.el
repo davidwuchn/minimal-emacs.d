@@ -93,7 +93,7 @@ Internal helper to centralize trend data extraction logic."
 If VERSIONS is a proper list, use it directly; otherwise scan for all available versions."
   (gptel-benchmark--require-valid-name name)
   (let ((trend-data '())
-        (versions-to-process (if (and (listp versions) (not (null versions)))
+        (versions-to-process (if (and (proper-list-p versions) (not (null versions)))
                                  versions
                                (gptel-benchmark-get-all-versions name))))
     (dolist (version versions-to-process)
