@@ -140,22 +140,27 @@ Uses cached value from load time, or detects from current directory."
                 (let ((line (buffer-substring-no-properties
                              (line-beginning-position) (line-end-position))))
                   (unless (string-empty-p line)
-                    (let* ((fields (split-string line "\t"))
-                           (target (nth 1 fields))
-                           (hypothesis (nth 2 fields))
-                           (score-before (string-to-number (or (nth 3 fields) "0")))
-                           (score-after (string-to-number (or (nth 4 fields) "0")))
-                           (quality (string-to-number (or (nth 5 fields) "0")))
-                           (delta-str (or (nth 6 fields) "+0.00"))
-                           (decision (nth 7 fields))
+                     (let* ((fields (split-string line "\t"))
+                            (field-count (length fields))
+                            ;; Handle both old 20-field format and new 27-field format.
+                            ;; Old format: exactly 20 fields, backend at index 14.
+                            ;; New format: 27 fields (or 26 if model missing), backend at index 15.
+                            (old-format-p (eq field-count 20))
+                            (target (nth 1 fields))
+                            (hypothesis (nth 2 fields))
+                            (score-before (string-to-number (or (nth 3 fields) "0")))
+                            (score-after (string-to-number (or (nth 4 fields) "0")))
+                            (quality (string-to-number (or (nth 5 fields) "0")))
+                            (delta-str (or (nth 6 fields) "+0.00"))
+                            (decision (nth 7 fields))
                             (grader-q (string-to-number (or (nth 9 fields) "0")))
-                                 (prompt-chars (string-to-number (or (nth 16 fields) "0")))
-                                 (backend (or (nth 15 fields) "unknown"))
-                                (research-strategy (or (nth 21 fields) "none"))
-                                 (research-hash (or (nth 22 fields) "none"))
-                                 (research-quality (or (nth 23 fields) "none"))
-                                  (kibcm-axis (or (nth 25 fields) "?"))
-                                  (model (or (nth 26 fields) "unknown")))
+                            (backend (or (nth (if old-format-p 14 15) fields) "unknown"))
+                            (prompt-chars (string-to-number (or (nth (if old-format-p 15 16) fields) "0")))
+                            (research-strategy (or (nth (if old-format-p 20 21) fields) "none"))
+                            (research-hash (or (nth (if old-format-p 20 22) fields) "none"))
+                            (research-quality (or (nth (if old-format-p 20 23) fields) "none"))
+                            (kibcm-axis (or (nth (if old-format-p 20 25) fields) "?"))
+                            (model (or (nth (if old-format-p 20 26) fields) "unknown")))
                            (push (list :target target
                                        :hypothesis hypothesis
                                        :score-before score-before

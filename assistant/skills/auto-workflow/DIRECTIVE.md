@@ -34,13 +34,13 @@ total-kept: 234
 *These patterns were automatically extracted from successful experiments.*
 
 - **Application for us** (24× from mementum)
+- **Source type** (24× from mementum)
+- **Description** (24× from mementum)
+- **Application** (20× from mementum)
+- **Implementation sketch** (20× from mementum)
 - **How it works** (18× from mementum)
-- **manual-fix** (10× from git)
 - **Key Pattern** (8× from mementum)
-- **error-handling** (7× from git)
-- **unless-guard** (5× from git)
-- **Agent Design Pattern Catalogue (arXiv:2405.10467)** (2× from mementum)
-- **MetaAgent Self-Evolving Paradigm (arXiv:2508.00271)** (2× from mementum)
+- **manual-fix** (8× from git)
 
 ## 🛠️ Effective Techniques
 

@@ -1,0 +1,1 @@
+{"name":"failure-memory","version":"1.0","hypothesis":"Mining cross-target failure patterns enables anticipatory guidance that prevents recurring failures","axis":"D","components":["failure-signature-extraction","cross-experiment-pattern-mining"]}
