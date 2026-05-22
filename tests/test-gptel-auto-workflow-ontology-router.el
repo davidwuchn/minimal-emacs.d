@@ -17,6 +17,9 @@
   (add-to-list 'load-path (expand-file-name "../packages/gptel" base))
   (add-to-list 'load-path (expand-file-name "../packages/gptel-agent" base)))
 
+;; Mock variables
+(defvar gptel-auto-workflow--evolution-next-cycle-hints nil)
+
 ;; Mock the existing fallback configuration
 (defvar gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
@@ -364,6 +367,71 @@ Guards against missing runtime dependencies (worktree-base-root)."
         (should (string-match-p "sandbox" (car tool-calls)))
         (should (= 1 (length agentic)))
         (should (string-match-p "evolution" (car agentic)))))))
+
+;; ─── π Synthesis: Semantic Clustering Tests ───
+
+(ert-deftest tdd/semantic-cluster/winning-strategy-from-tsv ()
+  "winning-strategy-for-target returns strategy from kept results."
+  (when (fboundp 'gptel-auto-workflow--winning-strategy-for-target)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list (list :target "a.el" :decision "kept" :strategy "weighted-failures")
+                       (list :target "a.el" :decision "discarded" :strategy "template-default")
+                       (list :target "b.el" :decision "kept" :strategy "complexity-compression")))))
+      (should (string= "weighted-failures"
+                       (gptel-auto-workflow--winning-strategy-for-target "a.el")))
+      (should (string= "complexity-compression"
+                       (gptel-auto-workflow--winning-strategy-for-target "b.el")))
+      (should-not (gptel-auto-workflow--winning-strategy-for-target "c.el")))))
+
+(ert-deftest tdd/semantic-cluster/cluster-grouping ()
+  "semantic-cluster-targets groups kept targets with similar files."
+  (when (fboundp 'gptel-auto-workflow--semantic-cluster-targets)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+               (lambda (&optional _)
+                 (list (list :source "a.el" :target "b.el" :score 0.80)
+                       (list :source "a.el" :target "c.el" :score 0.90)
+                       (list :source "d.el" :target "e.el" :score 0.85)))))
+      (let ((clusters (gptel-auto-workflow--semantic-cluster-targets 0.75)))
+        (should (= 2 (length clusters)))
+        (let ((a-cluster (cdr (assoc "a.el" clusters))))
+          (should (= 2 (length a-cluster)))
+          (should (assoc "b.el" a-cluster))
+          (should (assoc "c.el" a-cluster)))))))
+
+(ert-deftest tdd/semantic-cluster/suggest-similar-with-strategy ()
+  "suggest-similar-with-strategy returns targets + inherited strategy."
+  (when (fboundp 'gptel-auto-workflow--suggest-similar-with-strategy)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--winning-strategy-for-target)
+               (lambda (_) "weighted-failures"))
+              ((symbol-function 'gptel-auto-workflow--semantic-cluster-targets)
+               (lambda (&optional _)
+                 (list (cons "a.el" (list (cons "b.el" 0.88)
+                                          (cons "c.el" 0.82)))))))
+      (let ((result (gptel-auto-workflow--suggest-similar-with-strategy "a.el")))
+        (should result)
+        (should (string= "weighted-failures" (plist-get result :strategy)))
+        (should (= 2 (length (plist-get result :targets))))
+        (should (member "b.el" (plist-get result :targets)))
+        (should (string= "a.el" (plist-get result :source)))))))
+
+(ert-deftest tdd/semantic-cluster/queue-cluster-experiments ()
+  "queue-cluster-experiments adds hints to next-cycle-hints."
+  (when (fboundp 'gptel-auto-workflow--queue-cluster-experiments)
+    (let ((gptel-auto-workflow--evolution-next-cycle-hints nil))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--suggest-similar-with-strategy)
+                 (lambda (_)
+                   (list :targets '("b.el" "c.el")
+                         :strategy "weighted-failures"
+                         :source "a.el"
+                         :scores '(0.88 0.82)))))
+        (gptel-auto-workflow--queue-cluster-experiments "a.el")
+        (should (= 2 (length gptel-auto-workflow--evolution-next-cycle-hints)))
+        ;; dolist pushes to front, so order is reversed
+        (let ((first-hint (car gptel-auto-workflow--evolution-next-cycle-hints)))
+          (should (string= "c.el" (plist-get first-hint :target)))
+          (should (string= "weighted-failures" (plist-get first-hint :strategy)))
+          (should (string= "semantic-cluster" (plist-get first-hint :reason))))))))
 
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
