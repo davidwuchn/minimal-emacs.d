@@ -577,6 +577,30 @@ Returns list of evolution records."
       (insert (json-encode history)))
     (message "[autotts] Saved evolution history: %d generations" (length history))))
 
+(defun gptel-auto-workflow--count-actionable-patterns (findings)
+  "Count actionable pattern concepts in FINDINGS text.
+ε Purpose: measures how many concrete, named techniques the researcher extracted.
+Patterns include: markdown headers (##, ###), bullet points with technique names,
+and code-featured patterns (``` blocks with technique descriptions)."
+  (if (or (not (stringp findings)) (string-empty-p findings))
+      0
+    (let ((count 0))
+      (with-temp-buffer
+        (insert findings)
+        (goto-char (point-min))
+        ;; Count markdown headers (each is a distinct pattern concept)
+        (while (re-search-forward "^##+\\s-+" nil t)
+          (cl-incf count))
+        (goto-char (point-min))
+        ;; Count bullet points with technique descriptions (actionable items)
+        (while (re-search-forward "^\\s-*[-*]\\s-+\\*\\*.*\\*\\*" nil t)
+          (cl-incf count))
+        (goto-char (point-min))
+        ;; Count numbered technique entries
+        (while (re-search-forward "^[0-9]+\\.\\s-+\\*\\*" nil t)
+          (cl-incf count)))
+      count)))
+
 (defun gptel-auto-workflow--calculate-evolution-objective (traces config)
   "Calculate objective value for evolution from TRACES and CONFIG.
 Higher is better. Combines downstream outcome success rates,
@@ -1409,11 +1433,14 @@ Faster than `benchmark-all-research-strategies` which calls LLMs."
 (defun gptel-auto-workflow--update-trace-outcomes (experiment)
   "Update trace files with experiment outcome.
 EXPERIMENT is a plist with :research-hash and :kept fields.
-Called from experiment logging to link research → experiment results."
+Called from experiment logging to link research → experiment results.
+ε Purpose: records pattern actionability — did research produce concrete, named patterns?"
   (let* ((research-hash (plist-get experiment :research-hash))
          (kept (gptel-auto-workflow--experiment-kept-p experiment))
          (target (plist-get experiment :target))
-         (score-after (plist-get experiment :score-after)))
+         (score-after (plist-get experiment :score-after))
+         (findings-text (or (plist-get experiment :findings)
+                            (plist-get experiment :research-findings))))
     (when (and research-hash (not (equal research-hash "none")))
       (let ((trace-dir (expand-file-name "var/tmp/research-traces"
                                           (gptel-auto-workflow--worktree-base-root)))
@@ -1430,10 +1457,16 @@ Called from experiment logging to link research → experiment results."
                       (insert-file-contents file)
                       (let* ((trace (json-read))
                              (outcomes (plist-get trace :outcomes))
+                             ;; ε Purpose: count actionable patterns in findings
+                             (pattern-count
+                              (gptel-auto-workflow--count-actionable-patterns
+                               (or findings-text
+                                   (plist-get trace :findings) "")))
                              (new-outcome
                               (list :target target
                                     :kept (if kept t nil)
                                     :score-after (or score-after 0)
+                                    :pattern-actionability pattern-count
                                     :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ"))))
                         (setq trace (plist-put trace :outcomes
                                                (append outcomes
@@ -1441,8 +1474,8 @@ Called from experiment logging to link research → experiment results."
                         (erase-buffer)
                         (insert (json-encode trace))
                         (write-region (point-min) (point-max) file))
-                       (message "[autotts] Linked trace %s → %s (%s)"
-                                research-hash target (if kept "kept" "discarded"))
+                       (message "[autotts] Linked trace %s → %s (%s patterns=%d)"
+                                research-hash target (if kept "kept" "discarded") pattern-count)
                        (setq updated t)
                        ;; Schedule trace synthesis + maybe controller evolution
                        (run-with-idle-timer 10 nil

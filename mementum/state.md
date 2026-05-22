@@ -1,8 +1,49 @@
 # Mementum State
 
-> Last session: 2026-05-21/22
-> Session focus: Review daemon auto-promote changes, fix regressions, TDD verification, Allium improvements
-> Last session goal: Fix daemon crashes, enable ontology router, build backend/model comparison, improve Allium system
+> Last session: 2026-05-22
+> Session focus: Eight Keys alignment — decouple subsystem metrics from executor keep-rate
+> Last session goal: Fix zero-score feedback loop across AutoGo, meta-harness, Researcher, self-evolve
+
+> ## 2026-05-22 Session
+
+> ### Root Cause Discovered
+> All 4 subsystems (AutoGo, meta-harness, Researcher, self-evolve) fed into a zero-score feedback loop:
+> researcher finds patterns → injected into executor prompt → experiment scores 0 →
+> AutoTTS sees bad data → AutoGo has no champion → meta-harness generates 0-score strategies →
+> self-evolve plateaus → nothing improves.
+
+> ### Decisions Made
+> 1. **Decouple metrics from executor keep-rate**: Each subsystem optimized for its own Eight Key, not code output quality.
+> 2. **AutoGo μ Directness**: Champion must beat baseline (template-default ~18%), not absolute zero. Fixed `--crown-champion` silently rejecting 0% strategies while gate thought it succeeded.
+> 3. **meta-harness ∀ Vigilance**: Axis rotation enforced—block 3 consecutive same-axis proposals.
+> 4. **Researcher ε Purpose**: Score on pattern actionability (concrete technique count), not executor keep-rate.
+> 5. **self-evolve ∃ Truth**: Removed `(and nil ...)` hard-disable of production timer. τ Wisdom: re-enabled require.
+
+> ### Other Fixes
+> - **coerce → resolve-fsm**: Renamed local function in `gptel-ext-fsm-utils.el` to eliminate 30+ obsolete-alias warnings per cycle.
+> - **evolve_generic.py**: Accepts `--analysis`/`--output-dir` (11 skills' evolution was broken).
+> - **forward-sexp validation**: Added `emacs-lisp-mode` forward-sexp parse in experiment grading (catches unbalanced quotes that `read` misses).
+> - **curl timeout 900→180s**: Reduces MiniMax/DashScope/moonshot provider failure detection latency.
+> - **init-ai force-load**: gptel loaded explicitly for workflow daemon (was idle without it).
+> - **auto-commit-strategy-files**: Strategy `.el` + `.json` files auto-committed to git, preventing stash loss.
+
+> ### Verified
+> - 213/213 evolution tests pass
+> - Daemon restart confirmed clean: 14 lines, 0 errors
+> - `coerce` warnings eliminated (was 24/cycle)
+> - `evolve_generic.py` errors eliminated (was 11/cycle)
+
+> ### Key Files Changed
+> - `lisp/modules/gptel-auto-workflow-evolution.el` — AutoGo gate + baseline-keep-rate
+> - `lisp/modules/gptel-tools-agent-strategy-evolver.el` — axis diversity + rotation
+> - `lisp/modules/gptel-auto-workflow-research-benchmark.el` — pattern actionability scoring
+> - `lisp/modules/gptel-auto-workflow-production.el` — re-enabled production timer
+> - `lisp/modules/gptel-ext-fsm-utils.el` — coerce → resolve-fsm
+> - `assistant/skills/auto-workflow/scripts/evolve_generic.py` — accept --analysis/--output-dir
+> - `lisp/modules/gptel-tools-agent-validation.el` — forward-sexp parse check
+> - `lisp/modules/gptel-ext-backends.el` — curl timeout 900→180
+> - `lisp/init-ai.el` — force-load gptel for workflow daemon
+> - `lisp/modules/gptel-tools-agent-strategy-harness.el` — auto-commit-strategy-files
 
 > ## 2026-05-21/22 Session
 

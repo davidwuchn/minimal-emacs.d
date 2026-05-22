@@ -43,7 +43,7 @@
   :group 'gptel-benchmark-principles)
 
 (defconst gptel-benchmark-eight-keys-subsystem-profiles
-  `((:autotts
+  `((:autotts t
      ;; AutoTTS research controller: foresight + evidence.
      ;; Wisdom (τ): planning before execution, error prevention.
      ;; Truth (∃): evidence-based parameter selection, honest confidence.
@@ -56,7 +56,7 @@
                (exists-truth     . 1.3)
                (forall-vigilance . 0.8))
      :description "AutoTTS controller — optimizes research strategy parameters")
-    (:autogo
+    (:autogo t
      ;; AutoGo champion league: organic improvement + defensive.
      ;; Vitality (φ): builds on discoveries, non-repetitive evolution.
      ;; Vigilance (∀): never repeat failures, defensive against regression.
@@ -69,7 +69,7 @@
                (exists-truth     . 0.8)
                (forall-vigilance . 1.3))
      :description "AutoGo champion league — gates new strategies, prevents regression")
-    (:self-evolve
+    (:self-evolve t
      ;; Self-evolution cycle: holistic integration + actionable outcomes.
      ;; Synthesis (π): connects findings, integrates knowledge across cycles.
      ;; Purpose (ε): clear goals, measurable outcomes, purposeful steps.
@@ -82,7 +82,7 @@
                (exists-truth     . 0.7)
                (forall-vigilance . 0.9))
      :description "Self-evolution cycle — synthesizes knowledge across experiment runs")
-    (:meta-harness
+    (:meta-harness t
      ;; Meta-harness strategy proposer: explicit + efficient.
      ;; Clarity (fractal): explicit assumptions, testable definitions, clear structure.
      ;; Directness (μ): efficient, no wasted effort, cuts through noise.
@@ -95,7 +95,7 @@
                (exists-truth     . 0.6)
                (forall-vigilance . 0.7))
      :description "Meta-harness proposer — generates new strategy candidates")
-    (:ontology
+    (:ontology t
      ;; Ontology router: actionable routing + evidence-based selection.
      ;; Purpose (ε): actionable function, measurable backend outcomes.
      ;; Truth (∃): evidence-based, data-driven backend selection.
@@ -109,7 +109,7 @@
                (forall-vigilance . 0.6))
      :description "Ontology router — data-driven backend selection per target category"))
   "Per-subsystem Eight Keys weight profiles.
-Each profile emphasizes the keys most relevant to that subsystem's purpose.
+Each element is a plist (tag t :weights ALIST :description STRING).
 Weights >1.0 amplify the key; weights <1.0 de-emphasize it.
 The default profile uses all 1.0 (equal weighting).")
 
