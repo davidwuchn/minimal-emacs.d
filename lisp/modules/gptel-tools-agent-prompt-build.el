@@ -889,8 +889,11 @@ Returns template string or fallback hardcoded template."
 ## Suggestions
 {{suggestions}}
 
-## Skills (Context from Learned Patterns)
+      ## Skills (Context from Learned Patterns)
 {{self-evolution}}
+
+## Research Quality (Allium Audit)
+{{allium-issues}}
 
 ## Previous Experiments
 {{topic-knowledge}}
@@ -1076,6 +1079,11 @@ Implements section-level A/B testing to identify effective prompt components."
                                            (gptel-auto-workflow--evolution-get-knowledge)
                                          "")
                                      ""))
+                (allium-issues . ,(if (funcall section-included-p 'self-evolution)
+                                      (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-target)
+                                          (gptel-auto-workflow--allium-load-issues-for-target target)
+                                        "")
+                                    ""))
                 (evolved-recommendations . ,(or (gptel-auto-workflow--load-evolved-recommendations) ""))
                (topic-knowledge . ,(if (funcall section-included-p 'topic-specific)
                                        (gptel-auto-experiment--get-topic-knowledge target)

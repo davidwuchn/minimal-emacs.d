@@ -1827,6 +1827,15 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (gptel-auto-workflow--evolution-persist-model-comparison)
   ;; Step C.7: Semantic relationship discovery (git-embed ontology enrichment)
   (gptel-auto-workflow--evolution-persist-semantic-relationships)
+  ;; Step C.8: Allium issue trend analysis + regression detection
+  (let ((trends-report (gptel-auto-workflow--allium-trends-report)))
+    (when (> (length trends-report) 30)
+      (let ((file (expand-file-name "mementum/knowledge/allium-trends.md"
+                                    (gptel-auto-workflow--worktree-base-root))))
+        (make-directory (file-name-directory file) t)
+        (with-temp-file file (insert trends-report)))))
+  ;; Step C.9: Save Allium regression baselines for next cycle
+  (gptel-auto-workflow--allium-save-regression-baseline)
   ;; Throttle VSM health check to 1x/15min (expensive: allium LLM calls)
   (let ((now (float-time (current-time))))
     (when (or (null gptel-auto-workflow--vsm-health-last-run)
@@ -3499,6 +3508,183 @@ Use to determine which minimal pair has cleaner behavioral specification."
                                        (car (gptel-auto-experiment--allium-issues-count issues-b)))))))))))))))
     (when callback (funcall callback (cons 99 99)))
     nil))
+
+;; ─── Allium Improvements: trend tracking, dedup, regression detection, auto-repair ───
+
+(defun gptel-auto-workflow--allium-trend-issues ()
+  "Analyze Allium issues across all strategies for recurring patterns.
+Returns plist with :trends (deduplicated issue patterns with counts),
+:regressions (strategies with increased issues), :critical-count."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (issues-dir (and root (expand-file-name "var/tmp/evolution/allium-issues" root)))
+         (pattern-counts (make-hash-table :test 'equal))
+         (strategy-issues (make-hash-table :test 'equal))
+         (regressions nil)
+         (critical 0))
+    (when (and issues-dir (file-directory-p issues-dir))
+      (dolist (issue-file (directory-files issues-dir t "\\.md$"))
+        (condition-case nil
+            (let* ((name (file-name-base issue-file))
+                   (mtime (file-attribute-modification-time (file-attributes issue-file)))
+                   (fresh (time-less-p (time-subtract (current-time) (days-to-time 7)) mtime)))
+              (when fresh
+                (with-temp-buffer
+                  (insert-file-contents issue-file)
+                  (goto-char (point-min))
+                  (let ((issue-count 0) (severity 0.0))
+                    ;; Count issues and severity
+                    (when (string-match "\\*\\*Issues:\\*\\* \\([0-9]+\\)" (buffer-string))
+                      (setq issue-count (string-to-number (match-string 1 (buffer-string)))))
+                    (when (string-match "\\*\\*Severity:\\*\\* \\([0-9.]+\\)" (buffer-string))
+                      (setq severity (string-to-number (match-string 1 (buffer-string)))))
+                    (when (> severity 0.3) (cl-incf critical))
+                    ;; Extract individual issue patterns for dedup
+                    (goto-char (point-min))
+                    (let ((pos (point-min)))
+                      (while (re-search-forward "^[0-9]+\\.\\s-*\\*\\*\\([^*]+\\)\\*\\*" nil t)
+                        (let ((pattern (match-string 1)))
+                          (puthash pattern (1+ (or (gethash pattern pattern-counts) 0))
+                                   pattern-counts))
+                        (setq pos (point))))
+                    ;; Record per-strategy count for regression detection
+                    (puthash name (cons issue-count severity) strategy-issues))))
+              ;; Regression detection: compare with previous cycle
+              (let ((prev-file (expand-file-name
+                                (format "%s.prev" name)
+                                (expand-file-name "var/tmp/evolution/allium-regressions" root))))
+                (when (file-readable-p prev-file)
+                  (with-temp-buffer
+                    (insert-file-contents prev-file)
+                    (let ((prev-count (string-to-number (or (car (split-string (buffer-string) ":")) "0"))))
+                      (when (> (car (gethash name strategy-issues)) prev-count)
+                        (push (list name prev-count (car (gethash name strategy-issues)))
+                              regressions)))))))
+          (ignore))))
+    (list :trends (sort (mapcar (lambda (k) (cons k (gethash k pattern-counts)))
+                                (hash-table-keys pattern-counts))
+                        (lambda (a b) (> (cdr a) (cdr b))))
+          :regressions regressions
+          :critical-count critical)))
+
+(defun gptel-auto-workflow--allium-trends-report ()
+  "Generate a markdown report of Allium issue trends.
+Returns string suitable for mementum or prompt injection."
+  (let* ((analysis (gptel-auto-workflow--allium-trend-issues))
+         (trends (plist-get analysis :trends))
+         (regressions (plist-get analysis :regressions))
+         (critical (plist-get analysis :critical-count))
+         (lines nil))
+    (push "### Allium Issue Trends\n" lines)
+    (when trends
+      (push (format "**Recurring patterns** across all strategies:\n\n" ) lines)
+      (dolist (trend (seq-take trends 10))
+        (push (format "- **%s**: %d occurrence(s)\n" (car trend) (cdr trend)) lines))
+      (push "\n" lines))
+    (when regressions
+      (push (format "**Regression warnings** (%d strategies with increased issues):\n\n" (length regressions)) lines)
+      (dolist (r regressions)
+        (push (format "- `%s`: %d → %d issues (worse)\n" (nth 0 r) (nth 1 r) (nth 2 r)) lines))
+      (push "\n" lines))
+    (when (> critical 0)
+      (push (format "**Critical**: %d research strategies have severity > 0.3 — consider auto-repair experiments.\n" critical) lines))
+    (apply #'concat (nreverse lines))))
+
+(defun gptel-auto-workflow--allium-save-regression-baseline ()
+  "Save current issue counts as baseline for next cycle's regression detection."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (issues-dir (and root (expand-file-name "var/tmp/evolution/allium-issues" root)))
+         (baseline-dir (and root (expand-file-name "var/tmp/evolution/allium-regressions" root))))
+    (when (and issues-dir baseline-dir (file-directory-p issues-dir))
+      (make-directory baseline-dir t)
+      (dolist (issue-file (directory-files issues-dir t "\\.md$"))
+        (condition-case nil
+            (let* ((name (file-name-base issue-file))
+                   (baseline-file (expand-file-name (format "%s.prev" name) baseline-dir)))
+              (with-temp-buffer
+                (insert-file-contents issue-file)
+                (goto-char (point-min))
+                (let ((issue-count 0))
+                  (when (string-match "\\*\\*Issues:\\*\\* \\([0-9]+\\)" (buffer-string))
+                    (setq issue-count (string-to-number (match-string 1 (buffer-string)))))
+                  (with-temp-file baseline-file
+                    (insert (format "%d:0" issue-count))))))
+          (ignore))))))
+
+(defun gptel-auto-workflow--allium-build-repair-target (strategy-name)
+  "Generate a repair guidance prompt for STRATEGY-NAME with critical Allium issues.
+Returns a string suitable for injection into the next experiment targeting this strategy's research area."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (issue-file (and root (expand-file-name
+                                (format "%s.md" strategy-name)
+                                (expand-file-name "var/tmp/evolution/allium-issues" root)))))
+    (if (and issue-file (file-readable-p issue-file))
+        (with-temp-buffer
+          (insert-file-contents issue-file)
+          (goto-char (point-min))
+          (let ((count 0) (severity 0.0))
+            (when (string-match "\\*\\*Issues:\\*\\* \\([0-9]+\\)" (buffer-string))
+              (setq count (string-to-number (match-string 1 (buffer-string)))))
+            (when (string-match "\\*\\*Severity:\\*\\* \\([0-9.]+\\)" (buffer-string))
+              (setq severity (string-to-number (match-string 1 (buffer-string)))))
+            (if (> severity 0.3)
+                (format "## Allium Research Coherence Repair
+
+The research strategy `%s` has **%d issues** (severity %.2f).
+Your task: improve the RESEARCH QUALITY (not the code) by fixing behavioral
+spec coherence problems. Common fixes:
+- Add missing preconditions to research rules
+- Remove contradictory requires clauses
+- Fix transition graph violations in the research pipeline
+- Add missing trace evidence for claimed outcomes
+
+The issues below were found by static analysis of the behavioral spec.
+Address them to improve future experiment success rates.
+
+%s"
+                        strategy-name count severity
+                        (buffer-substring (point-min) (point-max)))
+              "")))
+      "")))
+
+(defun gptel-auto-workflow--allium-load-issues-for-target (target)
+  "Load Allium issues relevant to TARGET for experiment prompt injection.
+Returns markdown string with issues from strategies that have experimented on TARGET,
+or empty string if none found."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (relevant-strategies (make-hash-table :test 'equal))
+         (root (gptel-auto-workflow--worktree-base-root))
+         (result nil))
+    ;; Find strategies that have experimented on this target
+    (dolist (r results)
+      (when (and (equal (plist-get r :target) target)
+                 (plist-get r :strategy))
+        (puthash (plist-get r :strategy) t relevant-strategies)))
+    (when root
+      (let ((issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root)))
+        (when (file-directory-p issues-dir)
+          (maphash
+           (lambda (strategy _)
+             (let ((issue-file (expand-file-name (format "%s.md" strategy) issues-dir)))
+               (when (file-readable-p issue-file)
+                 (condition-case nil
+                     (let ((mtime (file-attribute-modification-time (file-attributes issue-file))))
+                       (when (time-less-p (time-subtract (current-time) (days-to-time 14))
+                                          mtime)
+                         (with-temp-buffer
+                           (insert-file-contents issue-file)
+                           (goto-char (point-min))
+                           (let ((content (buffer-string)))
+                             (when (> (length content) 20)
+                               (push (format "### Research quality for strategy `%s` (from Allium audit):\n\n%s"
+                                             strategy content)
+                                     result))))))
+                   (ignore)))))
+           relevant-strategies))))
+    (if result
+        (concat "## Previous Research Quality Issues (Allium audit)\n\n"
+                (mapconcat #'identity (nreverse result) "\n---\n")
+                "\n> Improve research strategy coherence to achieve better experiment outcomes.\n")
+      "")))
 
 ;; ─── Semantica Ontology: experiment → class/instance structure ───
 

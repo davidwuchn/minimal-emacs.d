@@ -85,6 +85,11 @@ Returns content string or error message."
               (format "Memory '%s' is empty" slug)
             content)))))))
 
+(defcustom gptel-tools-memory-max-content-size 1048576
+  "Maximum content size in bytes (default 1MB) to prevent memory exhaustion."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
 (defun gptel-tools-memory--write (slug content &optional knowledge-p)
   "Write CONTENT to a memory file identified by SLUG.
 Returns success message or error."
@@ -92,6 +97,9 @@ Returns success message or error."
     (error "Content must not be nil"))
   (when (string-blank-p content)
     (error "Content must not be empty or whitespace-only"))
+  (when (> (length content) gptel-tools-memory-max-content-size)
+    (error "Content exceeds maximum size of %d bytes (got %d)"
+           gptel-tools-memory-max-content-size (length content)))
   (let ((path (gptel-tools-memory--resolve-path slug knowledge-p)))
     (condition-case err
         (progn
@@ -105,7 +113,12 @@ Returns success message or error."
 (defun gptel-tools-memory--collect-dir (dir type-label root &optional topic)
   "Collect memory entries from DIR with TYPE-LABEL.
 Each entry is formatted as \"name (type-label)\".
-If TOPIC is a non-empty string, filter by topic match."
+If TOPIC is a non-empty string, filter by topic match.
+SIGNALS an error if TOPIC is a non-string, non-nil value."
+  (when (and (not (null topic))
+             (not (stringp topic))
+             (not (string= topic "")))
+    (error "Topic must be a string, nil, or empty string, got: %S" topic))
   (when (and (stringp dir) (file-directory-p dir))
     (cl-loop for f in (directory-files-recursively dir "\\.md$")
              for base = (file-name-sans-extension (file-name-nondirectory f))

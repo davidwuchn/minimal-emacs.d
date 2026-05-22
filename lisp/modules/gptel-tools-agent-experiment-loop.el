@@ -119,7 +119,7 @@ Executor will be instructed to load relevant skill and regenerate.")
             error)
            (and (stringp target)
                 (string-suffix-p ".el" target)
-                (string-match-p "\\`Syntax error in " error)))))
+                (string-match-p "\\`\\(Syntax error in \\|Elisp parse error in \\)" error)))))
 
 (defun gptel-auto-experiment--teachable-validation-error-p (target validation-error)
   "Return non-nil when VALIDATION-ERROR should trigger an immediate retry.
