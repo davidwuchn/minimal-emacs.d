@@ -4335,7 +4335,8 @@ effective +0.10, promising +0.05, underperforming -0.05."
   "Orchestrate cross-subsystem feedback: champion→controller, budget, VSM repair."
   (let ((champion-changes (gptel-auto-workflow--champion-feedback-to-controller))
         (budget (gptel-auto-workflow--category-experiment-budget 5))
-        (vsm-actions (gptel-auto-workflow--vsm-health-actions)))
+        (vsm-actions (gptel-auto-workflow--vsm-health-actions))
+        (expanded-actions (gptel-auto-workflow--vsm-expanded-actions)))
     ;; Save champion state for next cycle
     (when gptel-auto-workflow--category-champions
       (setq gptel-auto-workflow--evolution-next-cycle-hints
@@ -4348,7 +4349,8 @@ effective +0.10, promising +0.05, underperforming -0.05."
           (plist-put gptel-auto-workflow--evolution-next-cycle-hints :category-budget budget))
     (setq gptel-auto-workflow--evolution-next-cycle-hints
           (plist-put gptel-auto-workflow--evolution-next-cycle-hints
-                     :vsm-actions (plist-get vsm-actions :actions)))
+                     :vsm-actions (append (plist-get vsm-actions :actions)
+                                          expanded-actions)))
     ;; Log
     (dolist (change champion-changes)
       (message "[feedback] %s: %s (%.1f%%) [%s]"
