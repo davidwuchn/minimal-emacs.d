@@ -79,6 +79,10 @@ Layer 4: temporal git and experiment index.")
 (defvar gptel-auto-workflow--vsm-health-last-run nil
   "Timestamp of last VSM health check. Throttles to 1/15min.")
 
+(defvar gptel-auto-workflow--evolution-next-cycle-hints nil
+  "Alist of hints for the next evolution cycle.
+Keys: :prev-champions, :category-budget, :vsm-actions, :regressed-targets.")
+
 (defvar gptel-auto-workflow--evolution-repo-root nil
   "Cached git repository root for self-evolution.
 Captured at load time to avoid worktree issues.")
@@ -1876,9 +1880,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Cross-subsystem feedback: champion changes → controller budget,
   ;; category experiment allocation, VSM health → actionable repair
   (condition-case nil
-      (gptel-auto-workflow--apply-cross-subsystem-feedback)
-    (gptel-auto-workflow--consume-vsm-actions)
-    (ignore))
+      (progn
+        (gptel-auto-workflow--apply-cross-subsystem-feedback)
+        (gptel-auto-workflow--consume-vsm-actions))
+    (error (ignore)))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
