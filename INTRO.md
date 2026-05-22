@@ -8,6 +8,8 @@ A fork of [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Bui
 
 ## The Principle
 
+**Ouroboros.** The snake eating its tail.
+
 ```
 λ engage(emacs).
   research(external) → compile(strategy) → route(ontology) → execute(experiment) → verify(outcome) → learn(pattern)
@@ -20,29 +22,15 @@ This is not a code generator. It is a **self-improving formal system** — it re
 
 Like the Northern Divine Art (北冥神功), it absorbs techniques from everywhere and converts them into its own capability. What worked in one codebase flows into the next. What failed becomes a guard rail. The art grows with its practitioner.
 
----
+Every subsystem is the same Ouroboros cycle, just at different scales:
 
-## The Ouroboros
-
-One word for the whole architecture: **Ouroboros.** The snake eating its tail — each subsystem is the same recursive self-improvement cycle, just at different scales:
-
-```
-λ ouroboros.
-  observe → decide → act → learn → repeat
-  | each_scale: same_cycle, different_vocabulary, different_time_horizon
-  | water(feed) → wood(grow) → fire(learn) → earth(control) → metal(shape) → water
-```
-
-| Scale | System | Role | Time Horizon |
-|-------|--------|------|-------------|
-| **Turn** | AutoTTS | Should research stop, continue, or branch? | Seconds |
+| Scale | System | Ouroboros Role | Horizon |
+|-------|--------|---------------|---------|
+| **Turn** | AutoTTS | Stop, continue, or branch research? | Seconds |
 | **Strategy** | AutoGo | Does this challenger beat the champion? | Experiments |
-| **Evolution** | meta-harness | Generate new strategies from failures | Cycles |
+| **Evolution** | meta-harness | Generate new strategies from failure patterns | Cycles |
 | **System** | self-evolve | Is the whole pipeline improving or plateauing? | Days |
-| **Identity** | VSM + Eight Keys | Are all 5 layers healthy? | Continuously |
-| **Foundation** | Nucleus | λ notation, statecharts, formal reasoning | Always |
-
-Each layer consumes the output of the layer below. AutoTTS decisions feed AutoGo gates. AutoGo champions feed meta-harness proposals. meta-harness strategies feed self-evolve objectives. VSM health checks all five. The Ouroboros turns.
+| **Identity** | VSM + Eight Keys | Are all five layers healthy? | Continuously |
 
 The frameworks aren't separate tools — they're the same tool at different zoom levels. **VSM** assigns _who_ does the work. **Ontology** classifies _what_ kind of work. **Eight Keys** measure _how well_ it was done. All map to the same five elements: Water → Wood → Fire → Earth → Metal → Water.
 
