@@ -447,7 +447,8 @@ a RunAgent task has finished successfully.")
 Returns nil if patterns list is empty or contains non-string elements.
 BEHAVIOR: Validates patterns is a proper list before processing."
   (when (and (proper-list-p patterns)
-             (cl-every #'stringp patterns))
+             (cl-every #'stringp patterns)
+             patterns)
     (mapconcat (lambda (p) (concat "\\(?:" p "\\)")) patterns "\\|")))
 
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
