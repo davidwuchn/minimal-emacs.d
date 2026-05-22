@@ -8,6 +8,8 @@ A fork of [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Bui
 
 ## The Principle
 
+**Ouroboros.** The snake eating its tail.
+
 ```
 λ engage(emacs).
   research(external) → compile(strategy) → route(ontology) → execute(experiment) → verify(outcome) → learn(pattern)
@@ -19,6 +21,20 @@ A fork of [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Bui
 This is not a code generator. It is a **self-improving formal system** — it researches techniques from external sources, structures them into behavioral specifications, executes them as experiments in isolated environments, and feeds outcomes back into its own evolution.
 
 Like the Northern Divine Art (北冥神功), it absorbs techniques from everywhere and converts them into its own capability. What worked in one codebase flows into the next. What failed becomes a guard rail. The art grows with its practitioner.
+
+Every subsystem is the same Ouroboros cycle, just at different scales:
+
+| Scale | System | Ouroboros Role | Horizon |
+|-------|--------|---------------|---------|
+| **Turn** | AutoTTS | Stop, continue, or branch research? | Seconds |
+| **Strategy** | AutoGo | Does this challenger beat the champion? | Experiments |
+| **Evolution** | meta-harness | Generate new strategies from failure patterns | Cycles |
+| **System** | self-evolve | Is the whole pipeline improving or plateauing? | Days |
+| **Identity** | VSM + Eight Keys | Are all five layers healthy? | Continuously |
+
+The frameworks aren't separate tools — they're the same tool at different zoom levels. **VSM** assigns _who_ does the work. **Ontology** classifies _what_ kind of work. **Eight Keys** measure _how well_ it was done. All map to the same five elements: Water → Wood → Fire → Earth → Metal → Water.
+
+Say "Ouroboros" and you mean: the full self-regulating cybernetic architecture.
 
 ---
 

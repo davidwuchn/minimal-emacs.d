@@ -1,0 +1,1 @@
+{"name":"convergence-adaptive-ordering","version":"1.0","hypothesis":"Reordering guidance by convergence state produces better final outcomes","axis":"C","components":["convergence-assessment","adaptive-reordering"]}
