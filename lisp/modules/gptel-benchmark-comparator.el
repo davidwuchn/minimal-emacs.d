@@ -89,10 +89,11 @@ Internal helper to centralize trend data extraction logic."
       (gptel-benchmark-summarize-results benchmark-data))))
 
 (defun gptel-benchmark-version-trend (name &optional versions)
-  "Show trend for NAME across VERSIONS."
+  "Show trend for NAME across VERSIONS.
+If VERSIONS is a proper list, use it directly; otherwise scan for all available versions."
   (gptel-benchmark--require-valid-name name)
   (let ((trend-data '())
-        (versions-to-process (if (proper-list-p versions)
+        (versions-to-process (if (and (listp versions) (not (null versions)))
                                  versions
                                (gptel-benchmark-get-all-versions name))))
     (dolist (version versions-to-process)
