@@ -1668,74 +1668,29 @@ Does not duplicate existing targets."
   targets)
 
 (defun gptel-auto-workflow--inject-queued-targets (targets)
-  "Inject targets queued by pi Synthesis and pair-probe research into TARGETS.
-Reads :cluster-queued and :research-probes from evolution-next-cycle-hints.
-pi Synthesis: interleaves semantic cluster targets at weighted intervals
-(research-probes at position 2, high-confidence clusters every 3rd slot,
-medium-confidence clusters every 5th slot) instead of blind append.
+  "Inject targets queued by π Synthesis and pair-probe research into TARGETS list.
+Reads :cluster-queued and :research-probes from evolution-next-cycle-hints,
+extracts target names, and appends unique entries not already in TARGETS.
 Returns augmented target list without modifying the hints."
   (let* ((hints (and (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
                      gptel-auto-workflow--evolution-next-cycle-hints))
          (cluster-queued (when hints (plist-get hints :cluster-queued)))
          (research-probes (when hints (plist-get hints :research-probes)))
          (result (copy-sequence targets))
-         (seen (make-hash-table :test 'equal))
-         (high-conf nil)
-         (medium-conf nil)
-         (probes nil))
+         (seen (make-hash-table :test 'equal)))
     (dolist (item targets) (puthash item item seen))
-    ;; Classify queued entries by priority
-    (dolist (entry cluster-queued)
-      (when (plist-get entry :target)
-        (let ((tgt (plist-get entry :target))
-              (score (or (plist-get entry :score) 0.5)))
-          (unless (gethash tgt seen)
-            (puthash tgt t seen)
-            (if (>= score 0.75)
-                (push tgt high-conf)
-              (push tgt medium-conf))))))
-    (setq high-conf (nreverse high-conf)
-          medium-conf (nreverse medium-conf))
-    (dolist (entry research-probes)
+    (dolist (entry (append cluster-queued research-probes))
       (when (plist-get entry :target)
         (let ((tgt (plist-get entry :target)))
           (unless (gethash tgt seen)
             (puthash tgt t seen)
-            (push tgt probes)))))
-    (setq probes (nreverse probes))
-    ;; Interleave: build new list with weighted placement
-    (let ((interleaved nil)
-          (hi-idx 0) (med-idx 0) (probe-idx 0))
-      (dotimes (i (length result))
-        (push (nth i result) interleaved)
-        ;; Research probes every 2nd position (highest priority)
-        (when (and (= 1 (mod i 2)) (< probe-idx (length probes)))
-          (push (nth probe-idx probes) interleaved)
-          (setq probe-idx (1+ probe-idx)))
-        ;; High-confidence clusters every 3rd position
-        (when (and (= 2 (mod i 3)) (< hi-idx (length high-conf)))
-          (push (nth hi-idx high-conf) interleaved)
-          (setq hi-idx (1+ hi-idx)))
-        ;; Medium-confidence clusters every 5th position
-        (when (and (= 4 (mod i 5)) (< med-idx (length medium-conf)))
-          (push (nth med-idx medium-conf) interleaved)
-          (setq med-idx (1+ med-idx))))
-      ;; Append any remaining unplaced entries
-      (while (< probe-idx (length probes))
-        (push (nth probe-idx probes) interleaved)
-        (setq probe-idx (1+ probe-idx)))
-      (while (< hi-idx (length high-conf))
-        (push (nth hi-idx high-conf) interleaved)
-        (setq hi-idx (1+ hi-idx)))
-      (while (< med-idx (length medium-conf))
-        (push (nth med-idx medium-conf) interleaved)
-        (setq med-idx (1+ med-idx)))
-      (setq result (nreverse interleaved)))
+            (push tgt result)
+            (message "[inject] Queued target from %s: %s"
+                     (or (plist-get entry :source) (plist-get entry :reason) "hints") tgt)))))
+    (setq result (nreverse result))
     (when (> (length result) (length targets))
-      (message "[inject] Interleaved %d queued targets (probes=%d hi=%d med=%d) -> %d total"
-               (- (length result) (length targets))
-               (length probes) (length high-conf) (length medium-conf)
-               (length result)))
+      (message "[inject] Injected %d queued targets → %d total"
+               (- (length result) (length targets)) (length result)))
     result))
 
 (defun gptel-auto-workflow-select-targets (callback)
