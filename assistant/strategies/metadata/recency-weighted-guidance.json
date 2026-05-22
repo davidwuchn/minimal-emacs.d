@@ -1,0 +1,1 @@
+{"name":"recency-weighted-guidance","version":"1.0","hypothesis":"Weighting historical recommendations by recency and score delta focuses the AI on recently validated improvements rather than treating all past experiments equally.","axis":"D","components":["variable-computation","historical-filtering","weighting-scheme"]}
