@@ -220,6 +220,8 @@ variable names are not mistaken for undefined function calls."
 Only added diff lines are inspected to avoid rejecting pre-existing split-module
 forward references.  FORMS are the parsed top-level forms from the full file and
 are used to recognize local definitions and `declare-function' declarations."
+  (unless (proper-list-p forms)
+    (error "ASSUMPTION VIOLATION: forms must be a proper list, got: %S" forms))
   (let* ((local-defs (gptel-auto-experiment--defined-function-symbols forms))
          (actual-calls (gptel-auto-experiment--call-symbols-in-forms forms))
          (calls nil))
