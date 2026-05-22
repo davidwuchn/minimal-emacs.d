@@ -621,6 +621,25 @@ Calls controller, checks for doom loop, records history, returns final decision.
 
 ;; ─── End Controller Doom Loop Detection ───
 
+(defun gptel-auto-workflow--category-stop-threshold (text base-threshold)
+  "Adjust STOP threshold based on research content category.
+τ Wisdom: different categories converge at different rates.
+:text-programming converges faster (lower threshold = fewer turns needed).
+:tool-calls and :agentic need more turns (higher threshold)."
+  (let ((cat (cond
+              ((string-match-p "code\\|function\\|elisp\\|syntax\\|macro\\|program\\|defun" (or text ""))
+               :programming)
+              ((string-match-p "tool\\|sandbox\\|permit\\|security\\|guard\\|forbid" (or text ""))
+               :tool-calls)
+              ((string-match-p "agent\\|fsm\\|state\\|coordinat\\|delegat\\|subagent" (or text ""))
+               :agentic)
+              (t :natural-language))))
+    (cl-case cat
+      (:programming (- base-threshold 0.10))   ; converges fast, stop sooner
+      (:tool-calls   (+ base-threshold 0.10))   ; needs more turns for safety
+      (:agentic      (+ base-threshold 0.05))   ; coordination needs more turns
+      (t             base-threshold))))           ; natural-language: default
+
 (defun gptel-auto-workflow--controller-decide-research-flow (controller-config output-length &optional output-text)
   "AutoTTS controller with EMA momentum gate.
 Decides: stop, continue, branch, or cut.
@@ -636,10 +655,12 @@ Uses EMA trend analysis for momentum-aware stopping."
          ;; EMA state
          (ema-conf gptel-auto-workflow--research-ema-conf)
          (ema-delta (gptel-auto-workflow--research-ema-delta))
-         ;; Thresholds from beta schedule
-         (stop-threshold (or (plist-get controller-config :stop-threshold)
-                             (plist-get controller-config :min-confidence-stop) 0.65))
-         (branch-threshold (or (plist-get controller-config :branch-threshold) 0.3))
+          ;; Thresholds from beta schedule
+          (stop-threshold (or (plist-get controller-config :stop-threshold)
+                              (plist-get controller-config :min-confidence-stop) 0.65))
+          ;; τ Wisdom: per-category convergence rates
+          (stop-threshold (gptel-auto-workflow--category-stop-threshold text stop-threshold))
+          (branch-threshold (or (plist-get controller-config :branch-threshold) 0.3))
          (delta-slack (or (plist-get controller-config :delta-slack) 0.04))
          (trend-threshold (or (plist-get controller-config :trend-threshold) 0.04))
          (warm-up (or (plist-get controller-config :warm-up) 2))
