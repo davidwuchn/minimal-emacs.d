@@ -35,7 +35,7 @@
                 (defalias 'gptel-auto-workflow-run-research 'slr-run-research)))
           (error
            (message "[init-daemon] Deferred init-ai loading error: %s"
-                    (error-message-string err))))))
+                    (error-message-string err)))))))
   (require 'init-ai))
 
 ;; Backup and auto-save settings are configured in init-files.el
