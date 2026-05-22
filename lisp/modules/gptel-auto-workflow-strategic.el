@@ -1679,7 +1679,6 @@ Returns augmented target list without modifying the hints."
          (cluster-queued (when hints (plist-get hints :cluster-queued)))
          (research-probes (when hints (plist-get hints :research-probes)))
          (result (copy-sequence targets))
-<<<<<<< HEAD
          (seen (make-hash-table :test 'equal))
          (high-conf nil)
          (medium-conf nil)

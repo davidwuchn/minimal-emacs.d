@@ -272,166 +272,241 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default Distillation
+# Research Strategy: Template-Default (1986 Experiments)
 
-## Core Strategy Framework
+## Research Overview
 
-The **template-default** research strategy is a systematic code quality improvement methodology that applies consistent patterns across a codebase to improve **four cardinal virtues**: φ Vitality (error resilience), fractal Clarity (explicit assumptions), Safety (defensive programming), and Performance (algorithmic efficiency).
+The experiments span **80+ Emacs Lisp modules** across gptel-auto-workflow, gptel-tools-agent, gptel-benchmark, gptel-ext-core, gptel-sandbox, and related systems.
 
 ---
 
-## 1. Discovery Phase: Pattern Identification
+## Kept Hypotheses Categories
 
-### 1.1 File Triage
-Systematically scan each target file for quality issues, prioritizing files that:
-- Contain **duplicated logic** (copy-paste patterns)
-- Perform **implicit type assumptions** without validation
-- Handle **edge cases** without explicit guards
-- Use **deprecated language features** (e.g., `cl-flet` → `cl-letf`)
+### 1. Safety & Error Resilience (φ Vitality)
 
-### 1.2 Hypothesis Generation Template
-Generate hypotheses using the pattern:
+**Core pattern**: Add explicit validation before destructive operations.
+
 ```
-HYPOTHESIS: [Concrete change] will improve [Virtue] by [Mechanism]
-```
-Where **Virtue** ∈ {φ Vitality, fractal Clarity, Safety, Performance, Truth} and **Mechanism** describes *why* the change helps.
-
----
-
-## 2. Intervention Taxonomy
-
-### 2.1 φ Vitality Interventions (Error Resilience)
-
-| Pattern | Description | Example |
-|---------|-------------|---------|
-| **Nil guards** | Add `(when X ...)` or `(and X ...)` checks | `(when tool-calls (process-calls))` |
-| **Type validation** | Use `proper-list-p`, `listp`, `stringp`, `functionp` | `(when (proper-list-p forms) ...)` |
-| **Error handlers** | Wrap `condition-case` around risky operations | `(condition-case err (risky-op) ...)` |
-| **Fallback chains** | Provide defaults when lookups fail | `(or (lookup key) default-value)` |
-
-### 2.2 fractal Clarity Interventions (Explicit Assumptions)
-
-| Pattern | Description | Example |
-|---------|-------------|---------|
-| **Extract helpers** | Replace duplicated logic with named functions | `my/gptel--safe-extract` |
-| **Constants** | Name magic numbers/strings | `(defconst +error-prefix+ "Error: ")` |
-| **Guard clauses** | Early-exit for invalid inputs | `(unless (stringp input) (error ...))` |
-| **Documentation** | Ensure docstrings match implementation | "Handles nil safely" → actually returns "" |
-
-### 2.3 Safety Interventions (Defensive Programming)
-
-| Pattern | Description | Example |
-|---------|-------------|---------|
-| **Input validation** | Validate before destructive operations | `(hash-table-p table)` before `clrhash` |
-| **Proper-list checks** | Prevent dotted-pair issues | `proper-list-p` instead of `listp` |
-| **Bounds checking** | Prevent off-by-one errors | `(max 0 (- len limit))` |
-| **Atomic updates** | Use `setf` after `plist-put` | `(setq info (plist-put info :key val))` |
-
-### 2.4 Performance Interventions
-
-| Pattern | Description | Example |
-|---------|-------------|---------|
-| **Memoization** | Cache repeated computations | `(defvar cache (make-hash-table))` |
-| **Reduce complexity** | O(n²) → O(n) via hash tables | Replace `alist` with `hash-table` |
-| **Avoid redundant calls** | Compute once, reuse | `let* ((x (expensive-op)) ...) |
-| **Pre-compile** | Regex constants at load time | `(defconst +pattern+ (rx ...))` |
-
----
-
-## 3. Verification Protocol
-
-### 3.1 Syntax Validation
-```bash
-emacs --batch --eval "(byte-compile-file \"target.el\")"
+- proper-list-p validation prevents crashes on dotted/circular lists
+- nil guards prevent wrong-type-argument errors
+- stringp validation ensures string operations receive strings
+- hash-table-p validation before clrhash/puthash
+- condition-case wrapping for process/file operations
 ```
 
-### 3.2 Test Execution
-```bash
-emacs --batch -l ert -l test-file.el -l target.el \
-      --eval "(ert-run-tests-interactively t)"
+**Examples**:
+- `proper-list-p` validation in `gptel-sandbox--confirm-required-p`
+- `listp` guard for `(car result)` in git command outputs
+- `(stringp line)` guard before `string-match-p`
+
+---
+
+### 2. Fractal Clarity (Explicit Assumptions)
+
+**Core pattern**: Make implicit invariants explicit and testable.
+
+```
+- Replace listp with proper-list-p (dotted pairs fail silently)
+- Extract duplicate logic into named helpers
+- Centralize magic constants (error prefixes, score types)
+- Use when-let* instead of nested let+when pyramids
 ```
 
-### 3.3 Result Classification
-- **PASS**: All tests pass, byte-compile clean → Commit
-- **PARTIAL**: Some tests pass → Investigate failures
-- **FAIL**: Pre-existing infrastructure issues → Document and discard
+**Examples**:
+- `plistp` → `proper-list-p` in sanitize functions
+- Extracting `(mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)` pattern
+- `my/gptel--sanitize-type-symbol` helper for type conversion
 
 ---
 
-## 4. Prioritization Matrix
+### 3. Performance (Axis B)
 
-| Impact / Effort | Low Effort | High Effort |
-|-----------------|------------|-------------|
-| **High Impact** | Immediate fix | Schedule refactor |
-| **Low Impact** | Low-priority fix | Skip |
+**Core pattern**: Reduce algorithmic complexity and cache repeated computations.
 
-**High-impact, low-effort patterns**:
-- Nil guards (1-2 lines)
-- Type validation (1 line)
-- Removing dead code (deletion only)
-- Fixing obvious bugs (direct replacement)
+```
+- O(n²) → O(n) by eliminating nested loops
+- Cache regex compilation (defconst patterns)
+- Cache symbol lookups (fboundp, gptel-tool-name)
+- Replace dolist+push+nreverse with seq operations
+```
+
+**Examples**:
+- `cl-loop for ... being each cons cell` for cycle detection
+- Pre-compile regex patterns at load time
+- Cache context-window lookups in hash table
 
 ---
 
-## 5. Common Bug Signatures
+### 4. Bug Fixes (Truth/∃)
 
-| Bug Type | Detection |
+**Critical patterns identified**:
+
+| Bug Type | Example | Fix |
+|----------|---------|-----|
+| plist-put discard | `info` not assigned back | Add `setq info` |
+| prog1 t discard | Returns `t` instead of FSM | Return recursive result |
+| Variable shadowing | `fps` bound twice | Rename inner binding |
+| Double negation | `not` wrappers inverted | Remove `not` |
+| Off-by-one | `>=` vs `>` in partial match | Use `>` for "longest key" |
+| Circular reference | No seen-tracking in recursion | Add hash-table seen |
+
+---
+
+## Verification Gates
+
+1. **Byte-compile**: No warnings/errors
+2. **Tests**: All module-specific tests pass
+3. **Syntax**: Balanced parentheses, valid `cl-block`/`cl-return-from` pairs
+4. **Dependencies**: Require clauses present for `cl-lib`, `seq`
+
+---
+
+## Discarded Patterns
+
+| Rejected Pattern | Reason |
+|-----------------|--------|
+| `cl-flet` | Deprecated in Emacs 28 |
+| `plistp` for input validation | Doesn't reject dotted pairs |
+| `listp` for list validation | Accepts `(a . b)` |
+| `(or X nil)` redundancy | `X` already handles nil |
+| Unused variable bindings | Dead code confusion |
+
+---
+
+## Refactoring Templates
+
+### Nil-Safe Guard
+```elisp
+(defun module--safe-operation (x)
+  "Handle nil X safely."
+  (when (listp x)
+    (let ((first (car-safe x)))
+      ;; ... explicit handling
+      )))
+```
+
+### Extract Duplicate Logic
+```elisp
+(defconst module--error-prefix "Error: "
+  "Standard error message prefix.")
+
+(defun module--extract-error (msg)
+  "Extract error from MSG, handling plist and string formats."
+  (if (plistp msg)
+      (or (plist-get msg :error) "")
+    (string-trim msg)))
+```
+
+### Flatten Nested Conditionals
+```elisp
+;; Before: nested let+when
+(let ((x (compute)))
+  (when x
+    (let ((y (derive x)))
+      (when y
+        ...))))
+
+;; After: when-let*
+(when-let* ((x (compute))
+             (y (derive x)))
+  ...)
+```
+
+---
+
+## Quality Axes Summary
+
+| Axis | Score | Focus |
+|------|-------|-------|
+| φ Vitality | 40% (weakest) | Adaptive error handling |
+| fractal Clarity | 40% (weakest) | Explicit assumptions |
+| Safety (D) | 75% | Input validation |
+| Performance (B) | Variable | Algorithmic efficiency |
+
+**Target improve
 -- ... truncated ...
 ```
 
 ### Check Issues
 
-# Review: Template-Default Distillation Research Strategy
+# Review: Research Strategy Document
 
-## Summary
+## Summary Assessment
 
-A well-structured methodology with concrete patterns, but several inconsistencies and gaps that should be addressed.
-
----
-
-## Issues to Flag
-
-### 1. Cardinal Virtue Count Mismatch
-- **Intro**: "four cardinal virtues"
-- **Section 1.2**: Lists *five* (φ Vitality, fractal Clarity, Safety, Performance, **Truth**)
-- **Taxonomy**: Covers only four
-- **Fix**: Either drop "Truth" or expand taxonomy
-
-### 2. "Truth" is Undefined
-- Mentioned in hypothesis generation template
-- No intervention pattern exists for it
-- What does "Truth" mean here? API contract fidelity? Correctness? Logging?
-
-### 3. "fractal Clarity" is Non-Standard
-- "fractal" typically refers to self-similar mathematical structures
-- Unclear if this is metaphorical or intentional
-- Suggest: **"Explicit Clarity"** or **"Documentation Clarity"**
-
-### 4. Title/Content Mismatch
-- "Template-Default Distillation" appears nowhere in the document
-- Suggest a title that reflects "Code Quality Improvement Framework"
+The document has **good structure** but contains **significant inconsistencies** that need clarification before it can serve as reliable guidance.
 
 ---
 
-## Verification Gaps
+## Critical Issues
 
-| Gap | Impact |
-|-----|--------|
-| No guidance for "syntax OK but runtime failure" | Common scenario unaddressed |
-| No load-path validation in verification | Dependencies often cause failures |
-| "FAIL → Document and discard" | Too dismissive of learning opportunities |
+### 1. Internal Contradiction (Plistp)
+
+The document **contradicts itself** on `plistp`:
+
+| Location | Claim |
+|----------|-------|
+| Discarded Patterns | `plistp` "Doesn't reject dotted pairs" |
+| Refactoring Template | Uses `(plistp msg)` as a validation guard |
+
+If `plistp` is rejected as inadequate, the template example using it is also inadequate.
+
+**Fix needed**: Either use `proper-list-p` in the template, or clarify why `plistp` is acceptable here but not elsewhere.
 
 ---
 
-## Minor Improvements
+### 2. Undefined Metrics
 
-| Section | Issue | Suggestion |
-|---------|-------|------------|
-| Unbound variable fix | `boundp` check is often wrong fix | Add "ensure proper `defvar`
+The quality axes scores lack methodology:
+
+```
+φ Vitality: 40% (weakest)
+Safety (D): 75%
+Performance (B): Variable
+```
+
+- **How** were these measured?
+- **Who** determined the thresholds?
+- What does "Variable" mean for B?
+
+---
+
+### 3. Missing Axis Value
+
+The Quality Axes Summary table cell for the "Focus" column is empty:
+
+```
+| φ Vitality | 40% (weakest) | ??? |
+```
+
+---
+
+### 4. Cryptic Title
+
+"Template-Default (1986 Experiments)" conveys nothing:
+- What does "1986" refer to?
+- What is "Template-Default"?
+- Is this a code freeze date? A reference to Emacs 19.86?
+
+---
+
+## Minor Issues
+
+| Issue | Detail |
+|-------|--------|
+| Axis overlap | "φ Vitality" covers "Safety & Error Resilience" but "Safety (D)" is listed separately |
+| Greek symbols | φ, ∃ unexplained—presumably mathematical notation b
 
 ... (truncated)
