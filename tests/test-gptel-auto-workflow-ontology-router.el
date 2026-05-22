@@ -416,7 +416,7 @@ Guards against missing runtime dependencies (worktree-base-root)."
         (should (string= "a.el" (plist-get result :source)))))))
 
 (ert-deftest tdd/semantic-cluster/queue-cluster-experiments ()
-  "queue-cluster-experiments adds hints to next-cycle-hints."
+  "queue-cluster-experiments stores under :cluster-queued key in hints plist."
   (when (fboundp 'gptel-auto-workflow--queue-cluster-experiments)
     (let ((gptel-auto-workflow--evolution-next-cycle-hints nil))
       (cl-letf (((symbol-function 'gptel-auto-workflow--suggest-similar-with-strategy)
@@ -426,12 +426,13 @@ Guards against missing runtime dependencies (worktree-base-root)."
                          :source "a.el"
                          :scores '(0.88 0.82)))))
         (gptel-auto-workflow--queue-cluster-experiments "a.el")
-        (should (= 2 (length gptel-auto-workflow--evolution-next-cycle-hints)))
-        ;; dolist pushes to front, so order is reversed
-        (let ((first-hint (car gptel-auto-workflow--evolution-next-cycle-hints)))
-          (should (string= "c.el" (plist-get first-hint :target)))
-          (should (string= "weighted-failures" (plist-get first-hint :strategy)))
-          (should (string= "semantic-cluster" (plist-get first-hint :reason))))))))
+        (let ((queued (plist-get gptel-auto-workflow--evolution-next-cycle-hints :cluster-queued)))
+          (should queued)
+          (should (= 2 (length queued)))
+          (let ((first-hint (car queued)))
+            (should (string= "b.el" (plist-get first-hint :target)))
+            (should (string= "weighted-failures" (plist-get first-hint :strategy)))
+            (should (string= "semantic-cluster" (plist-get first-hint :reason)))))))))
 
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
