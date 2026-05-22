@@ -5293,9 +5293,9 @@ markdown table, and writes to mementum/knowledge/semantic-relationships.md.
                          "|---------------------|--------------|-------|\n")))
       (when edges
         (dolist (edge (seq-take edges 500))
-          (let ((source (car edge))
-                (target (cadr edge))
-                (score (cddr edge)))
+          (let ((source (plist-get edge :source))
+                (target (plist-get edge :target))
+                (score (plist-get edge :score)))
             (push (format "| %s | %s | %.3f |\n" source target score) lines)))
         (push "\n## Ontology Implications\n\n" lines)
         (push "- Files with high semantic similarity (>0.60) may benefit from similar fixes\n" lines)
