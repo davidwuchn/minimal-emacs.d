@@ -3540,12 +3540,11 @@ Returns plist with :trends (deduplicated issue patterns with counts),
                     (when (> severity 0.3) (cl-incf critical))
                     ;; Extract individual issue patterns for dedup
                     (goto-char (point-min))
-                    (let ((pos (point-min)))
+                    (let ((_pos (point-min)))
                       (while (re-search-forward "^[0-9]+\\.\\s-*\\*\\*\\([^*]+\\)\\*\\*" nil t)
                         (let ((pattern (match-string 1)))
                           (puthash pattern (1+ (or (gethash pattern pattern-counts) 0))
-                                   pattern-counts))
-                        (setq pos (point))))
+                                   pattern-counts))))
                     ;; Record per-strategy count for regression detection
                     (puthash name (cons issue-count severity) strategy-issues))))
               ;; Regression detection: compare with previous cycle
