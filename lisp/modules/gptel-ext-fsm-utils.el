@@ -267,7 +267,7 @@ Returns FSM struct or nil if not found."
                     (and (my/gptel--fsm-p fsm)
                          (matches-context-p fsm)
                           fsm)))
-                 (coerce (obj)
+                 (resolve-fsm (obj)
                    (cond
                     ((null obj) nil)
                     ((and (consp obj) (gethash obj seen)) nil)
@@ -276,8 +276,8 @@ Returns FSM struct or nil if not found."
                      (or (and (my/gptel--fsm-p obj)
                               (matches-context-p obj)
                               obj)
-                         (coerce (car obj))
-                         (coerce (cdr obj))))
+                         (resolve-fsm (car obj))
+                         (resolve-fsm (cdr obj))))
                     ((my/gptel--fsm-p obj)
                      (unless (gethash obj seen)
                        (puthash obj t seen)
@@ -287,7 +287,7 @@ Returns FSM struct or nil if not found."
                     ((symbolp obj)
                      (coerce-id (symbol-name obj)))
                     (t nil))))
-      (coerce object))))
+      (resolve-fsm object))))
 
 (defun my/gptel--coerce-fsm-with-context (object)
   "Return FSM with context-aware selection.
