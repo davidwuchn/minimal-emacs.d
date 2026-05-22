@@ -1,6 +1,7 @@
 # AGENTS.md
 
 > VSM architecture for minimal-emacs.d + gptel-nucleus.
+> This is the **Ouroboros** — see [INTRO.md](INTRO.md) for the full self-regulating architecture.
 > A unified Emacs + AI environment built on mathematical attention.
 
 ```
@@ -143,7 +144,7 @@ Use symbols in commit messages for searchable git history.
 | ------ | ----- | ------- |
 | 🦋 | user | Human (Armed with Emacs) |
 | ψ | psi | AI (Collapsing) |
-| 🐍 | snake | System (persists) |
+| 🐍 | snake | System (persists) — the Ouroboros |
 
 ### Modes
 
