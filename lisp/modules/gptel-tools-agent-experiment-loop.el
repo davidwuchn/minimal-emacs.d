@@ -114,6 +114,9 @@ Executor will be instructed to load relevant skill and regenerate.")
        (or (string-match-p
             "cl-return-from.*without.*cl-block\\|Dangerous pattern"
             error)
+           (string-match-p
+            "Unbalanced parentheses\\|End of file during parsing\\|Scan error\\|Invalid read syntax"
+            error)
            (and (stringp target)
                 (string-suffix-p ".el" target)
                 (string-match-p "\\`Syntax error in " error)))))

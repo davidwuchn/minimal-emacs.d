@@ -71,32 +71,44 @@ Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running ca
 (defvar my/gptel-prompt-marker "### "
   "Prompt marker inserted at end of a gptel buffer.")
 
-(defun my/gptel--prompt-marker-present-at-eob-p ()
-  "Return non-nil if the last non-blank line at EOB is a prompt marker."
+(defun my/gptel--prompt-marker-value ()
+  "Return the prompt marker string if valid, or nil."
   (when (and (boundp 'my/gptel-prompt-marker)
              (stringp my/gptel-prompt-marker)
              (not (string-empty-p my/gptel-prompt-marker)))
+    my/gptel-prompt-marker))
+
+(defun my/gptel--prompt-marker-regexp ()
+  "Return compiled regexp for prompt marker line, or nil if marker is invalid."
+  (when-let ((marker (my/gptel--prompt-marker-value)))
+    (concat "^" (regexp-quote marker))))
+
+(defun my/gptel--prompt-marker-present-at-eob-p ()
+  "Return non-nil if the last non-blank line at EOB is a prompt marker."
+  (when-let ((regexp (my/gptel--prompt-marker-regexp)))
     (save-excursion
       (goto-char (point-max))
       (skip-chars-backward " \t\n")
       (beginning-of-line)
-      (looking-at-p (concat "^" (regexp-quote my/gptel-prompt-marker))))))
+      (looking-at-p regexp))))
 
 (defun my/gptel--insert-prompt-marker-at-eob ()
-  "Insert a single prompt marker at end of buffer." 
-  (unless (my/gptel--prompt-marker-present-at-eob-p)
-    (goto-char (point-max))
-    ;; Keep exactly one marker line; no extra blank line.
-    (unless (bolp) (insert "\n"))
-    (insert my/gptel-prompt-marker)))
+  "Insert a single prompt marker at end of buffer."
+  (when-let ((marker (my/gptel--prompt-marker-value)))
+    (unless (my/gptel--prompt-marker-present-at-eob-p)
+      (goto-char (point-max))
+      ;; Keep exactly one marker line; no extra blank line.
+      (unless (bolp) (insert "\n"))
+      (insert marker))))
 
 (defun my/gptel--goto-prompt-marker-end ()
   "Move point to end of prompt marker at EOB if present."
-  (goto-char (point-max))
-  (skip-chars-backward " \t\n")
-  (beginning-of-line)
-  (when (looking-at-p (concat "^" (regexp-quote my/gptel-prompt-marker)))
-    (goto-char (match-end 0))))
+  (when-let ((regexp (my/gptel--prompt-marker-regexp)))
+    (goto-char (point-max))
+    (skip-chars-backward " \t\n")
+    (beginning-of-line)
+    (when (looking-at-p regexp)
+      (goto-char (match-end 0)))))
 
 
 
@@ -120,8 +132,10 @@ request is active."
     (setq-local my/gptel--abort-generation (1+ my/gptel--abort-generation)))
 
   ;; Abort main gptel request
-  (when (fboundp 'gptel-abort)
-    (ignore-errors (gptel-abort (current-buffer))))
+  (when-let ((buf (current-buffer)))
+    (when (and (fboundp 'gptel-abort)
+               (buffer-live-p buf))
+      (ignore-errors (gptel-abort buf))))
   ;; Kill all gptel-related sub-processes.
   ;; Prefer the explicit tag `my/gptel-managed`, but also catch gptel's own curl
   ;; process (buffer is typically named " *gptel-curl*" with a leading space).
@@ -131,13 +145,16 @@ request is active."
       (when (and (process-live-p proc)
                  (or (process-get proc 'my/gptel-managed)
                      ;; gptel's internal curl process is named "gptel-curl".
-                     (string= (process-name proc) "gptel-curl")
+                     (let ((proc-name (process-name proc)))
+                       (and proc-name
+                            (or (string= proc-name "gptel-curl")
+                                ;; Generic catch: gptel tool processes we create are named gptel-...
+                                (string-prefix-p "gptel-" proc-name))))
                      ;; Also match by process buffer name.
-                     (and (process-buffer proc)
-                          (buffer-name (process-buffer proc))
-                          (string-match-p "gptel-curl" (buffer-name (process-buffer proc))))
-                     ;; Generic catch: gptel tool processes we create are named gptel-...
-                     (string-prefix-p "gptel-" (process-name proc))))
+                     (let ((proc-buf (process-buffer proc)))
+                       (and proc-buf
+                            (stringp (buffer-name proc-buf))
+                            (string-match-p "gptel-curl" (buffer-name proc-buf))))))
         (cl-incf killed)
         (message "Killing gptel/subagent process: %s" (process-name proc))
         ;; Prevent sentinels/filters from writing into buffers after abort.
@@ -166,20 +183,21 @@ request is active."
 ;; --- Prompt Marker After Response ---
 ;; When gptel-agent finishes, add ### marker and position cursor for next prompt
 
+(defun my/gptel--has-fsm-error-p ()
+  "Return non-nil if current buffer's FSM has an error.
+Returns nil if no FSM, not a plist, or no error."
+  (let* ((fsm-val (buffer-local-value 'gptel--fsm-last (current-buffer)))
+         (fsm (and fsm-val (my/gptel--coerce-fsm fsm-val)))
+         (info (and fsm (gptel-fsm-info fsm))))
+    (and (listp info) (plist-get info :error))))
+
 (defun my/gptel-add-prompt-marker (_start end)
   "Add a prompt marker after the response and move point there.
 
 START and END are the response region positions passed by
 `gptel-post-response-functions'."
   (when (and gptel-mode
-             ;; In some buffers/sentinels, `gptel--fsm' may not be bound.
-             ;; Never error from a post-response hook.
-             (not (condition-case nil
-                       (let* ((fsm (my/gptel--coerce-fsm
-                                    (buffer-local-value 'gptel--fsm-last (current-buffer))))
-                              (info (and fsm (gptel-fsm-info fsm))))
-                        (plist-get info :error))
-                    (ignore))))
+             (not (my/gptel--has-fsm-error-p)))
     (save-excursion
       (goto-char end)
       ;; Only add marker if not already present at EOB

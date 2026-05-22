@@ -19,7 +19,7 @@
                     (cl-incf (cadr entry))
                     (when (eq outcome 'failure)
                       (cl-incf (caddr entry))))
-                (push (list pattern 1 (if (eq outcome 'failure) 1 0)) pattern-stats)))))))
+                (push (list pattern 1 (if (eq outcome 'failure) 1 0)) pattern-stats))))))))
     (mapcar (lambda (e)
               (let ((freq (cadr e)) (fails (caddr e)))
                 (list (car e) (/ fails (max freq 1)))))
