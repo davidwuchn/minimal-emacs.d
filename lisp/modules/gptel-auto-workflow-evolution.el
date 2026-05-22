@@ -2687,6 +2687,21 @@ DEPRECATED: use --category-champions for per-category gating.")
   (setq gptel-auto-workflow--category-strike-counts
         (assq-delete-all category gptel-auto-workflow--category-strike-counts)))
 
+(defun gptel-auto-workflow--apply-category-vigilance (target decision)
+  "Apply ∀ Vigilance strikes based on TARGET and DECISION.
+DECISION is 'kept, 'discarded, or 'validation-failed.
+Records strike on failure, resets on success."
+  (when (fboundp 'gptel-auto-workflow--categorize-experiment-target)
+    (let ((category (gptel-auto-workflow--categorize-experiment-target target)))
+      (cond
+       ((eq decision 'kept)
+        (gptel-auto-workflow--reset-category-strikes category)
+        (message "[vigilance] ✓ Category %s strike reset (experiment kept)" category))
+       ((memq decision '(discarded validation-failed))
+        (gptel-auto-workflow--record-category-strike category)
+        (message "[vigilance] ⚠ Category %s strike recorded (%s)"
+                 category decision))))))
+
 ;; ─── φ Vitality: Strategy Novelty Detection ───
 
 (defun gptel-auto-workflow--strategy-novelty-score (new-code existing-strategies)
@@ -4566,10 +4581,9 @@ Checks: required frontmatter, duplicate titles, empty sections."
         (push (format "Missing fn for required stage '%s'" (plist-get s :label)) warnings)))
     (gptel-auto-workflow--validation-result (null errors) errors warnings)))
 
-(defun gptel-auto-workflow--evolution-optimize-backend-order ()
-
-
 ;; ─── Backend Performance Optimization ───
+
+(defun gptel-auto-workflow--evolution-optimize-backend-order ()
   "Auto-reorder the fallback chain based on backend performance data.
 Moves better-performing backends to the front of the fallback chain."
   (let* ((stats (gptel-auto-workflow--evolution-backend-stats))

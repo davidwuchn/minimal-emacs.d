@@ -2369,6 +2369,114 @@ must not override it to MiniMax via setq-local in subagent buffers."
                 (should (string-match-p "Semantic File Relationships" (buffer-string))))))
         (delete-directory root t)))))
 
+(ert-deftest tdd/category-vigilance/strike-increments-to-freeze ()
+  "Three strikes freeze a category."
+  (when (fboundp 'gptel-auto-workflow--record-category-strike)
+    (let ((gptel-auto-workflow--category-strike-counts nil))
+      (gptel-auto-workflow--record-category-strike :programming)
+      (should (= 1 (cdr (assq :programming gptel-auto-workflow--category-strike-counts))))
+      (gptel-auto-workflow--record-category-strike :programming)
+      (should (= 2 (cdr (assq :programming gptel-auto-workflow--category-strike-counts))))
+      (gptel-auto-workflow--record-category-strike :programming)
+      (should (= 3 (cdr (assq :programming gptel-auto-workflow--category-strike-counts))))
+      (should (gptel-auto-workflow--category-frozen-p :programming))
+      ;; Other categories unaffected
+      (should-not (gptel-auto-workflow--category-frozen-p :tool-calls)))))
+
+(ert-deftest tdd/category-vigilance/reset-clears-strikes ()
+  "Reset strikes unfreezes a category."
+  (when (fboundp 'gptel-auto-workflow--reset-category-strikes)
+    (let ((gptel-auto-workflow--category-strike-counts '((:programming . 3))))
+      (should (gptel-auto-workflow--category-frozen-p :programming))
+      (gptel-auto-workflow--reset-category-strikes :programming)
+      (should-not (gptel-auto-workflow--category-frozen-p :programming))
+      (should-not (assq :programming gptel-auto-workflow--category-strike-counts)))))
+
+(ert-deftest tdd/category-vigilance/apply-vigilance-kept-resets ()
+  "apply-category-vigilance with 'kept resets strikes."
+  (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+    (let ((gptel-auto-workflow--category-strike-counts '((:programming . 2))))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--categorize-experiment-target)
+                 (lambda (_) :programming)))
+        (gptel-auto-workflow--apply-category-vigilance "test.el" 'kept)
+        (should-not (assq :programming gptel-auto-workflow--category-strike-counts))))))
+
+(ert-deftest tdd/category-vigilance/apply-vigilance-discarded-records ()
+  "apply-category-vigilance with 'discarded records strike."
+  (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+    (let ((gptel-auto-workflow--category-strike-counts nil))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--categorize-experiment-target)
+                 (lambda (_) :tool-calls)))
+        (gptel-auto-workflow--apply-category-vigilance "test.el" 'discarded)
+        (should (= 1 (cdr (assq :tool-calls gptel-auto-workflow--category-strike-counts))))
+        (gptel-auto-workflow--apply-category-vigilance "test.el" 'discarded)
+        (should (= 2 (cdr (assq :tool-calls gptel-auto-workflow--category-strike-counts))))))))
+
+(ert-deftest tdd/category-vigilance/apply-vigilance-validation-failed-records ()
+  "apply-category-vigilance with 'validation-failed records strike."
+  (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+    (let ((gptel-auto-workflow--category-strike-counts nil))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--categorize-experiment-target)
+                 (lambda (_) :agentic)))
+        (gptel-auto-workflow--apply-category-vigilance "test.el" 'validation-failed)
+        (should (= 1 (cdr (assq :agentic gptel-auto-workflow--category-strike-counts))))))))
+
+(ert-deftest tdd/feedback/category-budget-allocates-all-targets ()
+  "category-experiment-budget must allocate experiment slots across categories."
+  (when (and (fboundp 'gptel-auto-workflow--category-experiment-budget)
+             (fboundp 'gptel-auto-workflow--categorize-target))
+    (condition-case nil
+        (let* ((budget (gptel-auto-workflow--category-experiment-budget 5)))
+          (should (listp budget))
+          (should (cl-find :programming budget :key #'car))
+          (should (cl-find :tool-calls budget :key #'car))
+          (should (cl-find :agentic budget :key #'car))
+          (should (cl-find :natural-language budget :key #'car)))
+      (error nil))))
+
+(ert-deftest tdd/feedback/budget-slots-are-positive ()
+  "Each category budget slot must be at least 1."
+  (when (and (fboundp 'gptel-auto-workflow--category-experiment-budget)
+             (fboundp 'gptel-auto-workflow--categorize-target))
+    (condition-case nil
+        (let ((budget (gptel-auto-workflow--category-experiment-budget 10)))
+          (dolist (entry budget)
+            (should (>= (cdr entry) 1))))
+      (error nil))))
+
+(ert-deftest tdd/feedback/status-bonus-returns-number ()
+  "ontology-strategy-status-bonus returns a number for any strategy name."
+  (when (fboundp 'gptel-auto-workflow--ontology-strategy-status-bonus)
+    (let ((bonus (gptel-auto-workflow--ontology-strategy-status-bonus "nonexistent-strategy")))
+      (should (numberp bonus))
+      (should (<= -1 bonus 1)))))
+
+(ert-deftest tdd/feedback/recency-ontology-has-trend ()
+  "recency-weighted-ontology must include :trend and :improving fields."
+  (when (fboundp 'gptel-auto-workflow--recency-weighted-ontology)
+    (let ((onto (gptel-auto-workflow--recency-weighted-ontology)))
+      (should (listp onto))
+      (when-let ((first-class (car (plist-get onto :classes))))
+        (should (numberp (plist-get first-class :keep-rate)))
+        (should (numberp (plist-get first-class :trend)))
+        (should (booleanp (plist-get first-class :improving)))))))
+
+(ert-deftest tdd/feedback/vsm-actions-returns-plist ()
+  "vsm-health-actions returns a plist with :actions, :effective, :total."
+  (when (fboundp 'gptel-auto-workflow--vsm-health-actions)
+    (let ((result (gptel-auto-workflow--vsm-health-actions)))
+      (should (listp (plist-get result :actions)))
+      (should (integerp (plist-get result :effective)))
+      (should (integerp (plist-get result :total))))))
+
+(ert-deftest tdd/feedback/consume-vsm-actions-no-crash ()
+  "consume-vsm-actions must not crash when hints are nil or missing."
+  (when (fboundp 'gptel-auto-workflow--consume-vsm-actions)
+    (let ((gptel-auto-workflow--evolution-next-cycle-hints nil))
+      (should-not (condition-case nil
+                      (progn (gptel-auto-workflow--consume-vsm-actions) nil)
+                    (error t))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

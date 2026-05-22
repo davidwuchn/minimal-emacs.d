@@ -1,0 +1,1 @@
+{"name":"failure-frontloading","version":"1.0","hypothesis":"Moving failure-based guidance to the front of the prompt improves error avoidance","axis":"C","components":["section-reordering","failure-patterns"]}
