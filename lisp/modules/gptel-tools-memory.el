@@ -105,24 +105,14 @@ Returns success message or error."
 (defun gptel-tools-memory--collect-dir (dir type-label root &optional topic)
   "Collect memory entries from DIR with TYPE-LABEL.
 Each entry is formatted as \"name (type-label)\".
-If TOPIC is non-nil, filter by topic match."
-  (when (null dir)
-    (error "DIR must not be nil"))
-  (unless (stringp dir)
-    (error "DIR must be a string, got: %S" dir))
-  (unless (file-directory-p dir)
-    (error "DIR must be an existing directory: %S" dir))
-  (when (null type-label)
-    (error "TYPE-LABEL must not be nil"))
-  (unless (stringp type-label)
-    (error "TYPE-LABEL must be a string, got: %S" type-label))
-  (when (and topic (not (stringp topic)))
-    (error "TOPIC must be a string if provided, got: %S" topic))
-  (cl-loop for f in (directory-files-recursively dir "\\.md$")
-           for base = (file-name-sans-extension (file-name-nondirectory f))
-           when (or (not topic)
-                    (string-match-p (regexp-quote topic) base))
-           collect (format "%s (%s)" base type-label)))
+If TOPIC is a non-empty string, filter by topic match."
+  (when (and (stringp dir) (file-directory-p dir))
+    (cl-loop for f in (directory-files-recursively dir "\\.md$")
+             for base = (file-name-sans-extension (file-name-nondirectory f))
+             when (or (null topic)
+                      (string= topic "")
+                      (string-match-p (regexp-quote topic) base))
+             collect (format "%s (%s)" base type-label))))
 
 (defun gptel-tools-memory--list (&optional topic)
   "List available memories, optionally filtered by TOPIC."
