@@ -113,7 +113,12 @@ Returns success message or error."
 (defun gptel-tools-memory--collect-dir (dir type-label root &optional topic)
   "Collect memory entries from DIR with TYPE-LABEL.
 Each entry is formatted as \"name (type-label)\".
-If TOPIC is a non-empty string, filter by topic match."
+If TOPIC is a non-empty string, filter by topic match.
+SIGNALS an error if TOPIC is a non-string, non-nil value."
+  (when (and (not (null topic))
+             (not (stringp topic))
+             (not (string= topic "")))
+    (error "Topic must be a string, nil, or empty string, got: %S" topic))
   (when (and (stringp dir) (file-directory-p dir))
     (cl-loop for f in (directory-files-recursively dir "\\.md$")
              for base = (file-name-sans-extension (file-name-nondirectory f))
