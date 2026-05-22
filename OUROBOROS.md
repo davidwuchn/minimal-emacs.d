@@ -15,7 +15,7 @@ Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gp
   research(external) ⇄ execute(experiment) ⇄ verify(outcome) ⇄ learn(pattern)
   | ∀change: isolated(worktree) ∧ verified(tests) ∧ reviewed(AI)
   | self_referential: the system audits itself using its own ontologies
-  | route(ontology) ≡ categorize(target) → select(backend) by historical keep-rate
+  | route(ontology) ≡ categorize(target) → rank(backends) by Δ(keep-rate − baseline) ⊗ trend ⊗ confidence
 ```
 
 This is not a code generator. It is a **self-consuming formal system** — it researches techniques from external sources, distills them into specifications, tests them as isolated experiments, and feeds outcomes back into what it researches next. The head eats knowledge; the tail produces results; the body digests both.
@@ -112,7 +112,7 @@ Every experiment is an isolated git worktree. `main` is never touched directly. 
 
 | Gate | What it checks | What happens on failure |
 |------|---------------|------------------------|
-| **Category routing** | Which backend has the best keep-rate for this target type? | Routes to proven provider |
+| **Category routing** | Best backend for this target RIGHT NOW? (Δ-from-baseline + trend + confidence) | Routes to strongest current performer; unhealthy backends dropped |
 | **Test execution** | Did 1844 tests pass within 1800s? | Experiment discarded, pattern learned |
 | **AI grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **AI review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
@@ -156,7 +156,8 @@ Every cycle runs through six compilers — each examining the system's own behav
 | **Nucleus Lambda** | Hypothesis → λ expression | "What principle does this encode?" |
 | **Allium v3** | Research findings → behavioral spec | "Are these internally coherent?" |
 | **OWL/SHACL** | Ontology dict → Turtle/SHACL | "What is the formal shape of what we've learned?" |
-| **Ontology Router** | Target file → category → backend ranking | "Which backend has the best keep-rate for this target type?" |
+| **Ontology Router** | Target file → category → backend ranking | "Which backend is best RIGHT NOW — not just historically?" |
+| | Scoring: 40% delta-from-peers + 30% keep-rate + 20% trend + 10% confidence | Penalty for unhealthy backends (3+ recent errors) |
 | **π Synthesis** | Kept target → semantic cluster → strategy inheritance | "Which similar files should inherit this winning strategy?" |
 
 Results feed back into the next cycle's analyzer, strategy evolver, and π Synthesis cluster queue. The compiler output is not a log — it is **input to the next iteration**.
@@ -235,7 +236,7 @@ The snake's own immune system:
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
 | 1844 tests + 1800s timeout | Broken code caught before staging |
-| Ontology-aware provider routing | Reorders 5-provider fallback chain by historical keep-rate per target category |
+| Ontology-aware provider routing | Ranks backends by delta-from-baseline + keep-rate + trend + confidence; penalizes unhealthy providers |
 | Force-push protection | Stashes dirty artifacts, merges origin/main, then pushes; never force-pushes |
 | Server socket self-healing | 30s timer recreates lost daemon socket; no SIGKILL restart needed |
 | Conflict marker detection | No `<<<<<<<` in committed code |
