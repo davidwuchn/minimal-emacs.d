@@ -15,6 +15,11 @@
 (require 'seq)
 (require 'subr-x)
 
+;; Soft require: research-integration may not exist on all deployments
+(condition-case nil (require 'gptel-auto-workflow-research-integration nil t) (ignore))
+;; Soft require: research-benchmark provides load-research-traces
+(condition-case nil (require 'gptel-auto-workflow-research-benchmark nil t) (ignore))
+
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
@@ -1936,23 +1941,23 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
               (message "[cq]   UNANSWERABLE: %s" (car r))))))
     (ignore))
   ;; Competitive gating — champion league (AutoGo pattern)
-  (condition-case nil
+  (condition-case err
       (let ((gated (gptel-auto-workflow--gate-strategies)))
         (when gated
           (message "[gate] Strategy gating results (%d evaluated):" (length gated))
           (dolist (g (seq-take gated 5))
             (message "[gate]   %s: %s" (car g) (cdr g)))))
-    (ignore))
+    (error (message "[gate] ERROR: gating failed — %s" (error-message-string err))))
   ;; Cross-subsystem feedback: champion changes → controller budget,
   ;; category experiment allocation, VSM health → actionable repair
-  (condition-case nil
+  (condition-case err
       (progn
         (gptel-auto-workflow--apply-cross-subsystem-feedback)
       ;; Research champion league: benchmark proposed strategies against incumbents
       (when (fboundp 'gptel-auto-workflow--run-research-champion-league)
         (run-with-idle-timer 30 nil #'gptel-auto-workflow--run-research-champion-league))
         (gptel-auto-workflow--consume-vsm-actions))
-    (error (ignore)))
+    (error (message "[feedback] ERROR: cross-subsystem failed — %s" (error-message-string err))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
