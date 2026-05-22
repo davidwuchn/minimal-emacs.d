@@ -1725,12 +1725,29 @@ with kept experiments, and updates the researcher prompt accordingly."
                 (let ((feedback-file (expand-file-name "var/tmp/researcher-feedback.sexp"
                                                        (gptel-auto-workflow--worktree-base-root))))
                   (with-temp-file feedback-file
-                    (prin1 (list :best-quality best-quality
-                                 :best-rate best-rate
-                                 :stats stats
-                                 :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ"))
-                           (current-buffer)))))))
-        (message "[evolution] No research-enabled experiments to analyze yet")))))
+                     (prin1 (list :best-quality best-quality
+                                  :best-rate best-rate
+                                  :stats stats
+                                  :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ"))
+                            (current-buffer))))
+               ;; Self-evolve: correlate research sources to experiment outcomes
+               (when (fboundp 'gptel-auto-workflow--correlate-research-to-outcomes)
+                 (let ((source-stats (gptel-auto-workflow--correlate-research-to-outcomes)))
+                   (when source-stats
+                     (message "[evolution] Research source effectiveness (top 3):")
+                     (dolist (s (cl-subseq source-stats 0 (min 3 (length source-stats))))
+                       (message "  %s: %.1f%% kept" (car s) (* 100 (cdr s))))
+                     ;; Update research strategy champions (AutoGo)
+                     (when (fboundp 'gptel-auto-workflow--update-research-strategy-champion)
+                       (dolist (s source-stats)
+                         (gptel-auto-workflow--update-research-strategy-champion
+                          "agentic" (car s) (cdr s))))))
+                 ;; Ontology-driven research targeting
+                 (when (fboundp 'gptel-auto-workflow--top-research-priority)
+                   (let ((priority (gptel-auto-workflow--top-research-priority)))
+                     (when priority
+                       (message "[evolution] Ontology research priority: %s" priority))))))))
+         (message "[evolution] No research-enabled experiments to analyze yet")))))
 
 (defun gptel-auto-workflow--evolve-all-skills ()
   "Run self-evolution on ALL skills via Python scripts.

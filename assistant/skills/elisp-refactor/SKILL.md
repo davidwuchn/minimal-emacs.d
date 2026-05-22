@@ -155,4 +155,3 @@ that likely represent configurable policies.")
 - **Performance-critical paths**: Don't add indirection in inner loops (defer to benchmark)
 - **Stable external APIs**: Don't change interfaces that other packages depend on
 - **Already well-structured**: If mechanism and policy are already separated, don't over-engineer
-

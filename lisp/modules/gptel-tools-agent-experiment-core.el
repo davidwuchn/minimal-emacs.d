@@ -299,23 +299,31 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                               (if (plist-get (cdr pair) :valid) "yes" "no")))
                                                                     candidate-validation
                                                                     "\n")
-                                                                    "\n## INSTRUCTIONS FOR RETRY\n"
-                                                                    "The previous implementation failed validation. "
-                                                                    "If you have remaining valid candidates, implement one of those instead. "
-                                                                    "Otherwise, fix the validation error while keeping the same approach.\n\n"
-                                                                    "## CRITICAL: AVOID INSPECTION-THRASH\n"
-                                                                    "You have LIMITED read-only inspections before the system aborts your turn.\n"
-                                                                    "- Use at most 2 read-only tool calls to locate the issue\n"
-                                                                    "- Your NEXT call MUST be a write (Edit, ApplyPatch) to fix the error\n"
-                                                                    "- Do NOT re-read the entire file or do broad analysis\n"
-                                                                    "- Fix the specific validation error immediately\n")
-                                                          (concat executor-prompt
-                                                                  "\n\n## CRITICAL: AVOID INSPECTION-THRASH\n"
-                                                                  "You have LIMITED read-only inspections before the system aborts your turn.\n"
-                                                                  "- Use at most 2 read-only tool calls to locate the issue\n"
-                                                                  "- Your NEXT call MUST be a write (Edit, ApplyPatch) to fix the error\n"
-                                                                  "- Do NOT re-read the entire file or do broad analysis\n"
-                                                                  "- Fix the specific validation error immediately\n"))))
+                                                                     "\n## INSTRUCTIONS FOR RETRY\n"
+                                                                     "The previous implementation failed validation. "
+                                                                     "If you have remaining valid candidates, implement one of those instead. "
+                                                                     "Otherwise, fix the validation error while keeping the same approach.\n\n"
+                                                                     "## CRITICAL: AVOID INSPECTION-THRASH\n"
+                                                                     "You have LIMITED read-only inspections before the system aborts your turn.\n"
+                                                                     "- Use at most 2 read-only tool calls to locate the issue\n"
+                                                                     "- Your NEXT call MUST be a write (Edit, ApplyPatch) to fix the error\n"
+                                                                     "- Do NOT re-read the entire file or do broad analysis\n"
+                                                                     "- Fix the specific validation error immediately\n"
+                                                                     "\n## DANGEROUS PATTERNS TO AVOID\n"
+                                                                     "- NEVER use `cl-return-from` without a matching `cl-block` wrapper\n"
+                                                                     "- NEVER remove `cl-block` while keeping `cl-return-from` inside\n"
+                                                                     "- ALWAYS ensure `cl-return-from` targets a valid `cl-block` name\n")
+                                                           (concat executor-prompt
+                                                                   "\n\n## CRITICAL: AVOID INSPECTION-THRASH\n"
+                                                                   "You have LIMITED read-only inspections before the system aborts your turn.\n"
+                                                                   "- Use at most 2 read-only tool calls to locate the issue\n"
+                                                                   "- Your NEXT call MUST be a write (Edit, ApplyPatch) to fix the error\n"
+                                                                   "- Do NOT re-read the entire file or do broad analysis\n"
+                                                                   "- Fix the specific validation error immediately\n"
+                                                                   "\n## DANGEROUS PATTERNS TO AVOID\n"
+                                                                   "- NEVER use `cl-return-from` without a matching `cl-block` wrapper\n"
+                                                                   "- NEVER remove `cl-block` while keeping `cl-return-from` inside\n"
+                                                                   "- ALWAYS ensure `cl-return-from` targets a valid `cl-block` name\n"))))
                                                 (my/gptel--run-agent-tool-with-timeout
                                                  gptel-auto-experiment-validation-retry-time-budget
                                                  (lambda (retry-output)

@@ -2477,6 +2477,63 @@ must not override it to MiniMax via setq-local in subagent buffers."
                       (progn (gptel-auto-workflow--consume-vsm-actions) nil)
                     (error t))))))
 
+;; ─── Research Strategy Integration Tests ───
+
+(ert-deftest tdd/research/autotts-parse-trace-blocks ()
+  "parse-research-autotts-traces extracts ===RESULT=== JSON blocks."
+  (when (fboundp 'gptel-auto-workflow--parse-research-autotts-traces)
+    (let* ((output "Some text\n===RESULT===\n{\"phase\": \"search\", \"confidence\": 0.8, \"tokens\": 1200}\nMore text")
+           (traces (gptel-auto-workflow--parse-research-autotts-traces output)))
+      (should (= 1 (length traces)))
+      (should (equal (plist-get (car traces) :phase) "search"))
+      (should (= (plist-get (car traces) :confidence) 0.8))
+      (should (= (plist-get (car traces) :tokens) 1200)))))
+
+(ert-deftest tdd/research/autotts-stop-early-confidence ()
+  "autotts-stop-early-p returns t when confidence >0.7 and 2+ insights."
+  (when (fboundp 'gptel-auto-workflow--research-autotts-stop-early-p)
+    (let ((traces (list '(:phase "search" :confidence 0.6 :insights_count 1)
+                        '(:phase "fetch" :confidence 0.85 :insights_count 2))))
+      (should (gptel-auto-workflow--research-autotts-stop-early-p traces)))
+    (let ((traces (list '(:phase "search" :confidence 0.5 :insights_count 0))))
+      (should-not (gptel-auto-workflow--research-autotts-stop-early-p traces)))))
+
+(ert-deftest tdd/research/category-classifies-topics ()
+  "research-category-for-topic classifies keywords into ontology categories."
+  (when (fboundp 'gptel-auto-workflow--research-category-for-topic)
+    (should (eq :programming (gptel-auto-workflow--research-category-for-topic "elisp functions")))
+    (should (eq :agentic (gptel-auto-workflow--research-category-for-topic "workflow daemon")))
+    (should (eq :tool-calls (gptel-auto-workflow--research-category-for-topic "api gateway")))
+    (should (eq :natural-language (gptel-auto-workflow--research-category-for-topic "general topic")))))
+
+(ert-deftest tdd/research/ontology-gaps-returns-plist ()
+  "ontology-research-gaps returns plist with :gaps and :priorities."
+  (when (fboundp 'gptel-auto-workflow--ontology-research-gaps)
+    (let ((result (gptel-auto-workflow--ontology-research-gaps)))
+      (should (listp (plist-get result :gaps)))
+      (should (listp (plist-get result :priorities))))))
+
+(ert-deftest tdd/research/correlate-research-returns-alist ()
+  "correlate-research-to-outcomes returns sorted alist of (source . keep-rate)."
+  (when (fboundp 'gptel-auto-workflow--correlate-research-to-outcomes)
+    (let ((result (gptel-auto-workflow--correlate-research-to-outcomes)))
+      ;; Result is either nil (no data) or a sorted alist
+      (when result
+        (should (consp result))
+        (should (stringp (caar result)))
+        (should (numberp (cdar result)))
+        (should (>= (cdar result) 0))
+        (should (<= (cdar result) 1))))))
+
+(ert-deftest tdd/research/meta-harness-propose-strategy ()
+  "propose-research-strategy queues a new strategy for champion league."
+  (when (fboundp 'gptel-auto-workflow--propose-research-strategy)
+    (let ((gptel-auto-workflow--proposed-research-strategies nil))
+      (gptel-auto-workflow--propose-research-strategy
+       "test-strategy-42" "Test description"
+       '(list '(:name "phase1" :prompt "do thing")))
+      (should (member "test-strategy-42" gptel-auto-workflow--proposed-research-strategies)))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

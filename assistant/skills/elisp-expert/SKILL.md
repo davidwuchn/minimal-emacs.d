@@ -301,4 +301,3 @@ metadata:
 - [ ] Tests pass (if available)
 
 **"Compiles clean" ≠ "Works at runtime"**
-
