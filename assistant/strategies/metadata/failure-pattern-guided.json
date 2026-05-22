@@ -1,0 +1,1 @@
+{"name":"failure-pattern-guided","version":"1.0","hypothesis":"Extracting failure patterns from experiment history and amplifying relevant counter-measures improves success","axis":"D","components":["pattern-analysis","counter-measure-selection"]}
