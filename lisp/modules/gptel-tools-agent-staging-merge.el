@@ -180,9 +180,13 @@ Uses the staging worktree instead of switching branches in the root repo."
             (message "[auto-workflow] Missing merge source branch: %s" optimize-branch)
             nil)
          ;; Sync staging with main first so test fixes are included
-         (let ((sync-result (gptel-auto-workflow--git-result
-                             (format "git merge %s/main --no-ff -m %s" "origin" (shell-quote-argument "Sync staging with main before experiment"))
-                             180)))
+         ;; Must run from repo root — daemon's default-directory may be a worktree
+         (let* ((default-directory (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                            (gptel-auto-workflow--worktree-base-root))
+                                       default-directory))
+                (sync-result (gptel-auto-workflow--git-result
+                              (format "git merge %s/main --no-ff -m %s" "origin" (shell-quote-argument "Sync staging with main before experiment"))
+                              180)))
            (if (= 0 (cdr sync-result))
                (message "[auto-workflow] Synced staging with main before cherry-pick")
              (message "[auto-workflow] Staging sync with main skipped: %s"
