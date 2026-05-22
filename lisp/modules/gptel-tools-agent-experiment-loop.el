@@ -1037,11 +1037,15 @@ is set but the path doesn't exist, recreates the worktree."
                                    (shell-quote-argument "main")
                                    (shell-quote-argument "Sync main into staging for verification"))
                            180)))
-          (if (= 0 (cdr main-merge))
-              (message "[auto-workflow] Merged main into staging worktree")
+          (cond
+           ((null main-merge)
+            (message "[auto-workflow] Main merge command returned nil (non-fatal)"))
+           ((= 0 (cdr main-merge))
+            (message "[auto-workflow] Merged main into staging worktree"))
+           (t
             (message "[auto-workflow] Main merge into staging failed (non-fatal): %s"
                      (my/gptel--sanitize-for-logging (car main-merge) 160))
-            (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))))
+            (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60)))))
         (funcall fn)))))
 
 
