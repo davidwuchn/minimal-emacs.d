@@ -86,7 +86,7 @@ The system does not just run experiments — it builds a **formal knowledge grap
 
 AutoGo-inspired **champion league** gates every new strategy — incumbents must be defeated in a gauntlet before being adopted. **Playout Cap Randomization** (80% quick / 15% medium / 5% deep) prevents over-specialization. Every cycle emits a machine-parseable `===RESULT===` JSON block for the **autoresearch loop**: commit → run → parse → keep/revert — now wired into AutoTTS trace outcome hooks.
 
-**Head-to-head comparison** (promptfoo-style): every backend/model pair compared on shared targets (≥3 samples each) with 5% tie margin. Generates `mementum/knowledge/backend-comparison.md` and `model-comparison.md`.
+**Head-to-head comparison** (promptfoo-style): every backend/model pair compared on shared targets (≥3 samples each) with 5% tie margin. Generates `mementum/knowledge/backend-comparison.md` and `model-comparison.md`. **Allium v2** adds trend tracking, regression detection, experiment prompt injection, and auto-repair mode.
 
 **Holdout evaluation** tracks real progress on a frozen set of targets — if train metrics improve but holdout doesn't, the system detects overfitting.
 
@@ -161,9 +161,10 @@ Knowledge pages per strategy: what worked, what didn't, Allium coherence checks,
 | Guard | Prevents |
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
-| 89 tests + 1800s timeout | Broken code caught before staging |
+| 239 tests + 1800s timeout | Broken code caught before staging |
 | Ontology-aware provider routing | Reorders 5-provider fallback chain by historical keep-rate per target category |
 | Force-push protection | Fast-forwards origin/main before merge; never force-pushes shared main |
+| Server socket self-healing | 30s timer recreates lost daemon socket; no SIGKILL restart needed |
 | Conflict marker detection | No `<<<<<<<` in committed code |
 | 90-minute watchdog | No technique runs indefinitely |
 | Policy engine | Forbidden paths sealed |
@@ -189,4 +190,4 @@ First run initializes itself. After that, it absorbs and improves on its own.
 
 ---
 
-Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Extended with gptel, nucleus statecharts, mementum memory, verbum operational taxonomy, Semantica ontology, AutoGo competitive gating, LogMap inverted indexing and repair, Allium behavioral compilers. 30 patterns across 4 frameworks. The art grows with its practitioner.
+Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Extended with gptel, nucleus statecharts, mementum memory, verbum operational taxonomy, Semantica ontology, AutoGo competitive gating, LogMap inverted indexing and repair, Allium behavioral compilers. 37 patterns across 4 frameworks. The art grows with its practitioner.

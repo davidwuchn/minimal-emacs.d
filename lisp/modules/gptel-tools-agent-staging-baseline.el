@@ -756,7 +756,8 @@ the reviewer admits it could not verify the diff or locate the relevant file."
 (defun gptel-auto-workflow--finalize-review-fix-result (response pre-fix-head)
   "Return (success-p . RESPONSE) after verifying a review-fix attempt.
 PRE-FIX-HEAD is the current HEAD hash before the fixer runs."
-  (let ((success (not (string-match-p "^Error:" response)))
+  (let ((success (and (stringp response)
+                      (not (string-match-p "^Error:" response))))
         (fix-captured nil))
     (when success
       (when (gptel-auto-workflow--worktree-dirty-p)

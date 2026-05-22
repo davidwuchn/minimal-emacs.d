@@ -1,50 +1,76 @@
 # Mementum State
 
-> Last session: 2026-05-21
-> Session focus: Sync with remote, resolve daemon mode ping-pong, TDD verification
-> Last session goal: TDD — test all new Semantica/Allium/KIBC-M functions, fix bugs
-> 
-> ## 2026-05-21 Session
-> 
+> Last session: 2026-05-21/22
+> Session focus: Review daemon auto-promote changes, fix regressions, TDD verification, Allium improvements
+> Last session goal: Fix daemon crashes, enable ontology router, build backend/model comparison, improve Allium system
+
+> ## 2026-05-21/22 Session
+
 > ### Decisions Made
-> 1. **Daemon mode**: `--daemon` (standard), not `--fg-daemon`. Both work; real fixes are zombie reaper + sentinel deferral + soft requires.
-> 2. **Soft requires**: `condition-case` wrappers on gptel/gptel-agent in base.el AND gptel-tools-agent.el. Prevents daemon startup crash from deferred init-ai race.
-> 3. **Force-push ping-pong resolved**: Documented root causes, committed decision to prevent future reversions.
-> 
+> 1. **Never force-push main**: Auto-promote now does `git merge --ff-only origin/main` first, then regular `git push`. Shared branches must not be force-pushed.
+> 2. **Server socket self-healing**: 30s timer in post-init.el recreates lost daemon socket. Avoids SIGKILL + full restart.
+> 3. **Ontology router enabled**: Per-experiment category-based fallback reordering is now live.
+> 4. **Model-level comparison**: TSV now tracks both backend and model (e.g., MiniMax/minimax-m2.7-highspeed). Reports in mementum.
+> 5. **Stash dirty artifacts before auto-promote**: Daemon-generated files in assistant/ and mementum/ block git merge. Stash them first.
+
 > ### Verified (TDD)
-> - 171/171 tests pass (was 89 last session, up to 171 via pipeline auto-evolution)
-> - `--daemon` pipeline: daemon alive >120s, workflow running, no socket conflicts
-> - No regressions: evolution-fix.el (145 lines), ontology-strategy (157 lines), cq-evolution (70 lines), pruned test, stringp guard, fboundp guards — all preserved
-> 
+> - 239/239 tests pass (was 171 last session)
+> - TSV write-region fix: data rows now have proper model field (was 0 bytes)
+> - Backend stats work: `:backend` was missing from parser (dead code for months)
+> - Self-healing timer guarded: `(boundp 'server-name)`, `(stringp server-socket-dir)` added by daemon
+
 > ### Current State
-> - Daemon: running (`--daemon`), phase "selecting", run-id active
-> - Branch: main @ `6fbdd87d` (synced with origin)
-> - Uncommitted: gptel-tools-agent.el soft requires, benchmark stringp guard, daemon flag standardization, mementum memory
-> 
+> - Daemon: running (`--daemon`), 3h uptime, 0 code errors in 2812 log lines
+> - Branch: main @ `fed4c1a1` (synced with origin)
+> - Experiment run: `2026-05-22T070206Z-4060`, 5 kept/5 total
+> - Model tracking: 26/27 experiments show `minimax-m2.7-highspeed`
+
 > ### Key Files Touched
-> - scripts/run-auto-workflow-cron.sh, scripts/watchdog-daemon.sh
-> - lisp/modules/gptel-tools-agent-base.el, lisp/modules/gptel-tools-agent.el
-> - lisp/modules/gptel-workflow-benchmark.el
-> - mementum/memories/pipeline-daemon-mode-selection.md
-> 
-> ## Previous Session (2026-05-18)
+> - lisp/modules/gptel-tools-agent-staging-merge.el (auto-promote fix, stash)
+> - lisp/modules/gptel-tools-agent-prompt-build.el (write-region fix, let* fix, Allium prompt injection)
+> - lisp/modules/gptel-auto-workflow-evolution.el (rule-eval guards, backend comparison, model comparison, Allium v2)
+> - lisp/modules/gptel-auto-workflow-ontology-router.el (advice enabled)
+> - lisp/modules/gptel-tools-agent-experiment-core.el (model capture, proper-list-p guards)
+> - lisp/modules/gptel-tools-agent-base.el (TSV model column)
+> - lisp/modules/strategic-daemon-functions.el (comparison guards)
+> - post-early-init.el (zombie reaper stringp guard)
+> - post-init.el (server socket self-healing)
+> - scripts/watchdog-daemon.sh (stderr redirect removed)
+> - tests/test-gptel-auto-workflow-evolution-regressions.el (+26 tests)
+> - tests/test-gptel-auto-workflow-ontology-router.el (+5 tests)
+
+> ## Previous Session (2026-05-21)
 > 
 > ## Session Results
-> 
+
 > | Metric | Before | After |
 > |--------|--------|-------|
-> | Tests | 37 | 89 (+52) |
-> | Bugs fixed | — | 15 |
-> | TDD rounds | — | 23 |
-> | Files changed | — | 3 (evolution.el, prompt-build.el, test file) |
-> 
+> | Tests | 171 | 239 (+68) |
+> | Bugs fixed | — | 9 |
+> | Features added | — | 6 |
+> | Files changed | — | 14 |
+
 > ## Bugs Fixed
-> 
-> 1. allium-quality-score: severity>0 without numbered lines returned false 0.0
-> 2. 5 throw compile-early-return guards → if/else with nil return
-> 3. (setq result result) dead code removed (×2: removed, then removed again after merge re-introduced it)
-> 4. maphash 3-arg bug: 12-close-paren cascade → lambda extraction refactor
-> 5. nil-root guards: persist-spec, load-issues-for-guidance, allium-read-quality
+
+> 1. **TSV 0 bytes**: `write-region` positioned outside `with-temp-buffer`, wrote empty current buffer instead of temp buffer. Moved inside.
+> 2. **void-variable target/decision/file**: Extra `)` on `write-region` line prematurely closed `let*` scope. Fixed paren structure.
+> 3. **Rule-eval crashes (21×)**: `>`,`<`,`>=`,`<=`,`=` lacked `numberp` guards. Added `cl-every #'numberp`.
+> 4. **Holdout plistp crash**: `json-read` returns alist, `plist-get` needs plist. Normalize after read.
+> 5. **Staging force-push wipes commits**: `--force-with-lease` after fetch always passes. Now merges origin/main first, regular push.
+> 6. **Auto-promote merge failure**: Daemon-generated dirty files block `git merge`. Stash before merge.
+> 7. **Watchdog swallows errors**: `>/dev/null 2>&1` on daemon start. Removed stderr redirect.
+> 8. **Model always "unknown"**: `:model` never added to experiment plist. Added capture + plist entry.
+> 9. **Backend always "unknown"**: `:backend` missing from TSV parser. Field was in header but never extracted.
+> 10. **Python evolve_skills.py crash**: Test TSV debris with 28-field data rows. Cleaned `var/tmp/experiments/*TEST*`.
+
+> ## Features Added
+
+> 1. **Ontology router enabled**: Per-experiment category-based fallback reordering (programming/agentic/NL/tool-calls)
+> 2. **Backend N×N comparison**: Promptfoo-style head-to-head matrix, report → `mementum/knowledge/backend-comparison.md`
+> 3. **Model-level comparison**: Backend/model granularity (DeepSeek/deepseek-v4-pro vs moonshot/kimi-k2.6)
+> 4. **TSV model column**: Field 27 tracks specific model per experiment
+> 5. **Server socket self-healing**: 30s timer recreates lost daemon socket without SIGKILL restart
+> 6. **Allium v2**: Trend tracking + dedup, regression detection, experiment prompt injection, auto-repair mode
 > 6. validate-knowledge-page: field-order dependency (re-search-forward → string-match)
 > 7. allium-issues regex: no capture group → always defaulted to 0
 > 8. check-competency-questions: reversed string-match-p args + plural/singular mismatch
