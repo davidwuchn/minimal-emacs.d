@@ -190,4 +190,3 @@ Before outputting results:
 - [ ] Errors handled gracefully (invalid subreddit, API down)
 
 **"API call succeeded" ≠ "Data is useful"** - Verify content relevance.
-

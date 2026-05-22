@@ -237,4 +237,3 @@ Before finalizing demand research report:
 - [ ] Rate limits respected (check usage before realtime scrape)
 
 **"Data collected" ≠ "Actionable insights"** - Synthesize data into clear recommendations.
-

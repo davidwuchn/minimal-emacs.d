@@ -155,4 +155,3 @@ One JSON object per line, one line per evaluated candidate:
 ```json
 {"iteration": 1, "system": "example_strategy", "avg_val": 0.75, "axis": "A", "hypothesis": "...", "delta": +0.05, "outcome": "75.0% (+5.0)", "components": ["section-reorder", "failure-first"]}
 ```
-

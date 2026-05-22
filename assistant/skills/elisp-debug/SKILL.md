@@ -102,4 +102,3 @@ Only escalate to source modification when:
 - Bug is non-deterministic and needs trace data over many runs
 - Bug occurs in code path that can't be triggered interactively
 - After Level 0-3 failed to reveal the issue after 15 minutes of investigation
-
