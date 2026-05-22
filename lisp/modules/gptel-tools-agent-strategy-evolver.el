@@ -44,6 +44,41 @@ empty-analysis happy path.")
   "Exploration axes for strategy evolution, analogous to Meta-Harness
 exploitation axes.")
 
+(defvar gptel-auto-workflow--recent-strategy-axes nil
+  "Ring of last 3 axes used for strategy evolution.
+∀ Vigilance: blocks same-axis proposals if all 3 are identical.")
+
+(defun gptel-auto-workflow--check-axis-diversity (axis)
+  "Return non-nil if AXIS passes diversity check.
+fractal Clarity: each axis must have testable meaning.
+∀ Vigilance: reject if last 3 proposals all target this axis.
+Returns t if OK, or a rejection reason string if blocked."
+  (let* ((symbol-axis (if (symbolp axis) axis (intern (format "%s" axis))))
+         (recent gptel-auto-workflow--recent-strategy-axes)
+         (last-three (seq-take recent 3)))
+    (cond
+     ((not (assq symbol-axis gptel-auto-workflow--strategy-evolution-axes))
+      (format "Unknown axis %s — must be one of %s"
+              symbol-axis
+              (mapconcat (lambda (a) (format "%s" (car a)))
+                         gptel-auto-workflow--strategy-evolution-axes ", ")))
+     ((and (= (length last-three) 3)
+           (cl-every (lambda (a) (eq a symbol-axis)) last-three))
+      (message "[strategy] ∀ Vigilance: Axis %s blocked — last 3 proposals all target this axis"
+               symbol-axis)
+      (format "Axis %s overused — last 3 proposals all target it. Pick a different axis."
+              symbol-axis))
+     (t
+      t))))
+
+(defun gptel-auto-workflow--record-strategy-axis (axis)
+  "Record AXIS in the recent axes ring (max 3 entries)."
+  (let ((symbol-axis (if (symbolp axis) axis (intern (format "%s" axis)))))
+    (push symbol-axis gptel-auto-workflow--recent-strategy-axes)
+    (when (> (length gptel-auto-workflow--recent-strategy-axes) 3)
+      (setq gptel-auto-workflow--recent-strategy-axes
+            (seq-take gptel-auto-workflow--recent-strategy-axes 3)))))
+
 (defun gptel-auto-workflow--strategy-axis-description (axis)
   "Return a human-readable description for strategy AXIS."
   (or (cdr (assoc (if (symbolp axis) axis (intern-soft (format "%s" axis)))
@@ -834,19 +869,25 @@ markers, numbered lists, or bare code blocks."
   "Evolve a new strategy from PARENT-STRATEGY-NAME.
 HYPOTHESIS describes the mechanism change.
 AXIS is the exploitation axis (A-F).
+∀ Vigilance: rejects if axis has been overused (last 3 proposals same axis).
 Returns new strategy name or nil if rejected."
-  (let* ((parent-file (expand-file-name
+  (let* ((diversity-check (gptel-auto-workflow--check-axis-diversity axis))
+         (parent-file (expand-file-name
                        (format "strategy-%s.el" parent-strategy-name)
                        (gptel-auto-workflow--strategies-directory)))
          (parent-code (when (file-exists-p parent-file)
                         (with-temp-buffer
                           (insert-file-contents parent-file)
                           (buffer-string))))
-(parent-perf (gptel-auto-workflow--get-strategy-performance parent-strategy-name))
-          ;; Generate 3 candidates using agent-driven proposer
-         (candidates (gptel-auto-workflow--propose-strategies
-                      parent-strategy-name axis hypothesis parent-code parent-perf))
-         (valid-candidates '()))
+         (parent-perf (gptel-auto-workflow--get-strategy-performance parent-strategy-name)))
+    (if (not diversity-check)
+        (progn
+          (message "[strategy-evolution] REJECTED: Axis diversity check failed — %s" diversity-check)
+          nil)
+      (let* (;; Generate 3 candidates using agent-driven proposer
+             (candidates (gptel-auto-workflow--propose-strategies
+                          parent-strategy-name axis hypothesis parent-code parent-perf))
+             (valid-candidates '()))
     
     ;; Validate each candidate
     (dolist (candidate (or candidates '()))
@@ -934,17 +975,18 @@ Returns new strategy name or nil if rejected."
                             (format "%s" new-name)
                             (mapconcat #'identity (plist-get final-prototype :errors) ", "))
                    nil)
-               (if (gptel-auto-workflow--load-strategy new-name)
-                   (progn
-                     (message "[strategy-evolution] ACCEPTED %s (axis %s) from %d candidates"
-                              (format "%s" new-name)
-                              (format "%s" axis)
-                              (length valid-candidates))
-                     new-name)
+                (if (gptel-auto-workflow--load-strategy new-name)
+                    (progn
+                      (gptel-auto-workflow--record-strategy-axis axis)
+                      (message "[strategy-evolution] ACCEPTED %s (axis %s) from %d candidates"
+                               (format "%s" new-name)
+                               (format "%s" axis)
+                               (length valid-candidates))
+                      new-name)
                  (progn
                    (message "[strategy-evolution] REJECTED %s: Load failed after file write"
                             (format "%s" new-name))
-                   nil)))))))))))
+                   nil)))))))))))))
 
 ;;; Periodic Strategy Evolution
 

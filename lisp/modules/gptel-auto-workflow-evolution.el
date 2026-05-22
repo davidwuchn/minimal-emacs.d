@@ -2627,6 +2627,26 @@ AutoGo league system: incumbents must be defeated in gauntlet play.")
 (defvar gptel-auto-workflow--champion-keep-rate 0.0
   "Keep-rate of the champion strategy. Threshold for challenger adoption.")
 
+(defvar gptel-auto-workflow--baseline-keep-rate 0.0
+  "Keep-rate of the template-default (baseline) strategy.
+μ Directness: first champion must beat this, not absolute zero.")
+
+(defun gptel-auto-workflow--compute-baseline-keep-rate ()
+  "Compute the template-default keep-rate from all TSV data.
+Returns the keep-rate as a float, or 0.10 as a safe lower-bound fallback."
+  (let ((total 0) (kept 0)
+        (results (gptel-auto-workflow--parse-all-results)))
+    (dolist (r results)
+      (when (or (equal (plist-get r :strategy) "template-default")
+                (not (plist-get r :strategy)))
+        (setq total (1+ total))
+        (when (or (equal (plist-get r :decision) "kept")
+                   (equal (plist-get r :decision) t))
+          (setq kept (1+ kept)))))
+    (let ((rate (if (> total 0) (/ (float kept) total) 0.10)))
+      (setq gptel-auto-workflow--baseline-keep-rate rate)
+      rate)))
+
 (defvar gptel-auto-workflow--champion-composite-score 0.0
   "Composite benchmark score of the champion strategy.
 Combines keep rate, score delta, quality gain, and efficiency.")
@@ -2698,20 +2718,30 @@ Combines keep rate, score delta, quality gain, and efficiency.")
 
 (defun gptel-auto-workflow--crown-champion (strategy-name keep-rate &optional composite)
   "Crown STRATEGY-NAME as the new champion with KEEP-RATE and COMPOSITE score.
-Only crowns if KEEP-RATE exceeds current champion's by at least 0.05.
+Gateway: crowns only if KEEP-RATE exceeds current champion's rate.
+The first champion (when none exists) must beat the baseline.
 COMPOSITE is logged for diagnostics but keep-rate remains the gating threshold."
-  (when (and strategy-name keep-rate
-             (> keep-rate (+ gptel-auto-workflow--champion-keep-rate 0.05)))
-    (setq gptel-auto-workflow--champion-strategy strategy-name
-          gptel-auto-workflow--champion-keep-rate keep-rate)
-    (when composite
-      (setq gptel-auto-workflow--champion-composite-score composite))
-    (message "[champion] New champion: %s (keep=%.1f%% composite=%.3f)"
-             strategy-name (* 100 keep-rate) (or composite keep-rate))))
+  (when (and strategy-name keep-rate)
+    (let ((threshold (if gptel-auto-workflow--champion-strategy
+                         gptel-auto-workflow--champion-keep-rate
+                       gptel-auto-workflow--baseline-keep-rate)))
+      (when (or (null threshold) (> keep-rate threshold))
+        (setq gptel-auto-workflow--champion-strategy strategy-name
+              gptel-auto-workflow--champion-keep-rate keep-rate)
+        (when composite
+          (setq gptel-auto-workflow--champion-composite-score composite))
+        (message "[champion] New champion: %s (keep=%.1f%% composite=%.3f baseline=%.1f%%)"
+                 strategy-name (* 100 keep-rate) (or composite keep-rate)
+                 (* 100 gptel-auto-workflow--baseline-keep-rate))
+        t))))
 
 (defun gptel-auto-workflow--gate-strategies ()
-  "Gate evolved strategies against the champion."
-  (let* ((strategies (gptel-auto-workflow--discover-strategies))
+  "Gate evolved strategies against the champion.
+μ Directness: first champion must beat baseline (not absolute zero).
+Promotion: challenger must exceed champion by >5% relative improvement.
+∀ Vigilance: never re-crown the same champion; three-strike axis block."
+  (let* ((_baseline (gptel-auto-workflow--compute-baseline-keep-rate))
+         (strategies (gptel-auto-workflow--discover-strategies))
          (scores (mapcar (lambda (s) (cons s (gptel-auto-workflow--strategy-composite-score s)))
                          strategies))
          (scores (sort scores (lambda (a b) (> (cdr a) (cdr b)))))
@@ -2726,14 +2756,27 @@ COMPOSITE is logged for diagnostics but keep-rate remains the gating threshold."
              (champion gptel-auto-workflow--champion-strategy)
              (champion-rate gptel-auto-workflow--champion-keep-rate))
         (cond
+         ;; μ Directness: first champion must beat baseline (template-default ~18%),
+         ;; not absolute zero. No champion until a strategy proves itself.
          ((null champion)
-          (gptel-auto-workflow--crown-champion name (or keep-rate composite) composite)
-          (push (cons name 'first-champion) results))
-         ((and keep-rate (> keep-rate (+ champion-rate 0.05)))
+          (if (and keep-rate
+                   (> keep-rate gptel-auto-workflow--baseline-keep-rate))
+              (progn
+                (gptel-auto-workflow--crown-champion name keep-rate composite)
+                (push (cons name 'first-champion) results))
+            (push (cons name 'no-champion) results)))
+         ;; Promotion: 5% RELATIVE improvement over champion.
+         ;; e.g. champion at 20% → challenge at 21%+; champion at 40% → challenge at 42%+
+         ((and keep-rate (> keep-rate (* champion-rate 1.05)))
           (push (cons name 'promoted) results)
           (gptel-auto-workflow--crown-champion name keep-rate composite))
-         ((> composite champion-rate)
+         ;; Pass: beats champion but not enough for promotion.
+         ;; Keep champion but mark strategy as viable.
+         ((and keep-rate (> keep-rate champion-rate))
           (push (cons name 'passed) results))
+         ;; Use composite score as fallback when keep-rate missing
+         ((and composite champion-rate (> composite champion-rate))
+          (push (cons name 'passed-composite) results))
          (t
           (push (cons name 'rejected) results)))))
     (dolist (entry axis-scores)
@@ -2743,6 +2786,9 @@ COMPOSITE is logged for diagnostics but keep-rate remains the gating threshold."
         (when (> rate (+ champion-rate 0.1))
           (message "[champion] Axis %s performing well (%.1f%%) — consider strategies targeting this axis"
                    axis (* 100 rate)))))
+    (unless gptel-auto-workflow--champion-strategy
+      (message "[champion] No viable champion — all strategies below baseline (%.1f%%)"
+               (* 100 gptel-auto-workflow--baseline-keep-rate)))
     results))
 
 (defconst gptel-auto-workflow--pcr-budgets
