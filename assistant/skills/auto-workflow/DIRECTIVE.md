@@ -2,7 +2,7 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.23
-total-experiments: 1985
+total-experiments: 1986
 total-kept: 385
 ---
 
@@ -57,7 +57,7 @@ total-kept: 385
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (1521×): Investigate root cause
+- **other** (1522×): Investigate root cause
 - **timeout** (274×): Add smaller batch sizes or chunked processing
 - **test-failure** (106×): Run tests before committing experiments
 - **validation-failed** (39×): Improve pre-grade validation prompts
@@ -82,7 +82,7 @@ total-kept: 385
 - **lisp/modules/gptel-tools.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 38%)
 - **lisp/modules/gptel-ext-core.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 34%)
 - **lisp/modules/gptel-ext-reasoning.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-tools-agent-validation.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-agent-base.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1985 experiments (385 kept locally across 1985 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1986 experiments (385 kept locally across 1986 local records). It evolves every self-evolution cycle.*

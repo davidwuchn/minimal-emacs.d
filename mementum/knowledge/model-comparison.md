@@ -1,12 +1,12 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 1985 experiments across 12 models
+> Auto-generated from 1986 experiments across 12 models
 
 ## Model Rankings (by keep-rate)
 
 - **DashScope/persisted-findings**: 26.7%
 - **MiniMax/deep-external**: 26.1%
 - **MiniMax/none**: 22.8%
-- **MiniMax/minimax-m2.7-highspeed**: 21.2%
+- **MiniMax/minimax-m2.7-highspeed**: 20.9%
 - **MiniMax/unknown**: 19.2%
 - **MiniMax/failure-trajectory-tracking**: 18.2%
 - **MiniMax/chained-skill-resolution**: 16.7%
@@ -53,7 +53,7 @@
 
 ## MiniMax/none vs MiniMax/minimax-m2.7-highspeed (winner: **MiniMax/none**)
 - MiniMax/none: 27.3% keep-rate
-- MiniMax/minimax-m2.7-highspeed: 23.5% keep-rate
+- MiniMax/minimax-m2.7-highspeed: 22.2% keep-rate
 - Shared targets: 3 | won 1, won 0, ties 2
 
 ## DashScope/persisted-findings vs MiniMax/persisted-findings (winner: **DashScope/persisted-findings**)
@@ -117,7 +117,7 @@
 - Shared targets: 1 | won 1, won 0, ties 0
 
 ## MiniMax/minimax-m2.7-highspeed vs MiniMax/pattern-driven-skills (winner: **MiniMax/minimax-m2.7-highspeed**)
-- MiniMax/minimax-m2.7-highspeed: 22.2% keep-rate
+- MiniMax/minimax-m2.7-highspeed: 20.0% keep-rate
 - MiniMax/pattern-driven-skills: 0.0% keep-rate
 - Shared targets: 1 | won 1, won 0, ties 0
 
@@ -172,4 +172,4 @@
 - Shared targets: 1 | won 0, won 0, ties 1
 
 
-*Generated: 2026-05-23 00:13*
+*Generated: 2026-05-23 06:31*
