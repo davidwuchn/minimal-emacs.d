@@ -270,4 +270,3 @@ OLD: (gptel--send chunk)
 → May match dozens of locations
 ```
 
-*Auto-evolved: No experiment data yet (2026-05-22T06:06:07Z). Collecting baseline.*

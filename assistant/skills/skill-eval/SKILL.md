@@ -236,4 +236,3 @@ run:
 
 This recursive validation ensures the meta-skill remains self-consistent.
 
-*Auto-evolved: No experiment data yet (2026-05-22T06:06:08Z). Collecting baseline.*

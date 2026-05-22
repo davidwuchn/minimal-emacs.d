@@ -191,4 +191,3 @@ Before outputting results:
 
 **"API call succeeded" ≠ "Data is useful"** - Verify content relevance.
 
-*Auto-evolved: No experiment data yet (2026-05-22T06:06:08Z). Collecting baseline.*
