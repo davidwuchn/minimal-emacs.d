@@ -711,6 +711,7 @@ NOTE: Staging branch is never deleted, only the worktree."
                     60)))
       (when (and result
                  (= 0 (cdr result))
+                 (stringp (car result))
                  (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" (car result)))
         (match-string 1 (car result))))))
 
@@ -727,6 +728,7 @@ NOTE: Staging branch is never deleted, only the worktree."
                     60)))
       (when (and result
                  (= 0 (cdr result))
+                 (stringp (car result))
                  (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" (car result)))
         (match-string 1 (car result))))))
 
