@@ -386,9 +386,9 @@ with an additional `p' option to permit and remember a tool."
 (defun my/gptel--extract-programmatic-callback (response ov)
   "Extract callback from PROGRAMMATIC RESPONSE if valid.
 Returns (callback . is-programmatic) where callback is the function or nil."
-  (if (and (listp response)
+  (if (and (proper-list-p response)
            (= (length response) 1)
-           (listp (car-safe response)))
+           (proper-list-p (car-safe response)))
       (let* ((first (car response))
              (cb (nth 2 first)))
         (if (and (overlayp ov)
