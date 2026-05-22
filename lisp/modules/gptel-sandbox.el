@@ -128,11 +128,11 @@ gptel preset.")
 ;;; Sandbox Operation Constants
 
 (defconst gptel-sandbox--comparison-ops
-  '(equal string= = < > <= >=)
+  '(equal string= eq = < > <= >=)
   "Comparison operators allowed in sandbox expressions.")
 
 (defconst gptel-sandbox--data-ops
-  '(+ - * / 1+ 1- mod max min abs
+  '(+ - * / 1+ 1- mod max min abs minusp
     concat format list vector append length car cdr nth
     cons assoc alist-get plist-get split-string string-join
     string-trim string-empty-p string-match-p substring
@@ -152,8 +152,9 @@ gptel preset.")
     (alist-get 2 5)
     (+ 0 nil) (- 1 nil) (* 0 nil) (/ 1 nil)
     (1+ 1 1) (1- 1 1) (mod 2 2) (max 1 nil) (min 1 nil) (abs 1 1)
-    (equal 2 nil) (string= 2 nil) (= 2 nil)
-    (< 2 nil) (> 2 nil) (<= 2 nil) (>= 2 nil))
+    (minusp 1 1)
+    (equal 2 nil) (string= 2 nil) (eq 2 nil) (= 2 nil)
+    (< 1 nil) (> 1 nil) (<= 1 nil) (>= 1 nil))
   "Alist of (FUNC MIN-ARGS MAX-ARGS) for arity validation.
 MAX-ARGS of nil means no upper bound.")
 ;;; Internal Helpers
