@@ -1579,24 +1579,30 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
                      (message "[auto-workflow] Analyzer returned no targets; using static targets")
                      (let ((augmented (gptel-auto-workflow--semantic-target-augmentation static-targets)))
                        (funcall callback augmented)))
-                 (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                        (final-targets (if (and filtered-targets (listp filtered-targets))
-                                           filtered-targets
-                                         targets))
-                        (augmented (gptel-auto-workflow--semantic-target-augmentation final-targets)))
+                  (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
+                         (final-targets (if (and filtered-targets (listp filtered-targets))
+                                            filtered-targets
+                                          targets))
+                         (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                               (gptel-auto-workflow--enforce-category-budget final-targets)
+                                             final-targets))
+                         (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets)))
                    (unless (or (null filtered-targets) (listp filtered-targets))
                      (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                               filtered-targets))
                    (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
                             (length targets) (length final-targets))
                    (funcall callback augmented))))))
-        (let* ((filtered-targets (if static-targets
-                                     (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
-                                   nil))
-               (final-targets (if (and filtered-targets (listp filtered-targets))
-                                  filtered-targets
-                                static-targets))
-               (augmented (gptel-auto-workflow--semantic-target-augmentation final-targets)))
+         (let* ((filtered-targets (if static-targets
+                                      (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
+                                    nil))
+                (final-targets (if (and filtered-targets (listp filtered-targets))
+                                   filtered-targets
+                                 static-targets))
+                (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                      (gptel-auto-workflow--enforce-category-budget final-targets)
+                                    final-targets))
+                (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets)))
           (unless (or (null filtered-targets) (listp filtered-targets))
             (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                      filtered-targets))

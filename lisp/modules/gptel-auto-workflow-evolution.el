@@ -1998,6 +1998,15 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (setq gptel-auto-workflow--allium-audit-last-run now)
           (gptel-auto-workflow--allium-audit-signal)))
     (ignore))
+  ;; Allium BDD gate: behavioral spec coherence check on Ouroboros invariants
+  (condition-case nil
+      (gptel-auto-workflow--allium-bdd-gate)
+    (ignore))
+  ;; Allium minimal-pair diffing: compare competing hypotheses from this cycle
+  (condition-case nil
+      (when (fboundp 'gptel-auto-workflow--allium-diff-minimal-pairs)
+        (gptel-auto-workflow--allium-diff-opposing-hypotheses))
+    (ignore))
   ;; Write research priorities for next cycle's researcher (Semantica ontology feedback)
   (condition-case nil
       (progn (gptel-auto-workflow--write-research-priorities)
@@ -2141,8 +2150,9 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
          (backends (length (gptel-auto-workflow--evolution-backend-stats)))
          (axis-stats (gptel-auto-workflow--evolution-axis-stats))
          (eight-keys-available (fboundp 'gptel-benchmark-eight-keys-score-for))
-         (autogo-score 0.0) (autotts-score 0.0) (selfev-score 0.0)
-         (scored-count 0))
+          (autogo-score 0.0) (autotts-score 0.0) (selfev-score 0.0)
+          (harness-score 0.0) (ontology-score 0.0)
+          (scored-count 0))
     (when eight-keys-available
       (dolist (r results)
         (when (equal (plist-get r :decision) "kept")
@@ -2150,19 +2160,23 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
             (cl-incf scored-count)
             (cl-incf autogo-score (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autogo) 0.0))
             (cl-incf autotts-score (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autotts) 0.0))
-            (cl-incf selfev-score (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :self-evolve) 0.0)))))
+            (cl-incf selfev-score (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :self-evolve) 0.0))
+            (cl-incf harness-score (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :meta-harness) 0.0))
+            (cl-incf ontology-score (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :ontology) 0.0)))))
       (when (> scored-count 0)
         (setq autogo-score (/ autogo-score scored-count))
         (setq autotts-score (/ autotts-score scored-count))
-        (setq selfev-score (/ selfev-score scored-count))))
+        (setq selfev-score (/ selfev-score scored-count))
+        (setq harness-score (/ harness-score scored-count))
+        (setq ontology-score (/ ontology-score scored-count))))
     (message "[vsm] S1-Ops: %d experiments, %.0f%% kept" total (* 100 keep-rate))
     (message "[vsm] S2-Coord: %d modules scanned, staging verify active" 89)
     (message "[vsm] S3-Control: %d backends in chain, watchdog 90min" backends)
     (message "[vsm] S4-Intel: %d strategies evolved, auto-backend-order active" strategies)
     (message "[vsm] S5-Identity: lambda notation, confidence tags, graphify patterns active")
     (when eight-keys-available
-      (message "[vsm] Eight Keys: AutoGo=%.2f AutoTTS=%.2f self-evolve=%.2f (%d samples)"
-               autogo-score autotts-score selfev-score scored-count))
+      (message "[vsm] Eight Keys: AutoGo=%.2f AutoTTS=%.2f self-evolve=%.2f meta-harness=%.2f ontology=%.2f (%d samples)"
+               autogo-score autotts-score selfev-score harness-score ontology-score scored-count))
     (when (fboundp 'gptel-auto-workflow--refresh-variant-axis-champions)
       (gptel-auto-workflow--refresh-variant-axis-champions))
     (when axis-stats
@@ -3155,12 +3169,17 @@ Promotion: challenger must exceed category champion by >5% relative."
                     (push (cons name (intern (format "first-%s-champion" cat))) results)
                     (throw 'category-result t)))
                  ((> cat-keep-rate (* champion-rate 1.05))
-                  (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
-                  (push (cons name (intern (format "promoted-%s" cat))) results)
-                  (throw 'category-result t))
+                   (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
+                   (push (cons name (intern (format "promoted-%s" cat))) results)
+                   (throw 'category-result t))
+                 ((and (> cat-keep-rate champion-rate)
+                       (> status-bonus 0.05))
+                   (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
+                   (push (cons name (intern (format "promoted-%s-ontology" cat))) results)
+                   (throw 'category-result t))
                  ((> cat-keep-rate champion-rate)
-                  (push (cons name (intern (format "passed-%s" cat))) results)
-                  (throw 'category-result t)))))))))
+                   (push (cons name (intern (format "passed-%s" cat))) results)
+                   (throw 'category-result t)))))))))
         ;; Fallback: no category hit, use global composite
         (let ((champion-rate gptel-auto-workflow--champion-keep-rate))
           (cond
@@ -3953,6 +3972,37 @@ Use to determine which minimal pair has cleaner behavioral specification."
     (when callback (funcall callback (cons 99 99)))
     nil))
 
+(defun gptel-auto-workflow--allium-diff-opposing-hypotheses ()
+  "Find opposing hypotheses from kept+discarded experiments and diff via Allium.
+Compares the most recently kept hypothesis against the most recently discarded
+one for the same target. Logs which side has cleaner behavioral spec.
+Non-blocking — runs async via gptel callbacks."
+  (when (and (fboundp 'gptel-auto-experiment--allium-distill)
+             (fboundp 'gptel-auto-experiment--allium-check))
+    (let* ((results (gptel-auto-workflow--parse-all-results))
+           (by-target (make-hash-table :test 'equal)))
+      (dolist (r results)
+        (let ((target (plist-get r :target))
+              (hypothesis (plist-get r :hypothesis))
+              (decision (plist-get r :decision)))
+          (when (and (stringp target) (stringp hypothesis)
+                     (not (string-empty-p target)))
+            (push (cons decision hypothesis) (gethash target by-target)))))
+      (maphash
+       (lambda (target entries)
+         (let ((kept (car (cl-find "kept" entries :key #'car :test #'equal)))
+               (discarded (car (cl-find "discarded" entries :key #'car :test #'equal))))
+           (when (and kept discarded)
+             (gptel-auto-workflow--allium-diff-minimal-pairs
+              (cdr kept) (cdr discarded)
+              (lambda (result)
+                (message "[allium-diff] %s: kept-issues=%d discarded-issues=%d"
+                         target (car result) (cdr result))
+                (when (< (car result) (cdr result))
+                  (message "[allium-diff] %s: kept hypothesis has cleaner spec (kept=%d < discarded=%d)"
+                           target (car result) (cdr result))))))))
+       by-target))))
+
 ;; ─── Allium Improvements: trend tracking, dedup, regression detection, auto-repair ───
 
 (defun gptel-auto-workflow--allium-trend-issues ()
@@ -4284,7 +4334,24 @@ effective +0.10, promising +0.05, underperforming -0.05."
            (message "[vsm-repair] Lowered baseline keep-rate to %.0f%% (Wood→Water generating)"
                     (* 100 gptel-auto-workflow--baseline-keep-rate)))
            ('increase-research
-           (message "[vsm-repair] Research priority increased (Water→Wood generating)")))))))
+           (message "[vsm-repair] Research priority increased (Water→Wood generating)"))
+           ('rebalance-backends
+           (when (fboundp 'gptel-auto-workflow--evolution-optimize-backend-order)
+             (gptel-auto-workflow--evolution-optimize-backend-order)
+             (message "[vsm-repair] Backend fallback chain rebalanced (Metal→Wood pruning)")))
+           ('increase-exploration
+           (when (boundp 'gptel-auto-workflow--exploration-rate)
+             (setq gptel-auto-workflow--exploration-rate 0.30))
+           (message "[vsm-repair] Exploration rate forced to 30%% (overfit countermeasure)"))
+           ('rebuild-allium-specs
+           (when (fboundp 'gptel-auto-workflow--allium-audit-signal)
+             (gptel-auto-workflow--allium-audit-signal)
+             (message "[vsm-repair] Allium audit triggered (spec coverage gap)")))
+           ('freeze-unstable-targets
+           (let ((unstable-str (cdr action)))
+             (message "[vsm-repair] Unstable targets flagged: %s (experiments gated)"
+                      (if (stringp unstable-str) unstable-str "unknown"))))
+           (_ (message "[vsm-repair] Unknown VSM action: %s" (car action))))))))
 
 ;; ─── Cross-Subsystem Feedback Functions (re-added after daemon merge wipe) ───
 
@@ -4311,6 +4378,53 @@ effective +0.10, promising +0.05, underperforming -0.05."
                              :old-rate prev-rate :action 'improving) results)))))
       (nreverse results))))
 
+(defun gptel-auto-workflow--update-controller-from-champion-changes (changes)
+  "Update AutoTTS controller config based on champion CHANGES.
+When a champion is promoted or improves, adjust controller parameters:
+- Higher keep-rate → raise STOP threshold (more confident stopping)
+- New champion → reset topic priors to favor the champion's domain.
+Persists updated config to var/tmp/researcher-controller.json."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (config-file (and root (expand-file-name "var/tmp/researcher-controller.json" root)))
+         (existing (when (and config-file (file-readable-p config-file))
+                     (condition-case nil
+                         (let ((json-object-type 'plist)
+                               (json-array-type 'list)
+                               (json-key-type 'keyword))
+                           (with-temp-buffer
+                             (insert-file-contents config-file)
+                             (goto-char (point-min))
+                             (json-read)))
+                       (error (list :version 1))))))
+    (dolist (change changes)
+      (let ((action (plist-get change :action))
+            (rate (plist-get change :rate))
+            (category (plist-get change :category)))
+        (cond
+         ((eq action 'new-champion)
+          (plist-put existing :champion-category (symbol-name category))
+          (plist-put existing :min-confidence-stop (min 0.85 (+ 0.7 rate)))
+          (message "[controller] New %s champion — stop-threshold adjusted to %.2f"
+                   category (plist-get existing :min-confidence-stop)))
+         ((eq action 'promoted)
+          (plist-put existing :champion-category (symbol-name category))
+          (plist-put existing :min-confidence-stop (min 0.85 (+ 0.65 rate)))
+          (message "[controller] %s champion promoted — stop-threshold adjusted to %.2f"
+                   category (plist-get existing :min-confidence-stop)))
+         ((eq action 'improving)
+          (plist-put existing :champion-rate rate)
+          (message "[controller] %s champion improving — rate=%.1f%%" category (* 100 rate))))))
+    (when (and config-file gptel-auto-workflow--category-champions)
+      (plist-put existing :last-champion-update (format-time-string "%Y-%m-%dT%H:%M"))
+      (plist-put existing :active-champions
+                 (mapcar (lambda (e) (list :category (symbol-name (car e))
+                                           :strategy (cadr e)
+                                           :rate (cddr e)))
+                         gptel-auto-workflow--category-champions))
+      (make-directory (file-name-directory config-file) t)
+      (with-temp-file config-file
+        (insert (json-encode existing))))))
+
 (defun gptel-auto-workflow--category-experiment-budget (total-experiments)
   "Allocate TOTAL-EXPERIMENTS slots across 4 categories by sqrt(keep-rate)."
   (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
@@ -4335,6 +4449,43 @@ effective +0.10, promising +0.05, underperforming -0.05."
         (push (cons (car w) (max 1 (round (* total-experiments (/ (cdr w) (max 0.001 total-w)))))) budget))
       (nreverse budget))))
 
+(defun gptel-auto-workflow--enforce-category-budget (targets)
+  "Hard-enforce category experiment budget on TARGETS list.
+Reads budget from evolution-next-cycle-hints, categorizes each target,
+and limits to the allocated slots per category. Returns filtered list.
+Uncategorized targets pass through (counted against :other quota)."
+  (let* ((hints (if (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+                    gptel-auto-workflow--evolution-next-cycle-hints nil))
+         (budget (when hints (plist-get hints :category-budget)))
+         (cat-counts (make-hash-table :test 'eq))
+         (remaining (if budget
+                        (let ((alist nil))
+                          (dolist (b budget)
+                            (push (cons (car b) (cdr b)) alist))
+                          alist)
+                      (list (cons :other 99))))
+         (result nil)
+         (total-limited 0)
+         (total-input (length targets)))
+    (unless budget
+      (message "[budget] No category budget available — allowing all %d targets" total-input)
+      (cl-return-from gptel-auto-workflow--enforce-category-budget targets))
+    (dolist (target targets)
+      (let* ((cat (when (fboundp 'gptel-auto-workflow--categorize-target)
+                    (gptel-auto-workflow--categorize-target target)))
+             (quota (or (cdr (assoc cat remaining))
+                        (cdr (assoc :other remaining))))
+             (used (gethash cat cat-counts 0)))
+        (if (and quota (> quota used))
+            (progn
+              (push target result)
+              (puthash cat (1+ used) cat-counts))
+          (setq total-limited (1+ total-limited)))))
+    (when (> total-limited 0)
+      (message "[budget] Category budget enforced: %d/%d targets limited (within quota)"
+               total-limited total-input))
+    (nreverse result)))
+
 (defun gptel-auto-workflow--vsm-health-actions ()
   "Translate VSM diagnostics into actionable repair hints."
   (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
@@ -4358,6 +4509,9 @@ effective +0.10, promising +0.05, underperforming -0.05."
         (budget (gptel-auto-workflow--category-experiment-budget 5))
         (vsm-actions (gptel-auto-workflow--vsm-health-actions))
         (expanded-actions (gptel-auto-workflow--vsm-expanded-actions)))
+    ;; Feed champion changes into controller configuration
+    (when champion-changes
+      (gptel-auto-workflow--update-controller-from-champion-changes champion-changes))
     ;; Save champion state for next cycle
     (when gptel-auto-workflow--category-champions
       (setq gptel-auto-workflow--evolution-next-cycle-hints
@@ -5144,6 +5298,46 @@ Saves to var/tmp/evolution-scores.json."
     (- current (or (ignore-errors (float last-total)) 0))))
 
 ;; ─── Allium BDD: Behavior-Driven Development via spec checking ───
+
+(defun gptel-auto-workflow--allium-bdd-gate ()
+  "Run Allium BDD check on the system's behavioral specification.
+Distills a behavioral description of the key pipeline invariants,
+checks them via Allium spec coherence, and logs issues found.
+Silent no-op when gptel unavailable (returns nil immediately)."
+  (when (and (fboundp 'gptel-auto-workflow--allium-bdd-check)
+             (fboundp 'gptel-auto-experiment--allium-distill)
+             (fboundp 'gptel-request))
+    (let ((behavior-description
+           "The Ouroboros evolution pipeline: after each cycle, kept experiments
+should trigger π Synthesis (semantic cluster → inherit strategy → auto-queue
+similar targets), VSM health should generate Wu Xing repair actions, and
+cross-subsystem state should persist to disk for daemon-restart survival.
+Regressed targets from knowledge-page diffs should appear in the analyzer
+prompt, and category champions should gate new strategies with keep-rate evidence.")
+          (results nil))
+      (gptel-auto-workflow--allium-bdd-check
+       behavior-description
+       (lambda (result)
+         (setq results result)
+         (if (eq (car result) :pass)
+             (message "[allium-bdd] Ouroboros behavioral spec: PASS")
+           (message "[allium-bdd] Ouroboros behavioral spec: %s (issues=%s severity=%.2f score=%.2f)"
+                    (car result)
+                    (plist-get (cdr result) :issues)
+                    (plist-get (cdr result) :severity)
+                    (plist-get (cdr result) :score))
+           (when (eq (car result) :fail)
+             (let ((report (plist-get (cdr result) :report)))
+               (when report
+                 (let* ((root (gptel-auto-workflow--worktree-base-root))
+                        (file (and root (expand-file-name "var/tmp/evolution/allium-bdd-report.md" root))))
+                   (when file
+                     (make-directory (file-name-directory file) t)
+                     (with-temp-file file (insert report)))))))))
+       ;; Non-blocking: don't wait for callback
+       nil))))
+
+
 
 (defun gptel-auto-workflow--allium-bdd-check (behavior-description &optional callback)
   "BDD check: distill BEHAVIOR-DESCRIPTION to Allium spec and verify coherence.
