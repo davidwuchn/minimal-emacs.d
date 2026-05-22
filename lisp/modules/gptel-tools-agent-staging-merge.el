@@ -180,9 +180,13 @@ Uses the staging worktree instead of switching branches in the root repo."
             (message "[auto-workflow] Missing merge source branch: %s" optimize-branch)
             nil)
          ;; Sync staging with main first so test fixes are included
-         (let ((sync-result (gptel-auto-workflow--git-result
-                             (format "git merge %s/main --no-ff -m %s" "origin" (shell-quote-argument "Sync staging with main before experiment"))
-                             180)))
+         ;; Must run from repo root — daemon's default-directory may be a worktree
+         (let* ((default-directory (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                            (gptel-auto-workflow--worktree-base-root))
+                                       default-directory))
+                (sync-result (gptel-auto-workflow--git-result
+                              (format "git merge %s/main --no-ff -m %s" "origin" (shell-quote-argument "Sync staging with main before experiment"))
+                              180)))
            (if (= 0 (cdr sync-result))
                (message "[auto-workflow] Synced staging with main before cherry-pick")
              (message "[auto-workflow] Staging sync with main skipped: %s"
@@ -354,25 +358,29 @@ Returns (success-p . output)."
                (message "[auto-workflow] Merged main into staging worktree SUCCESS")
              (message "[auto-workflow] Main merge into staging failed (non-fatal)")
              (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60)))))
-       (message "[auto-workflow] Verifying staging...")
-       (let* ((default-directory worktree)
-             (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
-             (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
-             (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
-             (submodule-note
-              (and syntax-pass
-                   (not submodule-pass)
-                   (let ((note (car-safe submodules)))
-                     (if (gptel-auto-workflow--non-empty-string-p note)
-                         note
-                       "Staging submodule hydration failed"))))
-             (_ (when submodule-note
-                  (with-current-buffer output-buffer
-                    (insert submodule-note "\n"))))
-              (test-result (when (and submodule-pass test-script (file-exists-p test-script))
-                             (gptel-auto-workflow--call-process-with-watchdog
-                              "bash" nil output-buffer nil test-script "unit")))
-              (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
+        (message "[auto-workflow] Verifying staging...")
+        (let* ((default-directory worktree)
+              (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
+              (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+              (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
+              (submodule-note
+               (and syntax-pass
+                    (not submodule-pass)
+                    (let ((note (car-safe submodules)))
+                      (if (gptel-auto-workflow--non-empty-string-p note)
+                          note
+                        "Staging submodule hydration failed"))))
+              (_ (when submodule-note
+                   (with-current-buffer output-buffer
+                     (insert submodule-note "\n"))))
+              (_ (when submodule-pass
+                   (message "[auto-workflow] Running unit tests in staging (may block ~60s)...")))
+               (test-result (when (and submodule-pass test-script (file-exists-p test-script))
+                              (gptel-auto-workflow--call-process-with-watchdog
+                               "bash" nil output-buffer nil test-script "unit")))
+              (_ (when test-result
+                   (message "[auto-workflow] Unit tests completed (exit=%d)" (cdr test-result))))
+               (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
                                (let ((process-environment
                                       (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
                                             process-environment)))
@@ -520,13 +528,22 @@ commits are preserved."
              (format "git fetch %s main" remote) 180)
             ;; Fast-forward local main to origin/main first, so external
             ;; (e.g. human-pushed) commits are never dropped.
-            (let ((ff-remote-result
-                   (gptel-auto-workflow--git-result
-                    (format "git merge --ff-only %s/main" remote) 60)))
-              (unless (= 0 (cdr ff-remote-result))
-                (message "[auto-workflow] Cannot fast-forward to origin/main (may have diverged): %s"
-                         (car ff-remote-result))
-                (error "Auto-promote blocked: local main must match origin/main before merging staging")))
+             (let ((ff-remote-result
+                    (gptel-auto-workflow--git-result
+                     (format "git merge --ff-only %s/main" remote) 60)))
+               (unless (= 0 (cdr ff-remote-result))
+                 ;; Fast-forward failed — local may have diverged from origin.
+                 ;; Try rebase to reconcile before failing permanently.
+                 (message "[auto-workflow] Cannot ff to origin/main: %s — attempting rebase"
+                          (car ff-remote-result))
+                 (let ((rebase-result
+                        (gptel-auto-workflow--git-result
+                         (format "git pull --rebase %s main" remote) 120)))
+                   (if (= 0 (cdr rebase-result))
+                       (message "[auto-workflow] Rebased onto origin/main, continuing auto-promote")
+                     (message "[auto-workflow] ✗ Auto-promote error: Auto-promote blocked: %s"
+                              (car rebase-result))
+                     (error "Auto-promote blocked: local main must match origin/main before merging staging")))))
             ;; Merge staging into main (main is now at origin/main).
             ;; Daemon-generated artifacts (DIRECTIVE.md, comparison reports, etc.)
             ;; can dirty the worktree and block git merge.  Stash them first.

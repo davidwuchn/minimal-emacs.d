@@ -100,3 +100,9 @@ you actually understand what you're calling before worrying about safety.
 
 **Don't:** `(foo x)` → error → `(foo x y)` → error → `(foo (list x y))` → finally works
 **Do:** `(describe-function 'foo)` → understands signature → `(foo x y)` → correct first time
+<<<<<<< ours — heading `Anti-Patterns` (T+F, confidence: medium)
+// hint: Logic and cosmetic changes overlap. Resolve logic first, then reformat.
+=======
+
+*Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*
+>>>>>>> theirs — heading `Anti-Patterns` (T+F, confidence: medium)

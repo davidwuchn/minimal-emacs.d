@@ -2896,12 +2896,24 @@ PROC-INFO is the plist containing process metadata."
                         "response body")))))))
 
 ;; TODO: Separate user-messaging from this function
+(defvar gptel-curl--sentinel-depth 0
+  "Guard against recursive sentinel invocations.")
 (defun gptel-curl--stream-cleanup (process _status)
-  "Process sentinel for gptel curl requests.
+  "Process sentinel for gptel curl streaming requests.
 
 PROCESS and _STATUS are process parameters."
-  (let ((proc-buf (process-buffer process))
-        (exit-status (process-exit-status process)))
+  (if (> gptel-curl--sentinel-depth 20)
+      (progn
+        (message "[gptel] Stream cleanup recursion guard: depth=%d, dropping cleanup for %s"
+                 gptel-curl--sentinel-depth (process-name process))
+        (ignore-errors
+          (set-process-sentinel process #'ignore)
+          (setf (alist-get process gptel--request-alist nil 'remove) nil)
+          (delete-process process)
+          (kill-buffer (process-buffer process))))
+    (let ((gptel-curl--sentinel-depth (1+ gptel-curl--sentinel-depth))
+          (proc-buf (process-buffer process))
+          (exit-status (process-exit-status process)))
     (let* ((fsm (car (alist-get process gptel--request-alist)))
            (info (gptel-fsm-info fsm))
            (http-status (plist-get info :http-status)))
@@ -2955,7 +2967,7 @@ PROCESS and _STATUS are process parameters."
       (gptel--fsm-transition fsm))      ; Move to next state
     (setf (alist-get process gptel--request-alist nil 'remove) nil)
     (delete-process process)
-    (kill-buffer proc-buf)))
+    (kill-buffer proc-buf))))
 
 (defun gptel-curl--stream-filter (process output)
   (let* ((fsm (car (alist-get process gptel--request-alist)))
@@ -3058,14 +3070,11 @@ BACKEND is the LLM backend in use.
 PROC-INFO is a plist with process information and other context.
 See `gptel-curl--get-response' for its contents.")
 
-(defvar gptel-curl--sentinel-depth 0
-  "Guard against recursive sentinel invocations.")
-
 (defun gptel-curl--sentinel (process _status)
   "Process sentinel for gptel curl requests.
 
 PROCESS and _STATUS are process parameters."
-  (if (> gptel-curl--sentinel-depth 10)
+  (if (> gptel-curl--sentinel-depth 20)
       (progn
         (message "[gptel] Sentinel recursion guard: depth=%d, dropping sentinel for %s"
                  gptel-curl--sentinel-depth (process-name process))
