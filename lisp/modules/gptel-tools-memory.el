@@ -69,6 +69,8 @@ SIGNALS an error if SLUG contains path traversal or invalid characters."
 (defun gptel-tools-memory--read (slug &optional knowledge-p)
   "Read a memory or knowledge file by SLUG.
 Returns content string or error message."
+  (when (null slug)
+    (error "Slug must not be nil"))
   (let ((path (gptel-tools-memory--resolve-path slug knowledge-p)))
     (cond
      ((not (file-exists-p path))
@@ -93,6 +95,8 @@ Returns content string or error message."
 (defun gptel-tools-memory--write (slug content &optional knowledge-p)
   "Write CONTENT to a memory file identified by SLUG.
 Returns success message or error."
+  (when (null slug)
+    (error "Slug must not be nil"))
   (when (null content)
     (error "Content must not be nil"))
   (when (string-blank-p content)
@@ -115,10 +119,11 @@ Returns success message or error."
 Each entry is formatted as \"name (type-label)\".
 If TOPIC is a non-empty string, filter by topic match.
 SIGNALS an error if TOPIC is a non-string, non-nil value."
-  (when (and (not (null topic))
-             (not (stringp topic))
-             (not (string= topic "")))
+  (when (and topic
+             (not (stringp topic)))
     (error "Topic must be a string, nil, or empty string, got: %S" topic))
+  (when (null type-label)
+    (error "Type-label must not be nil"))
   (when (and (stringp dir) (file-directory-p dir))
     (cl-loop for f in (directory-files-recursively dir "\\.md$")
              for base = (file-name-sans-extension (file-name-nondirectory f))
