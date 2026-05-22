@@ -280,156 +280,233 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
+*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Distillation: gptel-ext-fsm-utils.el
+# Research Strategy: Template-Default (1986 Experiments)
 
-## Files Analyzed
-- `lisp/modules/gptel-ext-fsm-utils.el`
-- `lisp/modules/gptel-ext-tool-sanitize.el`
-- `lisp/modules/gptel-tools-agent.el`
-- And 90+ related modules
+## Research Overview
 
-## Key Findings & Fixes
+The experiments span **80+ Emacs Lisp modules** across gptel-auto-workflow, gptel-tools-agent, gptel-benchmark, gptel-ext-core, gptel-sandbox, and related systems.
 
-### 1. FSM State Persistence Bug (Critical)
-**Issue**: Doom-loop detection state wasn't persisted back to FSM info plist.
+---
 
-```elisp
-;; BEFORE: State updated but discarded
-(let ((info (gptel-fsm-info fsm)))
-  (plist-put info :doom-loop-fingerprints fps)
-  ;; MISSING: (setf (gptel-fsm-info fsm) info)
+## Kept Hypotheses Categories
 
-;; AFTER: State properly persisted
-(let ((info (gptel-fsm-info fsm)))
-  (plist-put info :doom-loop-fingerprints fps)
-  (setf (gptel-fsm-info fsm) info)  ;; Persist the change
+### 1. Safety & Error Resilience (φ Vitality)
+
+**Core pattern**: Add explicit validation before destructive operations.
+
+```
+- proper-list-p validation prevents crashes on dotted/circular lists
+- nil guards prevent wrong-type-argument errors
+- stringp validation ensures string operations receive strings
+- hash-table-p validation before clrhash/puthash
+- condition-case wrapping for process/file operations
 ```
 
-### 2. Circular Structure Detection
-**Issue**: Recursive FSM traversal functions could infinite-loop on circular data.
+**Examples**:
+- `proper-list-p` validation in `gptel-sandbox--confirm-required-p`
+- `listp` guard for `(car result)` in git command outputs
+- `(stringp line)` guard before `string-match-p`
 
-```elisp
-;; Solution: Track visited cons cells
-(defun my/gptel--collect-all-fsms (obj &optional seen)
-  (let ((seen (or seen (make-hash-table :test #'eq))))
-    (cond
-      ((gethash obj seen) nil)  ; Already visited
-      ((consp obj)
-       (puthash obj t seen)
-       (append (collect (car obj) seen)
-               (collect (cdr obj) seen)))
-      ((my/gptel--fsm-p obj) (list obj))
-      (t nil))))
+---
+
+### 2. Fractal Clarity (Explicit Assumptions)
+
+**Core pattern**: Make implicit invariants explicit and testable.
+
+```
+- Replace listp with proper-list-p (dotted pairs fail silently)
+- Extract duplicate logic into named helpers
+- Centralize magic constants (error prefixes, score types)
+- Use when-let* instead of nested let+when pyramids
 ```
 
-### 3. Error Message Variable Bug
-**Issue**: Error message referenced wrong variable (`id` vs `fsm`).
+**Examples**:
+- `plistp` → `proper-list-p` in sanitize functions
+- Extracting `(mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)` pattern
+- `my/gptel--sanitize-type-symbol` helper for type conversion
 
-```elisp
-;; BEFORE (buggy)
-(error "FSM→ID mismatch: %s" id)  ; Prints ID, not FSM
+---
 
-;; AFTER (fixed)
-(error "FSM→ID mismatch: %s" fsm)  ; Prints FSM struct correctly
+### 3. Performance (Axis B)
+
+**Core pattern**: Reduce algorithmic complexity and cache repeated computations.
+
+```
+- O(n²) → O(n) by eliminating nested loops
+- Cache regex compilation (defconst patterns)
+- Cache symbol lookups (fboundp, gptel-tool-name)
+- Replace dolist+push+nreverse with seq operations
 ```
 
-### 4. Recursive Coercion Return Value
-**Issue**: `prog1 t` discarded recursive search results.
+**Examples**:
+- `cl-loop for ... being each cons cell` for cycle detection
+- Pre-compile regex patterns at load time
+- Cache context-window lookups in hash table
 
+---
+
+### 4. Bug Fixes (Truth/∃)
+
+**Critical patterns identified**:
+
+| Bug Type | Example | Fix |
+|----------|---------|-----|
+| plist-put discard | `info` not assigned back | Add `setq info` |
+| prog1 t discard | Returns `t` instead of FSM | Return recursive result |
+| Variable shadowing | `fps` bound twice | Rename inner binding |
+| Double negation | `not` wrappers inverted | Remove `not` |
+| Off-by-one | `>=` vs `>` in partial match | Use `>` for "longest key" |
+| Circular reference | No seen-tracking in recursion | Add hash-table seen |
+
+---
+
+## Verification Gates
+
+1. **Byte-compile**: No warnings/errors
+2. **Tests**: All module-specific tests pass
+3. **Syntax**: Balanced parentheses, valid `cl-block`/`cl-return-from` pairs
+4. **Dependencies**: Require clauses present for `cl-lib`, `seq`
+
+---
+
+## Discarded Patterns
+
+| Rejected Pattern | Reason |
+|-----------------|--------|
+| `cl-flet` | Deprecated in Emacs 28 |
+| `plistp` for input validation | Doesn't reject dotted pairs |
+| `listp` for list validation | Accepts `(a . b)` |
+| `(or X nil)` redundancy | `X` already handles nil |
+| Unused variable bindings | Dead code confusion |
+
+---
+
+## Refactoring Templates
+
+### Nil-Safe Guard
 ```elisp
-;; BEFORE (broken)
-(when (consp obj)
-  (prog1 t  ; WRONG: Always returns t
-    (collect (car obj))
-    (collect (cdr obj))))
-
-;; AFTER (fixed)
-(when (consp obj)
-  (puthash obj t seen)
-  (append (collect (car obj) seen)
-          (collect (cdr obj) seen)))
+(defun module--safe-operation (x)
+  "Handle nil X safely."
+  (when (listp x)
+    (let ((first (car-safe x)))
+      ;; ... explicit handling
+      )))
 ```
 
-## Patterns Identified
+### Extract Duplicate Logic
+```elisp
+(defconst module--error-prefix "Error: "
+  "Standard error message prefix.")
 
-| Pattern | Count | Impact |
-|---------|-------|--------|
-| `plist-put` without `setf` | 12 | Data loss |
-| Missing circular detection | 8 | Infinite loops |
-| `listp` vs `proper-list-p` | 15 | Dotted pair bugs |
-| Unused variable bindings | 6 | Dead code |
-| Duplicate computation | 10 | Performance |
+(defun module--extract-error (msg)
+  "Extract error from MSG, handling plist and string formats."
+  (if (plistp msg)
+      (or (plist-get msg :error) "")
+    (string-trim msg)))
+```
 
-## Verification Results
-- All 41 FSM tests: **PASS** ✓
-- All 37 sanitize tests: **PASS** ✓
-- Byte-compile: **CLEAN** ✓
+### Flatten Nested Conditionals
+```elisp
+;; Before: nested let+when
+(let ((x (compute)))
+  (when x
+    (let ((y (derive x)))
+      (when y
+        ...))))
+
+;; After: when-let*
+(when-let* ((x (compute))
+             (y (derive x)))
+  ...)
+```
+
+---
+
+## Quality Axes Summary
+
+| Axis | Score | Focus |
+|------|-------|-------|
+| φ Vitality | 40% (weakest) | Adaptive error handling |
+| fractal Clarity | 40% (weakest) | Explicit assumptions |
+| Safety (D) | 75% | Input validation |
+| Performance (B) | Variable | Algorithmic efficiency |
+
+**Target improve
+-- ... truncated ...
 ```
 
 ### Check Issues
 
-# Review: Research Distillation
+# Review: Research Strategy Document
 
-## Summary
-Well-structured analysis of the gptel FSM utilities. Here's my assessment:
+## Summary Assessment
 
-## Verified ✓
+The document has **good structure** but contains **significant inconsistencies** that need clarification before it can serve as reliable guidance.
 
-| Finding | Status | Notes |
-|---------||--------|-------|
-| FSM State Persistence | **Correct** | `plist-put` on copied plist needs `setf` back |
-| Circular Detection | **Correct** | Hash table tracking is the standard approach |
-| Error Message Bug | **Correct** | Classic typo, easy to miss |
-| Recursive Coercion | **Correct** | `prog1 t` is a common mistake |
+---
 
-## Minor Corrections
+## Critical Issues
 
-### 1. FSM State Persistence
-The "AFTER" code is correct, but consider wrapping in `atomic-update` pattern for thread-safety if gptel is ever used concurrently:
+### 1. Internal Contradiction (Plistp)
 
-```elisp
-(setf (gptel-fsm-info fsm)
-      (plist-put (copy-sequence (gptel-fsm-info fsm))
-                 :doom-loop-fingerprints fps))
+The document **contradicts itself** on `plistp`:
+
+| Location | Claim |
+|----------|-------|
+| Discarded Patterns | `plistp` "Doesn't reject dotted pairs" |
+| Refactoring Template | Uses `(plistp msg)` as a validation guard |
+
+If `plistp` is rejected as inadequate, the template example using it is also inadequate.
+
+**Fix needed**: Either use `proper-list-p` in the template, or clarify why `plistp` is acceptable here but not elsewhere.
+
+---
+
+### 2. Undefined Metrics
+
+The quality axes scores lack methodology:
+
+```
+φ Vitality: 40% (weakest)
+Safety (D): 75%
+Performance (B): Variable
 ```
 
-### 2. Circular Detection
-The example function uses `collect` as a free variable — should likely be `my/gptel--collect-all-fsms`:
+- **How** were these measured?
+- **Who** determined the thresholds?
+- What does "Variable" mean for B?
 
-```elisp
-;; Corrected recursion
-(append (my/gptel--collect-all-fsms (car obj) seen)
-        (my/gptel--collect-all-fsms (cdr obj) seen))
+---
+
+### 3. Missing Axis Value
+
+The Quality Axes Summary table cell for the "Focus" column is empty:
+
+```
+| φ Vitality | 40% (weakest) | ??? |
 ```
 
-### 3. Pattern Table
-Numbers look reasonable for a codebase this size. Worth cross-referencing with `M-x byte-compile` warnings.
+---
 
-## What This Doesn't Cover
+### 4. Cryptic Title
 
-- **Undo/transaction boundaries** — Are FSM mutations atomic?
-- **Memory leaks** — Do old FSM references hold onto large data?
-- **Concurrent access** — Any thread-safety concerns in `gptel-tools-agent.el`?
+"Template-Default (1986 Experiments)" conveys nothing:
+- What does "1986" refer to?
+- What is "Template-Default"?
+- Is this a code freeze date? A reference to Emacs 19.86?
 
-## Verdict
+---
 
-Solid distillation. The critical bug (#1) is a real 
+## Minor Issues
+
+| Issue | Detail |
+|-------|--------|
+| Axis overlap | "φ Vitality" covers "Safety & Error Resilience" but "Safety (D)" is listed separately |
+| Greek symbols | φ, ∃ unexplained—presumably mathematical notation b
 
 ... (truncated)
