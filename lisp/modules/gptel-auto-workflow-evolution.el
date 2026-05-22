@@ -4103,8 +4103,102 @@ effective +0.10, promising +0.05, underperforming -0.05."
                  (max 0.05 (- (or gptel-auto-workflow--baseline-keep-rate 0.18) 0.03)))
            (message "[vsm-repair] Lowered baseline keep-rate to %.0f%% (Wood→Water generating)"
                     (* 100 gptel-auto-workflow--baseline-keep-rate)))
-          ('increase-research
+           ('increase-research
            (message "[vsm-repair] Research priority increased (Water→Wood generating)")))))))
+
+;; ─── Cross-Subsystem Feedback Functions (re-added after daemon merge wipe) ───
+
+(defun gptel-auto-workflow--champion-feedback-to-controller ()
+  "Detect category champion changes between cycles. Returns list of changes."
+  (when (and (boundp 'gptel-auto-workflow--category-champions)
+             gptel-auto-workflow--category-champions)
+    (let* ((prev (plist-get gptel-auto-workflow--evolution-next-cycle-hints :prev-champions))
+           (results nil))
+      (dolist (entry gptel-auto-workflow--category-champions)
+        (let* ((category (car entry)) (current-strategy (cadr entry)) (current-rate (cddr entry))
+               (prev-entry (when prev (assoc category prev)))
+               (prev-strategy (when prev-entry (cadr prev-entry)))
+               (prev-rate (when prev-entry (cddr prev-entry))))
+          (cond ((null prev-entry)
+                 (push (list :category category :strategy current-strategy :rate current-rate
+                             :action 'new-champion :reason "first champion") results))
+                ((and prev-strategy (not (string= current-strategy prev-strategy)))
+                 (push (list :category category :strategy current-strategy :rate current-rate
+                             :old-strategy prev-strategy :action 'promoted
+                             :reason (format "replaced %s" prev-strategy)) results))
+                ((and prev-rate current-rate (> (- current-rate prev-rate) 0.05))
+                 (push (list :category category :strategy current-strategy :rate current-rate
+                             :old-rate prev-rate :action 'improving) results)))))
+      (nreverse results))))
+
+(defun gptel-auto-workflow--category-experiment-budget (total-experiments)
+  "Allocate TOTAL-EXPERIMENTS slots across 4 categories by sqrt(keep-rate)."
+  (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
+         (instances (plist-get onto :instances))
+         (cat-rates (list (cons :programming 0) (cons :tool-calls 0)
+                          (cons :agentic 0) (cons :natural-language 0)))
+         (cat-counts (list (cons :programming 0) (cons :tool-calls 0)
+                           (cons :agentic 0) (cons :natural-language 0))))
+    (dolist (i instances)
+      (let* ((name (plist-get i :name)) (rate (plist-get i :keep-rate))
+             (cat (gptel-auto-workflow--categorize-target name)))
+        (when cat
+          (cl-incf (alist-get cat cat-counts))
+          (cl-incf (alist-get cat cat-rates) rate))))
+    (let* ((weights (mapcar (lambda (cat)
+                              (cons cat (sqrt (max 0.01 (/ (alist-get cat cat-rates)
+                                                           (max 1 (alist-get cat cat-counts)))))))
+                            (list :programming :tool-calls :agentic :natural-language)))
+           (total-w (apply #'+ (mapcar #'cdr weights)))
+           (budget nil))
+      (dolist (w weights)
+        (push (cons (car w) (max 1 (round (* total-experiments (/ (cdr w) (max 0.001 total-w)))))) budget))
+      (nreverse budget))))
+
+(defun gptel-auto-workflow--vsm-health-actions ()
+  "Translate VSM diagnostics into actionable repair hints."
+  (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
+         (classes (plist-get onto :classes))
+         (effective (cl-count-if (lambda (c) (string= (plist-get c :status) "effective")) classes))
+         (total (max 1 (length classes)))
+         (actions nil))
+    (when (< effective (max 3 (/ total 4)))
+      (push (cons 'increase-strategy-evolution
+                  (format "Only %d/%d effective; Fire(S4) weak" effective total)) actions))
+    (when (< (or gptel-auto-workflow--champion-keep-rate 0) 0.15)
+      (push (cons 'rebalance-experiment-targets "Champion keep-rate <15%; Wood(S1) weak") actions))
+    (let ((promising (cl-count-if (lambda (c) (string= (plist-get c :status) "promising")) classes)))
+      (when (< promising 2)
+        (push (cons 'increase-research (format "Only %d promising; Water(S5) weak" promising)) actions)))
+    (list :actions (nreverse actions) :effective effective :total total)))
+
+(defun gptel-auto-workflow--apply-cross-subsystem-feedback ()
+  "Orchestrate cross-subsystem feedback: champion→controller, budget, VSM repair."
+  (let ((champion-changes (gptel-auto-workflow--champion-feedback-to-controller))
+        (budget (gptel-auto-workflow--category-experiment-budget 5))
+        (vsm-actions (gptel-auto-workflow--vsm-health-actions)))
+    ;; Save champion state for next cycle
+    (when gptel-auto-workflow--category-champions
+      (setq gptel-auto-workflow--evolution-next-cycle-hints
+            (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                       :prev-champions
+                       (mapcar (lambda (e) (cons (car e) (cdr e)))
+                               gptel-auto-workflow--category-champions))))
+    ;; Store budget and VSM actions
+    (setq gptel-auto-workflow--evolution-next-cycle-hints
+          (plist-put gptel-auto-workflow--evolution-next-cycle-hints :category-budget budget))
+    (setq gptel-auto-workflow--evolution-next-cycle-hints
+          (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                     :vsm-actions (plist-get vsm-actions :actions)))
+    ;; Log
+    (dolist (change champion-changes)
+      (message "[feedback] %s: %s (%.1f%%) [%s]"
+               (plist-get change :category) (plist-get change :strategy)
+               (* 100 (or (plist-get change :rate) 0)) (plist-get change :action)))
+    (message "[budget] Categories: %s"
+             (mapconcat (lambda (b) (format "%s:%d" (car b) (cdr b))) budget " "))
+    (dolist (action (plist-get vsm-actions :actions))
+      (message "[vsm-action] %s: %s" (car action) (cdr action)))))
 
 (defun gptel-auto-workflow--experiment-causal-links ()
   "Build causal link graph between experiments on the same target.
