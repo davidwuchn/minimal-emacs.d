@@ -542,9 +542,11 @@ Returns formatted string of global insights."
                           "\t"))
                  ;; ASSUMPTION: TSV has at least 18 columns (index 0-17)
                  ;; BEHAVIOR: Guard access to prevent nil from short lines
-                 (num-fields (length fields))
-                 (decision (when (>= num-fields 8) (nth 7 fields)))
-                 (axis (when (>= num-fields 18) (or (nth 17 fields) "?"))))
+                  (num-fields (length fields))
+                  ;; 20/24-col: axis at index 17; 27-col: axis at index 18
+                  (axis-idx (if (<= num-fields 24) 17 18))
+                  (decision (when (>= num-fields 8) (nth 7 fields)))
+                  (axis (when (>= num-fields 18) (or (nth axis-idx fields) "?"))))
             (when (and decision (not (equal axis "?")))
               (puthash axis (1+ (gethash axis axis-counts 0)) axis-counts)
               (when (equal decision "kept")
