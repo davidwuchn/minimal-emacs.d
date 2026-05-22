@@ -1,7 +1,11 @@
 # Mementum State
 
 > Last session: 2026-05-22
-> Session focus: VSM × Ontology × Eight Keys integration — 15 changes
+> Session focus: TDD coverage for cross-subsystem feedback + sync
+
+> **New:** 6 TDD tests added for cross-subsystem feedback functions (1835 total)
+
+> ### 2026-05-22 Session (final)
 > Session goal: Wire three frameworks together, fix zero-score feedback loop, restart daemon clean
 
 > ## 2026-05-22 Session (final)
