@@ -38,7 +38,9 @@ Returns float 0.0-1.0 combining trace confidence, trace-success, and
 pattern actionability.  Returns nil when no trace data exists for TARGET.
 AutoTTS→Preflight: feeds research provenance into experiment gating."
   (let ((traces (and (fboundp 'gptel-auto-workflow--load-research-traces)
-                     (gptel-auto-workflow--load-research-traces)))
+                     (condition-case nil
+                         (gptel-auto-workflow--load-research-traces)
+                       (error nil))))
         (qualities nil))
     (dolist (trace traces)
       (let ((outcomes (plist-get trace :outcomes)))
@@ -131,7 +133,7 @@ Returns float 0.0-1.0 based on:
                             (* strategy-rate (if has-strategy-data 2 0))
                             (* target-rate (if has-target-data 1 0))
                             (* trend-rate (if (> trend-count 0) 1 0))
-                            (* research-quality (if has-research 2 0)))))
+                            (* (or research-quality 0) (if has-research 2 0)))))
       (if (> total-weight 0)
           (/ weighted-sum total-weight)
         0.5))))  ; No data = 50/50

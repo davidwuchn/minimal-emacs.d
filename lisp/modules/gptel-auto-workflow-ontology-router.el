@@ -383,12 +383,14 @@ pi-Synthesis: drives semantic-cluster-targets, semantic-target-suggestions,
 and the semantic-relationships knowledge page."
   (let ((threshold (or threshold 0.60))
         (now (float-time)))
-    (when (and gptel-auto-workflow--semantic-edges-cache
-               gptel-auto-workflow--semantic-edges-cache-time
-               (< (- now gptel-auto-workflow--semantic-edges-cache-time) 3600))
-      (cl-return-from gptel-auto-workflow--semantic-similarity-edges
-        (cl-remove-if (lambda (e) (< (plist-get e :score) threshold))
-                      gptel-auto-workflow--semantic-edges-cache)))
+    (if (and gptel-auto-workflow--semantic-edges-cache
+             gptel-auto-workflow--semantic-edges-cache-time
+             (< (- now gptel-auto-workflow--semantic-edges-cache-time) 3600))
+        (cl-remove-if (lambda (e)
+                        (or (< (plist-get e :score) threshold)
+                            (string= (plist-get e :source) (plist-get e :target))
+                            (not (string-match-p "\\`lisp/modules/.*\\.el\\'" (plist-get e :target)))))
+                      gptel-auto-workflow--semantic-edges-cache)
     (let* ((root (gptel-auto-workflow--worktree-base-root))
            (git-embed-bin (expand-file-name "bin/git-embed" root))
            (kept-targets nil)
@@ -425,7 +427,7 @@ and the semantic-relationships knowledge page."
             gptel-auto-workflow--semantic-edges-cache-time now)
       (message "[semantic] git-embed: %d similarity edges computed (threshold=%.2f)"
                (length edges) threshold)
-      edges)))
+      edges))))
 
 (defun gptel-auto-workflow--semantic-target-suggestions (&optional max-suggestions min-score)
   "Suggest experiment targets based on semantic similarity to kept targets.

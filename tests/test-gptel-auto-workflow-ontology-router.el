@@ -432,7 +432,48 @@ Guards against missing runtime dependencies (worktree-base-root)."
           (let ((first-hint (car queued)))
             (should (string= "b.el" (plist-get first-hint :target)))
             (should (string= "weighted-failures" (plist-get first-hint :strategy)))
-            (should (string= "semantic-cluster" (plist-get first-hint :reason)))))))))
+             (should (string= "semantic-cluster" (plist-get first-hint :reason)))))))))
+
+;; ─── Semantic Similarity Edges (git-embed) ───
+
+(ert-deftest tdd/ontology/semantic-edges-cache-hit ()
+  "semantic-similarity-edges returns cached edges when fresh."
+  (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+    (let ((gptel-auto-workflow--semantic-edges-cache
+           '((:source "a.el" :target "b.el" :score 0.82)
+             (:source "a.el" :target "c.el" :score 0.45)))
+          (gptel-auto-workflow--semantic-edges-cache-time (float-time)))
+      (let ((edges (gptel-auto-workflow--semantic-similarity-edges 0.60)))
+        (should (= 1 (length edges)))
+        (should (string= "a.el" (plist-get (car edges) :source)))
+        (should (= 0.82 (plist-get (car edges) :score)))))))
+
+(ert-deftest tdd/ontology/semantic-edges-nil-when-no-targets ()
+  "semantic-similarity-edges returns nil when no kept targets exist."
+  (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+    (let ((gptel-auto-workflow--semantic-edges-cache nil)
+          (gptel-auto-workflow--semantic-edges-cache-time nil))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                 (lambda () default-directory))
+                ((symbol-function 'gptel-auto-workflow--parse-all-results)
+                 (lambda () nil)))
+        (should-not (gptel-auto-workflow--semantic-similarity-edges 0.60))))))
+
+(ert-deftest tdd/ontology/semantic-edges-plist-format ()
+  "semantic-similarity-edges mock returns proper plist format."
+  (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+    (let ((mock-edges '((:source "a.el" :target "b.el" :score 0.88)
+                        (:source "a.el" :target "c.el" :score 0.75)))
+          (gptel-auto-workflow--semantic-edges-cache nil)
+          (gptel-auto-workflow--semantic-edges-cache-time 0))
+      (setq gptel-auto-workflow--semantic-edges-cache mock-edges)
+      (setq gptel-auto-workflow--semantic-edges-cache-time (float-time))
+      (let ((edges (gptel-auto-workflow--semantic-similarity-edges 0.70)))
+        (should (= 2 (length edges)))
+        (dolist (e edges)
+          (should (plist-get e :source))
+          (should (plist-get e :target))
+          (should (numberp (plist-get e :score))))))))
 
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
