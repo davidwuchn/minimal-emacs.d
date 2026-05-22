@@ -2358,7 +2358,7 @@ must not override it to MiniMax via setq-local in subagent buffers."
     (let ((root (make-temp-file "aw-evolution" t)))
       (unwind-protect
           (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
-                     (lambda (&optional _) '(("a.el" "b.el" . 0.75) ("a.el" "c.el" . 0.82))))
+                     (lambda (&optional _) '((:source "a.el" :target "b.el" :score 0.75) (:source "a.el" :target "c.el" :score 0.82))))
                     ((symbol-function 'gptel-auto-workflow--worktree-base-root)
                      (lambda () root)))
             (gptel-auto-workflow--evolution-persist-semantic-relationships)

@@ -1,5 +1,4 @@
 ---
-last-evolution: 2026-05-16 21:00
 name: strategy-proposer
 description: |
   Generates new Emacs Lisp prompt-building strategies for the auto-workflow meta-harness.

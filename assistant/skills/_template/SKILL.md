@@ -1,5 +1,4 @@
 ---
-last-evolution: 2026-05-16 21:00
 name: template-skill
 description: >
   Template skill demonstrating best practices.
