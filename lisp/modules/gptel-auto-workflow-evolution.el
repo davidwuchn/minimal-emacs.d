@@ -2201,8 +2201,23 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
       (push (cons 'enable-fallback-backend "Metal(S2) weak: fewer than 3 backends")
             gptel-auto-workflow--wu-xing-actions))
      (t
-      (message "[vsm] 相生: All layers balanced — generating cycle active")))
-    ;; Feed Wu Xing diagnostics into next-cycle hints for VSM repair
+       (message "[vsm] 相生: All layers balanced — generating cycle active")))
+     ;; VSM→Target: compute per-level health scores for target prioritization
+     (let* ((s1-strength (min 1.0 (* keep-rate 5.0)))        ; Wood/Operations → keep-rate
+            (s2-strength (min 1.0 (/ backends 5.0)))          ; Metal/Coord → backend count
+            (s3-strength (if (> backends 2) 0.7 0.3))         ; Earth/Control → infrastructure
+            (s4-strength (min 1.0 (/ strategies 10.0)))       ; Fire/Intel → strategy count
+            (s5-strength (if eight-keys-available
+                             (/ (+ autogo-score autotts-score selfev-score ontology-score) 4.0)
+                           0.5)))                             ; Water/Identity → Eight Keys avg
+       (push (cons 'prioritize-targets
+                   (list :s1-ops s1-strength
+                         :s2-coord s2-strength
+                         :s3-control s3-strength
+                         :s4-intel s4-strength
+                         :s5-identity s5-strength))
+             gptel-auto-workflow--wu-xing-actions))
+     ;; Feed Wu Xing diagnostics into next-cycle hints for VSM repair
     (when gptel-auto-workflow--wu-xing-actions
       (let ((existing (plist-get gptel-auto-workflow--evolution-next-cycle-hints :vsm-actions)))
         (setq gptel-auto-workflow--evolution-next-cycle-hints
@@ -4387,11 +4402,71 @@ effective +0.10, promising +0.05, underperforming -0.05."
            (when (fboundp 'gptel-auto-workflow--allium-audit-signal)
              (gptel-auto-workflow--allium-audit-signal)
              (message "[vsm-repair] Allium audit triggered (spec coverage gap)")))
-           ('freeze-unstable-targets
-           (let ((unstable-str (cdr action)))
-             (message "[vsm-repair] Unstable targets flagged: %s (experiments gated)"
-                      (if (stringp unstable-str) unstable-str "unknown"))))
-           (_ (message "[vsm-repair] Unknown VSM action: %s" (car action))))))))
+            ('freeze-unstable-targets
+            (let ((unstable-str (cdr action)))
+              (message "[vsm-repair] Unstable targets flagged: %s (experiments gated)"
+                       (if (stringp unstable-str) unstable-str "unknown"))))
+            ('prioritize-targets
+             (gptel-auto-workflow--vsm-prioritize-targets (cdr action))
+             (message "[vsm-repair] Target queue reordered by VSM health diagnostics"))
+            (_ (message "[vsm-repair] Unknown VSM action: %s" (car action))))))))
+
+(defun gptel-auto-workflow--vsm-prioritize-targets (vsm-levels)
+  "Reorder experiment target queue based on VSM health LEVEL weaknesses.
+Maps VSM level deficits to specific target file patterns to front-load
+experiments on files most relevant to the diagnosed weakness.
+VSM→Target: diagnosis-driven experiment targeting for faster recovery.
+
+VSM LEVELS is a plist of (level . strength):
+  :s1-ops (Wood) → operational modules
+  :s2-coord (Metal) → coordination/backend modules
+  :s3-control (Earth) → validation/staging modules
+  :s4-intel (Fire) → strategy/evolution modules
+  :s5-identity (Water) → core/identity modules"
+  (when (boundp 'gptel-auto-workflow--experiment-targets)
+    (let* ((level-files
+            '((:s1-ops . (".*gptel-tools-\\(agent\\|code\\|edit\\|preview\\)\\.el\\'"
+                          ".*gptel-ext-\\(core\\|fsm\\|retry\\|streaming\\)\\.el\\'"))
+              (:s2-coord . (".*gptel-ext-backends\\.el\\'"
+                            ".*gptel-tools-agent-\\(staging\\|worktree\\)"
+                            ".*ontology-router\\.el\\'"))
+              (:s3-control . (".*gptel-tools-agent-validation\\.el\\'"
+                              ".*gptel-sandbox\\.el\\'"
+                              ".*gptel-ext-security\\.el\\'"))
+              (:s4-intel . (".*gptel-tools-agent-strategy-\\(evolver\\|harness\\)\\.el\\'"
+                            ".*gptel-auto-workflow-research-\\(benchmark\\|integration\\)"
+                            ".*gptel-benchmark-principles\\.el\\'"))
+              (:s5-identity . (".*nucleus-\\(tools\\|prompts\\|presets\\)\\.el\\'"
+                               ".*gptel-ext-core\\.el\\'"
+                               ".*gptel-agent-loop\\.el\\'"))))
+           (targets gptel-auto-workflow--experiment-targets)
+           (prioritized nil)
+           (remaining targets))
+      ;; For each weak VSM level (strength below threshold), pull matching
+      ;; targets to the front of the queue
+      (dolist (level-pair (reverse vsm-levels))
+        (let* ((level (car level-pair))
+               (strength (cdr level-pair))
+               (patterns (cdr (assq level level-files))))
+          (when (and patterns (< strength 0.4))
+            (dolist (pattern patterns)
+              (let ((matched nil))
+                (setq remaining
+                      (cl-remove-if
+                       (lambda (tgt)
+                         (when (and (not matched)
+                                    (string-match-p pattern tgt))
+                           (push tgt prioritized)
+                           (setq matched t)
+                           t))
+                       remaining)))))))
+      ;; Append remaining (non-matched) targets after prioritized ones
+      (setq gptel-auto-workflow--experiment-targets
+            (append (nreverse prioritized) remaining))
+      (when prioritized
+        (message "[vsm-targets] Prioritized %d targets for weak VSM levels: %s"
+                 (length prioritized)
+                 (mapconcat #'identity (seq-take (nreverse prioritized) 3) ", "))))))
 
 ;; ─── Cross-Subsystem Feedback Functions (re-added after daemon merge wipe) ───
 
