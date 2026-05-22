@@ -62,7 +62,7 @@ they are not tracked by Git."
                          (not (string-empty-p base-root-raw))
                          (file-name-as-directory (expand-file-name base-root-raw))))
          (canonical-root (and base-root
-                              (not (file-directory-p (expand-file-name "var" base-root)))
+                              (file-directory-p (expand-file-name "var" base-root))
                               (gptel-auto-workflow--worktree-base-repo-root)))
          (source-root (and base-root
                            (or (and (stringp canonical-root)
