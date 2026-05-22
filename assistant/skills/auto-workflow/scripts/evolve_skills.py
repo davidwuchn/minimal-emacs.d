@@ -186,6 +186,9 @@ def generate_skill(skill_name, skill_info, analysis_path, root_dir, patterns_pat
             skill_file = skills_dir / "SKILL.md"
             if skill_file.exists():
                 cmd.extend(["--skill-file", str(skill_file)])
+            else:
+                print(f"    No SKILL.md found in {skills_dir}, skipping evolution")
+                continue
         
         # Pass patterns if available and script supports it
         if patterns_path and script_name == 'generate_directive.py':
