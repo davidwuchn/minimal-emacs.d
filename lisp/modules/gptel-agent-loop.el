@@ -604,9 +604,11 @@ BEHAVIOR: Uses the continuation-count reader to avoid redundant task-p checks."
   "Return non-nil when STATE should continue after RESP.
 Called only from `handle-continuation' which is called from
 `handle-string-response' when STATE is task-p.
-ASSUMPTION: RESP is a string (validated by callers)."
+Nil RESP returns nil immediately (short-circuit for safety)."
   (and (stringp resp)
+       (not (string-blank-p resp))
        (gptel-agent-loop--task-p state)
+       (not (gptel-agent-loop--task-aborted state))
        gptel-agent-loop-force-completion
        (or (null gptel-agent-loop-max-continuations)
            (< (gptel-agent-loop--continuation-count state)
