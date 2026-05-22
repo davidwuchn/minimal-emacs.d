@@ -173,23 +173,24 @@ Strategy is queued for champion league evaluation against existing 4 strategies.
     (push name gptel-auto-workflow--proposed-research-strategies)
     (message "[meta-harness] Proposed research strategy: %s — queued for champion league"
              name)
-    ;; Write strategy definition for later benchmark
-    (let ((strategy-file (expand-file-name
-                          (format "assistant/skills/researcher-prompt/strategies/%s.json"
-                                  name)
-                          (gptel-auto-workflow--worktree-base-root))))
-      (make-directory (file-name-directory strategy-file) t)
-      (with-temp-file strategy-file
-        (let ((json-object-type 'hash-table)
-              (json-array-type 'list)
-              (json-key-type 'string))
-          (insert (json-encode
-                   (let ((h (make-hash-table :test 'equal)))
-                     (puthash "name" name h)
-                     (puthash "description" description h)
-                     (puthash "phases" phases h)
-                     (puthash "status" "proposed" h)
-                     h))))))
+    ;; Write strategy definition for later benchmark when running in the full workflow.
+    (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+      (let ((strategy-file (expand-file-name
+                            (format "assistant/skills/researcher-prompt/strategies/%s.json"
+                                    name)
+                            (gptel-auto-workflow--worktree-base-root))))
+        (make-directory (file-name-directory strategy-file) t)
+        (with-temp-file strategy-file
+          (let ((json-object-type 'hash-table)
+                (json-array-type 'list)
+                (json-key-type 'string))
+            (insert (json-encode
+                     (let ((h (make-hash-table :test 'equal)))
+                       (puthash "name" name h)
+                       (puthash "description" description h)
+                       (puthash "phases" phases h)
+                       (puthash "status" "proposed" h)
+                       h)))))))
     name))
 
 (defun gptel-auto-workflow--run-research-champion-league ()

@@ -5381,7 +5381,7 @@ prompt, and category champions should gate new strategies with keep-rate evidenc
   "BDD check: distill BEHAVIOR-DESCRIPTION to Allium spec and verify coherence.
 Returns nil when Allium is unavailable. Silent no-op when gptel not functional.
 Use for TDD-style behavioral verification."
-  (condition-case-unless-debug err
+  (condition-case err
       (progn
         (unless (and (fboundp 'gptel-auto-experiment--allium-distill)
                      (fboundp 'gptel-request))
@@ -5390,13 +5390,13 @@ Use for TDD-style behavioral verification."
         (gptel-auto-experiment--allium-distill
          behavior-description
          (lambda (allium-spec)
-           (condition-case-unless-debug err
+            (condition-case err
                (if (not allium-spec)
                    (when callback (funcall callback (cons :distill-failed nil)))
                  (gptel-auto-experiment--allium-check
                   allium-spec
                   (lambda (issues)
-                    (condition-case-unless-debug err
+                    (condition-case err
                         (let* ((count-severity (gptel-auto-experiment--allium-issues-count issues))
                                (count (car count-severity))
                                (severity (cdr count-severity))
@@ -5410,7 +5410,8 @@ Use for TDD-style behavioral verification."
                                            (list :issues count :severity severity :score score
                                                  :spec allium-spec :report report)))))
                       (error (when callback (funcall callback (cons :check-error nil))))))))
-             (error (when callback (funcall callback (cons :check-error nil))))))))
+              (error (when callback (funcall callback (cons :check-error nil)))))))
+        nil)
     (error (when callback (funcall callback (cons :unavailable nil)))
            nil)))
 
