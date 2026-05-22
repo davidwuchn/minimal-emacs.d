@@ -32,20 +32,45 @@ Args: strategy target predicted threshold tokens."
 
 ;; ─── Prediction Core ───
 
+(defun gptel-auto-workflow--research-quality-for-target (target)
+  "Compute research-quality signal for TARGET from AutoTTS trace outcomes.
+Returns float 0.0-1.0 combining trace confidence, trace-success, and
+pattern actionability.  Returns nil when no trace data exists for TARGET.
+AutoTTS→Preflight: feeds research provenance into experiment gating."
+  (let ((traces (and (fboundp 'gptel-auto-workflow--load-research-traces)
+                     (gptel-auto-workflow--load-research-traces)))
+        (qualities nil))
+    (dolist (trace traces)
+      (let ((outcomes (plist-get trace :outcomes)))
+        (dolist (outcome outcomes)
+          (when (string= (or (plist-get outcome :target) "") target)
+            (let* ((confidence (or (plist-get trace :confidence) 0.5))
+                   (trace-success (if (and (fboundp 'gptel-auto-workflow--trace-success-p)
+                                            (gptel-auto-workflow--trace-success-p trace))
+                                      1.0 0.3))
+                   (actionability (min 1.0 (/ (or (plist-get outcome :pattern-actionability) 0) 5.0)))
+                   (quality (* confidence trace-success (+ 0.5 (* 0.5 actionability)))))
+              (push quality qualities))))))
+    (when qualities
+      (/ (apply #'+ qualities) (float (length qualities))))))
+
 (defun gptel-auto-workflow--predict-outcome (strategy target)
   "Predict success probability for STRATEGY + TARGET combination.
 Returns float 0.0-1.0 based on:
 - Strategy keep-rate from ontology
 - Target keep-rate from ontology
 - Strategy+target pair history (3x weight)
-- Recent trend (last 3 experiments)"
+- Recent trend (last 3 experiments)
+- Research trace quality from AutoTTS (2x weight, when available)"
   (let* ((ontology (gptel-auto-workflow--generate-experiment-ontology))
          (strategy-rate 0.0)
          (target-rate 0.0)
          (pair-rate 0.0)
          (pair-total 0)
          (trend-rate 0.0)
-         (trend-count 0))
+         (trend-count 0)
+         (research-quality (gptel-auto-workflow--research-quality-for-target target))
+         (has-research (and research-quality (numberp research-quality))))
     
     ;; Strategy rate
     (dolist (cls (plist-get ontology :classes))
@@ -94,16 +119,19 @@ Returns float 0.0-1.0 based on:
     
     ;; Weighted combination
     ;; Pair history (3x) + strategy rate (2x) + target rate (1x) + trend (1x)
+    ;; + research quality (2x, when available)
     (let* ((has-strategy-data (or (> pair-total 0) (> strategy-rate 0)))
            (has-target-data (or (> pair-total 0) (> target-rate 0)))
            (total-weight (+ (if (> pair-total 0) 3 0)
                             (if has-strategy-data 2 0)
                             (if has-target-data 1 0)
-                            (if (> trend-count 0) 1 0)))
+                            (if (> trend-count 0) 1 0)
+                            (if has-research 2 0)))
            (weighted-sum (+ (* pair-rate (if (> pair-total 0) 3 0))
                             (* strategy-rate (if has-strategy-data 2 0))
                             (* target-rate (if has-target-data 1 0))
-                            (* trend-rate (if (> trend-count 0) 1 0)))))
+                            (* trend-rate (if (> trend-count 0) 1 0))
+                            (* research-quality (if has-research 2 0)))))
       (if (> total-weight 0)
           (/ weighted-sum total-weight)
         0.5))))  ; No data = 50/50

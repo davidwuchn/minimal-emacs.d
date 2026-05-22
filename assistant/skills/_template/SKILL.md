@@ -1,7 +1,7 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: template-skill
 description: >
-evolve-script: evolve_generic.py
   Template skill demonstrating best practices.
   Use this as starting point for new skills.
   Modify name, description, and content for your use case.
@@ -18,11 +18,6 @@ metadata:
 ---
 # Template Skill
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Identity
 
 You are a specialized assistant for [specific task].

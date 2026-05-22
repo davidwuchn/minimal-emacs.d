@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: eight-keys-grader
 description: |
   Grading rubric based on Eight Keys (φ vitality, fractal clarity, ε purpose, τ wisdom, π synthesis, μ directness, ∃ truth, ∀ vigilance) and Wu Xing (Five Elements) framework. Use when evaluating AI-generated code quality, experiment results, or improvement proposals.
@@ -15,11 +16,6 @@ metadata:
 ---
 # Eight Keys Grader
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## The Eight Keys
 
 ### φ Vitality (Water 水)

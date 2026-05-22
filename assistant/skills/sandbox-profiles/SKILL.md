@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: sandbox-profiles
 description: |
   Defines tool permission profiles for programmatic agent execution.
@@ -15,11 +16,6 @@ metadata:
 ---
 # Sandbox Tool Profiles
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Overview
 
 Different execution contexts require different tool permissions:

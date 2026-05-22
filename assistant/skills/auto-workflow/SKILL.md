@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: auto-workflow
 description: Orchestrates automated code improvement through hypothesis-driven experimentation and self-evolution
 version: 1.1
@@ -12,11 +13,6 @@ metadata:
 
 This skill suite orchestrates automated code improvement through systematic experimentation and self-evolution.
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Skill Architecture
 
 The auto-workflow system consists of coordinated sub-skills:

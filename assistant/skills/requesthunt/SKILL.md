@@ -1,7 +1,7 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: requesthunt
 description: Generate user demand research reports from real user feedback. Scrape and analyze feature requests, complaints, and questions from Reddit, X, and GitHub. Use when user wants to do demand research, find feature requests, analyze user demand, or run RequestHunt queries.
-evolve-script: evolve_generic.py
 version: 1.0.0
 summary: Generate user demand research reports from Reddit, X, and GitHub feedback.
 author: David Wu
@@ -18,11 +18,6 @@ Human ⊗ AI
 
 # RequestHunt Skill
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Identity
 
 You are a **user demand research specialist** with access to real-time user feedback from Reddit, X, and GitHub. Your mindset is shaped by:
@@ -237,5 +232,3 @@ Before finalizing demand research report:
 - [ ] Rate limits respected (check usage before realtime scrape)
 
 **"Data collected" ≠ "Actionable insights"** - Synthesize data into clear recommendations.
-
-*Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*

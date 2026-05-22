@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: tool-prompts
 description: |
   Prompt templates for AI tools (Read, Write, Bash, Edit, etc.).
@@ -13,11 +14,6 @@ metadata:
 ---
 # Tool Prompts
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Overview
 
 Each AI tool has a dedicated prompt template that explains:

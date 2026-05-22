@@ -2524,6 +2524,40 @@ must not override it to MiniMax via setq-local in subagent buffers."
                     (progn (gptel-auto-workflow--allium-diff-opposing-hypotheses) nil)
                   (error t)))))
 
+(ert-deftest tdd/researcher/bottleneck-report-with-data ()
+  "current-bottleneck-report works with experiment results."
+  (when (fboundp 'gptel-auto-workflow--current-bottleneck-report)
+    (let ((report (gptel-auto-workflow--current-bottleneck-report)))
+      (should (stringp report))
+      (should (> (length report) 0)))))
+
+(ert-deftest tdd/researcher/queue-pair-probes-no-crash ()
+  "queue-research-pair-probes handles missing findings file gracefully."
+  (when (fboundp 'gptel-auto-workflow--queue-research-pair-probes)
+    (should-not (condition-case nil
+                    (progn (gptel-auto-workflow--queue-research-pair-probes) nil)
+                  (error t)))))
+
+(ert-deftest tdd/researcher/inject-queued-targets-dedup ()
+  "inject-queued-targets adds hints targets without duplicates."
+  (when (fboundp 'gptel-auto-workflow--inject-queued-targets)
+    (let ((gptel-auto-workflow--evolution-next-cycle-hints
+           (list :cluster-queued '((:target "a.el" :reason "test"))
+                 :research-probes '((:target "b.el" :source "test"))))
+          (targets '("a.el" "c.el"))
+          (result (gptel-auto-workflow--inject-queued-targets targets)))
+      (should (member "a.el" result))
+      (should (member "b.el" result))
+      (should (member "c.el" result))
+      (should (= 3 (length result))))))
+
+(ert-deftest tdd/researcher/inject-queued-no-hints ()
+  "inject-queued-targets returns unchanged targets when no hints."
+  (when (fboundp 'gptel-auto-workflow--inject-queued-targets)
+    (let ((gptel-auto-workflow--evolution-next-cycle-hints nil)
+          (targets '("a.el" "b.el")))
+      (should (equal targets (gptel-auto-workflow--inject-queued-targets targets))))))
+
 ;; ─── Research Strategy Integration Tests ───
 
 (ert-deftest tdd/research/autotts-parse-trace-blocks ()

@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: elisp-validator
 description: |
   Emacs Lisp code validation rules for AI-generated code. Checks for syntax errors,
@@ -9,16 +10,11 @@ metadata:
   category: code-quality
   language: emacs-lisp
   author: auto-workflow
+metadata:
   evolution-stats:
     total-experiments: 870
+
 ---
-
-## Current Performance
-
-- Keep rate when validated by this skill: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
-
 # Emacs Lisp Validator
 
 ## Overview

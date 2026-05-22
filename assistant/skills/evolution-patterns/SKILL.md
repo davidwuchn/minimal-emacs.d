@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: evolution-patterns
 description: Domain knowledge for experiment hypothesis categorization and score prediction. Extracted from gptel-auto-workflow-evolution.el.
 version: 1.0
@@ -10,11 +11,6 @@ metadata:
 ---
 # Evolution Patterns
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Hypothesis Categories
 
 Hypotheses are categorized by keyword matching (order matters - first match wins):

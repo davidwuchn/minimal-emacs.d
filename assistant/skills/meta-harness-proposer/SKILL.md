@@ -1,7 +1,7 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: meta-harness-proposer
 description: Run one iteration of prompt-building strategy evolution. Proposes 3 new strategy candidates based on prior results.
-evolve-script: evolve_generic.py
 version: 1.0
 metadata:
   evolution-stats:
@@ -14,11 +14,6 @@ Run ONE iteration of strategy evolution. Do all analysis and prototyping in the 
 
 **You do NOT run benchmarks.** You analyze results, prototype changes, and implement new strategies. The outer loop handles benchmarking separately.
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## CRITICAL CONSTRAINTS
 
 - You MUST propose exactly 3 new strategy candidates every iteration.
@@ -155,5 +150,3 @@ One JSON object per line, one line per evaluated candidate:
 ```json
 {"iteration": 1, "system": "example_strategy", "avg_val": 0.75, "axis": "A", "hypothesis": "...", "delta": +0.05, "outcome": "75.0% (+5.0)", "components": ["section-reorder", "failure-first"]}
 ```
-
-*Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*

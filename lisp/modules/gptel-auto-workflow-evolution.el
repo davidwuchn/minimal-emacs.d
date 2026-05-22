@@ -2201,8 +2201,23 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
       (push (cons 'enable-fallback-backend "Metal(S2) weak: fewer than 3 backends")
             gptel-auto-workflow--wu-xing-actions))
      (t
-      (message "[vsm] 相生: All layers balanced — generating cycle active")))
-    ;; Feed Wu Xing diagnostics into next-cycle hints for VSM repair
+       (message "[vsm] 相生: All layers balanced — generating cycle active")))
+     ;; VSM→Target: compute per-level health scores for target prioritization
+     (let* ((s1-strength (min 1.0 (* keep-rate 5.0)))        ; Wood/Operations → keep-rate
+            (s2-strength (min 1.0 (/ backends 5.0)))          ; Metal/Coord → backend count
+            (s3-strength (if (> backends 2) 0.7 0.3))         ; Earth/Control → infrastructure
+            (s4-strength (min 1.0 (/ strategies 10.0)))       ; Fire/Intel → strategy count
+            (s5-strength (if eight-keys-available
+                             (/ (+ autogo-score autotts-score selfev-score ontology-score) 4.0)
+                           0.5)))                             ; Water/Identity → Eight Keys avg
+       (push (cons 'prioritize-targets
+                   (list :s1-ops s1-strength
+                         :s2-coord s2-strength
+                         :s3-control s3-strength
+                         :s4-intel s4-strength
+                         :s5-identity s5-strength))
+             gptel-auto-workflow--wu-xing-actions))
+     ;; Feed Wu Xing diagnostics into next-cycle hints for VSM repair
     (when gptel-auto-workflow--wu-xing-actions
       (let ((existing (plist-get gptel-auto-workflow--evolution-next-cycle-hints :vsm-actions)))
         (setq gptel-auto-workflow--evolution-next-cycle-hints
@@ -4387,11 +4402,71 @@ effective +0.10, promising +0.05, underperforming -0.05."
            (when (fboundp 'gptel-auto-workflow--allium-audit-signal)
              (gptel-auto-workflow--allium-audit-signal)
              (message "[vsm-repair] Allium audit triggered (spec coverage gap)")))
-           ('freeze-unstable-targets
-           (let ((unstable-str (cdr action)))
-             (message "[vsm-repair] Unstable targets flagged: %s (experiments gated)"
-                      (if (stringp unstable-str) unstable-str "unknown"))))
-           (_ (message "[vsm-repair] Unknown VSM action: %s" (car action))))))))
+            ('freeze-unstable-targets
+            (let ((unstable-str (cdr action)))
+              (message "[vsm-repair] Unstable targets flagged: %s (experiments gated)"
+                       (if (stringp unstable-str) unstable-str "unknown"))))
+            ('prioritize-targets
+             (gptel-auto-workflow--vsm-prioritize-targets (cdr action))
+             (message "[vsm-repair] Target queue reordered by VSM health diagnostics"))
+            (_ (message "[vsm-repair] Unknown VSM action: %s" (car action))))))))
+
+(defun gptel-auto-workflow--vsm-prioritize-targets (vsm-levels)
+  "Reorder experiment target queue based on VSM health LEVEL weaknesses.
+Maps VSM level deficits to specific target file patterns to front-load
+experiments on files most relevant to the diagnosed weakness.
+VSM→Target: diagnosis-driven experiment targeting for faster recovery.
+
+VSM LEVELS is a plist of (level . strength):
+  :s1-ops (Wood) → operational modules
+  :s2-coord (Metal) → coordination/backend modules
+  :s3-control (Earth) → validation/staging modules
+  :s4-intel (Fire) → strategy/evolution modules
+  :s5-identity (Water) → core/identity modules"
+  (when (boundp 'gptel-auto-workflow--experiment-targets)
+    (let* ((level-files
+            '((:s1-ops . (".*gptel-tools-\\(agent\\|code\\|edit\\|preview\\)\\.el\\'"
+                          ".*gptel-ext-\\(core\\|fsm\\|retry\\|streaming\\)\\.el\\'"))
+              (:s2-coord . (".*gptel-ext-backends\\.el\\'"
+                            ".*gptel-tools-agent-\\(staging\\|worktree\\)"
+                            ".*ontology-router\\.el\\'"))
+              (:s3-control . (".*gptel-tools-agent-validation\\.el\\'"
+                              ".*gptel-sandbox\\.el\\'"
+                              ".*gptel-ext-security\\.el\\'"))
+              (:s4-intel . (".*gptel-tools-agent-strategy-\\(evolver\\|harness\\)\\.el\\'"
+                            ".*gptel-auto-workflow-research-\\(benchmark\\|integration\\)"
+                            ".*gptel-benchmark-principles\\.el\\'"))
+              (:s5-identity . (".*nucleus-\\(tools\\|prompts\\|presets\\)\\.el\\'"
+                               ".*gptel-ext-core\\.el\\'"
+                               ".*gptel-agent-loop\\.el\\'"))))
+           (targets gptel-auto-workflow--experiment-targets)
+           (prioritized nil)
+           (remaining targets))
+      ;; For each weak VSM level (strength below threshold), pull matching
+      ;; targets to the front of the queue
+      (dolist (level-pair (reverse vsm-levels))
+        (let* ((level (car level-pair))
+               (strength (cdr level-pair))
+               (patterns (cdr (assq level level-files))))
+          (when (and patterns (< strength 0.4))
+            (dolist (pattern patterns)
+              (let ((matched nil))
+                (setq remaining
+                      (cl-remove-if
+                       (lambda (tgt)
+                         (when (and (not matched)
+                                    (string-match-p pattern tgt))
+                           (push tgt prioritized)
+                           (setq matched t)
+                           t))
+                       remaining)))))))
+      ;; Append remaining (non-matched) targets after prioritized ones
+      (setq gptel-auto-workflow--experiment-targets
+            (append (nreverse prioritized) remaining))
+      (when prioritized
+        (message "[vsm-targets] Prioritized %d targets for weak VSM levels: %s"
+                 (length prioritized)
+                 (mapconcat #'identity (seq-take (nreverse prioritized) 3) ", "))))))
 
 ;; ─── Cross-Subsystem Feedback Functions (re-added after daemon merge wipe) ───
 
@@ -4466,28 +4541,67 @@ Persists updated config to var/tmp/researcher-controller.json."
         (insert (json-encode existing))))))
 
 (defun gptel-auto-workflow--category-experiment-budget (total-experiments)
-  "Allocate TOTAL-EXPERIMENTS slots across 4 categories by sqrt(keep-rate)."
+  "Allocate TOTAL-EXPERIMENTS slots across 4 categories by champion status.
+AutoGo→Budget: champions drive allocation — categories with proven strategies
+get exploit budget, empty categories get discovery budget, 10% reserved for
+pi-Synthesis semantic exploration.
+Falls back to sqrt(keep-rate) when no champion data exists."
   (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
          (instances (plist-get onto :instances))
          (cat-rates (list (cons :programming 0) (cons :tool-calls 0)
                           (cons :agentic 0) (cons :natural-language 0)))
          (cat-counts (list (cons :programming 0) (cons :tool-calls 0)
-                           (cons :agentic 0) (cons :natural-language 0))))
+                           (cons :agentic 0) (cons :natural-language 0)))
+         (baselines (or (and (boundp 'gptel-auto-workflow--category-baselines)
+                             gptel-auto-workflow--category-baselines)
+                        (condition-case nil
+                            (gptel-auto-workflow--compute-category-baselines)
+                          (error nil))))
+         (champions (and (boundp 'gptel-auto-workflow--category-champions)
+                         gptel-auto-workflow--category-champions))
+         (categories (list :programming :tool-calls :agentic :natural-language))
+         (budget nil))
+    ;; Collect per-category rates and counts
     (dolist (i instances)
       (let* ((name (plist-get i :name)) (rate (plist-get i :keep-rate))
              (cat (gptel-auto-workflow--categorize-target name)))
         (when cat
           (cl-incf (alist-get cat cat-counts))
           (cl-incf (alist-get cat cat-rates) rate))))
-    (let* ((weights (mapcar (lambda (cat)
-                              (cons cat (sqrt (max 0.01 (/ (alist-get cat cat-rates)
-                                                           (max 1 (alist-get cat cat-counts)))))))
-                            (list :programming :tool-calls :agentic :natural-language)))
-           (total-w (apply #'+ (mapcar #'cdr weights)))
-           (budget nil))
-      (dolist (w weights)
-        (push (cons (car w) (max 1 (round (* total-experiments (/ (cdr w) (max 0.001 total-w)))))) budget))
-      (nreverse budget))))
+    ;; Champion-aware allocation per category
+    (dolist (cat categories)
+      (let* ((champion (cdr (assq cat champions)))
+             (champion-rate (if champion (cdr champion) 0.0))
+             (baseline (or (cdr (assq cat baselines)) 0.15))
+             ;; sqrt fallback value
+             (sqrt-val (sqrt (max 0.01 (/ (alist-get cat cat-rates)
+                                          (max 1 (alist-get cat cat-counts))))))
+             ;; Champion-driven multiplier
+             (multiplier
+              (cond
+               ;; Strong champion: >30% above baseline → exploit (1.6x)
+               ((and champion (> champion-rate (* baseline 1.3))) 1.6)
+               ;; Champion above baseline → improve (1.0x)
+               ((and champion (> champion-rate baseline)) 1.0)
+               ;; Champion at/below baseline → discover (0.8x)
+               (champion 0.8)
+               ;; No champion → discover (0.8x, let exploration earn its place)
+               (t 0.8))))
+        (push (cons cat (* sqrt-val multiplier)) budget)))
+    (setq budget (nreverse budget))
+    ;; Reserve 10% for π Synthesis exploration
+    (let* ((exploration-reserve (max 1 (round (* total-experiments 0.10))))
+           (allocatable (- total-experiments exploration-reserve))
+           (total-w (apply #'+ (mapcar #'cdr budget)))
+           (result nil))
+      (dolist (b budget)
+        (push (cons (car b) (max 1 (round (* allocatable (/ (cdr b) (max 0.001 total-w))))))
+              result))
+      (setq result (nreverse result))
+      (push (cons :synthesis exploration-reserve) result)
+      (message "[budget] Champion-aware allocation (total=%d, synthesis-reserve=%d): %S"
+               total-experiments exploration-reserve result)
+      result)))
 
 (defun gptel-auto-workflow--enforce-category-budget (targets)
   "Hard-enforce category experiment budget on TARGETS list.
