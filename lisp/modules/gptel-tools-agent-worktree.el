@@ -1072,6 +1072,8 @@ just that gitlink from MAIN-REF, then rehydrate and commit the repair."
 
 (defun gptel-auto-workflow--temporary-worktree-path (slug)
   "Return a temporary worktree path for SLUG under the workflow worktree base."
+  (when (null slug)
+    (error "gptel-auto-workflow--temporary-worktree-path: slug must be non-nil"))
   (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
          (worktree-base-dir (gptel-auto-workflow--resolve-worktree-base-dir)))
     (expand-file-name (format "%s/%s-%d" worktree-base-dir slug (emacs-pid))
