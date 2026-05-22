@@ -4048,8 +4048,8 @@ Non-blocking — runs async via gptel callbacks."
           (when (and (stringp target) (stringp hypothesis)
                      (not (string-empty-p target)))
             (push (cons decision hypothesis) (gethash target by-target)))))
-       (maphash
-        (lambda (target entries)
+       (dolist (target (hash-table-keys by-target))
+         (let ((entries (gethash target by-target)))
           (when (listp entries)
             (let ((kept (car (cl-find "kept" entries :key #'car :test #'equal)))
                   (discarded (car (cl-find "discarded" entries :key #'car :test #'equal))))
@@ -4061,8 +4061,7 @@ Non-blocking — runs async via gptel callbacks."
                             target (car result) (cdr result))
                    (when (< (car result) (cdr result))
                      (message "[allium-diff] %s: kept hypothesis has cleaner spec (kept=%d < discarded=%d)"
-                              target (car result) (cdr result)))))))))
-       by-target))))
+                               target (car result) (cdr result)))))))))))))
 
 ;; ─── Allium Improvements: trend tracking, dedup, regression detection, auto-repair ───
 
