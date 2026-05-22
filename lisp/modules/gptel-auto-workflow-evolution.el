@@ -4466,28 +4466,67 @@ Persists updated config to var/tmp/researcher-controller.json."
         (insert (json-encode existing))))))
 
 (defun gptel-auto-workflow--category-experiment-budget (total-experiments)
-  "Allocate TOTAL-EXPERIMENTS slots across 4 categories by sqrt(keep-rate)."
+  "Allocate TOTAL-EXPERIMENTS slots across 4 categories by champion status.
+AutoGo→Budget: champions drive allocation — categories with proven strategies
+get exploit budget, empty categories get discovery budget, 10% reserved for
+pi-Synthesis semantic exploration.
+Falls back to sqrt(keep-rate) when no champion data exists."
   (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
          (instances (plist-get onto :instances))
          (cat-rates (list (cons :programming 0) (cons :tool-calls 0)
                           (cons :agentic 0) (cons :natural-language 0)))
          (cat-counts (list (cons :programming 0) (cons :tool-calls 0)
-                           (cons :agentic 0) (cons :natural-language 0))))
+                           (cons :agentic 0) (cons :natural-language 0)))
+         (baselines (or (and (boundp 'gptel-auto-workflow--category-baselines)
+                             gptel-auto-workflow--category-baselines)
+                        (condition-case nil
+                            (gptel-auto-workflow--compute-category-baselines)
+                          (error nil))))
+         (champions (and (boundp 'gptel-auto-workflow--category-champions)
+                         gptel-auto-workflow--category-champions))
+         (categories (list :programming :tool-calls :agentic :natural-language))
+         (budget nil))
+    ;; Collect per-category rates and counts
     (dolist (i instances)
       (let* ((name (plist-get i :name)) (rate (plist-get i :keep-rate))
              (cat (gptel-auto-workflow--categorize-target name)))
         (when cat
           (cl-incf (alist-get cat cat-counts))
           (cl-incf (alist-get cat cat-rates) rate))))
-    (let* ((weights (mapcar (lambda (cat)
-                              (cons cat (sqrt (max 0.01 (/ (alist-get cat cat-rates)
-                                                           (max 1 (alist-get cat cat-counts)))))))
-                            (list :programming :tool-calls :agentic :natural-language)))
-           (total-w (apply #'+ (mapcar #'cdr weights)))
-           (budget nil))
-      (dolist (w weights)
-        (push (cons (car w) (max 1 (round (* total-experiments (/ (cdr w) (max 0.001 total-w)))))) budget))
-      (nreverse budget))))
+    ;; Champion-aware allocation per category
+    (dolist (cat categories)
+      (let* ((champion (cdr (assq cat champions)))
+             (champion-rate (if champion (cdr champion) 0.0))
+             (baseline (or (cdr (assq cat baselines)) 0.15))
+             ;; sqrt fallback value
+             (sqrt-val (sqrt (max 0.01 (/ (alist-get cat cat-rates)
+                                          (max 1 (alist-get cat cat-counts))))))
+             ;; Champion-driven multiplier
+             (multiplier
+              (cond
+               ;; Strong champion: >30% above baseline → exploit (1.6x)
+               ((and champion (> champion-rate (* baseline 1.3))) 1.6)
+               ;; Champion above baseline → improve (1.0x)
+               ((and champion (> champion-rate baseline)) 1.0)
+               ;; Champion at/below baseline → discover (0.8x)
+               (champion 0.8)
+               ;; No champion → discover (0.8x, let exploration earn its place)
+               (t 0.8))))
+        (push (cons cat (* sqrt-val multiplier)) budget)))
+    (setq budget (nreverse budget))
+    ;; Reserve 10% for π Synthesis exploration
+    (let* ((exploration-reserve (max 1 (round (* total-experiments 0.10))))
+           (allocatable (- total-experiments exploration-reserve))
+           (total-w (apply #'+ (mapcar #'cdr budget)))
+           (result nil))
+      (dolist (b budget)
+        (push (cons (car b) (max 1 (round (* allocatable (/ (cdr b) (max 0.001 total-w))))))
+              result))
+      (setq result (nreverse result))
+      (push (cons :synthesis exploration-reserve) result)
+      (message "[budget] Champion-aware allocation (total=%d, synthesis-reserve=%d): %S"
+               total-experiments exploration-reserve result)
+      result)))
 
 (defun gptel-auto-workflow--enforce-category-budget (targets)
   "Hard-enforce category experiment budget on TARGETS list.

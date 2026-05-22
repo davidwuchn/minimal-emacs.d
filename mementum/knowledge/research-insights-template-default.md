@@ -4,54 +4,56 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 1.9/10
-allium-issues: 3
+allium-issues: 4
 allium-severity: 0.00
 allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 1981 experiments (19% keep rate).*
+*Consolidated from 1260 experiments (19% keep rate).*
 
-**Performance:** 385 kept / 1121 discarded / 37 failed (EXTRACTED — from TSV)
+**Performance:** 244 kept / 674 discarded / 95 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-validation.el` (3 kept / 5 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-evolution.el` (7 kept / 18 discarded)
-- `lisp/modules/gptel-tools-agent-strategy-harness.el` (2 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 4 discarded)
-- `lisp/modules/gptel-ext-tool-confirm.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-ext-abort.el` (1 kept / 7 discarded)
-- `lisp/modules/gptel-ext-context.el` (13 kept / 18 discarded / 1 failed)
-- `lisp/modules/gptel-ext-reasoning.el` (2 kept / 4 discarded / 4 failed)
-- `lisp/modules/gptel-ext-retry.el` (17 kept / 50 discarded)
-- `lisp/modules/nucleus-tools-validate.el` (3 kept / 9 discarded)
+- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
+- `lisp/modules/gptel-benchmark-core.el` (20 kept / 31 discarded / 5 failed)
+- `lisp/modules/gptel-tools-memory.el` (11 kept / 17 discarded)
+- `lisp/modules/gptel-benchmark-principles.el` (5 kept / 4 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-staging-baseline.el` (2 kept / 5 discarded)
+- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 3 discarded)
+- `lisp/modules/gptel-ext-abort.el` (2 kept / 4 discarded / 2 failed)
+- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
+- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 13 discarded / 1 failed)
+- `lisp/modules/gptel-ext-context.el` (7 kept / 14 discarded)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-auto-experiment--invalid-cl-return-target-in-forms, gptel-auto-experiment--invalid-cl-return-target, gptel-auto-experiment--defensive-code-removal-p, gptel-auto-experiment--diff-against-head, gptel-auto-experiment--defined-function-symbols, gptel-auto-experiment--diff-added-lines, gptel-auto-experiment--call-symbols-in-line, gptel-auto-experiment--defined-runtime-call-p, gptel-auto-experiment--call-symbols-in-forms, gptel-auto-experiment--introduced-undefined-call, gptel-auto-experiment--forward-sexp-file, gptel-auto-experiment--validate-code
-requires: cl-lib, subr-x
-provides: gptel-tools-agent-validation
-declares: gptel-auto-workflow--read-file-contents
-errors: error, error, error, error, error, error
-handlers: err, err
+defuns: gptel-workflow--result-scores, gptel-workflow--tool-calls-list, gptel-workflow--tool-names, gptel-workflow--phase-active-p, gptel-workflow-load-tests, gptel-workflow--normalize-test, gptel-workflow--read-json, gptel-workflow--collect-tool-call, gptel-workflow--setup-hooks, gptel-workflow--teardown-hooks, gptel-workflow--tool-use-advice, gptel-workflow-retrieve-memories, gptel-workflow--format-memories-for-context, gptel-workflow-detect-phases, gptel-workflow--detect-p1, gptel-workflow--detect-p2, gptel-workflow--detect-p3, gptel-workflow--agent-type, gptel-workflow-run-test, gptel-workflow-score
+defvars: gptel-agent-loop--state), gptel-benchmark-eight-keys-definitions), gptel-workflow-tests-dir, gptel-workflow-results-dir, gptel-workflow-default-timeout, gptel-workflow--current-run, gptel-workflow--runs, gptel-workflow--tool-call-hook, gptel-workflow-benchmark--cancelled, gptel-workflow-feedback-file
+requires: cl-lib, json, subr-x
+provides: gptel-workflow-benchmark
+declares: gptel-agent-loop--task-continuation-count, gptel-agent-loop--task-step-count, gptel-agent--task, gptel-benchmark-eight-keys-score, gptel-benchmark-memory-search, gptel-benchmark-memory-read
+errors: error, error, error
+handlers: err, err, nil, nil, nil, nil
+advised: gptel--handle-tool-use
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-ontology-strategy.el` (4 discarded / 2 failed)
-- `lisp/modules/gptel-tools-agent-strategy-harness.el` (2 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-ext-context.el` (13 kept / 18 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-tests.el` (3 failed)
-- `lisp/modules/gptel-ext-reasoning.el` (2 kept / 4 discarded / 4 failed)
+- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
+- `lisp/modules/nucleus-tools.el` (6 kept / 14 discarded / 3 failed)
+- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent.el` (8 kept / 22 discarded / 4 failed)
+- `lisp/modules/gptel-benchmark-core.el` (20 kept / 31 discarded / 5 failed)
 
 ## Allium Behavioral Coherence
 
-*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+*4 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
 
 
 

@@ -64,23 +64,86 @@ The value is effective, promising, underperforming, or unknown."
           (throw 'found (or (plist-get cls :keep-rate) 0.0))))
       0.0)))
 
+(defun gptel-auto-workflow--strategy-experiment-count (strategy)
+  "Return total experiment count for STRATEGY from TSV history."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (count 0))
+    (dolist (r results)
+      (when (string= (or (plist-get r :strategy) "") strategy)
+        (setq count (1+ count))))
+    count))
+
+(defun gptel-auto-workflow--strategy-recent-experiments (strategy &optional n)
+  "Return the N most recent experiment plists for STRATEGY."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (matching nil))
+    (dolist (r results)
+      (when (string= (or (plist-get r :strategy) "") strategy)
+        (push r matching)))
+    (seq-take (sort matching
+                    (lambda (a b)
+                      (> (or (plist-get a :timestamp) 0)
+                         (or (plist-get b :timestamp) 0))))
+              (or n 5))))
+
+(defun gptel-auto-workflow--category-eight-key-weight (category)
+  "Return the primary Eight Key weight multiplier for CATEGORY.
+Maps ontology categories to their most relevant Eight Key metric:
+  :programming → μ Directness (code must work, fewer tokens per kept)
+  :agentic     → ∀ Vigilance (agent must avoid anti-patterns)
+  :tool-calls  → φ Vitality (tools must show improving trend)
+  :natural-language → fractal Clarity (output must be high quality)"
+  (pcase category
+    (:programming '(mu-directness . 1.3))
+    (:agentic     '(forall-vigilance . 1.3))
+    (:tool-calls  '(phi-vitality . 1.3))
+    (:natural-language '(fractal-clarity . 1.3))
+    (_ '(epsilon-purpose . 1.0))))
+
 (defun gptel-auto-workflow--select-best-strategy-with-ontology (strategies target)
-  "Select best strategy using both historical TSV and ontology classification.
+  "Select best strategy using ontology classification + Eight Key alignment.
 Prefers strategies classified as `effective', then `promising'.
-Falls back to standard selection for unknown strategies."
-  (let ((best nil)
-        (best-score -1.0))
+Adds category-specific Eight Key bonus for strategies that score well
+on the dimension most relevant to the target's category.
+Eight Keys→Strategy: category-aligned scoring for better targeting."
+  (let* ((cat (if (fboundp 'gptel-auto-workflow--categorize-target)
+                  (gptel-auto-workflow--categorize-target target)
+                :natural-language))
+         (ekey (gptel-auto-workflow--category-eight-key-weight cat))
+         (best nil)
+         (best-score -1.0))
     (dolist (s strategies)
       (let* ((status (gptel-auto-workflow--ontology-strategy-status s))
              (keep-rate (gptel-auto-workflow--ontology-strategy-score s))
-             (score (cond ((string= status "effective") (+ keep-rate 1.0))
-                          ((string= status "promising") (+ keep-rate 0.5))
-                          ((string= status "underperforming") (- keep-rate 0.3))
-                          (t keep-rate))))
+             ;; Category-specific Eight Key bonus:
+             ;; :programming → reward strategies with high keep-rate (μ Directness)
+             ;; :agentic → reward strategies with data history (∀ Vigilance = proven)
+             ;; :tool-calls → reward strategies with improving trend (φ Vitality)
+             ;; :natural-language → reward strategies via raw keep-rate (fractal Clarity)
+             (ekey-multiplier (cdr ekey))
+             (ekey-bonus
+              (pcase (car ekey)
+                ('mu-directness (* keep-rate ekey-multiplier 0.3))
+                ('forall-vigilance
+                 ;; Prefer strategies with 3+ experiments (proven vigilance)
+                 (let ((total (gptel-auto-workflow--strategy-experiment-count s)))
+                   (* (min 1.0 (/ total 5.0)) ekey-multiplier 0.3)))
+                ('phi-vitality
+                 ;; Prefer strategies with recent activity (vitality)
+                 (let* ((recent (gptel-auto-workflow--strategy-recent-experiments s 5))
+                        (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) recent))
+                        (trend (if (> (length recent) 0) (/ (float kept) (length recent)) 0.5)))
+                   (* trend ekey-multiplier 0.3)))
+                ('fractal-clarity (* keep-rate ekey-multiplier 0.3))
+                (_ 0.0)))
+             (score (cond ((string= status "effective") (+ keep-rate 1.0 ekey-bonus))
+                          ((string= status "promising") (+ keep-rate 0.5 ekey-bonus))
+                          ((string= status "underperforming") (- keep-rate 0.3 ekey-bonus))
+                          (t (+ keep-rate ekey-bonus)))))
         (when (> score best-score)
           (setq best s best-score score))))
-    (message "[onto-strategy] Selected %s for %s (score %.2f, status: %s)"
-             best target best-score
+    (message "[onto-strategy] Selected %s for %s (cat=%s key=%s score=%.2f status=%s)"
+             best target cat (car ekey) best-score
              (gptel-auto-workflow--ontology-strategy-status best))
     best))
 
