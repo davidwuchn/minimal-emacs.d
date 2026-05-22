@@ -14,8 +14,6 @@
 
 (defun gptel-auto-workflow--safe-truename (path)
   "Return PATH's truename, or nil when PATH cannot be resolved."
-  (when (null path)
-    nil)
   (condition-case nil
       (file-truename path)
     (ignore)))
