@@ -347,9 +347,5 @@ Before finalizing SEO/GEO recommendations:
 - [ ] Action items are concrete (specific implementations, not vague suggestions)
 
 **"Audit completed" ≠ "Actionable recommendations"** - Prioritize by impact and provide implementation steps.
-<<<<<<< ours — heading `Verification` (T+F, confidence: medium)
-// hint: Logic and cosmetic changes overlap. Resolve logic first, then reformat.
-=======
 
 *Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*
->>>>>>> theirs — heading `Verification` (T+F, confidence: medium)

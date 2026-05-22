@@ -3,37 +3,18 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-<<<<<<< ours — preamble `(preamble)` (F, confidence: medium)
-// hint: Logic changed on both sides. Requires understanding intent of each change.
-insight-quality: 1.8/10
-=======
 insight-quality: 1.9/10
 allium-issues: 4
 allium-severity: 0.00
-allium-status: ok
->>>>>>> theirs — preamble `(preamble)` (F, confidence: medium)
----
+allium-status: ok---
 
 # Research Strategy: template-default
 
-<<<<<<< ours — heading `Research Strategy: template-default` (S, confidence: medium)
-// hint: Structural change (rename/retype). Check callers of this entity.
-*Consolidated from 22 experiments (18% keep rate).*
-
-**Performance:** 4 kept / 12 discarded / 3 failed
-=======
 *Consolidated from 1976 experiments (19% keep rate).*
 
 **Performance:** 383 kept / 1119 discarded / 37 failed (EXTRACTED — from TSV)
->>>>>>> theirs — heading `Research Strategy: template-default` (S, confidence: medium)
-
 ## Successful Targets
 
-<<<<<<< ours — heading `Successful Targets` (F, confidence: medium)
-// hint: Logic changed on both sides. Requires understanding intent of each change.
-- `lisp/modules/gptel-ext-fsm-utils.el` (3 kept / 4 discarded)
-- `lisp/modules/gptel-ext-context-cache.el` (1 kept / 2 discarded / 1 failed)
-=======
 - `lisp/modules/gptel-benchmark-evolution.el` (7 kept / 18 discarded)
 - `lisp/modules/gptel-tools-agent-strategy-harness.el` (2 kept / 2 discarded / 1 failed)
 - `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 4 discarded)
@@ -44,12 +25,7 @@ allium-status: ok
 - `lisp/modules/gptel-ext-retry.el` (17 kept / 50 discarded)
 - `lisp/modules/nucleus-tools-validate.el` (3 kept / 9 discarded)
 - `lisp/modules/gptel-benchmark-analysis.el` (1 kept / 2 discarded)
->>>>>>> theirs — heading `Successful Targets` (F, confidence: medium)
 
-
-<<<<<<< ours — heading `Structure (deterministic scan)` (S+F, confidence: low)
-// hint: Structural and logic conflict. Both design and behavior differ.
-=======
 ### Structure (deterministic scan)
 
 ```elisp-structure
@@ -60,24 +36,15 @@ provides: gptel-benchmark-evolution
 errors: error
 handlers: err
 ```
-
->>>>>>> theirs — heading `Structure (deterministic scan)` (S+F, confidence: low)
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-<<<<<<< ours — heading `Targets with Validation Failures` (F, confidence: medium)
-// hint: Logic changed on both sides. Requires understanding intent of each change.
-- `lisp/modules/gptel-sandbox.el` (1 discarded / 2 failed)
-- `lisp/modules/gptel-ext-context-cache.el` (1 kept / 2 discarded / 1 failed)
-=======
 - `lisp/modules/gptel-auto-workflow-ontology-strategy.el` (4 discarded / 2 failed)
 - `lisp/modules/gptel-tools-agent-strategy-harness.el` (2 kept / 2 discarded / 1 failed)
 - `lisp/modules/gptel-ext-context.el` (13 kept / 18 discarded / 1 failed)
 - `lisp/modules/gptel-benchmark-tests.el` (3 failed)
 - `lisp/modules/gptel-ext-reasoning.el` (2 kept / 4 discarded / 4 failed)
->>>>>>> theirs — heading `Targets with Validation Failures` (F, confidence: medium)
-
 ## Meta-Learning Recommendations
 
 - **This strategy underperforms.** Consider evolving a new approach.
@@ -181,12 +148,7 @@ The document captures findings from systematic debugging well. A few observation
 ---
 
 
-<<<<<<< ours — heading `Research Strategy Distillation` (S+F, confidence: low)
-// hint: Structural and logic conflict. Both design and behavior differ.
-=======
 # Research Strategy Distillation
-
->>>>>>> theirs — heading `Research Strategy Distillation` (S+F, confidence: low)
 
 ### 3. Unclear Scope
 - "1976 Experiments" — project codename or literal year?

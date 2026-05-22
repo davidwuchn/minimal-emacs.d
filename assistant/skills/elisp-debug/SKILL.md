@@ -102,9 +102,5 @@ Only escalate to source modification when:
 - Bug is non-deterministic and needs trace data over many runs
 - Bug occurs in code path that can't be triggered interactively
 - After Level 0-3 failed to reveal the issue after 15 minutes of investigation
-<<<<<<< ours — heading `When to Use` (T+F, confidence: medium)
-// hint: Logic and cosmetic changes overlap. Resolve logic first, then reformat.
-=======
 
 *Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*
->>>>>>> theirs — heading `When to Use` (T+F, confidence: medium)

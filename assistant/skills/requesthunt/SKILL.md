@@ -237,9 +237,5 @@ Before finalizing demand research report:
 - [ ] Rate limits respected (check usage before realtime scrape)
 
 **"Data collected" ≠ "Actionable insights"** - Synthesize data into clear recommendations.
-<<<<<<< ours — heading `Verification` (T+F, confidence: medium)
-// hint: Logic and cosmetic changes overlap. Resolve logic first, then reformat.
-=======
 
 *Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*
->>>>>>> theirs — heading `Verification` (T+F, confidence: medium)

@@ -99,9 +99,5 @@ This skill provides **REPL tools** for the protocol:
 - [ ] All tests pass
 
 **"It works" ≠ "It's done"**
-<<<<<<< ours — heading `Definition of Done` (S+F, confidence: low)
-// hint: Structural and logic conflict. Both design and behavior differ.
-=======
 
 *Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*
->>>>>>> theirs — heading `Definition of Done` (S+F, confidence: low)
