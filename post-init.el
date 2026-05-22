@@ -36,7 +36,7 @@
           (error
            (message "[init-daemon] Deferred init-ai loading error: %s"
                     (error-message-string err)))))))
-  (require 'init-ai))
+  (require 'init-ai)
 
 ;; Backup and auto-save settings are configured in init-files.el
 
@@ -121,4 +121,4 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
                                   (message "[server] Self-healed socket %s" sock))
                          (error
                           (message "[server] Self-heal failed: %s"
-                                   (error-message-string err))))))))))
+                                    (error-message-string err))))))))))
