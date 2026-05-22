@@ -26,21 +26,24 @@
   "Get cached value for KEY from result cache."
   (gethash key gptel-benchmark-result-cache))
 
+(defun gptel-benchmark--require-valid-string (value type-name)
+  "Signal error if VALUE is not a valid non-empty string.
+TYPE-NAME is a symbol describing the expected type for error messages.
+Returns VALUE if valid.
+Internal helper to centralize string validation logic."
+  (unless (and value (stringp value) (not (string-empty-p value)))
+    (signal 'wrong-type-argument (list type-name value)))
+  value)
+
 (defun gptel-benchmark--require-valid-name (name)
   "Signal error if NAME is not a valid non-empty string.
-Returns NAME if valid.
-Internal helper to centralize name validation logic."
-  (unless (and name (stringp name) (not (string-empty-p name)))
-    (signal 'wrong-type-argument (list "stringp" name)))
-  name)
+Returns NAME if valid."
+  (gptel-benchmark--require-valid-string name 'benchmark-name))
 
 (defun gptel-benchmark--require-valid-version (version)
   "Signal error if VERSION is not a valid non-empty string.
-Returns VERSION if valid.
-Internal helper to centralize version validation logic."
-  (unless (and version (stringp version) (not (string-empty-p version)))
-    (signal 'wrong-type-argument (list "stringp" version)))
-  version)
+Returns VERSION if valid."
+  (gptel-benchmark--require-valid-string version 'version))
 
 (defun gptel-benchmark--cache-put (key value)
   "Store KEY-VALUE pair in result cache."
