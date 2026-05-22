@@ -16,26 +16,31 @@
 
 (defun strategy-outcome-driven-sections--compute-priorities (analysis previous-results)
   "Compute section priorities based on failure patterns in ANALYSIS and PREVIOUS-RESULTS."
-  (let ((priorities (ht-create))
-        (pattern-types '()))
-    ;; Extract pattern types from analysis
-    (when (and (proper-list-p analysis)
-               (plist-get analysis :patterns))
-      (dolist (pattern (plist-get analysis :patterns))
-        (when (proper-list-p pattern)
-          (let ((ptype (plist-get pattern :type))
-                (freq (or (plist-get pattern :frequency) 1)))
-            (push (cons ptype freq) pattern-types)
-            (puthash ptype freq priorities)))))
-    ;; Boost priorities based on recent failures
-    (dolist (result previous-results)
-      (when (and (proper-list-p result)
-                 (plist-get result :failed-patterns))
-        (dolist (fp (plist-get result :failed-patterns))
-          (let ((current (gethash fp priorities 0)))
-            (puthash fp (+ current 0.5) priorities)))))
-    ;; Sort by priority
-    (sort (ht-to-alist priorities) (lambda (a b) (> (cdr a) (cdr b))))))
+  (condition-case err
+      (let ((priorities (ht-create))
+            (pattern-types '()))
+        ;; Extract pattern types from analysis
+        (when (and (proper-list-p analysis)
+                   (plist-get analysis :patterns))
+          (dolist (pattern (plist-get analysis :patterns))
+            (when (proper-list-p pattern)
+              (let ((ptype (plist-get pattern :type))
+                    (freq (or (plist-get pattern :frequency) 1)))
+                (push (cons ptype freq) pattern-types)
+                (puthash ptype freq priorities)))))
+        ;; Boost priorities based on recent failures
+        (dolist (result previous-results)
+          (when (and (proper-list-p result)
+                     (plist-get result :failed-patterns))
+            (dolist (fp (plist-get result :failed-patterns))
+              (let ((current (gethash fp priorities 0)))
+                (puthash fp (+ current 0.5) priorities)))))
+        ;; Sort by priority
+        (sort (ht-to-alist priorities) (lambda (a b) (> (cdr a) (cdr b)))))
+    (error
+     (message "[strategy] Error in outcome-driven-sections--compute-priorities: %s (analysis type: %s)" 
+              err (type-of analysis))
+     nil)))
 
 (defun strategy-outcome-driven-sections--build-guidance (priorities)
   "Build guidance string from PRIORITIES list."
