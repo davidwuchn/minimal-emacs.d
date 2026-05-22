@@ -156,4 +156,4 @@ that likely represent configurable policies.")
 - **Stable external APIs**: Don't change interfaces that other packages depend on
 - **Already well-structured**: If mechanism and policy are already separated, don't over-engineer
 
-*Auto-evolved: No experiment data yet (2026-05-22T02:31:01Z). Collecting baseline.*
+*Auto-evolved: No experiment data yet (2026-05-22T04:00:04Z). Collecting baseline.*
