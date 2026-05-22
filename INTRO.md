@@ -24,7 +24,7 @@ Like the Northern Divine Art (北冥神功), it absorbs techniques from everywhe
 
 ## The Architecture
 
-Every cycle runs through four compilers — each examining the system's own behavior. This is the nucleus (ν) layer:
+Every cycle runs through six compilers — each examining the system's own behavior. This is the nucleus (ν) layer:
 
 | Compiler | Input → Output | Answers |
 |----------|---------------|---------|
@@ -33,20 +33,26 @@ Every cycle runs through four compilers — each examining the system's own beha
 | **Allium v3** | Research findings → behavioral spec | "Are these internally coherent?" |
 | **OWL/SHACL** | Ontology dict → Turtle/SHACL | "What is the formal shape of what we've learned?" |
 | **Ontology Router** | Target file → category → backend ranking | "Which backend has the best keep-rate for this target type?" |
+| **π Synthesis** | Kept target → semantic cluster → strategy inheritance | "Which similar files should inherit this winning strategy?" |
 
-Results feed back into the next cycle's analyzer and strategy evolver. The compiler output is not a log — it is **input to the next iteration**.
+Results feed back into the next cycle's analyzer, strategy evolver, and π Synthesis cluster queue. The compiler output is not a log — it is **input to the next iteration**.
 
 ---
 
 ## The Loop
 
 ```
-Research (3min)  →  Evolution (2min)  →  Auto-Workflow (1-4h)  →  Post-Evolve (2min)
-     ↓                                              ↓
-  External findings                      Select target → Categorize → Route backend
-  + on-demand repo fetch                  → Generate hypothesis → Run 206+ tests
-                                          → AI grade → AI review
-                                          → Merge or learn
+Pipeline (runs 3-6×/day):
+  Research (3min) → Digestion (2min) → Auto-Workflow (1-4h) → Post-Evolve (2min)
+       ↓                                              ↓
+    External findings                       Select target → Categorize → Route backend
+    + on-demand repo fetch                  → Generate hypothesis → Run 1844 tests
+                                            → AI grade → AI review
+                                            → Merge or learn
+                                                     ↓
+                                              Kept? → π Synthesis:
+                                                    semantic cluster → inherit strategy
+                                                    → auto-queue similar targets
 ```
 
 Every experiment passes through six gates. Energy that doesn't pass a gate is not wasted — it returns as learning for the next cycle. All operations in isolated git worktrees. `main` is never touched directly.
@@ -77,8 +83,12 @@ The system does not just run experiments — it builds a **formal knowledge grap
 | **Pre-flight prediction** | Anti-pattern detection (3+ consecutive failures), target saturation (≥10), prediction threshold (0.15) |
 | **Ontology vs LLM decider** | Formal decision framework: data-availability × complexity → ontology or LLM |
 | **Category-based routing** | Targets classified as :programming, :tool-calls, :agentic, :natural-language → backend override |
+| **Semantic clustering** | git-embed similarity ≥0.75 groups related targets; winning strategies propagate across clusters |
+| **Strategy inheritance** | Similar targets auto-queue with inherited strategy from kept experiments (π Synthesis) |
+| **Category strike tracking** | 3 consecutive failures freeze a category; reset on next kept result (∀ Vigilance) |
+| **VSM health diagnostics** | Eight Keys scored per subsystem (AutoGo, AutoTTS, self-evolve) from kept hypotheses |
 
-30 patterns ported from Semantica, AutoGo, and LogMap. The system audits itself using its own ontologies.
+37 patterns ported from Semantica, AutoGo, LogMap, and VSM. The system audits itself using its own ontologies.
 
 ---
 
@@ -87,6 +97,10 @@ The system does not just run experiments — it builds a **formal knowledge grap
 AutoGo-inspired **champion league** gates every new strategy — incumbents must be defeated in a category-specific gauntlet before being adopted. Champions compete within their domain (:programming, :natural-language, :agentic, :tool-calls), not globally. **Playout Cap Randomization** (80% quick / 15% medium / 5% deep) prevents over-specialization. Every cycle emits a machine-parseable `===RESULT===` JSON block for the **autoresearch loop**: commit → run → parse → keep/revert — now wired into AutoTTS trace outcome hooks.
 
 **Head-to-head comparison** (promptfoo-style): every backend/model pair compared on shared targets (≥3 samples each) with 5% tie margin. Generates `mementum/knowledge/backend-comparison.md` and `model-comparison.md`. **Allium v2** adds trend tracking, regression detection, experiment prompt injection, and auto-repair mode.
+
+**∀ Vigilance** (S3 Earth): Categories with 3 consecutive champion failures are frozen during gating, preventing wasted experiments on broken domains. Strikes reset when a category produces a kept result.
+
+**π Synthesis** (S2 Metal): After a kept experiment, semantic clustering finds similar files (via git-embed) and auto-queues them with the winning strategy inherited — knowledge propagates across related targets without redundant exploration.
 
 **Holdout evaluation** tracks real progress on a frozen set of targets — if train metrics improve but holdout doesn't, the system detects overfitting.
 
@@ -161,7 +175,7 @@ Knowledge pages per strategy: what worked, what didn't, Allium coherence checks,
 | Guard | Prevents |
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
-| 1829 tests + 1800s timeout | Broken code caught before staging |
+| 1844 tests + 1800s timeout | Broken code caught before staging |
 | Ontology-aware provider routing | Reorders 5-provider fallback chain by historical keep-rate per target category |
 | Force-push protection | Stashes dirty artifacts, merges origin/main, then pushes; never force-pushes |
 | Server socket self-healing | 30s timer recreates lost daemon socket; no SIGKILL restart needed |
