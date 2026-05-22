@@ -132,7 +132,26 @@ Together: observe → diagnose → prove → act → schedule. Zero-LLM determin
 ./scripts/run-pipeline.sh
 ```
 
-Researches 17+ repos via `gh api`, distills techniques, produces Allium v3 behavioral specs, feeds them into the analyzer. No batch prefetch — fetches only what fills gaps in the ontology. The researcher is itself **ontology-aware and self-evolving**: it reads knowledge gaps, formulates research questions, fetches specific files on demand, and enriches the ontology with each discovery. Outcome feedback (kept/discarded) adjusts research priorities per source.
+Researches 17+ repos via `gh api`, distills techniques, produces Allium v3 behavioral specs, feeds them into the analyzer. No batch prefetch — fetches only what fills gaps in the ontology.
+
+The researcher is **benchmark-driven and self-evolving**:
+
+| Strategy | When Used |
+|----------|-----------|
+| **own-repos-first** | Local codebase patterns before external sources |
+| **deep-external** | Exhaustive external repo analysis |
+| **topic-specific** | Targeted research on ontology-identified gaps |
+| **quick-own-only** | Fast cycle when external API quota is low |
+
+**Research quality pipeline:**
+1. **Strategy benchmark** — All 4 strategies compete; best strategy wins per cycle
+2. **Allium coherence check** — Findings validated for contradictions before use
+3. **LLM noise stripping** — Conversational artifacts removed from raw findings
+4. **Eight Keys scoring** — Research scored on ε Purpose (actionability), not just volume
+5. **Ontology enrichment** — New techniques auto-extracted and merged into experiment ontology
+6. **Outcome feedback** — Kept/discarded experiments adjust research priorities per source
+
+The researcher reads knowledge gaps from the ontology, formulates questions, fetches specific files on demand, and enriches the ontology with each discovery.
 
 ### Structure Customer Data
 
