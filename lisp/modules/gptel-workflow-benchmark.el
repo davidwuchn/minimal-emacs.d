@@ -498,15 +498,17 @@ Uses phase trace timestamps to determine time window."
            (p1-forbidden (and forbidden-before (cdr (assq 'P1 forbidden-before))))
            (total-score 0.0)
            (count 0))
-      (when required
-        (let* ((found (cl-intersection required used-tools :test #'string=))
+      (when (and required (proper-list-p required))
+        (let* ((found (if (and (listp used-tools) (proper-list-p used-tools))
+                          (cl-intersection required used-tools :test #'string=)
+                        '()))
                (score (/ (float (length found)) (max 1 (length required)))))
           (cl-incf total-score score)
           (cl-incf count)))
-      (when p1-forbidden
+      (when (and p1-forbidden (proper-list-p p1-forbidden))
         (let* ((p1-tools (when (gptel-workflow--phase-active-p run 'P1)
                            (gptel-workflow--tools-during-phase run 'P1)))
-               (violations (when p1-tools
+               (violations (when (and p1-tools (proper-list-p p1-tools))
                              (cl-intersection p1-forbidden p1-tools :test #'string=)))
                (score (if violations 0.0 1.0)))
           (cl-incf total-score score)
