@@ -2973,10 +2973,15 @@ Promotion: challenger must exceed category champion by >5% relative."
          (results nil))
     (dolist (entry scores)
       (let* ((name (car entry))
-             (composite (cdr entry)))
+             (composite (cdr entry))
+             (status-bonus (gptel-auto-workflow--ontology-strategy-status-bonus name))
+             (effective-composite (+ composite status-bonus)))
         (catch 'category-result
           (dolist (cat categories)
-            (let* ((cat-keep-rate (gptel-auto-workflow--strategy-category-keep-rate name cat))
+            ;; ∀ Vigilance: skip frozen categories
+            (if (gptel-auto-workflow--category-frozen-p cat)
+                (message "[champion] ∀ Vigilance: skipping frozen category %s" cat)
+              (let* ((cat-keep-rate (gptel-auto-workflow--strategy-category-keep-rate name cat))
                    (champion-entry (gptel-auto-workflow--get-category-champion cat))
                    (champion-strategy (car champion-entry))
                    (champion-rate (or (cdr champion-entry) 0.0))
@@ -2986,16 +2991,16 @@ Promotion: challenger must exceed category champion by >5% relative."
                 (cond
                  ((null champion-strategy)
                   (when (> cat-keep-rate cat-baseline)
-                    (gptel-auto-workflow--crown-champion name cat-keep-rate composite cat)
+                    (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
                     (push (cons name (intern (format "first-%s-champion" cat))) results)
                     (throw 'category-result t)))
                  ((> cat-keep-rate (* champion-rate 1.05))
-                  (gptel-auto-workflow--crown-champion name cat-keep-rate composite cat)
+                  (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
                   (push (cons name (intern (format "promoted-%s" cat))) results)
                   (throw 'category-result t))
                  ((> cat-keep-rate champion-rate)
                   (push (cons name (intern (format "passed-%s" cat))) results)
-                  (throw 'category-result t)))))))
+                  (throw 'category-result t)))))))))
         ;; Fallback: no category hit, use global composite
         (let ((champion-rate gptel-auto-workflow--champion-keep-rate))
           (cond
@@ -3009,7 +3014,19 @@ Promotion: challenger must exceed category champion by >5% relative."
             (message "[champion] %s: %s (%.1f%%)"
                      cat (car champion-entry) (* 100 (cdr champion-entry)))
           (message "[champion] %s: no champion yet (baseline=%.1f%%)"
-                   cat (* 100 (or (cdr (assq cat gptel-auto-workflow--category-baselines)) 0.10))))))
+                   cat (* 100 (or (cdr (assq cat gptel-auto-workflow--category-baselines)) 0.10))))
+        ;; ∀ Vigilance: track champion failures per category
+        (unless champion-entry
+          (gptel-auto-workflow--record-category-strike cat)))
+    ;; φ Vitality: log novelty of promoted strategies
+    (when (and (fboundp 'gptel-auto-workflow--strategy-novelty-score)
+               (fboundp 'gptel-auto-workflow--discover-strategies))
+      (let ((novelties '()))
+        (dolist (r results)
+          (when (memq (cdr r) '(first-champion promoted passed))
+            (push (cons (car r) 1.0) novelties)))
+        (when novelties
+           (message "[champion] φ Vitality: %d novel strategies promoted" (length novelties)))))
     results))
 
 (defconst gptel-auto-workflow--pcr-budgets
@@ -3956,7 +3973,10 @@ or empty string if none found."
 
 (defun gptel-auto-workflow--generate-experiment-ontology ()
   "Generate an ontology from experiment results (Semantica pattern).
-Returns ontology plist with class and instance counts."
+Returns ontology plist with class and instance counts.
+Uses recency weights when `gptel-auto-workflow--recency-weighted-ontology' is available."
+  (if (fboundp 'gptel-auto-workflow--recency-weighted-ontology)
+      (gptel-auto-workflow--recency-weighted-ontology)
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (strategy-classes (make-hash-table :test 'equal))
          (target-instances (make-hash-table :test 'equal)))
@@ -4010,7 +4030,7 @@ Returns ontology plist with class and instance counts."
             :classes (sort class-list (lambda (a b) (> (plist-get a :keep-rate) (plist-get b :keep-rate))))
             :instances (sort instance-list (lambda (a b) (> (plist-get a :total) (plist-get b :total))))
             :class-count (hash-table-count strategy-classes)
-            :instance-count (hash-table-count target-instances)))))
+            :instance-count (hash-table-count target-instances))))))
 ;; ─── Ontology weight overrides ───
 
 (defun gptel-auto-workflow--ontology-strategy-status-bonus (strategy-name)
