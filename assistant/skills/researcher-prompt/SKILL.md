@@ -19,11 +19,11 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
 ## Current Research Performance
 
-- Overall research effectiveness: {{research-effectiveness}}.0% ({{kept-research}}/{{total-research}} research-correlated experiments kept)
+- Overall research effectiveness: 0.0% (0/0 research-correlated experiments kept)
 - Analysis window: last 30 days
 - Topics ranked by downstream success:
 
-{{topic-performance}}
+*No topic data available yet.*
 
 ## Mission
 

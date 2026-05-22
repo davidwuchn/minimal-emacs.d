@@ -1,10 +1,10 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 1169 experiments across 9 models
+> Auto-generated from 1170 experiments across 9 models
 
 ## Model Rankings (by keep-rate)
 
 - **MiniMax/template-default**: 33.3%
-- **MiniMax/minimax-m2.7-highspeed**: 31.1%
+- **MiniMax/minimax-m2.7-highspeed**: 30.8%
 - **MiniMax/unknown**: 22.1%
 - **MiniMax/none**: 15.2%
 - **MiniMax/persisted-findings**: 14.7%
@@ -134,4 +134,4 @@
 - Shared targets: 1 | won 1, won 0, ties 0
 
 
-*Generated: 2026-05-22 20:20*
+*Generated: 2026-05-22 23:24*
