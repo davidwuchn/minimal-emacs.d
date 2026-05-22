@@ -32,6 +32,8 @@
 
 (defun slr--save-trace (prompt findings hash)
   "Save standalone research FINDINGS as an AutoTTS-compatible trace."
+  (when (null findings)
+    (signal 'wrong-type-argument (list #'stringp findings)))
   (let* ((root (slr--root))
          (trace-dir (expand-file-name "var/tmp/research-traces" root))
          (timestamp (format-time-string "%Y%m%d-%H%M%S"))
