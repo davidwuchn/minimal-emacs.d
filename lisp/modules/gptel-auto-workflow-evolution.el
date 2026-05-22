@@ -1902,7 +1902,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Step C.6: Model-level comparison (backend/model granularity)
   (gptel-auto-workflow--evolution-persist-model-comparison)
   ;; Step C.7: Semantic relationship discovery (git-embed ontology enrichment)
-  (gptel-auto-workflow--evolution-persist-semantic-relationships)
+  (when (fboundp 'gptel-auto-workflow--evolution-persist-semantic-relationships)
+    (gptel-auto-workflow--evolution-persist-semantic-relationships))
   ;; Step C.8: Allium issue trend analysis + regression detection
   (let ((trends-report (gptel-auto-workflow--allium-trends-report)))
     (when (> (length trends-report) 30)
@@ -5275,6 +5276,35 @@ Returns a formatted string suitable for mementum/skill guidance."
       (let ((pairs (length (split-string report "## " t))))
         (message "[evolution] Backend comparison: %d pair(s) analyzed → mementum"
                  (max 0 (1- pairs)))))))
+
+(defun gptel-auto-workflow--evolution-persist-semantic-relationships ()
+  "Persist semantic file similarity relationships to mementum knowledge.
+Reads git-embed similarity edges from the ontology router, formats as
+markdown table, and writes to mementum/knowledge/semantic-relationships.md.
+ε Purpose: enriches ontology with structural similarity for file-target discovery."
+  (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+    (let* ((root (gptel-auto-workflow--worktree-base-root))
+           (file (expand-file-name "mementum/knowledge/semantic-relationships.md" root))
+           (edges (gptel-auto-workflow--semantic-similarity-edges 0.60))
+           (lines (list (format "# Semantic File Relationships\n\nGenerated: %s\n\n"
+                                (format-time-string "%Y-%m-%dT%H:%M"))
+                         "## Files Semantically Similar to Kept Experiment Targets\n\n"
+                         "| Source (kept target) | Similar File | Score |\n"
+                         "|---------------------|--------------|-------|\n")))
+      (when edges
+        (dolist (edge (seq-take edges 500))
+          (let ((source (car edge))
+                (target (cadr edge))
+                (score (cddr edge)))
+            (push (format "| %s | %s | %.3f |\n" source target score) lines)))
+        (push "\n## Ontology Implications\n\n" lines)
+        (push "- Files with high semantic similarity (>0.60) may benefit from similar fixes\n" lines)
+        (push "- Consider clustering similar files for batch optimization\n" lines)
+        (push "- Semantic edges supplement structural (import/require) relationships\n" lines)
+        (make-directory (file-name-directory file) t)
+        (with-temp-file file
+          (insert (mapconcat #'identity (nreverse lines) "")))
+        (message "[evolution] Semantic relationships: %d edges → mementum" (length edges))))))
 
 ;; ─── Model-Level Head-to-Head Comparison ───
 
