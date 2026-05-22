@@ -108,9 +108,9 @@ Internal helper to centralize trend data extraction logic."
     (signal 'wrong-type-argument (list "proper-list-p" summary-b)))
   (let* ((score-a (plist-get summary-a :avg-overall))
          (score-b (plist-get summary-b :avg-overall)))
-    (unless score-a
+    (unless (plist-member summary-a :avg-overall)
       (signal 'wrong-type-argument (list "expected :avg-overall key in plist" summary-a)))
-    (unless score-b
+    (unless (plist-member summary-b :avg-overall)
       (signal 'wrong-type-argument (list "expected :avg-overall key in plist" summary-b)))
     (unless (numberp score-a)
       (signal 'wrong-type-argument (list "numberp" score-a)))
