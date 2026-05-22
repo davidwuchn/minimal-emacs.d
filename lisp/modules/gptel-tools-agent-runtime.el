@@ -8,8 +8,9 @@
 
 (defun gptel-auto-workflow--path-exists-or-symlink-p (path)
   "Return non-nil when PATH exists or is a symlink, including broken links."
-  (or (file-exists-p path)
-      (file-symlink-p path)))
+  (when (stringp path)
+    (or (file-exists-p path)
+        (file-symlink-p path))))
 
 (defun gptel-auto-workflow--safe-truename (path)
   "Return PATH's truename, or nil when PATH cannot be resolved."
