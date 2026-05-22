@@ -1,6 +1,55 @@
 # Mementum State
 
 > Last session: 2026-05-22
+> Session focus: VSM × Ontology × Eight Keys integration — 15 changes
+> Session goal: Wire three frameworks together, fix zero-score feedback loop, restart daemon clean
+
+> ## 2026-05-22 Session (final)
+
+> ### Complete: 15 changes across all subsystems
+
+| # | System | Key | What |
+|---|--------|-----|------|
+| 1 | AutoGo | μ | Champion vs baseline, not absolute zero |
+| 2 | meta-harness | ∀ | Axis rotation + validation A-F |
+| 3 | Researcher | ε | Per-category pattern actionability |
+| 4 | self-evolve | ∃ | Re-enabled production timer |
+| 5 | AutoGo | μ | Per-category champions + baselines |
+| 6 | Researcher | τ | Skip research when findings <1h old |
+| 7 | AutoGo | ∀ | Three-strike category freeze |
+| 8 | AutoTTS | τ | Category-adjusted STOP thresholds |
+| 9 | self-evolve | φ | Strategy novelty detection |
+| 10 | auto-workflow | ε | Per-category experiment quotas |
+| 11 | Bench → Workflow | — | Eight Keys scoring wired to VSM health |
+| 12 | Ontology → Evolution | — | Unified categorization (router delegate) |
+| 13 | ∀ + φ | — | Freeze + novelty wired into gate-strategies |
+| 14 | evolve_generic.py | — | Write to var/tmp, not SKILL.md |
+| 15 | gptel-ext-fsm-utils | — | coerce → resolve-fsm (30+ warnings gone) |
+
+> ### Architecture Connected
+
+```
+benchmark-principles (Eight Keys) → fboundp → evolution VSM health
+ontology-router (categorize) → fboundp → evolution categorize-target
+AutoGo gate → per-category champions → cross-subsystem feedback bridge
+```
+
+> ### Verified
+> - 266/266 TDD across 5 modules
+> - 21 pre-existing agent-regressions unchanged
+> - Daemon restarted clean: 15 lines, 0 errors
+> - Evolution timer running hourly
+> - 306 research traces, pipeline active
+
+> ### Key Files
+> - `lisp/modules/gptel-auto-workflow-evolution.el` — category champions, gate, VSM+Eight Keys, freeze, novelty
+> - `lisp/modules/gptel-tools-agent-strategy-evolver.el` — axis rotation
+> - `lisp/modules/gptel-auto-workflow-research-benchmark.el` — per-category patterns, objective function
+> - `lisp/modules/gptel-auto-workflow-production.el` — re-enabled production timer
+> - `lisp/modules/strategic-daemon-functions.el` — category STOP thresholds
+> - `lisp/modules/gptel-auto-workflow-strategic.el` — τ Wisdom research cache skip
+> - `lisp/modules/gptel-ext-fsm-utils.el` — coerce → resolve-fsm
+> - `assistant/skills/scripts/evolve_generic.py` — var/tmp output, not SKILL.md
 > Session focus: Eight Keys alignment — decouple subsystem metrics from executor keep-rate
 > Last session goal: Fix zero-score feedback loop across AutoGo, meta-harness, Researcher, self-evolve
 
