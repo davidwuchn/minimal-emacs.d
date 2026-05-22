@@ -1,0 +1,1 @@
+{"name":"complexity-compression","version":"1.0","hypothesis":"High-complexity code benefits from more aggressive compression to maintain focus","axis":"F","components":["complexity-metrics","adaptive-compression"]}

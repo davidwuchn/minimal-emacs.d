@@ -258,7 +258,32 @@ Saves to assistant/strategies/metadata/NAME.json."
     (make-directory metadata-dir t)
     (with-temp-file metadata-file
       (insert (json-encode metadata)))
-    (message "[strategy] Persisted metadata for %s" name)))
+    (message "[strategy] Persisted metadata for %s" name)
+    ;; Auto-commit strategy files so they survive workspace cleanup
+    (gptel-auto-workflow--auto-commit-strategy-files name)))
+
+(defun gptel-auto-workflow--auto-commit-strategy-files (name)
+  "Commit strategy NAME's builder and metadata files to git.
+Prevents strategy files from being lost during stash/reset operations."
+  (let* ((root (or (gptel-auto-workflow--project-root)
+                   (gptel-auto-workflow--worktree-base-root)))
+         (builder (expand-file-name
+                   (format "strategy-%s.el" name)
+                   (expand-file-name "assistant/strategies/prompt-builders" root)))
+         (metadata (expand-file-name
+                    (format "%s.json" name)
+                    (expand-file-name "assistant/strategies/metadata" root)))
+         (default-directory root))
+    (when (and root (file-exists-p builder) (file-exists-p metadata))
+      (condition-case nil
+          (let ((cmd (format "git add %s %s && git diff --cached --quiet || git commit -m %s"
+                             (shell-quote-argument builder)
+                             (shell-quote-argument metadata)
+                             (shell-quote-argument
+                              (format "🔁 strategy: %s (auto-committed by harness)" name)))))
+            (shell-command-to-string cmd))
+        (error
+         (message "[strategy] Auto-commit skipped for %s (git not available)" name))))))
 
 (defun gptel-auto-workflow--load-strategy-metadata (name)
   "Load persisted metadata for strategy NAME from filesystem.

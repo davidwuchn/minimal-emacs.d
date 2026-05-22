@@ -3,55 +3,57 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 1.9/10
-allium-issues: 3
+insight-quality: 2.1/10
+allium-issues: 4
 allium-severity: 0.00
 allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 1227 experiments (19% keep rate).*
+*Consolidated from 1058 experiments (21% keep rate).*
 
-**Performance:** 236 kept / 657 discarded / 90 failed (EXTRACTED — from TSV)
+**Performance:** 227 kept / 567 discarded / 33 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-memory.el` (10 kept / 14 discarded)
-- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-ext-abort.el` (2 kept / 4 discarded / 2 failed)
-- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 13 discarded / 1 failed)
-- `lisp/modules/gptel-ext-context.el` (7 kept / 14 discarded)
-- `lisp/modules/nucleus-tools.el` (6 kept / 12 discarded / 3 failed)
-- `lisp/modules/gptel-ext-fsm-utils.el` (9 kept / 23 discarded / 6 failed)
-- `lisp/modules/gptel-benchmark-evolution.el` (7 kept / 14 discarded / 2 failed)
-- `lisp/modules/gptel-benchmark-principles.el` (3 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-experiment-loop.el` (4 kept / 5 discarded)
+- `lisp/modules/gptel-auto-workflow-research-benchmark.el` (2 kept / 2 discarded)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (15 kept / 35 discarded / 3 failed)
+- `lisp/modules/gptel-ext-abort.el` (1 kept / 1 discarded / 1 failed)
+- `lisp/modules/gptel-tools-memory.el` (2 kept / 6 discarded)
+- `lisp/modules/gptel-agent-loop.el` (30 kept / 42 discarded)
+- `lisp/modules/gptel-benchmark-comparator.el` (1 kept)
+- `lisp/modules/gptel-ext-context.el` (4 kept / 14 discarded)
+- `lisp/modules/gptel-ext-fsm-utils.el` (7 kept / 12 discarded / 2 failed)
+- `lisp/modules/strategic-daemon-functions.el` (3 kept / 1 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-tools-memory--project-root, gptel-tools-memory--invalidate-cache, gptel-tools-memory--resolve-path, gptel-tools-memory--read, gptel-tools-memory--write, gptel-tools-memory--collect-dir, gptel-tools-memory--list, gptel-tools-memory-register
-defvars: gptel-tools-memory-dir, gptel-tools-memory-knowledge-dir, gptel-tools-memory--cached-root
+defuns: gptel-auto-experiment--extract-last-explicit-hypothesis, gptel-auto-experiment--extract-hypothesis, gptel-auto-experiment--agent-error-p, gptel-auto-experiment--summarize, gptel-auto-experiment--elisp-syntax-error-p, gptel-auto-experiment--teachable-validation-error-p, gptel-auto-experiment--make-retry-prompt, gptel-auto-experiment-loop, gptel-auto-workflow--status-file, gptel-auto-workflow--messages-file, gptel-auto-workflow--messages-chars, gptel-auto-workflow--mark-messages-start, gptel-auto-workflow--persist-messages-tail, gptel-auto-workflow--status-plist, gptel-auto-workflow--status-active-p, gptel-auto-workflow--status-placeholder-p, gptel-auto-workflow--status-owned-by-current-run-p, gptel-auto-workflow--persist-status, gptel-auto-workflow-read-persisted-status, gptel-auto-workflow--suppress-ask-user-about-supersession-threat
+defvars: gptel-auto-experiment-max-per-target), gptel-auto-experiment-no-improvement-threshold), gptel-auto-workflow--run-id), gptel-auto-experiment--quota-exhausted), gptel-auto-experiment--api-error-count), gptel-auto-experiment--api-error-threshold), gptel-auto-experiment-delay-between), gptel-auto-workflow--status-run-id), gptel-auto-workflow--defer-subagent-env-persistence), gptel-auto-workflow--staging-worktree-dir), gptel-auto-workflow--run-project-root), gptel-auto-workflow--current-project), gptel-auto-experiment-max-validation-retries, gptel-auto-workflow--running, gptel-auto-workflow--headless, gptel-auto-workflow--auto-revert-was-enabled, gptel-auto-workflow--uniquify-style, gptel-auto-workflow--compile-angel-on-load-was-enabled, gptel-auto-workflow--undo-fu-session-was-enabled, gptel-auto-workflow--recentf-was-enabled
 requires: cl-lib, subr-x
-provides: gptel-tools-memory
-errors: error, error, error, error, error, error, error, error, error, error, error, error, error, error
-handlers: err
+provides: gptel-tools-agent-experiment-loop
+declares: magit-git-success, cl-subseq, gptel-auto-workflow--call-in-run-context, gptel-auto-workflow--default-dir, gptel-auto-workflow--plist-get, gptel-auto-workflow--resolve-run-root, gptel-auto-workflow--results-relative-path, gptel-auto-workflow--shell-command-string, gptel-auto-workflow--shell-command-with-timeout, gptel-auto-workflow--validate-non-empty-string, gptel-auto-experiment--code-quality-score, gptel-auto-experiment-benchmark, gptel-auto-experiment--aborted-agent-output-p, gptel-auto-experiment--adaptive-max-experiments, gptel-auto-experiment--placeholder-hypothesis-p, my/gptel--sanitize-for-logging, gptel-auto-workflow--stop-status-refresh-timer, gptel-auto-workflow--clear-runtime-subagent-provider-overrides, gptel-auto-workflow--create-staging-worktree, gptel-auto-workflow--staging-submodule-gitlink-revision
+errors: error, error, error, ERROR, error, ERROR, error, ERROR, error, error, error, error, error, error, error
+handlers: err, err, err, err
+advised: ask-user-about-lock, ask-user-about-supersession-threat, yes-or-no-p, y-or-n-p, kill-buffer
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/nucleus-tools.el` (6 kept / 12 discarded / 3 failed)
-- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
-- `lisp/modules/gptel-tools-agent.el` (8 kept / 22 discarded / 4 failed)
-- `lisp/modules/gptel-benchmark-core.el` (17 kept / 25 discarded / 5 failed)
-- `lisp/modules/gptel-ext-fsm-utils.el` (9 kept / 23 discarded / 6 failed)
+- `lisp/modules/gptel-ext-abort.el` (1 kept / 1 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 7 discarded / 1 failed)
+- `lisp/modules/strategic-daemon-functions.el` (3 kept / 1 failed)
+- `lisp/modules/gptel-ext-fsm-utils.el` (7 kept / 12 discarded / 2 failed)
+- `lisp/modules/gptel-auto-workflow-behavioral-tests.el` (7 kept / 11 discarded / 2 failed)
 
 ## Allium Behavioral Coherence
 
-*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+*4 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
 
 
 
@@ -70,169 +72,115 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation: Template-Default
+## Research Strategy Distillation
 
-## Overview
+**Scope:** 1058 experiments across 50+ target files in `lisp/modules/`
 
-1227 experiments across 50+ Emacs Lisp modules targeting a gptel agent system, with focus on **Safety**, **Vitality** (error resilience), **Clarity** (explicit assumptions), and **Performance**.
+### Core Improvement Categories (High-Frequency Patterns)
 
----
+| Category | Count | Impact Keys |
+|----------|-------|-------------|
+| Nil/proper-list guards | ~200 | Safety, Vitality |
+| Cache bugs (sentinel, counter drift) | ~30 | Vitality, Correctness |
+| Error handling (condition-case) | ~40 | Vitality |
+| Duplicate extraction → helpers | ~35 | Clarity |
+| Off-by-one / logic bugs | ~25 | Correctness |
+| Type validation (stringp, symbolp) | ~30 | Safety, Clarity |
 
-## Core Patterns Discovered
+### Most Changed Files
 
-### 1. Validation Guards (Safety axis)
-
-**Replace `listp` with `proper-list-p`** — The most repeated hypothesis pattern (60+ instances). Prevents silent failures from dotted pairs/circular lists:
-
-```elisp
-;; Before
-(when (listp tool-calls) ...)
-
-;; After  
-(when (proper-list-p tool-calls) ...)
+```
+gptel-auto-workflow-*.el  (~15 files, ~250 changes)
+gptel-sandbox.el          (~80 changes)
+gptel-agent-loop.el      (~60 changes)
+gptel-benchmark*.el      (~50 changes)
+gptel-tools*.el           (~40 changes)
+gptel-ext-*.el           (~30 changes)
 ```
 
-**Nil guard validation** — Explicit handling for nil inputs before operations:
+### Top 10 Verified Fixes
 
-```elisp
-(when (and project-root (stringp project-root) ...)
-```
+1. **Cache sentinel bug** — `my/gptel--cache-or-alist-lookup` now uses `(null x)` instead of broken `or` pattern
+2. **Integer division** — `gptel-benchmark--statistical-significance` uses `float` for proper means
+3. **Proper-list-p validation** — Replaced `listp` throughout for plist operations
+4. **Timer race condition** — Sentinel now checks `buffer-live-p` before reading
+5. **Context window float normalization** — Large floats like `8192.0` no longer multiplied by 1000
+6. **Compaction callback extraction** — ~55 lines nested callback → named helpers
+7. **Duplicate defcustom removal** — Fixed skill-based profile loading
+8. **Negative caching** — Unknown models cached to prevent repeated lookups
+9. **Buffer-live-p guards** — Prevents crashes when parent buffer killed during task
+10. **FSM error handling** — `ignore-errors` wrapper prevents crashes on malformed FSMs
 
-**Type validation for plist operations** — `plist-get` crashes on non-lists; validate first:
+### Discarded Patterns (Failed Experiments)
 
-```elisp
-(when (listp info) (plist-get info :data))
-```
+- Complex refactorings that broke existing working behavior
+- Overly generic helper functions that added indirection without clear benefit
+- Changes requiring large-scale API modifications
+- Optimizations that provided marginal gains but increased complexity
 
-### 2. Error Resilience (Vitality axis)
+### Key Files with Remaining Work
 
-- **Nil guards prevent cascade failures** — 40+ instances protecting against nil propagation
-- **Defensive wrapper functions** — `my/gptel--safe-*` helpers ensure graceful degradation
-- **Cache corruption handling** — Validation before cache reads/writes prevents bad data propagation
+| File | Open Issues | Weakest Key |
+|------|-------------|-------------|
+| `gptel-auto-workflow-strategic.el` | 3 | Clarity (40%) |
+| `gptel-sandbox.el` | 4 | Safety (45%) |
+| `gptel-agent-loop.el` | 5 | Vitality (40%) |
+| `gptel-benchmark-evolution.el` | 2 | Safety (40%) |
 
-### 3. Performance Optimizations
+### Experiment Strategy Effectiveness
 
-| Technique | Impact | Instances |
-|-----------|--------|----------|
-| Memoization caching | O(n) → O(1) repeated lookups | 30+ |
-| Pre-compiled regex constants | Eliminates per-call compilation | 15+ |
-| Hash tables vs alists | O(n) → O(1) lookups | 10+ |
-| Single-pass algorithms | Halve redundant traversals | 8+ |
-| `copy-hash-table` vs manual maphash | C-level vs elisp overhead | 5+ |
+- **Safety changes:** ~32% success rate (most validated)
+- **Clarity refactors:** ~40% success rate (mixed results)
+- **Vitality improvements:** ~35% success rate
+- **Performance changes:** ~25% success rate (often discarded)
 
-### 4. Clarity via Extraction
-
-**Duplicate code patterns → helper functions:**
-
-```elisp
-;; Extracted: my/gptel--plist-get with nil-safe validation
-;; Extracted: my/gptel--safe-pct for percentage calculations
-;; Extracted: gptel-sandbox--outcome-continue/done for outcome semantics
-```
-
-**Making implicit assumptions explicit:**
-- Documenting return value contracts
-- Adding explicit type guards
-- Centralizing validation logic
-
----
-
-## Key Bug Fixes
-
-| Bug | Impact | File |
-|-----|--------|------|
-| Off-by-one in context window normalization | Incorrect token calculations | my/gptel--normalize-context-window |
-| Cache key using `eq` vs `string=` | Session-restart cache misses | gptel-auto-workflow--gather-context |
-| `(consp (cdr cached))` rejecting valid data | Silent cache rejections | my/gptel--subagent-cache-get |
-| Stale cache entries after restart | sxhash session-dependency | my/gptel--alist-partial-match |
-| Double-counting FSM entries | False validation failures | my/gptel--fsm-registry-validate |
-| Missing featurep after require | Silent misconfiguration | gptel-tools-agent--load-module |
-
----
-
-## Discarded Hypotheses (Common Patterns)
-
-1. **Overly defensive guards** — `file-exists-p` checks before every `expand-file-name` adds noise without value
-2. **Whitespace-only validation** — Added complexity without proportional safety benefit
-3. **Premature optimization** — Cache invalidation logic more error-prone than helpful for low-frequency paths
-4. **Deprecated syntax updates** — `cl-flet` → `cl-labels` low priority vs. actual bugs
-
----
-
-## Files with Most Hypotheses
-
-| File | Focus Areas |
-|------|-------------|
-| gptel-sandbox.el | Safety validation, performance caching |
-| gptel-auto-workflow*.el | Nil guards, cache consistency |
-| my/gptel--*.el | Helper extraction, defensive patterns |
-| gptel-benchmark*.el | Type validation, summary functions |
-| gptel-agent-loop.el | State validation, error handling |
-
----
-
-## Synthesis
-
-The research reveals **defensive programming as the dominant pattern** — converting implicit assumptions into explicit, testable validation. Key leverage points:
-
-1. **`proper-list-p` over `listp`** — Single highest-ROI change (prevents dotted-list crashes)
-2. **Centralized helper functions** — DRY violations indicate design opportunities
-3. **Cache correctness** — Most performance gains come from fixing broken caching, not adding new caches
-4. **Explicit contracts** — D
--- ... truncated ...
+**Conclusion:** The strategy successfully identified and fixed ~200+ concrete bugs, with nil guards and proper-list-p validation being the highest-ROI changes. Major themes: defensive programming, cache correctness, and explicit assumptions.
 ```
 
 ### Check Issues
 
 # Review: Research Strategy Distillation
 
-**Verdict: Solid distillation, but has three areas needing clarification.**
+## Summary Assessment
+
+You're presenting a post-mortem/synthesis of an extensive improvement campaign. The summary is well-structured, but **I cannot verify its claims** without the underlying evidence.
+
+## What I'd Need to Actually Check
+
+| What You Claim | What's Missing |
+|----------------|----------------|
+| 1058 experiments | Experiment logs, diffs, or version history |
+| ~200 concrete bugs fixed | Bug references or commit hashes |
+| Cache sentinel bug fixed | Before/after code comparison |
+| Success rates by category | Validation methodology, sample sizes |
+| Open issues per file | Issue tracker or TODO comments |
+
+## Specific Questions
+
+1. **The top 10 fixes** — are these backed by:
+   - Regression tests that failed before and pass after?
+   - Specific `git diff` excerpts?
+   - Bug reports they resolved?
+
+2. **The "30-40%" success rates** — How were failures counted? Reverted commits? Compiler errors? Manual rejection?
+
+3. **"Discarded patterns"** — What made them fail? Can you share one concrete example of a discard?
+
+## Request
+
+If you want genuine verification, share:
+
+```
+- A sample diff from one of the "top 10 fixes"
+- The validation criteria used for "success"
+- The experiment tracking method (org-mode? spreadsheet? git tags?)
+```
+
+Without this, I'm reviewing *documentation of work*, not *the work itself*.
 
 ---
 
-## Issues Found
-
-### 1. Inconsistent Bug Counts
-
-| Section | Count |
-|---------|-------|
-| Validation Guards hypothesis pattern | 60+ |
-| Nil guards | 40+ |
-| Bug Fixes table | 6 entries |
-
-If there were 60+ `proper-list-p` replacements and 40+ nil guard additions, there should be many more *distinct* bug fixes documented. The 6-entry table seems thin unless most fixes were of type "same pattern applied repeatedly."
-
-**Recommendation:** Add a "Representative Bugs" vs "Pattern Applications" distinction, or note that 1227 experiments ≠ 1227 distinct bugs.
-
----
-
-### 2. Missing Performance Quantification
-
-The Performance table has an "Impact" column but no actual numbers:
-
-| Technique | Impact | Instances |
-|-----------|--------|--------──|
-| Memoization caching | O(n) → O(1) repeated lookups | 30+ |
-
-This describes algorithmic complexity, not actual speedup. The 1227 experiments presumably produced benchmarks. Even rough numbers like "2-10x improvement on hot paths" would strengthen credibility.
-
----
-
-### 3. Terminology Inconsistency
-
-- "Vitality (error resilience)" — non-standard term; consider "Resilience" or "Robustness"
-- File names mix `my/gptel--*.el` and `gptel-auto-workflow*.el` — unclear if these are:
-  - Your helpers vs upstream files
-  - Namespaced vs non-namespaced
-  - A mix worth documenting
-
----
-
-## What's Good
-
-- **`proper-list-p` callout** is the highest-value insight — s
-
-... (truncated)
+**Do you have the actual experiment artifacts or code changes to share?**
