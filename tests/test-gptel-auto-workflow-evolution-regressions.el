@@ -2357,8 +2357,8 @@ must not override it to MiniMax via setq-local in subagent buffers."
   (when (fboundp 'gptel-auto-workflow--evolution-persist-semantic-relationships)
     (let ((root (make-temp-file "aw-evolution" t)))
       (unwind-protect
-          (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-relationship-report)
-                     (lambda () "# Semantic File Relationships\n\nTest content."))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+                     (lambda (&optional _) '(("a.el" "b.el" . 0.75) ("a.el" "c.el" . 0.82))))
                     ((symbol-function 'gptel-auto-workflow--worktree-base-root)
                      (lambda () root)))
             (gptel-auto-workflow--evolution-persist-semantic-relationships)
@@ -2366,7 +2366,9 @@ must not override it to MiniMax via setq-local in subagent buffers."
               (should (file-exists-p knowledge-file))
               (with-temp-buffer
                 (insert-file-contents knowledge-file)
-                (should (string-match-p "Semantic File Relationships" (buffer-string))))))
+                (should (string-match-p "Semantic File Relationships" (buffer-string)))
+                (should (string-match-p "a.el" (buffer-string)))
+                (should (string-match-p "0.750" (buffer-string))))))
         (delete-directory root t)))))
 
 (ert-deftest tdd/category-vigilance/strike-increments-to-freeze ()
