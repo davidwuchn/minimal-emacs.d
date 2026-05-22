@@ -354,25 +354,29 @@ Returns (success-p . output)."
                (message "[auto-workflow] Merged main into staging worktree SUCCESS")
              (message "[auto-workflow] Main merge into staging failed (non-fatal)")
              (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60)))))
-       (message "[auto-workflow] Verifying staging...")
-       (let* ((default-directory worktree)
-             (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
-             (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
-             (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
-             (submodule-note
-              (and syntax-pass
-                   (not submodule-pass)
-                   (let ((note (car-safe submodules)))
-                     (if (gptel-auto-workflow--non-empty-string-p note)
-                         note
-                       "Staging submodule hydration failed"))))
-             (_ (when submodule-note
-                  (with-current-buffer output-buffer
-                    (insert submodule-note "\n"))))
-              (test-result (when (and submodule-pass test-script (file-exists-p test-script))
-                             (gptel-auto-workflow--call-process-with-watchdog
-                              "bash" nil output-buffer nil test-script "unit")))
-              (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
+        (message "[auto-workflow] Verifying staging...")
+        (let* ((default-directory worktree)
+              (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
+              (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+              (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
+              (submodule-note
+               (and syntax-pass
+                    (not submodule-pass)
+                    (let ((note (car-safe submodules)))
+                      (if (gptel-auto-workflow--non-empty-string-p note)
+                          note
+                        "Staging submodule hydration failed"))))
+              (_ (when submodule-note
+                   (with-current-buffer output-buffer
+                     (insert submodule-note "\n"))))
+              (_ (when submodule-pass
+                   (message "[auto-workflow] Running unit tests in staging (may block ~60s)...")))
+               (test-result (when (and submodule-pass test-script (file-exists-p test-script))
+                              (gptel-auto-workflow--call-process-with-watchdog
+                               "bash" nil output-buffer nil test-script "unit")))
+              (_ (when test-result
+                   (message "[auto-workflow] Unit tests completed (exit=%d)" (cdr test-result))))
+               (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
                                (let ((process-environment
                                       (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
                                             process-environment)))
