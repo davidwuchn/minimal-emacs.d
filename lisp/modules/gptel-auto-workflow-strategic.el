@@ -1142,13 +1142,29 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                                          (replace-regexp-in-string "^---$\\|^---\\n.*\\n---\\n" "" directive)
                                          1500 nil nil "..."))
                               ""))
-         (research-section (if (and research-skill (not (string-empty-p research-skill)))
-                               (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
-                                       (truncate-string-to-width research-skill 800 nil nil "..."))
-                             "")))
+        (research-section (if (and research-skill (not (string-empty-p research-skill)))
+                              (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
+                                      (truncate-string-to-width research-skill 800 nil nil "..."))
+                            ""))
+        ;; Inject category budget + regressed targets from cross-subsystem feedback
+        (hints-section
+         (let* ((hints (and (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+                            gptel-auto-workflow--evolution-next-cycle-hints))
+                (budget (plist-get hints :category-budget))
+                (regressed (cdr (assoc 'regressed-targets hints)))
+                (parts nil))
+           (when budget
+             (push (format "CATEGORY BUDGET (experiments allocated per category):\n%s"
+                           (mapconcat (lambda (b) (format "- %s: %d" (car b) (cdr b))) budget "\n"))
+                   parts))
+           (when regressed
+             (push (format "REGRESSED TARGETS (knowledge pages removed, prioritized):\n%s"
+                           (mapconcat (lambda (tgt) (format "- %s" (truncate-string-to-width tgt 60 nil nil "..."))) regressed "\n"))
+                   parts))
+           (if parts (concat (mapconcat #'identity (nreverse parts) "\n") "\n\n") ""))))
     (format "Select optimization targets for this Emacs Lisp project.
 
-%s%sFILES AVAILABLE:
+%s%s%sFILES AVAILABLE:
 %s
 
 RECENT GIT HISTORY:
@@ -1182,6 +1198,7 @@ OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
             directive-section
             research-section
+            (or hints-section "")
             (or (plist-get context :file-list) "")
             (or (plist-get context :git-history) "")
             (or (plist-get context :file-sizes) "")
