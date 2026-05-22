@@ -21,7 +21,6 @@
 (condition-case nil (require 'gptel-auto-workflow-research-benchmark nil t) (ignore))
 
 ;; External functions from other modules
-(require 'gptel-tools-agent-base)
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
 (declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness" ())
