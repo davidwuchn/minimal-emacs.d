@@ -46,7 +46,10 @@ run_unit_tests() {
     local runtime_dir
     local workflow_server
     local ert_status=0
-    
+
+    # Ensure we're in the project root so find/emacs resolve paths correctly
+    cd "$DIR"
+
     section "Unit Tests (ERT)"
     
     echo "Running ERT tests (pattern: $PATTERN)..."

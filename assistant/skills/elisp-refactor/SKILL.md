@@ -155,3 +155,9 @@ that likely represent configurable policies.")
 - **Performance-critical paths**: Don't add indirection in inner loops (defer to benchmark)
 - **Stable external APIs**: Don't change interfaces that other packages depend on
 - **Already well-structured**: If mechanism and policy are already separated, don't over-engineer
+<<<<<<< ours — heading `When NOT to Refactor` (T+F, confidence: medium)
+// hint: Logic and cosmetic changes overlap. Resolve logic first, then reformat.
+=======
+
+*Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*
+>>>>>>> theirs — heading `When NOT to Refactor` (T+F, confidence: medium)

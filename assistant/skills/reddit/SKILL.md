@@ -190,3 +190,9 @@ Before outputting results:
 - [ ] Errors handled gracefully (invalid subreddit, API down)
 
 **"API call succeeded" ≠ "Data is useful"** - Verify content relevance.
+<<<<<<< ours — heading `Verification` (T+F, confidence: medium)
+// hint: Logic and cosmetic changes overlap. Resolve logic first, then reformat.
+=======
+
+*Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*
+>>>>>>> theirs — heading `Verification` (T+F, confidence: medium)

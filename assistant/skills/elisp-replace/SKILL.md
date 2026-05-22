@@ -269,3 +269,9 @@ OLD: (with-current-buffer buf (gptel--send chunk))
 OLD: (gptel--send chunk)
 → May match dozens of locations
 ```
+<<<<<<< ours — heading `Do: Keep old-string as specific as possible` (T+F, confidence: medium)
+// hint: Logic and cosmetic changes overlap. Resolve logic first, then reformat.
+=======
+
+*Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*
+>>>>>>> theirs — heading `Do: Keep old-string as specific as possible` (T+F, confidence: medium)

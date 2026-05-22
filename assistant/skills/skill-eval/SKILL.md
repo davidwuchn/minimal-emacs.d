@@ -235,3 +235,9 @@ run:
 ```
 
 This recursive validation ensures the meta-skill remains self-consistent.
+<<<<<<< ours — heading `Evaluate skill-eval against itself` (T+F, confidence: medium)
+// hint: Logic and cosmetic changes overlap. Resolve logic first, then reformat.
+=======
+
+*Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*
+>>>>>>> theirs — heading `Evaluate skill-eval against itself` (T+F, confidence: medium)
