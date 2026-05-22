@@ -2482,7 +2482,7 @@ must not override it to MiniMax via setq-local in subagent buffers."
 (ert-deftest tdd/research/autotts-parse-trace-blocks ()
   "parse-research-autotts-traces extracts ===RESULT=== JSON blocks."
   (when (fboundp 'gptel-auto-workflow--parse-research-autotts-traces)
-    (let* ((output "Some text\n===RESULT===\n{\"phase\": \"search\", \"confidence\": 0.8, \"tokens\": 1200}\nMore text")
+    (let* ((output "Some text\n===RESULT===\n({\"phase\": \"search\", \"confidence\": 0.8, \"tokens\": 1200})\nMore text")
            (traces (gptel-auto-workflow--parse-research-autotts-traces output)))
       (should (= 1 (length traces)))
       (should (equal (plist-get (car traces) :phase) "search"))
@@ -2533,6 +2533,24 @@ must not override it to MiniMax via setq-local in subagent buffers."
        "test-strategy-42" "Test description"
        '(list '(:name "phase1" :prompt "do thing")))
       (should (member "test-strategy-42" gptel-auto-workflow--proposed-research-strategies)))))
+
+;; ─── TDD: Allium BDD ───
+
+(ert-deftest tdd/allium-bdd/bdd-check-function-exists ()
+  "allium-bdd-check must be defined."
+  (should (fboundp 'gptel-auto-workflow--allium-bdd-check)))
+
+(ert-deftest tdd/allium-bdd/bdd-assert-function-exists ()
+  "allium-bdd-assert must be defined."
+  (should (fboundp 'gptel-auto-workflow--allium-bdd-assert)))
+
+(ert-deftest tdd/allium-bdd/check-returns-without-crash ()
+  "allium-bdd-check must return nil without crashing when Allium unavailable."
+  (when (and (fboundp 'gptel-auto-experiment--allium-distill)
+             (fboundp 'gptel-request))
+    (should-not (condition-case nil
+                    (gptel-auto-workflow--allium-bdd-check "test behavior: handle nil input gracefully")
+                  (error t)))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 

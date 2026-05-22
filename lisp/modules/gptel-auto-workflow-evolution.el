@@ -5143,136 +5143,56 @@ Saves to var/tmp/evolution-scores.json."
          (current (length results)))
     (- current (or (ignore-errors (float last-total)) 0))))
 
-(defun gptel-auto-workflow--semantic-similarity-edges
-    (&optional threshold)
-  "Discover semantic relationships between files via git-embed."
-  (let ((min-score (or threshold 0.55)) (edges nil))
-    (when
-	(and (executable-find "git-embed")
-	     (fboundp 'gptel-auto-workflow--parse-all-results))
-      (let*
-	  ((results (gptel-auto-workflow--parse-all-results))
-	   (kept-targets
-	    (cl-remove-if-not (lambda (x) (stringp x))
-			      (delete-dups
-			       (mapcar
-				(lambda (r) (plist-get r :target))
-				(cl-remove-if-not
-				 (lambda (r)
-				   (equal (plist-get r :decision)
-					  "kept"))
-				 results))))))
-	(dolist (source-target kept-targets)
-	  (condition-case nil
-	      (let*
-		  ((default-directory
-		    (or (gptel-auto-workflow--worktree-base-root)
-			default-directory))
-		   (output
-		    (shell-command-to-string
-		     (format "git embed similar %s 2>/dev/null"
-			     (shell-quote-argument source-target))))
-		   (lines (split-string output "\n" t)))
-		(dolist (line lines)
-		  (when
-		      (string-match "\\([0-9.]+\\)[ \\t]+\\(.+\\)"
-				    line)
-		    (let
-			((score
-			  (string-to-number (match-string 1 line)))
-			 (similar-file (match-string 2 line)))
-		      (when
-			  (and (>= score min-score)
-			       (not
-				(string= source-target similar-file))
-			       (string-match-p "lisp/modules/"
-					       similar-file))
-			(push
-			 (list :source source-target :target
-			       similar-file :score score :method
-			       "git-embed-nomic")
-			 edges))))))
-	    (error nil)))))
-    (nreverse edges)))
+;; ─── Allium BDD: Behavior-Driven Development via spec checking ───
 
+(defun gptel-auto-workflow--allium-bdd-check (behavior-description &optional callback)
+  "BDD check: distill BEHAVIOR-DESCRIPTION to Allium spec and verify coherence.
+Returns nil when Allium is unavailable. Silent no-op when gptel not functional.
+Use for TDD-style behavioral verification."
+  (condition-case-unless-debug err
+      (progn
+        (unless (and (fboundp 'gptel-auto-experiment--allium-distill)
+                     (fboundp 'gptel-request))
+          (when callback (funcall callback (cons :unavailable nil)))
+          (cl-return-from gptel-auto-workflow--allium-bdd-check nil))
+        (gptel-auto-experiment--allium-distill
+         behavior-description
+         (lambda (allium-spec)
+           (condition-case-unless-debug err
+               (if (not allium-spec)
+                   (when callback (funcall callback (cons :distill-failed nil)))
+                 (gptel-auto-experiment--allium-check
+                  allium-spec
+                  (lambda (issues)
+                    (condition-case-unless-debug err
+                        (let* ((count-severity (gptel-auto-experiment--allium-issues-count issues))
+                               (count (car count-severity))
+                               (severity (cdr count-severity))
+                               (score (gptel-auto-experiment--allium-quality-score issues))
+                               (pass (and (< score 0.3) (<= count 5)))
+                               (report (format "# Allium BDD Check\n\n**Issues:** %d | **Severity:** %.2f | **Score:** %.2f\n\n## Issues\n\n%s\n\n## Spec\n\n```allium\n%s\n```"
+                                               count severity score (or issues "(none)") (or allium-spec "(none)"))))
+                          (when callback
+                            (funcall callback
+                                     (cons (if pass :pass :fail)
+                                           (list :issues count :severity severity :score score
+                                                 :spec allium-spec :report report)))))
+                      (error (when callback (funcall callback (cons :check-error nil))))))))
+             (error (when callback (funcall callback (cons :check-error nil))))))))
+    (error (when callback (funcall callback (cons :unavailable nil)))
+           nil)))
 
-(defun gptel-auto-workflow--semantic-relationship-report nil
-  "Generate markdown report of semantic file relationships."
-  (let ((edges (gptel-auto-workflow--semantic-similarity-edges)))
-    (when edges
-      (let
-	  ((report-buffer (generate-new-buffer " *semantic-report*")))
-	(with-current-buffer report-buffer
-	  (insert "# Semantic File Relationships\\n\\n")
-	  (insert "Generated: " (format-time-string "%Y-%m-%dT%H:%M")
-		  "\\n\\n")
-	  (insert
-	   "## Files Semantically Similar to Kept Experiment Targets\\n\\n")
-	  (insert "| Source (kept target) | Similar File | Score |\\n")
-	  (insert "|---------------------|--------------|-------|\\n")
-	  (dolist (edge edges)
-	    (insert
-	     (format "| %s | %s | %.3f |\\n" (plist-get edge :source)
-		     (plist-get edge :target) (plist-get edge :score))))
-	  (insert "\\n## Ontology Implications\\n\\n")
-	  (insert
-	   "- Files with high semantic similarity (>0.60) may benefit from similar fixes\\n")
-	  (insert
-	   "- Consider clustering similar files for batch optimization\\n")
-	  (insert
-	   "- Semantic edges supplement structural (import/require) relationships\\n")
-	  (buffer-string))))))
+(defun gptel-auto-workflow--allium-bdd-assert (behavior-description)
+  "Assert BEHAVIOR-DESCRIPTION passes Allium BDD check.
+Signals ert-test-failed if check fails. Use in ERT tests."
+  (when (fboundp 'gptel-auto-experiment--allium-distill)
+    (let ((result (gptel-auto-workflow--allium-bdd-check behavior-description)))
+      (when (eq (car result) :unavailable)
+        (message "[allium-bdd] Allium unavailable — skipping BDD assertion"))
+      (when (eq (car result) :distill-failed)
+        (message "[allium-bdd] Spec distillation failed — check input"))
+      (when (eq (car result) :fail)
+        (should nil)))))
 
-
-(defun gptel-auto-workflow--evolution-persist-semantic-relationships
-    nil
-  "Generate and save semantic relationship knowledge page."
-  (condition-case err
-      (let
-	  ((report (gptel-auto-workflow--semantic-relationship-report)))
-	(when report
-	  (let
-	      ((knowledge-dir
-		(expand-file-name "mementum/knowledge"
-				  (or
-				   (gptel-auto-workflow--worktree-base-root)
-				   default-directory)))
-	       (knowledge-file "semantic-relationships.md"))
-	    (make-directory knowledge-dir t)
-	    (with-temp-file
-		(expand-file-name knowledge-file knowledge-dir)
-	      (insert report))
-	    (message
-	     "[evolution] Semantic relationships → mementum/knowledge/%s"
-	     knowledge-file))))
-    (error
-     (message "[evolution] Semantic relationships error: %s"
-	      (error-message-string err)))))
-;; ─── Skill Governance Integration ───
-
-(defun gptel-auto-workflow--evolution-get-recently-evolved-skills ()
-  "Return list of skill names that were recently evolved (last 2 cycles).
-Used by skill-governance to select candidates for A/B testing."
-  (let ((skills-dir (expand-file-name "assistant/skills" user-emacs-directory))
-        (recent nil)
-        (cutoff (- (float-time) (* 48 3600))))  ;; last 48 hours
-    (when (file-directory-p skills-dir)
-      (dolist (skill-dir (directory-files skills-dir t "^[^._]"))
-        (when (file-directory-p skill-dir)
-          (let ((skill-file (expand-file-name "SKILL.md" skill-dir)))
-            (when (and (file-exists-p skill-file)
-                        (let ((mtime (file-attribute-modification-time (file-attributes skill-file))))
-                         (and mtime (> (float-time mtime) cutoff))))
-              (push (file-name-nondirectory skill-dir) recent))))))
-    (delete-dups recent)))
-
-;; ─── Init ───
-
-;; Cache repo root at load time to avoid worktree issues later
-(when nil (when (and (null gptel-auto-workflow--evolution-repo-root)
-           (fboundp 'gptel-auto-workflow--evolution-repo-root))
-  (gptel-auto-workflow--evolution-repo-root))
-
-)
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here
