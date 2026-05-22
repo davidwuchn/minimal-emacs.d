@@ -2649,6 +2649,85 @@ DEPRECATED: use --category-champions for per-category gating.")
   (setq gptel-auto-workflow--category-strike-counts
         (assq-delete-all category gptel-auto-workflow--category-strike-counts)))
 
+;; ─── φ Vitality: Strategy Novelty Detection ───
+
+(defun gptel-auto-workflow--strategy-novelty-score (new-code existing-strategies)
+  "φ Vitality: compute novelty score for NEW-CODE vs EXISTING-STRATEGIES.
+Returns 0.0–1.0 where 1.0 = completely novel mechanism.
+Scores by: function name uniqueness, approach description difference,
+and structural dissimilarity. Below 0.3 = likely parameter variant."
+  (if (or (not (stringp new-code)) (null existing-strategies))
+      1.0
+    (let ((total-score 0.0)
+          (compared 0))
+      (dolist (existing existing-strategies)
+        (when (stringp existing)
+          (let ((score 0.0))
+            ;; Check 1: function name overlap (penalty for similar names)
+            (let ((new-name (when (string-match "defun\\s-+strategy-\\([^ ]+\\)-build-prompt" new-code)
+                              (match-string 1 new-code)))
+                  (old-name (when (string-match "defun\\s-+strategy-\\([^ ]+\\)-build-prompt" existing)
+                              (match-string 1 existing))))
+              (when (and new-name old-name)
+                ;; Levenshtein-like: count shared words
+                (let ((shared 0) (total 0))
+                  (dolist (w (split-string new-name "-"))
+                    (cl-incf total)
+                    (when (string-match-p (regexp-quote w) old-name)
+                      (cl-incf shared)))
+                  (if (> total 0)
+                      (setq score (- 1.0 (/ (float shared) total)))
+                    (setq score 0.5)))))
+            ;; Check 2: structural similarity (same number of defuns, same sections)
+            (let ((new-defuns (count-matches "^(defun " new-code))
+                  (old-defuns (count-matches "^(defun " existing)))
+              (when (and (> new-defuns 0) (> old-defuns 0))
+                (setq score (+ score (* 0.5 (- 1.0 (/ (float (min new-defuns old-defuns))
+                                                       (max new-defuns old-defuns))))))))
+            (setq total-score (+ total-score score))
+            (cl-incf compared))))
+      (if (> compared 0)
+          (/ total-score compared)
+        1.0))))
+
+;; ─── ε Purpose: Per-Category Experiment Quotas ───
+
+(defvar gptel-auto-workflow--category-quota-max 5
+  "ε Purpose: maximum consecutive experiments per category before rotation.
+Prevents over-optimizing one category at the expense of others.")
+
+(defvar gptel-auto-workflow--category-experiment-counts nil
+  "Alist of (CATEGORY . COUNT) tracking consecutive experiments per category.
+ε Purpose: resets when category rotates.")
+
+(defun gptel-auto-workflow--next-category-target (current-category)
+  "ε Purpose: suggest next category to experiment on, enforcing quotas.
+If CURRENT-CATEGORY has exceeded quota, rotate to the least-optimized category.
+Returns a category keyword."
+  (let* ((counts gptel-auto-workflow--category-experiment-counts)
+         (cur-count (or (cdr (assq current-category counts)) 0))
+         (all-cats '(:programming :tool-calls :agentic :natural-language)))
+    (if (>= cur-count gptel-auto-workflow--category-quota-max)
+        ;; Rotate to least-used category
+        (let ((best-cat :natural-language)
+              (best-count most-positive-fixnum))
+          (dolist (cat all-cats)
+            (let ((c (or (cdr (assq cat counts)) 0)))
+              (when (< c best-count)
+                (setq best-count c best-cat cat))))
+          (message "[quota] ε Purpose: rotating from %s to %s (%d/%d max)"
+                   current-category best-cat cur-count gptel-auto-workflow--category-quota-max)
+          ;; Reset current category count after rotation
+          (setq gptel-auto-workflow--category-experiment-counts
+                (assq-delete-all current-category gptel-auto-workflow--category-experiment-counts))
+          best-cat)
+      ;; Track this category
+      (let ((entry (assq current-category counts)))
+        (if entry
+            (setcdr entry (1+ (cdr entry)))
+          (push (cons current-category 1) gptel-auto-workflow--category-experiment-counts)))
+      current-category)))
+
 (defvar gptel-auto-workflow--baseline-keep-rate 0.0
   "Keep-rate of the template-default (baseline) strategy.
 μ Directness: first champion must beat this, not absolute zero.")
