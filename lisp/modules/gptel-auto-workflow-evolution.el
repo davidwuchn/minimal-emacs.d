@@ -4576,7 +4576,8 @@ Falls back to sqrt(keep-rate) when no champion data exists."
     ;; Collect per-category rates and counts
     (dolist (i instances)
       (let* ((name (plist-get i :name)) (rate (plist-get i :keep-rate))
-             (cat (gptel-auto-workflow--categorize-target name)))
+             (cat (when (fboundp 'gptel-auto-workflow--categorize-target)
+                    (gptel-auto-workflow--categorize-target name))))
         (when cat
           (cl-incf (alist-get cat cat-counts))
           (cl-incf (alist-get cat cat-rates) rate))))
