@@ -297,5 +297,73 @@ Reorders fallback chain before each experiment based on historical performance."
 (advice-add 'gptel-auto-experiment-run
             :around #'gptel-auto-workflow--ontology-fallback-advice)
 
+;; ─── π Synthesis: Semantic Clustering + Strategy Inheritance ───
+
+(defun gptel-auto-workflow--winning-strategy-for-target (target)
+  "Find the strategy that produced a 'kept result for TARGET.
+Returns strategy name string or nil.  Checks TSV results."
+  (when (fboundp 'gptel-auto-workflow--parse-all-results)
+    (let ((results (gptel-auto-workflow--parse-all-results)))
+      (catch 'found
+        (dolist (r results)
+          (when (and (equal (plist-get r :target) target)
+                     (equal (plist-get r :decision) "kept")
+                     (plist-get r :strategy))
+            (throw 'found (plist-get r :strategy))))
+        nil))))
+
+(defun gptel-auto-workflow--semantic-cluster-targets (&optional min-score)
+  "Group kept targets with their semantically similar files.
+Returns alist of (source-target . ((similar-target . score) ...)).
+MIN-SCORE defaults to 0.75 (high confidence)."
+  (let ((clusters nil)
+        (threshold (or min-score 0.75)))
+    (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+      (let ((edges (gptel-auto-workflow--semantic-similarity-edges threshold)))
+        (dolist (edge edges)
+          (let* ((source (plist-get edge :source))
+                 (target (plist-get edge :target))
+                 (score (plist-get edge :score))
+                 (existing (assoc source clusters)))
+            (if existing
+                (setcdr existing (cons (cons target score) (cdr existing)))
+              (push (cons source (list (cons target score))) clusters)))))
+      clusters)))
+
+(defun gptel-auto-workflow--suggest-similar-with-strategy (source-target)
+  "Suggest targets similar to SOURCE-TARGET with inherited strategy.
+Returns plist with :targets and :strategy, or nil.
+π Synthesis: knowledge from kept experiments propagates to similar files."
+  (let ((strategy (gptel-auto-workflow--winning-strategy-for-target source-target))
+        (clusters (gptel-auto-workflow--semantic-cluster-targets 0.75)))
+    (when (and strategy clusters)
+      (let* ((cluster (cdr (assoc source-target clusters)))
+             (targets (mapcar #'car cluster)))
+        (when targets
+          (message "[cluster] π Synthesis: %d targets similar to %s, inheriting strategy '%s'"
+                   (length targets) source-target strategy)
+          (list :targets targets
+                :strategy strategy
+                :source source-target
+                :scores (mapcar #'cdr cluster)))))))
+
+(defun gptel-auto-workflow--queue-cluster-experiments (source-target)
+  "Queue experiments on targets similar to kept SOURCE-TARGET.
+Adds to gptel-auto-workflow--evolution-next-cycle-hints.
+VSM S2 Metal: coordination prevents duplicated effort across similar files."
+  (let ((suggestion (gptel-auto-workflow--suggest-similar-with-strategy source-target)))
+    (when suggestion
+      (let ((targets (plist-get suggestion :targets))
+            (strategy (plist-get suggestion :strategy)))
+        (dolist (target targets)
+          (push (list :target target
+                      :strategy strategy
+                      :reason "semantic-cluster"
+                      :source source-target
+                      :priority 2)
+                gptel-auto-workflow--evolution-next-cycle-hints)
+          (message "[cluster] Queued %s with strategy '%s' (similar to kept %s)"
+                   target strategy source-target))))))
+
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here

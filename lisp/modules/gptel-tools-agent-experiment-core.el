@@ -256,9 +256,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                   (message "[auto-exp] Repeated focus on %s after %d prior non-kept attempts; discarding without grading"
                                            symbol count)
                                   (magit-git-success "checkout" "--" "."))
-                                 (cl-incf gptel-auto-experiment--no-improvement-count)
-                                 (funcall log-fn run-id exp-result)
-                                 (funcall callback exp-result))
+                                  (cl-incf gptel-auto-experiment--no-improvement-count)
+                                  (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+                                    (gptel-auto-workflow--apply-category-vigilance target 'discarded))
+                                  (funcall log-fn run-id exp-result)
+                                  (funcall callback exp-result))
                              ;; Validate syntax BEFORE calling grader to avoid wasting API calls
                              (let ((validation-error
                                     (when target
@@ -341,10 +343,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                      :validation-error validation-error
                                                                      :backend actual-backend
                           :model actual-model)))
-                                                         (setq finished t)
-                                                         (cl-incf gptel-auto-experiment--no-improvement-count)
-                                                         (funcall log-fn run-id retry-exp-result)
-                                                         (funcall callback retry-exp-result))
+                                                          (setq finished t)
+                                                          (cl-incf gptel-auto-experiment--no-improvement-count)
+                                                          (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+                                                            (gptel-auto-workflow--apply-category-vigilance target 'validation-failed))
+                                                          (funcall log-fn run-id retry-exp-result)
+                                                          (funcall callback retry-exp-result))
                                                      ;; Retry succeeded: treat output as new executor output
                                                      (funcall executor-callback retry-output)))
                                                  "executor"
@@ -372,10 +376,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                         :validation-error validation-error
                                                         :backend actual-backend
                           :model actual-model)))
-                                           (setq finished t)
-                                           (cl-incf gptel-auto-experiment--no-improvement-count)
-                                           (funcall log-fn run-id exp-result)
-                                           (funcall callback exp-result)))))
+                                            (setq finished t)
+                                            (cl-incf gptel-auto-experiment--no-improvement-count)
+                                            (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+                                              (gptel-auto-workflow--apply-category-vigilance target 'validation-failed))
+                                            (funcall log-fn run-id exp-result)
+                                            (funcall callback exp-result)))))
                                  (let ((gptel-auto-experiment--grading-target target)
                                        (gptel-auto-experiment--grading-worktree experiment-worktree))
                                    (gptel-auto-experiment--grade-with-retry
@@ -553,15 +559,20 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 			                                                            (format "Commit experiment changes for %s" target)
 			                                                            provisional-commit-hash
 			                                                            commit-timeout))
-			                                                          (progn
-			                                                        (setq provisional-commit-hash nil)
-			                                                        (gptel-auto-workflow--track-commit experiment-id
-							                                                                           target
-							                                                                           experiment-worktree)
-			                                                        (gptel-auto-experiment--maybe-log-staging-pending
-							                                                     run-id exp-result log-fn)
-			                                                        (setq gptel-auto-experiment--best-score score-after
-			                                                              gptel-auto-experiment--no-improvement-count 0)
+                                                          (progn
+                                                        (setq provisional-commit-hash nil)
+                                                        (gptel-auto-workflow--track-commit experiment-id
+								                                           target
+								                                           experiment-worktree)
+                                                        (gptel-auto-experiment--maybe-log-staging-pending
+								                                     run-id exp-result log-fn)
+                                                        (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+                                                          (gptel-auto-workflow--apply-category-vigilance target 'kept))
+                                                        ;; π Synthesis: queue similar targets with inherited strategy
+                                                        (when (fboundp 'gptel-auto-workflow--queue-cluster-experiments)
+                                                          (gptel-auto-workflow--queue-cluster-experiments target))
+                                                        (setq gptel-auto-experiment--best-score score-after
+                                                              gptel-auto-experiment--no-improvement-count 0)
 			                                                        (if gptel-auto-experiment-auto-push
 			                                                            (progn
 			                                                              (message "[auto-experiment] Pushing to %s" experiment-branch)

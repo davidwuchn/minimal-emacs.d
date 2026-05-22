@@ -2369,6 +2369,58 @@ must not override it to MiniMax via setq-local in subagent buffers."
                 (should (string-match-p "Semantic File Relationships" (buffer-string))))))
         (delete-directory root t)))))
 
+(ert-deftest tdd/category-vigilance/strike-increments-to-freeze ()
+  "Three strikes freeze a category."
+  (when (fboundp 'gptel-auto-workflow--record-category-strike)
+    (let ((gptel-auto-workflow--category-strike-counts nil))
+      (gptel-auto-workflow--record-category-strike :programming)
+      (should (= 1 (cdr (assq :programming gptel-auto-workflow--category-strike-counts))))
+      (gptel-auto-workflow--record-category-strike :programming)
+      (should (= 2 (cdr (assq :programming gptel-auto-workflow--category-strike-counts))))
+      (gptel-auto-workflow--record-category-strike :programming)
+      (should (= 3 (cdr (assq :programming gptel-auto-workflow--category-strike-counts))))
+      (should (gptel-auto-workflow--category-frozen-p :programming))
+      ;; Other categories unaffected
+      (should-not (gptel-auto-workflow--category-frozen-p :tool-calls)))))
+
+(ert-deftest tdd/category-vigilance/reset-clears-strikes ()
+  "Reset strikes unfreezes a category."
+  (when (fboundp 'gptel-auto-workflow--reset-category-strikes)
+    (let ((gptel-auto-workflow--category-strike-counts '((:programming . 3))))
+      (should (gptel-auto-workflow--category-frozen-p :programming))
+      (gptel-auto-workflow--reset-category-strikes :programming)
+      (should-not (gptel-auto-workflow--category-frozen-p :programming))
+      (should-not (assq :programming gptel-auto-workflow--category-strike-counts)))))
+
+(ert-deftest tdd/category-vigilance/apply-vigilance-kept-resets ()
+  "apply-category-vigilance with 'kept resets strikes."
+  (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+    (let ((gptel-auto-workflow--category-strike-counts '((:programming . 2))))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--categorize-experiment-target)
+                 (lambda (_) :programming)))
+        (gptel-auto-workflow--apply-category-vigilance "test.el" 'kept)
+        (should-not (assq :programming gptel-auto-workflow--category-strike-counts))))))
+
+(ert-deftest tdd/category-vigilance/apply-vigilance-discarded-records ()
+  "apply-category-vigilance with 'discarded records strike."
+  (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+    (let ((gptel-auto-workflow--category-strike-counts nil))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--categorize-experiment-target)
+                 (lambda (_) :tool-calls)))
+        (gptel-auto-workflow--apply-category-vigilance "test.el" 'discarded)
+        (should (= 1 (cdr (assq :tool-calls gptel-auto-workflow--category-strike-counts))))
+        (gptel-auto-workflow--apply-category-vigilance "test.el" 'discarded)
+        (should (= 2 (cdr (assq :tool-calls gptel-auto-workflow--category-strike-counts))))))))
+
+(ert-deftest tdd/category-vigilance/apply-vigilance-validation-failed-records ()
+  "apply-category-vigilance with 'validation-failed records strike."
+  (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+    (let ((gptel-auto-workflow--category-strike-counts nil))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--categorize-experiment-target)
+                 (lambda (_) :agentic)))
+        (gptel-auto-workflow--apply-category-vigilance "test.el" 'validation-failed)
+        (should (= 1 (cdr (assq :agentic gptel-auto-workflow--category-strike-counts))))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
