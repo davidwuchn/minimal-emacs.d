@@ -136,6 +136,77 @@ Returns plist with :kept :total :keep-rate."
           :total total
           :keep-rate (if (> total 0) (/ (float kept) total) nil))))
 
+;; ─── Recent Performance (last N experiments) ───
+
+(defcustom gptel-auto-workflow--ontology-recent-window 20
+  "Number of most recent experiments to consider for trend analysis.
+Recent keep-rate compared against all-time to detect improvement/decline."
+  :type 'integer
+  :group 'gptel-auto-workflow)
+
+(defun gptel-auto-workflow--get-recent-performance-stats (backend category &optional strategy)
+  "Get BACKEND's RECENT performance stats on CATEGORY targets.
+Only considers the last `gptel-auto-workflow--ontology-recent-window' experiments.
+Returns plist with :kept :total :keep-rate, or nil if no recent data."
+  (let* ((all (gptel-auto-workflow--parse-all-results))
+         (recent (seq-take all (min (length all) gptel-auto-workflow--ontology-recent-window)))
+         (kept 0)
+         (total 0))
+    (dolist (r recent)
+      (let ((r-backend (or (plist-get r :backend) "unknown"))
+            (r-target (plist-get r :target))
+            (r-strategy (plist-get r :strategy))
+            (r-decision (plist-get r :decision)))
+        (when (and (string= r-backend backend)
+                   (eq (gptel-auto-workflow--categorize-target r-target) category)
+                   (or (null strategy) (string= r-strategy strategy)))
+          (setq total (1+ total))
+          (when (equal r-decision "kept")
+            (setq kept (1+ kept))))))
+    (list :kept kept
+          :total total
+          :keep-rate (if (> total 0) (/ (float kept) total) nil))))
+
+;; ─── Category Baseline ───
+
+(defun gptel-auto-workflow--category-baseline-keep-rate (category &optional strategy)
+  "Compute the average keep-rate across ALL backends for CATEGORY.
+This is the baseline — individual backend performance is measured
+as delta from this baseline. Optional STRATEGY filter.
+Returns float 0.0-1.0, or nil if no data."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (kept 0)
+        (total 0))
+    (dolist (r results)
+      (let ((r-target (plist-get r :target))
+            (r-strategy (plist-get r :strategy))
+            (r-decision (plist-get r :decision)))
+        (when (and (eq (gptel-auto-workflow--categorize-target r-target) category)
+                   (or (null strategy) (string= r-strategy strategy)))
+          (setq total (1+ total))
+          (when (equal r-decision "kept")
+            (setq kept (1+ kept))))))
+    (if (> total 0) (/ (float kept) total) nil)))
+
+;; ─── Backend Quota Check ───
+
+(defun gptel-auto-workflow--backend-quota-health (backend)
+  "Check BACKEND's current quota health from recent rate-limit data.
+Returns plist with :healthy (t/nil), :recent-errors (count),
+:last-error (timestamp string or nil)."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (errors 0)
+        (last-error nil))
+    (dolist (r results)
+      (let ((r-backend (or (plist-get r :backend) "unknown"))
+            (r-error (plist-get r :rate-limit-error)))
+        (when (and (string= r-backend backend) r-error)
+          (setq errors (1+ errors))
+          (setq last-error (or (plist-get r :timestamp) last-error)))))
+    (list :healthy (< errors 3)
+          :recent-errors errors
+          :last-error last-error)))
+
 ;; ─── Category Overrides (from 1,204 experiments) ───
 
 (defconst gptel-auto-workflow--category-backend-overrides
@@ -156,33 +227,69 @@ Agentic → nil (use default ontology ordering, MiniMax is baseline).")
 (defun gptel-auto-workflow--reorder-fallbacks-by-ontology (&optional strategy target)
   "Reorder `gptel-auto-workflow-headless-subagent-fallbacks' using ontology data.
 Returns new ordered list of (backend . model) cons cells.
-STRATEGY and TARGET filter the performance data."
+STRATEGY and TARGET filter the performance data.
+
+Scoring incorporates four dimensions (not just raw keep-rate):
+  1. DELTA from category baseline — how much better/worse vs peers?      (40%)
+  2. RAW keep-rate — historical performance on this category               (30%)
+  3. TREND — is performance improving or declining recently?               (20%)
+  4. CONFIDENCE — how much data backs this score?                          (10%)
+  Penalty: unhealthy backends (3+ recent errors) drop to bottom."
   (let* ((static-fallbacks (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
-                               gptel-auto-workflow-headless-subagent-fallbacks
-                             '(("MiniMax" . "minimax-m2.7-highspeed")
-                               ("moonshot" . "kimi-k2.6")
-                               ("DashScope" . "qwen3.6-plus")
-                               ("DeepSeek" . "deepseek-v4-flash")
-                               ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
-         (category (when target (gptel-auto-workflow--categorize-target target)))
-         (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
-         (scored nil))
+                                gptel-auto-workflow-headless-subagent-fallbacks
+                              '(("MiniMax" . "minimax-m2.7-highspeed")
+                                ("moonshot" . "kimi-k2.6")
+                                ("DashScope" . "qwen3.6-plus")
+                                ("DeepSeek" . "deepseek-v4-flash")
+                                ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+          (category (when target (gptel-auto-workflow--categorize-target target)))
+          (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
+          ;; Compute baseline once per category
+          (baseline (when category (gptel-auto-workflow--category-baseline-keep-rate category strategy)))
+          (scored nil))
     
     ;; Score each backend from static list
     (dolist (entry static-fallbacks)
       (let* ((backend (car entry))
              (model (cdr entry))
-             ;; Use category-level stats if available, otherwise target-level
-             (stats (if category
-                        (gptel-auto-workflow--get-category-performance-stats backend category strategy)
-                      (gptel-auto-workflow--get-backend-performance-stats backend strategy target)))
-             (keep-rate (plist-get stats :keep-rate))
-             (total (plist-get stats :total))
-             (score (if keep-rate
-                        (+ (* keep-rate 100)  ; Weighted by keep-rate
-                           (if (> total 0) 1 0))
-                      -1)))  ; No data = low priority
-        (push (list :backend backend :model model :score score :rate keep-rate :total total) scored)))
+             ;; All-time category stats
+             (all-stats (if category
+                            (gptel-auto-workflow--get-category-performance-stats backend category strategy)
+                          (gptel-auto-workflow--get-backend-performance-stats backend strategy target)))
+             (all-rate (plist-get all-stats :keep-rate))
+             (all-total (plist-get all-stats :total))
+             ;; Recent stats for trend
+             (recent-stats (when category
+                             (gptel-auto-workflow--get-recent-performance-stats backend category strategy)))
+             (recent-rate (plist-get recent-stats :keep-rate))
+             ;; Quota health
+             (quota (gptel-auto-workflow--backend-quota-health backend))
+             (healthy (plist-get quota :healthy))
+             ;; --- Score components ---
+             ;; Delta from baseline: how much better/worse than peers?
+             (delta (if (and all-rate baseline (> baseline 0.0))
+                        (- all-rate baseline)
+                      0.0))
+             ;; Trend: is recent performance better or worse?
+             (trend (if (and all-rate recent-rate (> all-rate 0.0))
+                        (- recent-rate all-rate)
+                      0.0))
+             ;; Confidence: more data = more trustworthy (caps at 1.0)
+             (confidence (if all-total
+                             (min 1.0 (/ (float all-total) 50.0))
+                           0.0)))
+        (push (list :backend backend :model model
+                    :rate all-rate :total all-total
+                    :delta delta :trend trend :confidence confidence
+                    :healthy healthy
+                    :score (if all-rate
+                               (+ (* delta 40.0)        ; Delta from peers (40%)
+                                  (* all-rate 30.0)      ; Raw keep-rate (30%)
+                                  (* trend 20.0)         ; Direction of change (20%)
+                                  (* confidence 10.0)    ; Data trust (10%)
+                                  (if healthy 0 -50.0))  ; Quota penalty
+                             -1.0))  ; No data = bottom
+              scored)))
     
     ;; Apply category override if available
     (when category-override
@@ -191,17 +298,33 @@ STRATEGY and TARGET filter the performance data."
                                  (plist-put s :score 9999.0)  ; Boost to top
                                s))
                            scored))
-      (message "[onto-router] CATEGORY OVERRIDE: %s (%s) → %s"
-               category target category-override))
+      (message "[onto-router] CATEGORY OVERRIDE: %s (%s) → %s (baseline=%.1f%%)"
+               category target category-override (if baseline (* baseline 100) 0)))
     
     ;; Sort by score descending
     (setq scored (sort scored (lambda (a b) (> (plist-get a :score) (plist-get b :score)))))
     
+    ;; Log rich routing decision for observability
+    (when (> (length scored) 1)
+      (let ((top (car scored))
+            (second (cadr scored)))
+        (message "[onto-router] ROUTE %s: %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f) > %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f)"
+                 (or category "global")
+                 (plist-get top :backend)
+                 (plist-get top :delta)
+                 (* (or (plist-get top :rate) 0) 100)
+                 (plist-get top :trend)
+                 (plist-get top :confidence)
+                 (plist-get second :backend)
+                 (plist-get second :delta)
+                 (* (or (plist-get second :rate) 0) 100)
+                 (plist-get second :trend)
+                 (plist-get second :confidence))))
+    
     ;; Check if we have enough data to trust the reordering
-    ;; Count total experiments across all backends
     (let ((total-samples (cl-reduce #'+ scored
-                                    :key (lambda (s) (or (plist-get s :total) 0))
-                                    :initial-value 0)))
+                                     :key (lambda (s) (or (plist-get s :total) 0))
+                                     :initial-value 0)))
       (if (>= total-samples gptel-auto-workflow--ontology-reorder-min-samples)
           (progn
             (message "[onto-router] Reordered %d backends by performance (≥%d samples)"
