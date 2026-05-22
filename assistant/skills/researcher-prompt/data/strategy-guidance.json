@@ -1,1 +1,6 @@
+<<<<<<< ours — interstitial `file_footer` (S, confidence: medium)
+// hint: Structural change (rename/retype). Check callers of this entity.
 {"beta":0.20465116279069767,"own-priority":59.98780487804878,"ext-priority":23.4375,"stop-threshold":65.0,"token-budget":8000,"learning-method":"agent-rules","evolved-at":"2026-05-16T22:56:13Z","based-on-traces":21,"best-topic":"json-null","best-topic-rate":0.0}
+=======
+{"beta":0.1858974358974359,"own-priority":86.66666666666666,"ext-priority":23.888888888888886,"stop-threshold":75.0,"token-budget":8000,"learning-method":"agent-rules","evolved-at":"2026-05-22T13:59:50Z","based-on-traces":30,"best-topic":"json-null","best-topic-rate":0.0}
+>>>>>>> theirs — interstitial `file_footer` (S, confidence: medium)
