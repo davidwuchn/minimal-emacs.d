@@ -71,12 +71,17 @@ Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running ca
 (defvar my/gptel-prompt-marker "### "
   "Prompt marker inserted at end of a gptel buffer.")
 
-(defun my/gptel--prompt-marker-regexp ()
-  "Return compiled regexp for prompt marker line, or nil if marker is invalid."
+(defun my/gptel--prompt-marker-value ()
+  "Return the prompt marker string if valid, or nil."
   (when (and (boundp 'my/gptel-prompt-marker)
              (stringp my/gptel-prompt-marker)
              (not (string-empty-p my/gptel-prompt-marker)))
-    (concat "^" (regexp-quote my/gptel-prompt-marker))))
+    my/gptel-prompt-marker))
+
+(defun my/gptel--prompt-marker-regexp ()
+  "Return compiled regexp for prompt marker line, or nil if marker is invalid."
+  (when-let ((marker (my/gptel--prompt-marker-value)))
+    (concat "^" (regexp-quote marker))))
 
 (defun my/gptel--prompt-marker-present-at-eob-p ()
   "Return non-nil if the last non-blank line at EOB is a prompt marker."
@@ -89,11 +94,7 @@ Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running ca
 
 (defun my/gptel--insert-prompt-marker-at-eob ()
   "Insert a single prompt marker at end of buffer."
-  (when-let ((marker (and (boundp 'my/gptel-prompt-marker)
-                          my/gptel-prompt-marker
-                          (stringp my/gptel-prompt-marker)
-                          (not (string-empty-p my/gptel-prompt-marker))
-                          my/gptel-prompt-marker)))
+  (when-let ((marker (my/gptel--prompt-marker-value)))
     (unless (my/gptel--prompt-marker-present-at-eob-p)
       (goto-char (point-max))
       ;; Keep exactly one marker line; no extra blank line.
@@ -131,8 +132,10 @@ request is active."
     (setq-local my/gptel--abort-generation (1+ my/gptel--abort-generation)))
 
   ;; Abort main gptel request
-  (when (fboundp 'gptel-abort)
-    (ignore-errors (gptel-abort (current-buffer))))
+  (when-let ((buf (current-buffer)))
+    (when (and (fboundp 'gptel-abort)
+               (buffer-live-p buf))
+      (ignore-errors (gptel-abort buf))))
   ;; Kill all gptel-related sub-processes.
   ;; Prefer the explicit tag `my/gptel-managed`, but also catch gptel's own curl
   ;; process (buffer is typically named " *gptel-curl*" with a leading space).
@@ -142,13 +145,16 @@ request is active."
       (when (and (process-live-p proc)
                  (or (process-get proc 'my/gptel-managed)
                      ;; gptel's internal curl process is named "gptel-curl".
-                     (string= (process-name proc) "gptel-curl")
+                     (let ((proc-name (process-name proc)))
+                       (and proc-name
+                            (or (string= proc-name "gptel-curl")
+                                ;; Generic catch: gptel tool processes we create are named gptel-...
+                                (string-prefix-p "gptel-" proc-name))))
                      ;; Also match by process buffer name.
-                     (and (process-buffer proc)
-                          (buffer-name (process-buffer proc))
-                          (string-match-p "gptel-curl" (buffer-name (process-buffer proc))))
-                     ;; Generic catch: gptel tool processes we create are named gptel-...
-                     (string-prefix-p "gptel-" (process-name proc))))
+                     (let ((proc-buf (process-buffer proc)))
+                       (and proc-buf
+                            (stringp (buffer-name proc-buf))
+                            (string-match-p "gptel-curl" (buffer-name proc-buf))))))
         (cl-incf killed)
         (message "Killing gptel/subagent process: %s" (process-name proc))
         ;; Prevent sentinels/filters from writing into buffers after abort.
