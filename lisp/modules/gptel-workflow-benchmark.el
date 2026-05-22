@@ -925,6 +925,8 @@ Returns plist with :patterns, :issues, and :recommendations."
   "Display ANALYSIS for WORKFLOW-NAME."
   (when (null analysis)
     (error "[workflow-bench] Cannot display nil analysis for %s" workflow-name))
+  (unless (proper-list-p analysis)
+    (error "[workflow-bench] Analysis for %s is not a plist: %S" workflow-name analysis))
   (let* ((total-tests (or (plist-get analysis :total-tests) 0))
          (timestamp (or (plist-get analysis :analysis-timestamp) "N/A"))
          (issues (or (plist-get analysis :issues) '()))

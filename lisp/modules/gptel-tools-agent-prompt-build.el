@@ -991,8 +991,8 @@ Implements section-level A/B testing to identify effective prompt components."
          (git-history (shell-command-to-string
                        (format "cd %s && git log --oneline -20 2>/dev/null || echo 'no history'"
                                worktree-quoted)))
-         (patterns (when analysis (plist-get analysis :patterns)))
-         (suggestions (when analysis (plist-get analysis :recommendations)))
+          (patterns (when (proper-list-p analysis) (plist-get analysis :patterns)))
+          (suggestions (when (proper-list-p analysis) (plist-get analysis :recommendations)))
          (skills (cdr (assoc target gptel-auto-workflow--skills)))
          (scores (gptel-auto-experiment--eight-keys-scores))
          (weakest-keys (when scores (gptel-auto-workflow--format-weakest-keys scores)))
