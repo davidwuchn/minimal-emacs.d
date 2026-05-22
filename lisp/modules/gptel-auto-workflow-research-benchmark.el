@@ -550,11 +550,11 @@ update-controller-from-champion-changes survive the save."
       (let ((tail controller-config))
         (while tail
           (setq merged (plist-put merged (car tail) (cadr tail)))
-          (setq tail (cddr tail)))))
-    (make-directory (file-name-directory controller-file) t)
-    (with-temp-file controller-file
-      (insert (json-encode merged)))
-    (message "[autotts] Saved evolved controller: %s (preserved champion keys)" controller-file)))
+          (setq tail (cddr tail))))
+      (make-directory (file-name-directory controller-file) t)
+      (with-temp-file controller-file
+        (insert (json-encode merged)))
+      (message "[autotts] Saved evolved controller: %s (preserved champion keys)" controller-file))))
 
 (defvar gptel-auto-workflow--controller-evolution-history nil
   "List of past controller evolution records.
