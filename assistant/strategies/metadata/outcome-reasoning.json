@@ -1,0 +1,1 @@
+{"name":"outcome-reasoning","version":"1.0","hypothesis":"Computing causal reasoning chains from failure outcomes produces more actionable guidance than pattern listing alone.","axis":"D","components":["failure-reasoning","derived-insights","causal-chains"]}

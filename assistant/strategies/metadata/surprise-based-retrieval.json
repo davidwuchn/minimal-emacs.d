@@ -1,0 +1,1 @@
+{"name":"surprise-based-retrieval","version":"1.0","hypothesis":"Novel code patterns require additional reference context more than conventional patterns.","axis":"B","components":["novelty-detection","pattern-frequency","similarity-retrieval"]}
