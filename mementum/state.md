@@ -1,12 +1,34 @@
 # Mementum State
 
-> Last session: 2026-05-22
-> Session focus: TDD coverage for cross-subsystem feedback + sync
+> Last session: 2026-05-22 19:40
+> Session focus: Restore deleted evolution code, fix BDD + parse bugs, enrich ontology router, polish OUROBOROS.md
 
-> **New:** 6 TDD tests added for cross-subsystem feedback functions (1835 total)
+> ### 2026-05-22 Session (evening)
+> Session goal: Review origin changes, fix accidental deletions, upgrade routing
 
-> ### 2026-05-22 Session (final)
-> Session goal: Wire three frameworks together, fix zero-score feedback loop, restart daemon clean
+### Complete
+
+| # | System | Key | What |
+|---|--------|-----|------|
+| 1 | evolution | ⊘ | Restored 512 lines accidentally deleted in BDD commit (pipeline stages, backend comparison, model comparison, quality gates) |
+| 2 | BDD | ⊘ | Fixed allium-bdd-check: condition-case → condition-case-unless-debug with nested handlers |
+| 3 | research-integration | ⊘ | Fixed unbalanced parens in parse-research-autotts-traces (was swallowing rest of file since creation) |
+| 4 | ontology-router | ⚒ | Enriched routing: score = Δ(baseline)×40 + keep-rate×30 + trend×20 + confidence×10 + quota penalty |
+| 5 | OUROBOROS.md | ◈ | Polished with two-halves framing: Researcher(Wood) ⇄ Executor(Metal) ⇄ Feedback(Water) |
+| 6 | docs | ◈ | Renamed docs/OUROBOROS.md → docs/research-autonomous-systems.md (naming collision) |
+
+### Verified
+- 232/233 evolution tests pass (1 pre-existing autotts failure)
+- 30/30 router tests pass (new scoring backwards-compatible)
+- Full suite: same 2 pre-existing failures (autotts + Emacs server)
+- Daemon: 4 workflow + 2 researcher, all stable, next cron at 11PM
+
+### Key Files Changed
+- `lisp/modules/gptel-auto-workflow-evolution.el` — restored 512 lines + BDD fix
+- `lisp/modules/gptel-auto-workflow-research-integration.el` — paren fix + regex + json-str
+- `lisp/modules/gptel-auto-workflow-ontology-router.el` — baseline, trend, confidence, quota scoring
+- `OUROBOROS.md` — two-halves framing, snake metaphor throughout
+- `tests/test-gptel-auto-workflow-evolution-regressions.el` — updated autotts test input
 
 > ## 2026-05-22 Session (final)
 
