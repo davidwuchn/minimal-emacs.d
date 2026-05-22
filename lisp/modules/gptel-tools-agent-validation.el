@@ -232,6 +232,22 @@ are used to recognize local definitions and `declare-function' declarations."
             (not (gptel-auto-experiment--defined-runtime-call-p symbol local-defs))))
      (delete-dups (nreverse calls)))))
 
+(defun gptel-auto-experiment--forward-sexp-file (file)
+  "Parse FILE with `forward-sexp' in `emacs-lisp-mode'.
+Returns nil if structurally valid, or an error message string."
+  (condition-case err
+      (with-temp-buffer
+        (insert-file-contents file)
+        (delay-mode-hooks
+          (emacs-lisp-mode))
+        (goto-char (point-min))
+        (while (not (eobp))
+          (forward-sexp))
+        nil)
+    (error (format "Elisp parse error in %s: %s"
+                   (file-relative-name file)
+                   (error-message-string err)))))
+
 (defun gptel-auto-experiment--validate-code (file)
   "Validate code in FILE for syntax and dangerous patterns.
 Returns nil if valid, or error message string if invalid."
@@ -240,7 +256,8 @@ Returns nil if valid, or error message string if invalid."
         (format "Missing target file: %s" file)
       (let ((content (gptel-auto-workflow--read-file-contents file))
             forms)
-        (or (cond
+        (or (gptel-auto-experiment--forward-sexp-file file)
+            (cond
              ((null content)
               (format "Empty or unreadable file: %s" file))
              ((condition-case err
