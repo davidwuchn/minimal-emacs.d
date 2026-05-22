@@ -19,8 +19,7 @@
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
 (declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness" ())
-
-;; AutoTTS-style research evolution via benchmark system
+(declare-function gptel-benchmark-eight-keys-score-for "gptel-benchmark-principles" (output subsystem &optional hypothesis))
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions" ())
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
@@ -2050,22 +2049,41 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                   :status (if (> rate 0) "keep" "skip")))))
     (ignore))))
 
-;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
+ ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
 
 (defun gptel-auto-workflow--evolution-vsm-health-check ()
-  "Score VSM layer health and log diagnostics."
+  "Score VSM layer health and log diagnostics.
+Connects benchmark-principles Eight Keys scoring to operational pipeline."
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
          (total (length results))
          (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
          (strategies (length (gptel-auto-workflow--evolution-strategy-structure-scores)))
          (backends (length (gptel-auto-workflow--evolution-backend-stats)))
-         (axis-stats (gptel-auto-workflow--evolution-axis-stats)))
+         (axis-stats (gptel-auto-workflow--evolution-axis-stats))
+         (eight-keys-available (fboundp 'gptel-benchmark-eight-keys-score-for))
+         (autogo-score 0.0) (autotts-score 0.0) (selfev-score 0.0)
+         (scored-count 0))
+    (when eight-keys-available
+      (dolist (r results)
+        (when (equal (plist-get r :decision) "kept")
+          (let ((hypo (or (plist-get r :hypothesis) "")))
+            (cl-incf scored-count)
+            (cl-incf autogo-score (gptel-benchmark-eight-keys-score-for hypo :autogo))
+            (cl-incf autotts-score (gptel-benchmark-eight-keys-score-for hypo :autotts))
+            (cl-incf selfev-score (gptel-benchmark-eight-keys-score-for hypo :self-evolve)))))
+      (when (> scored-count 0)
+        (setq autogo-score (/ autogo-score scored-count))
+        (setq autotts-score (/ autotts-score scored-count))
+        (setq selfev-score (/ selfev-score scored-count))))
     (message "[vsm] S1-Ops: %d experiments, %.0f%% kept" total (* 100 keep-rate))
     (message "[vsm] S2-Coord: %d modules scanned, staging verify active" 89)
     (message "[vsm] S3-Control: %d backends in chain, watchdog 90min" backends)
     (message "[vsm] S4-Intel: %d strategies evolved, auto-backend-order active" strategies)
     (message "[vsm] S5-Identity: lambda notation, confidence tags, graphify patterns active")
+    (when eight-keys-available
+      (message "[vsm] Eight Keys: AutoGo=%.2f AutoTTS=%.2f self-evolve=%.2f (%d samples)"
+               autogo-score autotts-score selfev-score scored-count))
     (when (fboundp 'gptel-auto-workflow--refresh-variant-axis-champions)
       (gptel-auto-workflow--refresh-variant-axis-champions))
     (when axis-stats
@@ -2749,25 +2767,28 @@ Computed from template-default experiments filtered by category.")
 
 (defun gptel-auto-workflow--categorize-experiment-target (target)
   "Categorize TARGET into an ontology category.
-Mirrors the ontology router's --categorize-target without requiring it.
+Delegates to ontology router's --categorize-target when available
+for a unified classification. Falls back to local regex matching.
 Returns :programming, :tool-calls, :agentic, or :natural-language."
-  (let ((base (if (stringp target) (file-name-nondirectory target) "")))
-    (cond
-     ((or (string-match-p "sandbox\\|tool-sanitize\\|tool-permit" base)
-          (string-match-p "\\btools?\\b" base))
-      :tool-calls)
-     ((or (string-match-p "agent-loop\\|agent-tools\\|agent-staging" base)
-          (string-match-p "\\bagent\\b" base)
-          (string-match-p "subagent" base))
-      :agentic)
-     ((or (string-match-p "benchmark\\|comparator\\|scoring\\|regression" base)
-          (string-match-p "\\btest" base)
-          (string-match-p "evolution\\|evolve\\|mutate" base))
-      :programming)
-     ((or (string-match-p "prompt\\|context\\|skill\\|strategy" base)
-          (string-match-p "\\bcompress\\|directive\\|guidance" base))
-      :natural-language)
-     (t :natural-language))))
+  (if (fboundp 'gptel-auto-workflow--categorize-target)
+      (gptel-auto-workflow--categorize-target target)
+    (let ((base (if (stringp target) (file-name-nondirectory target) "")))
+      (cond
+       ((or (string-match-p "sandbox\\|tool-sanitize\\|tool-permit" base)
+            (string-match-p "\\btools?\\b" base))
+        :tool-calls)
+       ((or (string-match-p "agent-loop\\|agent-tools\\|agent-staging" base)
+            (string-match-p "\\bagent\\b" base)
+            (string-match-p "subagent" base))
+        :agentic)
+       ((or (string-match-p "benchmark\\|comparator\\|scoring\\|regression" base)
+            (string-match-p "\\btest" base)
+            (string-match-p "evolution\\|evolve\\|mutate" base))
+        :programming)
+       ((or (string-match-p "prompt\\|context\\|skill\\|strategy" base)
+            (string-match-p "\\bcompress\\|directive\\|guidance" base))
+        :natural-language)
+       (t :natural-language)))))
 
 (defun gptel-auto-workflow--compute-baseline-keep-rate ()
   "Compute the template-default keep-rate from all TSV data.
