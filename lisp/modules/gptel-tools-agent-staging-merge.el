@@ -527,7 +527,12 @@ commits are preserved."
                 (message "[auto-workflow] Cannot fast-forward to origin/main (may have diverged): %s"
                          (car ff-remote-result))
                 (error "Auto-promote blocked: local main must match origin/main before merging staging")))
-            ;; Merge staging into main (main is now at origin/main)
+            ;; Merge staging into main (main is now at origin/main).
+            ;; Daemon-generated artifacts (DIRECTIVE.md, comparison reports, etc.)
+            ;; can dirty the worktree and block git merge.  Stash them first.
+            (gptel-auto-workflow--git-result
+             "git stash push -m 'auto-promote: dirty artifacts' -- assistant/ mementum/ 2>/dev/null || true"
+             30)
             (let ((merge-result
                    (gptel-auto-workflow--git-result
                     (format "git merge --ff-only %s" (shell-quote-argument staging))
@@ -544,6 +549,9 @@ commits are preserved."
                           nil)
                       t))
                 t))
+            ;; Restore daemon-generated artifacts after merge
+            (gptel-auto-workflow--git-result
+             "git stash pop 2>/dev/null || (git checkout -- assistant/ mementum/ 2>/dev/null; true)" 30)
             ;; Push main to origin — regular push, never force.
             ;; Because we fast-forwarded to origin/main above, this is
             ;; always a clean fast-forward.
