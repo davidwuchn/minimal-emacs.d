@@ -39,6 +39,18 @@
   (gptel-agent-loop-enable)
   (require 'ai-code-behaviors))
 
+;; In workflow daemon mode, gptel is never loaded interactively (no user
+;; commands). Force-load it so gptel-config and all agent modules are
+;; available for the auto-workflow pipeline.
+(when (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
+  (unless (featurep 'gptel)
+    (message "[init-ai] Workflow daemon detected; force-loading gptel")
+    (require 'gptel)
+    ;; Ensure gptel-config is loaded even if gptel was already loaded
+    ;; before this eval block ran.
+    (require 'gptel-config)
+    (require 'nucleus-config)))
+
 (defcustom my/ai-code-gptel-helper-backend 'gptel--minimax
   "Backend used for ai-code's synchronous gptel helper requests."
   :type 'symbol
