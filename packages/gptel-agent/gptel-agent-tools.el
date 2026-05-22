@@ -80,7 +80,8 @@ Note that you can also specify these parameters per-agent in the agent
 files, in the Markdown frontmatter or Org properties.  Agent-specific
 parameters take precedence over this value."
   :type '(choice (symbol :tag "Name of preset")
-                 (plist  :tag "Preset plist spec"))
+                 (restricted-sexp :match-alternatives (listp)
+                                  :tag "Preset plist spec"))
   :group 'gptel-agent)
 
 ;;; Tool use preview
@@ -1434,9 +1435,9 @@ PROMPT is the detailed prompt instructing the agent on what is required."
                    :context nil)       ;Can be overriden by agent
               (and gptel-agent-preset
                    (copy-sequence
-                    (cl-etypecase gptel-agent-preset
-                      (symbol (gptel-get-preset gptel-agent-preset))
-                      (plist gptel-agent-preset))))
+                     (cl-etypecase gptel-agent-preset
+                       (symbol (gptel-get-preset gptel-agent-preset))
+                       (list gptel-agent-preset))))
               (cdr (assoc agent-type gptel-agent--agents)))
     (let* ((info (gptel-fsm-info gptel--fsm-last))
            (where (or (plist-get info :tracking-marker)
