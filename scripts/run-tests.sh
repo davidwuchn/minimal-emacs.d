@@ -450,10 +450,10 @@ run_cron_tests() {
         fail "SHELL not set to /bin/bash"
     fi
     
-    if grep -q 'run-auto-workflow-cron.sh auto-workflow' "$CRON_FILE"; then
-        pass "Template uses wrapper for auto-workflow"
+    if grep -q 'run-pipeline.sh' "$CRON_FILE"; then
+        pass "Template uses pipeline wrapper for auto-workflow"
     else
-        fail "Template does not use wrapper for auto-workflow"
+        fail "Template does not use pipeline wrapper for auto-workflow"
     fi
     
     # Rendered crontab
@@ -499,7 +499,7 @@ EOF
     PATH="$FAKE_BIN:$PATH" FAKE_CRONTAB_STORE="$FAKE_CRONTAB" "$INSTALLER" install >/dev/null
 
     if grep -q '^30 2 \* \* \* /usr/bin/true$' "$FAKE_CRONTAB" &&
-       grep -Eq '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow' "$FAKE_CRONTAB" &&
+       grep -Eq '^[0-9*@].*run-pipeline\.sh' "$FAKE_CRONTAB" &&
        [ "$(grep -c '^# >>> minimal-emacs\.d auto-workflow >>>$' "$FAKE_CRONTAB")" -eq 1 ]; then
         pass "Installer merges workflow block idempotently"
     else

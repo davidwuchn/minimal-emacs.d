@@ -4566,10 +4566,9 @@ Checks: required frontmatter, duplicate titles, empty sections."
         (push (format "Missing fn for required stage '%s'" (plist-get s :label)) warnings)))
     (gptel-auto-workflow--validation-result (null errors) errors warnings)))
 
-(defun gptel-auto-workflow--evolution-optimize-backend-order ()
-
-
 ;; ─── Backend Performance Optimization ───
+
+(defun gptel-auto-workflow--evolution-optimize-backend-order ()
   "Auto-reorder the fallback chain based on backend performance data.
 Moves better-performing backends to the front of the fallback chain."
   (let* ((stats (gptel-auto-workflow--evolution-backend-stats))
