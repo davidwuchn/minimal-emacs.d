@@ -57,11 +57,15 @@
       "memory"))
 
 (defun gptel-auto-workflow--mementum-slug (text)
-  "Generate a URL-safe slug from TEXT."
-  (let* ((clean (replace-regexp-in-string "[^a-zA-Z0-9]" "-" text))
+  "Generate a URL-safe slug from TEXT.
+Returns empty string if TEXT is nil or empty."
+  (let* ((text (or text ""))
+         (clean (replace-regexp-in-string "[^a-zA-Z0-9]" "-" text))
          (collapsed (replace-regexp-in-string "-+" "-" clean))
          (slug (downcase (string-trim collapsed "-"))))
-    (substring slug 0 (min 80 (length slug)))))
+    (if (string-empty-p slug)
+        "untitled"
+      (substring slug 0 (min 80 (length slug))))))
 
 (defun gptel-auto-workflow--mementum-write-memory (symbol slug content)
   "Write a memory file with SYMBOL prefix and SLUG.
