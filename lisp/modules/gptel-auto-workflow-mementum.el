@@ -118,7 +118,11 @@ RESEARCH-RESULT is a plist with :findings :targets :kept-count :total-count
                      (when (and (fboundp 'sha1) (not (string-empty-p findings)))
                        (sha1 findings))))
            (hash-str (or hash "no-data"))
-           (slug (format "research-%s-%s" strategy (substring hash-str 0 (min 8 (length hash-str)))))
+            (slug (format "%s-%s"
+                          (if (string-prefix-p "research-" strategy)
+                              strategy
+                            (concat "research-" strategy))
+                          (substring hash-str 0 (min 8 (length hash-str)))))
            (targets (plist-get research-result :targets))
            (kept-count (or (plist-get research-result :kept-count) 0))
            (total-count (or (plist-get research-result :total-count) 0))
