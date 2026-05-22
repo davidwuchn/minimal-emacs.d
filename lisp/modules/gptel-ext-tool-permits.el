@@ -27,7 +27,8 @@ Keys are tool name strings, values are t.")
 
 (defun my/gptel-tool-permitted-p (tool-name)
   "Return non-nil if TOOL-NAME has been permitted this session."
-  (gethash tool-name my/gptel-permitted-tools))
+  (and (stringp tool-name)
+       (gethash tool-name my/gptel-permitted-tools)))
 
 (defun my/gptel-permit-tool (tool-name)
   "Permit TOOL-NAME for the rest of this Emacs session."
