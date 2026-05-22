@@ -2621,12 +2621,33 @@ Semantica abductive reasoner pattern."
 ;; ─── AutoGo: Competitive Gating + PCR + RESULT Protocol ───
 
 (defvar gptel-auto-workflow--champion-strategy nil
-  "Current champion strategy name. New strategies must beat this to be adopted.
-AutoGo league system: incumbents must be defeated in gauntlet play.")
-
+  "Current champion strategy name.")
 (defvar gptel-auto-workflow--champion-keep-rate 0.0
   "Keep-rate of the champion strategy. Threshold for challenger adoption.
 DEPRECATED: use --category-champions for per-category gating.")
+
+(defvar gptel-auto-workflow--category-strike-counts nil
+  "Alist of (CATEGORY . STRIKES) tracking successive champion failures.
+∀ Vigilance: 3 consecutive failures in a category freezes it for 5 cycles.")
+
+(defun gptel-auto-workflow--record-category-strike (category)
+  "Increment failure strike for CATEGORY. Freezes at 3."
+  (let ((entry (assq category gptel-auto-workflow--category-strike-counts)))
+    (if entry
+        (setcdr entry (1+ (cdr entry)))
+      (push (cons category 1) gptel-auto-workflow--category-strike-counts))
+    (when (>= (cdr (assq category gptel-auto-workflow--category-strike-counts)) 3)
+      (message "[champion] ∀ Vigilance: category %s FROZEN (3 strikes) — 5 cycle cooldown" category))))
+
+(defun gptel-auto-workflow--category-frozen-p (category)
+  "Return non-nil if CATEGORY is frozen (≥3 strikes)."
+  (let ((entry (assq category gptel-auto-workflow--category-strike-counts)))
+    (and entry (>= (cdr entry) 3))))
+
+(defun gptel-auto-workflow--reset-category-strikes (category)
+  "Reset strikes for CATEGORY after a success."
+  (setq gptel-auto-workflow--category-strike-counts
+        (assq-delete-all category gptel-auto-workflow--category-strike-counts)))
 
 (defvar gptel-auto-workflow--baseline-keep-rate 0.0
   "Keep-rate of the template-default (baseline) strategy.

@@ -1923,30 +1923,54 @@ Uses topic-specific model if available and topic detected."
   (expand-file-name "var/tmp/research-findings.md"
                     (gptel-auto-workflow--effective-project-root)))
 
+(defun gptel-auto-workflow--research-fresh-enough-p (findings-file)
+  "τ Wisdom: check if cached research is fresh enough to skip re-research.
+Returns non-nil if the findings file is <1 hour old and has pattern content."
+  (when (file-exists-p findings-file)
+    (let* ((mtime (file-attribute-modification-time (file-attributes findings-file)))
+           (age-seconds (- (float-time) (float-time mtime))))
+      (when (< age-seconds 3600)  ; <1 hour old
+        (with-temp-buffer
+          (insert-file-contents findings-file)
+          (goto-char (point-min))
+          ;; Must have actual pattern content, not just header
+          (> (count-lines (point-min) (point-max)) 5))))))
+
 (defun gptel-auto-workflow-run-research (&optional completion-callback)
   "Run researcher and store findings to cache.
+τ Wisdom: skips research if findings are fresh (<1h) and have content.
 Call periodically to keep findings fresh.
 Findings available to analyzer during target selection.
 Findings are cached per-project.
 When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
   (interactive)
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
-         (cache-key (gptel-auto-workflow--normalized-cache-key proj-root)))
-    (message "[research] Starting periodic research for %s..." proj-root)
-    (gptel-auto-workflow--research-patterns
-     (lambda (findings)
-       (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
-       (let ((file (gptel-auto-workflow--research-file)))
-         (make-directory (file-name-directory file) t)
-         (with-temp-file file
-           (insert (format "# Research Findings\n\n> Project: %s\n> Updated: %s\n\n%s"
-                           proj-root
-                           (format-time-string "%Y-%m-%d %H:%M")
-                           findings)))
-         (message "[research] Findings cached for %s (%d chars)"
-                  proj-root (length findings))
-         (when completion-callback
-           (funcall completion-callback findings)))))))
+         (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
+         (findings-file (gptel-auto-workflow--research-file)))
+    ;; τ Wisdom: skip if cache is fresh enough
+    (if (gptel-auto-workflow--research-fresh-enough-p findings-file)
+        (progn
+          (message "[research] τ Wisdom: skipping — findings still fresh (<1h)")
+          (when completion-callback
+            (let ((cached (or (gethash cache-key gptel-auto-workflow--research-findings-cache)
+                              (gptel-auto-workflow-load-research-findings))))
+               (funcall completion-callback cached))))
+      (progn
+        (message "[research] Starting periodic research for %s..." proj-root)
+        (gptel-auto-workflow--research-patterns
+         (lambda (findings)
+         (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
+         (let ((file (gptel-auto-workflow--research-file)))
+           (make-directory (file-name-directory file) t)
+           (with-temp-file file
+             (insert (format "# Research Findings\n\n> Project: %s\n> Updated: %s\n\n%s"
+                             proj-root
+                             (format-time-string "%Y-%m-%d %H:%M")
+                             findings)))
+           (message "[research] Findings cached for %s (%d chars)"
+                    proj-root (length findings))
+           (when completion-callback
+             (funcall completion-callback findings)))))))))
 
 (defun gptel-auto-workflow-load-research-findings ()
   "Load cached research findings for current project.
