@@ -2973,7 +2973,9 @@ Promotion: challenger must exceed category champion by >5% relative."
          (results nil))
     (dolist (entry scores)
       (let* ((name (car entry))
-             (composite (cdr entry)))
+             (composite (cdr entry))
+             (status-bonus (gptel-auto-workflow--ontology-strategy-status-bonus name))
+             (effective-composite (+ composite status-bonus)))
         (catch 'category-result
           (dolist (cat categories)
             ;; ∀ Vigilance: skip frozen categories
@@ -2989,11 +2991,11 @@ Promotion: challenger must exceed category champion by >5% relative."
                 (cond
                  ((null champion-strategy)
                   (when (> cat-keep-rate cat-baseline)
-                    (gptel-auto-workflow--crown-champion name cat-keep-rate composite cat)
+                    (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
                     (push (cons name (intern (format "first-%s-champion" cat))) results)
                     (throw 'category-result t)))
                  ((> cat-keep-rate (* champion-rate 1.05))
-                  (gptel-auto-workflow--crown-champion name cat-keep-rate composite cat)
+                  (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
                   (push (cons name (intern (format "promoted-%s" cat))) results)
                   (throw 'category-result t))
                  ((> cat-keep-rate champion-rate)
@@ -3971,7 +3973,10 @@ or empty string if none found."
 
 (defun gptel-auto-workflow--generate-experiment-ontology ()
   "Generate an ontology from experiment results (Semantica pattern).
-Returns ontology plist with class and instance counts."
+Returns ontology plist with class and instance counts.
+Uses recency weights when `gptel-auto-workflow--recency-weighted-ontology' is available."
+  (if (fboundp 'gptel-auto-workflow--recency-weighted-ontology)
+      (gptel-auto-workflow--recency-weighted-ontology)
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (strategy-classes (make-hash-table :test 'equal))
          (target-instances (make-hash-table :test 'equal)))
@@ -4025,7 +4030,7 @@ Returns ontology plist with class and instance counts."
             :classes (sort class-list (lambda (a b) (> (plist-get a :keep-rate) (plist-get b :keep-rate))))
             :instances (sort instance-list (lambda (a b) (> (plist-get a :total) (plist-get b :total))))
             :class-count (hash-table-count strategy-classes)
-            :instance-count (hash-table-count target-instances)))))
+            :instance-count (hash-table-count target-instances))))))
 ;; ─── Ontology weight overrides ───
 
 (defun gptel-auto-workflow--ontology-strategy-status-bonus (strategy-name)
