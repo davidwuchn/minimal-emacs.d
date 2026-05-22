@@ -1908,6 +1908,9 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case nil
       (progn
         (gptel-auto-workflow--apply-cross-subsystem-feedback)
+      ;; Research champion league: benchmark proposed strategies against incumbents
+      (when (fboundp 'gptel-auto-workflow--run-research-champion-league)
+        (run-with-idle-timer 30 nil #'gptel-auto-workflow--run-research-champion-league))
         (gptel-auto-workflow--consume-vsm-actions))
     (error (ignore)))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
@@ -2887,7 +2890,63 @@ Returns the keep-rate as a float, or 0.10 as a safe lower-bound fallback."
     (if entry
         (setcdr entry (cons strategy keep-rate))
       (push (cons category (cons strategy keep-rate))
-            gptel-auto-workflow--category-champions))))
+            gptel-auto-workflow--category-champions)))
+  ;; Persist to disk so champions survive daemon restarts
+  (gptel-auto-workflow--save-category-champions))
+
+(defun gptel-auto-workflow--champions-file ()
+  "Return the path to the category champions persistence file."
+  (expand-file-name "var/tmp/category-champions.sexp"
+                    (or (gptel-auto-workflow--worktree-base-root)
+                        default-directory)))
+
+(defun gptel-auto-workflow--save-category-champions ()
+  "Persist category champions to disk."
+  (let ((file (gptel-auto-workflow--champions-file)))
+    (make-directory (file-name-directory file) t)
+    (with-temp-file file
+      (prin1 gptel-auto-workflow--category-champions (current-buffer)))
+    (message "[champion] Persisted %d category champions to %s"
+             (length gptel-auto-workflow--category-champions)
+             (file-relative-name file))))
+
+(defun gptel-auto-workflow--load-category-champions ()
+  "Load category champions from disk."
+  (let ((file (gptel-auto-workflow--champions-file)))
+    (when (file-exists-p file)
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents file)
+            (setq gptel-auto-workflow--category-champions (read (current-buffer)))
+            (message "[champion] Loaded %d category champions from %s"
+                     (length gptel-auto-workflow--category-champions)
+                     (file-relative-name file)))
+        (error
+         (message "[champion] Failed to load champions from %s" file))))))
+
+(defun gptel-auto-workflow--queue-strategy-benchmark (strategy-name axis)
+  "Queue newly generated STRATEGY-NAME for benchmarking before production use.
+Writes to pending_eval.json for the meta-harness pipeline to process."
+  (let* ((root (or (gptel-auto-workflow--worktree-base-root) default-directory))
+         (pending-file (expand-file-name "var/tmp/strategy-evaluations/pending_eval.json" root))
+         (pending (if (file-exists-p pending-file)
+                      (condition-case nil
+                          (with-temp-buffer
+                            (insert-file-contents pending-file)
+                            (json-read))
+                        (error nil))
+                    (list :candidates '())))
+         (candidates (plist-get pending :candidates)))
+    (push (list :name strategy-name :axis (format "%s" axis)
+                :queued-at (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                :status "pending")
+          candidates)
+    (setq pending (plist-put pending :candidates candidates))
+    (make-directory (file-name-directory pending-file) t)
+    (with-temp-file pending-file
+      (insert (json-encode pending)))
+    (message "[strategy] Queued %s (axis %s) for benchmark evaluation"
+             strategy-name axis)))
 
 (defun gptel-auto-workflow--strategy-category-keep-rate (strategy-name category)
   "Compute keep-rate for STRATEGY-NAME filtered to CATEGORY."
@@ -3005,7 +3064,8 @@ COMPOSITE is logged for diagnostics but keep-rate remains the gating threshold."
 AutoGo category-gating: each ontology category has its own champion.
 μ Directness: first champion must beat category baseline, not absolute zero.
 Promotion: challenger must exceed category champion by >5% relative."
-  (let* ((_baselines (gptel-auto-workflow--compute-category-baselines))
+  (let* ((_loaded (gptel-auto-workflow--load-category-champions))
+         (_baselines (gptel-auto-workflow--compute-category-baselines))
          (strategies (gptel-auto-workflow--discover-strategies))
          (scores (mapcar (lambda (s) (cons s (gptel-auto-workflow--strategy-composite-score s)))
                          strategies))

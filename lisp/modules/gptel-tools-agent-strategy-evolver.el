@@ -985,6 +985,9 @@ Returns new strategy name or nil if rejected."
                                (format "%s" new-name)
                                (format "%s" axis)
                                (length valid-candidates))
+                      ;; Queue for benchmarking — don't enter production unproven
+                      (when (fboundp 'gptel-auto-workflow--queue-strategy-benchmark)
+                        (gptel-auto-workflow--queue-strategy-benchmark new-name axis))
                       new-name)
                  (progn
                    (message "[strategy-evolution] REJECTED %s: Load failed after file write"
