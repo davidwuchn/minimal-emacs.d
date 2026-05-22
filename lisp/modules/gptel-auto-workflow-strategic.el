@@ -578,10 +578,62 @@ and {{topic-performance}} with live data."
                      skill-content t t)))
           (setq skill-content
                 (replace-regexp-in-string
-                 "{{strategy-guidance}}"
-                 "*Controller not yet evolved.*"
-                 skill-content t t))))
+                  "{{strategy-guidance}}"
+                  "*Controller not yet evolved.*"
+                  skill-content t t)))
+      ;; Inject current executor bottlenecks so researcher targets real problems
+      (let ((bottlenecks (gptel-auto-workflow--current-bottleneck-report)))
+        (setq skill-content
+              (replace-regexp-in-string
+               "{{current-bottlenecks}}" bottlenecks
+               skill-content t t)))
       skill-content)))
+
+(defun gptel-auto-workflow--current-bottleneck-report ()
+  "Generate a bottleneck report showing what the executor is struggling with.
+Returns markdown string listing over-experimented targets, low-keep-rate files,
+and timeout-heavy targets for the researcher to investigate."
+  (let* ((results (and (fboundp 'gptel-auto-workflow--parse-all-results)
+                       (ignore-errors (gptel-auto-workflow--parse-all-results))))
+         (by-target (make-hash-table :test 'equal))
+         (over-experimented nil)
+         (lines nil))
+    (when results
+      (dolist (r results)
+        (let ((target (plist-get r :target))
+              (kept (equal (plist-get r :decision) "kept")))
+          (when (stringp target)
+            (let ((entry (or (gethash target by-target) (cons 0 0))))
+              (cl-incf (car entry))
+              (when kept (cl-incf (cdr entry)))
+              (puthash target entry by-target)))))
+      (maphash
+       (lambda (target counts)
+         (when (> (car counts) 10)
+           (let ((keep-rate (if (> (car counts) 0)
+                                (/ (float (cdr counts)) (car counts)) 0.0)))
+             (push (cons target (list :total (car counts) :kept (cdr counts)
+                                      :rate keep-rate))
+                   over-experimented))))
+       by-target)
+      (when over-experimented
+        (setq over-experimented
+              (sort over-experimented
+                    (lambda (a b) (> (plist-get (cdr a) :total)
+                                     (plist-get (cdr b) :total)))))
+        (push "## Current Executor Bottlenecks (research these problems)\n" lines)
+        (push (format "> %d targets exceed max-experiments policy\n\n" (length over-experimented)) lines)
+        (dolist (entry (seq-take over-experimented 5))
+          (let ((detail (cdr entry)))
+            (push (format "- **%s**: %d experiments (%.0f%% kept) — needs new approach\n"
+                         (car entry)
+                         (plist-get detail :total)
+                         (* 100 (plist-get detail :rate)))
+                  lines)))
+        (push "\n**Researcher task**: find novel techniques for these high-attempt targets. Current strategies are failing.\n" lines))))
+    (if lines
+        (concat (mapconcat #'identity (nreverse lines) ""))
+      "No executor bottlenecks detected. Continue with current research topics.\n")))
 
 (defun gptel-auto-workflow--format-topic-performance (topics)
   "Format TOPICS hash-table as markdown table.
