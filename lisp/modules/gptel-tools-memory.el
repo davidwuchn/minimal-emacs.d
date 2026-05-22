@@ -95,6 +95,8 @@ Returns content string or error message."
 Returns success message or error."
   (when (null content)
     (error "Content must not be nil"))
+  (unless (stringp content)
+    (error "Content must be a string, got: %S" content))
   (when (string-blank-p content)
     (error "Content must not be empty or whitespace-only"))
   (when (> (length content) gptel-tools-memory-max-content-size)
