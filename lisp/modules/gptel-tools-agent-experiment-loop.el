@@ -1060,7 +1060,9 @@ Prevents workflow from hanging indefinitely due to callback failures."
               gptel-auto-workflow--current-project nil
               gptel-auto-workflow--current-target nil)
         (setq gptel-auto-workflow--stats
-              (plist-put gptel-auto-workflow--stats :phase "idle"))
+              (if (proper-list-p gptel-auto-workflow--stats)
+                  (plist-put gptel-auto-workflow--stats :phase "idle")
+                (list :phase "idle")))
         (gptel-auto-workflow--persist-status)
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
@@ -1077,7 +1079,9 @@ Prevents workflow from hanging indefinitely due to callback failures."
               gptel-auto-workflow--current-project nil
               gptel-auto-workflow--current-target nil)
         (setq gptel-auto-workflow--stats
-              (plist-put gptel-auto-workflow--stats :phase "idle"))
+              (if (proper-list-p gptel-auto-workflow--stats)
+                  (plist-put gptel-auto-workflow--stats :phase "idle")
+                (list :phase "idle")))
         (gptel-auto-workflow--persist-status)
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
