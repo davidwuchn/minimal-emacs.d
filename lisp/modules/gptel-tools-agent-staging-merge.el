@@ -524,13 +524,22 @@ commits are preserved."
              (format "git fetch %s main" remote) 180)
             ;; Fast-forward local main to origin/main first, so external
             ;; (e.g. human-pushed) commits are never dropped.
-            (let ((ff-remote-result
-                   (gptel-auto-workflow--git-result
-                    (format "git merge --ff-only %s/main" remote) 60)))
-              (unless (= 0 (cdr ff-remote-result))
-                (message "[auto-workflow] Cannot fast-forward to origin/main (may have diverged): %s"
-                         (car ff-remote-result))
-                (error "Auto-promote blocked: local main must match origin/main before merging staging")))
+             (let ((ff-remote-result
+                    (gptel-auto-workflow--git-result
+                     (format "git merge --ff-only %s/main" remote) 60)))
+               (unless (= 0 (cdr ff-remote-result))
+                 ;; Fast-forward failed — local may have diverged from origin.
+                 ;; Try rebase to reconcile before failing permanently.
+                 (message "[auto-workflow] Cannot ff to origin/main: %s — attempting rebase"
+                          (car ff-remote-result))
+                 (let ((rebase-result
+                        (gptel-auto-workflow--git-result
+                         (format "git pull --rebase %s main" remote) 120)))
+                   (if (= 0 (cdr rebase-result))
+                       (message "[auto-workflow] Rebased onto origin/main, continuing auto-promote")
+                     (message "[auto-workflow] ✗ Auto-promote error: Auto-promote blocked: %s"
+                              (car rebase-result))
+                     (error "Auto-promote blocked: local main must match origin/main before merging staging")))))
             ;; Merge staging into main (main is now at origin/main).
             ;; Daemon-generated artifacts (DIRECTIVE.md, comparison reports, etc.)
             ;; can dirty the worktree and block git merge.  Stash them first.
