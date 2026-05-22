@@ -1,6 +1,6 @@
 # Ouroboros: Self-Regulating AI Architecture
 
-> **An autonomous pipeline that researches, codes, verifies, and self-evolves — built on formal reasoning.**
+> **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
 
 Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). Runs 3-6 improvement cycles per day inside Emacs. The snake eating its own tail — every subsystem improves every other subsystem.
 
@@ -12,29 +12,137 @@ Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gp
 
 ```
 λ engage(emacs).
-  research(external) → compile(strategy) → route(ontology) → execute(experiment) → verify(outcome) → learn(pattern)
+  research(external) ⇄ execute(experiment) ⇄ verify(outcome) ⇄ learn(pattern)
   | ∀change: isolated(worktree) ∧ verified(tests) ∧ reviewed(AI)
   | self_referential: the system audits itself using its own ontologies
   | route(ontology) ≡ categorize(target) → select(backend) by historical keep-rate
 ```
 
-This is not a code generator. It is a **self-improving formal system** — it researches techniques from external sources, structures them into behavioral specifications, executes them as experiments in isolated environments, and feeds outcomes back into its own evolution.
+This is not a code generator. It is a **self-consuming formal system** — it researches techniques from external sources, distills them into specifications, tests them as isolated experiments, and feeds outcomes back into what it researches next. The head eats knowledge; the tail produces results; the body digests both.
 
-Like the Northern Divine Art (北冥神功), it absorbs techniques from everywhere and converts them into its own capability. What worked in one codebase flows into the next. What failed becomes a guard rail. The art grows with its practitioner.
+Like the Northern Divine Art (北冥神功), it absorbs techniques from everywhere and converts them into its own capability. What worked flows into the next cycle. What failed becomes a guard rail. The art grows with its practitioner.
 
-Every subsystem is the same Ouroboros cycle, just at different scales:
+Every subsystem is the same Ouroboros cycle, viewed at different scales:
 
 | Scale | System | Ouroboros Role | Horizon |
 |-------|--------|---------------|---------|
 | **Turn** | AutoTTS | Stop, continue, or branch research? | Seconds |
-| **Strategy** | AutoGo | Does this challenger beat the champion? | Experiments |
+| **Strategy** | AutoGo | Does this challenger eat the champion? | Experiments |
 | **Evolution** | meta-harness | Generate new strategies from failure patterns | Cycles |
 | **System** | self-evolve | Is the whole pipeline improving or plateauing? | Days |
-| **Identity** | VSM + Eight Keys | Are all five layers healthy? | Continuously |
+| **Identity** | VSM + Eight Keys | Are all five elements healthy? | Continuously |
 
 The frameworks aren't separate tools — they're the same tool at different zoom levels. **VSM** assigns _who_ does the work. **Ontology** classifies _what_ kind of work. **Eight Keys** measure _how well_ it was done. All map to the same five elements: Water → Wood → Fire → Earth → Metal → Water.
 
 Say "Ouroboros" and you mean: the full self-regulating cybernetic architecture.
+
+---
+
+## The Two Halves
+
+The ouroboros has a head and a tail — and they eat each other. The **Researcher** looks outward, consuming external techniques and filing them into the ontology. The **Executor** looks inward, testing those techniques as experiments and feeding outcomes back. Neither works alone: the researcher's appetite is shaped by what the executor digests, and the executor's targets are chosen by what the researcher discovers.
+
+```
+        ┌──────────────────────────────────────────────┐
+        │                                              │
+        ▼                                              │
+  ┌──────────┐    findings     ┌──────────────┐        │
+  │ RESEARCH │ ───────────────→│   ANALYZE    │        │
+  │ (Wood)   │                 │  (Fire)      │        │
+  │ eat      │←────────────────│  decide      │        │
+  └──────────┘   "look here"   └──────────────┘        │
+        ▲                              │               │
+        │                              │ targets       │
+        │         ┌──────────────┐     ▼               │
+        │         │   EVOLVE     │  ┌──────────┐       │
+        │         │  (Earth)     │←─│ EXECUTE  │       │
+        │         │  learn       │  │ (Metal)  │       │
+        │         └──────────────┘  │ verify   │       │
+        │              │            └──────────┘       │
+        │              │ outcomes   │                  │
+        │              ▼            ▼                  │
+        │         ┌─────────────────────┐              │
+        └─────────│   π SYNTHESIS (Water)│─────────────┘
+   "research     │   propagate           │  "queue similar"
+    these gaps"  └─────────────────────┘
+```
+
+### The Researcher (Wood 木)
+
+The head of the snake. It consumes, it doesn't hoard.
+
+```bash
+./scripts/run-pipeline.sh
+```
+
+The researcher scans 17+ repos via `gh api`, but it doesn't prefetch everything. It reads the ontology for knowledge gaps, fetches only what fills those gaps, and produces Allium v3 behavioral specs. No batch crawl — each fetch is a deliberate bite.
+
+It is **benchmark-driven and self-evolving** — four research strategies compete each cycle, and the winner sets the technique:
+
+| Strategy | When the snake is... |
+|----------|---------------------|
+| **own-repos-first** | Digesting local patterns before hunting elsewhere |
+| **deep-external** | Hungry — exhaustively scanning external sources |
+| **topic-specific** | Focused — chasing a gap the ontology identified |
+| **quick-own-only** | Conservative — API quota is low, stay local |
+
+**Research quality pipeline** — each finding passes through six gates before reaching the executor:
+
+1. **Strategy benchmark** — All 4 compete; best wins per cycle
+2. **Allium coherence check** — Contradictions detected before techniques reach experiments
+3. **LLM noise stripping** — Conversational artifacts removed from raw findings
+4. **Eight Keys scoring** — Scored on ε Purpose (actionability), not just volume
+5. **Ontology enrichment** — New techniques auto-extracted and merged
+6. **Outcome feedback** — Kept/discarded experiments adjust research priorities per source
+
+The researcher is not a scraper. It is a **self-adjusting appetite**: what it researches next depends on what the executor kept or discarded last cycle.
+
+### The Executor (Metal 金)
+
+The body of the snake. It tests, verifies, and feeds back.
+
+```
+Select target → Categorize → Route backend → Generate hypothesis
+     → Run 1844 tests → AI grade → AI review → Merge or learn
+          ↓
+     Kept? → π Synthesis: semantic cluster → inherit strategy → auto-queue
+```
+
+Every experiment is an isolated git worktree. `main` is never touched directly. Six gates stand between a hypothesis and a merge:
+
+| Gate | What it checks | What happens on failure |
+|------|---------------|------------------------|
+| **Category routing** | Which backend has the best keep-rate for this target type? | Routes to proven provider |
+| **Test execution** | Did 1844 tests pass within 1800s? | Experiment discarded, pattern learned |
+| **AI grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
+| **AI review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
+| **π Synthesis** | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
+| **Champion league** | Does this strategy beat the current category champion? | Adopted or rejected with keep-rate evidence |
+
+Energy that doesn't pass a gate is not wasted — it returns as learning for the next cycle. A discarded experiment is not a failure; it's the snake's body telling the brain "don't eat that again."
+
+### The Feedback (Water 水)
+
+The head and body communicate through water — the flowing knowledge that connects them.
+
+```
+Researcher finds technique T ──→ Executor tests T on target X
+                                         │
+                                    ┌────┴────┐
+                                    ▼         ▼
+                                  kept     discarded
+                                    │         │
+                                    ▼         ▼
+                              π Synthesis  failure pattern
+                              queues X₂,X₃  tells researcher:
+                                    │       "avoid this shape"
+                                    ▼
+                              Researcher: "what else
+                              looks like X that I
+                              haven't studied yet?"
+```
+
+The cycle closes: **kept experiments tell the researcher what to pursue; discarded experiments tell it what to avoid; π Synthesis propagates winning strategies to similar targets without re-researching.** This is the ouroboros — the head eats based on what the tail produced.
 
 ---
 
@@ -55,54 +163,31 @@ Results feed back into the next cycle's analyzer, strategy evolver, and π Synth
 
 ---
 
-## The Loop
-
-```
-Pipeline (runs 3-6×/day):
-  Research (3min) → Digestion (2min) → Auto-Workflow (1-4h) → Post-Evolve (2min)
-       ↓                                              ↓
-    External findings                       Select target → Categorize → Route backend
-    + on-demand repo fetch                  → Generate hypothesis → Run 1844 tests
-                                            → AI grade → AI review
-                                            → Merge or learn
-                                                     ↓
-                                              Kept? → π Synthesis:
-                                                    semantic cluster → inherit strategy
-                                                    → auto-queue similar targets
-```
-
-Every experiment passes through six gates. Energy that doesn't pass a gate is not wasted — it returns as learning for the next cycle. All operations in isolated git worktrees. `main` is never touched directly.
-
----
-
 ## The Knowledge Layer
 
-The system does not just run experiments — it builds a **formal knowledge graph** of its own operation. This is the mementum (μ) layer:
+The system does not just run experiments — it builds a **formal knowledge graph** of its own operation. This is the mementum (μ) layer. The snake doesn't forget.
 
 | Capability | Mechanism |
 |-----------|----------|
 | **Ontology generation** | Raw experiment data → classes, properties, relationships → OWL |
 | **Allium behavioral checking** | Research findings → Allium v3 spec → distill → check for contradictions |
-| **Conflict detection** | Opposing hypotheses on the same target (add vs remove) → severity-graded |
+| **Conflict detection** | Opposing hypotheses on same target (add vs remove) → severity-graded |
 | **Impact classification** | Every experiment: BREAKING / POTENTIALLY BREAKING / SAFE |
 | **Causal chains** | Multi-experiment sequences per target → root cause via Floyd-Warshall |
 | **Cross-cycle diff** | Set-difference on knowledge page snapshots: +added / -removed / ~changed |
 | **Policy engine** | 5 rules: max per target, min keep-rate, forbidden paths |
-| **Knowledge page scoring** | Coverage, completeness, relation-link scores per generated page |
-| **Inverted file index** | O(1) token → page lookup across all knowledge pages |
 | **Horn SAT consistency** | Linear-time logical contradiction detection for ontology integrity |
 | **Ambiguity filtering** | Multi-stage confidence gating — defer high-ambiguity candidates |
 | **Second-chance repair** | Soft-deleted patterns re-evaluated each cycle |
-| **I-Sub lexical similarity** | Greedy longest-common-substring — better than Jaccard for ontology terms |
 | **Interval Labelling Schema** | O(1) subsumption over pattern hierarchy via preorder/postorder |
 | **Backend performance analysis** | 1,200+ experiments tracked per backend/model → keep-rate statistics |
 | **Pre-flight prediction** | Anti-pattern detection (3+ consecutive failures), target saturation (≥10), prediction threshold (0.15) |
 | **Ontology vs LLM decider** | Formal decision framework: data-availability × complexity → ontology or LLM |
-| **Category-based routing** | Targets classified as :programming, :tool-calls, :agentic, :natural-language → backend override |
+| **Category-based routing** | Targets classified as :programming, :tool-calls, :agentic, :natural-language → backend ranking per category |
 | **Semantic clustering** | git-embed similarity ≥0.75 groups related targets; winning strategies propagate across clusters |
 | **Strategy inheritance** | Similar targets auto-queue with inherited strategy from kept experiments (π Synthesis) |
 | **Category strike tracking** | 3 consecutive failures freeze a category; reset on next kept result (∀ Vigilance) |
-| **VSM health diagnostics** | Eight Keys scored per subsystem (AutoGo, AutoTTS, self-evolve) from kept hypotheses |
+| **VSM health diagnostics** | Eight Keys scored per subsystem from kept hypotheses |
 
 37 patterns ported from Semantica, AutoGo, LogMap, and VSM. The system audits itself using its own ontologies.
 
@@ -110,21 +195,23 @@ The system does not just run experiments — it builds a **formal knowledge grap
 
 ## The Competitive Layer
 
-AutoGo-inspired **champion league** gates every new strategy — incumbents must be defeated in a category-specific gauntlet before being adopted. Champions compete within their domain (:programming, :natural-language, :agentic, :tool-calls), not globally. **Playout Cap Randomization** (80% quick / 15% medium / 5% deep) prevents over-specialization. Every cycle emits a machine-parseable `===RESULT===` JSON block for the **autoresearch loop**: commit → run → parse → keep/revert — now wired into AutoTTS trace outcome hooks.
+The snake doesn't adopt new strategies naively — it makes them fight.
 
-**Head-to-head comparison** (promptfoo-style): every backend/model pair compared on shared targets (≥3 samples each) with 5% tie margin. Generates `mementum/knowledge/backend-comparison.md` and `model-comparison.md`. **Allium v2** adds trend tracking, regression detection, experiment prompt injection, and auto-repair mode.
+AutoGo-inspired **champion league** gates every new strategy: incumbents must be defeated in a category-specific gauntlet before being adopted. Champions compete within their domain (:programming, :natural-language, :agentic, :tool-calls), not globally. **Playout Cap Randomization** (80% quick / 15% medium / 5% deep) prevents over-specialization. Every cycle emits a machine-parseable `===RESULT===` JSON block for the **autoresearch loop**: commit → run → parse → keep/revert — wired into AutoTTS trace outcome hooks.
 
-**∀ Vigilance** (S3 Earth): Categories with 3 consecutive champion failures are frozen during gating, preventing wasted experiments on broken domains. Strikes reset when a category produces a kept result.
+**Head-to-head comparison** (promptfoo-style): every backend/model pair compared on shared targets (≥3 samples each) with 5% tie margin. Generates `mementum/knowledge/backend-comparison.md` and `model-comparison.md`.
 
-**π Synthesis** (S2 Metal): After a kept experiment, semantic clustering finds similar files (via git-embed) and auto-queues them with the winning strategy inherited — knowledge propagates across related targets without redundant exploration.
+**∀ Vigilance** (S3 Earth): Categories with 3 consecutive champion failures are frozen during gating — the snake stops trying to eat what makes it sick. Strikes reset when a category produces a kept result.
 
-**Holdout evaluation** tracks real progress on a frozen set of targets — if train metrics improve but holdout doesn't, the system detects overfitting.
+**π Synthesis** (S2 Metal): After a kept experiment, semantic clustering finds similar files and auto-queues them with the winning strategy inherited — knowledge propagates across related targets. The snake's body learns once and applies everywhere.
+
+**Holdout evaluation** tracks real progress on a frozen set of targets — if train metrics improve but holdout doesn't, the system detects overfitting. The snake distinguishes real growth from self-deception.
 
 ---
 
 ## The Operational Layer
 
-Every hypothesis is classified by its **operation type** — this is the verbum (φ) layer:
+Every hypothesis is classified by its **operation type** — the verbum (φ) layer:
 
 ```
 KIBC-M 15-axis taxonomy:
@@ -140,72 +227,9 @@ Together: observe → diagnose → prove → act → schedule. Zero-LLM determin
 
 ---
 
-## What It Absorbs (and How You Direct It)
-
-### Research on Demand
-
-```bash
-./scripts/run-pipeline.sh
-```
-
-Researches 17+ repos via `gh api`, distills techniques, produces Allium v3 behavioral specs, feeds them into the analyzer. No batch prefetch — fetches only what fills gaps in the ontology.
-
-The researcher is **benchmark-driven and self-evolving**:
-
-| Strategy | When Used |
-|----------|-----------|
-| **own-repos-first** | Local codebase patterns before external sources |
-| **deep-external** | Exhaustive external repo analysis |
-| **topic-specific** | Targeted research on ontology-identified gaps |
-| **quick-own-only** | Fast cycle when external API quota is low |
-
-**Research quality pipeline:**
-1. **Strategy benchmark** — All 4 strategies compete; best strategy wins per cycle
-2. **Allium coherence check** — Findings validated for contradictions before use
-3. **LLM noise stripping** — Conversational artifacts removed from raw findings
-4. **Eight Keys scoring** — Research scored on ε Purpose (actionability), not just volume
-5. **Ontology enrichment** — New techniques auto-extracted and merged into experiment ontology
-6. **Outcome feedback** — Kept/discarded experiments adjust research priorities per source
-
-The researcher reads knowledge gaps from the ontology, formulates questions, fetches specific files on demand, and enriches the ontology with each discovery.
-
-### Structure Customer Data
-
-```elisp
-(let ((onto (gptel-auto-workflow--generate-experiment-ontology)))
-  (message "Found %d classes, %d instances"
-           (plist-get onto :class-count)
-           (plist-get onto :instance-count)))
-```
-
-Auto-detected entity types, inferred relationships, XSD-typed properties. Add business rules:
-
-```elisp
-(setq gptel-auto-workflow--experiment-policy
-      '(:required-fields ("id" "timestamp" "source")
-        :forbidden-values ("null" "undefined")))
-```
-
-### Trace What Happened
-
-```bash
-cat var/tmp/experiments/*/results.tsv | grep "<target-file>"
-```
-
-Every experiment: hypothesis → change → outcome → decision. Causal chains. Impact classification. The history is structured, not buried in `git log`.
-
-### Report to Stakeholders
-
-```bash
-ls mementum/knowledge/research-insights-*.md
-ls mementum/knowledge/*-comparison.md
-```
-
-Knowledge pages per strategy: what worked, what didn't, Allium coherence checks, meta-learning recommendations. Backend and model comparison reports for data-driven provider selection. Send the markdown.
-
----
-
 ## Safety
+
+The snake's own immune system:
 
 | Guard | Prevents |
 |-------|---------|
@@ -230,11 +254,11 @@ cd ~/.emacs.d && ./scripts/setup-packages.sh
 ./scripts/run-pipeline.sh
 ```
 
-First run initializes itself. After that, it absorbs and improves on its own.
+First run initializes itself. After that, the snake feeds itself.
 
 ```elisp
-(gptel-auto-workflow-run-async)        ; Channel energy now
-(gptel-auto-workflow-status)           ; Check cultivation
+(gptel-auto-workflow-run-async)        ; Wake the snake
+(gptel-auto-workflow-status)           ; Check its pulse
 ```
 
 ---
