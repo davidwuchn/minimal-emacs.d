@@ -23,6 +23,11 @@
   "Run evolution cycle if enabled and not already running."
   (when (and gptel-auto-workflow-evolution-enabled
              (fboundp 'gptel-auto-workflow-evolution-run-cycle))
+    ;; Ensure base functions are available (breaks circular require)
+    (unless (fboundp 'gptel-auto-workflow--worktree-base-root)
+      (condition-case nil
+          (load "gptel-tools-agent-base" nil t)
+        (error nil)))
     (condition-case err
         (progn
           (message "[auto-workflow] Running scheduled evolution cycle...")
