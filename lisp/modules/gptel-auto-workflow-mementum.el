@@ -126,7 +126,6 @@ RESEARCH-RESULT is a plist with :findings :targets :kept-count :total-count
            (targets (plist-get research-result :targets))
            (kept-count (or (plist-get research-result :kept-count) 0))
            (total-count (or (plist-get research-result :total-count) 0))
-           (findings (or (plist-get research-result :findings) ""))
            (digested (or (plist-get research-result :digested) ""))
            (keep-rate (if (> total-count 0)
                          (/ (float kept-count) total-count)
