@@ -1678,7 +1678,7 @@ Returns augmented target list without modifying the hints."
          (research-probes (when hints (plist-get hints :research-probes)))
          (result (copy-sequence targets))
          (seen (make-hash-table :test 'equal)))
-    (dolist (t targets) (puthash t t seen))
+    (dolist (item targets) (puthash item item seen))
     (dolist (entry (append cluster-queued research-probes))
       (when (plist-get entry :target)
         (let ((tgt (plist-get entry :target)))

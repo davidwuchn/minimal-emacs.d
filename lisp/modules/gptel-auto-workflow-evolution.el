@@ -4048,19 +4048,20 @@ Non-blocking — runs async via gptel callbacks."
           (when (and (stringp target) (stringp hypothesis)
                      (not (string-empty-p target)))
             (push (cons decision hypothesis) (gethash target by-target)))))
-      (maphash
-       (lambda (target entries)
-         (let ((kept (car (cl-find "kept" entries :key #'car :test #'equal)))
-               (discarded (car (cl-find "discarded" entries :key #'car :test #'equal))))
-           (when (and kept discarded)
-             (gptel-auto-workflow--allium-diff-minimal-pairs
-              (cdr kept) (cdr discarded)
-              (lambda (result)
-                (message "[allium-diff] %s: kept-issues=%d discarded-issues=%d"
-                         target (car result) (cdr result))
-                (when (< (car result) (cdr result))
-                  (message "[allium-diff] %s: kept hypothesis has cleaner spec (kept=%d < discarded=%d)"
-                           target (car result) (cdr result))))))))
+       (maphash
+        (lambda (target entries)
+          (when (listp entries)
+            (let ((kept (car (cl-find "kept" entries :key #'car :test #'equal)))
+                  (discarded (car (cl-find "discarded" entries :key #'car :test #'equal))))
+              (when (and kept discarded)
+                (gptel-auto-workflow--allium-diff-minimal-pairs
+                 (cdr kept) (cdr discarded)
+                 (lambda (result)
+                   (message "[allium-diff] %s: kept-issues=%d discarded-issues=%d"
+                            target (car result) (cdr result))
+                   (when (< (car result) (cdr result))
+                     (message "[allium-diff] %s: kept hypothesis has cleaner spec (kept=%d < discarded=%d)"
+                              target (car result) (cdr result)))))))))
        by-target))))
 
 ;; ─── Allium Improvements: trend tracking, dedup, regression detection, auto-repair ───
