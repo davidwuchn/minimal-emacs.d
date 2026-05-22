@@ -1,8 +1,8 @@
-# minimal-emacs.d + gptel-nucleus
+# Ouroboros: Self-Regulating AI Architecture
 
 > **An autonomous pipeline that researches, codes, verifies, and self-evolves — built on formal reasoning.**
 
-A fork of [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Built on [gptel](https://github.com/karthink/gptel). Runs 3-6 improvement cycles per day inside Emacs.
+Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). Runs 3-6 improvement cycles per day inside Emacs. The snake eating its own tail — every subsystem improves every other subsystem.
 
 ---
 
