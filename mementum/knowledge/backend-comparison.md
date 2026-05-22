@@ -1,25 +1,10 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 1218 experiments across 4 backends
+> Auto-generated from 1221 experiments across 2 backends
 
-## MiniMax vs 0 (winner: **MiniMax**)
-- MiniMax: 18.8% keep-rate
-- 0: 0.0% keep-rate
-- Shared targets: 5 | MiniMax won 3, 0 won 0, ties 2
-
-## 19094 vs 0 (winner: **tie**)
-- 19094: 0.0% keep-rate
-- 0: 0.0% keep-rate
-- Shared targets: 1 | 19094 won 0, 0 won 0, ties 1
-
-## 18656 vs 0 (winner: **18656**)
-- 18656: 40.0% keep-rate
-- 0: 0.0% keep-rate
-- Shared targets: 1 | 18656 won 1, 0 won 0, ties 0
-
-## 18656 vs 19094 (winner: **18656**)
-- 18656: 40.0% keep-rate
-- 19094: 0.0% keep-rate
-- Shared targets: 1 | 18656 won 1, 19094 won 0, ties 0
+## MiniMax vs CF-Gateway (winner: **MiniMax**)
+- MiniMax: 24.1% keep-rate
+- CF-Gateway: 15.9% keep-rate
+- Shared targets: 8 | MiniMax won 4, CF-Gateway won 3, ties 1
 
 
-*Generated: 2026-05-22 07:01*
+*Generated: 2026-05-22 08:21*
