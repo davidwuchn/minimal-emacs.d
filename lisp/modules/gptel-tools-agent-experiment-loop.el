@@ -35,6 +35,8 @@
 (defvar gptel-auto-experiment-no-improvement-threshold)
 (defvar gptel-auto-workflow--run-id)
 (defvar gptel-auto-experiment--quota-exhausted)
+(defvar gptel-auto-experiment--consecutive-timeout-threshold 3
+  "Stop experiments on a target after this many consecutive timeouts.")
 (defvar gptel-auto-experiment--api-error-count)
 (defvar gptel-auto-experiment--api-error-threshold)
 (defvar gptel-auto-experiment-delay-between)
@@ -253,7 +255,8 @@ Adapts max-experiments based on API error rate."
            (results nil)
            (best-score (let ((score (gptel-auto-workflow--plist-get baseline :eight-keys nil)))
                          (if (numberp score) score 0.0)))
-           (no-improvement-count 0))
+            (no-improvement-count 0)
+            (consecutive-timeouts 0))
       (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
                target best-score max-exp)
       (cl-labels ((run-next (exp-id)
@@ -276,11 +279,12 @@ Adapts max-experiments based on API error rate."
                                target)
                       (setq max-exp (1- exp-id)))
                     (if (or (> exp-id max-exp)
-                            (>= no-improvement-count threshold))
+                             (>= no-improvement-count threshold)
+                             (>= consecutive-timeouts gptel-auto-experiment--consecutive-timeout-threshold))
                         (progn
-                           (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
+                           (message "[auto-experiment] Done with %s: %d experiments, best score %.2f (timeouts=%d)"
                                     target (length results)
-                                    best-score)
+                                    best-score consecutive-timeouts)
                            (funcall callback (nreverse results)))
                       (gptel-auto-experiment--run-with-retry
                        target exp-id max-exp
@@ -303,17 +307,24 @@ Adapts max-experiments based on API error rate."
                              (message "[auto-experiment] Final grader-only failure for %s in experiment %d; stopping further experiments for this target"
                                       target exp-id)
                              (setq max-exp exp-id))
-                           (when kept
-                             (setq best-score score-after
-                                   baseline-code-quality quality-after
-                                   no-improvement-count 0))
-                           (when (and (not kept)
-                                      score-after
-                                      (<= score-after best-score))
-                             (cl-incf no-improvement-count))
-                           (when hard-timeout
-                             (message "[auto-experiment] Hard timeout for %s in experiment %d; skipping retries for this attempt and continuing if budget remains"
-                                      target exp-id))
+                            (when kept
+                              (setq best-score score-after
+                                    baseline-code-quality quality-after
+                                    no-improvement-count 0
+                                    consecutive-timeouts 0))
+                            (when (and (not kept)
+                                       score-after
+                                       (<= score-after best-score))
+                              (cl-incf no-improvement-count))
+                            (unless hard-timeout
+                              (setq consecutive-timeouts 0))
+                            (when hard-timeout
+                              (cl-incf consecutive-timeouts)
+                              (message "[auto-experiment] Hard timeout for %s in experiment %d (%d consecutive); %s"
+                                       target exp-id consecutive-timeouts
+                                       (if (>= consecutive-timeouts gptel-auto-experiment--consecutive-timeout-threshold)
+                                           "threshold reached — stopping target"
+                                         "continuing if budget remains")))
                             ;; Trigger strategy evolution periodically
                             (when (and (fboundp 'gptel-auto-workflow--maybe-evolve-strategy)
                                        (zerop (% next-exp-id 5)))
