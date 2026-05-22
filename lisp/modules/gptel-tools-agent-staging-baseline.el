@@ -429,6 +429,8 @@ The returned plist contains:
 - `:files' absolute file paths safe to attach
 - `:skipped' relative file paths omitted due to reviewer context limits
 - `:bytes' cumulative bytes attached"
+  (unless (stringp worktree)
+    (list :files nil :skipped nil :bytes 0))
   (let ((files nil)
         (skipped nil)
         (total-bytes 0))
