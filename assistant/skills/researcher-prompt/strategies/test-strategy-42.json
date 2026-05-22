@@ -1,0 +1,1 @@
+{"name":"test-strategy-42","description":"Test description","phases":["list",["quote",{"name":"phase1","prompt":"do thing"}]],"status":"proposed"}
