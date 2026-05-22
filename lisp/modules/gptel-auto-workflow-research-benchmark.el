@@ -523,14 +523,38 @@ TRACES is list of trace plists."
       new-config)))
 
 (defun gptel-auto-workflow--save-evolved-controller (controller-config)
-  "Save evolved controller configuration to disk.
-CONTROLLER-CONFIG is a plist with controller parameters."
+  "Save evolved controller configuration to disk, preserving champion data.
+CONTROLLER-CONFIG is a plist with controller parameters.
+Reads existing file first and merges, so champion keys from
+update-controller-from-champion-changes survive the save."
   (let ((controller-file (expand-file-name "var/tmp/researcher-controller.json"
-                                          (gptel-auto-workflow--worktree-base-root))))
+                                           (gptel-auto-workflow--worktree-base-root)))
+        (existing (condition-case nil
+                      (when (file-readable-p controller-file)
+                        (with-temp-buffer
+                          (insert-file-contents controller-file)
+                          (goto-char (point-min))
+                          (let ((json-object-type 'plist)
+                                (json-array-type 'list)
+                                (json-key-type 'keyword))
+                            (json-read))))
+                    (error nil))))
+    ;; Merge: preserve champion keys from existing, then overlay new config
+    (let ((merged existing))
+      (dolist (key '(:active-champions :champion-category :champion-rate
+                     :last-champion-update :min-confidence-stop))
+        (let ((existing-val (plist-get existing key)))
+          (when existing-val
+            (setq merged (plist-put merged key existing-val)))))
+      ;; Overlay new config on top (new values take precedence)
+      (let ((tail controller-config))
+        (while tail
+          (setq merged (plist-put merged (car tail) (cadr tail)))
+          (setq tail (cddr tail)))))
     (make-directory (file-name-directory controller-file) t)
     (with-temp-file controller-file
-      (insert (json-encode controller-config)))
-    (message "[autotts] Saved evolved controller: %s" controller-file)))
+      (insert (json-encode merged)))
+    (message "[autotts] Saved evolved controller: %s (preserved champion keys)" controller-file)))
 
 (defvar gptel-auto-workflow--controller-evolution-history nil
   "List of past controller evolution records.

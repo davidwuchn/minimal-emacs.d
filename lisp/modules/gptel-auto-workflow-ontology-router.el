@@ -472,21 +472,33 @@ Returns plist with :targets and :strategy, or nil.
 
 (defun gptel-auto-workflow--queue-cluster-experiments (source-target)
   "Queue experiments on targets similar to kept SOURCE-TARGET.
-Adds to gptel-auto-workflow--evolution-next-cycle-hints.
+Stores under :cluster-queued key in hints plist (safe for plist-get consumers).
 VSM S2 Metal: coordination prevents duplicated effort across similar files."
   (let ((suggestion (gptel-auto-workflow--suggest-similar-with-strategy source-target)))
     (when suggestion
-      (let ((targets (plist-get suggestion :targets))
-            (strategy (plist-get suggestion :strategy)))
-        (dolist (target targets)
+      (let* ((targets (plist-get suggestion :targets))
+             (strategy (plist-get suggestion :strategy))
+             ;; Budget enforcement: apply category budget to cluster-queued targets
+             (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                   (gptel-auto-workflow--enforce-category-budget targets)
+                                 targets))
+             (existing (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+                         (plist-get gptel-auto-workflow--evolution-next-cycle-hints :cluster-queued)))
+             (new-entries nil))
+        (dolist (target budgeted-targets)
           (push (list :target target
                       :strategy strategy
                       :reason "semantic-cluster"
                       :source source-target
                       :priority 2)
-                gptel-auto-workflow--evolution-next-cycle-hints)
+                new-entries)
           (message "[cluster] Queued %s with strategy '%s' (similar to kept %s)"
-                   target strategy source-target))))))
+                   target strategy source-target))
+        (when new-entries
+          (setq gptel-auto-workflow--evolution-next-cycle-hints
+                (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                           :cluster-queued
+                           (append (nreverse new-entries) (or existing nil)))))))))
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here

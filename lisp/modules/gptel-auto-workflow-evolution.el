@@ -3405,10 +3405,17 @@ Consumed by researcher daemon to focus on high-value repos."
 (defun gptel-auto-workflow--enrich-ontology-from-research ()
   "Extract new techniques from researcher's Allium spec and merge into ontology.
 Researcher now outputs Allium v3 behavioral specs — parse Technique entities.
-Semantica pattern: continuous ontology enrichment by the research agent."
+Semantica pattern: continuous ontology enrichment by the research agent.
+Guards: skips enrichment when EMA confidence < 0.3 (untrusted research signal)."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (findings-file (expand-file-name "var/tmp/research-findings.md" root))
          (new-concepts nil))
+    (when (< (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
+                      gptel-auto-workflow--research-ema-conf) 0.5) 0.3)
+      (message "[onto-enrich] EMA confidence %.2f < 0.3 — skipping enrichment (untrusted research)"
+               (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
+                        gptel-auto-workflow--research-ema-conf) 0.0))
+      (cl-return-from gptel-auto-workflow--enrich-ontology-from-research nil))
     (when (file-readable-p findings-file)
       (with-temp-buffer
         (insert-file-contents findings-file)
@@ -4467,10 +4474,11 @@ Uncategorized targets pass through (counted against :other quota)."
          (result nil)
          (total-limited 0)
          (total-input (length targets)))
-    (unless budget
-      (message "[budget] No category budget available — allowing all %d targets" total-input)
-      (cl-return-from gptel-auto-workflow--enforce-category-budget targets))
-    (dolist (target targets)
+    (if (not budget)
+        (progn
+          (message "[budget] No category budget available — allowing all %d targets" total-input)
+          targets)
+      (dolist (target targets)
       (let* ((cat (when (fboundp 'gptel-auto-workflow--categorize-target)
                     (gptel-auto-workflow--categorize-target target)))
              (quota (or (cdr (assoc cat remaining))
@@ -4484,7 +4492,7 @@ Uncategorized targets pass through (counted against :other quota)."
     (when (> total-limited 0)
       (message "[budget] Category budget enforced: %d/%d targets limited (within quota)"
                total-limited total-input))
-    (nreverse result)))
+    (nreverse result))))
 
 (defun gptel-auto-workflow--vsm-health-actions ()
   "Translate VSM diagnostics into actionable repair hints."
@@ -4561,7 +4569,10 @@ Solves S5-2/S4-5/S2-1: cross-cycle state amnesia."
         (insert-file-contents file)
         (goto-char (point-min))
         (condition-case nil
-            (setq gptel-auto-workflow--evolution-next-cycle-hints (json-read))
+            (let ((json-object-type 'plist)
+                  (json-array-type 'list)
+                  (json-key-type 'keyword))
+              (setq gptel-auto-workflow--evolution-next-cycle-hints (json-read)))
           (error nil))))))
 
 (defun gptel-auto-workflow--wire-regressed-targets ()
@@ -5318,8 +5329,18 @@ prompt, and category champions should gate new strategies with keep-rate evidenc
       (gptel-auto-workflow--allium-bdd-check
        behavior-description
        (lambda (result)
-         (setq results result)
-         (if (eq (car result) :pass)
+          (setq results result)
+          (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+            (let ((status (car result))
+                  (details (cdr result)))
+              (setq gptel-auto-workflow--evolution-next-cycle-hints
+                    (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                               :bdd-status
+                               (list :status status
+                                     :issues (plist-get details :issues)
+                                     :severity (plist-get details :severity)
+                                     :score (plist-get details :score))))))
+          (if (eq (car result) :pass)
              (message "[allium-bdd] Ouroboros behavioral spec: PASS")
            (message "[allium-bdd] Ouroboros behavioral spec: %s (issues=%s severity=%.2f score=%.2f)"
                     (car result)
