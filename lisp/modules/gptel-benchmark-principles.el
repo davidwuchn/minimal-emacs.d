@@ -42,6 +42,93 @@
   :type '(alist :key-type symbol :value-type number)
   :group 'gptel-benchmark-principles)
 
+(defconst gptel-benchmark-eight-keys-subsystem-profiles
+  `((:autotts
+     ;; AutoTTS research controller: foresight + evidence.
+     ;; Wisdom (τ): planning before execution, error prevention.
+     ;; Truth (∃): evidence-based parameter selection, honest confidence.
+     :weights ((phi-vitality     . 0.7)
+               (fractal-clarity  . 0.5)
+               (epsilon-purpose  . 0.8)
+               (tau-wisdom       . 1.5)
+               (pi-synthesis     . 0.6)
+               (mu-directness    . 0.5)
+               (exists-truth     . 1.3)
+               (forall-vigilance . 0.8))
+     :description "AutoTTS controller — optimizes research strategy parameters")
+    (:autogo
+     ;; AutoGo champion league: organic improvement + defensive.
+     ;; Vitality (φ): builds on discoveries, non-repetitive evolution.
+     ;; Vigilance (∀): never repeat failures, defensive against regression.
+     :weights ((phi-vitality     . 1.5)
+               (fractal-clarity  . 0.8)
+               (epsilon-purpose  . 0.7)
+               (tau-wisdom       . 0.5)
+               (pi-synthesis     . 0.5)
+               (mu-directness    . 0.6)
+               (exists-truth     . 0.8)
+               (forall-vigilance . 1.3))
+     :description "AutoGo champion league — gates new strategies, prevents regression")
+    (:self-evolve
+     ;; Self-evolution cycle: holistic integration + actionable outcomes.
+     ;; Synthesis (π): connects findings, integrates knowledge across cycles.
+     ;; Purpose (ε): clear goals, measurable outcomes, purposeful steps.
+     :weights ((phi-vitality     . 0.8)
+               (fractal-clarity  . 0.7)
+               (epsilon-purpose  . 1.5)
+               (tau-wisdom       . 0.8)
+               (pi-synthesis     . 1.3)
+               (mu-directness    . 0.5)
+               (exists-truth     . 0.7)
+               (forall-vigilance . 0.9))
+     :description "Self-evolution cycle — synthesizes knowledge across experiment runs")
+    (:meta-harness
+     ;; Meta-harness strategy proposer: explicit + efficient.
+     ;; Clarity (fractal): explicit assumptions, testable definitions, clear structure.
+     ;; Directness (μ): efficient, no wasted effort, cuts through noise.
+     :weights ((phi-vitality     . 0.6)
+               (fractal-clarity  . 1.5)
+               (epsilon-purpose  . 0.8)
+               (tau-wisdom       . 0.6)
+               (pi-synthesis     . 0.7)
+               (mu-directness    . 1.3)
+               (exists-truth     . 0.6)
+               (forall-vigilance . 0.7))
+     :description "Meta-harness proposer — generates new strategy candidates")
+    (:ontology
+     ;; Ontology router: actionable routing + evidence-based selection.
+     ;; Purpose (ε): actionable function, measurable backend outcomes.
+     ;; Truth (∃): evidence-based, data-driven backend selection.
+     :weights ((phi-vitality     . 0.5)
+               (fractal-clarity  . 0.7)
+               (epsilon-purpose  . 1.5)
+               (tau-wisdom       . 0.6)
+               (pi-synthesis     . 0.5)
+               (mu-directness    . 0.8)
+               (exists-truth     . 1.3)
+               (forall-vigilance . 0.6))
+     :description "Ontology router — data-driven backend selection per target category"))
+  "Per-subsystem Eight Keys weight profiles.
+Each profile emphasizes the keys most relevant to that subsystem's purpose.
+Weights >1.0 amplify the key; weights <1.0 de-emphasize it.
+The default profile uses all 1.0 (equal weighting).")
+
+(defvar gptel-benchmark--active-subsystem nil
+  "Dynamically-bound subsystem keyword for Eight Keys weight selection.
+When non-nil, `gptel-benchmark-eight-keys-score' uses the profile-specific
+weights instead of the default equal weights.
+Bind with `let' around the subsystem's scoring context.")
+
+(defun gptel-benchmark-get-subsystem-weights (subsystem)
+  "Return the Eight Keys weight alist for SUBSYSTEM.
+SUBSYSTEM is a keyword: :autotts, :autogo, :self-evolve, :meta-harness, :ontology.
+Returns default weights if SUBSYSTEM not recognized."
+  (or (plist-get
+       (cl-find subsystem gptel-benchmark-eight-keys-subsystem-profiles
+                :key (lambda (p) (car p)))
+       :weights)
+      gptel-benchmark-eight-keys-weights))
+
 ;;; ============================================================================
 ;;; Eight Keys - see mementum/knowledge/nucleus-patterns.md for documentation
 ;;; ============================================================================
@@ -203,7 +290,28 @@ validation, or default."
 (defun gptel-benchmark-eight-keys-score (output &optional hypothesis)
   "Score OUTPUT against relevant Eight Keys using local pattern matching.
 If HYPOTHESIS is provided, detect task type and only score relevant keys.
+Returns alist: ((key . score) ...) plus overall score.
+Weights are drawn from `gptel-benchmark--active-subsystem' if bound,
+otherwise the default `gptel-benchmark-eight-keys-weights'."
+  (gptel-benchmark--eight-keys-score-with-weights
+   output hypothesis
+   (if (and (boundp 'gptel-benchmark--active-subsystem)
+            gptel-benchmark--active-subsystem)
+       (gptel-benchmark-get-subsystem-weights gptel-benchmark--active-subsystem)
+     gptel-benchmark-eight-keys-weights)))
+
+(defun gptel-benchmark-eight-keys-score-for (output subsystem &optional hypothesis)
+  "Score OUTPUT using subsystem-specific Eight Keys weights.
+SUBSYSTEM is a keyword: :autotts, :autogo, :self-evolve, :meta-harness, :ontology.
+Uses `gptel-benchmark-get-subsystem-weights' to look up the profile.
 Returns alist: ((key . score) ...) plus overall score."
+  (gptel-benchmark--eight-keys-score-with-weights
+   output hypothesis
+   (gptel-benchmark-get-subsystem-weights subsystem)))
+
+(defun gptel-benchmark--eight-keys-score-with-weights (output hypothesis weights)
+  "Core scoring engine.  Uses WEIGHTS instead of the global default.
+Internal helper shared by score and score-for."
   (let* ((task-type (gptel-benchmark--detect-task-type hypothesis))
          (relevant-keys (or (cadr (assoc task-type gptel-benchmark--task-type-key-mapping))
                             (cadr (assoc 'default gptel-benchmark--task-type-key-mapping))))
@@ -213,7 +321,7 @@ Returns alist: ((key . score) ...) plus overall score."
     (dolist (key-def gptel-benchmark-eight-keys-definitions)
       (let* ((key (car key-def))
              (def-plist (cdr key-def))
-             (weight (or (alist-get key gptel-benchmark-eight-keys-weights) 1.0))
+             (weight (or (alist-get key weights) 1.0))
              (signals (plist-get def-plist :signals))
              (anti-patterns (plist-get def-plist :anti-patterns)))
         (if (memq key relevant-keys)
