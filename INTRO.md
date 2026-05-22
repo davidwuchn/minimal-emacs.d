@@ -22,6 +22,34 @@ Like the Northern Divine Art (北冥神功), it absorbs techniques from everywhe
 
 ---
 
+## The Ouroboros
+
+One word for the whole architecture: **Ouroboros.** The snake eating its tail — each subsystem is the same recursive self-improvement cycle, just at different scales:
+
+```
+λ ouroboros.
+  observe → decide → act → learn → repeat
+  | each_scale: same_cycle, different_vocabulary, different_time_horizon
+  | water(feed) → wood(grow) → fire(learn) → earth(control) → metal(shape) → water
+```
+
+| Scale | System | Role | Time Horizon |
+|-------|--------|------|-------------|
+| **Turn** | AutoTTS | Should research stop, continue, or branch? | Seconds |
+| **Strategy** | AutoGo | Does this challenger beat the champion? | Experiments |
+| **Evolution** | meta-harness | Generate new strategies from failures | Cycles |
+| **System** | self-evolve | Is the whole pipeline improving or plateauing? | Days |
+| **Identity** | VSM + Eight Keys | Are all 5 layers healthy? | Continuously |
+| **Foundation** | Nucleus | λ notation, statecharts, formal reasoning | Always |
+
+Each layer consumes the output of the layer below. AutoTTS decisions feed AutoGo gates. AutoGo champions feed meta-harness proposals. meta-harness strategies feed self-evolve objectives. VSM health checks all five. The Ouroboros turns.
+
+The frameworks aren't separate tools — they're the same tool at different zoom levels. **VSM** assigns _who_ does the work. **Ontology** classifies _what_ kind of work. **Eight Keys** measure _how well_ it was done. All map to the same five elements: Water → Wood → Fire → Earth → Metal → Water.
+
+Say "Ouroboros" and you mean: the full self-regulating cybernetic architecture.
+
+---
+
 ## The Architecture
 
 Every cycle runs through six compilers — each examining the system's own behavior. This is the nucleus (ν) layer:
