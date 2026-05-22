@@ -2482,7 +2482,7 @@ must not override it to MiniMax via setq-local in subagent buffers."
 (ert-deftest tdd/research/autotts-parse-trace-blocks ()
   "parse-research-autotts-traces extracts ===RESULT=== JSON blocks."
   (when (fboundp 'gptel-auto-workflow--parse-research-autotts-traces)
-    (let* ((output "Some text\n===RESULT===\n{\"phase\": \"search\", \"confidence\": 0.8, \"tokens\": 1200}\nMore text")
+    (let* ((output "Some text\n===RESULT===\n({\"phase\": \"search\", \"confidence\": 0.8, \"tokens\": 1200})\nMore text")
            (traces (gptel-auto-workflow--parse-research-autotts-traces output)))
       (should (= 1 (length traces)))
       (should (equal (plist-get (car traces) :phase) "search"))

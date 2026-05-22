@@ -21,8 +21,8 @@ Returns list of trace plists with :phase, :confidence, :tokens, :decision.
 AutoTTS: research sessions emit structured trace blocks for token-optimal stopping."
   (let ((traces nil)
         (pos 0))
-    (while (string-match "===RESULT===\\s*\\(\\[?\\[{]?[^{\\[]*[{]\\)" output pos)
-      (let* ((json-start (match-beginning 1))
+    (while (string-match "===RESULT===\r?\n(" output pos)
+      (let* ((json-start (1- (match-end 0)))
              (json-end (condition-case nil
                            (with-temp-buffer
                              (insert (substring output json-start))
@@ -31,7 +31,7 @@ AutoTTS: research sessions emit structured trace blocks for token-optimal stoppi
                              (point))
                          (error nil))))
         (when json-end
-          (let* ((json-str (substring output json-start (+ json-start json-end)))
+          (let* ((json-str (substring output (1+ json-start) (- (+ json-start json-end) 2)))
                  (json-object-type 'plist)
                  (json-array-type 'list)
                  (json-key-type 'keyword))
@@ -41,7 +41,7 @@ AutoTTS: research sessions emit structured trace blocks for token-optimal stoppi
                     (push trace traces)))
               (error nil))))
         (setq pos (match-end 0)))
-    (nreverse traces)))
+    (nreverse traces))))
 
 (defun gptel-auto-workflow--research-autotts-stop-early-p (traces)
   "Return non-nil if research should STOP early based on TRACE analysis.
@@ -223,7 +223,7 @@ Adopts winners, discards losers. Called from evolution cycle.
                         proposed efficiency baseline))
              (setq gptel-auto-workflow--proposed-research-strategies
                      (cl-remove proposed gptel-auto-workflow--proposed-research-strategies
-                                :test #'string=))))))))))
+                                :test #'string=)))))))))
 
 (provide 'gptel-auto-workflow-research-integration)
 ;;; gptel-auto-workflow-research-integration.el ends here
