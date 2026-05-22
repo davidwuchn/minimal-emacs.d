@@ -1,0 +1,1 @@
+{"name":"iterative-refinement","version":"1.0","hypothesis":"Weighting recent experimental outcomes more heavily improves pattern recognition.","axis":"F","components":["pattern-aggregation","recency-weighting","experiment-history"]}
