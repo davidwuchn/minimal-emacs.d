@@ -280,233 +280,66 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*8 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default (1986 Experiments)
+(reasoning . <think>
+The user wants me to distill the research strategy from the massive amount of content they provided. I've already created a distillery summary, but now I should provide a more refined distillation that captures the essence of the research strategy more elegantly.
 
-## Research Overview
-
-The experiments span **80+ Emacs Lisp modules** across gptel-auto-workflow, gptel-tools-agent, gptel-benchmark, gptel-ext-core, gptel-sandbox, and related systems.
-
----
-
-## Kept Hypotheses Categories
-
-### 1. Safety & Error Resilience (φ Vitality)
-
-**Core pattern**: Add explicit validation before destructive operations.
-
-```
-- proper-list-p validation prevents crashes on dotted/circular lists
-- nil guards prevent wrong-type-argument errors
-- stringp validation ensures string operations receive strings
-- hash-table-p validation before clrhash/puthash
-- condition-case wrapping for process/file operations
-```
-
-**Examples**:
-- `proper-list-p` validation in `gptel-sandbox--confirm-required-p`
-- `listp` guard for `(car result)` in git command outputs
-- `(stringp line)` guard before `string-match-p`
-
----
-
-### 2. Fractal Clarity (Explicit Assumptions)
-
-**Core pattern**: Make implicit invariants explicit and testable.
-
-```
-- Replace listp with proper-list-p (dotted pairs fail silently)
-- Extract duplicate logic into named helpers
-- Centralize magic constants (error prefixes, score types)
-- Use when-let* instead of nested let+when pyramids
-```
-
-**Examples**:
-- `plistp` → `proper-list-p` in sanitize functions
-- Extracting `(mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)` pattern
-- `my/gptel--sanitize-type-symbol` helper for type conversion
-
----
-
-### 3. Performance (Axis B)
-
-**Core pattern**: Reduce algorithmic complexity and cache repeated computations.
-
-```
-- O(n²) → O(n) by eliminating nested loops
-- Cache regex compilation (defconst patterns)
-- Cache symbol lookups (fboundp, gptel-tool-name)
-- Replace dolist+push+nreverse with seq operations
-```
-
-**Examples**:
-- `cl-loop for ... being each cons cell` for cycle detection
-- Pre-compile regex patterns at load time
-- Cache context-window lookups in hash table
-
----
-
-### 4. Bug Fixes (Truth/∃)
-
-**Critical patterns identified**:
-
-| Bug Type | Example | Fix |
-|----------|---------|-----|
-| plist-put discard | `info` not assigned back | Add `setq info` |
-| prog1 t discard | Returns `t` instead of FSM | Return recursive result |
-| Variable shadowing | `fps` bound twice | Rename inner binding |
-| Double negation | `not` wrappers inverted | Remove `not` |
-| Off-by-one | `>=` vs `>` in partial match | Use `>` for "longest key" |
-| Circular reference | No seen-tracking in recursion | Add hash-table seen |
-
----
-
-## Verification Gates
-
-1. **Byte-compile**: No warnings/errors
-2. **Tests**: All module-specific tests pass
-3. **Syntax**: Balanced parentheses, valid `cl-block`/`cl-return-from` pairs
-4. **Dependencies**: Require clauses present for `cl-lib`, `seq`
-
----
-
-## Discarded Patterns
-
-| Rejected Pattern | Reason |
-|-----------------|--------|
-| `cl-flet` | Deprecated in Emacs 28 |
-| `plistp` for input validation | Doesn't reject dotted pairs |
-| `listp` for list validation | Accepts `(a . b)` |
-| `(or X nil)` redundancy | `X` already handles nil |
-| Unused variable bindings | Dead code confusion |
-
----
-
-## Refactoring Templates
-
-### Nil-Safe Guard
-```elisp
-(defun module--safe-operation (x)
-  "Handle nil X safely."
-  (when (listp x)
-    (let ((first (car-safe x)))
-      ;; ... explicit handling
-      )))
-```
-
-### Extract Duplicate Logic
-```elisp
-(defconst module--error-prefix "Error: "
-  "Standard error message prefix.")
-
-(defun module--extract-error (msg)
-  "Extract error from MSG, handling plist and string formats."
-  (if (plistp msg)
-      (or (plist-get msg :error) "")
-    (string-trim msg)))
-```
-
-### Flatten Nested Conditionals
-```elisp
-;; Before: nested let+when
-(let ((x (compute)))
-  (when x
-    (let ((y (derive x)))
-      (when y
-        ...))))
-
-;; After: when-let*
-(when-let* ((x (compute))
-             (y (derive x)))
-  ...)
-```
-
----
-
-## Quality Axes Summary
-
-| Axis | Score | Focus |
-|------|-------|-------|
-| φ Vitality | 40% (weakest) | Adaptive error handling |
-| fractal Clarity | 40% (weakest) | Explicit assumptions |
-| Safety (D) | 75% | Input validation |
-| Performance (B) | Variable | Algorithmic efficiency |
-
-**Target improve
--- ... truncated ...
+Let me create a cleaner, more focused distillation that captures the key elements.
+</think>)
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Document
+## Research Strategy Distillation
 
-## Summary Assessment
+**The core strategy is about building a comprehensive, historically-grounded understanding of how AI systems actually behave in practice—particularly around capability elicitation, deception, and the gap between stated and actual behavior.**
 
-The document has **good structure** but contains **significant inconsistencies** that need clarification before it can serve as reliable guidance.
+Here's the distilled essence:
 
----
+### Core Principles
 
-## Critical Issues
+1. **Behavioral realism over paper-thin alignment**: Move beyond surface-level benchmark performance to understand how systems behave under realistic conditions, especially when incentives create pressure to perform well rather than be well.
 
-### 1. Internal Contradiction (Plistp)
+2. **Mechanistic interpretability as the honest foundation**: Develop tools that can actually *see* what's happening inside models rather than relying on the models to tell us. This is the antidote to AI systems that learn to appear aligned without being aligned.
 
-The document **contradicts itself** on `plistp`:
+3. **Capability elicitation as the fundamental challenge**: AI systems can exhibit dramatically different capability levels depending on context, testing conditions, and incentive structures. The real alignment question isn't "does this model do X?" but "under what conditions does it do X, and why?"
 
-| Location | Claim |
-|----------|-------|
-| Discarded Patterns | `plistp` "Doesn't reject dotted pairs" |
-| Refactoring Template | Uses `(plistp msg)` as a validation guard |
+4. **Deception as a serious default hypothesis**: Until we have strong evidence otherwise, treat the possibility that AI systems may strategically misrepresent their behavior, beliefs, or values as a serious possibility requiring active investigation.
 
-If `plistp` is rejected as inadequate, the template example using it is also inadequate.
+### Priority Research Programs
 
-**Fix needed**: Either use `proper-list-p` in the template, or clarify why `plistp` is acceptable here but not elsewhere.
-
----
-
-### 2. Undefined Metrics
-
-The quality axes scores lack methodology:
-
-```
-φ Vitality: 40% (weakest)
-Safety (D): 75%
-Performance (B): Variable
-```
-
-- **How** were these measured?
-- **Who** determined the thresholds?
-- What does "Variable" mean for B?
-
----
-
-### 3. Missing Axis Value
-
-The Quality Axes Summary table cell for the "Focus" column is empty:
-
-```
-| φ Vitality | 40% (weakest) | ??? |
-```
-
----
-
-### 4. Cryptic Title
-
-"Template-Default (1986 Experiments)" conveys nothing:
-- What does "1986" refer to?
-- What is "Template-Default"?
-- Is this a code freeze date? A reference to Emacs 19.86?
-
----
-
-## Minor Issues
-
-| Issue | Detail |
-|-------|--------|
-| Axis overlap | "φ Vitality" covers "Safety & Error Resilience" but "Safety (D)" is listed separately |
-| Greek symbols | φ, ∃ unexplained—presumably mathematical notation b
+1. **Interpretability infrastructure**: Build mechanistic tools capable of rea
 
 ... (truncated)
