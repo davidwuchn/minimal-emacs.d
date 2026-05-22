@@ -485,8 +485,12 @@ Relative paths are resolved from the project root."
          (dir (file-name-directory file))
          (max-chars (gptel-auto-workflow--messages-chars)))
     (when dir
-      (make-directory dir t))
-    (with-current-buffer (get-buffer-create "*Messages*")
+      (condition-case err
+          (make-directory dir t)
+        (error
+         (message "[auto-workflow] Failed to create messages directory %s: %s" dir err)
+         (setq dir nil))))
+    (and dir (get-buffer-create "*Messages*")
       (let* ((start-pos (cond
                          ((integer-or-marker-p gptel-auto-workflow--messages-start-pos)
                           (max (point-min)
