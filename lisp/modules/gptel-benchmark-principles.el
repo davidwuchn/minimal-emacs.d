@@ -416,10 +416,10 @@ Returns nil if ELEMENT is not a valid element symbol."
     (dolist (element '(water wood fire earth metal))
       (let ((score 0.5))
         (when results
-          (let ((key (intern (format "%s-score" element))))
+          (let ((key (format "%s-score" element)))
             (dolist (r results)
               (let ((scores (if (consp r) (cdr r) r)))
-                (let ((score-value (plist-get scores key)))
+                (let ((score-value (and (listp scores) (alist-get (intern key) scores))))
                   (when (numberp score-value)
                     (setq score score-value)))))))
         (push (list :element element
