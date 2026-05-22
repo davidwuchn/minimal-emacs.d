@@ -144,26 +144,35 @@ Uses cached value from load time, or detects from current directory."
                              (line-beginning-position) (line-end-position))))
                   (unless (string-empty-p line)
                      (let* ((fields (split-string line "\t"))
-                            (field-count (length fields))
-                            ;; Handle both old 20-field format and new 27-field format.
-                            ;; Old format: exactly 20 fields, backend at index 14.
-                            ;; New format: 27 fields (or 26 if model missing), backend at index 15.
-                            (old-format-p (eq field-count 20))
-                            (target (nth 1 fields))
-                            (hypothesis (nth 2 fields))
-                            (score-before (string-to-number (or (nth 3 fields) "0")))
-                            (score-after (string-to-number (or (nth 4 fields) "0")))
-                            (quality (string-to-number (or (nth 5 fields) "0")))
-                            (delta-str (or (nth 6 fields) "+0.00"))
-                            (decision (nth 7 fields))
-                            (grader-q (string-to-number (or (nth 9 fields) "0")))
-                            (backend (or (nth (if old-format-p 14 15) fields) "unknown"))
-                            (prompt-chars (string-to-number (or (nth (if old-format-p 15 16) fields) "0")))
-                            (research-strategy (or (nth (if old-format-p 20 21) fields) "none"))
-                            (research-hash (or (nth (if old-format-p 20 22) fields) "none"))
-                            (research-quality (or (nth (if old-format-p 20 23) fields) "none"))
-                            (kibcm-axis (or (nth (if old-format-p 20 25) fields) "?"))
-                            (model (or (nth (if old-format-p 20 26) fields) "unknown")))
+                             (field-count (length fields))
+                             ;; Handle multiple TSV format versions:
+                             ;; 14 cols: earliest (no backend/strategy/research fields)
+                             ;; 20 cols: backend at index 14, no research fields
+                             ;; 24 cols: backend at index 14, research fields at 20-23
+                             ;; 27 cols: backend at index 15, full research fields
+                             (format-version (cond ((<= field-count 14) 14)
+                                                   ((<= field-count 20) 20)
+                                                   ((<= field-count 24) 24)
+                                                   (t 27)))
+                             (target (nth 1 fields))
+                             (hypothesis (nth 2 fields))
+                             (score-before (string-to-number (or (nth 3 fields) "0")))
+                             (score-after (string-to-number (or (nth 4 fields) "0")))
+                             (quality (string-to-number (or (nth 5 fields) "0")))
+                             (delta-str (or (nth 6 fields) "+0.00"))
+                             (decision (nth 7 fields))
+                             (grader-q (string-to-number (or (nth 9 fields) "0")))
+                             (backend (cond ((<= format-version 14) "unknown")
+                                            ((<= format-version 24)
+                                             (or (nth 14 fields) "unknown"))
+                                            (t (or (nth 15 fields) "unknown"))))
+                             (prompt-chars (string-to-number
+                                            (or (nth (if (<= format-version 24) 15 16) fields) "0")))
+                             (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
+                             (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
+                             (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
+                             (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
+                             (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
                            (push (list :target target
                                        :hypothesis hypothesis
                                        :score-before score-before
@@ -2973,7 +2982,9 @@ Promotion: challenger must exceed category champion by >5% relative."
          (results nil))
     (dolist (entry scores)
       (let* ((name (car entry))
-             (composite (cdr entry)))
+             (composite (cdr entry))
+             (status-bonus (gptel-auto-workflow--ontology-strategy-status-bonus name))
+             (effective-composite (+ composite status-bonus)))
         (catch 'category-result
           (dolist (cat categories)
             ;; ∀ Vigilance: skip frozen categories
@@ -2989,11 +3000,11 @@ Promotion: challenger must exceed category champion by >5% relative."
                 (cond
                  ((null champion-strategy)
                   (when (> cat-keep-rate cat-baseline)
-                    (gptel-auto-workflow--crown-champion name cat-keep-rate composite cat)
+                    (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
                     (push (cons name (intern (format "first-%s-champion" cat))) results)
                     (throw 'category-result t)))
                  ((> cat-keep-rate (* champion-rate 1.05))
-                  (gptel-auto-workflow--crown-champion name cat-keep-rate composite cat)
+                  (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
                   (push (cons name (intern (format "promoted-%s" cat))) results)
                   (throw 'category-result t))
                  ((> cat-keep-rate champion-rate)
@@ -3971,7 +3982,10 @@ or empty string if none found."
 
 (defun gptel-auto-workflow--generate-experiment-ontology ()
   "Generate an ontology from experiment results (Semantica pattern).
-Returns ontology plist with class and instance counts."
+Returns ontology plist with class and instance counts.
+Uses recency weights when `gptel-auto-workflow--recency-weighted-ontology' is available."
+  (if (fboundp 'gptel-auto-workflow--recency-weighted-ontology)
+      (gptel-auto-workflow--recency-weighted-ontology)
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (strategy-classes (make-hash-table :test 'equal))
          (target-instances (make-hash-table :test 'equal)))
@@ -4025,7 +4039,7 @@ Returns ontology plist with class and instance counts."
             :classes (sort class-list (lambda (a b) (> (plist-get a :keep-rate) (plist-get b :keep-rate))))
             :instances (sort instance-list (lambda (a b) (> (plist-get a :total) (plist-get b :total))))
             :class-count (hash-table-count strategy-classes)
-            :instance-count (hash-table-count target-instances)))))
+            :instance-count (hash-table-count target-instances))))))
 ;; ─── Ontology weight overrides ───
 
 (defun gptel-auto-workflow--ontology-strategy-status-bonus (strategy-name)

@@ -209,6 +209,11 @@ ARGS: (target experiment-id max-experiments ...)."
       ;; Skip experiment, return synthetic failure result
       (let ((reason (plist-get preflight :reason)))
         (message "[onto-preflight] SKIPPED %s: %s" target reason)
+        ;; Suggest alternative
+        (when (fboundp 'gptel-auto-workflow--preflight-alternative)
+          (let ((alt (gptel-auto-workflow--preflight-alternative target strategy)))
+            (when (plist-get alt :reason)
+              (message "[onto-preflight]   alt: %s" (plist-get alt :reason)))))
         (when (> (length args) 5)
           ;; Call callback with skip result
           (let ((callback (nth 5 args)))
