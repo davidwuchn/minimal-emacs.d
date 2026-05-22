@@ -79,6 +79,25 @@ Layer 4: temporal git and experiment index.")
 (defvar gptel-auto-workflow--vsm-health-last-run nil
   "Timestamp of last VSM health check. Throttles to 1/15min.")
 
+(defvar gptel-auto-workflow--evolution-last-objective nil
+  "Eight Keys convergence score from previous evolution cycle.
+∃ Truth: if current score ≤ this, evolution plateaued — stop.")
+
+(defun gptel-auto-workflow--eight-keys-convergence-score ()
+  "Compute Eight Keys convergence score from kept experiments.
+∃ Truth: aggregate of per-subsystem scores for convergence detection."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (autogo 0.0) (autotts 0.0) (selfev 0.0) (count 0))
+    (dolist (r results)
+      (when (and (equal (plist-get r :decision) "kept")
+                 (fboundp 'gptel-benchmark-eight-keys-score-for))
+        (let ((hypo (or (plist-get r :hypothesis) "")))
+          (cl-incf autogo (gptel-benchmark-eight-keys-score-for hypo :autogo))
+          (cl-incf autotts (gptel-benchmark-eight-keys-score-for hypo :autotts))
+          (cl-incf selfev (gptel-benchmark-eight-keys-score-for hypo :self-evolve))
+          (cl-incf count))))
+    (if (> count 0) (/ (+ autogo autotts selfev) (* 3 count)) 0.0)))
+
 (defvar gptel-auto-workflow--evolution-next-cycle-hints nil
   "Alist of hints for the next evolution cycle.
 Keys: :prev-champions, :category-budget, :vsm-actions, :regressed-targets.")
@@ -1797,9 +1816,19 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                (- now gptel-auto-workflow--evolution-last-run))
       (cl-return-from gptel-auto-workflow-evolution-run-cycle "throttled"))
    (setq gptel-auto-workflow--evolution-last-run now))
-   ;; Restore cross-subsystem hints from disk (survives daemon restart)
-   (gptel-auto-workflow--restore-next-cycle-hints)
-   (message "[auto-workflow] Running self-evolution cycle...")
+  ;; Restore cross-subsystem hints from disk (survives daemon restart)
+  (gptel-auto-workflow--restore-next-cycle-hints)
+  ;; Eight Keys convergence: skip evolution if scores haven't improved
+  (when (and gptel-auto-workflow--evolution-last-objective
+             (fboundp 'gptel-benchmark-eight-keys-score-for))
+    (let ((current-obj (gptel-auto-workflow--eight-keys-convergence-score)))
+      (when (and current-obj
+                 (<= current-obj gptel-auto-workflow--evolution-last-objective))
+        (message "[evolution] ∃ Truth: convergence — Eight Keys score %.3f ≤ %.3f, skipping"
+                 current-obj gptel-auto-workflow--evolution-last-objective)
+        (cl-return-from gptel-auto-workflow-evolution-run-cycle "converged"))
+      (setq gptel-auto-workflow--evolution-last-objective current-obj)))
+  (message "[auto-workflow] Running self-evolution cycle...")
   ;; Pipeline validation (Semantica PipelineValidator)
   (condition-case nil
       (let ((v (gptel-auto-workflow--validate-pipeline)))
@@ -2128,11 +2157,18 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
                           (seq-take axis-stats 5) " ")))
     (cond
      ((< keep-rate 0.05)
-      (message "[vsm] 相克: Wood(S1) weak → check Earth(S3) controls (timeouts too tight?)"))
+      (message "[vsm] 相克: Wood(S1) weak — keep-rate %.1f%%"
+               (* 100 keep-rate))
+      (push (cons 'rebalance-experiment-targets "Wood(S1) weak: diversify target selection")
+            (plist-get (gptel-auto-workflow--vsm-health-actions) :actions)))
      ((< strategies 5)
-      (message "[vsm] 相生: Fire(S4) weak → Water(S5) should generate more variety"))
+      (message "[vsm] 相生: Fire(S4) weak — only %d strategies" strategies)
+      (push (cons 'increase-strategy-evolution "Fire(S4) weak: fewer than 5 strategies")
+            (plist-get (gptel-auto-workflow--vsm-health-actions) :actions)))
      ((< backends 3)
-      (message "[vsm] 相克: Metal(S2) weak → Fire(S4) should coordinate backends"))
+      (message "[vsm] 相克: Metal(S2) weak — only %d backends" backends)
+      (push (cons 'enable-fallback-backend "Metal(S2) weak: fewer than 3 backends")
+            (plist-get (gptel-auto-workflow--vsm-health-actions) :actions)))
      (t
       (message "[vsm] 相生: All layers balanced — generating cycle active")))
     ;; Housekeeping: full autonomous maintenance
