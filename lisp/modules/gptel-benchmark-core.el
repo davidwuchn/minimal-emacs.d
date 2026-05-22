@@ -144,6 +144,16 @@ This consolidates the common plist detection pattern used across the module."
        (keywordp (car obj))
        (zerop (mod (length obj) 2))))
 
+(defun gptel-benchmark--keyword-plist-p (obj)
+  "Check if OBJ is a keyword-keyed plist suitable for plist-get operations.
+Unlike `gptel-benchmark--plist-p', this is more permissive - it accepts
+any proper list with keyword keys at even positions, not requiring even length.
+Used to distinguish plists from dotted-pair alists like ((:a . 1) (:b . 2)).
+Returns nil for dotted pairs, alists with symbol keys, or non-list types."
+  (and (proper-list-p obj)
+       (not (null obj))
+       (keywordp (car obj))))
+
 (defun gptel-benchmark--plist-to-alist (plist)
   "Convert PLIST to alist format for JSON encoding.
 Validates that PLIST has even number of elements.
@@ -274,12 +284,9 @@ Returns nil for nil or malformed input."
     (let ((scores (cdr r)))
       (when (and (proper-list-p scores)
                  (not (null scores))
-                 (or (gptel-benchmark--plist-p scores)
+                 (or (gptel-benchmark--keyword-plist-p scores)
                      (and (cl-every #'consp scores)
-                          (not (keywordp (car scores)))
-                          (not (and (proper-list-p (car scores))
-                                    (keywordp (caar scores))
-                                    (zerop (mod (length (car scores)) 2)))))))
+                          (not (keywordp (car scores))))))
         scores)))
    (t nil)))
 
