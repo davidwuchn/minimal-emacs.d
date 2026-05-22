@@ -21,27 +21,19 @@ Returns list of trace plists with :phase, :confidence, :tokens, :decision.
 AutoTTS: research sessions emit structured trace blocks for token-optimal stopping."
   (let ((traces nil)
         (pos 0))
-    (while (string-match "===RESULT===\r?\n(" output pos)
-      (let* ((json-start (1- (match-end 0)))
-             (json-end (condition-case nil
-                           (with-temp-buffer
-                             (insert (substring output json-start))
-                             (goto-char (point-min))
-                             (forward-sexp)
-                             (point))
-                         (error nil))))
-        (when json-end
-          (let* ((json-str (substring output (1+ json-start) (- (+ json-start json-end) 2)))
-                 (json-object-type 'plist)
+    (while (string-match "===RESULT===" output pos)
+      (let ((brace-pos (string-match "{" output (match-end 0))))
+        (when brace-pos
+          (let* ((json-object-type 'plist)
                  (json-array-type 'list)
                  (json-key-type 'keyword))
             (condition-case nil
-                (let ((trace (json-read-from-string json-str)))
+                (let ((trace (json-read-from-string (substring output brace-pos))))
                   (when (plist-get trace :phase)
                     (push trace traces)))
-              (error nil))))
-        (setq pos (match-end 0)))
-    (nreverse traces))))
+              (error nil)))
+          (setq pos (match-end 0)))))
+    (nreverse traces)))
 
 (defun gptel-auto-workflow--research-autotts-stop-early-p (traces)
   "Return non-nil if research should STOP early based on TRACE analysis.

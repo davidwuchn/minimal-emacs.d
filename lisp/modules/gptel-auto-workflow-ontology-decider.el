@@ -229,21 +229,35 @@ RESULT should be `ontology', `llm', or `hybrid'."
   (message "[decider] Ontology guards installed"))
 
 (defun gptel-auto-workflow--ontology-enhance-strategy-selection (orig-fun &rest args)
-  "Advice to enhance strategy selection with ontology data."
-  (let ((target (car args)))
+  "Advice to enhance strategy selection with ontology data.
+Checks EMA confidence factor: if EMA is high (>0.6), trust ontology more;
+if EMA is low (<0.3), skip ontology and fall through to LLM."
+  (let ((target (car args))
+        (ema-available (and (boundp 'gptel-auto-workflow--research-ema-conf)
+                            gptel-auto-workflow--research-ema-conf))
+        (ema-conf (if (boundp 'gptel-auto-workflow--research-ema-conf)
+                      gptel-auto-workflow--research-ema-conf 0.5)))
     (if (and (fboundp 'gptel-auto-workflow--generate-experiment-ontology)
              (> (hash-table-count (plist-get (gptel-auto-workflow--generate-experiment-ontology)
-                                             :classes)) 0))
+                                              :classes)) 0)
+             ;; Skip ontology if EMA confidence is critically low
+             (or (not ema-available) (>= ema-conf 0.3)))
         (let ((ontology-choice (gptel-auto-workflow--select-best-strategy-with-ontology
                                 nil target)))
-          (if ontology-choice
+          ;; With high EMA confidence, accept ontology even if weak; with low, require confident pick
+          (if (and ontology-choice
+                   (or (> ema-conf 0.6)
+                       (not (eq ontology-choice 'fallback))))
               (progn
                 (gptel-auto-workflow--record-decision "strategy-selection" 'ontology)
                 ontology-choice)
             (progn
               (gptel-auto-workflow--record-decision "strategy-selection" 'llm)
               (apply orig-fun args))))
-      (apply orig-fun args))))
+      (progn
+        (when (and ema-available (< ema-conf 0.3))
+          (message "[decider] EMA confidence %.2f < 0.3 — bypassing ontology, using LLM" ema-conf))
+        (apply orig-fun args)))))
 
 (provide 'gptel-auto-workflow-ontology-decider)
 ;;; gptel-auto-workflow-ontology-decider.el ends here

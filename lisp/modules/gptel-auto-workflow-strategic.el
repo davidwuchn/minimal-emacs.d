@@ -1164,11 +1164,27 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                                                           (car c) (cadr c) (* 100 (or (cddr c) 0))))
                                       champion-prev "\n"))
                    parts))
-           (when regressed
-             (push (format "REGRESSED TARGETS (knowledge pages removed, prioritized):\n%s"
-                           (mapconcat (lambda (tgt) (format "- %s" (truncate-string-to-width tgt 60 nil nil "..."))) regressed "\n"))
-                   parts))
-           (if parts (concat (mapconcat #'identity (nreverse parts) "\n") "\n\n") ""))))
+            (when regressed
+              (push (format "REGRESSED TARGETS (knowledge pages removed, prioritized):\n%s"
+                            (mapconcat (lambda (tgt) (format "- %s" (truncate-string-to-width tgt 60 nil nil "..."))) regressed "\n"))
+                    parts))
+            (when (and (fboundp 'gptel-auto-workflow--query-experiments)
+                       (boundp 'gptel-auto-workflow-targets)
+                       gptel-auto-workflow-targets)
+              (let ((sample-query (or (car gptel-auto-workflow-targets) "optimization"))
+                    (similar (gptel-auto-workflow--query-experiments
+                              (or (car gptel-auto-workflow-targets) "") 5)))
+                (when similar
+                  (push (format "SIMILAR PAST EXPERIMENTS (successful approaches on related files):\n%s"
+                                (mapconcat (lambda (s)
+                                             (format "- %s: %s (score=%.2f, %s)"
+                                                     (truncate-string-to-width (plist-get s :target) 40 nil nil "...")
+                                                     (truncate-string-to-width (plist-get s :hypothesis) 60 nil nil "...")
+                                                     (plist-get s :score)
+                                                     (plist-get s :decision)))
+                                           similar "\n"))
+                        parts))))
+            (if parts (concat (mapconcat #'identity (nreverse parts) "\n") "\n\n") ""))))
     (format "Select optimization targets for this Emacs Lisp project.
 
 %s%s%sFILES AVAILABLE:
@@ -1579,24 +1595,30 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
                      (message "[auto-workflow] Analyzer returned no targets; using static targets")
                      (let ((augmented (gptel-auto-workflow--semantic-target-augmentation static-targets)))
                        (funcall callback augmented)))
-                 (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                        (final-targets (if (and filtered-targets (listp filtered-targets))
-                                           filtered-targets
-                                         targets))
-                        (augmented (gptel-auto-workflow--semantic-target-augmentation final-targets)))
+                  (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
+                         (final-targets (if (and filtered-targets (listp filtered-targets))
+                                            filtered-targets
+                                          targets))
+                         (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                               (gptel-auto-workflow--enforce-category-budget final-targets)
+                                             final-targets))
+                         (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets)))
                    (unless (or (null filtered-targets) (listp filtered-targets))
                      (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                               filtered-targets))
                    (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
                             (length targets) (length final-targets))
                    (funcall callback augmented))))))
-        (let* ((filtered-targets (if static-targets
-                                     (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
-                                   nil))
-               (final-targets (if (and filtered-targets (listp filtered-targets))
-                                  filtered-targets
-                                static-targets))
-               (augmented (gptel-auto-workflow--semantic-target-augmentation final-targets)))
+         (let* ((filtered-targets (if static-targets
+                                      (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
+                                    nil))
+                (final-targets (if (and filtered-targets (listp filtered-targets))
+                                   filtered-targets
+                                 static-targets))
+                (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                      (gptel-auto-workflow--enforce-category-budget final-targets)
+                                    final-targets))
+                (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets)))
           (unless (or (null filtered-targets) (listp filtered-targets))
             (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                      filtered-targets))

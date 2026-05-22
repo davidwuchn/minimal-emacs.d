@@ -2477,6 +2477,53 @@ must not override it to MiniMax via setq-local in subagent buffers."
                       (progn (gptel-auto-workflow--consume-vsm-actions) nil)
                     (error t))))))
 
+(ert-deftest tdd/feedback/consume-vsm-actions-all-types ()
+  "All VSM action types dispatch without crashing."
+  (when (fboundp 'gptel-auto-workflow--consume-vsm-actions)
+    (let ((gptel-auto-workflow--evolution-next-cycle-hints
+           (list :vsm-actions (list (cons 'increase-strategy-evolution "test")
+                                    (cons 'increase-research "test")
+                                    (cons 'freeze-unstable-targets "3 unstable")))))
+      (should-not (condition-case nil
+                      (progn (gptel-auto-workflow--consume-vsm-actions) nil)
+                    (error t))))))
+
+(ert-deftest tdd/feedback/enforce-category-budget-with-hints ()
+  "enforce-category-budget limits targets when budget exists."
+  (when (fboundp 'gptel-auto-workflow--enforce-category-budget)
+    (let* ((gptel-auto-workflow--evolution-next-cycle-hints
+            (list :category-budget '((:programming . 2) (:tool-calls . 1)
+                                     (:agentic . 1) (:natural-language . 1) (:other . 5))))
+           (targets '("lisp/modules/foo.el" "lisp/modules/bar.el" "lisp/modules/baz.el"
+                       "lisp/init.el" "docs/readme.md" "tests/test.el"))
+           (result (gptel-auto-workflow--enforce-category-budget targets)))
+      (should result)
+      (should (listp result))
+      (should (> (length result) 0)))))
+
+(ert-deftest tdd/feedback/enforce-category-budget-no-budget ()
+  "enforce-category-budget passes all targets through when no budget."
+  (when (fboundp 'gptel-auto-workflow--enforce-category-budget)
+    (let ((gptel-auto-workflow--evolution-next-cycle-hints nil)
+          (targets '("a.el" "b.el" "c.el")))
+      (should (equal targets (gptel-auto-workflow--enforce-category-budget targets))))))
+
+(ert-deftest tdd/feedback/update-controller-from-champion-changes ()
+  "update-controller-from-champion-changes handles champion promotions."
+  (when (fboundp 'gptel-auto-workflow--update-controller-from-champion-changes)
+    (let ((changes '((:category :programming :strategy "test-strategy"
+                                :rate 0.4 :action new-champion))))
+      (should-not (condition-case nil
+                      (progn (gptel-auto-workflow--update-controller-from-champion-changes changes) nil)
+                    (error t))))))
+
+(ert-deftest tdd/feedback/allium-diff-opposing-hypotheses-no-crash ()
+  "allium-diff-opposing-hypotheses handles empty results without crashing."
+  (when (fboundp 'gptel-auto-workflow--allium-diff-opposing-hypotheses)
+    (should-not (condition-case nil
+                    (progn (gptel-auto-workflow--allium-diff-opposing-hypotheses) nil)
+                  (error t)))))
+
 ;; ─── Research Strategy Integration Tests ───
 
 (ert-deftest tdd/research/autotts-parse-trace-blocks ()

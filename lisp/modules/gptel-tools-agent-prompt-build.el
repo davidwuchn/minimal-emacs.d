@@ -898,6 +898,9 @@ Returns template string or fallback hardcoded template."
 ## Research Quality (Allium Audit)
 {{allium-issues}}
 
+## Auto-Repair Guidance (if Allium coherence issues found)
+{{allium-repair}}
+
 ## Previous Experiments
 {{topic-knowledge}}
 
@@ -1083,9 +1086,22 @@ Implements section-level A/B testing to identify effective prompt components."
                                          "")
                                      ""))
                 (allium-issues . ,(if (funcall section-included-p 'self-evolution)
-                                      (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-target)
-                                          (gptel-auto-workflow--allium-load-issues-for-target target)
-                                        "")
+                                       (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-target)
+                                           (gptel-auto-workflow--allium-load-issues-for-target target)
+                                         "")
+                                     ""))
+                (allium-repair . ,(if (and (funcall section-included-p 'self-evolution)
+                                           (fboundp 'gptel-auto-workflow--allium-build-repair-target)
+                                           (fboundp 'gptel-auto-workflow--allium-load-issues-for-target))
+                                      (let* ((issues-str (gptel-auto-workflow--allium-load-issues-for-target target))
+                                             (has-issues (and (stringp issues-str) (> (length issues-str) 10)))
+                                             (repair-str (when has-issues
+                                                           (gptel-auto-workflow--allium-build-repair-target
+                                                            (or (plist-get (gptel-auto-workflow--best-strategy-for-axis target) :name)
+                                                                "default")))))
+                                        (if (and (stringp repair-str) (> (length repair-str) 10))
+                                            repair-str
+                                          ""))
                                     ""))
                 (evolved-recommendations . ,(or (gptel-auto-workflow--load-evolved-recommendations) ""))
                (topic-knowledge . ,(if (funcall section-included-p 'topic-specific)
