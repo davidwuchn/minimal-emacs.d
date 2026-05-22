@@ -269,4 +269,3 @@ OLD: (with-current-buffer buf (gptel--send chunk))
 OLD: (gptel--send chunk)
 → May match dozens of locations
 ```
-
