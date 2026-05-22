@@ -46,7 +46,9 @@
 
 (defun gptel-auto-experiment--extract-last-explicit-hypothesis (output pattern)
   "Return the last non-placeholder hypothesis in OUTPUT matching PATTERN."
-  (when (stringp output)
+  (when (and (stringp output)
+             (stringp pattern)
+             (not (string-empty-p pattern)))
     (let ((start 0)
           candidate)
       (while (and (< start (length output))
