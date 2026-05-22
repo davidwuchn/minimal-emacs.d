@@ -1796,8 +1796,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (message "[evolution] Throttled: last cycle was %.0fs ago, skipping"
                (- now gptel-auto-workflow--evolution-last-run))
       (cl-return-from gptel-auto-workflow-evolution-run-cycle "throttled"))
-    (setq gptel-auto-workflow--evolution-last-run now))
-  (message "[auto-workflow] Running self-evolution cycle...")
+   (setq gptel-auto-workflow--evolution-last-run now))
+   ;; Restore cross-subsystem hints from disk (survives daemon restart)
+   (gptel-auto-workflow--restore-next-cycle-hints)
+   (message "[auto-workflow] Running self-evolution cycle...")
   ;; Pipeline validation (Semantica PipelineValidator)
   (condition-case nil
       (let ((v (gptel-auto-workflow--validate-pipeline)))
@@ -4319,7 +4321,80 @@ effective +0.10, promising +0.05, underperforming -0.05."
     (message "[budget] Categories: %s"
              (mapconcat (lambda (b) (format "%s:%d" (car b) (cdr b))) budget " "))
     (dolist (action (plist-get vsm-actions :actions))
-      (message "[vsm-action] %s: %s" (car action) (cdr action)))))
+      (message "[vsm-action] %s: %s" (car action) (cdr action)))
+    ;; Persist to disk so hints survive daemon restarts
+    (gptel-auto-workflow--persist-next-cycle-hints)
+    ;; Wire :regressed-targets from knowledge-page diff
+    (gptel-auto-workflow--wire-regressed-targets)))
+
+;; ─── Ouroboros Persistence + Gap Closures ───
+
+(defun gptel-auto-workflow--persist-next-cycle-hints ()
+  "Persist evolution-next-cycle-hints to disk for daemon-restart survival.
+Solves S5-2/S4-5/S2-1: cross-cycle state amnesia."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (file (and root (expand-file-name "var/tmp/cross-subsystem-state.json" root))))
+    (when file
+      (make-directory (file-name-directory file) t)
+      (with-temp-file file
+        (insert (json-encode gptel-auto-workflow--evolution-next-cycle-hints))))))
+
+(defun gptel-auto-workflow--restore-next-cycle-hints ()
+  "Restore evolution-next-cycle-hints from disk after daemon restart."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (file (and root (expand-file-name "var/tmp/cross-subsystem-state.json" root))))
+    (when (and file (file-readable-p file))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (condition-case nil
+            (setq gptel-auto-workflow--evolution-next-cycle-hints (json-read))
+          (error nil))))))
+
+(defun gptel-auto-workflow--wire-regressed-targets ()
+  "Populate :regressed-targets from cross-cycle knowledge-page diff.
+Solves S5-3: dead feedback path."
+  (let* ((diff (condition-case nil (gptel-auto-workflow--diff-knowledge-pages) (error nil)))
+         (removed (and diff (plist-get diff :removed))))
+    (when removed
+      (setq gptel-auto-workflow--evolution-next-cycle-hints
+            (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                       :regressed-targets removed)))))
+
+(defun gptel-auto-workflow--vsm-expanded-actions ()
+  "Expanded VSM health actions beyond the 3 trivial ones.
+Solves S2-2: richer repair repertoire."
+  (let* ((backends (gptel-auto-workflow--evolution-backend-stats))
+         (onto (gptel-auto-workflow--generate-experiment-ontology))
+         (classes (plist-get onto :classes))
+         (allium-issues (length (directory-files
+                                 (expand-file-name "var/tmp/evolution/allium-issues"
+                                                   (gptel-auto-workflow--worktree-base-root))
+                                 t "\\.md$")))
+         (actions nil))
+    ;; S4-1: Backend variance check
+    (when (> (length backends) 1)
+      (let ((rates (mapcar #'cdr backends)) (best (or (cdar backends) 0)) (worst (or (cdr (car (last backends))) 0)))
+        (when (> (- best worst) 0.15)
+          (push (cons 'rebalance-backends (format "Keep-rate variance %.0f%%-%.0f%%" (* 100 worst) (* 100 best))) actions))))
+    ;; S1-4: Overfit detection gates
+    (when (fboundp 'gptel-auto-workflow--detect-overfitting)
+      (when (eq (gptel-auto-workflow--detect-overfitting) 'overfit)
+        (push (cons 'increase-exploration "Overfitting detected — forcing 30% exploration rate") actions)
+        (when (boundp 'gptel-auto-workflow--exploration-rate)
+          (setq gptel-auto-workflow--exploration-rate 0.30))))
+    ;; S4-2: Allium coverage check
+    (when (> (length classes) 0)
+      (when (< allium-issues (length classes))
+        (push (cons 'rebuild-allium-specs (format "Only %d Allium specs for %d strategies" allium-issues (length classes))) actions)))
+    ;; S2-5: Unstable target detection
+    (let ((unstable nil))
+      (dolist (c classes)
+        (when (and (< (plist-get c :total) 10) (< (plist-get c :keep-rate) 0.1) (string= (plist-get c :status) "underperforming"))
+          (push (plist-get c :name) unstable)))
+      (when unstable
+        (push (cons 'freeze-unstable-targets (format "%d unstable target(s)" (length unstable))) actions)))
+    (nreverse actions)))
 
 (defun gptel-auto-workflow--experiment-causal-links ()
   "Build causal link graph between experiments on the same target.
