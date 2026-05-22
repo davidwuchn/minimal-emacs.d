@@ -506,7 +506,9 @@ Relative paths are resolved from the project root."
   "Return current workflow status as a plist."
   (let* ((running (or gptel-auto-workflow--running
                       (bound-and-true-p gptel-auto-workflow--cron-job-running)))
-         (phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle"))
+         (stats (and (proper-list-p gptel-auto-workflow--stats)
+                     gptel-auto-workflow--stats))
+         (phase (gptel-auto-workflow--plist-get stats :phase "idle"))
          (active-run-id (and (stringp gptel-auto-workflow--run-id)
                              (not (string-empty-p gptel-auto-workflow--run-id))
                              gptel-auto-workflow--run-id))
@@ -518,8 +520,8 @@ Relative paths are resolved from the project root."
                      (and (member phase '("complete" "quota-exhausted" "error"))
                           status-run-id))))
     (list :running running
-          :kept (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :kept 0)
-          :total (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :total 0)
+          :kept (gptel-auto-workflow--plist-get stats :kept 0)
+          :total (gptel-auto-workflow--plist-get stats :total 0)
           :phase phase
           :run-id run-id
           :results (and run-id
