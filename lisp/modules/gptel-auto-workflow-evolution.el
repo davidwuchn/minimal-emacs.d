@@ -2012,7 +2012,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Write research priorities for next cycle's researcher (Semantica ontology feedback)
   (condition-case err
       (progn (gptel-auto-workflow--write-research-priorities)
-             (gptel-auto-workflow--enrich-ontology-from-research))
+             (gptel-auto-workflow--enrich-ontology-from-research)
+             (gptel-auto-workflow--queue-research-pair-probes))
     (error (message "[research-feedback] Priority write failed: %s" (error-message-string err))))
   ;; Knowledge page cross-cycle diff (Semantica set-difference pattern)
   (condition-case err
@@ -3456,7 +3457,37 @@ Guards: skips enrichment when EMA confidence < 0.3 (untrusted research signal)."
                            (fboundp 'gptel-auto-experiment--owl-save))
                   (gptel-auto-experiment--owl-save
                    onto (expand-file-name "var/tmp/evolution/enriched-ontology.ttl" root)
-                    (lambda (_ok) nil)))))))))))
+                     (lambda (_ok) nil)))))))))))
+
+(defun gptel-auto-workflow--queue-research-pair-probes ()
+  "Parse [pair-probe] HA/HB blocks from research findings and auto-queue as experiments.
+Each pair-probe block contains an optimization hypothesis with Elisp code.
+Queues under :research-probes key in hints for the experiment loop to consume."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (findings-file (expand-file-name "var/tmp/research-findings.md" root))
+         (probes nil))
+    (when (file-readable-p findings-file)
+      (with-temp-buffer
+        (insert-file-contents findings-file)
+        (goto-char (point-min))
+        (while (re-search-forward "\\[pair-probe\\] \\*\\*\\(H[AB]\\)\\*\\*: \\([^\n]+\\)" nil t)
+          (let ((label (match-string 1))
+                (description (string-trim (match-string 2)))
+                (code-block nil))
+            (when (re-search-forward "```elisp\n\\([^`]+\\)```" nil t)
+              (setq code-block (string-trim (match-string 1))))
+            (when (and description code-block (> (length code-block) 10))
+              (push (list :hypothesis (format "[%s] %s" label description)
+                          :code code-block
+                          :source "research-pair-probe"
+                          :priority 2)
+                    probes)))))
+      (when probes
+        (setq gptel-auto-workflow--evolution-next-cycle-hints
+              (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                         :research-probes (nreverse probes)))
+        (message "[research-probes] Queued %d pair-probe hypotheses for experimentation"
+                 (length probes))))))
 
 ;; ─── LogMap: Ambiguity filtering + Second-chance repair ───
 

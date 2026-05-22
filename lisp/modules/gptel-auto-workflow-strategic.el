@@ -1570,6 +1570,32 @@ Does not duplicate existing targets."
           (message "[auto-workflow] Semantic suggestion: %s" s)))))
   targets)
 
+(defun gptel-auto-workflow--inject-queued-targets (targets)
+  "Inject targets queued by π Synthesis and pair-probe research into TARGETS list.
+Reads :cluster-queued and :research-probes from evolution-next-cycle-hints,
+extracts target names, and appends unique entries not already in TARGETS.
+Returns augmented target list without modifying the hints."
+  (let* ((hints (and (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+                     gptel-auto-workflow--evolution-next-cycle-hints))
+         (cluster-queued (when hints (plist-get hints :cluster-queued)))
+         (research-probes (when hints (plist-get hints :research-probes)))
+         (result (copy-sequence targets))
+         (seen (make-hash-table :test 'equal)))
+    (dolist (t targets) (puthash t t seen))
+    (dolist (entry (append cluster-queued research-probes))
+      (when (plist-get entry :target)
+        (let ((tgt (plist-get entry :target)))
+          (unless (gethash tgt seen)
+            (puthash tgt t seen)
+            (push tgt result)
+            (message "[inject] Queued target from %s: %s"
+                     (or (plist-get entry :source) (plist-get entry :reason) "hints") tgt)))))
+    (setq result (nreverse result))
+    (when (> (length result) (length targets))
+      (message "[inject] Injected %d queued targets → %d total"
+               (- (length result) (length targets)) (length result)))
+    result))
+
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
 CALLBACK receives list of target files.
@@ -1602,13 +1628,14 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
                          (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
                                                (gptel-auto-workflow--enforce-category-budget final-targets)
                                              final-targets))
-                         (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets)))
+                         (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
+                         (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
                    (unless (or (null filtered-targets) (listp filtered-targets))
                      (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                               filtered-targets))
                    (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
                             (length targets) (length final-targets))
-                   (funcall callback augmented))))))
+                    (funcall callback with-queued))))))
          (let* ((filtered-targets (if static-targets
                                       (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
                                     nil))
@@ -1618,13 +1645,14 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
                 (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
                                       (gptel-auto-workflow--enforce-category-budget final-targets)
                                     final-targets))
-                (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets)))
+                (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
+                (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
           (unless (or (null filtered-targets) (listp filtered-targets))
             (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                      filtered-targets))
           (message "[auto-workflow] Static: %d targets, %d after frontier filtering"
                    (length static-targets) (length final-targets))
-          (funcall callback augmented))))))
+          (funcall callback with-queued))))))
 
 ;;; ─── AutoTTS Trace Collection & Controller ───
 
