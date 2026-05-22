@@ -1929,7 +1929,13 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (message "[diff] Knowledge pages: +%d added, -%d removed, ~%d changed"
                      (length added) (length removed) (length changed))
             (dolist (a added) (message "[diff]   + %s" a))
-            (dolist (r removed) (message "[diff]   - %s" r)))))
+            (dolist (r removed) (message "[diff]   - %s" r))
+            (let ((regressed (gptel-auto-workflow--regressed-targets-from-diff)))
+              (when regressed
+                (message "[repair] %d regressed target(s) detected"
+                         (length regressed))
+                (push (cons 'regressed-targets regressed)
+                      gptel-auto-workflow--evolution-next-cycle-hints))))))
     (ignore))
   ;; Structural validation of knowledge pages (Semantica OntologyValidator)
   (condition-case nil
@@ -2753,6 +2759,8 @@ Promotion: challenger must exceed champion by >5% relative improvement.
              (perf (when (fboundp 'gptel-auto-workflow--get-strategy-performance)
                      (gptel-auto-workflow--get-strategy-performance name)))
              (keep-rate (plist-get perf :success-rate))
+             (ontology-bonus (gptel-auto-workflow--ontology-strategy-status-bonus name))
+             (effective-composite (+ (or composite 0.0) ontology-bonus))
              (champion gptel-auto-workflow--champion-strategy)
              (champion-rate gptel-auto-workflow--champion-keep-rate))
         (cond
@@ -2762,14 +2770,14 @@ Promotion: challenger must exceed champion by >5% relative improvement.
           (if (and keep-rate
                    (> keep-rate gptel-auto-workflow--baseline-keep-rate))
               (progn
-                (gptel-auto-workflow--crown-champion name keep-rate composite)
+                (gptel-auto-workflow--crown-champion name keep-rate effective-composite)
                 (push (cons name 'first-champion) results))
             (push (cons name 'no-champion) results)))
          ;; Promotion: 5% RELATIVE improvement over champion.
          ;; e.g. champion at 20% → challenge at 21%+; champion at 40% → challenge at 42%+
          ((and keep-rate (> keep-rate (* champion-rate 1.05)))
           (push (cons name 'promoted) results)
-          (gptel-auto-workflow--crown-champion name keep-rate composite))
+          (gptel-auto-workflow--crown-champion name keep-rate effective-composite))
          ;; Pass: beats champion but not enough for promotion.
          ;; Keep champion but mark strategy as viable.
          ((and keep-rate (> keep-rate champion-rate))
@@ -3790,6 +3798,106 @@ Returns ontology plist with class and instance counts."
             :instances (sort instance-list (lambda (a b) (> (plist-get a :total) (plist-get b :total))))
             :class-count (hash-table-count strategy-classes)
             :instance-count (hash-table-count target-instances)))))
+
+
+;; ─── Ontology + Mementum → Subsystem Improvements ───
+
+(defun gptel-auto-workflow--generate-recency-weighted-ontology ()
+  "Generate ontology with recency weighting. Recent (<24h) 3x, 1-7d 1x, older 0.5x."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (classes (make-hash-table :test (function equal)))
+         (instances (make-hash-table :test (function equal)))
+         (now (float-time)) (recency (- now (* 24 3600)))
+         (mid (- now (* 7 24 3600))))
+    (dolist (r results)
+      (let* ((s (or (plist-get r :strategy) "template-default"))
+             (_t (plist-get r :target)) (d (plist-get r :decision))
+             (ts (or (plist-get r :timestamp) 0))
+             (w (cond ((>= ts recency) 3.0) ((>= ts mid) 1.0) (t 0.5))))
+        (when (stringp s)
+          (let ((e (or (gethash s classes) (list :wt 0.0 :wk 0.0 :rt 0 :rk 0))))
+            (cl-incf (plist-get e :rt)) (cl-incf (plist-get e :wt) w)
+            (when (equal d "kept") (cl-incf (plist-get e :rk)) (cl-incf (plist-get e :wk) w))
+            (puthash s e classes)))
+        (when (and (stringp t) (not (string-empty-p t)))
+          (let ((e (or (gethash t instances) (list :wt 0.0 :wk 0.0 :rt 0 :rk 0))))
+            (cl-incf (plist-get e :rt)) (cl-incf (plist-get e :wt) w)
+            (when (equal d "kept") (cl-incf (plist-get e :rk)) (cl-incf (plist-get e :wk) w))
+            (puthash t e instances)))))
+    (let ((class-list nil) (instance-list nil))
+      (maphash (lambda (s e)
+                 (let* ((wr (if (> (plist-get e :wt) 0) (/ (plist-get e :wk) (plist-get e :wt)) 0.0))
+                        (rr (if (> (plist-get e :rt) 0) (/ (float (plist-get e :rk)) (plist-get e :rt)) 0.0)))
+                   (push (list :name s :keep-rate wr :raw-rate rr :trend (- wr rr)
+                               :total (plist-get e :rt) :improving (> (- wr rr) 0.03)
+                               :status (cond ((>= wr 0.5) "effective") ((>= wr 0.3) "promising") (t "underperforming")))
+                         class-list))) classes)
+      (maphash (lambda (_t e)
+                 (let* ((wr (if (> (plist-get e :wt) 0) (/ (plist-get e :wk) (plist-get e :wt)) 0.0))
+                        (rr (if (> (plist-get e :rt) 0) (/ (float (plist-get e :rk)) (plist-get e :rt)) 0.0)))
+                   (push (list :name t :keep-rate wr :raw-rate rr :trend (- wr rr)
+                               :total (plist-get e :rt) :improving (> (- wr rr) 0.03)
+                               :classification (cond ((>= wr 0.5) "high-value") ((>= wr 0.3) "moderate") (t "low-value")))
+                         instance-list))) instances)
+      (list :classes (sort class-list (lambda (a b) (> (plist-get a :keep-rate) (plist-get b :keep-rate))))
+            :instances (sort instance-list (lambda (a b) (> (plist-get a :total) (plist-get b :total))))
+            :class-count (hash-table-count classes) :instance-count (hash-table-count instances) :weighted t))))
+
+(defun gptel-auto-workflow--ontology-strategy-status-bonus (strategy-name)
+  "Return bonus from ontology status: effective +0.10, promising +0.05, underperforming -0.05."
+  (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
+         (classes (plist-get onto :classes))
+         (entry (cl-find strategy-name classes :test (function string=)
+                        :key (lambda (c) (plist-get c :name)))))
+    (if entry (pcase (plist-get entry :status) ("effective" 0.10) ("promising" 0.05) ("underperforming" -0.05) (_ 0)) 0)))
+
+(defun gptel-auto-workflow--ontology-or-llm-for-controller (context)
+  "Decide ontology vs LLM. Returns (quote ontology) if data abundant and simple."
+  (let* ((avail (cond ((> (or (plist-get context :total-experiments) 0) 100) :abundant)
+                      ((> (or (plist-get context :total-experiments) 0) 20) :moderate) (t :sparse)))
+         (complex (cond ((< (or (plist-get context :strategy-count) 1) 3) :simple)
+                        ((< (or (plist-get context :strategy-count) 1) 10) :moderate) (t :complex))))
+    (if (and (eq avail :abundant) (eq complex :simple)) (quote ontology) (quote llm))))
+
+(defun gptel-auto-workflow--mementum-confidence-factor (strategy-name)
+  "Read mementum knowledge page confidence. Higher confidence = lower EMA threshold."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (page (and root (expand-file-name (format "research-insights-%s.md" strategy-name)
+                                           (expand-file-name "mementum/knowledge" root)))))
+    (if (and page (file-readable-p page))
+        (with-temp-buffer (insert-file-contents page) (goto-char (point-min))
+          (if (re-search-forward "^confidence:\\s-*\\([0-9.]+\\)" nil t) (string-to-number (match-string 1)) 0.5))
+      0.5)))
+
+(defun gptel-auto-workflow--regressed-targets-from-diff ()
+  "Return targets whose knowledge page was removed in last cross-cycle diff."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (diff-file (and root (expand-file-name "var/tmp/evolution/knowledge-diff.md" root)))
+         (regressed nil))
+    (when (and diff-file (file-readable-p diff-file))
+      (with-temp-buffer (insert-file-contents diff-file) (goto-char (point-min))
+        (while (re-search-forward "^\\s-*-\\s-*\\(.+\\)$" nil t)
+          (let ((page (match-string 1)))
+            (when (string-match "research-insights-\\(.+\\)\\.md" page)
+              (push (match-string 1 page) regressed))))))
+    (delete-dups regressed)))
+
+(defun gptel-auto-workflow--preflight-alternative (blocked-target blocked-strategy)
+  "When pre-flight blocks, suggest a better target/strategy pair."
+  (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
+         (instances (plist-get onto :instances)) (classes (plist-get onto :classes))
+         (alt-target (cl-find-if (lambda (i) (and (not (string= (plist-get i :name) blocked-target))
+                                                   (member (plist-get i :classification) (quote ("high-value" "moderate")))
+                                                   (> (plist-get i :total) 3))) instances))
+         (alt-strategy (cl-find-if (lambda (c) (and (not (string= (plist-get c :name) blocked-strategy))
+                                                     (string= (plist-get c :status) "effective")
+                                                     (> (plist-get c :total) 10))) classes)))
+    (list :alternative-target (when alt-target (plist-get alt-target :name))
+          :alternative-strategy (when alt-strategy (plist-get alt-strategy :name))
+          :reason (cond ((not alt-target) "No unblocked high-value target")
+                        ((not alt-strategy) "No alternative effective strategy")
+                        (t (format "Suggested %s x %s (%.0f%%)" (plist-get alt-target :name)
+                                   (plist-get alt-strategy :name) (* 100 (plist-get alt-target :keep-rate))))))))
 
 (defun gptel-auto-workflow--experiment-causal-links ()
   "Build causal link graph between experiments on the same target.
