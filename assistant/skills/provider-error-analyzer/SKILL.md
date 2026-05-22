@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: provider-error-analyzer
 description: |
   Analyzes LLM provider error messages to determine retry strategy, failover candidates,
@@ -15,11 +16,6 @@ metadata:
 ---
 # Provider Error Analyzer
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Overview
 
 Different LLM providers return different error formats. This skill maps error messages to categories and determines the best recovery strategy.

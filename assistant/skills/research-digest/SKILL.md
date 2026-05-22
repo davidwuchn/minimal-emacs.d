@@ -1,4 +1,5 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: research-digest
 description: Prompt template for digesting raw external research findings into actionable insights. Extracted from gptel-auto-workflow-strategic.el.
 version: 1.0
@@ -12,11 +13,6 @@ metadata:
 
 Used by: `gptel-auto-workflow--digest-research-findings`
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Template
 
 ```

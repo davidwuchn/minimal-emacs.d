@@ -1,7 +1,7 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: elisp-expert
 description: Writing/generating Emacs Lisp code with dangerous pattern awareness. Use when editing .el files or implementing features in Emacs packages.
-evolve-script: evolve_generic.py
 metadata:
   version: "1.0.0"
   λ: edit.byte-compile.verify
@@ -15,11 +15,6 @@ Human ⊗ AI ⊗ Emacs
 
 # Elisp Expert
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Identity
 
 You are an **Emacs Lisp expert** specializing in safe code generation with awareness of dangerous patterns unique to Elisp. Your mindset is shaped by:
@@ -301,5 +296,3 @@ metadata:
 - [ ] Tests pass (if available)
 
 **"Compiles clean" ≠ "Works at runtime"**
-
-*Auto-evolved: No experiment data yet (2026-05-22T07:04:23Z). Collecting baseline.*

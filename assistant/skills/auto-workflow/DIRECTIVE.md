@@ -1,9 +1,9 @@
 ---
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
-version: 2026.05.22
-total-experiments: 1138
-total-kept: 207
+version: 2026.05.16
+total-experiments: 910
+total-kept: 156
 ---
 
 # Auto-Workflow Program
@@ -17,51 +17,48 @@ total-kept: 207
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-tools-agent-experiment-loop.el` | 40% | 5 | 2 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-comparator.el` | 38% | 45 | 17 | ✅ High yield |
-| `lisp/modules/gptel-workflow-benchmark.el` | 33% | 27 | 9 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-comparator.el` | 42% | 12 | 5 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-runtime.el` | 38% | 8 | 3 | ✅ High yield |
+| `lisp/modules/gptel-workflow-benchmark.el` | 35% | 23 | 8 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-staging-baseline.el` | 33% | 3 | 1 | ✅ High yield |
-| `lisp/modules/gptel-tools-memory.el` | 33% | 15 | 5 | ✅ High yield |
-| `lisp/modules/gptel-ext-abort.el` | 30% | 27 | 8 | 🟡 Active |
+| `lisp/modules/gptel-ext-context-images.el` | 33% | 9 | 3 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-worktree.el` | 29% | 24 | 7 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-git.el` | 28% | 39 | 11 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-runtime.el` | 27% | 33 | 9 | 🟡 Active |
-| `lisp/modules/gptel-agent-loop.el` | 26% | 34 | 9 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-error.el` | 29% | 28 | 8 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-git.el` | 28% | 29 | 8 | 🟡 Active |
+| `lisp/modules/gptel-agent-loop.el` | 25% | 32 | 8 | 🟡 Active |
+| `lisp/modules/gptel-ext-abort.el` | 25% | 4 | 1 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **Application for us** (24× from mementum)
-- **Source type** (24× from mementum)
-- **Description** (24× from mementum)
-- **Application** (20× from mementum)
-- **Implementation sketch** (20× from mementum)
-- **How it works** (18× from mementum)
-- **Emacs application** (14× from mementum)
-- **unless-guard** (10× from git)
+- **extract-helper-function** (11× from git)
+- **unless-guard** (9× from git)
+- **add-variable** (6× from git)
+- **Applicability** (2× from mementum)
+- **Key insight** (2× from mementum)
 
 ## 🛠️ Effective Techniques
 
 <!-- AUTO-UPDATED: From mementum insights -->
 
-- Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (seen 2×)
-- Use mathematical constants (φ, ψ, Δ, λ) as "attention magnets" to prime LLMs toward formal reasoning patterns (seen 2×)
-- Zero client-side intelligence; AI decides, client executes. (seen 2×)
-- 35+ structured tools with circuit breakers, automatic retry, and security controls (seen 2×)
-- Programmatic verification before trust; self-modification loop. (seen 2×)
-- [PLAN] + [EXPECT] with P(success) confidence scoring based on prior outcomes (seen 2×)
+- Removing Defensive JSON Key Lookups (seen 2×)
+- Schema Validation + Type Checking Gap (seen 1×)
+- commit `0b3a4da` (seen 1×)
+- Correct parentheses balance" (seen 1×)
+- define marker traits on tools, derive all classification lists from markers at load time. (seen 1×)
+- Repetition Guard (seen 1×)
 
 ## 🛡️ Error Mitigation
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (950×): Investigate root cause
-- **timeout** (110×): Add smaller batch sizes or chunked processing
-- **validation-failed** (48×): Improve pre-grade validation prompts
-- **api-limit** (20×): Implement provider fallback or rate limit handling
-- **test-failure** (11×): Run tests before committing experiments
+- **other** (741×): Investigate root cause
+- **timeout** (105×): Add smaller batch sizes or chunked processing
+- **validation-failed** (38×): Improve pre-grade validation prompts
+- **api-limit** (18×): Implement provider fallback or rate limit handling
+- **test-failure** (8×): Run tests before committing experiments
 
 ## Success Patterns
 
@@ -78,11 +75,11 @@ total-kept: 207
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-tools-agent-experiment-loop.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 40%)
-- **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 38%)
-- **lisp/modules/gptel-workflow-benchmark.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
+- **lisp/modules/gptel-benchmark-comparator.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 42%)
+- **lisp/modules/gptel-tools-agent-runtime.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 38%)
+- **lisp/modules/gptel-workflow-benchmark.el**: Apply Removing Defensive JSON Key Lookups (keep rate: 35%)
 - **lisp/modules/gptel-sandbox.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-fsm-utils.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -108,4 +105,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1138 experiments (207 kept locally across 1138 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 910 experiments (156 kept locally across 910 local records). It evolves every self-evolution cycle.*

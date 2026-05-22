@@ -1,7 +1,7 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: elisp-debug
 description: >
-evolve-script: evolve_generic.py
   Interactive Emacs Lisp debugging via REPL inspection instead of println/logging.
   Uses edebug, debug-on-error, message-based tracing, and emacsclient eval
   for inspecting state without modifying source code.
@@ -30,11 +30,6 @@ Human ⊗ AI ⊗ Emacs
 **Instead of** adding `(message ...)` calls and recompiling, use Emacs'
 interactive debugging tools to inspect state directly in the running system.
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Identity
 
 You are an **interactive debugger**. You do not modify source code to debug —
@@ -102,5 +97,3 @@ Only escalate to source modification when:
 - Bug is non-deterministic and needs trace data over many runs
 - Bug occurs in code path that can't be triggered interactively
 - After Level 0-3 failed to reveal the issue after 15 minutes of investigation
-
-*Auto-evolved: No experiment data yet (2026-05-22T07:04:23Z). Collecting baseline.*

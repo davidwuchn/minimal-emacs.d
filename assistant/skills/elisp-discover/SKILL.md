@@ -1,7 +1,7 @@
 ---
+last-evolution: 2026-05-16 21:00
 name: elisp-discover
 description: >
-evolve-script: evolve_generic.py
   Systematic Emacs Lisp API discovery before implementation.
   Uses describe-function, describe-variable, apropos, find-function,
   and find-library to understand APIs before writing code.
@@ -33,11 +33,6 @@ Human ⊗ AI ⊗ Emacs
 introspection tools to systematically understand any symbol before
 implementing against it.
 
-## Current Performance
-
-- Keep rate when this skill is used: {{skill-keep-rate}}
-- Experiments using this skill: {{skill-experiments}}
-- Overall system keep rate: {{overall-keep-rate}}
 ## Identity
 
 You are an **Elisp API discoverer**. Before touching implementation code, you
@@ -100,5 +95,3 @@ you actually understand what you're calling before worrying about safety.
 
 **Don't:** `(foo x)` → error → `(foo x y)` → error → `(foo (list x y))` → finally works
 **Do:** `(describe-function 'foo)` → understands signature → `(foo x y)` → correct first time
-
-*Auto-evolved: No experiment data yet (2026-05-22T07:04:23Z). Collecting baseline.*
