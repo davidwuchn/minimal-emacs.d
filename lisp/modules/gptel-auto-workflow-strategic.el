@@ -1164,11 +1164,27 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                                                           (car c) (cadr c) (* 100 (or (cddr c) 0))))
                                       champion-prev "\n"))
                    parts))
-           (when regressed
-             (push (format "REGRESSED TARGETS (knowledge pages removed, prioritized):\n%s"
-                           (mapconcat (lambda (tgt) (format "- %s" (truncate-string-to-width tgt 60 nil nil "..."))) regressed "\n"))
-                   parts))
-           (if parts (concat (mapconcat #'identity (nreverse parts) "\n") "\n\n") ""))))
+            (when regressed
+              (push (format "REGRESSED TARGETS (knowledge pages removed, prioritized):\n%s"
+                            (mapconcat (lambda (tgt) (format "- %s" (truncate-string-to-width tgt 60 nil nil "..."))) regressed "\n"))
+                    parts))
+            (when (and (fboundp 'gptel-auto-workflow--query-experiments)
+                       (boundp 'gptel-auto-workflow-targets)
+                       gptel-auto-workflow-targets)
+              (let ((sample-query (or (car gptel-auto-workflow-targets) "optimization"))
+                    (similar (gptel-auto-workflow--query-experiments
+                              (or (car gptel-auto-workflow-targets) "") 5)))
+                (when similar
+                  (push (format "SIMILAR PAST EXPERIMENTS (successful approaches on related files):\n%s"
+                                (mapconcat (lambda (s)
+                                             (format "- %s: %s (score=%.2f, %s)"
+                                                     (truncate-string-to-width (plist-get s :target) 40 nil nil "...")
+                                                     (truncate-string-to-width (plist-get s :hypothesis) 60 nil nil "...")
+                                                     (plist-get s :score)
+                                                     (plist-get s :decision)))
+                                           similar "\n"))
+                        parts))))
+            (if parts (concat (mapconcat #'identity (nreverse parts) "\n") "\n\n") ""))))
     (format "Select optimization targets for this Emacs Lisp project.
 
 %s%s%sFILES AVAILABLE:

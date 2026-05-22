@@ -4552,16 +4552,24 @@ Uncategorized targets pass through (counted against :other quota)."
 
 (defun gptel-auto-workflow--persist-next-cycle-hints ()
   "Persist evolution-next-cycle-hints to disk for daemon-restart survival.
-Solves S5-2/S4-5/S2-1: cross-cycle state amnesia."
+Solves S5-2/S4-5/S2-1: cross-cycle state amnesia.
+Also persists EMA confidence history for cross-session trend analysis."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (file (and root (expand-file-name "var/tmp/cross-subsystem-state.json" root))))
+         (file (and root (expand-file-name "var/tmp/cross-subsystem-state.json" root)))
+         (hints gptel-auto-workflow--evolution-next-cycle-hints))
+    ;; Attach EMA history for cross-session continuity
+    (when (bound-and-true-p gptel-auto-workflow--research-ema-history)
+      (setq hints (plist-put hints :ema-history gptel-auto-workflow--research-ema-history)))
+    (when (bound-and-true-p gptel-auto-workflow--research-ema-conf)
+      (setq hints (plist-put hints :ema-conf gptel-auto-workflow--research-ema-conf)))
     (when file
       (make-directory (file-name-directory file) t)
       (with-temp-file file
-        (insert (json-encode gptel-auto-workflow--evolution-next-cycle-hints))))))
+        (insert (json-encode hints))))))
 
 (defun gptel-auto-workflow--restore-next-cycle-hints ()
-  "Restore evolution-next-cycle-hints from disk after daemon restart."
+  "Restore evolution-next-cycle-hints from disk after daemon restart.
+Also restores EMA confidence history for cross-session trend analysis."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (file (and root (expand-file-name "var/tmp/cross-subsystem-state.json" root))))
     (when (and file (file-readable-p file))
@@ -4573,7 +4581,18 @@ Solves S5-2/S4-5/S2-1: cross-cycle state amnesia."
                   (json-array-type 'list)
                   (json-key-type 'keyword))
               (setq gptel-auto-workflow--evolution-next-cycle-hints (json-read)))
-          (error nil))))))
+          (error nil))))
+    ;; Restore EMA confidence data from plist
+    (when (and gptel-auto-workflow--evolution-next-cycle-hints
+               (boundp 'gptel-auto-workflow--research-ema-history))
+      (let ((history (plist-get gptel-auto-workflow--evolution-next-cycle-hints :ema-history)))
+        (when history
+          (setq gptel-auto-workflow--research-ema-history history))))
+    (when (and gptel-auto-workflow--evolution-next-cycle-hints
+               (boundp 'gptel-auto-workflow--research-ema-conf))
+      (let ((conf (plist-get gptel-auto-workflow--evolution-next-cycle-hints :ema-conf)))
+        (when conf
+          (setq gptel-auto-workflow--research-ema-conf conf))))))
 
 (defun gptel-auto-workflow--wire-regressed-targets ()
   "Populate :regressed-targets from cross-cycle knowledge-page diff.
@@ -5324,12 +5343,10 @@ should trigger π Synthesis (semantic cluster → inherit strategy → auto-queu
 similar targets), VSM health should generate Wu Xing repair actions, and
 cross-subsystem state should persist to disk for daemon-restart survival.
 Regressed targets from knowledge-page diffs should appear in the analyzer
-prompt, and category champions should gate new strategies with keep-rate evidence.")
-          (results nil))
+prompt, and category champions should gate new strategies with keep-rate evidence."))
       (gptel-auto-workflow--allium-bdd-check
        behavior-description
        (lambda (result)
-          (setq results result)
           (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
             (let ((status (car result))
                   (details (cdr result)))
