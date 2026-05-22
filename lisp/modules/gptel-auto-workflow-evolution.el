@@ -21,7 +21,8 @@
 (condition-case nil (require 'gptel-auto-workflow-research-benchmark nil t) (ignore))
 
 ;; External functions from other modules
-(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
+(require 'gptel-tools-agent-base)
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
 (declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness" ())
 (declare-function gptel-benchmark-eight-keys-score-for "gptel-benchmark-principles" (output subsystem &optional hypothesis))
@@ -1856,6 +1857,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                            (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
     (when (and (< new-experiments 3) (not has-research))
+      ;; Persist hints before early return so state survives daemon restarts
+      (gptel-auto-workflow--persist-next-cycle-hints)
       (let ((message (format "[evolution] Insufficient new data (%d experiments, no research). Skipping."
                              new-experiments)))
         (message "%s" message)
