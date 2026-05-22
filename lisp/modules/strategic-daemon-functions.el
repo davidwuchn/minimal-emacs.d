@@ -220,8 +220,14 @@ BETA is in [0,1]: 0 = conservative (few turns, easy to stop),
 
 (defun gptel-auto-workflow--update-research-ema (new-confidence)
   "Update EMA with NEW-CONFIDENCE reading.
-Uses gptel-auto-workflow--research-ema-alpha for smoothing."
-  (let ((alpha gptel-auto-workflow--research-ema-alpha))
+Uses gptel-auto-workflow--research-ema-alpha for smoothing.
+Adjusts alpha based on mementum knowledge page confidence."
+  (let* ((mementum-conf (when (fboundp 'gptel-auto-workflow--mementum-confidence-factor)
+                          (gptel-auto-workflow--mementum-confidence-factor "template-default")))
+         (alpha (* gptel-auto-workflow--research-ema-alpha
+                   (cond ((and mementum-conf (> mementum-conf 0.7)) 0.7)
+                         ((and mementum-conf (< mementum-conf 0.3)) 1.3)
+                         (t 1.0)))))
     (setq gptel-auto-workflow--research-ema-conf
           (+ (* (- 1.0 alpha) gptel-auto-workflow--research-ema-conf)
              (* alpha new-confidence)))

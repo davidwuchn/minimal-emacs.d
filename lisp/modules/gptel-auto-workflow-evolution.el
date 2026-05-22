@@ -19,8 +19,7 @@
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
 (declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness" ())
-
-;; AutoTTS-style research evolution via benchmark system
+(declare-function gptel-benchmark-eight-keys-score-for "gptel-benchmark-principles" (output subsystem &optional hypothesis))
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions" ())
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
@@ -79,6 +78,10 @@ Layer 4: temporal git and experiment index.")
   "Timestamp of last evolution cycle. Throttles full cycles to 1/5min.")
 (defvar gptel-auto-workflow--vsm-health-last-run nil
   "Timestamp of last VSM health check. Throttles to 1/15min.")
+
+(defvar gptel-auto-workflow--evolution-next-cycle-hints nil
+  "Alist of hints for the next evolution cycle.
+Keys: :prev-champions, :category-budget, :vsm-actions, :regressed-targets.")
 
 (defvar gptel-auto-workflow--evolution-repo-root nil
   "Cached git repository root for self-evolution.
@@ -141,26 +144,35 @@ Uses cached value from load time, or detects from current directory."
                              (line-beginning-position) (line-end-position))))
                   (unless (string-empty-p line)
                      (let* ((fields (split-string line "\t"))
-                            (field-count (length fields))
-                            ;; Handle both old 20-field format and new 27-field format.
-                            ;; Old format: exactly 20 fields, backend at index 14.
-                            ;; New format: 27 fields (or 26 if model missing), backend at index 15.
-                            (old-format-p (eq field-count 20))
-                            (target (nth 1 fields))
-                            (hypothesis (nth 2 fields))
-                            (score-before (string-to-number (or (nth 3 fields) "0")))
-                            (score-after (string-to-number (or (nth 4 fields) "0")))
-                            (quality (string-to-number (or (nth 5 fields) "0")))
-                            (delta-str (or (nth 6 fields) "+0.00"))
-                            (decision (nth 7 fields))
-                            (grader-q (string-to-number (or (nth 9 fields) "0")))
-                            (backend (or (nth (if old-format-p 14 15) fields) "unknown"))
-                            (prompt-chars (string-to-number (or (nth (if old-format-p 15 16) fields) "0")))
-                            (research-strategy (or (nth (if old-format-p 20 21) fields) "none"))
-                            (research-hash (or (nth (if old-format-p 20 22) fields) "none"))
-                            (research-quality (or (nth (if old-format-p 20 23) fields) "none"))
-                            (kibcm-axis (or (nth (if old-format-p 20 25) fields) "?"))
-                            (model (or (nth (if old-format-p 20 26) fields) "unknown")))
+                             (field-count (length fields))
+                             ;; Handle multiple TSV format versions:
+                             ;; 14 cols: earliest (no backend/strategy/research fields)
+                             ;; 20 cols: backend at index 14, no research fields
+                             ;; 24 cols: backend at index 14, research fields at 20-23
+                             ;; 27 cols: backend at index 15, full research fields
+                             (format-version (cond ((<= field-count 14) 14)
+                                                   ((<= field-count 20) 20)
+                                                   ((<= field-count 24) 24)
+                                                   (t 27)))
+                             (target (nth 1 fields))
+                             (hypothesis (nth 2 fields))
+                             (score-before (string-to-number (or (nth 3 fields) "0")))
+                             (score-after (string-to-number (or (nth 4 fields) "0")))
+                             (quality (string-to-number (or (nth 5 fields) "0")))
+                             (delta-str (or (nth 6 fields) "+0.00"))
+                             (decision (nth 7 fields))
+                             (grader-q (string-to-number (or (nth 9 fields) "0")))
+                             (backend (cond ((<= format-version 14) "unknown")
+                                            ((<= format-version 24)
+                                             (or (nth 14 fields) "unknown"))
+                                            (t (or (nth 15 fields) "unknown"))))
+                             (prompt-chars (string-to-number
+                                            (or (nth (if (<= format-version 24) 15 16) fields) "0")))
+                             (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
+                             (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
+                             (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
+                             (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
+                             (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
                            (push (list :target target
                                        :hypothesis hypothesis
                                        :score-before score-before
@@ -1877,8 +1889,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Cross-subsystem feedback: champion changes → controller budget,
   ;; category experiment allocation, VSM health → actionable repair
   (condition-case nil
-      (gptel-auto-workflow--apply-cross-subsystem-feedback)
-    (ignore))
+      (progn
+        (gptel-auto-workflow--apply-cross-subsystem-feedback)
+        (gptel-auto-workflow--consume-vsm-actions))
+    (error (ignore)))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -2049,22 +2063,41 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                   :status (if (> rate 0) "keep" "skip")))))
     (ignore))))
 
-;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
+ ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
 
 (defun gptel-auto-workflow--evolution-vsm-health-check ()
-  "Score VSM layer health and log diagnostics."
+  "Score VSM layer health and log diagnostics.
+Connects benchmark-principles Eight Keys scoring to operational pipeline."
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (kept (cl-count-if (lambda (r) (equal (plist-get r :decision) "kept")) results))
          (total (length results))
          (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
          (strategies (length (gptel-auto-workflow--evolution-strategy-structure-scores)))
          (backends (length (gptel-auto-workflow--evolution-backend-stats)))
-         (axis-stats (gptel-auto-workflow--evolution-axis-stats)))
+         (axis-stats (gptel-auto-workflow--evolution-axis-stats))
+         (eight-keys-available (fboundp 'gptel-benchmark-eight-keys-score-for))
+         (autogo-score 0.0) (autotts-score 0.0) (selfev-score 0.0)
+         (scored-count 0))
+    (when eight-keys-available
+      (dolist (r results)
+        (when (equal (plist-get r :decision) "kept")
+          (let ((hypo (or (plist-get r :hypothesis) "")))
+            (cl-incf scored-count)
+            (cl-incf autogo-score (gptel-benchmark-eight-keys-score-for hypo :autogo))
+            (cl-incf autotts-score (gptel-benchmark-eight-keys-score-for hypo :autotts))
+            (cl-incf selfev-score (gptel-benchmark-eight-keys-score-for hypo :self-evolve)))))
+      (when (> scored-count 0)
+        (setq autogo-score (/ autogo-score scored-count))
+        (setq autotts-score (/ autotts-score scored-count))
+        (setq selfev-score (/ selfev-score scored-count))))
     (message "[vsm] S1-Ops: %d experiments, %.0f%% kept" total (* 100 keep-rate))
     (message "[vsm] S2-Coord: %d modules scanned, staging verify active" 89)
     (message "[vsm] S3-Control: %d backends in chain, watchdog 90min" backends)
     (message "[vsm] S4-Intel: %d strategies evolved, auto-backend-order active" strategies)
     (message "[vsm] S5-Identity: lambda notation, confidence tags, graphify patterns active")
+    (when eight-keys-available
+      (message "[vsm] Eight Keys: AutoGo=%.2f AutoTTS=%.2f self-evolve=%.2f (%d samples)"
+               autogo-score autotts-score selfev-score scored-count))
     (when (fboundp 'gptel-auto-workflow--refresh-variant-axis-champions)
       (gptel-auto-workflow--refresh-variant-axis-champions))
     (when axis-stats
@@ -2763,25 +2796,28 @@ Computed from template-default experiments filtered by category.")
 
 (defun gptel-auto-workflow--categorize-experiment-target (target)
   "Categorize TARGET into an ontology category.
-Mirrors the ontology router's --categorize-target without requiring it.
+Delegates to ontology router's --categorize-target when available
+for a unified classification. Falls back to local regex matching.
 Returns :programming, :tool-calls, :agentic, or :natural-language."
-  (let ((base (if (stringp target) (file-name-nondirectory target) "")))
-    (cond
-     ((or (string-match-p "sandbox\\|tool-sanitize\\|tool-permit" base)
-          (string-match-p "\\btools?\\b" base))
-      :tool-calls)
-     ((or (string-match-p "agent-loop\\|agent-tools\\|agent-staging" base)
-          (string-match-p "\\bagent\\b" base)
-          (string-match-p "subagent" base))
-      :agentic)
-     ((or (string-match-p "benchmark\\|comparator\\|scoring\\|regression" base)
-          (string-match-p "\\btest" base)
-          (string-match-p "evolution\\|evolve\\|mutate" base))
-      :programming)
-     ((or (string-match-p "prompt\\|context\\|skill\\|strategy" base)
-          (string-match-p "\\bcompress\\|directive\\|guidance" base))
-      :natural-language)
-     (t :natural-language))))
+  (if (fboundp 'gptel-auto-workflow--categorize-target)
+      (gptel-auto-workflow--categorize-target target)
+    (let ((base (if (stringp target) (file-name-nondirectory target) "")))
+      (cond
+       ((or (string-match-p "sandbox\\|tool-sanitize\\|tool-permit" base)
+            (string-match-p "\\btools?\\b" base))
+        :tool-calls)
+       ((or (string-match-p "agent-loop\\|agent-tools\\|agent-staging" base)
+            (string-match-p "\\bagent\\b" base)
+            (string-match-p "subagent" base))
+        :agentic)
+       ((or (string-match-p "benchmark\\|comparator\\|scoring\\|regression" base)
+            (string-match-p "\\btest" base)
+            (string-match-p "evolution\\|evolve\\|mutate" base))
+        :programming)
+       ((or (string-match-p "prompt\\|context\\|skill\\|strategy" base)
+            (string-match-p "\\bcompress\\|directive\\|guidance" base))
+        :natural-language)
+       (t :natural-language)))))
 
 (defun gptel-auto-workflow--compute-baseline-keep-rate ()
   "Compute the template-default keep-rate from all TSV data.
@@ -2961,10 +2997,15 @@ Promotion: challenger must exceed category champion by >5% relative."
          (results nil))
     (dolist (entry scores)
       (let* ((name (car entry))
-             (composite (cdr entry)))
+             (composite (cdr entry))
+             (status-bonus (gptel-auto-workflow--ontology-strategy-status-bonus name))
+             (effective-composite (+ composite status-bonus)))
         (catch 'category-result
           (dolist (cat categories)
-            (let* ((cat-keep-rate (gptel-auto-workflow--strategy-category-keep-rate name cat))
+            ;; ∀ Vigilance: skip frozen categories
+            (if (gptel-auto-workflow--category-frozen-p cat)
+                (message "[champion] ∀ Vigilance: skipping frozen category %s" cat)
+              (let* ((cat-keep-rate (gptel-auto-workflow--strategy-category-keep-rate name cat))
                    (champion-entry (gptel-auto-workflow--get-category-champion cat))
                    (champion-strategy (car champion-entry))
                    (champion-rate (or (cdr champion-entry) 0.0))
@@ -2974,16 +3015,16 @@ Promotion: challenger must exceed category champion by >5% relative."
                 (cond
                  ((null champion-strategy)
                   (when (> cat-keep-rate cat-baseline)
-                    (gptel-auto-workflow--crown-champion name cat-keep-rate composite cat)
+                    (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
                     (push (cons name (intern (format "first-%s-champion" cat))) results)
                     (throw 'category-result t)))
                  ((> cat-keep-rate (* champion-rate 1.05))
-                  (gptel-auto-workflow--crown-champion name cat-keep-rate composite cat)
+                  (gptel-auto-workflow--crown-champion name cat-keep-rate effective-composite cat)
                   (push (cons name (intern (format "promoted-%s" cat))) results)
                   (throw 'category-result t))
                  ((> cat-keep-rate champion-rate)
                   (push (cons name (intern (format "passed-%s" cat))) results)
-                  (throw 'category-result t)))))))
+                  (throw 'category-result t)))))))))
         ;; Fallback: no category hit, use global composite
         (let ((champion-rate gptel-auto-workflow--champion-keep-rate))
           (cond
@@ -2997,7 +3038,19 @@ Promotion: challenger must exceed category champion by >5% relative."
             (message "[champion] %s: %s (%.1f%%)"
                      cat (car champion-entry) (* 100 (cdr champion-entry)))
           (message "[champion] %s: no champion yet (baseline=%.1f%%)"
-                   cat (* 100 (or (cdr (assq cat gptel-auto-workflow--category-baselines)) 0.10))))))
+                   cat (* 100 (or (cdr (assq cat gptel-auto-workflow--category-baselines)) 0.10))))
+        ;; ∀ Vigilance: track champion failures per category
+        (unless champion-entry
+          (gptel-auto-workflow--record-category-strike cat)))
+    ;; φ Vitality: log novelty of promoted strategies
+    (when (and (fboundp 'gptel-auto-workflow--strategy-novelty-score)
+               (fboundp 'gptel-auto-workflow--discover-strategies))
+      (let ((novelties '()))
+        (dolist (r results)
+          (when (memq (cdr r) '(first-champion promoted passed))
+            (push (cons (car r) 1.0) novelties)))
+        (when novelties
+           (message "[champion] φ Vitality: %d novel strategies promoted" (length novelties)))))
     results))
 
 (defconst gptel-auto-workflow--pcr-budgets
@@ -3944,7 +3997,10 @@ or empty string if none found."
 
 (defun gptel-auto-workflow--generate-experiment-ontology ()
   "Generate an ontology from experiment results (Semantica pattern).
-Returns ontology plist with class and instance counts."
+Returns ontology plist with class and instance counts.
+Uses recency weights when `gptel-auto-workflow--recency-weighted-ontology' is available."
+  (if (fboundp 'gptel-auto-workflow--recency-weighted-ontology)
+      (gptel-auto-workflow--recency-weighted-ontology)
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (strategy-classes (make-hash-table :test 'equal))
          (target-instances (make-hash-table :test 'equal)))
@@ -3998,141 +4054,195 @@ Returns ontology plist with class and instance counts."
             :classes (sort class-list (lambda (a b) (> (plist-get a :keep-rate) (plist-get b :keep-rate))))
             :instances (sort instance-list (lambda (a b) (> (plist-get a :total) (plist-get b :total))))
             :class-count (hash-table-count strategy-classes)
-            :instance-count (hash-table-count target-instances)))))
+            :instance-count (hash-table-count target-instances))))))
+;; ─── Ontology weight overrides ───
 
-;; ─── Cross-Subsystem Feedback + Budget Allocation ───
+(defun gptel-auto-workflow--ontology-strategy-status-bonus (strategy-name)
+  "Return bonus score from ontology strategy status.
+effective +0.10, promising +0.05, underperforming -0.05."
+  (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
+         (classes (plist-get onto :classes))
+         (entry (cl-find strategy-name classes :test #'string=
+                        :key (lambda (c) (plist-get c :name)))))
+    (if entry (pcase (plist-get entry :status) ("effective" 0.10) ("promising" 0.05) ("underperforming" -0.05) (_ 0)) 0)))
 
-;; 1. CROSS-SUBSYSTEM FEEDBACK: AutoGo champion change → AutoTTS budget
+(defun gptel-auto-workflow--recency-weighted-ontology ()
+  "Generate ontology with recency weights. Recent (<24h) 3x, 1-7d 1x, older 0.5x."
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (classes (make-hash-table :test 'equal))
+         (instances (make-hash-table :test 'equal))
+         (now (float-time)) (recency (- now (* 24 3600))) (mid (- now (* 7 24 3600))))
+    (dolist (r results)
+      (let* ((s (or (plist-get r :strategy) "template-default"))
+             (_t (plist-get r :target)) (d (plist-get r :decision))
+             (ts (or (plist-get r :timestamp) 0))
+             (w (cond ((>= ts recency) 3.0) ((>= ts mid) 1.0) (t 0.5))))
+        (when (stringp s)
+          (let ((e (or (gethash s classes) (list :wt 0.0 :wk 0.0 :rt 0 :rk 0))))
+            (cl-incf (plist-get e :rt)) (cl-incf (plist-get e :wt) w)
+            (when (equal d "kept") (cl-incf (plist-get e :rk)) (cl-incf (plist-get e :wk) w))
+            (puthash s e classes)))
+        (when (and (stringp _t) (not (string-empty-p _t)))
+          (let ((e (or (gethash _t instances) (list :wt 0.0 :wk 0.0 :rt 0 :rk 0))))
+            (cl-incf (plist-get e :rt)) (cl-incf (plist-get e :wt) w)
+            (when (equal d "kept") (cl-incf (plist-get e :rk)) (cl-incf (plist-get e :wk) w))
+            (puthash _t e instances)))))
+    (let ((class-list nil) (instance-list nil))
+      (maphash (lambda (s e)
+                 (let* ((wr (if (> (plist-get e :wt) 0) (/ (plist-get e :wk) (plist-get e :wt)) 0.0))
+                        (rr (if (> (plist-get e :rt) 0) (/ (float (plist-get e :rk)) (plist-get e :rt)) 0.0)))
+                   (push (list :name s :keep-rate wr :raw-rate rr :trend (- wr rr)
+                               :total (plist-get e :rt) :improving (> (- wr rr) 0.03)
+                               :status (cond ((>= wr 0.5) "effective") ((>= wr 0.3) "promising") (t "underperforming")))
+                         class-list))) classes)
+      (maphash (lambda (_t e)
+                 (let* ((wr (if (> (plist-get e :wt) 0) (/ (plist-get e :wk) (plist-get e :wt)) 0.0))
+                        (rr (if (> (plist-get e :rt) 0) (/ (float (plist-get e :rk)) (plist-get e :rt)) 0.0)))
+                   (push (list :name _t :keep-rate wr :raw-rate rr :trend (- wr rr)
+                               :total (plist-get e :rt) :improving (> (- wr rr) 0.03)
+                               :classification (cond ((>= wr 0.5) "high-value") ((>= wr 0.3) "moderate") (t "low-value")))
+                         instance-list))) instances)
+      (list :classes (sort class-list (lambda (a b) (> (plist-get a :keep-rate) (plist-get b :keep-rate))))
+            :instances (sort instance-list (lambda (a b) (> (plist-get a :total) (plist-get b :total))))
+            :class-count (hash-table-count classes) :instance-count (hash-table-count instances) :weighted t))))
+
+(defun gptel-auto-workflow--mementum-confidence-factor (strategy-name)
+  "Read mementum knowledge page confidence for STRATEGY-NAME."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (page (and root (expand-file-name (format "research-insights-%s.md" strategy-name)
+                                           (expand-file-name "mementum/knowledge" root)))))
+    (if (and page (file-readable-p page))
+        (with-temp-buffer (insert-file-contents page) (goto-char (point-min))
+          (if (re-search-forward "^confidence:\\s-*\\([0-9.]+\\)" nil t)
+              (string-to-number (match-string 1)) 0.5)) 0.5)))
+
+(defun gptel-auto-workflow--preflight-alternative (blocked-target blocked-strategy)
+  "When pre-flight blocks, suggest a better target/strategy pair."
+  (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
+         (instances (plist-get onto :instances)) (classes (plist-get onto :classes))
+         (alt-target (cl-find-if (lambda (i) (and (not (string= (plist-get i :name) blocked-target))
+                                                   (member (plist-get i :classification) '("high-value" "moderate"))
+                                                   (> (plist-get i :total) 3))) instances))
+         (alt-strategy (cl-find-if (lambda (c) (and (not (string= (plist-get c :name) blocked-strategy))
+                                                     (string= (plist-get c :status) "effective")
+                                                     (> (plist-get c :total) 10))) classes)))
+    (list :alternative-target (when alt-target (plist-get alt-target :name))
+          :alternative-strategy (when alt-strategy (plist-get alt-strategy :name))
+          :reason (cond ((not alt-target) "none") ((not alt-strategy) "none")
+                        (t (format "Try %s x %s" (plist-get alt-target :name) (plist-get alt-strategy :name)))))))
+
+;; 7. VSM ACTIONS → REPAIR: consumer for stored vsm-actions
+(defun gptel-auto-workflow--consume-vsm-actions ()
+  "Read stored VSM actions from evolution-next-cycle-hints and trigger repairs."
+  (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+    (let ((actions (plist-get gptel-auto-workflow--evolution-next-cycle-hints :vsm-actions)))
+      (dolist (action actions)
+        (pcase (car action)
+          ('increase-strategy-evolution
+           (when (boundp 'gptel-auto-workflow--strategy-evolution-enabled)
+             (setq gptel-auto-workflow--strategy-evolution-enabled t)
+             (message "[vsm-repair] Strategy evolution enabled (Fire→Earth generating)")))
+          ('rebalance-experiment-targets
+           (setq gptel-auto-workflow--baseline-keep-rate
+                 (max 0.05 (- (or gptel-auto-workflow--baseline-keep-rate 0.18) 0.03)))
+           (message "[vsm-repair] Lowered baseline keep-rate to %.0f%% (Wood→Water generating)"
+                    (* 100 gptel-auto-workflow--baseline-keep-rate)))
+           ('increase-research
+           (message "[vsm-repair] Research priority increased (Water→Wood generating)")))))))
+
+;; ─── Cross-Subsystem Feedback Functions (re-added after daemon merge wipe) ───
+
 (defun gptel-auto-workflow--champion-feedback-to-controller ()
-  "When AutoGo crowns a new champion, signal AutoTTS to adjust experiment budgets.
-Returns plist with :category, :strategy, :old-rate, :new-rate, :action."
+  "Detect category champion changes between cycles. Returns list of changes."
   (when (and (boundp 'gptel-auto-workflow--category-champions)
              gptel-auto-workflow--category-champions)
     (let* ((prev (plist-get gptel-auto-workflow--evolution-next-cycle-hints :prev-champions))
            (results nil))
-      ;; Compare current champions against previous cycle's values
       (dolist (entry gptel-auto-workflow--category-champions)
-        (let* ((category (car entry))
-               (current-strategy (cadr entry))
-               (current-rate (cddr entry))
+        (let* ((category (car entry)) (current-strategy (cadr entry)) (current-rate (cddr entry))
                (prev-entry (when prev (assoc category prev)))
                (prev-strategy (when prev-entry (cadr prev-entry)))
                (prev-rate (when prev-entry (cddr prev-entry))))
-          (cond
-           ((null prev-entry)
-            (push (list :category category :strategy current-strategy :rate current-rate
-                        :action 'new-champion :reason "first champion for this category")
-                  results))
-           ((and prev-strategy (not (string= current-strategy prev-strategy)))
-            (push (list :category category :strategy current-strategy :rate current-rate
-                        :old-strategy prev-strategy :old-rate (or prev-rate 0.0)
-                        :action 'promoted :reason (format "replaced %s" prev-strategy))
-                  results))
-           ((and prev-rate current-rate (> (- current-rate prev-rate) 0.05))
-            (push (list :category category :strategy current-strategy :rate current-rate
-                        :old-rate prev-rate :action 'improving
-                        :delta (- current-rate prev-rate))
-                  results)))))
+          (cond ((null prev-entry)
+                 (push (list :category category :strategy current-strategy :rate current-rate
+                             :action 'new-champion :reason "first champion") results))
+                ((and prev-strategy (not (string= current-strategy prev-strategy)))
+                 (push (list :category category :strategy current-strategy :rate current-rate
+                             :old-strategy prev-strategy :action 'promoted
+                             :reason (format "replaced %s" prev-strategy)) results))
+                ((and prev-rate current-rate (> (- current-rate prev-rate) 0.05))
+                 (push (list :category category :strategy current-strategy :rate current-rate
+                             :old-rate prev-rate :action 'improving) results)))))
       (nreverse results))))
 
-;; 2. EXPERIMENT BUDGET PER CATEGORY
 (defun gptel-auto-workflow--category-experiment-budget (total-experiments)
-  "Allocate TOTAL-EXPERIMENTS slots across categories based on keep-rate.
-High-performers get more slots, low-performers fewer.
-Returns alist of (category . allocated-slots)."
+  "Allocate TOTAL-EXPERIMENTS slots across 4 categories by sqrt(keep-rate)."
   (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
          (instances (plist-get onto :instances))
-         (cat-rates '((:programming . 0) (:tool-calls . 0) (:agentic . 0) (:natural-language . 0)))
-         (cat-counts '((:programming . 0) (:tool-calls . 0) (:agentic . 0) (:natural-language . 0))))
-    ;; Aggregate keep-rates per category
+         (cat-rates (list (cons :programming 0) (cons :tool-calls 0)
+                          (cons :agentic 0) (cons :natural-language 0)))
+         (cat-counts (list (cons :programming 0) (cons :tool-calls 0)
+                           (cons :agentic 0) (cons :natural-language 0))))
     (dolist (i instances)
-      (let* ((name (plist-get i :name))
-             (rate (plist-get i :keep-rate))
+      (let* ((name (plist-get i :name)) (rate (plist-get i :keep-rate))
              (cat (gptel-auto-workflow--categorize-target name)))
         (when cat
           (cl-incf (alist-get cat cat-counts))
           (cl-incf (alist-get cat cat-rates) rate))))
-    ;; Normalize: each category gets slots proportional to sqrt(keep-rate)
-    ;; sqrt dampens extremes — a 50% category doesn't get 50× more than 1%
     (let* ((weights (mapcar (lambda (cat)
                               (cons cat (sqrt (max 0.01 (/ (alist-get cat cat-rates)
                                                            (max 1 (alist-get cat cat-counts)))))))
-                            '(:programming :tool-calls :agentic :natural-language)))
+                            (list :programming :tool-calls :agentic :natural-language)))
            (total-w (apply #'+ (mapcar #'cdr weights)))
            (budget nil))
       (dolist (w weights)
-        (push (cons (car w) (max 1 (round (* total-experiments
-                                              (/ (cdr w) (max 0.001 total-w))))))
-              budget))
+        (push (cons (car w) (max 1 (round (* total-experiments (/ (cdr w) (max 0.001 total-w)))))) budget))
       (nreverse budget))))
 
-;; 3. VSM HEALTH → ACTIONABLE REPAIR
 (defun gptel-auto-workflow--vsm-health-actions ()
-  "Translate VSM health diagnostics into actionable repair hints.
-Returns plist with :actions (list of (action . target))."
+  "Translate VSM diagnostics into actionable repair hints."
   (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
          (classes (plist-get onto :classes))
          (effective (cl-count-if (lambda (c) (string= (plist-get c :status) "effective")) classes))
-         (total (length classes))
+         (total (max 1 (length classes)))
          (actions nil))
-    ;; S4 Fire check: too few effective strategies → increase strategy evolution
     (when (< effective (max 3 (/ total 4)))
       (push (cons 'increase-strategy-evolution
-                  (format "Only %d/%d strategies effective; Fire(S4) weak" effective total))
-            actions))
-    ;; S1 Wood check: low keep-rate overall → check experiment targeting
+                  (format "Only %d/%d effective; Fire(S4) weak" effective total)) actions))
     (when (< (or gptel-auto-workflow--champion-keep-rate 0) 0.15)
-      (push (cons 'rebalance-experiment-targets
-                  "Champion keep-rate below 15%; Wood(S1) weak, diversify targets")
-            actions))
-    ;; S5 Water check: no new strategies recently → increase research
-    (let ((new-strategies (cl-count-if (lambda (c) (> (plist-get c :total) 5))
-                                       (cl-remove-if-not
-                                        (lambda (c) (string= (plist-get c :status) "promising"))
-                                        classes))))
-      (when (< new-strategies 2)
-        (push (cons 'increase-research
-                  (format "Only %d promising new strategies; Water(S5) weak" new-strategies))
-              actions)))
-    (list :actions (nreverse actions)
-          :effective-strategies effective
-          :total-strategies total)))
+      (push (cons 'rebalance-experiment-targets "Champion keep-rate <15%; Wood(S1) weak") actions))
+    (let ((promising (cl-count-if (lambda (c) (string= (plist-get c :status) "promising")) classes)))
+      (when (< promising 2)
+        (push (cons 'increase-research (format "Only %d promising; Water(S5) weak" promising)) actions)))
+    (list :actions (nreverse actions) :effective effective :total total)))
 
-;; 4. PENDING WIRINGS: hook into evolution cycle
 (defun gptel-auto-workflow--apply-cross-subsystem-feedback ()
-  "Apply all cross-subsystem feedback to the next experiment cycle.
-Called from evolution-run-cycle after analysis."
+  "Orchestrate cross-subsystem feedback: champion→controller, budget, VSM repair."
   (let ((champion-changes (gptel-auto-workflow--champion-feedback-to-controller))
         (budget (gptel-auto-workflow--category-experiment-budget 5))
         (vsm-actions (gptel-auto-workflow--vsm-health-actions)))
-    ;; Save champion state for next cycle comparison
+    ;; Save champion state for next cycle
     (when gptel-auto-workflow--category-champions
-      (let ((prev (mapcar (lambda (e) (cons (car e) (cdr e)))
-                          gptel-auto-workflow--category-champions)))
-        (setq gptel-auto-workflow--evolution-next-cycle-hints
-              (plist-put gptel-auto-workflow--evolution-next-cycle-hints
-                         :prev-champions prev))))
-    ;; Log feedback
+      (setq gptel-auto-workflow--evolution-next-cycle-hints
+            (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                       :prev-champions
+                       (mapcar (lambda (e) (cons (car e) (cdr e)))
+                               gptel-auto-workflow--category-champions))))
+    ;; Store budget and VSM actions
+    (setq gptel-auto-workflow--evolution-next-cycle-hints
+          (plist-put gptel-auto-workflow--evolution-next-cycle-hints :category-budget budget))
+    (setq gptel-auto-workflow--evolution-next-cycle-hints
+          (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                     :vsm-actions (plist-get vsm-actions :actions)))
+    ;; Log
     (dolist (change champion-changes)
-      (message "[feedback] %s %s → %s (%.1f%%) [%s]"
-               (plist-get change :category)
-               (or (plist-get change :old-strategy) "none")
-               (plist-get change :strategy)
-               (* 100 (or (plist-get change :rate) 0))
-               (plist-get change :action)))
-    (when budget
-      (message "[budget] Category allocations: %s"
-               (mapconcat (lambda (b) (format "%s:%d" (car b) (cdr b))) budget " ")))
+      (message "[feedback] %s: %s (%.1f%%) [%s]"
+               (plist-get change :category) (plist-get change :strategy)
+               (* 100 (or (plist-get change :rate) 0)) (plist-get change :action)))
+    (message "[budget] Categories: %s"
+             (mapconcat (lambda (b) (format "%s:%d" (car b) (cdr b))) budget " "))
     (dolist (action (plist-get vsm-actions :actions))
-      (message "[vsm-action] %s: %s" (car action) (cdr action)))
-    ;; Store budget for next cycle's target selection
-    (setq gptel-auto-workflow--evolution-next-cycle-hints
-          (plist-put gptel-auto-workflow--evolution-next-cycle-hints
-                     :category-budget budget))
-    ;; Store VSM actions for next cycle
-    (setq gptel-auto-workflow--evolution-next-cycle-hints
-          (plist-put gptel-auto-workflow--evolution-next-cycle-hints
-                     :vsm-actions (plist-get vsm-actions :actions)))))
+      (message "[vsm-action] %s: %s" (car action) (cdr action)))))
 
 (defun gptel-auto-workflow--experiment-causal-links ()
   "Build causal link graph between experiments on the same target.
@@ -4471,10 +4581,9 @@ Checks: required frontmatter, duplicate titles, empty sections."
         (push (format "Missing fn for required stage '%s'" (plist-get s :label)) warnings)))
     (gptel-auto-workflow--validation-result (null errors) errors warnings)))
 
-(defun gptel-auto-workflow--evolution-optimize-backend-order ()
-
-
 ;; ─── Backend Performance Optimization ───
+
+(defun gptel-auto-workflow--evolution-optimize-backend-order ()
   "Auto-reorder the fallback chain based on backend performance data.
 Moves better-performing backends to the front of the fallback chain."
   (let* ((stats (gptel-auto-workflow--evolution-backend-stats))
