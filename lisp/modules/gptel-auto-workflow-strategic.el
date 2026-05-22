@@ -587,6 +587,18 @@ and {{topic-performance}} with live data."
               (replace-regexp-in-string
                "{{current-bottlenecks}}" bottlenecks
                skill-content t t)))
+      ;; Inject AutoGo research champion for strategy guidance
+      (let ((champion (gptel-auto-workflow--research-champion-report)))
+        (setq skill-content
+              (replace-regexp-in-string
+               "{{research-champion}}" champion
+               skill-content t t)))
+      ;; Inject ontology knowledge gaps
+      (let ((gaps (gptel-auto-workflow--ontology-gap-report)))
+        (setq skill-content
+              (replace-regexp-in-string
+               "{{ontology-gaps}}" gaps
+               skill-content t t)))
       skill-content)))
 
 (defun gptel-auto-workflow--current-bottleneck-report ()
@@ -634,6 +646,39 @@ and timeout-heavy targets for the researcher to investigate."
     (if lines
         (concat (mapconcat #'identity (nreverse lines) ""))
       "No executor bottlenecks detected. Continue with current research topics.\n")))
+
+(defun gptel-auto-workflow--research-champion-report ()
+  "AutoGo: report current research strategy champion for the researcher.
+Returns markdown showing which strategy won and why."
+  (if (and (boundp 'gptel-auto-workflow--research-strategies)
+           gptel-auto-workflow--research-strategies
+           (boundp 'gptel-auto-workflow--champion-strategy))
+      (let ((champ gptel-auto-workflow--champion-strategy)
+            (rate (or (and (boundp 'gptel-auto-workflow--champion-keep-rate)
+                           gptel-auto-workflow--champion-keep-rate) 0.0)))
+        (format "**Active Champion**: `%s` (keep-rate: %.0f%%)\n%s strategies competing. Focus on techniques matching the champion's approach.\n"
+                (or champ "none") (* 100 rate)
+                (length gptel-auto-workflow--research-strategies)))
+    "*No research champion yet — run more experiments to establish baselines.*\n"))
+
+(defun gptel-auto-workflow--ontology-gap-report ()
+  "Ontology: report knowledge gaps from experiment ontology.
+Returns markdown listing under-explored categories and targets."
+  (if (fboundp 'gptel-auto-workflow--generate-experiment-ontology)
+      (let* ((onto (ignore-errors (gptel-auto-workflow--generate-experiment-ontology)))
+             (classes (and onto (plist-get onto :classes)))
+             (gaps nil))
+        (when classes
+          (dolist (c classes)
+            (when (and (< (plist-get c :total) 5)
+                       (string= (plist-get c :status) "underperforming"))
+              (push (plist-get c :name) gaps)))
+          (if gaps
+              (format "## Ontology Knowledge Gaps (research these categories)\n\n%d under-explored strategies:\n- %s\n"
+                      (length gaps)
+                      (mapconcat #'identity (seq-take gaps 5) "\n- "))
+            "## Ontology Knowledge Gaps\n\nAll strategies have sufficient data. Focus on improving keep-rates.\n")))
+    "*Ontology unavailable — research general topics.*\n"))
 
 (defun gptel-auto-workflow--format-topic-performance (topics)
   "Format TOPICS hash-table as markdown table.

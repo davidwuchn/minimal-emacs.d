@@ -156,4 +156,4 @@ One JSON object per line, one line per evaluated candidate:
 {"iteration": 1, "system": "example_strategy", "avg_val": 0.75, "axis": "A", "hypothesis": "...", "delta": +0.05, "outcome": "75.0% (+5.0)", "components": ["section-reorder", "failure-first"]}
 ```
 
-*Auto-evolved: No experiment data yet (2026-05-22T05:59:51Z). Collecting baseline.*
+*Auto-evolved: No experiment data yet (2026-05-22T07:04:24Z). Collecting baseline.*
