@@ -181,7 +181,7 @@ and are Emacs Lisp constants, not callable functions."
 
 This walks code positions and skips lambda/defun argument lists, so ordinary
 variable names are not mistaken for undefined function calls."
-  (when (proper-list-p forms)
+  (when (and forms (proper-list-p forms))
     (let (calls)
     (cl-labels
         ((walk (form)
