@@ -753,8 +753,8 @@ FILES are validated against project root for security.
                                 "\n</parent_conversation_history>\n\n")))))
 
     (if (string-empty-p context)
-        prompt
-      (concat context "Task:\n" prompt))))
+        (or prompt "")
+      (concat context "Task:\n" (or prompt "")))))
 
 ;;; Subagent Functions
 
