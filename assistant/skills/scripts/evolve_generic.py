@@ -99,6 +99,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--skill-file", required=True)
     parser.add_argument("--root", default=".")
+    parser.add_argument("--analysis", default=None)
+    parser.add_argument("--output-dir", default=None)
     args = parser.parse_args()
     
     skill_file = Path(args.skill_file)
