@@ -142,7 +142,8 @@ Returns nil if the benchmark file does not exist."
       (let ((benchmark-file (gptel-benchmark-get-file name version)))
         (when (file-exists-p benchmark-file)
           (let ((result (gptel-benchmark-read-json benchmark-file)))
-            (gptel-benchmark--cache-put cache-key result)
+            (when result
+              (gptel-benchmark--cache-put cache-key result))
             result))))))
 
 (defun gptel-benchmark--read-version-file (name file-type fallback-fn default)
