@@ -1857,6 +1857,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                            (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
     (when (and (< new-experiments 3) (not has-research))
+      ;; Persist hints before early return so state survives daemon restarts
+      (gptel-auto-workflow--persist-next-cycle-hints)
       (let ((message (format "[evolution] Insufficient new data (%d experiments, no research). Skipping."
                              new-experiments)))
         (message "%s" message)
