@@ -64,13 +64,17 @@ def skill_performance(skill_name, rows):
 
 
 def evolve_skill(skill_file, skill_name, rows):
-    """Update SKILL.md with a performance-driven insight in the footer."""
+    """Write a performance-driven insight to a SEPARATE evolution file.
+    Does NOT modify SKILL.md — avoids perpetual git merge conflicts
+    between daemon instances with different experiment data."""
     keep_rate, avg_delta, total, kept = skill_performance(skill_name, rows)
-    
-    with open(skill_file) as f:
-        content = f.read()
-    
-    # Generate insight based on performance
+
+    # Write to var/tmp/skill-evolution/{skill}.md (not SKILL.md)
+    root = Path(skill_file).parent.parent.parent.parent  # skill/SKILL.md → repo root
+    out_dir = root / "var" / "tmp" / "skill-evolution"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / f"{skill_name}.md"
+
     timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     if total == 0:
         insight = f"*Auto-evolved: No experiment data yet ({timestamp}). Collecting baseline.*"
@@ -83,16 +87,11 @@ def evolve_skill(skill_file, skill_name, rows):
     else:
         insight = (f"*Auto-evolved: Keep rate {keep_rate:.0%} ({kept}/{total}), "
                    f"avg delta {avg_delta:+.3f} ({timestamp}). Low — the current approach needs revision.*")
-    
-    # Replace existing auto-evolved line or append at end
-    if re.search(r'\*Auto-evolved:.*\*', content):
-        content = re.sub(r'\*Auto-evolved:.*\*', insight, content)
-    else:
-        content = content.rstrip() + "\n\n" + insight + "\n"
-    
-    with open(skill_file, 'w') as f:
-        f.write(content)
-    print(f"    ✓ {skill_name}: keep={keep_rate:.0%} delta={avg_delta:+.3f} ({total} exp)")
+
+    with open(out_file, 'w') as f:
+        f.write(f"# {skill_name} Evolution\n\n{insight}\n")
+
+    print(f"    ✓ {skill_name}: keep={keep_rate:.0%} delta={avg_delta:+.3f} ({total} exp) → {out_file}")
 
 
 def main():
