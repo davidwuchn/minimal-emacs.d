@@ -369,7 +369,14 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
-  (if (or gptel-benchmark--cancelled (null results))
+  (cond
+   ((null results)
+    (append (list :total-tests 0 :passed-tests 0)
+            (mapcan (lambda (m) (list (cdr m) 0.0))
+                    gptel-benchmark--score-type-averages)))
+   ((not (and (listp results) (proper-list-p results))) nil)
+   (t
+    (if gptel-benchmark--cancelled
       (append (list :total-tests 0 :passed-tests 0)
               (mapcan (lambda (m) (list (cdr m) 0.0))
                       gptel-benchmark--score-type-averages))
@@ -391,7 +398,7 @@ Returns plist with :total-tests, :passed-tests, and average scores."
               (mapcan (lambda (m)
                         (list (cdr m)
                               (gptel-benchmark--calculate-average score-totals total (car m))))
-                      gptel-benchmark--score-type-averages)))))
+                      gptel-benchmark--score-type-averages)))))))
 
 ;;; Eight Keys Integration
 
