@@ -79,6 +79,25 @@ Layer 4: temporal git and experiment index.")
 (defvar gptel-auto-workflow--vsm-health-last-run nil
   "Timestamp of last VSM health check. Throttles to 1/15min.")
 
+(defvar gptel-auto-workflow--evolution-last-objective nil
+  "Eight Keys convergence score from previous evolution cycle.
+∃ Truth: if current score ≤ this, evolution plateaued — stop.")
+
+(defun gptel-auto-workflow--eight-keys-convergence-score ()
+  "Compute Eight Keys convergence score from kept experiments.
+∃ Truth: aggregate of per-subsystem scores for convergence detection."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (autogo 0.0) (autotts 0.0) (selfev 0.0) (count 0))
+    (dolist (r results)
+      (when (and (equal (plist-get r :decision) "kept")
+                 (fboundp 'gptel-benchmark-eight-keys-score-for))
+        (let ((hypo (or (plist-get r :hypothesis) "")))
+          (cl-incf autogo (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autogo) 0.0))
+          (cl-incf autotts (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autotts) 0.0))
+          (cl-incf selfev (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :self-evolve) 0.0))
+          (cl-incf count))))
+    (if (> count 0) (/ (+ autogo autotts selfev) (* 3 count)) 0.0)))
+
 (defvar gptel-auto-workflow--evolution-next-cycle-hints nil
   "Alist of hints for the next evolution cycle.
 Keys: :prev-champions, :category-budget, :vsm-actions, :regressed-targets.")
@@ -1796,7 +1815,19 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (message "[evolution] Throttled: last cycle was %.0fs ago, skipping"
                (- now gptel-auto-workflow--evolution-last-run))
       (cl-return-from gptel-auto-workflow-evolution-run-cycle "throttled"))
-    (setq gptel-auto-workflow--evolution-last-run now))
+   (setq gptel-auto-workflow--evolution-last-run now))
+  ;; Restore cross-subsystem hints from disk (survives daemon restart)
+  (gptel-auto-workflow--restore-next-cycle-hints)
+  ;; Eight Keys convergence: skip evolution if scores haven't improved
+  (when (and gptel-auto-workflow--evolution-last-objective
+             (fboundp 'gptel-benchmark-eight-keys-score-for))
+    (let ((current-obj (gptel-auto-workflow--eight-keys-convergence-score)))
+      (when (and current-obj
+                 (<= current-obj gptel-auto-workflow--evolution-last-objective))
+        (message "[evolution] ∃ Truth: convergence — Eight Keys score %.3f ≤ %.3f, skipping"
+                 current-obj gptel-auto-workflow--evolution-last-objective)
+        (cl-return-from gptel-auto-workflow-evolution-run-cycle "converged"))
+      (setq gptel-auto-workflow--evolution-last-objective current-obj)))
   (message "[auto-workflow] Running self-evolution cycle...")
   ;; Pipeline validation (Semantica PipelineValidator)
   (condition-case nil
@@ -1908,6 +1939,9 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case nil
       (progn
         (gptel-auto-workflow--apply-cross-subsystem-feedback)
+      ;; Research champion league: benchmark proposed strategies against incumbents
+      (when (fboundp 'gptel-auto-workflow--run-research-champion-league)
+        (run-with-idle-timer 30 nil #'gptel-auto-workflow--run-research-champion-league))
         (gptel-auto-workflow--consume-vsm-actions))
     (error (ignore)))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
@@ -2123,11 +2157,18 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
                           (seq-take axis-stats 5) " ")))
     (cond
      ((< keep-rate 0.05)
-      (message "[vsm] 相克: Wood(S1) weak → check Earth(S3) controls (timeouts too tight?)"))
+      (message "[vsm] 相克: Wood(S1) weak — keep-rate %.1f%%"
+               (* 100 keep-rate))
+      (push (cons 'rebalance-experiment-targets "Wood(S1) weak: diversify target selection")
+            (plist-get (gptel-auto-workflow--vsm-health-actions) :actions)))
      ((< strategies 5)
-      (message "[vsm] 相生: Fire(S4) weak → Water(S5) should generate more variety"))
+      (message "[vsm] 相生: Fire(S4) weak — only %d strategies" strategies)
+      (push (cons 'increase-strategy-evolution "Fire(S4) weak: fewer than 5 strategies")
+            (plist-get (gptel-auto-workflow--vsm-health-actions) :actions)))
      ((< backends 3)
-      (message "[vsm] 相克: Metal(S2) weak → Fire(S4) should coordinate backends"))
+      (message "[vsm] 相克: Metal(S2) weak — only %d backends" backends)
+      (push (cons 'enable-fallback-backend "Metal(S2) weak: fewer than 3 backends")
+            (plist-get (gptel-auto-workflow--vsm-health-actions) :actions)))
      (t
       (message "[vsm] 相生: All layers balanced — generating cycle active")))
     ;; Housekeeping: full autonomous maintenance
@@ -2887,7 +2928,63 @@ Returns the keep-rate as a float, or 0.10 as a safe lower-bound fallback."
     (if entry
         (setcdr entry (cons strategy keep-rate))
       (push (cons category (cons strategy keep-rate))
-            gptel-auto-workflow--category-champions))))
+            gptel-auto-workflow--category-champions)))
+  ;; Persist to disk so champions survive daemon restarts
+  (gptel-auto-workflow--save-category-champions))
+
+(defun gptel-auto-workflow--champions-file ()
+  "Return the path to the category champions persistence file."
+  (expand-file-name "var/tmp/category-champions.sexp"
+                    (or (gptel-auto-workflow--worktree-base-root)
+                        default-directory)))
+
+(defun gptel-auto-workflow--save-category-champions ()
+  "Persist category champions to disk."
+  (let ((file (gptel-auto-workflow--champions-file)))
+    (make-directory (file-name-directory file) t)
+    (with-temp-file file
+      (prin1 gptel-auto-workflow--category-champions (current-buffer)))
+    (message "[champion] Persisted %d category champions to %s"
+             (length gptel-auto-workflow--category-champions)
+             (file-relative-name file))))
+
+(defun gptel-auto-workflow--load-category-champions ()
+  "Load category champions from disk."
+  (let ((file (gptel-auto-workflow--champions-file)))
+    (when (file-exists-p file)
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents file)
+            (setq gptel-auto-workflow--category-champions (read (current-buffer)))
+            (message "[champion] Loaded %d category champions from %s"
+                     (length gptel-auto-workflow--category-champions)
+                     (file-relative-name file)))
+        (error
+         (message "[champion] Failed to load champions from %s" file))))))
+
+(defun gptel-auto-workflow--queue-strategy-benchmark (strategy-name axis)
+  "Queue newly generated STRATEGY-NAME for benchmarking before production use.
+Writes to pending_eval.json for the meta-harness pipeline to process."
+  (let* ((root (or (gptel-auto-workflow--worktree-base-root) default-directory))
+         (pending-file (expand-file-name "var/tmp/strategy-evaluations/pending_eval.json" root))
+         (pending (if (file-exists-p pending-file)
+                      (condition-case nil
+                          (with-temp-buffer
+                            (insert-file-contents pending-file)
+                            (json-read))
+                        (error nil))
+                    (list :candidates '())))
+         (candidates (plist-get pending :candidates)))
+    (push (list :name strategy-name :axis (format "%s" axis)
+                :queued-at (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                :status "pending")
+          candidates)
+    (setq pending (plist-put pending :candidates candidates))
+    (make-directory (file-name-directory pending-file) t)
+    (with-temp-file pending-file
+      (insert (json-encode pending)))
+    (message "[strategy] Queued %s (axis %s) for benchmark evaluation"
+             strategy-name axis)))
 
 (defun gptel-auto-workflow--strategy-category-keep-rate (strategy-name category)
   "Compute keep-rate for STRATEGY-NAME filtered to CATEGORY."
@@ -3005,7 +3102,8 @@ COMPOSITE is logged for diagnostics but keep-rate remains the gating threshold."
 AutoGo category-gating: each ontology category has its own champion.
 μ Directness: first champion must beat category baseline, not absolute zero.
 Promotion: challenger must exceed category champion by >5% relative."
-  (let* ((_baselines (gptel-auto-workflow--compute-category-baselines))
+  (let* ((_loaded (gptel-auto-workflow--load-category-champions))
+         (_baselines (gptel-auto-workflow--compute-category-baselines))
          (strategies (gptel-auto-workflow--discover-strategies))
          (scores (mapcar (lambda (s) (cons s (gptel-auto-workflow--strategy-composite-score s)))
                          strategies))
@@ -4259,7 +4357,80 @@ effective +0.10, promising +0.05, underperforming -0.05."
     (message "[budget] Categories: %s"
              (mapconcat (lambda (b) (format "%s:%d" (car b) (cdr b))) budget " "))
     (dolist (action (plist-get vsm-actions :actions))
-      (message "[vsm-action] %s: %s" (car action) (cdr action)))))
+      (message "[vsm-action] %s: %s" (car action) (cdr action)))
+    ;; Persist to disk so hints survive daemon restarts
+    (gptel-auto-workflow--persist-next-cycle-hints)
+    ;; Wire :regressed-targets from knowledge-page diff
+    (gptel-auto-workflow--wire-regressed-targets)))
+
+;; ─── Ouroboros Persistence + Gap Closures ───
+
+(defun gptel-auto-workflow--persist-next-cycle-hints ()
+  "Persist evolution-next-cycle-hints to disk for daemon-restart survival.
+Solves S5-2/S4-5/S2-1: cross-cycle state amnesia."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (file (and root (expand-file-name "var/tmp/cross-subsystem-state.json" root))))
+    (when file
+      (make-directory (file-name-directory file) t)
+      (with-temp-file file
+        (insert (json-encode gptel-auto-workflow--evolution-next-cycle-hints))))))
+
+(defun gptel-auto-workflow--restore-next-cycle-hints ()
+  "Restore evolution-next-cycle-hints from disk after daemon restart."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (file (and root (expand-file-name "var/tmp/cross-subsystem-state.json" root))))
+    (when (and file (file-readable-p file))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (condition-case nil
+            (setq gptel-auto-workflow--evolution-next-cycle-hints (json-read))
+          (error nil))))))
+
+(defun gptel-auto-workflow--wire-regressed-targets ()
+  "Populate :regressed-targets from cross-cycle knowledge-page diff.
+Solves S5-3: dead feedback path."
+  (let* ((diff (condition-case nil (gptel-auto-workflow--diff-knowledge-pages) (error nil)))
+         (removed (and diff (plist-get diff :removed))))
+    (when removed
+      (setq gptel-auto-workflow--evolution-next-cycle-hints
+            (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                       :regressed-targets removed)))))
+
+(defun gptel-auto-workflow--vsm-expanded-actions ()
+  "Expanded VSM health actions beyond the 3 trivial ones.
+Solves S2-2: richer repair repertoire."
+  (let* ((backends (gptel-auto-workflow--evolution-backend-stats))
+         (onto (gptel-auto-workflow--generate-experiment-ontology))
+         (classes (plist-get onto :classes))
+         (allium-issues (length (directory-files
+                                 (expand-file-name "var/tmp/evolution/allium-issues"
+                                                   (gptel-auto-workflow--worktree-base-root))
+                                 t "\\.md$")))
+         (actions nil))
+    ;; S4-1: Backend variance check
+    (when (> (length backends) 1)
+      (let ((rates (mapcar #'cdr backends)) (best (or (cdar backends) 0)) (worst (or (cdr (car (last backends))) 0)))
+        (when (> (- best worst) 0.15)
+          (push (cons 'rebalance-backends (format "Keep-rate variance %.0f%%-%.0f%%" (* 100 worst) (* 100 best))) actions))))
+    ;; S1-4: Overfit detection gates
+    (when (fboundp 'gptel-auto-workflow--detect-overfitting)
+      (when (eq (gptel-auto-workflow--detect-overfitting) 'overfit)
+        (push (cons 'increase-exploration "Overfitting detected — forcing 30% exploration rate") actions)
+        (when (boundp 'gptel-auto-workflow--exploration-rate)
+          (setq gptel-auto-workflow--exploration-rate 0.30))))
+    ;; S4-2: Allium coverage check
+    (when (> (length classes) 0)
+      (when (< allium-issues (length classes))
+        (push (cons 'rebuild-allium-specs (format "Only %d Allium specs for %d strategies" allium-issues (length classes))) actions)))
+    ;; S2-5: Unstable target detection
+    (let ((unstable nil))
+      (dolist (c classes)
+        (when (and (< (plist-get c :total) 10) (< (plist-get c :keep-rate) 0.1) (string= (plist-get c :status) "underperforming"))
+          (push (plist-get c :name) unstable)))
+      (when unstable
+        (push (cons 'freeze-unstable-targets (format "%d unstable target(s)" (length unstable))) actions)))
+    (nreverse actions)))
 
 (defun gptel-auto-workflow--experiment-causal-links ()
   "Build causal link graph between experiments on the same target.
