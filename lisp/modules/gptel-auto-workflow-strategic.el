@@ -1151,11 +1151,18 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
          (let* ((hints (and (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
                             gptel-auto-workflow--evolution-next-cycle-hints))
                 (budget (plist-get hints :category-budget))
-                (regressed (cdr (assoc 'regressed-targets hints)))
+                (champion-prev (plist-get hints :prev-champions))
+                (regressed (plist-get hints :regressed-targets))
                 (parts nil))
            (when budget
              (push (format "CATEGORY BUDGET (experiments allocated per category):\n%s"
                            (mapconcat (lambda (b) (format "- %s: %d" (car b) (cdr b))) budget "\n"))
+                   parts))
+           (when champion-prev
+             (push (format "CHAMPION CHANGES (last cycle):\n%s"
+                           (mapconcat (lambda (c) (format "- %s: %s (%.1f%%)"
+                                                          (car c) (cadr c) (* 100 (or (cddr c) 0))))
+                                      champion-prev "\n"))
                    parts))
            (when regressed
              (push (format "REGRESSED TARGETS (knowledge pages removed, prioritized):\n%s"

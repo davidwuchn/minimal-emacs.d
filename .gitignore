@@ -15,7 +15,7 @@ lisp/modules/*.elc
 !post-early-init.el
 !post-init.el
 !AGENTS.md
-!INTRO.md
+!OUROBOROS.md
 !.dir-locals.el
 !.gitmodules
 !assistant/
