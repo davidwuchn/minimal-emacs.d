@@ -100,4 +100,3 @@ This skill provides **REPL tools** for the protocol:
 
 **"It works" ≠ "It's done"**
 
-*Auto-evolved: No experiment data yet (2026-05-22T06:06:07Z). Collecting baseline.*

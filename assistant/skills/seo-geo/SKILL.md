@@ -348,4 +348,3 @@ Before finalizing SEO/GEO recommendations:
 
 **"Audit completed" ≠ "Actionable recommendations"** - Prioritize by impact and provide implementation steps.
 
-*Auto-evolved: No experiment data yet (2026-05-22T06:06:08Z). Collecting baseline.*

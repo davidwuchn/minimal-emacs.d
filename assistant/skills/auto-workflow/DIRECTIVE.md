@@ -1,9 +1,9 @@
 ---
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
-version: 2026.05.22
-total-experiments: 1068
-total-kept: 229
+version: 2026.05.17
+total-experiments: 901
+total-kept: 197
 ---
 
 # Auto-Workflow Program
@@ -17,51 +17,50 @@ total-kept: 229
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-benchmark-comparator.el` | 100% | 1 | 1 | ✅ High yield |
-| `lisp/modules/strategic-daemon-functions.el` | 75% | 4 | 3 | ✅ High yield |
-| `lisp/modules/gptel-auto-workflow-research-benchmark.el` | 50% | 4 | 2 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-experiment-loop.el` | 45% | 11 | 5 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-evolution.el` | 35% | 17 | 6 | ✅ High yield |
-| `lisp/modules/gptel-agent-loop.el` | 34% | 88 | 30 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-experiment-loop.el` | 40% | 5 | 2 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-evolution.el` | 40% | 10 | 4 | ✅ High yield |
+| `lisp/modules/gptel-agent-loop.el` | 33% | 87 | 29 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-git.el` | 33% | 6 | 2 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-worktree.el` | 33% | 9 | 3 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-core.el` | 31% | 48 | 15 | ✅ High yield |
-| `lisp/modules/gptel-sandbox.el` | 28% | 121 | 34 | 🟡 Active |
-| `lisp/modules/gptel-ext-context-cache.el` | 28% | 101 | 28 | 🟡 Active |
+| `lisp/modules/gptel-auto-workflow-bootstrap.el` | 33% | 3 | 1 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-core.el` | 30% | 46 | 14 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-validation.el` | 30% | 10 | 3 | ✅ High yield |
+| `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 29% | 21 | 6 | 🟡 Active |
+| `lisp/modules/gptel-workflow-benchmark.el` | 29% | 7 | 2 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **Application for us** (24× from mementum)
-- **Source type** (24× from mementum)
-- **Description** (24× from mementum)
-- **Application** (20× from mementum)
-- **Implementation sketch** (20× from mementum)
-- **How it works** (18× from mementum)
-- **Emacs application** (14× from mementum)
-- **unless-guard** (10× from git)
+- **extract-helper-function** (9× from git)
+- **error-handling** (7× from git)
+- **unless-guard** (4× from git)
+- **Applicability** (2× from mementum)
+- **Key insight** (2× from mementum)
+- **manual-fix** (2× from git)
+- **add-variable** (2× from git)
 
 ## 🛠️ Effective Techniques
 
 <!-- AUTO-UPDATED: From mementum insights -->
 
-- Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (seen 2×)
-- Use mathematical constants (φ, ψ, Δ, λ) as "attention magnets" to prime LLMs toward formal reasoning patterns (seen 2×)
-- Zero client-side intelligence; AI decides, client executes. (seen 2×)
-- 35+ structured tools with circuit breakers, automatic retry, and security controls (seen 2×)
-- Programmatic verification before trust; self-modification loop. (seen 2×)
-- [PLAN] + [EXPECT] with P(success) confidence scoring based on prior outcomes (seen 2×)
+- Multi-layer validation stack (seen 1×)
+- ACP (Agent Client Protocol) - standardized agent communication (seen 1×)
+- Offline simulation functions diverge from live controller logic. (seen 1×)
+- Multiple cron jobs using the same Emacs daemon server name cause "already running" errors. (seen 1×)
+- Merged experiment worktrees should be cleaned up to prevent accumulation. (seen 1×)
+- Direct path is more efficient than full cycle for simple tasks. (seen 1×)
 
 ## 🛡️ Error Mitigation
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (867×): Investigate root cause
-- **timeout** (99×): Add smaller batch sizes or chunked processing
-- **test-failure** (43×): Run tests before committing experiments
-- **validation-failed** (33×): Improve pre-grade validation prompts
-- **api-limit** (20×): Implement provider fallback or rate limit handling
+- **other** (727×): Investigate root cause
+- **timeout** (81×): Add smaller batch sizes or chunked processing
+- **test-failure** (41×): Run tests before committing experiments
+- **validation-failed** (27×): Improve pre-grade validation prompts
+- **api-limit** (19×): Implement provider fallback or rate limit handling
 
 ## Success Patterns
 
@@ -78,11 +77,11 @@ total-kept: 229
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/strategic-daemon-functions.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 75%)
-- **lisp/modules/gptel-auto-workflow-research-benchmark.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 50%)
-- **lisp/modules/gptel-tools-agent-experiment-loop.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 45%)
+- **lisp/modules/gptel-benchmark-evolution.el**: Apply Multi-layer validation stack (keep rate: 40%)
+- **lisp/modules/gptel-tools-agent-experiment-loop.el**: Apply Multi-layer validation stack (keep rate: 40%)
+- **lisp/modules/gptel-agent-loop.el**: Apply Multi-layer validation stack (keep rate: 33%)
+- **lisp/modules/nucleus-tools.el**: Try validation guards or error handling improvements (previous experiments discarded)
 - **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-tools-agent-staging-baseline.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -108,4 +107,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1068 experiments (229 kept locally across 1068 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 901 experiments (197 kept locally across 901 local records). It evolves every self-evolution cycle.*
