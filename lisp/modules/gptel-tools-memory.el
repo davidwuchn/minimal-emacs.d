@@ -85,6 +85,11 @@ Returns content string or error message."
               (format "Memory '%s' is empty" slug)
             content)))))))
 
+(defcustom gptel-tools-memory-max-content-size 1048576
+  "Maximum content size in bytes (default 1MB) to prevent memory exhaustion."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
 (defun gptel-tools-memory--write (slug content &optional knowledge-p)
   "Write CONTENT to a memory file identified by SLUG.
 Returns success message or error."
@@ -92,6 +97,9 @@ Returns success message or error."
     (error "Content must not be nil"))
   (when (string-blank-p content)
     (error "Content must not be empty or whitespace-only"))
+  (when (> (length content) gptel-tools-memory-max-content-size)
+    (error "Content exceeds maximum size of %d bytes (got %d)"
+           gptel-tools-memory-max-content-size (length content)))
   (let ((path (gptel-tools-memory--resolve-path slug knowledge-p)))
     (condition-case err
         (progn
