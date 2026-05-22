@@ -302,4 +302,4 @@ metadata:
 
 **"Compiles clean" ≠ "Works at runtime"**
 
-*Auto-evolved: No experiment data yet (2026-05-22T04:00:04Z). Collecting baseline.*
+*Auto-evolved: No experiment data yet (2026-05-22T06:06:07Z). Collecting baseline.*

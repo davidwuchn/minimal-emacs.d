@@ -578,28 +578,46 @@ Returns list of evolution records."
     (message "[autotts] Saved evolution history: %d generations" (length history))))
 
 (defun gptel-auto-workflow--count-actionable-patterns (findings)
-  "Count actionable pattern concepts in FINDINGS text.
+  "Count actionable pattern concepts in FINDINGS text, per ontology category.
 ε Purpose: measures how many concrete, named techniques the researcher extracted.
-Patterns include: markdown headers (##, ###), bullet points with technique names,
-and code-featured patterns (``` blocks with technique descriptions)."
+Returns an alist of (CATEGORY . COUNT) keyed by :programming, :tool-calls,
+:agentic, :natural-language, plus :total."
   (if (or (not (stringp findings)) (string-empty-p findings))
-      0
-    (let ((count 0))
+      '((:total . 0))
+    (let ((cats '((:programming . 0) (:tool-calls . 0)
+                  (:agentic . 0) (:natural-language . 0)))
+          (total 0))
       (with-temp-buffer
         (insert findings)
+        ;; Count markdown headers — classify by content keywords
         (goto-char (point-min))
-        ;; Count markdown headers (each is a distinct pattern concept)
-        (while (re-search-forward "^##+\\s-+" nil t)
-          (cl-incf count))
+        (while (re-search-forward "^##+\\s-+\\(.+\\)$" nil t)
+          (let ((header (match-string 1)))
+            (cl-incf total)
+            (cond
+             ((string-match-p "code\\|implement\\|function\\|defun\\|elisp\\|syntax\\|macro\\|class\\|program" header)
+              (cl-incf (alist-get :programming cats)))
+             ((string-match-p "sandbox\\|tool\\|permit\\|allow\\|forbid\\|security\\|guard" header)
+              (cl-incf (alist-get :tool-calls cats)))
+             ((string-match-p "agent\\|coord\\|staging\\|delegat\\|subagent\\|fsm\\|state" header)
+              (cl-incf (alist-get :agentic cats)))
+             (t
+              (cl-incf (alist-get :natural-language cats))))))
+        ;; Count bullet points with **bold** technique descriptions
         (goto-char (point-min))
-        ;; Count bullet points with technique descriptions (actionable items)
-        (while (re-search-forward "^\\s-*[-*]\\s-+\\*\\*.*\\*\\*" nil t)
-          (cl-incf count))
-        (goto-char (point-min))
-        ;; Count numbered technique entries
-        (while (re-search-forward "^[0-9]+\\.\\s-+\\*\\*" nil t)
-          (cl-incf count)))
-      count)))
+        (while (re-search-forward "^\\s-*[-*]\\s-+\\*\\*\\([^*]+\\)\\*\\*" nil t)
+          (let ((desc (match-string 1)))
+            (cl-incf total)
+            (cond
+             ((string-match-p "code\\|function\\|program\\|elisp\\|defun\\|syntax" desc)
+              (cl-incf (alist-get :programming cats)))
+             ((string-match-p "tool\\|sandbox\\|permit\\|guard\\|security" desc)
+              (cl-incf (alist-get :tool-calls cats)))
+             ((string-match-p "agent\\|fsm\\|state\\|delegat\\|subagent" desc)
+              (cl-incf (alist-get :agentic cats)))
+             (t
+              (cl-incf (alist-get :natural-language cats)))))))
+      (cons (cons :total total) cats))))
 
 (defun gptel-auto-workflow--calculate-evolution-objective (traces config)
   "Calculate objective value for evolution from TRACES and CONFIG.
@@ -615,7 +633,13 @@ falling back to output quality heuristics for traces without outcomes."
         (total-tokens 0)
         (total-output 0)
         (outcome-known-count 0)
-        (outcome-success-count 0))
+        (outcome-success-count 0)
+        ;; Eight Keys tracking
+        (phi-targets (make-hash-table :test 'equal))  ; φ Vitality: unique targets
+        (pi-cats (make-hash-table :test 'eq))          ; π Synthesis: category coverage
+        (epsilon-patterns 0)                            ; ε Purpose: total actionable patterns
+        (all-trace-count 0)
+        (converged-p t))                                ; τ Wisdom: convergence tracked externally
     (dolist (trace traces)
       (let ((source (gptel-auto-workflow--trace-source trace))
             (output-length (or (plist-get trace :output-length) 0))
@@ -626,10 +650,31 @@ falling back to output quality heuristics for traces without outcomes."
         (setq total-confidence (+ total-confidence confidence))
         (setq total-tokens (+ total-tokens tokens))
         (setq total-output (+ total-output output-length))
+        (setq all-trace-count (1+ all-trace-count))
         (when outcome-known
           (setq outcome-known-count (1+ outcome-known-count))
           (when trace-success
             (setq outcome-success-count (1+ outcome-success-count))))
+        ;; φ Vitality: track unique targets
+        (let ((outcomes (plist-get trace :outcomes)))
+          (dolist (o outcomes)
+            (let ((target (plist-get o :target)))
+              (when target (puthash target t phi-targets)))))
+        ;; π Synthesis: count category coverage from pattern data
+        (let ((outcomes (plist-get trace :outcomes)))
+          (dolist (o outcomes)
+            (let ((cat-patterns (plist-get o :category-patterns)))
+              (when cat-patterns
+                (dolist (pair cat-patterns)
+                  (when (and (consp pair) (keywordp (car pair)) (not (eq (car pair) :total)))
+                    (let ((existing (gethash (car pair) pi-cats 0)))
+                      (puthash (car pair) (+ existing (cdr pair)) pi-cats))))))))
+        ;; ε Purpose: count actionable patterns
+        (let ((outcomes (plist-get trace :outcomes)))
+          (dolist (o outcomes)
+            (let ((pa (plist-get o :pattern-actionability)))
+              (when (numberp pa) (setq epsilon-patterns (+ epsilon-patterns pa))))))
+        ;; ∃ Truth: compare outcome rate to confidence (overconfident = penalty)
         (if (string= source "own-repo")
             (progn
               (setq own-total (1+ own-total))
@@ -645,16 +690,26 @@ falling back to output quality heuristics for traces without outcomes."
            (outcome-rate (if (> outcome-known-count 0) (/ (float outcome-success-count) outcome-known-count) 0))
            (own-priority (or (plist-get config :own-repo-priority) 0.7))
            (ext-priority (or (plist-get config :external-priority) 0.15))
-           ;; Weighted objective: prioritize downstream outcomes on high-priority sources
+           ;; Eight Keys metrics
+           (phi-vitality (/ (float (hash-table-count phi-targets)) (max 1 all-trace-count)))
+           (pi-synthesis (/ (float (hash-table-count pi-cats)) 4.0))  ; 4 categories max
+           (epsilon-purpose (/ (float epsilon-patterns) (max 1 all-trace-count)))
+           (exists-truth (if (> avg-confidence 0)
+                             (- 1.0 (abs (- outcome-rate avg-confidence)))
+                           0.5))
+           ;; Eight Keys weighted objective
            (objective (+ (* own-rate own-priority 2.0)
-                        (* ext-rate ext-priority 1.0)
-                        (* outcome-rate 1.5)
-                        (* avg-confidence 0.5)
-                        (* (min token-efficiency 2.0) 0.25))))
-      (message "[autotts] Objective: own=%.2f ext=%.2f outcomes=%.2f(%d) conf=%.2f eff=%.2f → %.3f"
-               own-rate ext-rate outcome-rate outcome-known-count
-               avg-confidence token-efficiency objective)
-      objective)))
+                         (* ext-rate ext-priority 1.0)
+                         (* phi-vitality 0.20)       ; φ: novel targets
+                         (* epsilon-purpose 0.15)     ; ε: actionable patterns
+                         (* exists-truth 0.15)        ; ∃: honest confidence
+                         (* pi-synthesis 0.10)        ; π: category coverage
+                         (* outcome-rate 0.5)
+                         (* avg-confidence 0.2)
+                         (* (min token-efficiency 2.0) 0.1))))
+       (message "[autotts] Objective: own=%.2f ext=%.2f φ=%.2f ε=%.2f ∃=%.2f π=%.2f → %.3f"
+                own-rate ext-rate phi-vitality epsilon-purpose exists-truth pi-synthesis objective)
+        objective)))
 
 (defun gptel-auto-workflow--detect-convergence (history new-objective)
   "Detect if evolution has converged (plateaued).
@@ -1457,8 +1512,8 @@ Called from experiment logging to link research → experiment results.
                       (insert-file-contents file)
                       (let* ((trace (json-read))
                              (outcomes (plist-get trace :outcomes))
-                             ;; ε Purpose: count actionable patterns in findings
-                             (pattern-count
+                             ;; ε Purpose: per-category actionable pattern counts
+                             (pattern-counts
                               (gptel-auto-workflow--count-actionable-patterns
                                (or findings-text
                                    (plist-get trace :findings) "")))
@@ -1466,7 +1521,8 @@ Called from experiment logging to link research → experiment results.
                               (list :target target
                                     :kept (if kept t nil)
                                     :score-after (or score-after 0)
-                                    :pattern-actionability pattern-count
+                                    :pattern-actionability (cdr (assq :total pattern-counts))
+                                    :category-patterns pattern-counts
                                     :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ"))))
                         (setq trace (plist-put trace :outcomes
                                                (append outcomes
@@ -1474,8 +1530,12 @@ Called from experiment logging to link research → experiment results.
                         (erase-buffer)
                         (insert (json-encode trace))
                         (write-region (point-min) (point-max) file))
-                       (message "[autotts] Linked trace %s → %s (%s patterns=%d)"
-                                research-hash target (if kept "kept" "discarded") pattern-count)
+                       (message "[autotts] Linked trace %s → %s (%s patterns=%d cat:%s)"
+                                research-hash target (if kept "kept" "discarded")
+                                (cdr (assq :total pattern-counts))
+                                (mapconcat (lambda (c) (format "%s:%d" (car c) (cdr c)))
+                                           (cl-remove-if (lambda (p) (eq (car p) :total)) pattern-counts)
+                                           " "))
                        (setq updated t)
                        ;; Schedule trace synthesis + maybe controller evolution
                        (run-with-idle-timer 10 nil
