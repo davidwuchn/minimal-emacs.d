@@ -1,5 +1,5 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 1058 experiments across 2 backends
+> Auto-generated from 1068 experiments across 2 backends
 
 ## MiniMax vs CF-Gateway (winner: **MiniMax**)
 - MiniMax: 29.9% keep-rate
@@ -7,4 +7,4 @@
 - Shared targets: 2 | MiniMax won 2, CF-Gateway won 0, ties 0
 
 
-*Generated: 2026-05-22 09:49*
+*Generated: 2026-05-22 11:07*

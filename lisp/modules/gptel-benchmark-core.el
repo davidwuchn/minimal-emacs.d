@@ -116,7 +116,8 @@ Handles plists by converting to alists."
                           (or (stringp (car x))
                               (and (symbolp (car x))
                                    (not (keywordp (car x)))))))
-                   data))
+                   data)
+         (cl-every #'consp data))
     (mapcar (lambda (pair)
               (cons (car pair) (gptel-benchmark--to-json-format (cdr pair))))
             data))
@@ -143,6 +144,16 @@ This consolidates the common plist detection pattern used across the module."
        (not (null obj))
        (keywordp (car obj))
        (zerop (mod (length obj) 2))))
+
+(defun gptel-benchmark--keyword-plist-p (obj)
+  "Check if OBJ is a keyword-keyed plist suitable for plist-get operations.
+Unlike `gptel-benchmark--plist-p', this is more permissive - it accepts
+any proper list with keyword keys at even positions, not requiring even length.
+Used to distinguish plists from dotted-pair alists like ((:a . 1) (:b . 2)).
+Returns nil for dotted pairs, alists with symbol keys, or non-list types."
+  (and (proper-list-p obj)
+       (not (null obj))
+       (keywordp (car obj))))
 
 (defun gptel-benchmark--plist-to-alist (plist)
   "Convert PLIST to alist format for JSON encoding.
@@ -274,12 +285,9 @@ Returns nil for nil or malformed input."
     (let ((scores (cdr r)))
       (when (and (proper-list-p scores)
                  (not (null scores))
-                 (or (gptel-benchmark--plist-p scores)
+                 (or (gptel-benchmark--keyword-plist-p scores)
                      (and (cl-every #'consp scores)
-                          (not (keywordp (car scores)))
-                          (not (and (proper-list-p (car scores))
-                                    (keywordp (caar scores))
-                                    (zerop (mod (length (car scores)) 2)))))))
+                          (not (keywordp (car scores))))))
         scores)))
    (t nil)))
 
@@ -369,7 +377,14 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
-  (if (or gptel-benchmark--cancelled (null results))
+  (cond
+   ((null results)
+    (append (list :total-tests 0 :passed-tests 0)
+            (mapcan (lambda (m) (list (cdr m) 0.0))
+                    gptel-benchmark--score-type-averages)))
+   ((not (and (listp results) (proper-list-p results))) nil)
+   (t
+    (if gptel-benchmark--cancelled
       (append (list :total-tests 0 :passed-tests 0)
               (mapcan (lambda (m) (list (cdr m) 0.0))
                       gptel-benchmark--score-type-averages))
@@ -391,7 +406,7 @@ Returns plist with :total-tests, :passed-tests, and average scores."
               (mapcan (lambda (m)
                         (list (cdr m)
                               (gptel-benchmark--calculate-average score-totals total (car m))))
-                      gptel-benchmark--score-type-averages)))))
+                      gptel-benchmark--score-type-averages)))))))
 
 ;;; Eight Keys Integration
 

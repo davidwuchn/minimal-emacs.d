@@ -2621,15 +2621,68 @@ Semantica abductive reasoner pattern."
 ;; ─── AutoGo: Competitive Gating + PCR + RESULT Protocol ───
 
 (defvar gptel-auto-workflow--champion-strategy nil
-  "Current champion strategy name. New strategies must beat this to be adopted.
-AutoGo league system: incumbents must be defeated in gauntlet play.")
-
+  "Current champion strategy name.")
 (defvar gptel-auto-workflow--champion-keep-rate 0.0
-  "Keep-rate of the champion strategy. Threshold for challenger adoption.")
+  "Keep-rate of the champion strategy. Threshold for challenger adoption.
+DEPRECATED: use --category-champions for per-category gating.")
+
+(defvar gptel-auto-workflow--category-strike-counts nil
+  "Alist of (CATEGORY . STRIKES) tracking successive champion failures.
+∀ Vigilance: 3 consecutive failures in a category freezes it for 5 cycles.")
+
+(defun gptel-auto-workflow--record-category-strike (category)
+  "Increment failure strike for CATEGORY. Freezes at 3."
+  (let ((entry (assq category gptel-auto-workflow--category-strike-counts)))
+    (if entry
+        (setcdr entry (1+ (cdr entry)))
+      (push (cons category 1) gptel-auto-workflow--category-strike-counts))
+    (when (>= (cdr (assq category gptel-auto-workflow--category-strike-counts)) 3)
+      (message "[champion] ∀ Vigilance: category %s FROZEN (3 strikes) — 5 cycle cooldown" category))))
+
+(defun gptel-auto-workflow--category-frozen-p (category)
+  "Return non-nil if CATEGORY is frozen (≥3 strikes)."
+  (let ((entry (assq category gptel-auto-workflow--category-strike-counts)))
+    (and entry (>= (cdr entry) 3))))
+
+(defun gptel-auto-workflow--reset-category-strikes (category)
+  "Reset strikes for CATEGORY after a success."
+  (setq gptel-auto-workflow--category-strike-counts
+        (assq-delete-all category gptel-auto-workflow--category-strike-counts)))
 
 (defvar gptel-auto-workflow--baseline-keep-rate 0.0
   "Keep-rate of the template-default (baseline) strategy.
 μ Directness: first champion must beat this, not absolute zero.")
+
+(defvar gptel-auto-workflow--category-champions nil
+  "Alist of (CATEGORY . (STRATEGY . KEEP-RATE)) for per-category champions.
+Categories: :programming, :natural-language, :tool-calls, :agentic.
+AutoGo: each category has its own champion and gate.")
+
+(defvar gptel-auto-workflow--category-baselines nil
+  "Alist of (CATEGORY . KEEP-RATE) for per-category baseline keep-rates.
+Computed from template-default experiments filtered by category.")
+
+(defun gptel-auto-workflow--categorize-experiment-target (target)
+  "Categorize TARGET into an ontology category.
+Mirrors the ontology router's --categorize-target without requiring it.
+Returns :programming, :tool-calls, :agentic, or :natural-language."
+  (let ((base (if (stringp target) (file-name-nondirectory target) "")))
+    (cond
+     ((or (string-match-p "sandbox\\|tool-sanitize\\|tool-permit" base)
+          (string-match-p "\\btools?\\b" base))
+      :tool-calls)
+     ((or (string-match-p "agent-loop\\|agent-tools\\|agent-staging" base)
+          (string-match-p "\\bagent\\b" base)
+          (string-match-p "subagent" base))
+      :agentic)
+     ((or (string-match-p "benchmark\\|comparator\\|scoring\\|regression" base)
+          (string-match-p "\\btest" base)
+          (string-match-p "evolution\\|evolve\\|mutate" base))
+      :programming)
+     ((or (string-match-p "prompt\\|context\\|skill\\|strategy" base)
+          (string-match-p "\\bcompress\\|directive\\|guidance" base))
+      :natural-language)
+     (t :natural-language))))
 
 (defun gptel-auto-workflow--compute-baseline-keep-rate ()
   "Compute the template-default keep-rate from all TSV data.
@@ -2646,6 +2699,58 @@ Returns the keep-rate as a float, or 0.10 as a safe lower-bound fallback."
     (let ((rate (if (> total 0) (/ (float kept) total) 0.10)))
       (setq gptel-auto-workflow--baseline-keep-rate rate)
       rate)))
+
+(defun gptel-auto-workflow--compute-category-baselines ()
+  "Compute per-category baseline keep-rates from template-default experiments."
+  (let ((stats (make-hash-table :test 'eq))
+        (results (gptel-auto-workflow--parse-all-results)))
+    (dolist (r results)
+      (when (or (equal (plist-get r :strategy) "template-default")
+                (not (plist-get r :strategy)))
+        (let* ((target (plist-get r :target))
+               (cat (gptel-auto-workflow--categorize-experiment-target target))
+               (entry (gethash cat stats (cons 0 0))))
+          (setcar entry (1+ (car entry)))
+          (when (or (equal (plist-get r :decision) "kept")
+                     (equal (plist-get r :decision) t))
+            (setcdr entry (1+ (cdr entry))))
+          (puthash cat entry stats))))
+    (let ((alist '()))
+      (maphash (lambda (cat entry)
+                 (let ((total (car entry))
+                       (kept (cdr entry)))
+                   (push (cons cat (if (> total 0) (/ (float kept) total) 0.10))
+                         alist)))
+               stats)
+      (setq gptel-auto-workflow--category-baselines alist)
+      alist)))
+
+(defun gptel-auto-workflow--get-category-champion (category)
+  "Get the current champion (strategy . keep-rate) for CATEGORY."
+  (cdr (assq category gptel-auto-workflow--category-champions)))
+
+(defun gptel-auto-workflow--set-category-champion (category strategy keep-rate)
+  "Set STRATEGY as champion for CATEGORY with KEEP-RATE."
+  (let ((entry (assq category gptel-auto-workflow--category-champions)))
+    (if entry
+        (setcdr entry (cons strategy keep-rate))
+      (push (cons category (cons strategy keep-rate))
+            gptel-auto-workflow--category-champions))))
+
+(defun gptel-auto-workflow--strategy-category-keep-rate (strategy-name category)
+  "Compute keep-rate for STRATEGY-NAME filtered to CATEGORY."
+  (let ((total 0) (kept 0)
+        (results (gptel-auto-workflow--parse-all-results)))
+    (dolist (r results)
+      (when (and (equal (plist-get r :strategy) strategy-name)
+                 (eq (gptel-auto-workflow--categorize-experiment-target
+                      (plist-get r :target))
+                     category))
+        (setq total (1+ total))
+        (when (or (equal (plist-get r :decision) "kept")
+                   (equal (plist-get r :decision) t))
+          (setq kept (1+ kept)))))
+    (if (> total 0) (/ (float kept) total) 0.0)))
 
 (defvar gptel-auto-workflow--champion-composite-score 0.0
   "Composite benchmark score of the champion strategy.
@@ -2716,79 +2821,84 @@ Combines keep rate, score delta, quality gain, and efficiency.")
         (setq previous (cons timestamp r))))
     (nreverse gaps)))
 
-(defun gptel-auto-workflow--crown-champion (strategy-name keep-rate &optional composite)
-  "Crown STRATEGY-NAME as the new champion with KEEP-RATE and COMPOSITE score.
-Gateway: crowns only if KEEP-RATE exceeds current champion's rate.
-The first champion (when none exists) must beat the baseline.
+(defun gptel-auto-workflow--crown-champion (strategy-name keep-rate &optional composite category)
+  "Crown STRATEGY-NAME as champion for CATEGORY with KEEP-RATE and COMPOSITE score.
+If CATEGORY is nil, crowns the legacy global champion (backward compat).
+Gateway: crowns only if KEEP-RATE exceeds current category champion's rate.
+The first champion (when none exists) must beat the category baseline.
 COMPOSITE is logged for diagnostics but keep-rate remains the gating threshold."
   (when (and strategy-name keep-rate)
-    (let ((threshold (if gptel-auto-workflow--champion-strategy
-                         gptel-auto-workflow--champion-keep-rate
-                       gptel-auto-workflow--baseline-keep-rate)))
+    (let* ((cat (or category :natural-language))
+           (champion-entry (gptel-auto-workflow--get-category-champion cat))
+           (champion-rate (if champion-entry (cdr champion-entry) nil))
+           (baseline-entry (assq cat gptel-auto-workflow--category-baselines))
+           (cat-baseline (if baseline-entry (cdr baseline-entry)
+                           gptel-auto-workflow--baseline-keep-rate))
+           (threshold (or champion-rate cat-baseline)))
       (when (or (null threshold) (> keep-rate threshold))
-        (setq gptel-auto-workflow--champion-strategy strategy-name
-              gptel-auto-workflow--champion-keep-rate keep-rate)
+        (gptel-auto-workflow--set-category-champion cat strategy-name keep-rate)
+        ;; Also update legacy global for backward compat
+        (when (> keep-rate (or gptel-auto-workflow--champion-keep-rate 0.0))
+          (setq gptel-auto-workflow--champion-strategy strategy-name
+                gptel-auto-workflow--champion-keep-rate keep-rate))
         (when composite
           (setq gptel-auto-workflow--champion-composite-score composite))
-        (message "[champion] New champion: %s (keep=%.1f%% composite=%.3f baseline=%.1f%%)"
-                 strategy-name (* 100 keep-rate) (or composite keep-rate)
-                 (* 100 gptel-auto-workflow--baseline-keep-rate))
+        (message "[champion] New %s champion: %s (keep=%.1f%% composite=%.3f baseline=%.1f%%)"
+                 cat strategy-name (* 100 keep-rate) (or composite keep-rate)
+                 (* 100 cat-baseline))
         t))))
 
 (defun gptel-auto-workflow--gate-strategies ()
-  "Gate evolved strategies against the champion.
-μ Directness: first champion must beat baseline (not absolute zero).
-Promotion: challenger must exceed champion by >5% relative improvement.
-∀ Vigilance: never re-crown the same champion; three-strike axis block."
-  (let* ((_baseline (gptel-auto-workflow--compute-baseline-keep-rate))
+  "Gate evolved strategies against per-category champions.
+AutoGo category-gating: each ontology category has its own champion.
+μ Directness: first champion must beat category baseline, not absolute zero.
+Promotion: challenger must exceed category champion by >5% relative."
+  (let* ((_baselines (gptel-auto-workflow--compute-category-baselines))
          (strategies (gptel-auto-workflow--discover-strategies))
          (scores (mapcar (lambda (s) (cons s (gptel-auto-workflow--strategy-composite-score s)))
                          strategies))
          (scores (sort scores (lambda (a b) (> (cdr a) (cdr b)))))
-         (axis-scores (gptel-auto-workflow--evolution-axis-stats))
+         (categories '(:programming :tool-calls :agentic :natural-language))
          (results nil))
     (dolist (entry scores)
       (let* ((name (car entry))
-             (composite (cdr entry))
-             (perf (when (fboundp 'gptel-auto-workflow--get-strategy-performance)
-                     (gptel-auto-workflow--get-strategy-performance name)))
-             (keep-rate (plist-get perf :success-rate))
-             (champion gptel-auto-workflow--champion-strategy)
-             (champion-rate gptel-auto-workflow--champion-keep-rate))
-        (cond
-         ;; μ Directness: first champion must beat baseline (template-default ~18%),
-         ;; not absolute zero. No champion until a strategy proves itself.
-         ((null champion)
-          (if (and keep-rate
-                   (> keep-rate gptel-auto-workflow--baseline-keep-rate))
-              (progn
-                (gptel-auto-workflow--crown-champion name keep-rate composite)
-                (push (cons name 'first-champion) results))
-            (push (cons name 'no-champion) results)))
-         ;; Promotion: 5% RELATIVE improvement over champion.
-         ;; e.g. champion at 20% → challenge at 21%+; champion at 40% → challenge at 42%+
-         ((and keep-rate (> keep-rate (* champion-rate 1.05)))
-          (push (cons name 'promoted) results)
-          (gptel-auto-workflow--crown-champion name keep-rate composite))
-         ;; Pass: beats champion but not enough for promotion.
-         ;; Keep champion but mark strategy as viable.
-         ((and keep-rate (> keep-rate champion-rate))
-          (push (cons name 'passed) results))
-         ;; Use composite score as fallback when keep-rate missing
-         ((and composite champion-rate (> composite champion-rate))
-          (push (cons name 'passed-composite) results))
-         (t
-          (push (cons name 'rejected) results)))))
-    (dolist (entry axis-scores)
-      (let* ((axis (format "%s" (car entry)))
-             (rate (cdr entry))
-             (champion-rate gptel-auto-workflow--champion-keep-rate))
-        (when (> rate (+ champion-rate 0.1))
-          (message "[champion] Axis %s performing well (%.1f%%) — consider strategies targeting this axis"
-                   axis (* 100 rate)))))
-    (unless gptel-auto-workflow--champion-strategy
-      (message "[champion] No viable champion — all strategies below baseline (%.1f%%)"
-               (* 100 gptel-auto-workflow--baseline-keep-rate)))
+             (composite (cdr entry)))
+        (catch 'category-result
+          (dolist (cat categories)
+            (let* ((cat-keep-rate (gptel-auto-workflow--strategy-category-keep-rate name cat))
+                   (champion-entry (gptel-auto-workflow--get-category-champion cat))
+                   (champion-strategy (car champion-entry))
+                   (champion-rate (or (cdr champion-entry) 0.0))
+                   (baseline-entry (assq cat gptel-auto-workflow--category-baselines))
+                   (cat-baseline (or (cdr baseline-entry) 0.10)))
+              (when (> cat-keep-rate 0)
+                (cond
+                 ((null champion-strategy)
+                  (when (> cat-keep-rate cat-baseline)
+                    (gptel-auto-workflow--crown-champion name cat-keep-rate composite cat)
+                    (push (cons name (intern (format "first-%s-champion" cat))) results)
+                    (throw 'category-result t)))
+                 ((> cat-keep-rate (* champion-rate 1.05))
+                  (gptel-auto-workflow--crown-champion name cat-keep-rate composite cat)
+                  (push (cons name (intern (format "promoted-%s" cat))) results)
+                  (throw 'category-result t))
+                 ((> cat-keep-rate champion-rate)
+                  (push (cons name (intern (format "passed-%s" cat))) results)
+                  (throw 'category-result t)))))))
+        ;; Fallback: no category hit, use global composite
+        (let ((champion-rate gptel-auto-workflow--champion-keep-rate))
+          (cond
+           ((and champion-rate (> composite champion-rate))
+            (push (cons name 'passed-composite) results))
+           (t
+            (push (cons name 'rejected) results))))))
+    (dolist (cat categories)
+      (let ((champion-entry (gptel-auto-workflow--get-category-champion cat)))
+        (if champion-entry
+            (message "[champion] %s: %s (%.1f%%)"
+                     cat (car champion-entry) (* 100 (cdr champion-entry)))
+          (message "[champion] %s: no champion yet (baseline=%.1f%%)"
+                   cat (* 100 (or (cdr (assq cat gptel-auto-workflow--category-baselines)) 0.10))))))
     results))
 
 (defconst gptel-auto-workflow--pcr-budgets

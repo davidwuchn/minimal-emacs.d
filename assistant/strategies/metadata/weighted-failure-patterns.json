@@ -1,0 +1,1 @@
+{"name":"weighted-failure-patterns","version":"1.0","hypothesis":"Weighting failure patterns by cross-target frequency and recency produces more actionable guidance.","axis":"D","components":["pattern-weighting","recency-scoring"]}
