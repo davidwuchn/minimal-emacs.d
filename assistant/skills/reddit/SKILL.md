@@ -190,3 +190,5 @@ Before outputting results:
 - [ ] Errors handled gracefully (invalid subreddit, API down)
 
 **"API call succeeded" ≠ "Data is useful"** - Verify content relevance.
+
+*Auto-evolved: No experiment data yet (2026-05-22T02:31:02Z). Collecting baseline.*

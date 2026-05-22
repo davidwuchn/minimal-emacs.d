@@ -301,3 +301,5 @@ metadata:
 - [ ] Tests pass (if available)
 
 **"Compiles clean" ≠ "Works at runtime"**
+
+*Auto-evolved: No experiment data yet (2026-05-22T02:31:01Z). Collecting baseline.*
