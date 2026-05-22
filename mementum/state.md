@@ -1,7 +1,34 @@
 # Mementum State
 
-> Last session: 2026-05-22 19:40
-> Session focus: Restore deleted evolution code, fix BDD + parse bugs, enrich ontology router, polish OUROBOROS.md
+> Last session: 2026-05-22 21:27
+> Session focus: Fixed remaining research parser failures and Allium BDD ordering-sensitive return bug
+
+> ### 2026-05-22 Session (night)
+> Session goal: Fix remaining test failures after research-integration commit
+
+### Complete
+
+| # | System | Key | What |
+|---|--------|-----|------|
+| 1 | research-integration | ⊘ | Fixed parser return structure: `nreverse` now returns from function, not while body |
+| 2 | research-integration | ⊘ | Fixed JSON end offsets from `forward-sexp` buffer positions and preserved multi-block parsing |
+| 3 | research-integration | ⊘ | Tests now expect JSON string values for `:phase`, matching `json-read-from-string` behavior |
+| 4 | meta-harness | ⊘ | `propose-research-strategy` now queues strategies even when worktree-root helper is unavailable in isolated tests |
+| 5 | Allium BDD | ⊘ | `allium-bdd-check` now always returns nil on async path and catches integration failures even under debug-on-error |
+
+### Verified
+- `tdd/research-integration`: 24/24 pass
+- `tdd/research/autotts-parse-trace-blocks`: 1/1 pass
+- Full unit suite: 1877 tests, 0 unexpected, 54 skipped
+- Byte-compile touched files: succeeds; warnings are pre-existing/docstring/forward-declaration style warnings
+
+### Key Files Changed
+- `lisp/modules/gptel-auto-workflow-research-integration.el`
+- `tests/test-gptel-auto-workflow-research-integration.el`
+- `lisp/modules/gptel-auto-workflow-evolution.el`
+
+> Previous session: 2026-05-22 19:40
+> Previous focus: Restore deleted evolution code, fix BDD + parse bugs, enrich ontology router, polish OUROBOROS.md
 
 > ### 2026-05-22 Session (evening)
 > Session goal: Review origin changes, fix accidental deletions, upgrade routing

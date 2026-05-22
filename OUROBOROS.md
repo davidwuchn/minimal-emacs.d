@@ -183,14 +183,34 @@ The system does not just run experiments — it builds a **formal knowledge grap
 | **Interval Labelling Schema** | O(1) subsumption over pattern hierarchy via preorder/postorder |
 | **Backend performance analysis** | 1,200+ experiments tracked per backend/model → keep-rate statistics |
 | **Pre-flight prediction** | Anti-pattern detection (3+ consecutive failures), target saturation (≥10), prediction threshold (0.15) |
-| **Ontology vs LLM decider** | Formal decision framework: data-availability × complexity → ontology or LLM |
+| **Ontology vs LLM decider** | Formal decision framework: data-availability × complexity × EMA confidence → ontology or LLM. Low EMA (<0.3) bypasses ontology, high EMA (>0.6) accepts weaker picks |
+| | φ freshness: EMA history persists across daemon restarts via cross-subsystem-state.json | Controller starts with informed confidence, not from zero |
 | **Category-based routing** | Targets classified as :programming, :tool-calls, :agentic, :natural-language → backend ranking per category |
 | **Semantic clustering** | git-embed similarity ≥0.75 groups related targets; winning strategies propagate across clusters |
 | **Strategy inheritance** | Similar targets auto-queue with inherited strategy from kept experiments (π Synthesis) |
 | **Category strike tracking** | 3 consecutive failures freeze a category; reset on next kept result (∀ Vigilance) |
-| **VSM health diagnostics** | Eight Keys scored per subsystem from kept hypotheses |
+| **VSM health diagnostics** | Eight Keys scored per subsystem (all 5: AutoGo, AutoTTS, self-evolve, meta-harness, ontology) from kept hypotheses; 7 expanded Wu Xing repair actions dispatched |
+| **Allium BDD gate** | Behavioral spec coherence checked each evolution cycle; failures stored in hints for analyzer consumption |
+| **Allium auto-repair** | Issues inject repair guidance into experiment prompts when coherence problems detected for target strategies |
+| **Category budget** | Per-category experiment quotas allocated by sqrt(keep-rate); hard-enforced programmatically at target selection + π Synthesis queue |
 
 37 patterns ported from Semantica, AutoGo, LogMap, and VSM. The system audits itself using its own ontologies.
+
+## The Persistence Layer
+
+Cross-subsystem state survives daemon restarts via `var/tmp/cross-subsystem-state.json`:
+
+| What persists | Why |
+|--------------|-----|
+| Category champions + keep-rates | Competitive gating continues across restarts |
+| Category experiment budget | Budget enforcement resumes with informed allocation |
+| VSM expanded actions | Wu Xing repair hints survive crashes |
+| Regressed targets | Knowledge-page diffs feed back into next analyzer cycle |
+| EMA confidence history | Controller starts with trend data, not from zero |
+| π Synthesis cluster queue | Semantically similar targets survive restart |
+| Allium BDD status | Behavioral spec coherence tracked across cycles |
+
+The pipeline verifies this file exists after each evolution step and restarts the daemon to pick up evolved code.
 
 ---
 
@@ -239,6 +259,8 @@ The snake's own immune system:
 | Ontology-aware provider routing | Ranks backends by delta-from-baseline + keep-rate + trend + confidence; penalizes unhealthy providers |
 | Force-push protection | Stashes dirty artifacts, merges origin/main, then pushes; never force-pushes |
 | Server socket self-healing | 30s timer recreates lost daemon socket; no SIGKILL restart needed |
+| Pipeline state verification | `cross-subsystem-state.json` checked after evolution; daemon restarted to load evolved code |
+| Cross-cycle amnesia guard | All hints serialized to JSON with proper keyword keys; EMA history persists across daemon restarts |
 | Conflict marker detection | No `<<<<<<<` in committed code |
 | 90-minute watchdog | No technique runs indefinitely |
 | Policy engine | Forbidden paths sealed |
