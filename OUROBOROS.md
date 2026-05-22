@@ -103,7 +103,7 @@ The body of the snake. It tests, verifies, and feeds back.
 
 ```
 Select target → Categorize → Route backend → Generate hypothesis
-     → Run 1844 tests → AI grade → AI review → Merge or learn
+     → Run 2481 tests → AI grade → AI review → Merge or learn
           ↓
      Kept? → π Synthesis: semantic cluster → inherit strategy → auto-queue
 ```
@@ -113,7 +113,7 @@ Every experiment is an isolated git worktree. `main` is never touched directly. 
 | Gate | What it checks | What happens on failure |
 |------|---------------|------------------------|
 | **Category routing** | Best backend for this target RIGHT NOW? (Δ-from-baseline + trend + confidence) | Routes to strongest current performer; unhealthy backends dropped |
-| **Test execution** | Did 1844 tests pass within 1800s? | Experiment discarded, pattern learned |
+| **Test execution** | Did 2481 tests pass within 1800s? | Experiment discarded, pattern learned |
 | **AI grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **AI review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
 | **π Synthesis** | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
@@ -235,7 +235,7 @@ The snake's own immune system:
 | Guard | Prevents |
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
-| 1844 tests + 1800s timeout | Broken code caught before staging |
+| 2481 tests + 1800s timeout | Broken code caught before staging |
 | Ontology-aware provider routing | Ranks backends by delta-from-baseline + keep-rate + trend + confidence; penalizes unhealthy providers |
 | Force-push protection | Stashes dirty artifacts, merges origin/main, then pushes; never force-pushes |
 | Server socket self-healing | 30s timer recreates lost daemon socket; no SIGKILL restart needed |
