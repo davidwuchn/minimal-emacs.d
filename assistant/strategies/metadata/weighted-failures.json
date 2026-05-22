@@ -1,0 +1,1 @@
+{"name":"weighted-failures","version":"1.0","hypothesis":"Prioritizing recent and frequent failure patterns yields more actionable insights than treating all patterns equally.","axis":"D","components":["weighted-patterns","recency-filtering"]}
