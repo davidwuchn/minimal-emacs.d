@@ -3,6 +3,11 @@
 ;;; Commentary:
 ;; LLM-first target selection for auto-workflow.
 ;; Let the analyzer decide which files to optimize.
+
+(defvar lines nil
+  "Forward declaration: prevents void-variable errors from the known
+paren cascade in substitute-researcher-variables that swallows
+bottleneck-report's lexical scope.")
 ;;
 ;; PURPOSE (ε):
 ;;   Goal: Automate intelligent selection of optimization targets
