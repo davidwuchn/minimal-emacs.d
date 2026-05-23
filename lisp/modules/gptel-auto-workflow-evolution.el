@@ -1965,6 +1965,11 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (run-with-idle-timer 30 nil #'gptel-auto-workflow--run-research-champion-league))
         (gptel-auto-workflow--consume-vsm-actions))
     (error (message "[feedback] ERROR: cross-subsystem failed — %s" (error-message-string err))))
+  ;; Verbum integration: monitor parallel research for new findings
+  (when (fboundp 'gptel-auto-workflow--verbum-tracker)
+    (condition-case err
+        (gptel-auto-workflow--verbum-tracker)
+      (error (message "[verbum] ERROR: tracker failed — %s" (error-message-string err)))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))

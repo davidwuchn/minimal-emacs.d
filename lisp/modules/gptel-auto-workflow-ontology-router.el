@@ -301,25 +301,45 @@ Scoring incorporates four dimensions (not just raw keep-rate):
       (message "[onto-router] CATEGORY OVERRIDE: %s (%s) → %s (baseline=%.1f%%)"
                category target category-override (if baseline (* baseline 100) 0)))
     
-    ;; Sort by score descending
-    (setq scored (sort scored (lambda (a b) (> (plist-get a :score) (plist-get b :score)))))
+    ;; Apply ternary decisions (verbum Phase 1): reject backends below baseline
+    (when baseline
+      (setq scored (gptel-auto-workflow--apply-ternary-routing scored baseline))
+      ;; Log ternary decisions for observability
+      (dolist (s scored)
+        (let ((ternary (plist-get s :ternary)))
+          (when (= ternary -1)
+            (message "[ternary] REJECTED %s (rate=%.1f%% < baseline=%.1f%%)"
+                     (plist-get s :backend)
+                     (* (or (plist-get s :rate) 0) 100)
+                     (* baseline 100))))))
+    
+    ;; Sort by score descending, but ternary -1 always at bottom
+    (setq scored (sort scored
+                       (lambda (a b)
+                         (let ((ta (or (plist-get a :ternary) 0))
+                               (tb (or (plist-get b :ternary) 0)))
+                           (if (/= ta tb)
+                               (> ta tb)  ; +1 > 0 > -1
+                             (> (plist-get a :score) (plist-get b :score)))))))
     
     ;; Log rich routing decision for observability
     (when (> (length scored) 1)
       (let ((top (car scored))
             (second (cadr scored)))
-        (message "[onto-router] ROUTE %s: %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f) > %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f)"
+        (message "[onto-router] ROUTE %s: %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s) > %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s)"
                  (or category "global")
                  (plist-get top :backend)
                  (plist-get top :delta)
                  (* (or (plist-get top :rate) 0) 100)
                  (plist-get top :trend)
                  (plist-get top :confidence)
+                 (pcase (plist-get top :ternary) (+1 "ACCEPT") (0 "DEFER") (-1 "REJECT"))
                  (plist-get second :backend)
                  (plist-get second :delta)
                  (* (or (plist-get second :rate) 0) 100)
                  (plist-get second :trend)
-                 (plist-get second :confidence))))
+                 (plist-get second :confidence)
+                 (pcase (plist-get second :ternary) (+1 "ACCEPT") (0 "DEFER") (-1 "REJECT")))))
     
     ;; Check if we have enough data to trust the reordering
     (let ((total-samples (cl-reduce #'+ scored
@@ -330,7 +350,10 @@ Scoring incorporates four dimensions (not just raw keep-rate):
             (message "[onto-router] Reordered %d backends by performance (≥%d samples)"
                      (length scored) total-samples)
             ;; Exploration: 15% chance to swap first two for learning
+            ;; Skip exploration if either top backend is rejected (ternary -1)
             (when (and (> (length scored) 1)
+                       (/= (or (plist-get (car scored) :ternary) 0) -1)
+                       (/= (or (plist-get (cadr scored) :ternary) 0) -1)
                        (< (random 100) (* gptel-auto-workflow--ontology-reorder-exploration-rate 100)))
               (let ((tmp (car scored)))
                 (setcar scored (cadr scored))
@@ -667,19 +690,26 @@ Based on verbum ternary weight research: {-1, 0, +1} creates cleaner boundaries.
 (defun gptel-auto-workflow--apply-ternary-routing (scored baseline)
   "Apply ternary decisions to SCORED backends using BASELINE.
 Modifies scored plist with :ternary field (-1, 0, +1).
-Backends with -1 are moved to bottom regardless of continuous score."
+Backends with -1 are moved to bottom regardless of continuous score.
+Category overrides (score = 9999.0) are always ACCEPT regardless of rate."
   (let ((result nil))
     (dolist (entry scored)
       (let* ((rate (or (plist-get entry :rate) 0.0))
-             (ternary (gptel-auto-workflow--backend-ternary-decision rate baseline)))
+             (score (plist-get entry :score))
+             ;; Category override: score = 9999.0 means forced top → ACCEPT
+             (has-override (and score (>= score 9999.0)))
+             (ternary (if has-override
+                          +1
+                        (gptel-auto-workflow--backend-ternary-decision rate baseline))))
         (push (plist-put entry :ternary ternary) result)
-        (message "[ternary] %s: rate=%.2f%% → %s"
+        (message "[ternary] %s: rate=%.2f%% → %s%s"
                  (plist-get entry :backend)
                  (* rate 100)
                  (pcase ternary
                    (-1 "REJECT")
                    (0 "DEFER")
-                   (+1 "ACCEPT")))))
+                   (+1 "ACCEPT"))
+                 (if has-override " [override]" ""))))
     (nreverse result)))
 
 ;; ─── Verbum Experiment Tracker ───

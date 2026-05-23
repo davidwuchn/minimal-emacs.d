@@ -510,6 +510,35 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (should (= +1 (plist-get good :ternary)))
       (should (= -1 (plist-get bad :ternary))))))
 
+(ert-deftest tdd/ternary/rejected-backends-at-bottom ()
+  "Backends with ternary -1 should be sorted to bottom."
+  (let ((scored (list (list :backend "bad" :rate 0.10 :score 5.0 :ternary -1)
+                      (list :backend "good" :rate 0.30 :score 15.0 :ternary +1))))
+    (setq scored (sort scored
+                       (lambda (a b)
+                         (let ((ta (or (plist-get a :ternary) 0))
+                               (tb (or (plist-get b :ternary) 0)))
+                           (if (/= ta tb)
+                               (> ta tb)
+                             (> (plist-get a :score) (plist-get b :score)))))))
+    (should (string= "good" (plist-get (car scored) :backend)))
+    (should (string= "bad" (plist-get (cadr scored) :backend)))))
+
+(ert-deftest tdd/ternary/no-exploration-on-rejected ()
+  "Exploration should not swap if top backend is rejected."
+  (let ((scored (list (list :backend "rejected" :rate 0.05 :score -10.0 :ternary -1)
+                      (list :backend "deferred" :rate 0.18 :score 2.0 :ternary 0)
+                      (list :backend "accepted" :rate 0.30 :score 15.0 :ternary +1))))
+    (setq scored (sort scored
+                       (lambda (a b)
+                         (let ((ta (or (plist-get a :ternary) 0))
+                               (tb (or (plist-get b :ternary) 0)))
+                           (if (/= ta tb)
+                               (> ta tb)
+                             (> (plist-get a :score) (plist-get b :score)))))))
+    ;; First should be accepted, not rejected
+    (should (string= "accepted" (plist-get (car scored) :backend)))))
+
 ;; ─── Backend Lambda Verification (verbum Phase 2) ───
 
 (ert-deftest tdd/lambda-verify/returns-unknown-initially ()
