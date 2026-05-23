@@ -4702,18 +4702,18 @@ Falls back to sqrt(keep-rate) when no champion data exists."
                (champion 0.8)
                ;; No champion → discover (0.8x, let exploration earn its place)
                (t 0.8)))
-             ;; Verbum: penalize categories with degraded/absent backends
-             (verbum-penalty
-              (if (and (boundp 'gptel-auto-workflow--quarantined-backends)
-                       gptel-auto-workflow--quarantined-backends)
-                  ;; If >50% of backends quarantined, reduce budget to 10%
-                  (let* ((total-backs (length (gptel-auto-workflow--evolution-backend-stats)))
-                         (quarantined (length gptel-auto-workflow--quarantined-backends))
-                         (q-ratio (/ (float quarantined) (max 1 total-backs))))
-                    (if (> q-ratio 0.5) 0.1   ; catastrophic: 10% budget
-                      (if (> q-ratio 0.25) 0.5 ; severe: 50% budget
-                        1.0)))                  ; minor: no penalty
-                1.0)))
+              ;; Verbum: penalize categories when backends are unhealthy
+              (verbum-penalty
+               (if (fboundp 'gptel-auto-workflow--backend-health-weight)
+                   (let* ((avg-hw 0.0) (n 0))
+                     (dolist (b (mapcar #'car (gptel-auto-workflow--evolution-backend-stats)))
+                       (cl-incf avg-hw (gptel-auto-workflow--backend-health-weight b))
+                       (cl-incf n))
+                     (setq avg-hw (/ avg-hw (max 1 n)))
+                     (cond ((< avg-hw 0.3) 0.1)   ; catastrophic
+                           ((< avg-hw 0.5) 0.5)   ; severe
+                           (t 1.0)))              ; healthy
+                 1.0)))
             (push (cons cat (* sqrt-val multiplier verbum-penalty)) budget)))
     (setq budget (nreverse budget))
     ;; Reserve 10% for π Synthesis exploration

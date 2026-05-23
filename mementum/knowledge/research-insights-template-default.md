@@ -62,3 +62,177 @@ These targets may need different research patterns or the research findings were
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Allium Behavioral Spec (auto-generated, v3)
+
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+
+```allium
+## Distilled Research Strategy
+
+**Framework:** `template-default` across **1986 experiments** targeting **~140 files** (lisp/modules/*, staging-*).
+
+### Core Hypotheses (Kept)
+
+The research tested improvements across five quality axes:
+
+| Axis | Focus | Pattern |
+|------|-------|---------|
+| **φ Vitality** | Error resilience, adaptability | `nil` guards, validation before `plist-get`/`car` |
+| **fractal Clarity** | Explicit assumptions, testable definitions | `proper-list-p` guards, named constants |
+| **Performance (B)** | Algorithmic efficiency | Caching, O(n²)→O(n), pre-compiled regex |
+| **Safety** | Defensive input handling | Type guards (`integerp`, `stringp`, `functionp`) |
+| **Truth (∃)** | Correct behavior | Bug fixes in off-by-one, data structure misuse |
+
+### High-Value Patterns Applied
+
+1. **Nil/input validation** — Adding `(when (my/gptel--positive-integer-p X) ...)` guards before plist/hash operations
+2. **proper-list-p over listp** — Dotted pairs (`(a . b)`) pass `listp` but fail `plist-get`/`cddr`
+3. **Format-agnostic field access** — Replacing `plist-get` with helpers that handle both plist and alist (JSON round-trip)
+4. **Extract duplicated logic** — 3+ identical code blocks → 1 named helper
+5. **Cache computation** — Regex patterns, context windows, model metadata
+6. **Fix plist-put/discarded-return** — `plist-put` returns new plist; must `setq`/`setf` back
+
+### Discarded Hypotheses
+
+- Adding explicit `proper-list-p` validation in `nucleus-tools-validate.el`
+- String-literal filtering in `call-symbols-in-line` for false-positive detection
+- FSM ID format validation (decimal vs scientific notation)
+- `cl-lib` require and nil guards in ontology parsing
+- Missing `:name` validation in tool spec argument processing
+```
+
+### Check Issues
+
+## Verification Report
+
+### Claims Check
+
+| Claim | Status | Evidence |
+|-------|--------|----------|
+| **~140 files** targeted | ❌ Inaccurate | Found **110 .el files** in `lisp/*` |
+| **1986 experiments** | ✅ Verified | Confirmed in `DIRECTIVE.md` header + `model-comparison.md` |
+| **385 kept** | ✅ Verified | `total-kept: 385` in DIRECTIVE.md |
+| **`template-default` framework** | ⚠️ Partial | Found in `analysis.json` but not in skills |
+| **`proper-list-p` in nucleus-tools-validate.el** | ❌ Inverted | File **has** `proper-list-p` guards (contrary to "discarded" claim) |
+
+### Verified Patterns (Evidence Found)
+
+| Pattern | Status |
+|----------|--------|
+| `my/gptel--positive-integer-p` nil guards | ✅ Found in `gptel-ext-context-cache.el` |
+| `proper-list-p` guards | ✅ Found in 4+ files |
+| Cache definitions | ✅ 8+ `*cache*` vars found |
+| `plist-put` without setq/setf | ⚠️ Found - potential bug |
+| Type guards (`integerp`, `stringp`) | ✅ Present |
+
+### Discrepancies Found
+
+1. **File count**: Claims ~140 files, actual is **110 .el files** (26% inflation)
+2. **nucleus-tools-validate.el**: Listed as "discarded hypothesis" but file **contains** `proper-list-p` validation - the hypothesis was **applied**
+3. **Experiment count accuracy**: 1986 is a **metric** (total-experiments field), not necessarily distinct experiment runs (there's debate in the data if this is cumulative or unique)
+
+### Summary
+
+The core research strategy is **substantially accurate** with 1986 experiments and 385 kept
+
+... (truncated)
