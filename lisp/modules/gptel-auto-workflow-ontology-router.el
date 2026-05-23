@@ -851,13 +851,19 @@ Quarantines backend at 3 consecutive degraded strikes."
       (:degraded
        (let ((new-count (1+ count)))
          (puthash backend new-count gptel-auto-workflow--lambda-strike-count)
-         (when (>= new-count 3)
-           (unless (member backend gptel-auto-workflow--quarantined-backends)
-             (push backend gptel-auto-workflow--quarantined-backends)
-             (message "[verbum] ⚠ QUARANTINED %s: %d consecutive degraded lambda checks"
-                      backend new-count)))))
-      (_
-       (message "[verbum] %s lambda status %s — no strike change" backend status)))))
+          (when (>= new-count 3)
+            (unless (member backend gptel-auto-workflow--quarantined-backends)
+              (push backend gptel-auto-workflow--quarantined-backends)
+              (message "[verbum] ⚠ QUARANTINED %s: %d consecutive degraded lambda checks"
+                       backend new-count)
+              ;; Trigger champion re-evaluation: champions may have been
+              ;; crowned on now-quarantined backend data
+              (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+                (setq gptel-auto-workflow--evolution-next-cycle-hints
+                      (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                                 :revalidate-champions t))))))
+       (_
+        (message "[verbum] %s lambda status %s — no strike change" backend status))))))
 
 (defun gptel-auto-workflow--backend-quarantined-p (backend)
   "Return t if BACKEND is quarantined due to lambda degradation."

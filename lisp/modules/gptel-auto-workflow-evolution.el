@@ -2204,6 +2204,29 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
          (strategies (length (gptel-auto-workflow--evolution-strategy-structure-scores)))
          (backends (length (gptel-auto-workflow--evolution-backend-stats)))
          (axis-stats (gptel-auto-workflow--evolution-axis-stats))
+         ;; Verbum: backend health metrics
+         (healthy-backends (- backends (length (if (boundp 'gptel-auto-workflow--quarantined-backends)
+                                                    gptel-auto-workflow--quarantined-backends
+                                                  nil))))
+         (degraded-backends (if (boundp 'gptel-auto-workflow--lambda-strike-count)
+                                (hash-table-count gptel-auto-workflow--lambda-strike-count)
+                              0))
+         (backend-health-ratio (if (> backends 0) (/ (float healthy-backends) backends) 0.0))
+         ;; Verbum: cross-backend consistency
+         (consistency-available (fboundp 'gptel-auto-workflow--check-all-targets-consistency))
+         (consistency-ratio
+          (if consistency-available
+              (let ((cons-result (condition-case nil
+                                     (gptel-auto-workflow--check-all-targets-consistency)
+                                   (error nil))))
+                (if cons-result
+                    (let ((total-targets (plist-get cons-result :total))
+                          (inconsistent (plist-get cons-result :inconsistent)))
+                      (if (> total-targets 0)
+                          (- 1.0 (/ (float inconsistent) total-targets))
+                        1.0))
+                  1.0))
+            1.0))
          (eight-keys-available (fboundp 'gptel-benchmark-eight-keys-score-for))
           (autogo-score 0.0) (autotts-score 0.0) (selfev-score 0.0)
           (harness-score 0.0) (ontology-score 0.0)
@@ -2225,10 +2248,16 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
         (setq harness-score (/ harness-score scored-count))
         (setq ontology-score (/ ontology-score scored-count))))
     (message "[vsm] S1-Ops: %d experiments, %.0f%% kept" total (* 100 keep-rate))
-    (message "[vsm] S2-Coord: %d modules scanned, staging verify active" 89)
-    (message "[vsm] S3-Control: %d backends in chain, watchdog 90min" backends)
+    (message "[vsm] S2-Coord: %d modules scanned, consistency %.0f%%" 89 (* 100 consistency-ratio))
+    (message "[vsm] S3-Control: %d/%d healthy backends (%.0f%%), %d degraded, watchdog 90min"
+             healthy-backends backends (* 100 backend-health-ratio) degraded-backends)
     (message "[vsm] S4-Intel: %d strategies evolved, auto-backend-order active" strategies)
     (message "[vsm] S5-Identity: lambda notation, confidence tags, graphify patterns active")
+    (when (and (boundp 'gptel-auto-workflow--quarantined-backends)
+               gptel-auto-workflow--quarantined-backends)
+      (message "[vsm] ⚠ VERBUM: %d backend(s) quarantined: %s"
+               (length gptel-auto-workflow--quarantined-backends)
+               (mapconcat #'identity gptel-auto-workflow--quarantined-backends ", ")))
     (when eight-keys-available
       (message "[vsm] Eight Keys: AutoGo=%.2f AutoTTS=%.2f self-evolve=%.2f meta-harness=%.2f ontology=%.2f (%d samples)"
                autogo-score autotts-score selfev-score harness-score ontology-score scored-count))
@@ -2248,20 +2277,30 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
       (message "[vsm] 相生: Fire(S4) weak — only %d strategies" strategies)
       (push (cons 'increase-strategy-evolution "Fire(S4) weak: fewer than 5 strategies")
             gptel-auto-workflow--wu-xing-actions))
-     ((< backends 3)
-      (message "[vsm] 相克: Metal(S2) weak — only %d backends" backends)
-      (push (cons 'enable-fallback-backend "Metal(S2) weak: fewer than 3 backends")
-            gptel-auto-workflow--wu-xing-actions))
+      ((< backends 3)
+       (message "[vsm] 相克: Metal(S2) weak — only %d backends" backends)
+       (push (cons 'enable-fallback-backend "Metal(S2) weak: fewer than 3 backends")
+             gptel-auto-workflow--wu-xing-actions))
+      ((< backend-health-ratio 0.5)
+       (message "[vsm] 相克: Earth(S3) weak — only %.0f%% backends healthy" (* 100 backend-health-ratio))
+       (push (cons 'rebalance-backends "Earth(S3) weak: majority of backends degraded")
+             gptel-auto-workflow--wu-xing-actions))
+      ((< consistency-ratio 0.6)
+       (message "[vsm] 相克: Metal(S2) weak — only %.0f%% cross-backend consistency" (* 100 consistency-ratio))
+       (push (cons 'increase-consistency "Metal(S2) weak: backends disagree on target classification")
+             gptel-auto-workflow--wu-xing-actions))
      (t
        (message "[vsm] 相生: All layers balanced — generating cycle active")))
      ;; VSM→Target: compute per-level health scores for target prioritization
      (let* ((s1-strength (min 1.0 (* keep-rate 5.0)))        ; Wood/Operations → keep-rate
-            (s2-strength (min 1.0 (/ backends 5.0)))          ; Metal/Coord → backend count
-            (s3-strength (if (> backends 2) 0.7 0.3))         ; Earth/Control → infrastructure
-            (s4-strength (min 1.0 (/ strategies 10.0)))       ; Fire/Intel → strategy count
+            (s2-strength (min 1.0 consistency-ratio))           ; Metal/Coord → backend agreement
+            (s3-strength (if (> backends 2)
+                             (* backend-health-ratio 0.7)       ; Earth/Control → healthy ratio
+                           0.3))                                ; penalized when <3 total
+            (s4-strength (min 1.0 (/ strategies 10.0)))        ; Fire/Intel → strategy count
             (s5-strength (if eight-keys-available
                              (/ (+ autogo-score autotts-score selfev-score ontology-score) 4.0)
-                           0.5)))                             ; Water/Identity → Eight Keys avg
+                           0.5)))                              ; Water/Identity → Eight Keys avg
        (push (cons 'prioritize-targets
                    (list :s1-ops s1-strength
                          :s2-coord s2-strength
@@ -4646,8 +4685,20 @@ Falls back to sqrt(keep-rate) when no champion data exists."
                ;; Champion at/below baseline → discover (0.8x)
                (champion 0.8)
                ;; No champion → discover (0.8x, let exploration earn its place)
-               (t 0.8))))
-        (push (cons cat (* sqrt-val multiplier)) budget)))
+               (t 0.8)))
+             ;; Verbum: penalize categories with degraded/absent backends
+             (verbum-penalty
+              (if (and (boundp 'gptel-auto-workflow--quarantined-backends)
+                       gptel-auto-workflow--quarantined-backends)
+                  ;; If >50% of backends quarantined, reduce budget to 10%
+                  (let* ((total-backs (length (gptel-auto-workflow--evolution-backend-stats)))
+                         (quarantined (length gptel-auto-workflow--quarantined-backends))
+                         (q-ratio (/ (float quarantined) (max 1 total-backs))))
+                    (if (> q-ratio 0.5) 0.1   ; catastrophic: 10% budget
+                      (if (> q-ratio 0.25) 0.5 ; severe: 50% budget
+                        1.0)))                  ; minor: no penalty
+                1.0)))
+            (push (cons cat (* sqrt-val multiplier verbum-penalty)) budget)))
     (setq budget (nreverse budget))
     ;; Reserve 10% for π Synthesis exploration
     (let* ((exploration-reserve (max 1 (round (* total-experiments 0.10))))
