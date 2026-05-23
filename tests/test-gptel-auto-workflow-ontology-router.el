@@ -781,5 +781,43 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
       (should (eq :unknown (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
 
+;; ─── Lambda Verification Report (verbum Phase 12) ───
+
+(ert-deftest tdd/lambda-verify/report-with-results ()
+  "lambda-verification-report shows correct counts with cached results."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
+    (puthash "DashScope" :degraded gptel-auto-workflow--lambda-verification-results)
+    (puthash "DeepSeek" :unknown gptel-auto-workflow--lambda-verification-results)
+    (let ((result (gptel-auto-workflow--lambda-verification-report)))
+      (should (= 1 (plist-get result :healthy)))
+      (should (= 1 (plist-get result :degraded)))
+      (should (> (plist-get result :unknown) 0))
+      (should (= 5 (plist-get result :total))))))
+
+(ert-deftest tdd/lambda-verify/penalty-degraded ()
+  "apply-verification-penalty penalizes degraded backends."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "bad-backend" :degraded gptel-auto-workflow--lambda-verification-results)
+    (let ((scored (list (list :backend "bad-backend" :score 100.0))))
+      (setq scored (gptel-auto-workflow--apply-verification-penalty scored))
+      (should (= 80.0 (plist-get (car scored) :score))))))
+
+(ert-deftest tdd/lambda-verify/penalty-healthy ()
+  "apply-verification-penalty does not penalize healthy backends."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "good-backend" :healthy gptel-auto-workflow--lambda-verification-results)
+    (let ((scored (list (list :backend "good-backend" :score 100.0))))
+      (setq scored (gptel-auto-workflow--apply-verification-penalty scored))
+      (should (= 100.0 (plist-get (car scored) :score))))))
+
+(ert-deftest tdd/lambda-verify/penalty-unknown ()
+  "apply-verification-penalty slightly penalizes unknown backends."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "unknown-backend" :unknown gptel-auto-workflow--lambda-verification-results)
+    (let ((scored (list (list :backend "unknown-backend" :score 100.0))))
+      (setq scored (gptel-auto-workflow--apply-verification-penalty scored))
+      (should (= 95.0 (plist-get (car scored) :score))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

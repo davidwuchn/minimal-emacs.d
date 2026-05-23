@@ -192,12 +192,29 @@ Called when research context changes or run completes."
       
       ;; Verbum integration status
       (insert "Verbum Integration:\n")
-      (when (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
-        (insert (format "  Lambda health cache: %d entries\n" 
-                        (length gptel-auto-workflow--backend-lambda-health-cache))))
-      (when (boundp 'gptel-auto-workflow--holographic-memory)
+      (when (fboundp 'gptel-auto-workflow--verbum-current-session)
+        (let ((session (gptel-auto-workflow--verbum-current-session)))
+          (if session
+              (insert (format "  Latest session: %d\n" session))
+            (insert "  Latest session: unavailable\n"))))
+      (when (fboundp 'gptel-auto-workflow--lambda-verification-results)
+        (insert (format "  Lambda verification cache: %d backends checked\n" 
+                        (hash-table-count gptel-auto-workflow--lambda-verification-results))))
+      (when (fboundp 'gptel-auto-workflow--holographic-memory)
         (insert (format "  Holographic memory: %d target-axis pairs\n" 
                         (length gptel-auto-workflow--holographic-memory))))
+      ;; Lambda verification report
+      (when (fboundp 'gptel-auto-workflow--lambda-verification-report)
+        (condition-case nil
+            (let ((report (gptel-auto-workflow--lambda-verification-report)))
+              (insert "\nLambda Verification Report:\n")
+              (insert (format "  Healthy: %d, Degraded: %d, Unknown: %d\n"
+                              (plist-get report :healthy)
+                              (plist-get report :degraded)
+                              (plist-get report :unknown)))
+              (dolist (entry (plist-get report :backends))
+                (insert (format "  %s: %s\n" (car entry) (cdr entry)))))
+          (ignore)))
       (insert "\n")
       
       (insert "\nPress q to quit\n")

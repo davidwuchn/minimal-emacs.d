@@ -412,6 +412,10 @@ Scoring incorporates four dimensions (not just raw keep-rate):
     (when target
       (setq scored (gptel-auto-workflow--apply-holographic-boost scored target)))
     
+    ;; Apply lambda verification penalty (verbum Phase 12): penalize
+    ;; degraded backends to avoid routing to backends without lambda compiler
+    (setq scored (gptel-auto-workflow--apply-verification-penalty scored))
+    
     ;; Sort by score descending, but ternary -1 always at bottom
     (setq scored (sort scored
                        (lambda (a b)
@@ -865,6 +869,62 @@ TODO: Use proper parser when verbum integration complete."
         (string-match-p "\\\\lambda" response)
         (string-match-p "->" response)
         (string-match-p "lambda" response))))
+
+;; ─── Lambda Verification Report (verbum Phase 12) ───
+
+(defun gptel-auto-workflow--lambda-verification-report ()
+  "Generate report of lambda verification results across all backends.
+Returns plist with :total :healthy :degraded :unknown :backends."
+  (let ((fallbacks (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+                       gptel-auto-workflow-headless-subagent-fallbacks
+                     '(("MiniMax" . "minimax-m2.7-highspeed")
+                       ("moonshot" . "kimi-k2.6")
+                       ("DashScope" . "qwen3.6-plus")
+                       ("DeepSeek" . "deepseek-v4-flash")
+                       ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+        (healthy-count 0)
+        (degraded-count 0)
+        (unknown-count 0)
+        (backend-statuses nil))
+    (dolist (entry fallbacks)
+      (let* ((backend (car entry))
+             (status (or (gethash backend gptel-auto-workflow--lambda-verification-results)
+                         :unknown)))
+        (push (cons backend status) backend-statuses)
+        (pcase status
+          (:healthy (cl-incf healthy-count))
+          (:degraded (cl-incf degraded-count))
+          (:unknown (cl-incf unknown-count)))))
+    (message "[verbum] Lambda verification report: %d healthy, %d degraded, %d unknown"
+             healthy-count degraded-count unknown-count)
+    (list :total (length fallbacks)
+          :healthy healthy-count
+          :degraded degraded-count
+          :unknown unknown-count
+          :backends (nreverse backend-statuses))))
+
+(defun gptel-auto-workflow--apply-verification-penalty (scored)
+  "Apply lambda verification penalty to SCORED backends.
+Degraded backends (-20 points) and unknown backends (-5 points).
+Healthy backends get no penalty.
+Returns modified scored list."
+  (let ((result nil))
+    (dolist (entry scored)
+      (let* ((backend (plist-get entry :backend))
+             (status (or (gethash backend gptel-auto-workflow--lambda-verification-results)
+                         :unknown))
+             (score (plist-get entry :score))
+             (penalty (pcase status
+                        (:degraded -20.0)
+                        (:unknown -5.0)
+                        (:healthy 0.0)
+                        (_ -5.0)))
+             (new-score (+ score penalty)))
+        (when (/= penalty 0)
+          (message "[verbum] %s penalized %.0f for lambda status: %s"
+                   backend (abs penalty) status))
+        (push (plist-put entry :score new-score) result)))
+    (nreverse result)))
 
 ;; ─── Cross-Backend Consistency Checking (verbum Phase 6) ───
 
