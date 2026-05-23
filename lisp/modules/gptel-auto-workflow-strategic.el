@@ -532,9 +532,24 @@ Returns nil if data not available."
 (defun gptel-auto-workflow--substitute-researcher-variables (skill-content)
   "Substitute template variables in SKILL-CONTENT with meta-learning data.
 Replaces {{research-effectiveness}}, {{kept-research}}, {{total-research}},
-and {{topic-performance}} with live data."
+and {{topic-performance}} with live data.
+Resilient: if SKILL.md was regenerated with hardcoded placeholder text by the
+daemon's evolve_researcher.py, restores template variables before substituting."
   (if (null skill-content)
       skill-content
+    ;; RESTORE: convert hardcoded placeholders back to template variables.
+    ;; The daemon's evolve_researcher.py regenerates SKILL.md with hardcoded
+    ;; text each evolution cycle. This ensures the substitution always works.
+    (setq skill-content
+          (replace-regexp-in-string
+           "Overall research effectiveness: [0-9.]+% ([0-9]+/[0-9]+ research-correlated experiments kept)"
+           "Overall research effectiveness: {{research-effectiveness}}.0% ({{kept-research}}/{{total-research}} research-correlated experiments kept)"
+           skill-content t t))
+    (setq skill-content
+          (replace-regexp-in-string
+           "\\*No topic data available yet\\.\\*"
+           "{{topic-performance}}\n\n{{research-champion}}\n\n{{ontology-gaps}}\n\n{{current-bottlenecks}}"
+           skill-content t t))
     (let* ((meta-data (gptel-auto-workflow--load-researcher-meta-learning))
            (effectiveness (or (plist-get meta-data :effectiveness) 16))
            (kept (or (plist-get meta-data :kept) 0))
