@@ -1662,8 +1662,8 @@ and advance through the configured fallback chain instead.")
 
 (defun gptel-auto-workflow--headless-provider-override-active-p ()
   "Return non-nil when headless auto-workflow provider override should apply."
-  (and (bound-and-true-p gptel-auto-workflow--headless)
-       (bound-and-true-p gptel-auto-workflow-persistent-headless)
+  (and (or (bound-and-true-p gptel-auto-workflow--headless)
+           (bound-and-true-p gptel-auto-workflow-persistent-headless))
        (bound-and-true-p gptel-auto-workflow--current-project)))
 
 (defun gptel-auto-workflow--backend-object (backend-name)
@@ -1704,11 +1704,11 @@ the user has not explicitly customized the variable."
                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
                      ("Gemini" . "gemini-3.1-pro-preview")))
         (setq gptel-auto-workflow-headless-subagent-fallbacks
-              '(("MiniMax" . "minimax-m2.7-highspeed")
-                ("moonshot" . "kimi-k2.6")
-                ("DashScope" . "glm-5")
+              '(("moonshot" . "kimi-k2.6")
+                ("DashScope" . "qwen3.6-plus")
                 ("DeepSeek" . "deepseek-v4-flash")
-                ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))
+                ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
+                ("MiniMax" . "minimax-m2.7-highspeed")))
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-executor-rate-limit-fallbacks)
@@ -1772,15 +1772,47 @@ Call at the start of a new workflow run."
     gptel-auto-workflow-headless-subagent-fallbacks)))
 
 (defun gptel-auto-workflow--agent-base-preset (agent-type)
-  "Return the current base preset plist for AGENT-TYPE, or nil when unavailable."
+  "Return the current base preset plist for AGENT-TYPE, or nil when unavailable.
+
+When the agent config has no :backend and the headless fallback override is
+active, automatically select the first available provider from the headless
+chain so that subagent calls do not fall through to the mode-hook default
+(typically MiniMax)."
   (when-let* ((agent-type (and (stringp agent-type) agent-type))
               (agent-config (and (boundp 'gptel-agent--agents)
-                                 (assoc agent-type gptel-agent--agents))))
-    (append (list :include-reasoning nil
-                  :use-tools t
-                  :use-context nil
-                  :stream my/gptel-subagent-stream)
-            (copy-sequence (cdr agent-config)))))
+                                 (assoc agent-type gptel-agent--agents)))
+              (merged (append (list :include-reasoning nil
+                                    :use-tools t
+                                    :use-context nil
+                                    :stream my/gptel-subagent-stream)
+                              (copy-sequence (cdr agent-config)))))
+    ;; If the merged preset has no backend, use the global gptel-backend
+    ;; as the default.  This is simpler and more reliable than the headless
+    ;; chain auto-select, which depends on timeline-sensitive dynamic
+    ;; variables (--headless, --current-project) that may not be set in
+    ;; every daemon code-path.
+    (when (and (null (plist-get merged :backend))
+               (boundp 'gptel-backend)
+               gptel-backend)
+      (setq merged (plist-put merged :backend gptel-backend)))
+    ;; Fallback: headless chain auto-select (when global backend is nil)
+    (when (and (null (plist-get merged :backend))
+               (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
+               (gptel-auto-workflow--headless-provider-override-active-p)
+               (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
+               (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
+      (let ((candidates (gptel-auto-workflow--rate-limit-failover-candidates agent-type))
+            (excluded (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                           gptel-auto-workflow--rate-limited-backends)))
+        (when candidates
+          (let ((pick (gptel-auto-workflow--first-available-provider-candidate
+                       candidates excluded)))
+            (when pick
+              (message "[subagent] %s base-preset auto-selected %s/%s"
+                       agent-type (car pick) (cdr pick))
+              (setq merged (plist-put merged :backend (car pick)))
+              (setq merged (plist-put merged :model (cdr pick))))))))
+    merged))
 
 (defun gptel-auto-workflow--runtime-subagent-provider-override (agent-type)
   "Return the active per-run provider override for AGENT-TYPE, if any."

@@ -769,8 +769,10 @@ When COMPLETION-CALLBACK is non-nil, call it after research completes."
   (let* ((root (expand-file-name project-root))
          (project-buf (gptel-auto-workflow--get-project-buffer root)))
     (message "[research] Starting for project: %s" root)
-    ;; Ensure gptel-auto-workflow-strategic is loaded
-    (unless (featurep 'gptel-auto-workflow-strategic)
+    ;; Ensure bottleneck-report + other critical functions are available.
+    ;; The feature may be provided but definitions missed due to load ordering.
+    (unless (and (fboundp 'gptel-auto-workflow--current-bottleneck-report)
+                 (fboundp 'gptel-auto-workflow--research-champion-report))
       (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)))
     ;; Set current project context for subagents
     (setq gptel-auto-workflow--current-project root)
@@ -792,6 +794,10 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   ;; Load full workflow stack when running in researcher daemon context
   (when (fboundp 'gptel-auto-workflow--reload-live-support)
     (gptel-auto-workflow--reload-live-support))
+  ;; Prevent gptel-mode hooks from defaulting to MiniMax and ensure
+  ;; headless-provider-override-active-p returns t so the fallback
+  ;; chain (DeepSeek etc.) is consulted for research subagent calls.
+  (setq gptel-auto-workflow-persistent-headless t)
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[research] Running for %d projects..." (length projects))
     (let ((results nil)

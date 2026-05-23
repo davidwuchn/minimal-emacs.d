@@ -3865,6 +3865,50 @@ experiment phases do not trip the real pre-grade target validator."
                        '(("Authorization" . "Bearer token")
                          ("User-Agent" . "KimiCLI/1.3"))))))))
 
+(ert-deftest regression/auto-workflow/subagent-dispatch-chain-overrides-minimax-preset ()
+  "Headless subagent dispatch should prefer the fallback chain over MiniMax preset."
+  (let ((gptel-benchmark-use-subagents t)
+        (gptel-agent-preset nil)
+        (gptel-auto-workflow--rate-limited-backends nil)
+        captured-preset
+        captured-agent
+        result)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--agent-base-preset)
+               (lambda (_agent-type)
+                 '(:backend "MiniMax" :model "minimax-m2.7-highspeed")))
+              ((symbol-function 'gptel-auto-workflow--maybe-override-subagent-provider)
+               (lambda (_agent-type preset)
+                 preset))
+              ((symbol-function 'gptel-auto-workflow--headless-provider-override-active-p)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--rate-limit-failover-candidates)
+               (lambda (_agent-type)
+                 '(("moonshot" . "kimi-k2.6")
+                   ("MiniMax" . "minimax-m2.7-highspeed"))))
+              ((symbol-function 'gptel-auto-workflow--first-available-provider-candidate)
+               (lambda (candidates &optional _excluded)
+                 (car candidates)))
+              ((symbol-function 'my/gptel--agent-task-with-timeout)
+               (lambda (callback agent-type _description _prompt &rest _args)
+                 (setq captured-preset gptel-agent-preset
+                       captured-agent agent-type)
+                 (funcall callback "ok")))
+              ((symbol-function 'gptel-agent--task)
+               (lambda (callback agent-type _description _prompt)
+                 (setq captured-preset gptel-agent-preset
+                       captured-agent agent-type)
+                 (funcall callback "ok")))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-benchmark-call-subagent
+       'researcher "External research" "Prompt"
+       (lambda (value) (setq result value))))
+    (should (equal result "ok"))
+    (should (equal captured-agent "researcher"))
+    (should (plistp captured-preset))
+    (should (equal (plist-get captured-preset :backend) "moonshot"))
+    (should (equal (plist-get captured-preset :model) "kimi-k2.6"))))
+
 (ert-deftest regression/auto-workflow/headless-subagent-provider-override-keeps-minimax-without-fallback ()
   "Headless workflow should keep MiniMax when no fallback credentials exist."
   (let ((preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
@@ -4445,6 +4489,42 @@ experiment phases do not trip the real pre-grade target validator."
       (put 'gptel-auto-experiment-validation-retry-active-grace 'saved-value old-saved)
       (put 'gptel-auto-experiment-validation-retry-active-grace 'customized-value old-customized)
       (put 'gptel-auto-experiment-validation-retry-active-grace 'theme-value old-theme))))
+
+(ert-deftest regression/auto-workflow/migrates-legacy-headless-subagent-fallbacks-to-moonshot-first ()
+  "Legacy headless subagent defaults should not restore MiniMax-first routing."
+  (let* ((legacy-subagent
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-chat")
+            ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+            ("Gemini" . "gemini-3.1-pro-preview")))
+         (old-subagent gptel-auto-workflow-headless-subagent-fallbacks)
+         (old-subagent-saved (get 'gptel-auto-workflow-headless-subagent-fallbacks
+                                  'saved-value))
+         (old-subagent-customized (get 'gptel-auto-workflow-headless-subagent-fallbacks
+                                       'customized-value))
+         (old-subagent-theme (get 'gptel-auto-workflow-headless-subagent-fallbacks
+                                  'theme-value)))
+    (unwind-protect
+        (progn
+          (setq gptel-auto-workflow-headless-subagent-fallbacks legacy-subagent)
+          (put 'gptel-auto-workflow-headless-subagent-fallbacks 'saved-value nil)
+          (put 'gptel-auto-workflow-headless-subagent-fallbacks 'customized-value nil)
+          (put 'gptel-auto-workflow-headless-subagent-fallbacks 'theme-value nil)
+          (cl-letf (((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (should (member 'gptel-auto-workflow-headless-subagent-fallbacks
+                            (gptel-auto-workflow--migrate-legacy-provider-defaults))))
+          (should (equal gptel-auto-workflow-headless-subagent-fallbacks
+                         '(("moonshot" . "kimi-k2.6")
+                           ("DashScope" . "qwen3.6-plus")
+                           ("DeepSeek" . "deepseek-v4-flash")
+                           ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
+                           ("MiniMax" . "minimax-m2.7-highspeed")))))
+      (setq gptel-auto-workflow-headless-subagent-fallbacks old-subagent)
+      (put 'gptel-auto-workflow-headless-subagent-fallbacks 'saved-value old-subagent-saved)
+      (put 'gptel-auto-workflow-headless-subagent-fallbacks 'customized-value old-subagent-customized)
+      (put 'gptel-auto-workflow-headless-subagent-fallbacks 'theme-value old-subagent-theme))))
 
 (ert-deftest regression/auto-workflow/migrates-legacy-provider-defaults ()
   "Run startup should refresh known legacy headless provider defaults."

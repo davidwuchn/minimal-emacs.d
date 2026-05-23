@@ -320,7 +320,7 @@ stale_active_snapshot_recoverable() {
 worker_daemon_pids() {
     ps -eo pid=,args= | awk -v bg="--bg-daemon=$SERVER_NAME" \
         -v d="--daemon=$SERVER_NAME" \
-        -v fg="--daemon=$SERVER_NAME" '
+        -v fg="--fg-daemon=$SERVER_NAME" '
         tolower($2) ~ /(^|\/)emacs/ && (index($0, bg) || index($0, d) || index($0, fg)) { print $1 }
     '
 }
@@ -959,14 +959,14 @@ workflow_action_elisp() {
 
     case "$action" in
         auto-workflow) dispatch="(gptel-auto-workflow-queue-all-projects)" ;;
-        research) dispatch="(gptel-auto-workflow-queue-all-research t)" ;;
+    research) dispatch="(gptel-auto-workflow-queue-all-research t)" ;;
         mementum) dispatch="(progn (setq gptel-mementum-headless-auto-approve t) (gptel-auto-workflow-queue-all-mementum))" ;;
         instincts) dispatch="(gptel-auto-workflow-queue-all-instincts)" ;;
         evolution) dispatch="(when (fboundp 'gptel-auto-workflow-evolution-run-cycle) (gptel-auto-workflow-evolution-run-cycle))" ;;
         *) return 1 ;;
     esac
 
-    printf '(let ((root (file-name-as-directory "%s"))) (let ((inhibit-message t) (load-verbose nil)) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)) (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root))) %s)' \
+    printf '(let ((root (file-name-as-directory "%s"))) (let ((inhibit-message t) (load-verbose nil)) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)) (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el")) (load-file (expand-file-name (concat "lisp/modules/" module) root))) (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root))) %s)' \
            "$ROOT_LISP" "$dispatch"
 }
 
@@ -1114,10 +1114,7 @@ ensure_worker_daemon() {
     
     # Keep the dedicated workflow daemon truly headless and detached.
     # Use `--daemon` (background fork) for session isolation and ulimit
-    # for C stack protection.  `--fg-daemon` is avoided — it can cause
-    # blocking pipe_read on the internal self-pipe when stdin is /dev/null.
-    # Self-pipe blocks from async HTTP calls are handled by the zombie
-    # reaper (60s timer in post-early-init.el) + sentinel >=0 deferral.
+    # for C stack protection.
     hydrate_missing_worktree_submodules
     seed_worker_daemon_shared_var
     # Disable native compilation for workflow daemon to avoid stale cache issues
@@ -1128,7 +1125,7 @@ ensure_worker_daemon() {
             MINIMAL_EMACS_WORKFLOW_ROLE="$ACTION" \
             MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
             MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" </dev/null >>"$3" 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" --eval "(setq native-comp-jit-compilation nil)" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     else
         env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
@@ -1137,7 +1134,7 @@ ensure_worker_daemon() {
             MINIMAL_EMACS_WORKFLOW_ROLE="$ACTION" \
             MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
             MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" </dev/null >>"$3" 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" --eval "(setq native-comp-jit-compilation nil)" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     fi
     for _ in $(seq 1 50); do

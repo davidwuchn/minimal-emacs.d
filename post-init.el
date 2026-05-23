@@ -6,6 +6,14 @@
 
 ;;; Code:
 
+;; Pre-emptively set persistent-headless for workflow daemons before any
+;; gptel-mode buffers are created.  Without this the gptel-mode hook in
+;; gptel-ext-core.el defaults every buffer's gptel-backend to MiniMax,
+;; and the headless-provider-override never activates because it requires
+;; this variable to be non-nil.
+(when (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
+  (setq gptel-auto-workflow-persistent-headless t))
+
 ;; Add the local lisp directory to Emacs' load path using the true root directory
 ;; (not user-emacs-directory, since we changed that to var/)
 (add-to-list 'load-path (expand-file-name "lisp" minimal-emacs-user-directory))
@@ -46,6 +54,15 @@
             (let ((load-verbose nil)
                   (inhibit-message t))
               (require 'init-ai)
+              ;; Force-reload key modules so chain-backend selection,
+              ;; OR-condition override, and nil-backend failover are
+              ;; available.  load-file always re-evaluates from source.
+              (dolist (mod '("gptel-tools-agent-error"
+                             "gptel-tools-agent-prompt-build"
+                             "gptel-benchmark-subagent"))
+                (load-file (expand-file-name
+                            (format "lisp/modules/%s.el" mod)
+                            minimal-emacs-user-directory)))
               (load (expand-file-name "lisp/modules/standalone-research.el"
                                        minimal-emacs-user-directory) nil 'nomessage)
               (when (fboundp 'slr-run-research)

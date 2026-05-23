@@ -864,7 +864,9 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("qwen3-max-2026-01-23" . 400000)
     ("glm-5"              . 350000)   ; 128K tokens
     ("glm-4.7"            . 350000)
-    ("MiniMax-M2.5"       . 300000)
+    ("minimax"            . 350000)   ; minimax-m2.7-highspeed, MiniMax-M2.5, etc.
+    ("MiniMax"            . 350000)   ; legacy PascalCase variants
+    ("qwen3."             . 400000)   ; qwen3.5-plus, qwen3.6-plus, etc.
     ("deepseek-v4-flash"  . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
     ("deepseek-v4-pro"    . 3000000)
     ("deepseek-chat"      . 3000000)
@@ -897,15 +899,21 @@ Otherwise falls back to `my/gptel-payload-byte-limit'.
 Only clamps to the global limit for unknown models — known models
 with higher limits (e.g., DeepSeek 3MB, Kimi 800KB) should use them.
 
-ASSUMPTION: Model names may include version/date suffixes (e.g., \"kimi-k2.6-20250711\").
-  Uses prefix matching to map variant names to their family limits.
-EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'."
-  (let* ((model (plist-get info :model))
+ASSUMPTION: Model names may include backend prefixes (e.g., \"moonshot/kimi-k2.6\")
+  or version/date suffixes. Uses substring matching to find family limits.
+EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'.
+  Also checks dynamically-bound gptel-model/gptel-backend since
+  the :before advice runs before gptel populates :model in info."
+  (let* ((model (or (plist-get info :model)
+                    ;; :before advice runs before :model is in info plist.
+                    ;; Use the dynamically-bound gptel-model or gptel-backend name.
+                    (and (boundp 'gptel-model) (symbol-name gptel-model))
+                    (and (boundp 'gptel-backend) (format "%s" gptel-backend))))
          (global-limit (or my/gptel-payload-byte-limit my/gptel--unbounded-byte-limit))
          (model-limit
           (if (stringp model)
               (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
-                       when (string-prefix-p pattern model)
+                       when (string-match (regexp-quote pattern) model)
                        return limit)
             nil)))
     (if model-limit

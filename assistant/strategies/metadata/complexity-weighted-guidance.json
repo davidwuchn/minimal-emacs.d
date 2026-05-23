@@ -1,0 +1,1 @@
+{"name":"complexity-weighted-guidance","version":"1.0","hypothesis":"Code complexity metrics should modulate the intensity of improvement guidance.","axis":"D","components":["complexity-metrics","adaptive-guidance"]}
