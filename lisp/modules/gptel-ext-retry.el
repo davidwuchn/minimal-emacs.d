@@ -891,8 +891,11 @@ Uses `json-serialize' for accuracy.  Returns 0 if :data is nil or serialization 
 
 (defun my/gptel--effective-byte-limit (info)
   "Return the byte limit to use for INFO's request.
-Takes the minimum of `my/gptel-payload-byte-limit' and the model-specific
-context limit from `my/gptel-model-context-bytes'.
+When the model has a specific limit in `my/gptel-model-context-bytes',
+uses that directly (the model declares what it can handle).
+Otherwise falls back to `my/gptel-payload-byte-limit'.
+Only clamps to the global limit for unknown models — known models
+with higher limits (e.g., DeepSeek 3MB, Kimi 800KB) should use them.
 
 ASSUMPTION: Model names may include version/date suffixes (e.g., \"kimi-k2.6-20250711\").
   Uses prefix matching to map variant names to their family limits.
@@ -901,12 +904,16 @@ EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'."
          (global-limit (or my/gptel-payload-byte-limit my/gptel--unbounded-byte-limit))
          (model-limit
           (if (stringp model)
-              (or (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
-                           when (string-prefix-p pattern model)
-                           return limit)
-                  my/gptel--unbounded-byte-limit)
-            my/gptel--unbounded-byte-limit)))
-    (min global-limit model-limit)))
+              (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
+                       when (string-prefix-p pattern model)
+                       return limit)
+            nil)))
+    (if model-limit
+        ;; Model has a declared limit — use it directly.
+        ;; The global limit is a safety net for unknown/unlisted models.
+        model-limit
+      ;; Unknown model: use global limit as safety net.
+      global-limit)))
 
 (defconst my/gptel--compaction-passes
   `((1 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i 1 t))

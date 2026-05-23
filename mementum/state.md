@@ -2,11 +2,28 @@
 
 > Last session: 2026-05-23
 
-## Current Session: Verbum Integration — All 7 Phases + Wiring Complete
+## Current Session: Deep Debugging + gptel Payload Fix
 
-**Status:** Complete — Implemented and wired all verbum phases into production pipeline.
+**Status:** All P0/P1 bugs resolved. 316/316 tests.
 
-### What Was Built
+### Bugs Fixed (2026-05-23)
+
+1. **Verbum budget penalty**: `quarantined-backends` → `health-weight` API
+2. **Gate-strategies paren scoping**: 2 missing parens causing byte-compile free-var warnings → regression test added
+3. **Conflicted-target review queue**: human-in-the-loop triage for <50% agreement targets
+4. **5 byte-compile warnings**: rates unused, `_t`/`err` naming
+5. **Researcher crash** (`void-function bottleneck-report`): `let(guidance-json)` at L587 never closed, cascaded +1 depth through entire function, swallowing bottleneck-report as substitute's body. Fix: +1 `)` L598, −1 `)` L663
+6. **3 `cl-return-from` without `cl-block`**: enrich-ontology, eight-keys-convergence, allium-bdd-check all silently fail at runtime with `No catch for tag`
+7. **exec-path-from-shell 2.3s**: `check-startup-files nil` skips full shell rc loading
+8. **Launchd daemon restart loop**: KeepAlive→AbnormalExit triggered rapid restarts; fixed with socket cleanup + ThrottleInterval
+9. **gptel payload 350KB warning**: `my/gptel--effective-byte-limit` used `min(global, model)` which capped known models at 200KB even when they support 350KB+. Fix: use model-specific limit directly, only fall back to global for unknown models
+
+### Key Learnings
+
+- **Paren cascade bugs**: One unclosed `(` pushes all downstream depths +1, deferring defun closure dozens of lines. Check-parens passes (balanced) but structure is wrong. Use `syntax-ppss` depth tracking to find cascade roots.
+- **`cl-return-from` without `cl-block`**: No compile warning. Fails silently at runtime with `No catch for tag`. Only visible in logs.
+- **`min()` logic for limits**: Taking minimum of global+model limits is overly conservative. Models declare their own limits for a reason. Use model limit directly, global only as safety net for unknown models.
+- **Launchd + Emacs daemon**: Socket path on macOS is `$TMPDIR/emacs$UID/server`, not `/tmp`. Must clean both paths.
 
 **Phase 1-7 (Complete):**
 1. **Ternary decisions** — Convert scores to -1/0/+1
