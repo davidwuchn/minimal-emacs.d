@@ -4928,7 +4928,7 @@ Solves S2-2: richer repair repertoire."
          (actions nil))
     ;; S4-1: Backend variance check
     (when (> (length backends) 1)
-      (let ((rates (mapcar #'cdr backends)) (best (or (cdar backends) 0)) (worst (or (cdr (car (last backends))) 0)))
+      (let ((rates (mapcar #'cdr backends)) (best (or (car rates) 0)) (worst (or (car (last rates)) 0)))
         (when (> (- best worst) 0.15)
           (push (cons 'rebalance-backends (format "Keep-rate variance %.0f%%-%.0f%%" (* 100 worst) (* 100 best))) actions))))
     ;; S1-4: Overfit detection gates
