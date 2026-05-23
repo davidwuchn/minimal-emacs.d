@@ -634,6 +634,22 @@ daemon's evolve_researcher.py, restores template variables before substituting."
               (replace-regexp-in-string
                "{{ontology-gaps}}" gaps
                skill-content t t)))
+      ;; Inject priority repo URLs.  Keep the list short (3-4) so the
+      ;; subagent can visit all within a single research turn's timeout.
+      (let* ((repos
+              '(("nucleus" . "AI prompting framework (VSM, lambda notation, Wu Xing)")
+                ("mementum" . "Git-based AI memory (synthesis, recall protocol)")
+                ("gptel" . "LLM backend integration -- new backends, tool APIs")))
+             (repo-md
+              (mapconcat
+               (pcase-lambda (`(,name . ,desc))
+                 (format "- **[%s](https://github.com/davidwuchn/%s)**: %s\n  - Read: AGENTS.md, README.md, recent commits\n  - Extract: 1-3 patterns applicable to Emacs Lisp AI agents"
+                         name name desc))
+               repos "\n")))
+        (setq skill-content
+              (replace-regexp-in-string
+               "{{priority-repos}}" repo-md
+               skill-content t t)))
       skill-content)))
 
 (defun gptel-auto-workflow--current-bottleneck-report ()
