@@ -475,5 +475,111 @@ Guards against missing runtime dependencies (worktree-base-root)."
           (should (plist-get e :target))
           (should (numberp (plist-get e :score))))))))
 
+;; ─── Ternary Decision Boundaries (verbum Phase 1) ───
+
+(ert-deftest tdd/ternary/reject-below-baseline ()
+  "Backend with rate 5% below baseline should be rejected (-1)."
+  (should (= -1 (gptel-auto-workflow--backend-ternary-decision 0.10 0.20))))
+
+(ert-deftest tdd/ternary/accept-above-baseline ()
+  "Backend with rate 5% above baseline should be accepted (+1)."
+  (should (= +1 (gptel-auto-workflow--backend-ternary-decision 0.30 0.20))))
+
+(ert-deftest tdd/ternary/defer-near-baseline ()
+  "Backend within 5% of baseline should be deferred (0)."
+  (should (= 0 (gptel-auto-workflow--backend-ternary-decision 0.22 0.20))))
+
+(ert-deftest tdd/ternary/defer-exactly-at-baseline ()
+  "Backend exactly at baseline should be deferred (0)."
+  (should (= 0 (gptel-auto-workflow--backend-ternary-decision 0.20 0.20))))
+
+(ert-deftest tdd/ternary/defer-nil-inputs ()
+  "Nil inputs should defer (0) rather than crash."
+  (should (= 0 (gptel-auto-workflow--backend-ternary-decision nil 0.20)))
+  (should (= 0 (gptel-auto-workflow--backend-ternary-decision 0.20 nil)))
+  (should (= 0 (gptel-auto-workflow--backend-ternary-decision nil nil))))
+
+(ert-deftest tdd/ternary/apply-ternary-routing ()
+  "apply-ternary-routing adds :ternary field and preserves order."
+  (let* ((scored (list (list :backend "good" :rate 0.30)
+                       (list :backend "bad" :rate 0.10)))
+         (result (gptel-auto-workflow--apply-ternary-routing scored 0.20)))
+    (should (= 2 (length result)))
+    (let ((good (car result))
+          (bad (cadr result)))
+      (should (= +1 (plist-get good :ternary)))
+      (should (= -1 (plist-get bad :ternary))))))
+
+;; ─── Backend Lambda Verification (verbum Phase 2) ───
+
+(ert-deftest tdd/lambda-verify/returns-unknown-initially ()
+  "Lambda verification returns :unknown before API integration."
+  (let ((gptel-auto-workflow--backend-lambda-health-cache nil))
+    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda "moonshot")))))
+
+(ert-deftest tdd/lambda-verify/caches-result ()
+  "Lambda verification caches result for same hour."
+  (let ((gptel-auto-workflow--backend-lambda-health-cache nil))
+    (gptel-auto-workflow--verify-backend-lambda "moonshot")
+    (should (> (length gptel-auto-workflow--backend-lambda-health-cache) 0))))
+
+(ert-deftest tdd/lambda-verify/gate-prompt-exists ()
+  "Lambda gate prompt should be defined and non-empty."
+  (should gptel-auto-workflow--lambda-gate-prompt)
+  (should (> (length gptel-auto-workflow--lambda-gate-prompt) 0)))
+
+;; ─── Verbum Tracker (verbum Phase 1) ───
+
+(ert-deftest tdd/verbum/state-file-path ()
+  "verbum-state-file returns correct path."
+  (let ((gptel-auto-workflow--verbum-repo-path "/tmp/verbum"))
+    (should (string= "/tmp/verbum/mementum/state.md"
+                     (gptel-auto-workflow--verbum-state-file)))))
+
+(ert-deftest tdd/verbum/session-parsing ()
+  "verbum-current-session extracts session number from state."
+  (let ((temp-file (make-temp-file "verbum-state-")))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file
+            (insert "## Current Session: Session 112 — crystal spine\n"))
+          (let ((gptel-auto-workflow--verbum-repo-path (file-name-directory temp-file)))
+            ;; Override to use temp file path
+            (cl-letf (((symbol-function 'gptel-auto-workflow--verbum-state-file)
+                       (lambda () temp-file)))
+              (should (= 112 (gptel-auto-workflow--verbum-current-session))))))
+      (delete-file temp-file))))
+
+(ert-deftest tdd/verbum/session-parsing-nil ()
+  "verbum-current-session returns nil for missing file."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--verbum-state-file)
+             (lambda () "/nonexistent/path/state.md")))
+    (should-not (gptel-auto-workflow--verbum-current-session))))
+
+(ert-deftest tdd/verbum/tracker-detects-new-session ()
+  "verbum-tracker detects when session advances."
+  (let ((gptel-auto-workflow--verbum-last-session 111)
+        (tracked nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--verbum-current-session)
+               (lambda () 112))
+              ((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (setq tracked (apply #'format fmt args)))))
+      (gptel-auto-workflow--verbum-tracker)
+      (should tracked)
+      (should (string-match-p "112" tracked))
+      (should (= 112 gptel-auto-workflow--verbum-last-session)))))
+
+(ert-deftest tdd/verbum/tracker-skips-same-session ()
+  "verbum-tracker does nothing when session unchanged."
+  (let ((gptel-auto-workflow--verbum-last-session 112)
+        (called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--verbum-current-session)
+               (lambda () 112))
+              ((symbol-function 'message)
+               (lambda (&rest _) (setq called t))))
+      (gptel-auto-workflow--verbum-tracker)
+      (should-not called))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

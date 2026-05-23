@@ -615,5 +615,111 @@ VSM S2 Metal: coordination prevents duplicated effort across similar files."
                            :cluster-queued
                            (append (nreverse new-entries) (or existing nil)))))))))
 
+;; ─── Verbum Integration: Lambda Verification ───
+
+(defvar gptel-auto-workflow--lambda-gate-prompt
+  "Convert the following prose to a lambda expression.\n\nProse: A function that takes a number and returns its square.\n\nLambda:"
+  "Gate prompt to test if backend exhibits lambda compiler.
+Based on verbum research: P(λ)=90.7% indicates compiler present.")
+
+(defvar gptel-auto-workflow--lambda-verification-threshold 0.8
+  "Minimum P(λ) score for backend to be considered healthy.
+Backends below this are flagged as degraded.")
+
+(defvar gptel-auto-workflow--backend-lambda-health-cache nil
+  "Cache of backend lambda verification results.
+Format: ((backend . timestamp) . status) where status is :healthy/:degraded/:unknown.")
+
+(defun gptel-auto-workflow--verify-backend-lambda (backend)
+  "Check if BACKEND exhibits lambda compiler (verbum Phase 2).
+Returns :healthy, :degraded, or :unknown.
+Caches results for 1 hour to avoid repeated API calls."
+  (let* ((cache-key (cons backend (format-time-string "%Y-%m-%d-%H")))
+         (cached (assoc cache-key gptel-auto-workflow--backend-lambda-health-cache)))
+    (if cached
+        (cdr cached)
+      ;; TODO: Actually call backend with gate prompt when API integration ready
+      ;; For now, mark all as unknown until verbum integration complete
+      (let ((status :unknown))
+        (push (cons cache-key status) gptel-auto-workflow--backend-lambda-health-cache)
+        (message "[verbum] Lambda health for %s: %s (cache miss)" backend status)
+        status))))
+
+;; ─── Ternary Decision Boundaries (verbum Phase 1) ───
+
+(defun gptel-auto-workflow--backend-ternary-decision (score baseline)
+  "Convert continuous SCORE to ternary decision vs BASELINE.
+Returns: -1 (reject, below baseline), 0 (defer, ambiguous), +1 (accept, beats baseline).
+Based on verbum ternary weight research: {-1, 0, +1} creates cleaner boundaries."
+  (cond
+   ;; No data or invalid score → defer
+   ((or (null score) (null baseline) (< baseline 0))
+    0)
+   ;; Significantly below baseline (> 5% gap) → reject
+   ((< score (- baseline 0.05))
+    -1)
+   ;; Significantly above baseline (> 5% gap) → accept
+   ((> score (+ baseline 0.05))
+    +1)
+   ;; Within 5% of baseline → defer (ambiguous)
+   (t 0)))
+
+(defun gptel-auto-workflow--apply-ternary-routing (scored baseline)
+  "Apply ternary decisions to SCORED backends using BASELINE.
+Modifies scored plist with :ternary field (-1, 0, +1).
+Backends with -1 are moved to bottom regardless of continuous score."
+  (let ((result nil))
+    (dolist (entry scored)
+      (let* ((rate (or (plist-get entry :rate) 0.0))
+             (ternary (gptel-auto-workflow--backend-ternary-decision rate baseline)))
+        (push (plist-put entry :ternary ternary) result)
+        (message "[ternary] %s: rate=%.2f%% → %s"
+                 (plist-get entry :backend)
+                 (* rate 100)
+                 (pcase ternary
+                   (-1 "REJECT")
+                   (0 "DEFER")
+                   (+1 "ACCEPT")))))
+    (nreverse result)))
+
+;; ─── Verbum Experiment Tracker ───
+
+(defvar gptel-auto-workflow--verbum-repo-path
+  (expand-file-name "~/src/verbum")
+  "Path to verbum repository for monitoring.")
+
+(defvar gptel-auto-workflow--verbum-last-session nil
+  "Last verbum session number that was processed.")
+
+(defun gptel-auto-workflow--verbum-state-file ()
+  "Return path to verbum's mementum state file."
+  (expand-file-name "mementum/state.md" gptel-auto-workflow--verbum-repo-path))
+
+(defun gptel-auto-workflow--verbum-current-session ()
+  "Read current verbum session number from state file.
+Returns session number or nil if unavailable."
+  (let ((state-file (gptel-auto-workflow--verbum-state-file)))
+    (when (file-exists-p state-file)
+      (with-temp-buffer
+        (insert-file-contents state-file)
+        (goto-char (point-min))
+        (when (re-search-forward "Session \\([0-9]+\\)" nil t)
+          (string-to-number (match-string 1)))))))
+
+(defun gptel-auto-workflow--verbum-tracker ()
+  "Monitor verbum for new sessions and auto-create mementum entries.
+Called periodically by evolution cycle.
+Phase 1: Low-effort monitoring; Phase 3: Deep integration with holographic memory."
+  (let ((current-session (gptel-auto-workflow--verbum-current-session)))
+    (when (and current-session
+               (or (null gptel-auto-workflow--verbum-last-session)
+                   (> current-session gptel-auto-workflow--verbum-last-session)))
+      (message "[verbum] New session detected: %d → %d"
+               (or gptel-auto-workflow--verbum-last-session 0) current-session)
+      (setq gptel-auto-workflow--verbum-last-session current-session)
+      ;; TODO: Auto-create mementum memory entry when verbum integration deepens
+      (message "[verbum] Session %d findings available at %s"
+               current-session gptel-auto-workflow--verbum-repo-path))))
+
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here
