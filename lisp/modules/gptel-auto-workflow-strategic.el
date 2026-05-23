@@ -570,9 +570,18 @@ daemon's evolve_researcher.py, restores template variables before substituting."
            "Overall research effectiveness: {{research-effectiveness}}.0% ({{kept-research}}/{{total-research}} research-correlated experiments kept)"
            skill-content t t))
     (setq skill-content
+           (replace-regexp-in-string
+            "\\*No topic data available yet\\.\\*"
+            "{{topic-performance}}\n\n{{research-champion}}\n\n{{ontology-gaps}}\n\n{{current-bottlenecks}}"
+            skill-content t t))
+    ;; RESTORE: The daemon's evolution cycle rewrites {{priority-repos}}
+    ;; back into the full hardcoded repo list.  Detect and restore it.
+    (setq skill-content
           (replace-regexp-in-string
-           "\\*No topic data available yet\\.\\*"
-           "{{topic-performance}}\n\n{{research-champion}}\n\n{{ontology-gaps}}\n\n{{current-bottlenecks}}"
+           (concat "# Priority Repos to Explore .*?"
+                   "\\(?:\n\\|.\\)*?"
+                   "## Research Method Per Repo")
+           "{{priority-repos}}\n\n## Research Method Per Repo"
            skill-content t t))
     (let* ((meta-data (gptel-auto-workflow--load-researcher-meta-learning))
            (effectiveness (or (plist-get meta-data :effectiveness) 16))
