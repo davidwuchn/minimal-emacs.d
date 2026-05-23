@@ -1987,7 +1987,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
               (gptel-auto-workflow--verify-all-backends-lambda)
               (put 'gptel-auto-workflow--verify-all-backends-lambda :last-run (float-time)))
           (error (message "[verbum] ERROR: lambda verification failed — %s" (error-message-string err)))))))
-  ;; Verbum Phase 6: Cross-backend consistency check (run every 3 hours)
+  ;; Verbum Phase 6+9: Cross-backend consistency + low-agreement alerts (run every 3 hours)
   (when (fboundp 'gptel-auto-workflow--check-all-targets-consistency)
     (let ((last-check (get 'gptel-auto-workflow--check-all-targets-consistency :last-run)))
       (when (or (null last-check)
@@ -1997,23 +1997,20 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
               (put 'gptel-auto-workflow--check-all-targets-consistency :last-run (float-time))
               (when (> (plist-get result :inconsistent) 0)
                 (message "[verbum] ⚠ %d inconsistent targets detected"
-                         (plist-get result :inconsistent))))
+                         (plist-get result :inconsistent))
+                ;; Phase 9: detailed low-agreement alerts
+                (let ((low-agreement nil))
+                  (dolist (target-report (plist-get result :targets))
+                    (when (< (plist-get target-report :ratio) 0.5)
+                      (push target-report low-agreement)))
+                  (when low-agreement
+                    (message "[verbum] ⚠ LOW AGREEMENT (%d targets < 50%%):" (length low-agreement))
+                    (dolist (t (seq-take low-agreement 5))
+                      (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
+                               (plist-get t :target)
+                               (* 100 (plist-get t :ratio))
+                               (length (plist-get t :conflicts))))))))
           (error (message "[verbum] ERROR: consistency check failed — %s" (error-message-string err)))))))
-  ;; Verbum Phase 9: Consistency alerts for low-agreement targets
-  (when (fboundp 'gptel-auto-workflow--check-all-targets-consistency)
-    (let ((result (gptel-auto-workflow--check-all-targets-consistency)))
-      (when (> (plist-get result :inconsistent) 0)
-        (let ((low-agreement nil))
-          (dolist (target-report (plist-get result :targets))
-            (when (< (plist-get target-report :ratio) 0.5)
-              (push target-report low-agreement)))
-          (when low-agreement
-            (message "[verbum] ⚠ LOW AGREEMENT (%d targets < 50%%):" (length low-agreement))
-            (dolist (t (seq-take low-agreement 5))
-              (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
-                       (plist-get t :target)
-                       (* 100 (plist-get t :ratio))
-                       (length (plist-get t :conflicts)))))))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))

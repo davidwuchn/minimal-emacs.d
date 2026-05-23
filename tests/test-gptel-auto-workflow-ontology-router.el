@@ -545,14 +545,14 @@ Guards against missing runtime dependencies (worktree-base-root)."
   "Lambda verification returns cached status when available."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
-    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))))
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))))
 
 (ert-deftest tdd/lambda-verify/known-backends-return-unknown-without-cache ()
   "Without cache, verification initiates async and returns :unknown."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
         (gptel-auto-workflow--backend-lambda-health-cache nil))
-    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))
-    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "DashScope")))))
+    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))
+    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "DashScope" "qwen3.6-plus")))))
 
 (ert-deftest tdd/lambda-verify/response-contains-lambda ()
   "response-contains-lambda-p detects lambda expressions."
@@ -787,22 +787,22 @@ Guards against missing runtime dependencies (worktree-base-root)."
   "Returns cached result when available."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
-    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))))
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))))
 
 (ert-deftest tdd/lambda-verify/cached-degraded ()
   "Returns cached degraded result."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (puthash "moonshot" :degraded gptel-auto-workflow--lambda-verification-results)
-    (should (eq :degraded (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))))
+    (should (eq :degraded (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))))
 
 (ert-deftest tdd/lambda-verify/no-cache-initiates-async ()
   "When no cached result, initiates async verification and returns :unknown."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
         (called nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--call-backend-for-lambda)
-               (lambda (backend _prompt) (setq called backend) t)))
-      (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))
-      (should (string= "moonshot" called)))))
+               (lambda (backend model _prompt) (setq called (cons backend model)) t)))
+      (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))
+      (should (equal '("moonshot" . "kimi-k2.6") called)))))
 
 (ert-deftest tdd/lambda-verify/callback-stores-healthy ()
   "Async callback stores :healthy when lambda found in response."
@@ -811,7 +811,7 @@ Guards against missing runtime dependencies (worktree-base-root)."
                (lambda (_prompt &rest args)
                  (let ((cb (plist-get args :callback)))
                    (funcall cb "λx.x" nil)))))
-      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "test")
+      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
       (should (eq :healthy (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
 
 (ert-deftest tdd/lambda-verify/callback-stores-degraded ()
@@ -821,7 +821,7 @@ Guards against missing runtime dependencies (worktree-base-root)."
                (lambda (_prompt &rest args)
                  (let ((cb (plist-get args :callback)))
                    (funcall cb "hello world" nil)))))
-      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "test")
+      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
       (should (eq :degraded (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
 
 (ert-deftest tdd/lambda-verify/callback-stores-unknown-on-nil ()
@@ -831,7 +831,7 @@ Guards against missing runtime dependencies (worktree-base-root)."
                (lambda (_prompt &rest args)
                  (let ((cb (plist-get args :callback)))
                    (funcall cb nil nil)))))
-      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "test")
+      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
       (should (eq :unknown (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
 
 (provide 'test-gptel-auto-workflow-ontology-router)

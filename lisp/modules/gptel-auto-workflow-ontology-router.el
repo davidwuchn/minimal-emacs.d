@@ -351,6 +351,9 @@ Scoring incorporates four dimensions (not just raw keep-rate):
              ;; Quota health
              (quota (gptel-auto-workflow--backend-quota-health backend))
              (healthy (plist-get quota :healthy))
+             ;; Lambda health (verbum Phase 11): is backend producing λ?
+             (lambda-health (gethash backend gptel-auto-workflow--lambda-verification-results))
+             (lambda-degraded (eq lambda-health :degraded))
              ;; --- Score components ---
              ;; Delta from baseline: how much better/worse than peers?
              (delta (if (and all-rate baseline (> baseline 0.0))
@@ -373,7 +376,8 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                                   (* all-rate 30.0)      ; Raw keep-rate (30%)
                                   (* trend 20.0)         ; Direction of change (20%)
                                   (* confidence 10.0)    ; Data trust (10%)
-                                  (if healthy 0 -50.0))  ; Quota penalty
+                                  (if healthy 0 -50.0)   ; Quota penalty
+                                  (if lambda-degraded -30.0 0))  ; Lambda degraded penalty
                              -1.0))  ; No data = bottom
               scored)))
     
@@ -784,7 +788,8 @@ Returns plist with :overall status and per-backend results."
     (message "[verbum] Verifying lambda compiler on %d backends..." (length fallbacks))
     (dolist (entry fallbacks)
       (let* ((backend (car entry))
-             (status (gptel-auto-workflow--verify-backend-lambda-impl backend)))
+             (model (cdr entry))
+             (status (gptel-auto-workflow--verify-backend-lambda-impl backend model)))
         (push (cons backend status) results)
         (pcase status
           (:healthy (cl-incf healthy-count))
@@ -806,48 +811,50 @@ Returns plist with :overall status and per-backend results."
   "Hash table storing async lambda verification results.
 Keys are backend names, values are :healthy/:degraded/:unknown.")
 
-(defun gptel-auto-workflow--call-backend-for-lambda (backend prompt)
-  "Call BACKEND with PROMPT for lambda verification via API.
-Uses `gptel-request' to send the prompt asynchronously.
+(defun gptel-auto-workflow--call-backend-for-lambda (backend model prompt)
+  "Call BACKEND with MODEL for lambda verification via API.
+Binds `gptel-backend' and `gptel-model' dynamically around `gptel-request'
+so each backend gets tested with its own model, not the active one.
 Result is stored in `gptel-auto-workflow--lambda-verification-results'.
 Returns t if request was initiated, nil on failure."
   (condition-case err
       (progn
-        (message "[verbum] Sending lambda gate prompt to %s..." backend)
-        (gptel-request prompt
-                       :callback (lambda (response info)
-                                   (if (null response)
-                                       (progn
-                                         (message "[verbum] %s returned no response" backend)
-                                         (puthash backend :unknown
-                                                  gptel-auto-workflow--lambda-verification-results))
-                                     (if (gptel-auto-workflow--response-contains-lambda-p response)
+        (message "[verbum] Sending lambda gate prompt to %s/%s..." backend model)
+        (let ((gptel-backend (intern backend))
+              (gptel-model (intern model)))
+          (gptel-request prompt
+                         :callback (lambda (response info)
+                                     (if (null response)
                                          (progn
-                                           (message "[verbum] %s lambda compiler confirmed ✓" backend)
-                                           (puthash backend :healthy
+                                           (message "[verbum] %s returned no response" backend)
+                                           (puthash backend :unknown
                                                     gptel-auto-workflow--lambda-verification-results))
-                                       (progn
-                                         (message "[verbum] %s no lambda in response" backend)
-                                         (puthash backend :degraded
-                                                  gptel-auto-workflow--lambda-verification-results))))))
+                                       (if (gptel-auto-workflow--response-contains-lambda-p response)
+                                           (progn
+                                             (message "[verbum] %s lambda compiler confirmed ✓" backend)
+                                             (puthash backend :healthy
+                                                      gptel-auto-workflow--lambda-verification-results))
+                                         (progn
+                                           (message "[verbum] %s no lambda in response" backend)
+                                           (puthash backend :degraded
+                                                    gptel-auto-workflow--lambda-verification-results)))))))
         t)
     (error
      (message "[verbum] API call failed for %s: %s" backend (error-message-string err))
      nil)))
 
-(defun gptel-auto-workflow--verify-backend-lambda-impl (backend)
-  "Verify lambda compiler for BACKEND using real API calls.
+(defun gptel-auto-workflow--verify-backend-lambda-impl (backend model)
+  "Verify lambda compiler for BACKEND/MODEL using real API calls.
 Returns :healthy, :degraded, or :unknown.
-Always uses API. If result not yet available from async call, returns :unknown.
-Initiates async verification if no recent result exists."
+Initiates async verification if no cached result exists."
   (condition-case err
       (let ((cached (gethash backend gptel-auto-workflow--lambda-verification-results)))
         (if cached
             cached
-          ;; No cached result: initiate async verification
+          ;; No cached result: initiate async verification with proper backend/model
           (progn
             (gptel-auto-workflow--call-backend-for-lambda
-             backend gptel-auto-workflow--lambda-gate-prompt)
+             backend model gptel-auto-workflow--lambda-gate-prompt)
             :unknown)))
     (error
      (message "[verbum] Lambda verification failed for %s: %s" backend (error-message-string err))
