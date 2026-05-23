@@ -35,9 +35,10 @@
   :ensure t
   :demand t
   :functions exec-path-from-shell-initialize
-  :config
+  :custom
   ;; Skip reading full shell rc files — reduces startup by ~2s on macOS.
-  (setq exec-path-from-shell-check-startup-files nil)
+  (exec-path-from-shell-check-startup-files nil)
+  :config
   (dolist (var '("TMPDIR"
                  "SSH_AUTH_SOCK" "SSH_AGENT_PID"
                  "GPG_AGENT_INFO"
