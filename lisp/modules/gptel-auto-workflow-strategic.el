@@ -695,6 +695,73 @@ Returns markdown listing under-explored categories and targets."
             "## Ontology Knowledge Gaps\n\nAll strategies have sufficient data. Focus on improving keep-rates.\n")))
     "*Ontology unavailable — research general topics.*\n"))
 
+(defun gptel-auto-workflow--detect-research-topic-trends ()
+  "Detect emerging/declining research topics by comparing performance against baseline.
+Reads topic-performance.json, compares against stored baseline in temporal-patterns.json,
+updates emerging/mature/declining/unexplored classifications.
+Called from evolution cycle — feeds into evolve_researcher.py via temporal-patterns.json."
+  (let* ((root (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                    (ignore-errors (gptel-auto-workflow--worktree-base-root))))
+         (topic-file (and root (expand-file-name "assistant/skills/researcher-prompt/data/topic-performance.json" root)))
+         (pattern-file (and root (expand-file-name "assistant/skills/researcher-prompt/data/temporal-patterns.json" root))))
+    (when (and topic-file (file-readable-p topic-file))
+      (let* ((json-object-type 'hash-table)
+             (json-array-type 'list)
+             (topic-data (json-read-file topic-file))
+             (topics (gethash "topics" topic-data))
+             (baseline (if (and pattern-file (file-readable-p pattern-file))
+                           (condition-case nil (json-read-file pattern-file) (error nil))
+                         (list (cons "patterns" (make-hash-table)))))
+             (baseline-topics (when baseline
+                                (let ((pats (gethash "patterns" baseline)))
+                                  (when (hash-table-p pats)
+                                    (let ((ht (make-hash-table :test 'equal)))
+                                      (dolist (cat '(emerging mature declining unexplored))
+                                        (let ((items (gethash (symbol-name cat) pats)))
+                                          (when items
+                                            (dolist (item items)
+                                              (puthash item cat ht)))))
+                                      ht)))))
+             (emerging nil) (declining nil) (mature nil) (unexplored nil)
+             (total-topics 0))
+        (when (hash-table-p topics)
+          (dolist (topic-key (hash-table-keys topics))
+            (let* ((stats (gethash topic-key topics))
+                   (rate (when (hash-table-p stats) (gethash "success_rate" stats 0)))
+                   (total (when (hash-table-p stats) (gethash "total_experiments" stats 0)))
+                   (prev-cat (when baseline-topics (gethash topic-key baseline-topics))))
+              (setq total-topics (1+ total-topics))
+              (cond
+               ((< total 3)
+                (push topic-key unexplored))
+               ((and (>= total 10) (>= rate 0.3))
+                (push topic-key mature))
+               ((and prev-cat (memq prev-cat '(emerging mature))
+                     (< total 10))
+                (push topic-key declining))
+               ((and (> rate 0.2) (or (not prev-cat) (memq prev-cat '(unexplored declining))))
+                (push topic-key emerging))
+               ((>= total 5)
+                (push topic-key mature))
+               (t
+                (push topic-key unexplored))))))
+        (when (and pattern-file (> total-topics 0))
+          (let ((patterns (make-hash-table :test 'equal)))
+            (puthash "emerging" (vconcat (nreverse emerging)) patterns)
+            (puthash "mature" (vconcat (nreverse mature)) patterns)
+            (puthash "declining" (vconcat (nreverse declining)) patterns)
+            (puthash "unexplored" (vconcat (nreverse unexplored)) patterns)
+            (make-directory (file-name-directory pattern-file) t)
+            (with-temp-file pattern-file
+              (let ((json-object-type 'hash-table)
+                    (json-array-type 'list))
+                (insert (json-encode
+                         (list (cons "version" (format-time-string "%Y-%m-%dT%H:%M:%SZ"))
+                               (cons "patterns" patterns))))))
+            (message "[topic-trends] %d topics analyzed: +%d emerging, %d mature, -%d declining, ?%d unexplored"
+                     total-topics (length emerging) (length mature)
+                     (length declining) (length unexplored))))))))
+
 (defun gptel-auto-workflow--format-topic-performance (topics)
   "Format TOPICS hash-table as markdown table.
 Returns placeholder message if TOPICS is nil or empty."

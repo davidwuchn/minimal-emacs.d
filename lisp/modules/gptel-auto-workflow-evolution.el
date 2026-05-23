@@ -2068,7 +2068,9 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case err
       (progn (gptel-auto-workflow--write-research-priorities)
              (gptel-auto-workflow--enrich-ontology-from-research)
-             (gptel-auto-workflow--queue-research-pair-probes))
+             (gptel-auto-workflow--queue-research-pair-probes)
+             (when (fboundp 'gptel-auto-workflow--detect-research-topic-trends)
+               (gptel-auto-workflow--detect-research-topic-trends)))
     (error (message "[research-feedback] Priority write failed: %s" (error-message-string err))))
   ;; Knowledge page cross-cycle diff (Semantica set-difference pattern)
   (condition-case err
