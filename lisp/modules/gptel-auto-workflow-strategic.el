@@ -532,9 +532,24 @@ Returns nil if data not available."
 (defun gptel-auto-workflow--substitute-researcher-variables (skill-content)
   "Substitute template variables in SKILL-CONTENT with meta-learning data.
 Replaces {{research-effectiveness}}, {{kept-research}}, {{total-research}},
-and {{topic-performance}} with live data."
+and {{topic-performance}} with live data.
+Resilient: if SKILL.md was regenerated with hardcoded placeholder text by the
+daemon's evolve_researcher.py, restores template variables before substituting."
   (if (null skill-content)
       skill-content
+    ;; RESTORE: convert hardcoded placeholders back to template variables.
+    ;; The daemon's evolve_researcher.py regenerates SKILL.md with hardcoded
+    ;; text each evolution cycle. This ensures the substitution always works.
+    (setq skill-content
+          (replace-regexp-in-string
+           "Overall research effectiveness: [0-9.]+% ([0-9]+/[0-9]+ research-correlated experiments kept)"
+           "Overall research effectiveness: {{research-effectiveness}}.0% ({{kept-research}}/{{total-research}} research-correlated experiments kept)"
+           skill-content t t))
+    (setq skill-content
+          (replace-regexp-in-string
+           "\\*No topic data available yet\\.\\*"
+           "{{topic-performance}}\n\n{{research-champion}}\n\n{{ontology-gaps}}\n\n{{current-bottlenecks}}"
+           skill-content t t))
     (let* ((meta-data (gptel-auto-workflow--load-researcher-meta-learning))
            (effectiveness (or (plist-get meta-data :effectiveness) 16))
            (kept (or (plist-get meta-data :kept) 0))
@@ -1668,29 +1683,74 @@ Does not duplicate existing targets."
   targets)
 
 (defun gptel-auto-workflow--inject-queued-targets (targets)
-  "Inject targets queued by π Synthesis and pair-probe research into TARGETS list.
-Reads :cluster-queued and :research-probes from evolution-next-cycle-hints,
-extracts target names, and appends unique entries not already in TARGETS.
+  "Inject targets queued by pi Synthesis and pair-probe research into TARGETS list.
+Reads :cluster-queued and :research-probes from evolution-next-cycle-hints.
+pi Synthesis: interleaves semantic cluster targets at weighted intervals
+(research-probes at position 2, high-confidence clusters every 3rd slot,
+medium-confidence clusters every 5th slot) instead of blind append.
 Returns augmented target list without modifying the hints."
   (let* ((hints (and (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
                      gptel-auto-workflow--evolution-next-cycle-hints))
          (cluster-queued (when hints (plist-get hints :cluster-queued)))
          (research-probes (when hints (plist-get hints :research-probes)))
          (result (copy-sequence targets))
-         (seen (make-hash-table :test 'equal)))
-    (dolist (t targets) (puthash t t seen))
-    (dolist (entry (append cluster-queued research-probes))
+         (seen (make-hash-table :test 'equal))
+         (high-conf nil)
+         (medium-conf nil)
+         (probes nil))
+    (dolist (item targets) (puthash item item seen))
+    ;; Classify queued entries by priority
+    (dolist (entry cluster-queued)
+      (when (plist-get entry :target)
+        (let ((tgt (plist-get entry :target))
+              (score (or (plist-get entry :score) 0.5)))
+          (unless (gethash tgt seen)
+            (puthash tgt t seen)
+            (if (>= score 0.75)
+                (push tgt high-conf)
+              (push tgt medium-conf))))))
+    (setq high-conf (nreverse high-conf)
+          medium-conf (nreverse medium-conf))
+    (dolist (entry research-probes)
       (when (plist-get entry :target)
         (let ((tgt (plist-get entry :target)))
           (unless (gethash tgt seen)
             (puthash tgt t seen)
-            (push tgt result)
-            (message "[inject] Queued target from %s: %s"
-                     (or (plist-get entry :source) (plist-get entry :reason) "hints") tgt)))))
-    (setq result (nreverse result))
+            (push tgt probes)))))
+    (setq probes (nreverse probes))
+    ;; Interleave: build new list with weighted placement
+    (let ((interleaved nil)
+          (hi-idx 0) (med-idx 0) (probe-idx 0))
+      (dotimes (i (length result))
+        (push (nth i result) interleaved)
+        ;; Research probes every 2nd position (highest priority)
+        (when (and (= 1 (mod i 2)) (< probe-idx (length probes)))
+          (push (nth probe-idx probes) interleaved)
+          (setq probe-idx (1+ probe-idx)))
+        ;; High-confidence clusters every 3rd position
+        (when (and (= 2 (mod i 3)) (< hi-idx (length high-conf)))
+          (push (nth hi-idx high-conf) interleaved)
+          (setq hi-idx (1+ hi-idx)))
+        ;; Medium-confidence clusters every 5th position
+        (when (and (= 4 (mod i 5)) (< med-idx (length medium-conf)))
+          (push (nth med-idx medium-conf) interleaved)
+          (setq med-idx (1+ med-idx))))
+      ;; Append any remaining unplaced entries
+      (while (< probe-idx (length probes))
+        (push (nth probe-idx probes) interleaved)
+        (setq probe-idx (1+ probe-idx)))
+      (while (< hi-idx (length high-conf))
+        (push (nth hi-idx high-conf) interleaved)
+        (setq hi-idx (1+ hi-idx)))
+      (while (< med-idx (length medium-conf))
+        (push (nth med-idx medium-conf) interleaved)
+        (setq med-idx (1+ med-idx)))
+      (setq result (nreverse interleaved)))
     (when (> (length result) (length targets))
-      (message "[inject] Injected %d queued targets → %d total"
-               (- (length result) (length targets)) (length result)))
+      (message "[inject] Interleaved %d queued targets (probes=%d hi=%d med=%d) -> %d total"
+               (- (length result) (length targets))
+               (length probes) (length high-conf) (length medium-conf)
+               (length result)))
     result))
 
 (defun gptel-auto-workflow-select-targets (callback)

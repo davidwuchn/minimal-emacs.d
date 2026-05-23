@@ -211,14 +211,11 @@ def generate_evolved_skill(skill_path, data_dir):
     if repos_file.exists():
         repos_md = repos_file.read_text(encoding="utf-8").strip()
     
-    # Calculate overall effectiveness
-    topics = topic_data.get('topics', {})
+    # Calculate overall effectiveness (used by Elisp substitution, not inline)
     total_kept = sum(s['kept'] for s in topics.values())
     total_exp = sum(s['total_experiments'] for s in topics.values())
-    effectiveness = (total_kept / total_exp * 100) if total_exp > 0 else 0
     
-    # Generate sections
-    topic_performance_md = format_topic_performance(topic_data)
+    # Generate sections (still used in Mission and other sections)
     priority_topics_md = format_priority_topics(topic_data, temporal_data)
     project_priorities_md = format_project_priorities(source_data)
     anti_patterns_md = format_anti_patterns(topic_data)
@@ -245,11 +242,17 @@ Your job: hunt the internet for novel ideas that could improve our project.
 
 ## Current Research Performance
 
-- Overall research effectiveness: {effectiveness:.1f}% ({total_kept}/{total_exp} research-correlated experiments kept)
+- Overall research effectiveness: {{research-effectiveness}}.0% ({{kept-research}}/{{total-research}} research-correlated experiments kept)
 - Analysis window: last {topic_data.get('lookback_days', 30)} days
 - Topics ranked by downstream success:
 
-{topic_performance_md}
+{{topic-performance}}
+
+{{research-champion}}
+
+{{ontology-gaps}}
+
+{{current-bottlenecks}}
 
 ## Mission
 

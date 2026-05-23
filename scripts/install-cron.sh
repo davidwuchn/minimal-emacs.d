@@ -106,6 +106,7 @@ cleaned_lines = []
 skip_until_next_section = False
 in_raw_block = False
 raw_block_lines = []
+active_cron_re = re.compile(r"^\d")
 
 for i, line in enumerate(lines):
     if line.strip() == begin_marker.strip():
@@ -138,7 +139,6 @@ for i, line in enumerate(lines):
         block_text = "\n".join(block_lines) + "\n"
         # Check if this block contains the same cron jobs as rendered content
         # by looking for active (uncommented) cron lines
-        active_cron_re = re.compile(r"^\d")
         rendered_active = [l for l in rendered_raw.split("\n") if active_cron_re.match(l)]
         block_active = [l for l in block_text.split("\n") if active_cron_re.match(l)]
 
@@ -148,8 +148,30 @@ for i, line in enumerate(lines):
             continue
         else:
             cleaned_lines.append(line)
+
+    # Detect and remove legacy cron lines from older installs
+    # (run-auto-workflow-cron.sh auto-workflow, etc.) that were
+    # installed before the managed block system — these duplicate
+    # the pipeline work and cause double-execution.
+    elif line.strip() and active_cron_re.match(line.strip()):
+        stripped = line.strip()
+        if ("run-auto-workflow-cron.sh" in stripped or
+            "run-pipeline.sh" in stripped):
+            # Mark as legacy — will be filtered after the loop
+            line = "# [LEGACY] " + line
+            cleaned_lines.append(line)
+        else:
+            cleaned_lines.append(line)
     else:
         cleaned_lines.append(line)
+
+# Post-process: remove legacy lines if managed block is present
+# (they're redundant next to the managed pipeline schedule)
+if managed_pattern.search("\n".join(cleaned_lines)):
+    cleaned_lines = [
+        l for l in cleaned_lines
+        if not l.startswith("# [LEGACY]")
+    ]
 
 existing = "\n".join(cleaned_lines)
 

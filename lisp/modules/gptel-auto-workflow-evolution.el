@@ -114,6 +114,10 @@ Aggregate of per-subsystem scores for convergence detection."
   "Alist of hints for the next evolution cycle.
 Keys: :prev-champions, :category-budget, :vsm-actions, :regressed-targets.")
 
+(defvar gptel-auto-workflow--experiment-targets nil
+  "List of target file paths for the next experiment batch.
+Set by the experiment loop and reordered by VSM health diagnostics.")
+
 (defvar gptel-auto-workflow--evolution-repo-root nil
   "Cached git repository root for self-evolution.
 Captured at load time to avoid worktree issues.")
@@ -4044,20 +4048,20 @@ Non-blocking — runs async via gptel callbacks."
           (when (and (stringp target) (stringp hypothesis)
                      (not (string-empty-p target)))
             (push (cons decision hypothesis) (gethash target by-target)))))
-      (maphash
-       (lambda (target entries)
-         (let ((kept (car (cl-find "kept" entries :key #'car :test #'equal)))
-               (discarded (car (cl-find "discarded" entries :key #'car :test #'equal))))
-           (when (and kept discarded)
-             (gptel-auto-workflow--allium-diff-minimal-pairs
-              (cdr kept) (cdr discarded)
-              (lambda (result)
-                (message "[allium-diff] %s: kept-issues=%d discarded-issues=%d"
-                         target (car result) (cdr result))
-                (when (< (car result) (cdr result))
-                  (message "[allium-diff] %s: kept hypothesis has cleaner spec (kept=%d < discarded=%d)"
-                           target (car result) (cdr result))))))))
-       by-target))))
+       (dolist (target (hash-table-keys by-target))
+         (let ((entries (gethash target by-target)))
+          (when (listp entries)
+            (let ((kept (car (cl-find "kept" entries :key #'car :test #'equal)))
+                  (discarded (car (cl-find "discarded" entries :key #'car :test #'equal))))
+              (when (and kept discarded)
+                (gptel-auto-workflow--allium-diff-minimal-pairs
+                 (cdr kept) (cdr discarded)
+                 (lambda (result)
+                   (message "[allium-diff] %s: kept-issues=%d discarded-issues=%d"
+                            target (car result) (cdr result))
+                   (when (< (car result) (cdr result))
+                     (message "[allium-diff] %s: kept hypothesis has cleaner spec (kept=%d < discarded=%d)"
+                               target (car result) (cdr result)))))))))))))
 
 ;; ─── Allium Improvements: trend tracking, dedup, regression detection, auto-repair ───
 
@@ -4426,26 +4430,33 @@ VSM LEVELS is a plist of (level . strength):
   :s5-identity (Water) → core/identity modules"
   (when (boundp 'gptel-auto-workflow--experiment-targets)
     (let* ((level-files
-            '((:s1-ops . (".*gptel-tools-\\(agent\\|code\\|edit\\|preview\\)\\.el\\'"
-                          ".*gptel-ext-\\(core\\|fsm\\|retry\\|streaming\\)\\.el\\'"))
-              (:s2-coord . (".*gptel-ext-backends\\.el\\'"
+            '((:s1-ops . (".*gptel-tools-\\(agent\\|code\\|edit\\|preview\\|bash\\|glob\\|grep\\)"
+                          ".*gptel-ext-\\(core\\|fsm\\|retry\\|streaming\\|abort\\|security\\)"))
+              (:s2-coord . (".*gptel-ext-backends"
                             ".*gptel-tools-agent-\\(staging\\|worktree\\)"
-                            ".*ontology-router\\.el\\'"))
-              (:s3-control . (".*gptel-tools-agent-validation\\.el\\'"
-                              ".*gptel-sandbox\\.el\\'"
-                              ".*gptel-ext-security\\.el\\'"))
-              (:s4-intel . (".*gptel-tools-agent-strategy-\\(evolver\\|harness\\)\\.el\\'"
+                            ".*ontology-router"))
+              (:s3-control . (".*gptel-tools-agent-validation"
+                              ".*gptel-sandbox"
+                              ".*gptel-ext-security"))
+              (:s4-intel . (".*gptel-tools-agent-strategy-\\(evolver\\|harness\\)"
                             ".*gptel-auto-workflow-research-\\(benchmark\\|integration\\)"
-                            ".*gptel-benchmark-principles\\.el\\'"))
-              (:s5-identity . (".*nucleus-\\(tools\\|prompts\\|presets\\)\\.el\\'"
-                               ".*gptel-ext-core\\.el\\'"
-                               ".*gptel-agent-loop\\.el\\'"))))
+                            ".*gptel-benchmark-principles"))
+              (:s5-identity . (".*nucleus-\\(tools\\|prompts\\|presets\\|header\\)"
+                               ".*gptel-ext-core"
+                               ".*gptel-agent-loop"))))
            (targets gptel-auto-workflow--experiment-targets)
            (prioritized nil)
            (remaining targets))
       ;; For each weak VSM level (strength below threshold), pull matching
-      ;; targets to the front of the queue
-      (dolist (level-pair (reverse vsm-levels))
+      ;; targets to the front of the queue.  Process S5→S1 so weaker levels
+      ;; take priority (later reverse gives S5-first processing).
+      (let ((level-pairs nil))
+        (let ((tail vsm-levels))
+          (while tail
+            (push (cons (car tail) (cadr tail)) level-pairs)
+            (setq tail (cddr tail))))
+        ;; Process S5→S1: last-pushed (S5) is first, giving weaker levels priority
+        (dolist (level-pair level-pairs)
         (let* ((level (car level-pair))
                (strength (cdr level-pair))
                (patterns (cdr (assq level level-files))))
@@ -4460,7 +4471,7 @@ VSM LEVELS is a plist of (level . strength):
                            (push tgt prioritized)
                            (setq matched t)
                            t))
-                       remaining)))))))
+                        remaining))))))))
       ;; Append remaining (non-matched) targets after prioritized ones
       (setq gptel-auto-workflow--experiment-targets
             (append (nreverse prioritized) remaining))
@@ -4565,7 +4576,8 @@ Falls back to sqrt(keep-rate) when no champion data exists."
     ;; Collect per-category rates and counts
     (dolist (i instances)
       (let* ((name (plist-get i :name)) (rate (plist-get i :keep-rate))
-             (cat (gptel-auto-workflow--categorize-target name)))
+             (cat (when (fboundp 'gptel-auto-workflow--categorize-target)
+                    (gptel-auto-workflow--categorize-target name))))
         (when cat
           (cl-incf (alist-get cat cat-counts))
           (cl-incf (alist-get cat cat-rates) rate))))

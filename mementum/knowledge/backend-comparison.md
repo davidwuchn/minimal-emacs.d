@@ -1,5 +1,5 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 1985 experiments across 3 backends
+> Auto-generated from 1986 experiments across 3 backends
 
 ## DashScope vs MiniMax (winner: **DashScope**)
 - DashScope: 31.2% keep-rate
@@ -12,4 +12,4 @@
 - Shared targets: 1 | MiniMax won 1, ChatGPT won 0, ties 0
 
 
-*Generated: 2026-05-23 00:12*
+*Generated: 2026-05-23 07:38*

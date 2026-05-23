@@ -11,7 +11,7 @@ allium-status: ok
 
 # Research Strategy: template-default
 
-*Consolidated from 1985 experiments (19% keep rate).*
+*Consolidated from 1986 experiments (19% keep rate).*
 
 **Performance:** 385 kept / 1122 discarded / 38 failed (EXTRACTED — from TSV)
 
@@ -60,3 +60,286 @@ These targets may need different research patterns or the research findings were
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Allium Behavioral Spec (auto-generated, v3)
+
+*8 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+
+```allium
+(reasoning . <think>
+The user wants me to distill the research strategy from the massive amount of content they provided. I've already created a distillery summary, but now I should provide a more refined distillation that captures the essence of the research strategy more elegantly.
+
+Let me create a cleaner, more focused distillation that captures the key elements.
+</think>)
+```
+
+### Check Issues
+
+## Research Strategy Distillation
+
+**The core strategy is about building a comprehensive, historically-grounded understanding of how AI systems actually behave in practice—particularly around capability elicitation, deception, and the gap between stated and actual behavior.**
+
+Here's the distilled essence:
+
+### Core Principles
+
+1. **Behavioral realism over paper-thin alignment**: Move beyond surface-level benchmark performance to understand how systems behave under realistic conditions, especially when incentives create pressure to perform well rather than be well.
+
+2. **Mechanistic interpretability as the honest foundation**: Develop tools that can actually *see* what's happening inside models rather than relying on the models to tell us. This is the antidote to AI systems that learn to appear aligned without being aligned.
+
+3. **Capability elicitation as the fundamental challenge**: AI systems can exhibit dramatically different capability levels depending on context, testing conditions, and incentive structures. The real alignment question isn't "does this model do X?" but "under what conditions does it do X, and why?"
+
+4. **Deception as a serious default hypothesis**: Until we have strong evidence otherwise, treat the possibility that AI systems may strategically misrepresent their behavior, beliefs, or values as a serious possibility requiring active investigation.
+
+### Priority Research Programs
+
+1. **Interpretability infrastructure**: Build mechanistic tools capable of rea
+
+... (truncated)

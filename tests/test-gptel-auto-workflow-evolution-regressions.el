@@ -2287,24 +2287,23 @@ must not override it to MiniMax via setq-local in subagent buffers."
 (ert-deftest tdd/semantic-similarity/returns-nil-when-no-kept-targets ()
   "semantic-similarity-edges returns nil when no kept targets exist."
   (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
-    (cl-letf (((symbol-function 'executable-find)
-               (lambda (_) t))
-              ((symbol-function 'gptel-auto-workflow--parse-all-results)
-               (lambda () '((:decision "discarded" :target "a.el")
-                            (:decision "discarded" :target "b.el")))))
-      (should (null (gptel-auto-workflow--semantic-similarity-edges))))))
+    (let ((gptel-auto-workflow--semantic-edges-cache nil)
+          (gptel-auto-workflow--semantic-edges-cache-time nil))
+      (cl-letf (((symbol-function 'executable-find)
+                 (lambda (_) "/nonexistent/git-embed"))
+                ((symbol-function 'gptel-auto-workflow--parse-all-results)
+                 (lambda () '((:decision "discarded" :target "a.el")
+                              (:decision "discarded" :target "b.el")))))
+        (should (null (gptel-auto-workflow--semantic-similarity-edges)))))))
 
 (ert-deftest tdd/semantic-similarity/filters-by-threshold ()
   "semantic-similarity-edges filters edges below threshold."
   (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
-    (cl-letf (((symbol-function 'executable-find)
-               (lambda (_) t))
-              ((symbol-function 'gptel-auto-workflow--parse-all-results)
-               (lambda () '((:decision "kept" :target "a.el"))))
-              ((symbol-function 'gptel-auto-workflow--worktree-base-root)
-               (lambda () "/tmp"))
-               ((symbol-function 'shell-command-to-string)
-                (lambda (_) "0.7  lisp/modules/b.el\n0.3  lisp/modules/c.el\n0.8  lisp/modules/d.el")))
+    (let ((gptel-auto-workflow--semantic-edges-cache
+           '((:source "a.el" :target "b.el" :score 0.7)
+             (:source "a.el" :target "c.el" :score 0.3)
+             (:source "a.el" :target "d.el" :score 0.8)))
+          (gptel-auto-workflow--semantic-edges-cache-time (float-time)))
       (let ((edges (gptel-auto-workflow--semantic-similarity-edges 0.6)))
         (should (= 2 (length edges)))
         (should (= 0.7 (plist-get (car edges) :score)))
@@ -2313,27 +2312,22 @@ must not override it to MiniMax via setq-local in subagent buffers."
 (ert-deftest tdd/semantic-similarity/skips-self-matches ()
   "semantic-similarity-edges excludes source-target matching itself."
   (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
-    (cl-letf (((symbol-function 'executable-find)
-               (lambda (_) t))
-              ((symbol-function 'gptel-auto-workflow--parse-all-results)
-               (lambda () '((:decision "kept" :target "a.el"))))
-              ((symbol-function 'gptel-auto-workflow--worktree-base-root)
-               (lambda () "/tmp"))
-              ((symbol-function 'shell-command-to-string)
-               (lambda (_) "0.7  a.el")))
-      (should (null (gptel-auto-workflow--semantic-similarity-edges))))))
+    (let ((gptel-auto-workflow--semantic-edges-cache
+           '((:source "a.el" :target "a.el" :score 0.9)
+             (:source "a.el" :target "lisp/modules/b.el" :score 0.7)))
+          (gptel-auto-workflow--semantic-edges-cache-time (float-time)))
+      (let ((edges (gptel-auto-workflow--semantic-similarity-edges 0.6)))
+        (should (= 1 (length edges)))
+        (should (string= "lisp/modules/b.el" (plist-get (car edges) :target)))))))
 
 (ert-deftest tdd/semantic-similarity/filters-lisp-modules-only ()
   "semantic-similarity-edges only includes files matching lisp/modules/."
   (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
-    (cl-letf (((symbol-function 'executable-find)
-               (lambda (_) t))
-              ((symbol-function 'gptel-auto-workflow--parse-all-results)
-               (lambda () '((:decision "kept" :target "a.el"))))
-              ((symbol-function 'gptel-auto-workflow--worktree-base-root)
-               (lambda () "/tmp"))
-              ((symbol-function 'shell-command-to-string)
-               (lambda (_) "0.7  lisp/modules/b.el\n0.8  README.md\n0.9  lisp/modules/c.el")))
+    (let ((gptel-auto-workflow--semantic-edges-cache
+           '((:source "a.el" :target "lisp/modules/b.el" :score 0.7)
+             (:source "a.el" :target "scripts/README.md" :score 0.8)
+             (:source "a.el" :target "lisp/modules/c.el" :score 0.9)))
+          (gptel-auto-workflow--semantic-edges-cache-time (float-time)))
       (let ((edges (gptel-auto-workflow--semantic-similarity-edges)))
         (should (= 2 (length edges)))
         (should (string-match-p "lisp/modules/b.el" (plist-get (car edges) :target)))
@@ -2633,7 +2627,42 @@ must not override it to MiniMax via setq-local in subagent buffers."
              (fboundp 'gptel-request))
     (should-not (condition-case nil
                     (gptel-auto-workflow--allium-bdd-check "test behavior: handle nil input gracefully")
-                  (error t)))))
+                   (error t)))))
+
+;; ─── VSM → Target Prioritization ───
+
+(ert-deftest tdd/vsm/prioritize-targets-wood-weak ()
+  "vsm-prioritize-targets front-loads operational modules when S1/Wood weak."
+  (when (fboundp 'gptel-auto-workflow--vsm-prioritize-targets)
+    (let ((gptel-auto-workflow--experiment-targets
+           '("lisp/modules/gptel-ext-core.el"
+             "lisp/modules/gptel-tools-code.el")))
+      (gptel-auto-workflow--vsm-prioritize-targets
+       '(:s1-ops 0.2 :s2-coord 0.8 :s3-control 0.8 :s4-intel 0.8 :s5-identity 0.8))
+      (let ((first (car gptel-auto-workflow--experiment-targets)))
+        ;; S1 weak → tools-code.el should be front (matches gptel-tools pattern)
+        (should (string-match-p "gptel-tools-code" first))))))
+
+(ert-deftest tdd/vsm/prioritize-targets-all-strong-no-change ()
+  "vsm-prioritize-targets does not reorder when all levels healthy."
+  (when (fboundp 'gptel-auto-workflow--vsm-prioritize-targets)
+    (let ((original '("a.el" "b.el" "c.el"))
+          (gptel-auto-workflow--experiment-targets '("a.el" "b.el" "c.el")))
+      (gptel-auto-workflow--vsm-prioritize-targets
+       '(:s1-ops 0.8 :s2-coord 0.8 :s3-control 0.8 :s4-intel 0.8 :s5-identity 0.8))
+      (should (equal original gptel-auto-workflow--experiment-targets)))))
+
+(ert-deftest tdd/vsm/prioritize-targets-identity-weak ()
+  "vsm-prioritize-targets front-loads nucleus modules when S5/Water weak."
+  (when (fboundp 'gptel-auto-workflow--vsm-prioritize-targets)
+    (let ((gptel-auto-workflow--experiment-targets
+           '("lisp/modules/gptel-tools-code.el"
+             "lisp/modules/nucleus-tools.el")))
+      (gptel-auto-workflow--vsm-prioritize-targets
+       '(:s1-ops 0.8 :s2-coord 0.8 :s3-control 0.8 :s4-intel 0.8 :s5-identity 0.2))
+      (let ((first (car gptel-auto-workflow--experiment-targets)))
+        ;; S5 weak → nucleus-tools.el should be front (matches nucleus pattern)
+        (should (string-match-p "nucleus" first))))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 

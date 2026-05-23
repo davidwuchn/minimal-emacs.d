@@ -152,7 +152,42 @@
       (let ((setup (gptel-auto-workflow--ontology-enhance-experiment-setup "lisp/test.el")))
         (should (string= "effective-strat" (plist-get setup :strategy)))
         (should (string= "moonshot" (plist-get setup :backend)))
-        (should (string= "high-value" (plist-get setup :target-value)))))))
+         (should (string= "high-value" (plist-get setup :target-value)))))))
+
+;; ─── Eight Key Weight Mapping ───
+
+(ert-deftest tdd/strategy/category-eight-key-programming ()
+  "category-eight-key-weight maps :programming to mu-directness."
+  (when (fboundp 'gptel-auto-workflow--category-eight-key-weight)
+    (let ((ekey (gptel-auto-workflow--category-eight-key-weight :programming)))
+      (should (eq 'mu-directness (car ekey)))
+      (should (= 1.3 (cdr ekey))))))
+
+(ert-deftest tdd/strategy/category-eight-key-agentic ()
+  "category-eight-key-weight maps :agentic to forall-vigilance."
+  (when (fboundp 'gptel-auto-workflow--category-eight-key-weight)
+    (let ((ekey (gptel-auto-workflow--category-eight-key-weight :agentic)))
+      (should (eq 'forall-vigilance (car ekey))))))
+
+(ert-deftest tdd/strategy/category-eight-key-default ()
+  "category-eight-key-weight falls back to epsilon-purpose for unknown category."
+  (when (fboundp 'gptel-auto-workflow--category-eight-key-weight)
+    (let ((ekey (gptel-auto-workflow--category-eight-key-weight :unknown-cat)))
+      (should (eq 'epsilon-purpose (car ekey)))
+      (should (= 1.0 (cdr ekey))))))
+
+;; ─── Strategy Experiment Count ───
+
+(ert-deftest tdd/strategy/experiment-count ()
+  "strategy-experiment-count returns correct count from TSV."
+  (when (fboundp 'gptel-auto-workflow--strategy-experiment-count)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () '((:strategy "s1" :decision "kept")
+                            (:strategy "s1" :decision "discarded")
+                            (:strategy "s2" :decision "kept")))))
+      (should (= 2 (gptel-auto-workflow--strategy-experiment-count "s1")))
+      (should (= 1 (gptel-auto-workflow--strategy-experiment-count "s2")))
+      (should (= 0 (gptel-auto-workflow--strategy-experiment-count "none"))))))
 
 (provide 'test-gptel-auto-workflow-ontology-strategy)
 ;;; test-gptel-auto-workflow-ontology-strategy.el ends here
