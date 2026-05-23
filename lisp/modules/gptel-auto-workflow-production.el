@@ -84,6 +84,12 @@ Records to mementum and triggers evolution if needed."
       ;; Add to current batch
       (push experiment gptel-auto-workflow--research-batch-results)))
   
+  ;; Record to holographic memory (verbum Phase 7)
+  (when (fboundp 'gptel-auto-workflow--record-holographic-experiment)
+    (condition-case err
+        (gptel-auto-workflow--record-holographic-experiment experiment)
+      (error (message "[auto-workflow] Holographic recording error: %s" err))))
+  
   ;; Run evolution every N experiments
   (let ((exp-id (or (plist-get experiment :id) 0)))
     (when (and (> exp-id 0)
@@ -183,6 +189,21 @@ Called when research context changes or run completes."
               (insert (format "  Kept: %d (%.1f%%)\n\n" 
                               kept (* 100.0 (/ (float kept) (max total 1))))))
           (ignore)))
+      
+      ;; Verbum integration status
+      (insert "Verbum Integration:\n")
+      (when (fboundp 'gptel-auto-workflow--verbum-current-session)
+        (let ((session (gptel-auto-workflow--verbum-current-session)))
+          (if session
+              (insert (format "  Latest session: %d\n" session))
+            (insert "  Latest session: unavailable\n"))))
+      (when (fboundp 'gptel-auto-workflow--backend-lambda-health-cache)
+        (insert (format "  Lambda health cache: %d entries\n" 
+                        (length gptel-auto-workflow--backend-lambda-health-cache))))
+      (when (fboundp 'gptel-auto-workflow--holographic-memory)
+        (insert (format "  Holographic memory: %d target-axis pairs\n" 
+                        (length gptel-auto-workflow--holographic-memory))))
+      (insert "\n")
       
       (insert "\nPress q to quit\n")
       (goto-char (point-min))

@@ -1980,6 +1980,18 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
               (gptel-auto-workflow--verify-all-backends-lambda)
               (put 'gptel-auto-workflow--verify-all-backends-lambda :last-run (float-time)))
           (error (message "[verbum] ERROR: lambda verification failed — %s" (error-message-string err)))))))
+  ;; Verbum Phase 6: Cross-backend consistency check (run every 3 hours)
+  (when (fboundp 'gptel-auto-workflow--check-all-targets-consistency)
+    (let ((last-check (get 'gptel-auto-workflow--check-all-targets-consistency :last-run)))
+      (when (or (null last-check)
+                (> (- (float-time) last-check) 10800))  ; 3 hours
+        (condition-case err
+            (let ((result (gptel-auto-workflow--check-all-targets-consistency)))
+              (put 'gptel-auto-workflow--check-all-targets-consistency :last-run (float-time))
+              (when (> (plist-get result :inconsistent) 0)
+                (message "[verbum] ⚠ %d inconsistent targets detected"
+                         (plist-get result :inconsistent))))
+          (error (message "[verbum] ERROR: consistency check failed — %s" (error-message-string err)))))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
