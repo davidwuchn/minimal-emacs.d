@@ -1834,6 +1834,13 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
    (setq gptel-auto-workflow--evolution-last-run now))
   ;; Restore cross-subsystem hints from disk (survives daemon restart)
   (gptel-auto-workflow--restore-next-cycle-hints)
+  ;; Rebuild holographic memory from history (verbum Phase 10)
+  (when (fboundp 'gptel-auto-workflow--rebuild-holographic-memory)
+    (condition-case err
+        (progn
+          (gptel-auto-workflow--rebuild-holographic-memory)
+          (message "[verbum] Holographic memory rebuilt"))
+      (error (message "[verbum] ERROR: holographic rebuild failed — %s" (error-message-string err)))))
   ;; Eight Keys convergence: skip evolution if scores haven't improved
   (when (and gptel-auto-workflow--evolution-last-objective
              (> gptel-auto-workflow--evolution-last-objective 0))
@@ -1992,6 +1999,21 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                 (message "[verbum] ⚠ %d inconsistent targets detected"
                          (plist-get result :inconsistent))))
           (error (message "[verbum] ERROR: consistency check failed — %s" (error-message-string err)))))))
+  ;; Verbum Phase 9: Consistency alerts for low-agreement targets
+  (when (fboundp 'gptel-auto-workflow--check-all-targets-consistency)
+    (let ((result (gptel-auto-workflow--check-all-targets-consistency)))
+      (when (> (plist-get result :inconsistent) 0)
+        (let ((low-agreement nil))
+          (dolist (target-report (plist-get result :targets))
+            (when (< (plist-get target-report :ratio) 0.5)
+              (push target-report low-agreement)))
+          (when low-agreement
+            (message "[verbum] ⚠ LOW AGREEMENT (%d targets < 50%%):" (length low-agreement))
+            (dolist (t (seq-take low-agreement 5))
+              (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
+                       (plist-get t :target)
+                       (* 100 (plist-get t :ratio))
+                       (length (plist-get t :conflicts)))))))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
