@@ -1280,13 +1280,22 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
               (push (format "REGRESSED TARGETS (knowledge pages removed, prioritized):\n%s"
                             (mapconcat (lambda (tgt) (format "- %s" (truncate-string-to-width tgt 60 nil nil "..."))) regressed "\n"))
                     parts))
-            ;; Verbum gate: inject quarantined backends + conflicted targets
-            (when (and (boundp 'gptel-auto-workflow--quarantined-backends)
-                       gptel-auto-workflow--quarantined-backends)
-              (push (format "⚠ QUARANTINED BACKENDS (lambda degraded — DO NOT USE):\n%s"
-                            (mapconcat (lambda (b) (format "- %s (3+ consecutive failures)" b))
-                                       gptel-auto-workflow--quarantined-backends "\n"))
-                    parts))
+            ;; Verbum gate: inject degraded backends + conflicted targets
+            (when (and (fboundp 'gptel-auto-workflow--backend-health-level)
+                       (boundp 'gptel-auto-workflow-headless-subagent-fallbacks))
+              (let ((degraded nil))
+                (dolist (entry gptel-auto-workflow-headless-subagent-fallbacks)
+                  (let* ((backend (car entry))
+                         (level (gptel-auto-workflow--backend-health-level backend)))
+                    (when (>= level 2)
+                      (push (format "- %s (level %d: %s)"
+                                    backend level
+                                    (gptel-auto-workflow--backend-health-label backend))
+                            degraded))))
+                (when degraded
+                  (push (format "⚠ DEGRADED BACKENDS (reduced routing weight):\n%s"
+                                (mapconcat #'identity (nreverse degraded) "\n"))
+                        parts))))
             (when (and (boundp 'gptel-auto-workflow--conflicted-targets)
                        gptel-auto-workflow--conflicted-targets)
               (let ((deferred-str (mapconcat (lambda (c) (format "- %s (%.0f%% agreement)"
