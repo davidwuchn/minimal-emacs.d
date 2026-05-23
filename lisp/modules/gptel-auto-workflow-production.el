@@ -190,6 +190,32 @@ Called when research context changes or run completes."
                               kept (* 100.0 (/ (float kept) (max total 1))))))
           (ignore)))
       
+      ;; Conflicted target review queue
+      (when (and (boundp 'gptel-auto-workflow--conflicted-targets)
+                 gptel-auto-workflow--conflicted-targets)
+        (insert "Conflicted Target Review:\n")
+        (let* ((conflicted (length gptel-auto-workflow--conflicted-targets))
+               (review-file (when (fboundp 'gptel-auto-workflow--review-file-path)
+                              (gptel-auto-workflow--review-file-path)))
+               (decisions (when (and review-file (file-exists-p review-file)
+                                     (fboundp 'gptel-auto-workflow--read-review-decisions))
+                            (gptel-auto-workflow--read-review-decisions)))
+               (approved 0) (dropped 0) (pending conflicted))
+          (when decisions
+            (maphash (lambda (target dec)
+                       (pcase (plist-get dec :decision)
+                         ('approved (cl-incf approved) (cl-decf pending))
+                         ('dropped (cl-incf dropped) (cl-decf pending))))
+                     decisions))
+          (insert (format "  Total conflicted: %d\n" conflicted))
+          (when (> approved 0)
+            (insert (format "  Approved (override): %d\n" approved)))
+          (when (> dropped 0)
+            (insert (format "  Dropped (human): %d\n" dropped)))
+          (insert (format "  Pending review: %d\n" pending))
+          (when review-file
+            (insert (format "  Review file: %s\n" review-file))))
+        (insert "\n"))
       ;; Verbum integration status
       (insert "Verbum Integration:\n")
       (when (boundp 'gptel-auto-workflow--holographic-memory)

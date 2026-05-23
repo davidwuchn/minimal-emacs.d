@@ -2000,12 +2000,15 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                        (push target-report low-agreement)))
                    (when low-agreement
                      ;; Populate conflicted-targets for gatekeeping
-                     (when (boundp 'gptel-auto-workflow--conflicted-targets)
-                       (setq gptel-auto-workflow--conflicted-targets
-                             (mapcar (lambda (r) (cons (plist-get r :target)
-                                                       (plist-get r :ratio)))
-                                     low-agreement)))
-                     (message "[verbum] ⚠ LOW AGREEMENT (%d targets < 50%%):" (length low-agreement))
+                      (when (boundp 'gptel-auto-workflow--conflicted-targets)
+                        (setq gptel-auto-workflow--conflicted-targets
+                              (mapcar (lambda (r) (cons (plist-get r :target)
+                                                        (plist-get r :ratio)))
+                                      low-agreement)))
+                      ;; Generate human review file for conflicted targets
+                      (when (fboundp 'gptel-auto-workflow--generate-conflicted-review)
+                        (gptel-auto-workflow--generate-conflicted-review low-agreement))
+                      (message "[verbum] ⚠ LOW AGREEMENT (%d targets < 50%%):" (length low-agreement))
                     (dolist (report (seq-take low-agreement 5))
                        (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
                                 (plist-get report :target)

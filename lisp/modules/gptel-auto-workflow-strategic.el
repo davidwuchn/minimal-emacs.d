@@ -1776,8 +1776,27 @@ Returns filtered list."
                 gptel-auto-workflow--conflicted-targets))
       targets
     (let ((result nil) (deferred nil) (dead nil))
+      ;; Load fresh review decisions each cycle
+      (let ((decisions (gptel-auto-workflow--read-review-decisions)))
+        (when (and decisions (> (hash-table-count decisions) 0))
+          (setq gptel-auto-workflow--review-decisions decisions)))
       (dolist (target targets)
         (cond
+         ;; Check human review decisions before deferring
+         ((and gptel-auto-workflow--review-decisions
+               (gethash target gptel-auto-workflow--review-decisions))
+          (let ((dec (gethash target gptel-auto-workflow--review-decisions)))
+            (pcase (plist-get dec :decision)
+              ('approved
+               (push target result)
+               (message "[verbum] ✓ APPROVED %s (human override, route: %s)"
+                        target (or (plist-get dec :backend) "any")))
+              ('dropped
+               (push target dead)
+               (message "[verbum] ❌ DROPPED %s (human decision)" target))
+              (_
+               (push target deferred)
+               (message "[verbum] ⚠ DEFERRED %s (pending review)" target)))))
          ((gptel-auto-workflow--target-conflicted-p target)
           (push target deferred)
           (message "[verbum] ⚠ DEFERRED %s (%.0f%% backend agreement)"
@@ -1791,6 +1810,144 @@ Returns filtered list."
         (message "[verbum] Deferred %d conflicted targets, dropped %d dead targets"
                  (length deferred) (length dead)))
       (nreverse result))))
+
+;; ─── Conflicted Target Review Queue ───
+
+(defvar gptel-auto-workflow--review-decisions nil
+  "Hash table of human decisions on conflicted targets.
+Key: target (string), value: plist with :decision (:approved/:dropped/:defer)
+and optionally :backend (string) for approved targets.
+Populated by --read-review-decisions from conflicted-review.md.")
+
+(defvar gptel-auto-workflow--review-file nil
+  "Path to conflicted target review file.
+Defaults to mementum/knowledge/conflicted-review.md under project root.")
+
+(defun gptel-auto-workflow--review-file-path ()
+  "Return the path to the conflicted target review file."
+  (or gptel-auto-workflow--review-file
+      (expand-file-name "mementum/knowledge/conflicted-review.md"
+                        (if (fboundp 'gptel-auto-workflow--worktree-base-root)
+                            (gptel-auto-workflow--worktree-base-root)
+                          user-emacs-directory))))
+
+(defun gptel-auto-workflow--generate-conflicted-review (target-reports)
+  "Generate a human-reviewable file for conflicted TARGET-REPORTS.
+TARGET-REPORTS is a list of plists with :target, :ratio, :conflicts.
+Writes to --review-file-path. Existing decisions are preserved."
+  (let* ((path (gptel-auto-workflow--review-file-path))
+         (dir (file-name-directory path))
+         (existing-decisions (when (file-exists-p path)
+                               (gptel-auto-workflow--read-review-decisions)))
+         (reports (sort (copy-sequence target-reports)
+                        (lambda (a b) (< (plist-get a :ratio) (plist-get b :ratio))))))
+    (unless (file-directory-p dir)
+      (make-directory dir t))
+    (with-temp-file path
+      (insert "# Conflicted Target Review\n\n")
+      (insert (format "*Generated: %s | Pending: %d targets*\n\n"
+                      (format-time-string "%Y-%m-%d %H:%M")
+                      (length reports)))
+      (insert "> Targets where <50% of backends agree on KIBC axis.\n")
+      (insert "> Edit the status line and selection boxes below, then save.\n")
+      (insert "> Decisions are re-read each cycle. Format:\n")
+      (insert "> `**Status**: PENDING` / `**Status**: APPROVED (route: DeepSeek)` / `**Status**: DROPPED`\n\n")
+      (insert "---\n\n")
+      (if (null reports)
+          (insert "No conflicted targets pending review.\n")
+        (dolist (report reports)
+          (let* ((target (plist-get report :target))
+                 (ratio (plist-get report :ratio))
+                 (conflicts (plist-get report :conflicts))
+                 (existing (when existing-decisions
+                             (gethash target existing-decisions))))
+            (insert (format "## Target: `%s`\n\n" target))
+            (insert (format "- **Agreement**: %.0f%% (%s)\n"
+                            (* 100 ratio)
+                            (if conflicts
+                                (format "%d backends disagree" (length conflicts))
+                              "all backends")))
+            (when conflicts
+              (insert "- **Disagreeing backends**: ")
+              (let ((votes nil))
+                (dolist (c conflicts)
+                  (push (format "`%s`→`%s` (expected `%s`)"
+                                (plist-get c :backend)
+                                (plist-get c :axis)
+                                (plist-get c :expected))
+                        votes))
+                (insert (string-join (nreverse votes) ", ")))
+              (insert "\n"))
+            ;; Historical stats
+            (when (fboundp 'gptel-auto-workflow--get-holographic-consensus)
+              (let ((cons (gptel-auto-workflow--get-holographic-consensus target)))
+                (when cons
+                  (insert (format "- **Historical consensus**: %s axis, %d operations, %.0f%% confidence\n"
+                                  (plist-get cons :axis)
+                                  (or (plist-get cons :count) 0)
+                                  (* 100 (or (plist-get cons :confidence) 0)))))))
+            ;; Decision status
+            (insert "\n**Status**: ")
+            (cond
+             ((and existing (eq (plist-get existing :decision) 'approved))
+              (insert (format "APPROVED (route: %s)\n" (or (plist-get existing :backend) "any"))))
+             ((and existing (eq (plist-get existing :decision) 'dropped))
+              (insert "DROPPED\n"))
+             (t
+              (insert "PENDING\n")))
+            (insert "\n- [ ] APPROVE → route to: `____`\n")
+            (insert "- [ ] DROP → stop researching this target\n")
+            (insert "- [ ] DEFER → try again next cycle\n\n")
+            (insert "---\n\n"))))
+      (insert "## Decision Log\n\n")
+      (insert "*No decisions recorded yet.*\n"))
+    (message "[verbum] Wrote conflicted target review: %s (%d targets)" path (length reports))
+    path))
+
+(defun gptel-auto-workflow--read-review-decisions ()
+  "Parse conflicted-review.md for human decisions.
+Returns a hash table of target → (:decision keyword :backend string-or-nil).
+Call this before each cycle to pick up fresh decisions."
+  (let* ((path (gptel-auto-workflow--review-file-path))
+         (decisions (make-hash-table :test 'equal)))
+    (when (file-exists-p path)
+      (with-temp-buffer
+        (insert-file-contents path)
+        (goto-char (point-min))
+        (let ((target nil) (status nil) (backend nil))
+          (while (not (eobp))
+            (cond
+             ;; Find target header: ## Target: `file.el`
+             ((looking-at "## Target: `\\([^`]+\\)`")
+              (setq target (match-string 1)
+                    status nil
+                    backend nil))
+             ;; Parse status line: **Status**: PENDING / APPROVED (route: DeepSeek) / DROPPED
+             ((and target (looking-at "\\*\\*Status\\*\\*: \\([A-Z]+\\)"))
+              (let ((word (match-string 1))
+                    (line (buffer-substring (line-beginning-position) (line-end-position))))
+                (cond
+                 ((string= word "APPROVED")
+                  (setq status 'approved)
+                  (when (string-match "(route: \\([^)]+\\))" line)
+                    (setq backend (match-string 1 line))))
+                 ((string= word "DROPPED")
+                  (setq status 'dropped))
+                 ((string= word "PENDING")
+                  (setq status nil)))))
+             ;; Store decision at section boundary
+             ((and target (looking-at "^##\\|^---\\|\\'"))
+              (when status
+                (puthash target (list :decision status :backend backend) decisions))
+              (setq target nil status nil backend nil)))
+            (forward-line 1))
+          ;; Store last target
+          (when (and target status)
+            (puthash target (list :decision status :backend backend) decisions)))))
+    (let ((count (hash-table-count decisions)))
+      (when (> count 0)
+        (message "[verbum] Read %d review decisions from %s" count path)))
+    decisions))
 
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
