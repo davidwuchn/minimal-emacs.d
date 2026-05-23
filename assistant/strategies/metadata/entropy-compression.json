@@ -1,0 +1,1 @@
+{"name":"entropy-compression","version":"1.0","hypothesis":"Entropy-based compression preserves high-information content while aggressively reducing redundancy","axis":"F","components":["shannon-entropy","adaptive-compression"]}
