@@ -4,7 +4,25 @@
 
 ## Current Session: Deep Debugging + gptel Payload Fix
 
-**Status:** All P0/P1 bugs resolved. 316/316 tests.
+**Status:** Researcher scope + allium/persisted-budget bugs fixed. 1940 ERT unit tests, 0 unexpected.
+
+### Bugs Fixed (2026-05-23, follow-up)
+
+1. **`defvar lines` band-aid removed**: bottleneck report had one extra `)` closing the local `let*` before final `(if lines ...)`, so `lines` escaped scope. `defvar lines` only made the escaped read hit a global special variable; it also made the report always fall back. Fixed paren structure and added regression proving bottlenecks are emitted.
+2. **Allium `listp "kept"` root cause**: `allium-diff-opposing-hypotheses` did `(car (cl-find ...))`, converting the matched cons cell `("kept" . hypothesis)` into string `"kept"`, then `(cdr kept)` crashed. Kept the cons cell and pass `(cdr kept)` / `(cdr discarded)`.
+3. **Persisted category budget shape**: in-memory budget is alist `((:synthesis . 1) ...)`, but JSON restore returns plist `(:synthesis 1 ...)`. `enforce-category-budget` assumed alist and crashed on `car(:synthesis)`. Added normalizer used by budget enforcement and analyzer prompt formatting.
+4. **Test lexical scoping leak**: `inject-queued-targets-dedup` used `let` while initializing `result` from sibling binding `targets`; changed to `let*`.
+
+**Verification:** `./scripts/run-tests.sh unit` → 1940 tests, 1886 expected, 0 unexpected, 54 skipped.
+
+### Researcher Provider Routing Continued (2026-05-23)
+
+- Fixed `gptel-benchmark-call-subagent` so headless chain selection runs even when an override/base preset exists; prior shape logged the override branch and skipped the direct chain branch.
+- Added both `:backend` and `:model` to the effective preset before calling the timeout wrapper, blocking the `gptel-config.el` MiniMax nil-model advice.
+- Fixed legacy headless-subagent fallback migration so hot-reload no longer restores MiniMax-first ordering.
+- Added live reload of `gptel-tools-agent-prompt-build.el`, `gptel-tools-agent-error.el`, and `gptel-benchmark-subagent.el` in both `gptel-auto-workflow--reload-live-support` and the cron dispatch eval; `gptel-tools-agent.el` skips already-provided split modules.
+- Verified in live `copilot-researcher` daemon with no-network mocks: the actual task-runner boundary receives `gptel-agent-preset` containing `:backend "moonshot"` and `:model "kimi-k2.6"`.
+- Focused provider tests pass; full 532-test batch still has unrelated staging/payload failures.
 
 ### Bugs Fixed (2026-05-23)
 

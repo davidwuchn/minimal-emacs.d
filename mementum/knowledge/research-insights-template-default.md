@@ -178,116 +178,702 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Distillation: gptel Code Quality Analysis
+## Distilled Research Strategy
 
-## Overview
-Template-default strategy evaluated **~200+ hypotheses** across **60+ Elisp modules**, targeting **φ Vitality** (adaptability, error resilience) and **fractal Clarity** (explicit assumptions, testable definitions).
+**Core Problem Areas (ranked by frequency):**
 
-## Key Patterns Identified
+### 1. Type Validation Gaps (highest priority)
+- **`proper-list-p` not used where plist operations follow** — ~40+ instances; `listp` fails on dotted pairs/circular lists
+- **Nil guards missing** — ~35+ functions crash on nil inputs
+- **`stringp` missing before string operations** — ~20+ instances
 
-### 1. Validation Gaps (Highest Frequency)
-| Pattern | Count | Impact |
-|---------|-------|--------|
-| `nil` guard missing | ~80 | Runtime crashes |
-| `proper-list-p` vs `listp` | ~35 | Silent failures on dotted pairs |
-| Type validation (`stringp`, `numberp`) | ~25 | Wrong-type-argument errors |
+### 2. Cache Correctness Bugs
+- **Nil-caching**: Storing nil in cache prevents future lookups even after files are created
+- **Size counter drift**: `clrhash` doesn't reset counter, causing eviction logic to fail
+- **Missing invalidation**: Updates to one cache don't invalidate dependent caches
 
-### 2. Performance Issues
-| Issue | Files | Fix |
-|-------|-------|-----|
-| O(n²) → O(n) | gptel-ext-fsm-utils.el, gptel-tools-agent.el | Single-pass traversal |
-| Repeated regex compilation | gptel-sandbox.el, gptel-auto-workflow*.el | `defconst` pre-compilation |
-| Missing memoization | gptel-context-cache.el | Hash table caching |
-| Redundant `nreverse`/`append` | gptel-ext-tool-sanitize.el | Accumulator pattern |
+### 3. Code Duplication Patterns
+- **Validation patterns repeated** — Extract `my/gptel--parse-context-entry`, `gptel-benchmark--require-valid-string`, `gptel-auto-workflow--git-cmd-safe`
+- **Error handling duplicated** — Centralize transient-error detection, cache eviction
 
-### 3. Bug Categories Fixed
-- **Off-by-one**: Loop boundaries, truncation logic
-- **Wrong variable**: Error messages referencing `id` instead of `fsm`
-- **Discarded return values**: `plist-put` results not assigned back
-- **Circular reference**: Missing cycle detection in DFS traversal
-- **Race conditions**: Timer state not reset atomically
+### 4. Performance (secondary to correctness)
+- **Memoization missing** — `gptel-benchmark-load-result`, `file-readable-p`, MD5 in fingerprints
+- **Redundant regex compilation** — Pre-compile with `regexp-opt`
 
-### 4. Code Structure Issues
-- **Duplicate code**: ~40 extraction opportunities (helpers/macros)
-- **Nested pyramids**: `when-let*` flattening reduced 4-level indent to 2
-- **Dead code**: Unused bindings, unreachable branches
-- **Inconsistent patterns**: Varying validation approaches across files
+### 5. Data Structure Mismatches
+- **`plist-get` on alist data** — Several functions use wrong accessor
+- **Vector/list confusion** — Using list ops on vectors
 
-## High-Impact Changes (Success Rate >70%)
+**Files Needing Most Attention:**
+1. `gptel-sandbox.el` — 30+ hypotheses
+2. `gptel-agent-loop.el` — 20+ hypotheses  
+3. `gptel-auto-workflow*.el` — 25+ hypotheses
+4. `gptel-benchmark*.el` — 15+ hypotheses
 
-| File | Change | Vitality | Clarity |
-|------|--------|----------|---------|
-| gptel-ext-fsm-utils.el | FSM state → plist persistence | ✓ | ✓ |
-| gptel-tools-agent.el | Timer lifecycle management | ✓ | ✓ |
-| gptel-sandbox.el | Error propagation fix | ✓ | ✓ |
-| gptel-benchmark-core.el | plist/alist agnostic accessors | ✓ | ✓ |
-
-## Discarded Hypotheses (~30)
-- Overly defensive checks where callers already validate
-- Premature optimization without measurable benefit
-- Hypotheses without concrete code evidence
-- Duplicate patterns already addressed
-
-## Metrics Summary
-- **Applied**: ~150 changes across 45 files
-- **Net-new helpers**: 25 extracted functions/macros
-- **Test coverage**: 8 new test cases added
-- **Byte-compile warnings**: Eliminated all new warnings
+**Top 5 Highest-Impact Fixes:**
+1. `proper-list-p` validation in sandbox state/args handling
+2. Cache size counter sync with `hash-table-count`
+3. Nil-caching prevention in `gptel-benchmark-load-result`
+4. Extract validation helpers to eliminate 6+ copy-paste patterns
+5. FSM type guards before accessor calls
 ```
 
-### Check Issues
-
-# Review: Research Distillation
-
-## Verdict: Needs Substantiation
-
-This document has **presentation quality** but lacks **technical rigor** for verification.
-
----
-
-## Strengths
-- Categorized findings (validation, performance, structure)
-- Specific file names attached to issues
-- Quantified metrics (150 changes, 25 helpers, 8 tests)
-
----
-
-## Critical Gaps
-
-| Issue | Explanation |
-|-------|-------------|
-| No definitions | What are "φ Vitality" and "fractal Clarity"? Vague frameworks reduce credibility |
-| No evidence links | Where are the before/after diffs? PRs? Commits? |
-| Suspicious precision | ~80, ~35, ~25 vs "8 new test cases" - why exact vs approximate? |
-| "200+ hypotheses" framing | Unusual framing for code review. Was this automated analysis? Manual audit? Both? |
-| High-impact table lacks specifics | What exactly changed? Show code, not checkmarks |
-
----
-
-## Questions for Author
-
-1. **What tool/methodology produced the "200+ hypotheses"?** Was this `M-x checkdoc`, `byte-compile`, manual audit, or something else?
-
-2. **Can you share a representative diff?** E.g., the O(n²) → O(n) fix in `gptel-ext-fsm-utils.el`
-
-3. **What was the failure mode for "~80 nil guards missing"?** Did these cause actual test failures or reported bugs, or were they theoretical?
-
-4. **Why were 30 hypotheses discarded?** What's the inclusion/exclusion criteria?
-
----
-
-## What Would Make This Credible
-
-```elisp
-;; BEFORE (dotted pair crash)
-(car (listp x))  ; wrong: listp returns boolean
-
-;; AFTER
-(when (proper-list-p x) (ca
-
-... (truncated)
