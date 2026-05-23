@@ -334,6 +334,18 @@ Scoring incorporates four dimensions (not just raw keep-rate):
           (baseline (when category (gptel-auto-workflow--category-baseline-keep-rate category strategy)))
           (scored nil))
     
+    ;; Quarantine gate: remove backends with 3+ consecutive degraded lambda checks
+    (when gptel-auto-workflow--quarantined-backends
+      (let ((filtered nil))
+        (dolist (entry static-fallbacks)
+          (let ((backend (car entry)))
+            (if (and (gptel-auto-workflow--backend-quarantined-p backend)
+                     (not (and category-override
+                               (string= backend category-override))))
+                (message "[verbum] ⚠ SKIPPING quarantined backend %s" backend)
+              (push entry filtered))))
+        (setq static-fallbacks (nreverse filtered))))
+    
     ;; Score each backend from static list
     (dolist (entry static-fallbacks)
       (let* ((backend (car entry))
@@ -807,6 +819,48 @@ Returns plist with :overall status and per-backend results."
   "Hash table storing async lambda verification results.
 Keys are backend names, values are :healthy/:degraded/:unknown.")
 
+(defvar gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal)
+  "Consecutive degraded lambda checks per backend.
+Reset to 0 when :healthy. Quarantine at >= 3 strikes.")
+
+(defvar gptel-auto-workflow--quarantined-backends nil
+  "List of backend names currently quarantined (3+ degraded strikes).
+Quarantined backends are removed from routing entirely.")
+
+(defvar gptel-auto-workflow--conflicted-targets nil
+  "Alist of (target . ratio) for targets with <50%% backend agreement.
+Populated by Phase 6 consistency check. Targets are deferred until
+next cycle to let backends stabilize.")
+
+(defun gptel-auto-workflow--target-conflicted-p (target)
+  "Return non-nil if TARGET has <50%% backend agreement (deferred)."
+  (cdr (assoc target gptel-auto-workflow--conflicted-targets)))
+
+(defun gptel-auto-workflow--record-lambda-strike (backend status)
+  "Record lambda verification STATUS for BACKEND, updating strike count.
+Resets strikes on :healthy, increments on :degraded.
+Quarantines backend at 3 consecutive degraded strikes."
+  (let ((count (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0)))
+    (pcase status
+      (:healthy
+       (puthash backend 0 gptel-auto-workflow--lambda-strike-count)
+       (setq gptel-auto-workflow--quarantined-backends
+             (delete backend gptel-auto-workflow--quarantined-backends)))
+      (:degraded
+       (let ((new-count (1+ count)))
+         (puthash backend new-count gptel-auto-workflow--lambda-strike-count)
+         (when (>= new-count 3)
+           (unless (member backend gptel-auto-workflow--quarantined-backends)
+             (push backend gptel-auto-workflow--quarantined-backends)
+             (message "[verbum] ⚠ QUARANTINED %s: %d consecutive degraded lambda checks"
+                      backend new-count)))))
+      (_
+       (message "[verbum] %s lambda status %s — no strike change" backend status)))))
+
+(defun gptel-auto-workflow--backend-quarantined-p (backend)
+  "Return t if BACKEND is quarantined due to lambda degradation."
+  (member backend gptel-auto-workflow--quarantined-backends))
+
 (defun gptel-auto-workflow--call-backend-for-lambda (backend model prompt)
   "Call BACKEND with MODEL for lambda verification via API.
 Binds `gptel-backend' and `gptel-model' dynamically around `gptel-request'
@@ -829,11 +883,13 @@ Returns t if request was initiated, nil on failure."
                                            (progn
                                              (message "[verbum] %s lambda compiler confirmed ✓" backend)
                                              (puthash backend :healthy
-                                                      gptel-auto-workflow--lambda-verification-results))
+                                                      gptel-auto-workflow--lambda-verification-results)
+                                             (gptel-auto-workflow--record-lambda-strike backend :healthy))
                                          (progn
                                            (message "[verbum] %s no lambda in response" backend)
                                            (puthash backend :degraded
-                                                    gptel-auto-workflow--lambda-verification-results)))))))
+                                                    gptel-auto-workflow--lambda-verification-results)
+                                           (gptel-auto-workflow--record-lambda-strike backend :degraded)))))))
         t)
     (error
      (message "[verbum] API call failed for %s: %s" backend (error-message-string err))

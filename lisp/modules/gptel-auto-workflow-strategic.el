@@ -1753,6 +1753,26 @@ Returns augmented target list without modifying the hints."
                (length result)))
     result))
 
+(defun gptel-auto-workflow--filter-deferred-targets (targets)
+  "Remove TARGETS that have <50% backend agreement (conflicted).
+Reads `gptel-auto-workflow--conflicted-targets' populated by Phase 6
+consistency check. Conflicted targets are deferred to next cycle.
+Returns filtered list."
+  (if (not (and (boundp 'gptel-auto-workflow--conflicted-targets)
+                gptel-auto-workflow--conflicted-targets))
+      targets
+    (let ((result nil) (deferred nil))
+      (dolist (target targets)
+        (if (gptel-auto-workflow--target-conflicted-p target)
+            (progn
+              (push target deferred)
+              (message "[verbum] ⚠ DEFERRED %s (%.0f%% backend agreement)"
+                       target (* 100 (gptel-auto-workflow--target-conflicted-p target))))
+          (push target result)))
+      (when deferred
+        (message "[verbum] Deferred %d conflicted targets to next cycle" (length deferred)))
+      (nreverse result))))
+
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
 CALLBACK receives list of target files.
@@ -1767,16 +1787,17 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
             (gptel-auto-workflow--filter-valid-targets
              gptel-auto-workflow-targets
              proj-root
-             gptel-auto-workflow-max-targets-per-run)))
+             gptel-auto-workflow-max-targets-per-run))
+           (safe-targets (gptel-auto-workflow--filter-deferred-targets static-targets)))
       (if gptel-auto-workflow-strategic-selection
           (gptel-auto-workflow--ask-analyzer-for-targets
            (lambda (targets)
-             (if (gptel-auto-workflow--handle-analyzer-error-state targets static-targets callback)
-                 nil  ; Error already handled
-               (if (null targets)
-                   (progn
-                     (message "[auto-workflow] Analyzer returned no targets; using static targets")
-                     (let ((augmented (gptel-auto-workflow--semantic-target-augmentation static-targets)))
+              (if (gptel-auto-workflow--handle-analyzer-error-state targets safe-targets callback)
+                  nil  ; Error already handled
+                (if (null targets)
+                    (progn
+                      (message "[auto-workflow] Analyzer returned no targets; using static targets")
+                      (let ((augmented (gptel-auto-workflow--semantic-target-augmentation safe-targets)))
                        (funcall callback augmented)))
                   (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
                          (final-targets (if (and filtered-targets (listp filtered-targets))

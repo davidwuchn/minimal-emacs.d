@@ -1994,12 +1994,18 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                 (message "[verbum] ⚠ %d inconsistent targets detected"
                          (plist-get result :inconsistent))
                 ;; Phase 9: detailed low-agreement alerts
-                (let ((low-agreement nil))
-                  (dolist (target-report (plist-get result :targets))
-                    (when (< (plist-get target-report :ratio) 0.5)
-                      (push target-report low-agreement)))
-                  (when low-agreement
-                    (message "[verbum] ⚠ LOW AGREEMENT (%d targets < 50%%):" (length low-agreement))
+                 (let ((low-agreement nil))
+                   (dolist (target-report (plist-get result :targets))
+                     (when (< (plist-get target-report :ratio) 0.5)
+                       (push target-report low-agreement)))
+                   (when low-agreement
+                     ;; Populate conflicted-targets for gatekeeping
+                     (when (boundp 'gptel-auto-workflow--conflicted-targets)
+                       (setq gptel-auto-workflow--conflicted-targets
+                             (mapcar (lambda (r) (cons (plist-get r :target)
+                                                       (plist-get r :ratio)))
+                                     low-agreement)))
+                     (message "[verbum] ⚠ LOW AGREEMENT (%d targets < 50%%):" (length low-agreement))
                     (dolist (report (seq-take low-agreement 5))
                        (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
                                 (plist-get report :target)
