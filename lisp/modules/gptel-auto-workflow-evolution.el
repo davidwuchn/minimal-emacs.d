@@ -2204,14 +2204,25 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
          (strategies (length (gptel-auto-workflow--evolution-strategy-structure-scores)))
          (backends (length (gptel-auto-workflow--evolution-backend-stats)))
          (axis-stats (gptel-auto-workflow--evolution-axis-stats))
-         ;; Verbum: backend health metrics
-         (healthy-backends (- backends (length (if (boundp 'gptel-auto-workflow--quarantined-backends)
-                                                    gptel-auto-workflow--quarantined-backends
-                                                  nil))))
-         (degraded-backends (if (boundp 'gptel-auto-workflow--lambda-strike-count)
-                                (hash-table-count gptel-auto-workflow--lambda-strike-count)
-                              0))
+         ;; Verbum: backend health metrics (health ladder levels 0-4)
+         (healthy-backends
+          (if (fboundp 'gptel-auto-workflow--backend-health-level)
+              (let ((hl 0))
+                (dolist (b (mapcar #'car (gptel-auto-workflow--evolution-backend-stats)))
+                  (when (= 0 (gptel-auto-workflow--backend-health-level b))
+                    (cl-incf hl)))
+                hl)
+            backends))
+         (degraded-backends (- backends healthy-backends))
          (backend-health-ratio (if (> backends 0) (/ (float healthy-backends) backends) 0.0))
+         ;; Verbum: health-weighted experiment confidence
+         (evidence-trust (if (fboundp 'gptel-auto-workflow--backend-health-weight)
+                             (let ((total-w 0.0) (trusted-w 0.0))
+                               (dolist (b (mapcar #'car (gptel-auto-workflow--evolution-backend-stats)))
+                                 (let ((w (gptel-auto-workflow--backend-health-weight b)))
+                                   (cl-incf total-w w)))
+                               (/ total-w (float backends)))
+                           1.0))
          ;; Verbum: cross-backend consistency
          (consistency-available (fboundp 'gptel-auto-workflow--check-all-targets-consistency))
          (consistency-ratio
@@ -2249,15 +2260,20 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
         (setq ontology-score (/ ontology-score scored-count))))
     (message "[vsm] S1-Ops: %d experiments, %.0f%% kept" total (* 100 keep-rate))
     (message "[vsm] S2-Coord: %d modules scanned, consistency %.0f%%" 89 (* 100 consistency-ratio))
-    (message "[vsm] S3-Control: %d/%d healthy backends (%.0f%%), %d degraded, watchdog 90min"
-             healthy-backends backends (* 100 backend-health-ratio) degraded-backends)
+    (message "[vsm] S3-Control: %d/%d healthy backends (%.0f%% health, %.0f%% trust), %d degraded"
+             healthy-backends backends (* 100 backend-health-ratio) (* 100 evidence-trust) degraded-backends)
     (message "[vsm] S4-Intel: %d strategies evolved, auto-backend-order active" strategies)
     (message "[vsm] S5-Identity: lambda notation, confidence tags, graphify patterns active")
-    (when (and (boundp 'gptel-auto-workflow--quarantined-backends)
-               gptel-auto-workflow--quarantined-backends)
-      (message "[vsm] ⚠ VERBUM: %d backend(s) quarantined: %s"
-               (length gptel-auto-workflow--quarantined-backends)
-               (mapconcat #'identity gptel-auto-workflow--quarantined-backends ", ")))
+    (when (and (fboundp 'gptel-auto-workflow--backend-health-level)
+               (> degraded-backends 0))
+      (message "[vsm] ⚠ VERBUM: %d backend(s) degraded (non-zero health level): %s"
+               degraded-backends
+               (mapconcat (lambda (b) (format "%s/%s"
+                                              (car b)
+                                              (gptel-auto-workflow--backend-health-label (car b))))
+                          (cl-remove-if (lambda (b) (= 0 (gptel-auto-workflow--backend-health-level (car b))))
+                                        (gptel-auto-workflow--evolution-backend-stats))
+                          ", ")))
     (when eight-keys-available
       (message "[vsm] Eight Keys: AutoGo=%.2f AutoTTS=%.2f self-evolve=%.2f meta-harness=%.2f ontology=%.2f (%d samples)"
                autogo-score autotts-score selfev-score harness-score ontology-score scored-count))
@@ -2295,7 +2311,7 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
      (let* ((s1-strength (min 1.0 (* keep-rate 5.0)))        ; Wood/Operations → keep-rate
             (s2-strength (min 1.0 consistency-ratio))           ; Metal/Coord → backend agreement
             (s3-strength (if (> backends 2)
-                             (* backend-health-ratio 0.7)       ; Earth/Control → healthy ratio
+                             (* evidence-trust 0.7)              ; Earth/Control → health-weighted trust
                            0.3))                                ; penalized when <3 total
             (s4-strength (min 1.0 (/ strategies 10.0)))        ; Fire/Intel → strategy count
             (s5-strength (if eight-keys-available
@@ -4820,6 +4836,22 @@ Also persists EMA confidence history for cross-session trend analysis."
       (setq hints (plist-put hints :ema-history gptel-auto-workflow--research-ema-history)))
     (when (bound-and-true-p gptel-auto-workflow--research-ema-conf)
       (setq hints (plist-put hints :ema-conf gptel-auto-workflow--research-ema-conf)))
+    ;; Verbum immune memory: persist backend health state across restarts
+    (when (and (boundp 'gptel-auto-workflow--lambda-strike-count)
+               (> (hash-table-count gptel-auto-workflow--lambda-strike-count) 0))
+      (let ((strikes nil))
+        (maphash (lambda (k v) (push (cons k v) strikes)) gptel-auto-workflow--lambda-strike-count)
+        (setq hints (plist-put hints :lambda-strikes strikes))))
+    (when (and (boundp 'gptel-auto-workflow--lambda-dead-until)
+               (> (hash-table-count gptel-auto-workflow--lambda-dead-until) 0))
+      (let ((dead nil))
+        (maphash (lambda (k v) (push (cons k v) dead)) gptel-auto-workflow--lambda-dead-until)
+        (setq hints (plist-put hints :lambda-dead dead))))
+    (when (and (boundp 'gptel-auto-workflow--lambda-verification-results)
+               (> (hash-table-count gptel-auto-workflow--lambda-verification-results) 0))
+      (let ((results nil))
+        (maphash (lambda (k v) (push (cons (symbol-name k) (symbol-name v)) results)) gptel-auto-workflow--lambda-verification-results)
+        (setq hints (plist-put hints :lambda-results results))))
     (when file
       (make-directory (file-name-directory file) t)
       (with-temp-file file
@@ -4850,7 +4882,25 @@ Also restores EMA confidence history for cross-session trend analysis."
                (boundp 'gptel-auto-workflow--research-ema-conf))
       (let ((conf (plist-get gptel-auto-workflow--evolution-next-cycle-hints :ema-conf)))
         (when conf
-          (setq gptel-auto-workflow--research-ema-conf conf))))))
+          (setq gptel-auto-workflow--research-ema-conf conf))))
+    ;; Verbum immune memory: restore backend health state from disk
+    (when gptel-auto-workflow--evolution-next-cycle-hints
+      (when (boundp 'gptel-auto-workflow--lambda-strike-count)
+        (let ((strikes (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-strikes)))
+          (when strikes
+            (clrhash gptel-auto-workflow--lambda-strike-count)
+            (dolist (s strikes) (puthash (car s) (cdr s) gptel-auto-workflow--lambda-strike-count)))))
+      (when (boundp 'gptel-auto-workflow--lambda-dead-until)
+        (let ((dead (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-dead)))
+          (when dead
+            (clrhash gptel-auto-workflow--lambda-dead-until)
+            (dolist (d dead) (puthash (car d) (cdr d) gptel-auto-workflow--lambda-dead-until)))))
+      (when (boundp 'gptel-auto-workflow--lambda-verification-results)
+        (let ((results (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-results)))
+          (when results
+            (clrhash gptel-auto-workflow--lambda-verification-results)
+            (dolist (r results)
+              (puthash (car r) (intern (cdr r)) gptel-auto-workflow--lambda-verification-results))))))))
 
 (defun gptel-auto-workflow--wire-regressed-targets ()
   "Populate :regressed-targets from cross-cycle knowledge-page diff.
