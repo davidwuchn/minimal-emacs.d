@@ -554,92 +554,326 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default (1986)
+## Distilled Research Strategy
 
-## Core Principles
+**Core Problem Areas (ranked by frequency):**
 
-1. **Vitality (Error Resilience)**: Make code robust against malformed/unexpected inputs
-2. **Clarity (Explicit Assumptions)**: Make implicit requirements visible and testable
+### 1. Type Validation Gaps (highest priority)
+- **`proper-list-p` not used where plist operations follow** — ~40+ instances; `listp` fails on dotted pairs/circular lists
+- **Nil guards missing** — ~35+ functions crash on nil inputs
+- **`stringp` missing before string operations** — ~20+ instances
 
-## Dominant Fix Patterns
+### 2. Cache Correctness Bugs
+- **Nil-caching**: Storing nil in cache prevents future lookups even after files are created
+- **Size counter drift**: `clrhash` doesn't reset counter, causing eviction logic to fail
+- **Missing invalidation**: Updates to one cache don't invalidate dependent caches
 
-### 1. Input Validation Guards
-```
-- proper-list-p validation before list operations
-- nil guards before car/cdr/plist-get
-- stringp guards before string operations  
-- type validation before arithmetic
-```
+### 3. Code Duplication Patterns
+- **Validation patterns repeated** — Extract `my/gptel--parse-context-entry`, `gptel-benchmark--require-valid-string`, `gptel-auto-workflow--git-cmd-safe`
+- **Error handling duplicated** — Centralize transient-error detection, cache eviction
 
-### 2. Helper Extraction
-- Replace duplicated inline logic with named helpers
-- Centralize validation patterns (single source of truth)
-- Make transformation pipelines explicit
+### 4. Performance (secondary to correctness)
+- **Memoization missing** — `gptel-benchmark-load-result`, `file-readable-p`, MD5 in fingerprints
+- **Redundant regex compilation** — Pre-compile with `regexp-opt`
 
-### 3. Error Handling Hardening
-- Replace bare `signal` with `error`
-- Add `condition-case` for external operations
-- Fix error message variable references
+### 5. Data Structure Mismatches
+- **`plist-get` on alist data** — Several functions use wrong accessor
+- **Vector/list confusion** — Using list ops on vectors
 
-### 4. Data Structure Correctness
-- Use `plist-member` instead of truthiness for key existence
-- Fix circular list detection in recursive traversals
-- Ensure `plist-put` results are assigned back
+**Files Needing Most Attention:**
+1. `gptel-sandbox.el` — 30+ hypotheses
+2. `gptel-agent-loop.el` — 20+ hypotheses  
+3. `gptel-auto-workflow*.el` — 25+ hypotheses
+4. `gptel-benchmark*.el` — 15+ hypotheses
 
-### 5. Performance Patterns
-- Cache expensive computations (regex, file reads, subprocess)
-- Replace O(n²) with O(n) algorithms
-- Use hash tables instead of alists for O(1) lookups
-
-## Discarded Hypothesis Pattern
-Hypotheses were discarded when:
-- Target file had pre-existing syntax errors
-- The fix was already applied
-- Test failures were environmental (submodule sync, missing deps)
+**Top 5 Highest-Impact Fixes:**
+1. `proper-list-p` validation in sandbox state/args handling
+2. Cache size counter sync with `hash-table-count`
+3. Nil-caching prevention in `gptel-benchmark-load-result`
+4. Extract validation helpers to eliminate 6+ copy-paste patterns
+5. FSM type guards before accessor calls
 ```
 
-### Check Issues
-
-# Review: Research Strategy Template-Default (1986)
-
-This is a solid defensive programming methodology. A few observations:
-
-## Strengths
-
-| Aspect | Assessment |
-|--------|------------|
-| **Provenance** | The 1986 date suggests matured, battle-tested patterns |
-| **Balance** | Good tension between robustness, clarity, and performance |
-| **Pragmatism** | Discarded hypothesis section prevents analysis paralysis |
-
-## Potential Gaps
-
-1. **Testing Strategy** — No mention of:
-   - Regression test patterns
-   - Property-based testing for invariants
-   - Fuzzing for input validation
-
-2. **Version Compatibility** — No guards for:
-   - Feature detection (`featurep`, `fboundp`)
-   - Version-specific behavior differences
-
-3. **Transactionality** — Missing for compound operations requiring atomicity
-
-## Suggested Addition
-
-```elisp
-;; Missing: State Consistency Pattern
-;; For multi-step mutations, ensure rollback on failure
-;; e.g., when modifying both a plist and a cache simultaneously
-```
-
-## Verdict
-
-✅ **Publishable as-is** — The "discarded hypothesis" section is especially valuable; it documents *why* certain approaches weren't pursued, which is often more useful than the final solution.
-
-Do you want me to expand on any particular section?
