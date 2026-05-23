@@ -156,8 +156,8 @@ In headless auto-workflow runs, bypass `gptel-agent-loop-task' to avoid
 its async continuation layer in the worker daemon."
   (require 'gptel-request)
   (let* ((headless-auto-workflow
-          (and (bound-and-true-p gptel-auto-workflow--headless)
-               (bound-and-true-p gptel-auto-workflow-persistent-headless)
+          (and (or (bound-and-true-p gptel-auto-workflow--headless)
+                   (bound-and-true-p gptel-auto-workflow-persistent-headless))
                (bound-and-true-p gptel-auto-workflow--current-project)))
          (isolated-env
           (and headless-auto-workflow

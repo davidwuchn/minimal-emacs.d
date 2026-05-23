@@ -162,6 +162,10 @@ run_self_evolution() {
     printf '%s\n' "$evolution_output" >> "$PIPELINE_LOG"
     if printf '%s' "$evolution_output" | grep -q "already-running"; then
         log "Self-evolution skipped (already running)"
+    elif printf '%s' "$evolution_output" | grep -q "throttled"; then
+        log "Self-evolution skipped (throttled)"
+    elif printf '%s' "$evolution_output" | grep -q "converged"; then
+        log "Self-evolution skipped (converged)"
     elif printf '%s' "$evolution_output" | grep -q "Insufficient new data"; then
         log "Self-evolution skipped (insufficient new data)"
     elif printf '%s' "$evolution_output" | grep -q "Self-evolution cycle complete"; then
