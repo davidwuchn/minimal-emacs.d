@@ -2287,12 +2287,14 @@ must not override it to MiniMax via setq-local in subagent buffers."
 (ert-deftest tdd/semantic-similarity/returns-nil-when-no-kept-targets ()
   "semantic-similarity-edges returns nil when no kept targets exist."
   (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
-    (cl-letf (((symbol-function 'executable-find)
-               (lambda (_) t))
-              ((symbol-function 'gptel-auto-workflow--parse-all-results)
-               (lambda () '((:decision "discarded" :target "a.el")
-                            (:decision "discarded" :target "b.el")))))
-      (should (null (gptel-auto-workflow--semantic-similarity-edges))))))
+    (let ((gptel-auto-workflow--semantic-edges-cache nil)
+          (gptel-auto-workflow--semantic-edges-cache-time nil))
+      (cl-letf (((symbol-function 'executable-find)
+                 (lambda (_) "/nonexistent/git-embed"))
+                ((symbol-function 'gptel-auto-workflow--parse-all-results)
+                 (lambda () '((:decision "discarded" :target "a.el")
+                              (:decision "discarded" :target "b.el")))))
+        (should (null (gptel-auto-workflow--semantic-similarity-edges)))))))
 
 (ert-deftest tdd/semantic-similarity/filters-by-threshold ()
   "semantic-similarity-edges filters edges below threshold."
@@ -2323,7 +2325,7 @@ must not override it to MiniMax via setq-local in subagent buffers."
   (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
     (let ((gptel-auto-workflow--semantic-edges-cache
            '((:source "a.el" :target "lisp/modules/b.el" :score 0.7)
-             (:source "a.el" :target "README.md" :score 0.8)
+             (:source "a.el" :target "scripts/README.md" :score 0.8)
              (:source "a.el" :target "lisp/modules/c.el" :score 0.9)))
           (gptel-auto-workflow--semantic-edges-cache-time (float-time)))
       (let ((edges (gptel-auto-workflow--semantic-similarity-edges)))
