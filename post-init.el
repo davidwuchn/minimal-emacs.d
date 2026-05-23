@@ -10,6 +10,9 @@
 ;; (not user-emacs-directory, since we changed that to var/)
 (add-to-list 'load-path (expand-file-name "lisp" minimal-emacs-user-directory))
 
+;; Set fringe width to match character size — scales with font, avoids fixed-width gap.
+(fringe-mode (frame-char-width))
+
 ;; Load the modular configuration files
 (require 'init-system)
 (require 'init-completion)
