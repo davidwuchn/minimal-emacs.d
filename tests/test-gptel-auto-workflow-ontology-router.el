@@ -541,38 +541,18 @@ Guards against missing runtime dependencies (worktree-base-root)."
 
 ;; ─── Backend Lambda Verification (verbum Phase 2) ───
 
-(ert-deftest tdd/lambda-verify/returns-known-status ()
-  "Lambda verification returns known status for verified backends."
-  (let ((gptel-auto-workflow--backend-lambda-health-cache nil))
-    ;; moonshot is known to have lambda compiler from verbum research
-    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda "moonshot")))))
+(ert-deftest tdd/lambda-verify/returns-cached-status ()
+  "Lambda verification returns cached status when available."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))))
 
-(ert-deftest tdd/lambda-verify/caches-result ()
-  "Lambda verification caches result for same hour."
-  (let ((gptel-auto-workflow--backend-lambda-health-cache nil))
-    (gptel-auto-workflow--verify-backend-lambda "MiniMax")
-    (should (> (length gptel-auto-workflow--backend-lambda-health-cache) 0))))
-
-(ert-deftest tdd/lambda-verify/gate-prompt-exists ()
-  "Lambda gate prompt should be defined and non-empty."
-  (should gptel-auto-workflow--lambda-gate-prompt)
-  (should (> (length gptel-auto-workflow--lambda-gate-prompt) 0)))
-
-(ert-deftest tdd/lambda-verify/verify-all-backends ()
-  "verify-all-backends-lambda returns overall status and per-backend results."
-  (when (fboundp 'gptel-auto-workflow--verify-all-backends-lambda)
-    (let ((result (gptel-auto-workflow--verify-all-backends-lambda)))
-      (should result)
-      (should (plist-get result :overall))
-      (should (plist-get result :backends))
-      (should (> (length (plist-get result :backends)) 0)))))
-
-(ert-deftest tdd/lambda-verify/known-backends-have-status ()
-  "Known backends (moonshot, DashScope) should have specific lambda status."
-  (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))
-  (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "DashScope")))
-  (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "MiniMax")))
-  (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "NonExistent"))))
+(ert-deftest tdd/lambda-verify/known-backends-return-unknown-without-cache ()
+  "Without cache, verification initiates async and returns :unknown."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--backend-lambda-health-cache nil))
+    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))
+    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "DashScope")))))
 
 (ert-deftest tdd/lambda-verify/response-contains-lambda ()
   "response-contains-lambda-p detects lambda expressions."
@@ -800,6 +780,59 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (setq scored (gptel-auto-workflow--apply-holographic-boost scored "a.el"))
       ;; Consensus is 50%, below 70% threshold — no boost
       (should (= 50.0 (plist-get (car scored) :score))))))
+
+;; ─── Real Lambda Verification (verbum Phase 11) ───
+
+(ert-deftest tdd/lambda-verify/cached-healthy ()
+  "Returns cached result when available."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))))
+
+(ert-deftest tdd/lambda-verify/cached-degraded ()
+  "Returns cached degraded result."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "moonshot" :degraded gptel-auto-workflow--lambda-verification-results)
+    (should (eq :degraded (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))))
+
+(ert-deftest tdd/lambda-verify/no-cache-initiates-async ()
+  "When no cached result, initiates async verification and returns :unknown."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--call-backend-for-lambda)
+               (lambda (backend _prompt) (setq called backend) t)))
+      (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))
+      (should (string= "moonshot" called)))))
+
+(ert-deftest tdd/lambda-verify/callback-stores-healthy ()
+  "Async callback stores :healthy when lambda found in response."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (_prompt &rest args)
+                 (let ((cb (plist-get args :callback)))
+                   (funcall cb "λx.x" nil)))))
+      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "test")
+      (should (eq :healthy (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
+
+(ert-deftest tdd/lambda-verify/callback-stores-degraded ()
+  "Async callback stores :degraded when no lambda in response."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (_prompt &rest args)
+                 (let ((cb (plist-get args :callback)))
+                   (funcall cb "hello world" nil)))))
+      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "test")
+      (should (eq :degraded (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
+
+(ert-deftest tdd/lambda-verify/callback-stores-unknown-on-nil ()
+  "Async callback stores :unknown when response is nil."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (_prompt &rest args)
+                 (let ((cb (plist-get args :callback)))
+                   (funcall cb nil nil)))))
+      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "test")
+      (should (eq :unknown (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
 
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

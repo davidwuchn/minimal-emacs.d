@@ -802,26 +802,53 @@ Returns plist with :overall status and per-backend results."
             :unknown unknown-count
             :backends (nreverse results)))))
 
-(defun gptel-auto-workflow--verify-backend-lambda-impl (backend)
-  "Internal: verify lambda compiler for single BACKEND.
-Returns :healthy, :degraded, or :unknown.
-TODO: Replace with actual API call when backend integration ready."
+(defvar gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)
+  "Hash table storing async lambda verification results.
+Keys are backend names, values are :healthy/:degraded/:unknown.")
+
+(defun gptel-auto-workflow--call-backend-for-lambda (backend prompt)
+  "Call BACKEND with PROMPT for lambda verification via API.
+Uses `gptel-request' to send the prompt asynchronously.
+Result is stored in `gptel-auto-workflow--lambda-verification-results'.
+Returns t if request was initiated, nil on failure."
   (condition-case err
       (progn
-        ;; TODO: Use gptel-request or similar to send gate prompt
-        ;; (let ((response (gptel-auto-workflow--call-backend-with-prompt backend gptel-auto-workflow--lambda-gate-prompt)))
-        ;;   (if (gptel-auto-workflow--response-contains-lambda-p response)
-        ;;       :healthy
-        ;;     :degraded))
-        ;; For now, simulate based on known backend characteristics
-        (pcase backend
-          ;; Known lambda-compiler backends (from verbum research)
-          ("moonshot" :healthy)    ;; kimi-k2.6 confirmed
-          ("DashScope" :healthy)   ;; qwen3 family confirmed
-          ("DeepSeek" :unknown)    ;; unconfirmed
-          ("MiniMax" :unknown)     ;; unconfirmed
-          ("CF-Gateway" :unknown)  ;; varies by model
-          (_ :unknown)))
+        (message "[verbum] Sending lambda gate prompt to %s..." backend)
+        (gptel-request prompt
+                       :callback (lambda (response info)
+                                   (if (null response)
+                                       (progn
+                                         (message "[verbum] %s returned no response" backend)
+                                         (puthash backend :unknown
+                                                  gptel-auto-workflow--lambda-verification-results))
+                                     (if (gptel-auto-workflow--response-contains-lambda-p response)
+                                         (progn
+                                           (message "[verbum] %s lambda compiler confirmed ✓" backend)
+                                           (puthash backend :healthy
+                                                    gptel-auto-workflow--lambda-verification-results))
+                                       (progn
+                                         (message "[verbum] %s no lambda in response" backend)
+                                         (puthash backend :degraded
+                                                  gptel-auto-workflow--lambda-verification-results))))))
+        t)
+    (error
+     (message "[verbum] API call failed for %s: %s" backend (error-message-string err))
+     nil)))
+
+(defun gptel-auto-workflow--verify-backend-lambda-impl (backend)
+  "Verify lambda compiler for BACKEND using real API calls.
+Returns :healthy, :degraded, or :unknown.
+Always uses API. If result not yet available from async call, returns :unknown.
+Initiates async verification if no recent result exists."
+  (condition-case err
+      (let ((cached (gethash backend gptel-auto-workflow--lambda-verification-results)))
+        (if cached
+            cached
+          ;; No cached result: initiate async verification
+          (progn
+            (gptel-auto-workflow--call-backend-for-lambda
+             backend gptel-auto-workflow--lambda-gate-prompt)
+            :unknown)))
     (error
      (message "[verbum] Lambda verification failed for %s: %s" backend (error-message-string err))
      :unknown)))
