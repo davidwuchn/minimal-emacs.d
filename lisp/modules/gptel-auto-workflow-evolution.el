@@ -96,6 +96,7 @@ Populated by VSM health check, consumed by cross-subsystem feedback.")
   "Compute Eight Keys convergence score from kept experiments.
 ∃ Truth: returns nil if no scorable data (blocking false convergence).
 Aggregate of per-subsystem scores for convergence detection."
+  (cl-block gptel-auto-workflow--eight-keys-convergence-score
   (unless (fboundp 'gptel-benchmark-eight-keys-score-for)
     (message "[evolution] Eight Keys scoring unavailable — skipping convergence check")
     (cl-return-from gptel-auto-workflow--eight-keys-convergence-score nil))
@@ -108,7 +109,7 @@ Aggregate of per-subsystem scores for convergence detection."
           (cl-incf autotts (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autotts) 0.0))
           (cl-incf selfev (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :self-evolve) 0.0))
           (cl-incf count))))
-    (if (> count 0) (/ (+ autogo autotts selfev) (* 3 count)) nil)))
+    (if (> count 0) (/ (+ autogo autotts selfev) (* 3 count)) nil))))
 
 (defvar gptel-auto-workflow--evolution-next-cycle-hints nil
   "Alist of hints for the next evolution cycle.
@@ -3537,6 +3538,7 @@ Consumed by researcher daemon to focus on high-value repos."
 Researcher now outputs Allium v3 behavioral specs — parse Technique entities.
 Semantica pattern: continuous ontology enrichment by the research agent.
 Guards: skips enrichment when EMA confidence < 0.3 (untrusted research signal)."
+  (cl-block gptel-auto-workflow--enrich-ontology-from-research
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (findings-file (expand-file-name "var/tmp/research-findings.md" root))
          (new-concepts nil))
@@ -3584,7 +3586,7 @@ Guards: skips enrichment when EMA confidence < 0.3 (untrusted research signal)."
                            (fboundp 'gptel-auto-experiment--owl-save))
                   (gptel-auto-experiment--owl-save
                    onto (expand-file-name "var/tmp/evolution/enriched-ontology.ttl" root)
-                     (lambda (_ok) nil)))))))))))
+                     (lambda (_ok) nil))))))))))))
 
 (defun gptel-auto-workflow--queue-research-pair-probes ()
   "Parse [pair-probe] HA/HB blocks from research findings and auto-queue as experiments.
@@ -5723,6 +5725,7 @@ prompt, and category champions should gate new strategies with keep-rate evidenc
   "BDD check: distill BEHAVIOR-DESCRIPTION to Allium spec and verify coherence.
 Returns nil when Allium is unavailable. Silent no-op when gptel not functional.
 Use for TDD-style behavioral verification."
+  (cl-block gptel-auto-workflow--allium-bdd-check
   (condition-case _err
       (progn
         (unless (and (fboundp 'gptel-auto-experiment--allium-distill)
@@ -5755,7 +5758,7 @@ Use for TDD-style behavioral verification."
               (error (when callback (funcall callback (cons :check-error nil)))))))
         nil)
     (error (when callback (funcall callback (cons :unavailable nil)))
-           nil)))
+           nil))))
 
 (defun gptel-auto-workflow--allium-bdd-assert (behavior-description)
   "Assert BEHAVIOR-DESCRIPTION passes Allium BDD check.
