@@ -922,6 +922,63 @@ Returns plist with :total :consistent :inconsistent :targets."
           :inconsistent inconsistent
           :targets (nreverse target-reports))))
 
+;; ─── Holographic Experiment Memory (verbum Phase 7) ───
+
+(defvar gptel-auto-workflow--holographic-memory nil
+  "Holographic memory of experiment consensus.
+Format: ((target . axis) . consensus-count) alist.
+Tracks how many operations (KIBC axes) agreed on each target.
+Inspired by verbum cross-op consensus etching.")
+
+(defun gptel-auto-workflow--record-holographic-experiment (experiment)
+  "Record EXPERIMENT into holographic memory.
+Increments consensus count for target+axis combination.
+EXPERIMENT is a plist with :target, :kibcm-axis, :decision."
+  (when (and experiment
+             (equal (plist-get experiment :decision) "kept"))
+    (let* ((target (plist-get experiment :target))
+           (axis (or (plist-get experiment :kibcm-axis) "?"))
+           (key (cons target axis))
+           (existing (assoc key gptel-auto-workflow--holographic-memory)))
+      (if existing
+          (setcdr existing (1+ (cdr existing)))
+        (push (cons key 1) gptel-auto-workflow--holographic-memory))
+      (message "[holographic] Recorded %s → %s (consensus: %d)"
+               target axis (or (cdr (assoc key gptel-auto-workflow--holographic-memory)) 0)))))
+
+(defun gptel-auto-workflow--get-holographic-consensus (target)
+  "Get holographic consensus for TARGET.
+Returns plist with :axis :count :total :confidence.
+Higher confidence = more operations agreed."
+  (let ((matches (cl-remove-if-not
+                  (lambda (entry) (equal (car (car entry)) target))
+                  gptel-auto-workflow--holographic-memory))
+        (total 0))
+    (dolist (m matches)
+      (setq total (+ total (cdr m))))
+    (if (null matches)
+        (list :axis "?" :count 0 :total 0 :confidence 0.0)
+      (let* ((best (cl-reduce (lambda (a b)
+                                (if (> (cdr a) (cdr b)) a b))
+                              matches))
+             (axis (cdr (car best)))
+             (count (cdr best)))
+        (list :axis axis
+              :count count
+              :total total
+              :confidence (if (> total 0) (/ (float count) total) 0.0))))))
+
+(defun gptel-auto-workflow--rebuild-holographic-memory ()
+  "Rebuild holographic memory from all historical kept experiments.
+Called on startup or after major changes."
+  (setq gptel-auto-workflow--holographic-memory nil)
+  (let ((results (gptel-auto-workflow--parse-all-results)))
+    (dolist (r results)
+      (when (equal (plist-get r :decision) "kept")
+        (gptel-auto-workflow--record-holographic-experiment r))))
+  (message "[holographic] Rebuilt memory: %d target-axis pairs"
+           (length gptel-auto-workflow--holographic-memory)))
+
 ;; ─── Ternary Decision Boundaries (verbum Phase 1) ───
 
 (defun gptel-auto-workflow--backend-ternary-decision (score baseline)

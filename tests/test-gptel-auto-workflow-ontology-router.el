@@ -721,5 +721,46 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (should (= 1 (plist-get result :consistent)))
       (should (= 1 (plist-get result :inconsistent))))))
 
+;; ─── Holographic Experiment Memory (verbum Phase 7) ───
+
+(ert-deftest tdd/holographic/record-kept-experiment ()
+  "Recording a kept experiment increments consensus count."
+  (let ((gptel-auto-workflow--holographic-memory nil))
+    (gptel-auto-workflow--record-holographic-experiment
+     (list :target "a.el" :kibcm-axis ":B" :decision "kept"))
+    (should (= 1 (length gptel-auto-workflow--holographic-memory)))
+    (should (= 1 (cdr (assoc (cons "a.el" ":B") gptel-auto-workflow--holographic-memory))))))
+
+(ert-deftest tdd/holographic/discarded-not-recorded ()
+  "Discarded experiments are not recorded in holographic memory."
+  (let ((gptel-auto-workflow--holographic-memory nil))
+    (gptel-auto-workflow--record-holographic-experiment
+     (list :target "a.el" :kibcm-axis ":B" :decision "discarded"))
+    (should (= 0 (length gptel-auto-workflow--holographic-memory)))))
+
+(ert-deftest tdd/holographic/get-consensus ()
+  "get-holographic-consensus returns axis with highest agreement."
+  (let ((gptel-auto-workflow--holographic-memory
+         (list (cons (cons "a.el" ":B") 3)
+               (cons (cons "a.el" ":K") 1))))
+    (let ((result (gptel-auto-workflow--get-holographic-consensus "a.el")))
+      (should (string= ":B" (plist-get result :axis)))
+      (should (= 3 (plist-get result :count)))
+      (should (= 4 (plist-get result :total)))
+      (should (= 0.75 (plist-get result :confidence))))))
+
+(ert-deftest tdd/holographic/rebuild-from-history ()
+  "rebuild-holographic-memory rebuilds from all kept experiments."
+  (let ((gptel-auto-workflow--holographic-memory nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list (list :target "a.el" :kibcm-axis ":B" :decision "kept")
+                       (list :target "a.el" :kibcm-axis ":B" :decision "kept")
+                       (list :target "b.el" :kibcm-axis ":K" :decision "kept")))))
+      (gptel-auto-workflow--rebuild-holographic-memory)
+      (should (= 2 (length gptel-auto-workflow--holographic-memory)))
+      (should (= 2 (cdr (assoc (cons "a.el" ":B") gptel-auto-workflow--holographic-memory))))
+      (should (= 1 (cdr (assoc (cons "b.el" ":K") gptel-auto-workflow--holographic-memory)))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
