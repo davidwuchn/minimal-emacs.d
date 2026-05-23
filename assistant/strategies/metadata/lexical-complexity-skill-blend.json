@@ -1,0 +1,1 @@
+{"name":"lexical-complexity-skill-blend","version":"1.0","hypothesis":"Blending skills dynamically based on detected code complexity yields more targeted guidance","axis":"E","components":["skill-blending","lexical-detection","complexity-scoring"]}
