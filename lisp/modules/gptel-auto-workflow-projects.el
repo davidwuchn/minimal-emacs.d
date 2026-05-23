@@ -842,10 +842,16 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
         (run-next)))))
 
 (defun gptel-auto-workflow--shutdown-researcher-daemon-after-job (&rest _args)
-  "Shut down the dedicated researcher daemon after its queued job completes."
+  "Mark researcher daemon as complete and keep it alive.
+The researcher daemon stays running so the pipeline can detect its
+phase as 'complete' or 'idle'. Previously shut down via kill-emacs
+which caused the pipeline to misdiagnose a crash."
   (when (equal (or (daemonp) "") "copilot-researcher")
-    (message "[research] Shutting down researcher daemon after completion")
-    (run-at-time 1 nil #'save-buffers-kill-emacs)))
+    (message "[research] Research job complete — daemon staying alive")
+    ;; Mark phase as complete so pipeline detects it
+    (when (boundp 'gptel-auto-workflow--stats)
+      (setq gptel-auto-workflow--stats
+            (plist-put gptel-auto-workflow--stats :phase "complete")))))
 
 (defun gptel-auto-workflow-queue-all-research (&optional shutdown-after-completion)
   "Queue `gptel-auto-workflow-run-all-research' and return immediately."
