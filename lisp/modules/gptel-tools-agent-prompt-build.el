@@ -3,9 +3,6 @@
 (require 'seq)
 (require 'subr-x)
 
-(with-temp-file "/tmp/DEBUG-prompt-build-loaded-v2.txt"
-  (insert (format "LOADED prompt-build at %s\n" (current-time-string))))
-
 (defconst gptel-auto-experiment--axis-names
   '(("A" . "Error Handling")
     ("B" . "Performance")
