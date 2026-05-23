@@ -1662,8 +1662,8 @@ and advance through the configured fallback chain instead.")
 
 (defun gptel-auto-workflow--headless-provider-override-active-p ()
   "Return non-nil when headless auto-workflow provider override should apply."
-  (and (bound-and-true-p gptel-auto-workflow--headless)
-       (bound-and-true-p gptel-auto-workflow-persistent-headless)
+  (and (or (bound-and-true-p gptel-auto-workflow--headless)
+           (bound-and-true-p gptel-auto-workflow-persistent-headless))
        (bound-and-true-p gptel-auto-workflow--current-project)))
 
 (defun gptel-auto-workflow--backend-object (backend-name)
