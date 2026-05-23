@@ -35,6 +35,13 @@
 - Verified in live researcher daemon: function completes cleanly (`"Self-evolution complete"`), each subsystem skips when no data.
 - Full 532-test batch: 447 pass, 22 fail, 63 skip — no regression introduced.
 
+### E2E Moonshot Backend Fix (2026-05-23)
+
+- **Root cause**: `my/gptel-agent--task-override` in `gptel-tools-agent-git.el` recomputed the preset from scratch using global `gptel-backend` (MiniMax), ignoring the `gptel-agent-preset` carefully set by `gptel-benchmark-call-subagent` with chain-selected Moonshot.
+- **Fix 1** (`gptel-tools-agent-git.el`): If `gptel-agent-preset` is already bound with a `:backend`, use it directly instead of recalculating.
+- **Fix 2** (`gptel-tools-agent-subagent.el`): The headless-auto-workflow check in `my/gptel--call-gptel-agent-task` required `--headless` AND `persistent-headless` AND `current-project`. Changed to OR on `--headless`/`persistent-headless`, matching `headless-provider-override-active-p`.
+- **E2E proof**: Direct subagent call returned `MOONSHOT_WORKS` (no rate limits). Web research subagent returned 1379 chars of real external findings from Wikipedia, using Moonshot backend — no backends blacklisted.
+
 ### Bugs Fixed (2026-05-23)
 
 1. **Verbum budget penalty**: `quarantined-backends` → `health-weight` API

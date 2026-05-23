@@ -307,15 +307,23 @@ large-result truncation, and result caching."
           (funcall main-cb cached)
           (cl-return-from my/gptel-agent--task-override)))
       ;; Not cached, run the subagent
+      ;; Respect an already-bound gptel-agent-preset (e.g. the one set by
+      ;; gptel-benchmark-call-subagent after chain selection).  When present
+      ;; with a :backend, use it directly instead of recomputing from the
+      ;; global gptel-backend, which avoids the MiniMax default hijack.
       (let* ((preset
-              (gptel-auto-workflow--maybe-override-subagent-provider
-               agent-type
-               (or (gptel-auto-workflow--agent-base-preset agent-type)
-                   (nconc (list :include-reasoning nil
-                                :use-tools t
-                                :use-context nil
-                                :stream my/gptel-subagent-stream)
-                          (cdr agent-config)))))
+              (or (and (boundp 'gptel-agent-preset)
+                       (plistp gptel-agent-preset)
+                       (plist-get gptel-agent-preset :backend)
+                       gptel-agent-preset)
+                  (gptel-auto-workflow--maybe-override-subagent-provider
+                   agent-type
+                   (or (gptel-auto-workflow--agent-base-preset agent-type)
+                       (nconc (list :include-reasoning nil
+                                    :use-tools t
+                                    :use-context nil
+                                    :stream my/gptel-subagent-stream)
+                              (cdr agent-config))))))
              (syms (cons 'gptel--preset (gptel--preset-syms preset)))
              (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
         (cl-progv syms vals
