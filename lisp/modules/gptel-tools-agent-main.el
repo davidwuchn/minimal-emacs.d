@@ -345,6 +345,15 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
     (condition-case nil (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)) (error (message "[reload] strategic.el skipped (load error)")))
+    ;; Populate targets if empty (daemon mode doesn't load .dir-locals.el)
+    (when (and (boundp 'gptel-auto-workflow-targets)
+               (or (null gptel-auto-workflow-targets)
+                   (equal gptel-auto-workflow-targets '())))
+      (when (fboundp 'gptel-auto-workflow--discover-targets)
+        (let ((discovered (gptel-auto-workflow--discover-targets)))
+          (when discovered
+            (setq gptel-auto-workflow-targets discovered)
+            (message "[init] Populated %d auto-workflow targets" (length discovered))))))
     (condition-case nil (load-file (expand-file-name "lisp/modules/strategic-daemon-functions.el" root)) (error (message "[reload] daemon-functions.el skipped (load error)")))
     ;; strategic.el requires gptel-auto-workflow-research-cache via (require '... nil t).
     ;; If that require succeeded, featurep will be t and we skip the re-load.
@@ -453,7 +462,12 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
               (gptel-auto-workflow--reload-live-support proj-root))
             (setq gptel-auto-experiment--api-error-count 0)
             (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
-            (gptel-auto-workflow--safe-call "Sync staging" #'gptel-auto-workflow--sync-staging-with-main)
+            (gptel-auto-workflow--safe-call "Sync staging"
+              (lambda ()
+                (condition-case nil
+                    (with-timeout (30 (message "[auto-workflow] Sync staging timed out after 30s, skipping"))
+                      (gptel-auto-workflow--sync-staging-with-main))
+                  (error (message "[auto-workflow] Sync staging failed, continuing")))))
             (gptel-auto-workflow--safe-call
              "Orphan scan"
              (lambda ()

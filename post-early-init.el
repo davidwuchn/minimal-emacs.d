@@ -98,14 +98,15 @@
 ;; "Lisp nesting exceeds max-lisp-eval-depth" errors from deeply nested
 ;; subagent async callbacks (curl sentinel → FSM → callback → next process).
 ;; Default 1600 is too low for 5+ nested subagent layers.
+;; 320000 caused macOS C stack overflow (64MB SIP limit) → silent SEGFAULT.
+;; 15000 provides headroom while staying within macOS stack budget.
 ;; Root cause fixed: gptel-abort now defers callback to break sync recursion.
-(setq max-lisp-eval-depth 320000)
+(setq max-lisp-eval-depth 15000)
 
 ;; Increase max-specpdl-size for subagent chain depth
 ;; REQUIRED: 5+ nested subagent layers without C stack overflow.
-;; Researcher daemon's single-turn fallback (300s timeout) triggers
-;; deep recursion during subagent setup. 10000 provides headroom.
-(setq max-specpdl-size 50000)
+;; Reduced from 50000 to avoid macOS C stack exhaustion.
+(setq max-specpdl-size 8000)
 
 ;; HARDEN: Defer gptel curl sentinel via run-at-time 0 to break
 ;; synchronous recursion chains (sentinel → FSM → HTTP → sentinel).
