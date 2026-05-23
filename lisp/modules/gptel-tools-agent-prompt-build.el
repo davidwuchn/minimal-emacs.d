@@ -1704,11 +1704,11 @@ the user has not explicitly customized the variable."
                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
                      ("Gemini" . "gemini-3.1-pro-preview")))
         (setq gptel-auto-workflow-headless-subagent-fallbacks
-              '(("MiniMax" . "minimax-m2.7-highspeed")
-                ("moonshot" . "kimi-k2.6")
-                ("DashScope" . "glm-5")
+              '(("moonshot" . "kimi-k2.6")
+                ("DashScope" . "qwen3.6-plus")
                 ("DeepSeek" . "deepseek-v4-flash")
-                ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))
+                ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
+                ("MiniMax" . "minimax-m2.7-highspeed")))
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-executor-rate-limit-fallbacks)

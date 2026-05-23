@@ -6,6 +6,15 @@
 
 **Status:** All P0/P1 bugs resolved. 316/316 tests.
 
+### Researcher Provider Routing Continued (2026-05-23)
+
+- Fixed `gptel-benchmark-call-subagent` so headless chain selection runs even when an override/base preset exists; prior shape logged the override branch and skipped the direct chain branch.
+- Added both `:backend` and `:model` to the effective preset before calling the timeout wrapper, blocking the `gptel-config.el` MiniMax nil-model advice.
+- Fixed legacy headless-subagent fallback migration so hot-reload no longer restores MiniMax-first ordering.
+- Added live reload of `gptel-tools-agent-prompt-build.el`, `gptel-tools-agent-error.el`, and `gptel-benchmark-subagent.el` in both `gptel-auto-workflow--reload-live-support` and the cron dispatch eval; `gptel-tools-agent.el` skips already-provided split modules.
+- Verified in live `copilot-researcher` daemon with no-network mocks: the actual task-runner boundary receives `gptel-agent-preset` containing `:backend "moonshot"` and `:model "kimi-k2.6"`.
+- Focused provider tests pass; full 532-test batch still has unrelated staging/payload failures.
+
 ### Bugs Fixed (2026-05-23)
 
 1. **Verbum budget penalty**: `quarantined-backends` → `health-weight` API
