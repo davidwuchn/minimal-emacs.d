@@ -2005,11 +2005,11 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                       (push target-report low-agreement)))
                   (when low-agreement
                     (message "[verbum] ⚠ LOW AGREEMENT (%d targets < 50%%):" (length low-agreement))
-                    (dolist (t (seq-take low-agreement 5))
-                      (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
-                               (plist-get t :target)
-                               (* 100 (plist-get t :ratio))
-                               (length (plist-get t :conflicts))))))))
+                    (dolist (report (seq-take low-agreement 5))
+                       (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
+                                (plist-get report :target)
+                                (* 100 (plist-get report :ratio))
+                                (length (plist-get report :conflicts))))))))
           (error (message "[verbum] ERROR: consistency check failed — %s" (error-message-string err)))))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
