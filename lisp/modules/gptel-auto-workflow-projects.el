@@ -792,6 +792,10 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   ;; Load full workflow stack when running in researcher daemon context
   (when (fboundp 'gptel-auto-workflow--reload-live-support)
     (gptel-auto-workflow--reload-live-support))
+  ;; Prevent gptel-mode hooks from defaulting to MiniMax and ensure
+  ;; headless-provider-override-active-p returns t so the fallback
+  ;; chain (DeepSeek etc.) is consulted for research subagent calls.
+  (setq gptel-auto-workflow-persistent-headless t)
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[research] Running for %d projects..." (length projects))
     (let ((results nil)

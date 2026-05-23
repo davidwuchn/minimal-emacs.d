@@ -102,17 +102,25 @@ name strings."
      candidates)))
 
 (defun gptel-auto-workflow--runtime-provider-failover-candidate (agent-type preset)
-  "Return the active provider-wide fallback candidate for AGENT-TYPE and PRESET."
-  (when (plistp preset)
-    (let* ((current-backend
-            (gptel-auto-workflow--preset-backend-name
-             (plist-get preset :backend)))
-           (candidates
-            (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))
-      (when (gptel-auto-workflow--backend-rate-limited-p current-backend)
-        (gptel-auto-workflow--first-available-provider-candidate
-         candidates
-         gptel-auto-workflow--rate-limited-backends)))))
+  "Return the active provider-wide fallback candidate for AGENT-TYPE and PRESET.
+
+On fresh daemon start the preset may have no backend.  Pick the first
+available from the headless chain so the subagent always has a working
+provider rather than falling through to the global default (often
+MiniMax)."
+  (let* ((current-backend
+          (and (plistp preset)
+               (gptel-auto-workflow--preset-backend-name
+                (plist-get preset :backend))))
+         (candidates
+          (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))
+    (when (and candidates
+               (or (null current-backend)
+                   (gptel-auto-workflow--backend-rate-limited-p current-backend)
+                   (not (gptel-auto-workflow--backend-available-p current-backend))))
+      (gptel-auto-workflow--first-available-provider-candidate
+       candidates
+       gptel-auto-workflow--rate-limited-backends))))
 
 (defun gptel-auto-workflow--rewrite-subagent-provider (preset candidate)
   "Return PRESET rewritten to use CANDIDATE backend/model.
