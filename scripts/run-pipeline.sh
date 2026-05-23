@@ -166,6 +166,8 @@ run_self_evolution() {
         log "Self-evolution skipped (throttled)"
     elif printf '%s' "$evolution_output" | grep -q "converged"; then
         log "Self-evolution skipped (converged)"
+    elif printf '%s' "$evolution_output" | grep -q "discard"; then
+        log "Self-evolution skipped (discard)"
     elif printf '%s' "$evolution_output" | grep -q "Insufficient new data"; then
         log "Self-evolution skipped (insufficient new data)"
     elif printf '%s' "$evolution_output" | grep -q "Self-evolution cycle complete"; then
