@@ -1145,7 +1145,7 @@ Defaults: 5 attempts, 0%% keep-rate."
               (setcdr entry (1+ (cdr entry))))
             (puthash target entry by-target)))))
     (maphash (lambda (target entry)
-               (let ((total (car entry))
+               (let* ((total (car entry))
                      (kept (cdr entry))
                      (rate (if (> total 0) (/ (float kept) total) 0.0)))
                  (when (and (>= total min-att) (<= rate max-rate))
