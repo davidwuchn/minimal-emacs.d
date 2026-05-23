@@ -4163,8 +4163,8 @@ Non-blocking — runs async via gptel callbacks."
        (dolist (target (nreverse targets))
          (let ((entries (gethash target by-target)))
           (when (listp entries)
-            (let ((kept (car (cl-find "kept" entries :key #'car :test #'equal)))
-                  (discarded (car (cl-find "discarded" entries :key #'car :test #'equal))))
+            (let ((kept (cl-find "kept" entries :key #'car :test #'equal))
+                  (discarded (cl-find "discarded" entries :key #'car :test #'equal)))
               (when (and kept discarded)
                 (gptel-auto-workflow--allium-diff-minimal-pairs
                  (cdr kept) (cdr discarded)
@@ -4740,17 +4740,41 @@ Falls back to sqrt(keep-rate) when no champion data exists."
                total-experiments exploration-reserve result)
       result)))
 
+(defun gptel-auto-workflow--normalize-category-budget (budget)
+  "Return BUDGET as an alist of (CATEGORY . QUOTA) entries.
+Accepts the in-memory alist shape and the plist shape restored from JSON."
+  (let (normalized)
+    (cond
+     ((not (listp budget)) nil)
+     ((and budget (keywordp (car budget)))
+      (let ((tail budget))
+        (while tail
+          (let ((category (pop tail))
+                (quota (pop tail)))
+            (when (and (keywordp category) (numberp quota))
+              (push (cons category quota) normalized))))))
+     (t
+      (dolist (entry budget)
+        (cond
+         ((and (consp entry) (keywordp (car entry)) (numberp (cdr entry)))
+          (push (cons (car entry) (cdr entry)) normalized))
+         ((and (consp entry) (keywordp (car entry))
+               (consp (cdr entry)) (numberp (cadr entry)))
+          (push (cons (car entry) (cadr entry)) normalized))))))
+    (nreverse normalized)))
+
 (defun gptel-auto-workflow--enforce-category-budget (targets)
   "Hard-enforce category experiment budget on TARGETS list.
 Reads budget from evolution-next-cycle-hints, categorizes each target,
 and limits to the allocated slots per category. Returns filtered list.
 Uncategorized targets pass through (counted against :other quota)."
   (let* ((hints (if (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
-                    gptel-auto-workflow--evolution-next-cycle-hints nil))
-         (budget (when hints (plist-get hints :category-budget)))
+                     gptel-auto-workflow--evolution-next-cycle-hints nil))
+         (budget (gptel-auto-workflow--normalize-category-budget
+                  (when hints (plist-get hints :category-budget))))
          (cat-counts (make-hash-table :test 'eq))
          (remaining (if budget
-                        (let ((alist nil))
+                         (let ((alist nil))
                           (dolist (b budget)
                             (push (cons (car b) (cdr b)) alist))
                           alist)

@@ -328,8 +328,20 @@ Note: This test fails in batch mode because retry uses run-with-timer async sche
                        :outcomes ((:kept t)))))))
     (should
      (string-match-p
-      "own-repo via standalone-research"
-      (gptel-auto-workflow--build-recent-trace-outcomes-string)))))
+       "own-repo via standalone-research"
+       (gptel-auto-workflow--build-recent-trace-outcomes-string)))))
+
+(ert-deftest regression/auto-workflow-strategic/bottleneck-report-keeps-lines-in-local-scope ()
+  "Bottleneck report should return accumulated local lines, not a global fallback."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (let (results)
+                 (dotimes (_ 11 results)
+                   (push (list :target "lisp/modules/foo.el" :decision "kept") results))))))
+    (let ((report (gptel-auto-workflow--current-bottleneck-report)))
+      (should (string-match-p "Current Executor Bottlenecks" report))
+      (should (string-match-p "lisp/modules/foo.el" report))
+      (should-not (string-match-p "No executor bottlenecks" report)))))
 
 (ert-deftest regression/auto-workflow-strategic/filter-valid-targets-rejects-nested-repos ()
   "Nested git repos should not be selected by the root workflow."

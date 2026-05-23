@@ -518,6 +518,27 @@ to the async LLM path (tested implicitly by the real pipeline)."
                                   (symbol-function 'gptel-auto-experiment--allium-check))))
           (fset 'gptel-auto-experiment--allium-check check-fn))))))
 
+(ert-deftest regression/auto-workflow-evolution/allium-diff-keeps-hypothesis-cons-cells ()
+  "Opposing-hypothesis diffing should pass hypotheses, not decision labels."
+  (let (captured)
+    (cl-letf (((symbol-function 'gptel-auto-experiment--allium-distill)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-auto-experiment--allium-check)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list (list :target "a.el" :decision "kept" :hypothesis "keep hypothesis")
+                       (list :target "a.el" :decision "discarded" :hypothesis "discard hypothesis"))))
+              ((symbol-function 'gptel-auto-workflow--allium-diff-minimal-pairs)
+               (lambda (kept discarded callback)
+                 (setq captured (list kept discarded))
+                 (funcall callback (cons 1 2)))))
+      (should-not
+       (condition-case nil
+           (progn (gptel-auto-workflow--allium-diff-opposing-hypotheses) nil)
+         (error t)))
+      (should (equal captured '("keep hypothesis" "discard hypothesis"))))))
+
 ;; ─── Allium Feed-Forward Tests ───
 
 (defvar ert--allium-ff-tmpdir nil
@@ -2532,6 +2553,15 @@ must not override it to MiniMax via setq-local in subagent buffers."
       (should (listp result))
       (should (> (length result) 0)))))
 
+(ert-deftest tdd/feedback/enforce-category-budget-accepts-json-restored-plist ()
+  "Category budgets restored from JSON should be accepted as plists."
+  (when (fboundp 'gptel-auto-workflow--enforce-category-budget)
+    (let* ((gptel-auto-workflow--evolution-next-cycle-hints
+            (list :category-budget '(:synthesis 1 :programming 2 :natural-language 1 :other 5)))
+           (targets '("lisp/modules/gptel-ext-retry.el" "docs/readme.md"))
+           (result (gptel-auto-workflow--enforce-category-budget targets)))
+      (should (equal result targets)))))
+
 (ert-deftest tdd/feedback/enforce-category-budget-no-budget ()
   "enforce-category-budget passes all targets through when no budget."
   (when (fboundp 'gptel-auto-workflow--enforce-category-budget)
@@ -2572,11 +2602,11 @@ must not override it to MiniMax via setq-local in subagent buffers."
 (ert-deftest tdd/researcher/inject-queued-targets-dedup ()
   "inject-queued-targets adds hints targets without duplicates."
   (when (fboundp 'gptel-auto-workflow--inject-queued-targets)
-    (let ((gptel-auto-workflow--evolution-next-cycle-hints
-           (list :cluster-queued '((:target "a.el" :reason "test"))
-                 :research-probes '((:target "b.el" :source "test"))))
-          (targets '("a.el" "c.el"))
-          (result (gptel-auto-workflow--inject-queued-targets targets)))
+    (let* ((gptel-auto-workflow--evolution-next-cycle-hints
+            (list :cluster-queued '((:target "a.el" :reason "test"))
+                  :research-probes '((:target "b.el" :source "test"))))
+           (targets '("a.el" "c.el"))
+           (result (gptel-auto-workflow--inject-queued-targets targets)))
       (should (member "a.el" result))
       (should (member "b.el" result))
       (should (member "c.el" result))
