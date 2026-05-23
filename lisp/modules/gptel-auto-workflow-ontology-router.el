@@ -334,17 +334,20 @@ Scoring incorporates four dimensions (not just raw keep-rate):
           (baseline (when category (gptel-auto-workflow--category-baseline-keep-rate category strategy)))
           (scored nil))
     
-    ;; Quarantine gate: remove backends with 3+ consecutive degraded lambda checks
-    (when gptel-auto-workflow--quarantined-backends
-      (let ((filtered nil))
-        (dolist (entry static-fallbacks)
-          (let ((backend (car entry)))
-            (if (and (gptel-auto-workflow--backend-quarantined-p backend)
-                     (not (and category-override
-                               (string= backend category-override))))
-                (message "[verbum] ⚠ SKIPPING quarantined backend %s" backend)
-              (push entry filtered))))
-        (setq static-fallbacks (nreverse filtered))))
+    ;; Health ladder: filter probation/dead backends, apply weight reduction
+    (let ((filtered nil))
+      (dolist (entry static-fallbacks)
+        (let* ((backend (car entry))
+               (level (gptel-auto-workflow--backend-health-level backend))
+               (override (and category-override (string= backend category-override))))
+          (cond
+           ((>= level 3)
+            (if override
+                (push entry filtered)  ; category override bypasses probation
+              (message "[verbum] ⚠ SKIPPING %s backend %s (level=%d)"
+                       (gptel-auto-workflow--backend-health-label backend) backend level)))
+           (t (push entry filtered)))))
+      (setq static-fallbacks (nreverse filtered)))
     
     ;; Score each backend from static list
     (dolist (entry static-fallbacks)
@@ -825,9 +828,53 @@ Keys are backend names, values are :healthy/:degraded/:unknown.")
   "Consecutive degraded lambda checks per backend.
 Reset to 0 when :healthy. Quarantine at >= 3 strikes.")
 
-(defvar gptel-auto-workflow--quarantined-backends nil
-  "List of backend names currently quarantined (3+ degraded strikes).
-Quarantined backends are removed from routing entirely.")
+(defvar gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal)
+  "Consecutive degraded lambda checks per backend.
+Reset to 0 when :healthy.")
+
+(defvar gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal)
+  "Timestamp when DEAD backends can be retried (exponential backoff).
+Key: backend name, value: float-time when retest is allowed.")
+
+(defun gptel-auto-workflow--backend-health-level (backend)
+  "Return health level for BACKEND: 0-4.
+0=HEALTHY (full trust), 1=WARNING (-15%%), 2=DEGRADED (-35%%),
+3=PROBATION (canary only), 4=DEAD (waiting for backoff)."
+  (let ((strikes (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
+        (dead-until (gethash backend gptel-auto-workflow--lambda-dead-until)))
+    (cond
+     ;; DEAD: waiting for backoff timer
+     ((and dead-until (> dead-until (float-time))) 4)
+     ;; DEAD timer expired → retest now, treat as PROBATION
+     (dead-until 3)
+     ;; 5+ strikes → DEAD with exponential backoff
+     ((>= strikes 5) 4)
+     ;; 3-4 strikes → PROBATION (canary tasks only)
+     ((>= strikes 3) 3)
+     ;; 2 strikes → DEGRADED (reduced weight)
+     ((>= strikes 2) 2)
+     ;; 1 strike → WARNING (slight penalty)
+     ((>= strikes 1) 1)
+     ;; 0 strikes → HEALTHY
+     (t 0))))
+
+(defun gptel-auto-workflow--backend-health-weight (backend)
+  "Return routing weight multiplier [0.0-1.0] for BACKEND based on health level.
+0=1.0, 1=0.85, 2=0.65, 3=0.0 (probation), 4=0.0 (dead)."
+  (pcase (gptel-auto-workflow--backend-health-level backend)
+    (0 1.0)   ; HEALTHY
+    (1 0.85)  ; WARNING
+    (2 0.65)  ; DEGRADED
+    (_ 0.0))) ; PROBATION or DEAD = no routing
+
+(defun gptel-auto-workflow--backend-health-label (backend)
+  "Return human-readable health label for BACKEND."
+  (pcase (gptel-auto-workflow--backend-health-level backend)
+    (0 "HEALTHY") (1 "WARNING") (2 "DEGRADED") (3 "PROBATION") (_ "DEAD")))
+
+(defun gptel-auto-workflow--backend-quarantined-p (backend)
+  "Return t if BACKEND is probation or worse (health level >= 3)."
+  (>= (gptel-auto-workflow--backend-health-level backend) 3))
 
 (defvar gptel-auto-workflow--conflicted-targets nil
   "Alist of (target . ratio) for targets with <50%% backend agreement.
@@ -839,31 +886,43 @@ next cycle to let backends stabilize.")
   (cdr (assoc target gptel-auto-workflow--conflicted-targets)))
 
 (defun gptel-auto-workflow--record-lambda-strike (backend status)
-  "Record lambda verification STATUS for BACKEND, updating strike count.
-Resets strikes on :healthy, increments on :degraded.
-Quarantines backend at 3 consecutive degraded strikes."
-  (let ((count (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0)))
+  "Record lambda verification STATUS for BACKEND with progressive health ladder.
+HEALTHY → resets strikes, clears dead timer.
+DEGRADED → increments strikes, triggers actions at each level:
+  1=WARNING log, 2=DEGRADED log, 3=PROBATION canary, 5=DEAD backoff."
+  (let ((count (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
+        (old-level (gptel-auto-workflow--backend-health-level backend)))
     (pcase status
       (:healthy
        (puthash backend 0 gptel-auto-workflow--lambda-strike-count)
-       (setq gptel-auto-workflow--quarantined-backends
-             (delete backend gptel-auto-workflow--quarantined-backends)))
+       (remhash backend gptel-auto-workflow--lambda-dead-until)
+       (when (>= old-level 1)
+         (message "[verbum] ✓ %s recovered: %s→HEALTHY (strikes cleared)"
+                  backend (gptel-auto-workflow--backend-health-label backend))))
       (:degraded
-       (let ((new-count (1+ count)))
+       (let* ((new-count (1+ count))
+              (new-level (gptel-auto-workflow--backend-health-level backend)))
          (puthash backend new-count gptel-auto-workflow--lambda-strike-count)
-          (when (>= new-count 3)
-            (unless (member backend gptel-auto-workflow--quarantined-backends)
-              (push backend gptel-auto-workflow--quarantined-backends)
-              (message "[verbum] ⚠ QUARANTINED %s: %d consecutive degraded lambda checks"
-                       backend new-count)
-              ;; Trigger champion re-evaluation: champions may have been
-              ;; crowned on now-quarantined backend data
+         (pcase new-level
+           (1 (message "[verbum] ⚠ WARNING %s: 1 strike (lambda degraded)" backend))
+           (2 (message "[verbum] ⚠ DEGRADED %s: 2 strikes (routing weight -35%%)" backend))
+           (3 (message "[verbum] ⚠ PROBATION %s: 3 strikes — canary tasks only" backend)
               (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
                 (setq gptel-auto-workflow--evolution-next-cycle-hints
                       (plist-put gptel-auto-workflow--evolution-next-cycle-hints
-                                 :revalidate-champions t))))))
-       (_
-        (message "[verbum] %s lambda status %s — no strike change" backend status))))))
+                                 :revalidate-champions t))))
+           (4 (message "[verbum] ⚠ PROBATION %s: %d strikes — awaiting recovery" backend new-count))
+           (5 (let ((backoff 1800))  ; 30 min
+                (puthash backend (+ (float-time) backoff) gptel-auto-workflow--lambda-dead-until)
+                (message "[verbum] 💀 DEAD %s: %d strikes — retest in %.0fm (exponential backoff)"
+                         backend new-count (/ backoff 60.0)))
+              (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+                (setq gptel-auto-workflow--evolution-next-cycle-hints
+                      (plist-put gptel-auto-workflow--evolution-next-cycle-hints
+                                 :revalidate-champions t))))
+           (_ (message "[verbum] 💀 DEAD %s: %d strikes — awaiting retest window" backend new-count)))))
+      (_
+       (message "[verbum] %s lambda status %s — no strike change" backend status)))))
 
 (defun gptel-auto-workflow--backend-quarantined-p (backend)
   "Return t if BACKEND is quarantined due to lambda degradation."
