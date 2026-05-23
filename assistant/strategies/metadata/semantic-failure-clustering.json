@@ -1,0 +1,1 @@
+{"name":"semantic-failure-clustering","version":"1.0","hypothesis":"Clustering failure patterns by semantic similarity enables faster root-cause identification","axis":"B/D","components":["failure-analysis","semantic-grouping"]}
