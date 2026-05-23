@@ -405,23 +405,67 @@ and the semantic-relationships knowledge page."
                 (puthash target t seen)
                 (push target kept-targets))))))
       (when kept-targets
-        (dolist (source kept-targets)
+        (if (file-executable-p git-embed-bin)
+            ;; Primary: git-embed vector similarity (nomic-embed-text-v1.5)
+            (dolist (source kept-targets)
+              (condition-case nil
+                  (with-temp-buffer
+                    (let ((default-directory root))
+                      (call-process git-embed-bin nil t nil
+                                    "search" source "-n" "10" "--dims" "256"))
+                    (goto-char (point-min))
+                    (while (re-search-forward
+                            "^\\([0-9.]+\\)[ \t]+\\(.+\\)$" nil t)
+                      (let ((score (string-to-number (match-string 1)))
+                            (target (string-trim (match-string 2))))
+                        (when (and (>= score threshold)
+                                   (not (string= target source))
+                                   (string-match-p "\\`lisp/modules/.*\\.el\\'" target))
+                          (push (list :source source :target target :score score)
+                                edges)))))
+                (error nil)))
+          ;; Fallback: git co-commit Jaccard similarity (no embedding model needed)
+          (message "[semantic] git-embed not available — using co-commit fallback")
           (condition-case nil
-              (with-temp-buffer
-                (let ((default-directory root))
-                  (call-process git-embed-bin nil t nil
-                                "search" source "-n" "10" "--dims" "256"))
-                (goto-char (point-min))
-                (while (re-search-forward
-                        "^\\([0-9.]+\\)[ \t]+\\(.+\\)$" nil t)
-                  (let ((score (string-to-number (match-string 1)))
-                        (target (string-trim (match-string 2))))
-                    (when (and (>= score threshold)
-                               (not (string= target source))
-                               (string-match-p "\\`lisp/modules/.*\\.el\\'" target))
-                      (push (list :source source :target target :score score)
-                            edges)))))
-            (error nil))))
+              (let ((co-occur (make-hash-table :test 'equal))
+                    (file-counts (make-hash-table :test 'equal)))
+                (with-temp-buffer
+                  (let ((default-directory root))
+                    (call-process "git" nil t nil
+                                  "log" "--name-only" "--pretty=format:"
+                                  "--diff-filter=AM" "-n" "200"))
+                  (goto-char (point-min))
+                  (let ((commit-files nil))
+                    (while (not (eobp))
+                      (let ((line (string-trim
+                                   (buffer-substring (point) (line-end-position)))))
+                        (forward-line 1)
+                        (if (string-empty-p line)
+                            (progn
+                              (when commit-files
+                                (dolist (a commit-files)
+                                  (cl-incf (gethash a file-counts 0))
+                                  (dolist (b commit-files)
+                                    (unless (string= a b)
+                                      (let* ((key (if (string< a b) (cons a b) (cons b a)))
+                                             (prev (gethash key co-occur 0)))
+                                        (puthash key (1+ prev) co-occur))))))
+                              (setq commit-files nil))
+                          (when (string-match-p "\\`lisp/modules/.*\\.el\\'" line)
+                            (push line commit-files)))))))
+                (maphash
+                 (lambda (key co-count)
+                   (let* ((a (car key)) (b (cdr key))
+                          (a-total (gethash a file-counts 0))
+                          (b-total (gethash b file-counts 0))
+                          (union-size (+ a-total b-total (- co-count)))
+                          (score (if (> union-size 0)
+                                     (/ (float co-count) union-size)
+                                   0.0)))
+                     (when (>= score threshold)
+                       (push (list :source a :target b :score score) edges))))
+                 co-occur))
+            (error (message "[semantic] Co-commit fallback failed — returning nil")))))
       (setq edges (sort edges (lambda (a b) (> (plist-get a :score) (plist-get b :score))))
             gptel-auto-workflow--semantic-edges-cache edges
             gptel-auto-workflow--semantic-edges-cache-time now)
