@@ -197,10 +197,10 @@ Called when research context changes or run completes."
           (if session
               (insert (format "  Latest session: %d\n" session))
             (insert "  Latest session: unavailable\n"))))
-      (when (fboundp 'gptel-auto-workflow--backend-lambda-health-cache)
+      (when (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
         (insert (format "  Lambda health cache: %d entries\n" 
                         (length gptel-auto-workflow--backend-lambda-health-cache))))
-      (when (fboundp 'gptel-auto-workflow--holographic-memory)
+      (when (boundp 'gptel-auto-workflow--holographic-memory)
         (insert (format "  Holographic memory: %d target-axis pairs\n" 
                         (length gptel-auto-workflow--holographic-memory))))
       (insert "\n")
