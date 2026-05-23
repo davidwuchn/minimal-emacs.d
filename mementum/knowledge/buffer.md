@@ -101,13 +101,17 @@ Replace buffer-local/global state with hash tables keyed by task identifier:
 (defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
 
 ;; Accessor functions
-(defun gptel-auto-workflow--get-worktree-state (target)
-  "Get worktree state for TARGET."
-  (gethash target gptel-auto-workflow--worktree-state))
+(defun gptel-auto-workflow--get-worktree-state (target key)
+  "Get value for KEY from worktree state for TARGET.
+Returns nil if hash table is invalid or TARGET not found."
+  (when (hash-table-p gptel-auto-workflow--worktree-state)
+    (plist-get (gethash target gptel-auto-workflow--worktree-state) key)))
 
-(defun gptel-auto-workflow--set-worktree-state (target state)
-  "Set worktree STATE for TARGET."
-  (puthash target state gptel-auto-workflow--worktree-state))
+(defun gptel-auto-workflow--set-worktree-state (target key value)
+  "Set worktree VALUE for KEY of TARGET."
+  (when (hash-table-p gptel-auto-workflow--worktree-state)
+    (let ((state (gethash target gptel-auto-workflow--worktree-state)))
+      (puthash target (plist-put state key value) gptel-auto-workflow--worktree-state))))
 
 (defun gptel-auto-workflow--clear-worktree-state (target)
   "Clear worktree state for TARGET."
