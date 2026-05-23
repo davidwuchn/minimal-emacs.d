@@ -590,17 +590,13 @@ daemon's evolve_researcher.py, restores template variables before substituting."
                skill-content t t)))
       ;; Inject AutoTTS strategy guidance from data/strategy-guidance.json
       (let ((guidance-json (gptel-auto-workflow--load-strategy-guidance-json)))
-        (if guidance-json
-            (let ((guidance-md (gptel-auto-workflow--format-strategy-guidance-json guidance-json)))
-              (setq skill-content
-                    (replace-regexp-in-string
-                     "{{strategy-guidance}}" guidance-md
-                  skill-content t t))))
-          (setq skill-content
-                (replace-regexp-in-string
-                  "{{strategy-guidance}}"
-                  "*Controller not yet evolved.*"
-                  skill-content t t)))
+        (setq skill-content
+              (replace-regexp-in-string
+               "{{strategy-guidance}}"
+               (if guidance-json
+                   (gptel-auto-workflow--format-strategy-guidance-json guidance-json)
+                 "*Controller not yet evolved.*")
+               skill-content t t)))
       ;; Inject current executor bottlenecks so researcher targets real problems
       (let ((bottlenecks (gptel-auto-workflow--current-bottleneck-report)))
         (setq skill-content
