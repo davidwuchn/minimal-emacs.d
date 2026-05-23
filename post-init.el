@@ -13,6 +13,20 @@
 ;; Set fringe width to match character size — scales with font, avoids fixed-width gap.
 (fringe-mode (frame-char-width))
 
+;; Typed text replaces active selection (standard behavior in every other editor).
+(delete-selection-mode 1)
+
+;; Visual column ruler at 80 characters — helps enforce line length discipline.
+(global-display-fill-column-indicator-mode 1)
+
+;; Smooth pixel-level scrolling (reduces jitter on macOS).
+(when (fboundp 'pixel-scroll-precision-mode)
+  (setq pixel-scroll-precision-use-momentum nil)
+  (pixel-scroll-precision-mode 1))
+
+;; Maximum tree-sitter syntax highlighting depth for richer colors.
+(setq treesit-font-lock-level 4)
+
 ;; Load the modular configuration files
 (require 'init-system)
 (require 'init-completion)
