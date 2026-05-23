@@ -4425,7 +4425,7 @@ effective +0.10, promising +0.05, underperforming -0.05."
          (now (float-time)) (recency (- now (* 24 3600))) (mid (- now (* 7 24 3600))))
     (dolist (r results)
       (let* ((s (or (plist-get r :strategy) "template-default"))
-             (_t (plist-get r :target)) (d (plist-get r :decision))
+             (target (plist-get r :target)) (d (plist-get r :decision))
              (ts (or (plist-get r :timestamp) 0))
              (w (cond ((>= ts recency) 3.0) ((>= ts mid) 1.0) (t 0.5))))
         (when (stringp s)
@@ -4433,11 +4433,11 @@ effective +0.10, promising +0.05, underperforming -0.05."
             (cl-incf (plist-get e :rt)) (cl-incf (plist-get e :wt) w)
             (when (equal d "kept") (cl-incf (plist-get e :rk)) (cl-incf (plist-get e :wk) w))
             (puthash s e classes)))
-        (when (and (stringp _t) (not (string-empty-p _t)))
-          (let ((e (or (gethash _t instances) (list :wt 0.0 :wk 0.0 :rt 0 :rk 0))))
+        (when (and (stringp target) (not (string-empty-p target)))
+          (let ((e (or (gethash target instances) (list :wt 0.0 :wk 0.0 :rt 0 :rk 0))))
             (cl-incf (plist-get e :rt)) (cl-incf (plist-get e :wt) w)
             (when (equal d "kept") (cl-incf (plist-get e :rk)) (cl-incf (plist-get e :wk) w))
-            (puthash _t e instances)))))
+            (puthash target e instances)))))
     (let ((class-list nil) (instance-list nil))
       (maphash (lambda (s e)
                  (let* ((wr (if (> (plist-get e :wt) 0) (/ (plist-get e :wk) (plist-get e :wt)) 0.0))
@@ -4446,10 +4446,10 @@ effective +0.10, promising +0.05, underperforming -0.05."
                                :total (plist-get e :rt) :improving (> (- wr rr) 0.03)
                                :status (cond ((>= wr 0.5) "effective") ((>= wr 0.3) "promising") (t "underperforming")))
                          class-list))) classes)
-      (maphash (lambda (_t e)
+      (maphash (lambda (target-name e)
                  (let* ((wr (if (> (plist-get e :wt) 0) (/ (plist-get e :wk) (plist-get e :wt)) 0.0))
                         (rr (if (> (plist-get e :rt) 0) (/ (float (plist-get e :rk)) (plist-get e :rt)) 0.0)))
-                   (push (list :name _t :keep-rate wr :raw-rate rr :trend (- wr rr)
+                   (push (list :name target-name :keep-rate wr :raw-rate rr :trend (- wr rr)
                                :total (plist-get e :rt) :improving (> (- wr rr) 0.03)
                                :classification (cond ((>= wr 0.5) "high-value") ((>= wr 0.3) "moderate") (t "low-value")))
                          instance-list))) instances)
@@ -4928,7 +4928,7 @@ Solves S2-2: richer repair repertoire."
          (actions nil))
     ;; S4-1: Backend variance check
     (when (> (length backends) 1)
-      (let ((rates (mapcar #'cdr backends)) (best (or (car rates) 0)) (worst (or (car (last rates)) 0)))
+      (let* ((rates (mapcar #'cdr backends)) (best (or (car rates) 0)) (worst (or (car (last rates)) 0)))
         (when (> (- best worst) 0.15)
           (push (cons 'rebalance-backends (format "Keep-rate variance %.0f%%-%.0f%%" (* 100 worst) (* 100 best))) actions))))
     ;; S1-4: Overfit detection gates
@@ -5721,7 +5721,7 @@ prompt, and category champions should gate new strategies with keep-rate evidenc
   "BDD check: distill BEHAVIOR-DESCRIPTION to Allium spec and verify coherence.
 Returns nil when Allium is unavailable. Silent no-op when gptel not functional.
 Use for TDD-style behavioral verification."
-  (condition-case err
+  (condition-case _err
       (progn
         (unless (and (fboundp 'gptel-auto-experiment--allium-distill)
                      (fboundp 'gptel-request))
@@ -5730,13 +5730,13 @@ Use for TDD-style behavioral verification."
         (gptel-auto-experiment--allium-distill
          behavior-description
          (lambda (allium-spec)
-            (condition-case err
+            (condition-case _err
                (if (not allium-spec)
                    (when callback (funcall callback (cons :distill-failed nil)))
                  (gptel-auto-experiment--allium-check
                   allium-spec
                   (lambda (issues)
-                    (condition-case err
+                    (condition-case _err
                         (let* ((count-severity (gptel-auto-experiment--allium-issues-count issues))
                                (count (car count-severity))
                                (severity (cdr count-severity))
