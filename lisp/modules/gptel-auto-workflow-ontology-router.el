@@ -831,6 +831,97 @@ TODO: Use proper parser when verbum integration complete."
         (string-match-p "->" response)
         (string-match-p "lambda" response))))
 
+;; ─── Cross-Backend Consistency Checking (verbum Phase 6) ───
+
+(defun gptel-auto-workflow--cross-backend-consistency (target)
+  "Check consistency of KIBC classifications for TARGET across backends.
+Returns plist with :consistent t/nil, :agreement-ratio 0.0-1.0, :conflicts list.
+When backends disagree on KIBC axis, flags as conflict."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (target-results nil))
+    ;; Collect all experiments on this target
+    (dolist (r results)
+      (when (equal (plist-get r :target) target)
+        (push r target-results)))
+    ;; Group by backend, get most recent KIBC axis per backend
+    (let ((backend-axes nil))
+      (dolist (r target-results)
+        (let* ((backend (or (plist-get r :backend) "unknown"))
+               (axis (or (plist-get r :kibcm-axis) "?"))
+               (existing (assoc backend backend-axes)))
+          (if existing
+              ;; Update if this experiment is newer (later in list = newer)
+              (setcdr existing axis)
+            (push (cons backend axis) backend-axes))))
+      ;; Check consistency
+      (if (< (length backend-axes) 2)
+          (list :consistent t :agreement-ratio 1.0 :conflicts nil
+                :message "Only one backend sampled")
+        (let* ((axes (mapcar #'cdr backend-axes))
+               (unique-axes (cl-remove-duplicates axes :test #'string=))
+               (total (length axes))
+               (max-count (if unique-axes
+                             (apply #'max (mapcar (lambda (u)
+                                                    (cl-count u axes :test #'string=))
+                                                unique-axes))
+                           0))
+               (ratio (/ (float max-count) total))
+               (conflicts nil))
+          ;; Build conflict list for disagreeing backends
+          (when (> (length unique-axes) 1)
+            (let ((majority-axis (car (cl-sort unique-axes
+                                              (lambda (a b)
+                                                (> (cl-count a axes :test #'string=)
+                                                   (cl-count b axes :test #'string=)))))))
+              (dolist (entry backend-axes)
+                (unless (string= (cdr entry) majority-axis)
+                  (push (list :backend (car entry)
+                             :axis (cdr entry)
+                             :expected majority-axis)
+                        conflicts)))))
+          (when (> (length unique-axes) 1)
+            (message "[consistency] %s: %d backends, %d unique axes, %.0f%% agreement"
+                     target (length backend-axes) (length unique-axes) (* ratio 100)))
+          (list :consistent (= (length unique-axes) 1)
+                :agreement-ratio ratio
+                :conflicts conflicts
+                :backend-count (length backend-axes)
+                :unique-axes (length unique-axes)))))))
+
+(defun gptel-auto-workflow--check-all-targets-consistency ()
+  "Check cross-backend consistency for all targets with multiple backend samples.
+Returns plist with :total :consistent :inconsistent :targets."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (targets-seen (make-hash-table :test 'equal))
+        (total 0)
+        (consistent 0)
+        (inconsistent 0)
+        (target-reports nil))
+    ;; Find all targets with multiple backends
+    (dolist (r results)
+      (let ((target (plist-get r :target)))
+        (when target
+          (puthash target t targets-seen))))
+    ;; Check each target
+    (maphash (lambda (target _)
+               (let ((check (gptel-auto-workflow--cross-backend-consistency target)))
+                 (when (>= (plist-get check :backend-count) 2)
+                   (cl-incf total)
+                   (if (plist-get check :consistent)
+                       (cl-incf consistent)
+                     (cl-incf inconsistent)
+                     (push (list :target target
+                                :ratio (plist-get check :agreement-ratio)
+                                :conflicts (plist-get check :conflicts))
+                           target-reports)))))
+             targets-seen)
+    (message "[consistency] Checked %d targets: %d consistent, %d inconsistent"
+             total consistent inconsistent)
+    (list :total total
+          :consistent consistent
+          :inconsistent inconsistent
+          :targets (nreverse target-reports))))
+
 ;; ─── Ternary Decision Boundaries (verbum Phase 1) ───
 
 (defun gptel-auto-workflow--backend-ternary-decision (score baseline)

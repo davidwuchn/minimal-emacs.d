@@ -676,5 +676,50 @@ Guards against missing runtime dependencies (worktree-base-root)."
     (should (= 50.0 (plist-get (car scored) :score)))
     (should (= 45.0 (plist-get (cadr scored) :score)))))
 
+;; ─── Cross-Backend Consistency (verbum Phase 6) ───
+
+(ert-deftest tdd/consistency/single-backend-is-consistent ()
+  "Single backend sample is always consistent."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")))))
+    (let ((result (gptel-auto-workflow--cross-backend-consistency "a.el")))
+      (should (plist-get result :consistent))
+      (should (= 1.0 (plist-get result :agreement-ratio))))))
+
+(ert-deftest tdd/consistency/agreeing-backends-are-consistent ()
+  "Backends with same KIBC axis are consistent."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")
+                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":B")))))
+    (let ((result (gptel-auto-workflow--cross-backend-consistency "a.el")))
+      (should (plist-get result :consistent))
+      (should (= 1.0 (plist-get result :agreement-ratio))))))
+
+(ert-deftest tdd/consistency/disagreeing-backends-are-inconsistent ()
+  "Backends with different KIBC axis are inconsistent."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")
+                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":K")))))
+    (let ((result (gptel-auto-workflow--cross-backend-consistency "a.el")))
+      (should-not (plist-get result :consistent))
+      (should (= 0.5 (plist-get result :agreement-ratio)))
+      (should (= 1 (length (plist-get result :conflicts)))))))
+
+(ert-deftest tdd/consistency/check-all-targets ()
+  "check-all-targets-consistency reports aggregate stats."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")
+                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":B")
+                     (list :target "b.el" :backend "moonshot" :kibcm-axis ":B")
+                     (list :target "b.el" :backend "DashScope" :kibcm-axis ":K")))))
+    (let ((result (gptel-auto-workflow--check-all-targets-consistency)))
+      (should (= 2 (plist-get result :total)))
+      (should (= 1 (plist-get result :consistent)))
+      (should (= 1 (plist-get result :inconsistent))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
