@@ -1280,6 +1280,20 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
               (push (format "REGRESSED TARGETS (knowledge pages removed, prioritized):\n%s"
                             (mapconcat (lambda (tgt) (format "- %s" (truncate-string-to-width tgt 60 nil nil "..."))) regressed "\n"))
                     parts))
+            ;; Verbum gate: inject quarantined backends + conflicted targets
+            (when (and (boundp 'gptel-auto-workflow--quarantined-backends)
+                       gptel-auto-workflow--quarantined-backends)
+              (push (format "⚠ QUARANTINED BACKENDS (lambda degraded — DO NOT USE):\n%s"
+                            (mapconcat (lambda (b) (format "- %s (3+ consecutive failures)" b))
+                                       gptel-auto-workflow--quarantined-backends "\n"))
+                    parts))
+            (when (and (boundp 'gptel-auto-workflow--conflicted-targets)
+                       gptel-auto-workflow--conflicted-targets)
+              (let ((deferred-str (mapconcat (lambda (c) (format "- %s (%.0f%% agreement)"
+                                                                   (car c) (* 100 (cdr c))))
+                                              (seq-take gptel-auto-workflow--conflicted-targets 5) "\n")))
+                (push (format "⚠ DEFERRED TARGETS (backend disagreement — skip this cycle):\n%s" deferred-str)
+                      parts)))
             (when (and (fboundp 'gptel-auto-workflow--query-experiments)
                        (boundp 'gptel-auto-workflow-targets)
                        gptel-auto-workflow-targets)
@@ -1754,23 +1768,28 @@ Returns augmented target list without modifying the hints."
     result))
 
 (defun gptel-auto-workflow--filter-deferred-targets (targets)
-  "Remove TARGETS that have <50% backend agreement (conflicted).
-Reads `gptel-auto-workflow--conflicted-targets' populated by Phase 6
-consistency check. Conflicted targets are deferred to next cycle.
+  "Remove TARGETS that are conflicted or holographically dead.
+Conflicted: <50% backend agreement, deferred to next cycle.
+Dead: >=5 attempts across all backends with 0% keep-rate, dropped permanently.
 Returns filtered list."
   (if (not (and (boundp 'gptel-auto-workflow--conflicted-targets)
                 gptel-auto-workflow--conflicted-targets))
       targets
-    (let ((result nil) (deferred nil))
+    (let ((result nil) (deferred nil) (dead nil))
       (dolist (target targets)
-        (if (gptel-auto-workflow--target-conflicted-p target)
-            (progn
-              (push target deferred)
-              (message "[verbum] ⚠ DEFERRED %s (%.0f%% backend agreement)"
-                       target (* 100 (gptel-auto-workflow--target-conflicted-p target))))
-          (push target result)))
+        (cond
+         ((gptel-auto-workflow--target-conflicted-p target)
+          (push target deferred)
+          (message "[verbum] ⚠ DEFERRED %s (%.0f%% backend agreement)"
+                   target (* 100 (gptel-auto-workflow--target-conflicted-p target))))
+         ((and (fboundp 'gptel-auto-workflow--holographic-dead-targets)
+               (assoc target (gptel-auto-workflow--holographic-dead-targets 5 0.0)))
+          (push target dead)
+          (message "[holographic] ⚠ DROPPED %s (≥5 attempts, 0%% keep — dead target)" target))
+         (t (push target result))))
       (when deferred
-        (message "[verbum] Deferred %d conflicted targets to next cycle" (length deferred)))
+        (message "[verbum] Deferred %d conflicted targets, dropped %d dead targets"
+                 (length deferred) (length dead)))
       (nreverse result))))
 
 (defun gptel-auto-workflow-select-targets (callback)

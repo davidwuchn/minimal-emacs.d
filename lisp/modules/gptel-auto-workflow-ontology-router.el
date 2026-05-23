@@ -1126,6 +1126,36 @@ Called on startup or after major changes."
   (message "[holographic] Rebuilt memory: %d target-axis pairs"
            (length gptel-auto-workflow--holographic-memory)))
 
+(defun gptel-auto-workflow--holographic-dead-targets (&optional min-attempts max-keep-rate)
+  "Find targets with >=MIN-ATTEMPTS across all backends but <=MAX-KEEP-RATE keep.
+Returns list of target names that are dead (no improvement across any backend).
+Defaults: 5 attempts, 0%% keep-rate."
+  (let ((min-att (or min-attempts 5))
+        (max-rate (or max-keep-rate 0.0))
+        (results (gptel-auto-workflow--parse-all-results))
+        (by-target (make-hash-table :test 'equal))
+        (dead nil))
+    (dolist (r results)
+      (let ((target (plist-get r :target))
+            (decision (plist-get r :decision)))
+        (when target
+          (let ((entry (or (gethash target by-target) (cons 0 0))))
+            (setcar entry (1+ (car entry)))
+            (when (equal decision "kept")
+              (setcdr entry (1+ (cdr entry))))
+            (puthash target entry by-target)))))
+    (maphash (lambda (target entry)
+               (let ((total (car entry))
+                     (kept (cdr entry))
+                     (rate (if (> total 0) (/ (float kept) total) 0.0)))
+                 (when (and (>= total min-att) (<= rate max-rate))
+                   (push (cons target rate) dead))))
+             by-target)
+    (when dead
+      (message "[holographic] %d dead targets detected (≥%d attempts, 0%% keep)"
+               (length dead) min-att))
+    dead))
+
 ;; ─── Holographic Consensus Boost (verbum Phase 8) ───
 
 (defun gptel-auto-workflow--apply-holographic-boost (scored target)
