@@ -212,8 +212,9 @@ def generate_evolved_skill(skill_path, data_dir):
         repos_md = repos_file.read_text(encoding="utf-8").strip()
     
     # Calculate overall effectiveness (used by Elisp substitution, not inline)
-    total_kept = sum(s['kept'] for s in topics.values())
-    total_exp = sum(s['total_experiments'] for s in topics.values())
+    topics = (topic_data or {}).get("topics", {})
+    total_kept = sum((s or {}).get('kept', 0) for s in topics.values())
+    total_exp = sum((s or {}).get('total_experiments', 0) for s in topics.values())
     
     # Generate sections (still used in Mission and other sections)
     priority_topics_md = format_priority_topics(topic_data, temporal_data)
