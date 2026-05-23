@@ -744,10 +744,6 @@ VSM S2 Metal: coordination prevents duplicated effort across similar files."
   "Gate prompt to test if backend exhibits lambda compiler.
 Based on verbum research: P(λ)=90.7% indicates compiler present.")
 
-(defvar gptel-auto-workflow--lambda-verification-threshold 0.8
-  "Minimum P(λ) score for backend to be considered healthy.
-Backends below this are flagged as degraded.")
-
 (defvar gptel-auto-workflow--backend-lambda-health-cache nil
   "Cache of backend lambda verification results.
 Format: ((backend . timestamp) . status) where status is :healthy/:degraded/:unknown.")
@@ -1115,43 +1111,6 @@ Category overrides (score = 9999.0) are always ACCEPT regardless of rate."
     (nreverse result)))
 
 ;; ─── Verbum Experiment Tracker ───
-
-(defvar gptel-auto-workflow--verbum-repo-path
-  (expand-file-name "~/src/verbum")
-  "Path to verbum repository for monitoring.")
-
-(defvar gptel-auto-workflow--verbum-last-session nil
-  "Last verbum session number that was processed.")
-
-(defun gptel-auto-workflow--verbum-state-file ()
-  "Return path to verbum's mementum state file."
-  (expand-file-name "mementum/state.md" gptel-auto-workflow--verbum-repo-path))
-
-(defun gptel-auto-workflow--verbum-current-session ()
-  "Read current verbum session number from state file.
-Returns session number or nil if unavailable."
-  (let ((state-file (gptel-auto-workflow--verbum-state-file)))
-    (when (file-exists-p state-file)
-      (with-temp-buffer
-        (insert-file-contents state-file)
-        (goto-char (point-min))
-        (when (re-search-forward "Session \\([0-9]+\\)" nil t)
-          (string-to-number (match-string 1)))))))
-
-(defun gptel-auto-workflow--verbum-tracker ()
-  "Monitor verbum for new sessions and auto-create mementum entries.
-Called periodically by evolution cycle.
-Phase 1: Low-effort monitoring; Phase 3: Deep integration with holographic memory."
-  (let ((current-session (gptel-auto-workflow--verbum-current-session)))
-    (when (and current-session
-               (or (null gptel-auto-workflow--verbum-last-session)
-                   (> current-session gptel-auto-workflow--verbum-last-session)))
-      (message "[verbum] New session detected: %d → %d"
-               (or gptel-auto-workflow--verbum-last-session 0) current-session)
-      (setq gptel-auto-workflow--verbum-last-session current-session)
-      ;; TODO: Auto-create mementum memory entry when verbum integration deepens
-      (message "[verbum] Session %d findings available at %s"
-               current-session gptel-auto-workflow--verbum-repo-path))))
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here

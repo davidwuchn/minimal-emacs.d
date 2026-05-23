@@ -562,59 +562,6 @@ Guards against missing runtime dependencies (worktree-base-root)."
   (should-not (gptel-auto-workflow--response-contains-lambda-p "hello world"))
   (should-not (gptel-auto-workflow--response-contains-lambda-p nil)))
 
-;; ─── Verbum Tracker (verbum Phase 1) ───
-
-(ert-deftest tdd/verbum/state-file-path ()
-  "verbum-state-file returns correct path."
-  (let ((gptel-auto-workflow--verbum-repo-path "/tmp/verbum"))
-    (should (string= "/tmp/verbum/mementum/state.md"
-                     (gptel-auto-workflow--verbum-state-file)))))
-
-(ert-deftest tdd/verbum/session-parsing ()
-  "verbum-current-session extracts session number from state."
-  (let ((temp-file (make-temp-file "verbum-state-")))
-    (unwind-protect
-        (progn
-          (with-temp-file temp-file
-            (insert "## Current Session: Session 112 — crystal spine\n"))
-          (let ((gptel-auto-workflow--verbum-repo-path (file-name-directory temp-file)))
-            ;; Override to use temp file path
-            (cl-letf (((symbol-function 'gptel-auto-workflow--verbum-state-file)
-                       (lambda () temp-file)))
-              (should (= 112 (gptel-auto-workflow--verbum-current-session))))))
-      (delete-file temp-file))))
-
-(ert-deftest tdd/verbum/session-parsing-nil ()
-  "verbum-current-session returns nil for missing file."
-  (cl-letf (((symbol-function 'gptel-auto-workflow--verbum-state-file)
-             (lambda () "/nonexistent/path/state.md")))
-    (should-not (gptel-auto-workflow--verbum-current-session))))
-
-(ert-deftest tdd/verbum/tracker-detects-new-session ()
-  "verbum-tracker detects when session advances."
-  (let ((gptel-auto-workflow--verbum-last-session 111)
-        (tracked nil))
-    (cl-letf (((symbol-function 'gptel-auto-workflow--verbum-current-session)
-               (lambda () 112))
-              ((symbol-function 'message)
-               (lambda (fmt &rest args)
-                 (setq tracked (apply #'format fmt args)))))
-      (gptel-auto-workflow--verbum-tracker)
-      (should tracked)
-      (should (string-match-p "112" tracked))
-      (should (= 112 gptel-auto-workflow--verbum-last-session)))))
-
-(ert-deftest tdd/verbum/tracker-skips-same-session ()
-  "verbum-tracker does nothing when session unchanged."
-  (let ((gptel-auto-workflow--verbum-last-session 112)
-        (called nil))
-    (cl-letf (((symbol-function 'gptel-auto-workflow--verbum-current-session)
-               (lambda () 112))
-              ((symbol-function 'message)
-               (lambda (&rest _) (setq called t))))
-      (gptel-auto-workflow--verbum-tracker)
-      (should-not called))))
-
 ;; ─── Sieve-Based Routing (verbum Phase 5) ───
 
 (ert-deftest tdd/sieve/classify-by-backend-name ()

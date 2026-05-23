@@ -1972,12 +1972,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (run-with-idle-timer 30 nil #'gptel-auto-workflow--run-research-champion-league))
         (gptel-auto-workflow--consume-vsm-actions))
     (error (message "[feedback] ERROR: cross-subsystem failed — %s" (error-message-string err))))
-  ;; Verbum integration: monitor parallel research for new findings
-  (when (fboundp 'gptel-auto-workflow--verbum-tracker)
-    (condition-case err
-        (gptel-auto-workflow--verbum-tracker)
-      (error (message "[verbum] ERROR: tracker failed — %s" (error-message-string err)))))
-  ;; Verbum Phase 2: Lambda compiler verification (run every 6 hours)
+  ;; Verbum Phase 11: Lambda compiler verification (run every 6 hours)
   (when (fboundp 'gptel-auto-workflow--verify-all-backends-lambda)
     (let ((last-verify (get 'gptel-auto-workflow--verify-all-backends-lambda :last-run)))
       (when (or (null last-verify)

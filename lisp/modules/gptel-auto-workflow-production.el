@@ -192,11 +192,6 @@ Called when research context changes or run completes."
       
       ;; Verbum integration status
       (insert "Verbum Integration:\n")
-      (when (fboundp 'gptel-auto-workflow--verbum-current-session)
-        (let ((session (gptel-auto-workflow--verbum-current-session)))
-          (if session
-              (insert (format "  Latest session: %d\n" session))
-            (insert "  Latest session: unavailable\n"))))
       (when (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
         (insert (format "  Lambda health cache: %d entries\n" 
                         (length gptel-auto-workflow--backend-lambda-health-cache))))

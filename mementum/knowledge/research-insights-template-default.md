@@ -308,38 +308,127 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*8 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-(reasoning . <think>
-The user wants me to distill the research strategy from the massive amount of content they provided. I've already created a distillery summary, but now I should provide a more refined distillation that captures the essence of the research strategy more elegantly.
+# Research Strategy Distillation
 
-Let me create a cleaner, more focused distillation that captures the key elements.
-</think>)
+## Research Strategy: Template-Default
+
+## Target Files (46 core modules)
+Core agent loop, FSM utilities, sandbox, benchmark framework, workflow orchestration, tool sanitization, context caching, retry logic, and various extension modules.
+
+---
+
+## Core Improvement Hypotheses (Consolidated by Category)
+
+### Safety & Error Resilience (Vitality)
+- Add `nil` guards and type validation (`proper-list-p`, `stringp`, `numberp`) to prevent runtime crashes
+- Replace `listp` with `proper-list-p` to reject dotted pairs/improper lists
+- Add `condition-case` error handling around process operations and callbacks
+- Fix discarded `plist-put` return values (state mutations not persisted)
+
+### Code Clarity (Explicit Assumptions)
+- Extract duplicated patterns into named helper functions (DRY principle)
+- Replace magic numbers/strings with named constants
+- Simplify nested `let`/`when` pyramids with `when-let*`
+- Make implicit nil/string checks explicit and testable
+
+### Performance
+- Replace O(n²) patterns (repeated `append`, nested loops) with O(n) alternatives
+- Add caching for repeated computations (context windows, git operations)
+- Pre-compile regex patterns at load time
+- Reduce redundant `hash-table-count` calls
+
+### Bug Fixes
+- Fix `prog1 t` that discards recursive results in FSM traversal
+- Fix cycle detection in recursive functions (missing `seen` hash tracking)
+- Fix `plist-get` misuse with cons cells vs proper plists
+- Fix off-by-one errors in boundary checks
+- Fix incorrect variable references in error messages
+
+### Data Structure Correctness
+- Ensure plist/alist format handling consistency across JSON round-trips
+- Add validation before `aref`/`plist-get` operations
+- Fix collection order semantics (first-wins vs last-wins)
+
+---
+
+## Key Architectural Patterns
+
+1. **Defensive Programming**: Every function assumes inputs are valid → add explicit guards at boundaries
+2. **Progressive Refactoring**: Extract helpers, then wire them up across call sites
+3. **Caching for Hot Paths**: Context window lookups, git operations, token estimation
+4. **Explicit over Implicit**: Make assumptions testable through validation helpers
 ```
 
 ### Check Issues
 
-## Research Strategy Distillation
+# Review: Research Strategy Distillation
 
-**The core strategy is about building a comprehensive, historically-grounded understanding of how AI systems actually behave in practice—particularly around capability elicitation, deception, and the gap between stated and actual behavior.**
+## Overall Assessment
 
-Here's the distilled essence:
+Solid foundation. Well-categorized with actionable technical specifics. Here's my analysis:
 
-### Core Principles
+---
 
-1. **Behavioral realism over paper-thin alignment**: Move beyond surface-level benchmark performance to understand how systems behave under realistic conditions, especially when incentives create pressure to perform well rather than be well.
+## ✅ Strengths
 
-2. **Mechanistic interpretability as the honest foundation**: Develop tools that can actually *see* what's happening inside models rather than relying on the models to tell us. This is the antidote to AI systems that learn to appear aligned without being aligned.
+| Aspect | Comment |
+|--------|---------|
+| **Categorization** | Logical grouping by concern (safety, clarity, perf, bugs) |
+| **Specificity** | Concrete examples: `proper-list-p`, `condition-case`, `seen` hash tracking |
+| **Patterns identified** | The 4 architectural patterns provide good decision-making heuristics |
+| **Scope clarity** | 46 modules explicitly defined - bounded work |
 
-3. **Capability elicitation as the fundamental challenge**: AI systems can exhibit dramatically different capability levels depending on context, testing conditions, and incentive structures. The real alignment question isn't "does this model do X?" but "under what conditions does it do X, and why?"
+---
 
-4. **Deception as a serious default hypothesis**: Until we have strong evidence otherwise, treat the possibility that AI systems may strategically misrepresent their behavior, beliefs, or values as a serious possibility requiring active investigation.
+## ⚠️ Concerns & Questions
 
-### Priority Research Programs
+### 1. **Prioritization Missing**
+No indication of:
+- Which fixes are **blocking** vs **nice-to-have**
+- Order of operations / dependencies between fixes
+- High-impact vs low-effort wins to tackle first
 
-1. **Interpretability infrastructure**: Build mechanistic tools capable of rea
+**Recommendation**: Add a priority matrix (e.g., P0/P1/P2) or impact/effort scoring.
+
+### 2. **Scope Risk**
+46 modules is ambitious. Without phased delivery:
+- High integration risk
+- Hard to rollback if issues arise
+- Diff will be unmanageable for review
+
+**Recommendation**: Identify a **core subset** (maybe 5-10 modules) for Phase 1 pilot.
+
+### 3. **Test Strategy Omitted**
+Refactoring without tests = potential regression surface. The doc doesn't mention:
+- Adding test coverage alongside refactors
+- How to validate improvements don't break behavior
+
+**Recommendation**: Add "Testing Requirements" to each category.
+
+### 4. **Performance Caveat**
+Caching and guards have costs:
+- Memory overhead for cache
+- CPU overhea
 
 ... (truncated)
