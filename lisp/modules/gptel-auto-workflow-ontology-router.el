@@ -437,7 +437,7 @@ Scoring incorporates four dimensions (not just raw keep-rate):
     (when (> (length scored) 1)
       (let ((top (car scored))
             (second (cadr scored)))
-        (message "[onto-router] ROUTE %s: %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s) > %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s)"
+        (message "[onto-router] ROUTE %s: %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s λ=%s) > %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s λ=%s)"
                  (or category "global")
                  (plist-get top :backend)
                  (plist-get top :delta)
@@ -445,12 +445,14 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                  (plist-get top :trend)
                  (plist-get top :confidence)
                  (pcase (plist-get top :ternary) (+1 "ACCEPT") (0 "DEFER") (-1 "REJECT"))
+                 (pcase (gptel-auto-workflow--backend-lambda-trend (plist-get top :backend)) (-1 "↓") (1 "↑") (_ "→"))
                  (plist-get second :backend)
                  (plist-get second :delta)
                  (* (or (plist-get second :rate) 0) 100)
                  (plist-get second :trend)
                  (plist-get second :confidence)
-                 (pcase (plist-get second :ternary) (+1 "ACCEPT") (0 "DEFER") (-1 "REJECT")))))
+                 (pcase (plist-get second :ternary) (+1 "ACCEPT") (0 "DEFER") (-1 "REJECT"))
+                 (pcase (gptel-auto-workflow--backend-lambda-trend (plist-get second :backend)) (-1 "↓") (1 "↑") (_ "→")))))
     
     ;; Check if we have enough data to trust the reordering
     (let ((total-samples (cl-reduce #'+ scored
@@ -861,6 +863,40 @@ Quarantines backend at 3 consecutive degraded strikes."
   "Return t if BACKEND is quarantined due to lambda degradation."
   (member backend gptel-auto-workflow--quarantined-backends))
 
+(defvar gptel-auto-workflow--lambda-trend-history (make-hash-table :test 'equal)
+  "Ring buffer of last 5 lambda statuses per backend.
+Values are lists of (:healthy/:degraded/:unknown). Used for trend detection.")
+
+(defun gptel-auto-workflow--record-lambda-trend (backend status)
+  "Record lambda STATUS for BACKEND in trend history (last 5).
+Returns trend score: -1 declining, 0 stable, +1 improving."
+  (let* ((history (or (gethash backend gptel-auto-workflow--lambda-trend-history) nil))
+         (updated (append (seq-take history 4) (list status))))
+    (puthash backend updated gptel-auto-workflow--lambda-trend-history)
+    ;; Only compute trend when we have enough history
+    (when (>= (length updated) 3)
+      (let* ((scores (mapcar (lambda (s) (pcase s (:healthy 1) (:degraded -1) (_ 0))) updated))
+             (recent (seq-take (reverse scores) 3))  ;; last 3
+             (trend (/ (float (apply #'+ recent)) 3.0)))
+        (when (< trend -0.5)
+          (message "[verbum] ⚠ TREND ALERT: %s lambda declining (%.1f over last %d checks)"
+                   backend trend (length recent)))
+        (when (> trend 0.5)
+          (message "[verbum] ✓ TREND: %s lambda improving (%.1f)" backend trend))
+        trend))))
+
+(defun gptel-auto-workflow--backend-lambda-trend (backend)
+  "Return trend score for BACKEND: -1 declining, 0 stable, +1 improving.
+Returns nil if insufficient history (<3 checks)."
+  (let ((history (gethash backend gptel-auto-workflow--lambda-trend-history)))
+    (when (and history (>= (length history) 3))
+      (let* ((scores (mapcar (lambda (s) (pcase s (:healthy 1) (:degraded -1) (_ 0))) history))
+             (recent (seq-take (reverse scores) 3))
+             (trend (/ (float (apply #'+ recent)) 3.0)))
+        (if (< trend -0.5) -1
+          (if (> trend 0.5) 1
+            0))))))
+
 (defun gptel-auto-workflow--call-backend-for-lambda (backend model prompt)
   "Call BACKEND with MODEL for lambda verification via API.
 Binds `gptel-backend' and `gptel-model' dynamically around `gptel-request'
@@ -884,12 +920,14 @@ Returns t if request was initiated, nil on failure."
                                              (message "[verbum] %s lambda compiler confirmed ✓" backend)
                                              (puthash backend :healthy
                                                       gptel-auto-workflow--lambda-verification-results)
-                                             (gptel-auto-workflow--record-lambda-strike backend :healthy))
+                                             (gptel-auto-workflow--record-lambda-strike backend :healthy)
+                                             (gptel-auto-workflow--record-lambda-trend backend :healthy))
                                          (progn
                                            (message "[verbum] %s no lambda in response" backend)
                                            (puthash backend :degraded
                                                     gptel-auto-workflow--lambda-verification-results)
-                                           (gptel-auto-workflow--record-lambda-strike backend :degraded)))))))
+                                           (gptel-auto-workflow--record-lambda-strike backend :degraded)
+                                           (gptel-auto-workflow--record-lambda-trend backend :degraded)))))))
         t)
     (error
      (message "[verbum] API call failed for %s: %s" backend (error-message-string err))
