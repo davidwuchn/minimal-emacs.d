@@ -4786,12 +4786,13 @@ Uncategorized targets pass through (counted against :other quota)."
         (progn
           (message "[budget] No category budget available — allowing all %d targets" total-input)
           targets)
-      (dolist (target targets)
-      (let* ((cat (when (fboundp 'gptel-auto-workflow--categorize-target)
-                    (gptel-auto-workflow--categorize-target target)))
-             (quota (or (cdr (assoc cat remaining))
-                        (cdr (assoc :other remaining))))
-             (used (gethash cat cat-counts 0)))
+       (dolist (target targets)
+       (let* ((cat (when (fboundp 'gptel-auto-workflow--categorize-target)
+                     (gptel-auto-workflow--categorize-target target)))
+              (quota (or (cdr (assoc cat remaining))
+                         (cdr (assoc :other remaining))
+                         99))   ; uncategorized pass-through when :other missing
+              (used (gethash cat cat-counts 0)))
         (if (and quota (> quota used))
             (progn
               (push target result)
