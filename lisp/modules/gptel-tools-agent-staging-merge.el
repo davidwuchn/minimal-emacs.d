@@ -893,6 +893,10 @@ NOTE: Human must manually merge staging to main after review."
   "Continue staging flow after review for OPTIMIZE-BRANCH.
 REVIEW-RESULT is (approved-p . review-output).
 When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
+  (unless (consp review-result)
+    (message "[auto-workflow] Invalid review result type %S for %s, treating as blocked"
+             (type-of review-result) optimize-branch)
+    (setq review-result (cons nil (format "Invalid review result: %S" review-result))))
   (let* ((raw-approved (car review-result))
          (review-output (cdr review-result))
          (disproven-undefined-blocker
