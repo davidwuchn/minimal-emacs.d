@@ -528,68 +528,231 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*2 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+# Research Strategy: Template-Default — Distillation
 
-## Template: `template-default`
+## Overview
+Systematic code quality improvement through **hypothesis-driven validation**, targeting four primary axes: **Vitality** (error resilience), **Clarity** (explicit assumptions), **Safety**, and **Performance**.
 
-## Scale
-- **1182 experiments** across **49 target files**
-
-## Core Methodology
-1. **Systematic hypothesis generation** for each target file
-2. **Multi-axis evaluation** of each hypothesis:
-   - **Vitality** (error resilience, adaptability)
-   - **Clarity** (explicit assumptions, testability)
-   - **Safety** (input validation, defensive coding)
-   - **Performance** (optimization, caching)
-   - **Fractal Clarity** (code duplication, DRY principles)
-
-## Hypothesis Pattern
-Each hypothesis follows:
+## Core Pattern
 ```
-Action → Target Function → Bug/Issue → Expected Improvement → Quality Axes
+Identify implicit assumption → Add explicit validation → Measure improvement
 ```
 
-## Common Fix Categories (Kept Hypotheses)
+## Strategic Themes
 
-| Category | Pattern | Top Axes |
-|----------|---------|----------|
-| **Nil guards** | `stringp`, `proper-list-p`, `consp` validation | Vitality, Safety |
-| **Cache bugs** | Negative caching, size counter drift, eviction | Vitality, Performance |
-| **Type coercion** | String/number normalization | Vitality, Clarity |
-| **Code extraction** | Helper functions from duplication | Clarity, Fractal |
-| **API consistency** | `plistp` vs `listp`, struct accessors | Safety, Clarity |
+### 1. Validation-as-Documentation
+Making type and structure assumptions explicit transforms implicit contracts into testable code:
+- `proper-list-p` guards prevent crashes from dotted/circular lists
+- `nil` guards fail fast with clear messages
+- Type guards (`stringp`, `hash-table-p`, `functionp`) document expected inputs
 
-## Discarded Patterns
-- Premature optimization without evidence
-- Hypotheses already covered by other experiments
-- Overly generic changes without specific bug justification
+### 2. Defensive Destructuring
+Before accessing car/cdr/plist-get, validate structure:
+- Check `consp` before `car`
+- Check `proper-list-p` before iteration
+- Check `hash-table-p` before `maphash`
 
-## Key Insight
-The strategy favors **defensive coding** (nil guards, type validation) and **DRY refactoring** (extracting helpers) over speculative optimization, targeting the weakest quality axes per target.
+### 3. Memoization Hotspots
+Cache repeated expensive operations:
+- Tool name normalization (O(n) string ops → O(1) lookup)
+- File path normalization (filesystem calls)
+- Regex compilation (patterns → constants)
+
+### 4. Extraction for Testability
+Duplicate logic becomes dedicated helpers:
+- Validation helpers (`my/gptel--plist-get`, `my/gptel--safe-pct`)
+- Pattern matchers (error detection, error-result-p)
+- Computation caches (context-window, token estimates)
+
+### 5. Consistency Enforcement
+Apply defensive patterns uniformly:
+- If one function validates `listp`, related functions should use `proper-list-p`
+- Error handling should match across sync/async paths
+- Guard placement (first condition in `cond`) documents assumptions
+
+## Key Files Impacted
+| Category | Files | Focus |
+|----------|-------|-------|
+| Agent Loop | 6 | State validation, callback safety |
+| Sandbox | 8 | Environment guards, tool execution |
+| Benchmark | 9 | Data validation, scoring accuracy |
+| Auto-Workflow | 12 | Project detection, context gathering |
+| Memory/Tools | 6 | Path resolution, file operations |
+| FSM | 4 | Registry validation, traversal safety |
+
+## Success Indicators
+- **Vitality**: Runtime crashes → clear error messages
+- **Clarity**: Implicit assumptions → explicit guards with docstrings
+- **Performance**: O(n²) → O(n), repeated computation → cached lookup
+- **Safety**: Silent failures → defensive validation
+
+## Discarded vs. Kept
+- **Kept**: Concrete fixes with measurable impact
+- **Discarded**: Premature optimization, test pollution without actual bugs
+
+## Meta-Observation
+1279 experiments across 47 files suggests **iterative refinement** over big-bang changes. Each hypothesis is small, testable, and independently verifiable.
 ```
 
 ### Check Issues
 
-**Verification Results:**
+# Review: Research Strategy Document
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| **Consistency** | ✅ | Template reference matches "template-default" |
-| **Math check** | ✅ | 1182 experiments / 49 files ≈ 24 hypotheses per file — high but plausible |
-| **Hypothesis pattern** | ✅ | Complete 5-element structure present |
-| **Quality axes** | ✅ | All 5 axes defined and used in categories table |
-| **Categories ↔ Axes** | ✅ | Each category maps to at least one relevant axis |
-| **Discarded patterns** | ✅ | Negatives are specific, not vague |
-| **Key insight** | ✅ | Defensive coding + DRY aligns with axis priorities |
+## Strengths
 
-**Minor nits (non-blocking):**
-1. "Fractal Clarity" — consider a note explaining why this axis name (vs just "Clarity")
-2. "Kept Hypotheses" table header is a bit confusing — perhaps "Preserved Patterns" or "Validated Categories"
+**Structure & Precision**
+- Clean hierarchy: Overview → Pattern → Themes → Metrics
+- The core pattern is tight and actionable
+- "Discarded vs. Kept" section shows good judgment about scope
 
-**Overall:** Solid methodology document. The 5-axis evaluation and explicit discard rationale add credibility. No red flags.
+**Defensive Coding Philosophy**
+- Well-articulated distinction between *types* of validation (Vitality, Clarity, Safety, Performance)
+- Guard placement conventions ("first condition in `cond`") are concrete implementation guidance
+
+**Meta-Awareness**
+- 1279 experiments → iterative refinement is the right mindset
+- Acknowledging "test pollution" as a risk shows hard-won experience
+
+---
+
+## Issues & Questions
+
+### 1. Vague on "How"
+The document describes *what* to do, not *how*. Example:
+
+> Check `consp` before `car`
+
+What does the fixed code look like? What's the *before/after*?
+
+### 2. O(n²) → O(n) Claims
+Without concrete hotspots, these performance claims read as aspirations. Where specifically did memoization help?
+
+### 3. Scope Ambiguity
+47 files across 6 categories — is this:
+- One project with 47 files?
+- A multi-project codebase?
+- A rolling improvement initiative?
+
+Context would sharpen the strategy's applicability.
+
+### 4. Guard Proliferation Risk
+1279 experiments is a lot. How many guards were *removed* because they:
+- Didn't catch real bugs?
+- Created maintenance burden?
+- Introduced test fragility?
+
+### 5. The Table is Noise
+The "Key Files Impacted" table lists counts but no specifics. What *is* the benchmark suite? What does the sandbox do? Without context,
+
+... (truncated)
