@@ -53,6 +53,7 @@
   ;; Note: gptel-auto-workflow-persistent-headless is set in post-init.el
   ;; before any gptel-mode buffers exist, so the mode hook in
   ;; gptel-ext-core.el won't default to MiniMax.
+  )
 
 (defcustom my/ai-code-gptel-helper-backend 'gptel--minimax
   "Backend used for ai-code's synchronous gptel helper requests."
