@@ -802,6 +802,10 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   ;; headless-provider-override-active-p returns t so the fallback
   ;; chain (DeepSeek etc.) is consulted for research subagent calls.
   (setq gptel-auto-workflow-persistent-headless t)
+  ;; Clear stale rate-limited backends from previous research attempts so
+  ;; the fallback chain starts fresh with Moonshot.
+  (when (fboundp 'gptel-auto-workflow--clear-rate-limited-backends)
+    (gptel-auto-workflow--clear-rate-limited-backends))
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[research] Running for %d projects..." (length projects))
     (let ((results nil)
