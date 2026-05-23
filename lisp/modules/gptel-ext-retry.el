@@ -864,7 +864,9 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("qwen3-max-2026-01-23" . 400000)
     ("glm-5"              . 350000)   ; 128K tokens
     ("glm-4.7"            . 350000)
-    ("MiniMax-M2.5"       . 300000)
+    ("minimax"            . 350000)   ; minimax-m2.7-highspeed, MiniMax-M2.5, etc.
+    ("MiniMax"            . 350000)   ; legacy PascalCase variants
+    ("qwen3."             . 400000)   ; qwen3.5-plus, qwen3.6-plus, etc.
     ("deepseek-v4-flash"  . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
     ("deepseek-v4-pro"    . 3000000)
     ("deepseek-chat"      . 3000000)
