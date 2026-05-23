@@ -1,15 +1,1 @@
-{
-  "version": "2026-05-08T21:27:51.346577",
-  "patterns": {
-    "emerging": [],
-    "mature": [
-      "nil-safety",
-      "validation-guard",
-      "performance",
-      "type-validation",
-      "error-handling"
-    ],
-    "declining": [],
-    "unexplored": []
-  }
-}
+{"version":"2026-05-23T05:58:11Z","patterns":{"emerging":[],"mature":["bootstrap","template-default","standalone-research","performance","type-validation","helper-extraction","nil-safety","clarity","cleanup","async","validation-guard","buffer","error-handling"],"declining":[],"unexplored":["unknown"]}}

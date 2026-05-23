@@ -178,116 +178,572 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Distillation: gptel Code Quality Analysis
+# Research Strategy Distillation
 
-## Overview
-Template-default strategy evaluated **~200+ hypotheses** across **60+ Elisp modules**, targeting **φ Vitality** (adaptability, error resilience) and **fractal Clarity** (explicit assumptions, testable definitions).
+## Summary of Findings
 
-## Key Patterns Identified
+The research examined a large Emacs Lisp codebase (gptel/agent system) across 100+ files, generating ~200+ hypotheses for code quality improvements. Below is the distilled essence:
 
-### 1. Validation Gaps (Highest Frequency)
-| Pattern | Count | Impact |
-|---------|-------|--------|
-| `nil` guard missing | ~80 | Runtime crashes |
-| `proper-list-p` vs `listp` | ~35 | Silent failures on dotted pairs |
-| Type validation (`stringp`, `numberp`) | ~25 | Wrong-type-argument errors |
+## Key Improvement Patterns Identified
 
-### 2. Performance Issues
-| Issue | Files | Fix |
-|-------|-------|-----|
-| O(n²) → O(n) | gptel-ext-fsm-utils.el, gptel-tools-agent.el | Single-pass traversal |
-| Repeated regex compilation | gptel-sandbox.el, gptel-auto-workflow*.el | `defconst` pre-compilation |
-| Missing memoization | gptel-context-cache.el | Hash table caching |
-| Redundant `nreverse`/`append` | gptel-ext-tool-sanitize.el | Accumulator pattern |
+### 1. **Nil Guard Deficiency (Most Common)**
+~60% of hypotheses involved adding defensive nil checks:
+```elisp
+;; Before
+(plist-get info :key)
 
-### 3. Bug Categories Fixed
-- **Off-by-one**: Loop boundaries, truncation logic
-- **Wrong variable**: Error messages referencing `id` instead of `fsm`
-- **Discarded return values**: `plist-put` results not assigned back
-- **Circular reference**: Missing cycle detection in DFS traversal
-- **Race conditions**: Timer state not reset atomically
+;; After  
+(when (and info (plist-member info :key))
+  (plist-get info :key))
+```
 
-### 4. Code Structure Issues
-- **Duplicate code**: ~40 extraction opportunities (helpers/macros)
-- **Nested pyramids**: `when-let*` flattening reduced 4-level indent to 2
-- **Dead code**: Unused bindings, unreachable branches
-- **Inconsistent patterns**: Varying validation approaches across files
+### 2. **Type Mismatch Bugs (plist vs alist)**
+A recurring bug pattern where JSON-parsed data becomes alists, but code expected plists:
+```elisp
+;; Broken: only works with plists
+(plist-get scores :overall-score)
 
-## High-Impact Changes (Success Rate >70%)
+;; Fixed: works with both
+(gptel-benchmark--get-field scores :overall-score)
+```
 
-| File | Change | Vitality | Clarity |
-|------|--------|----------|---------|
-| gptel-ext-fsm-utils.el | FSM state → plist persistence | ✓ | ✓ |
-| gptel-tools-agent.el | Timer lifecycle management | ✓ | ✓ |
-| gptel-sandbox.el | Error propagation fix | ✓ | ✓ |
-| gptel-benchmark-core.el | plist/alist agnostic accessors | ✓ | ✓ |
+### 3. **Missing Return Value Assignment**
+Functions modified data but forgot to capture results:
+```elisp
+;; Broken: modification lost
+(plist-put info :tool-use pruned-list)
 
-## Discarded Hypotheses (~30)
-- Overly defensive checks where callers already validate
-- Premature optimization without measurable benefit
-- Hypotheses without concrete code evidence
-- Duplicate patterns already addressed
+;; Fixed: capture return value
+(setq info (plist-put info :tool-use pruned-list))
+```
 
-## Metrics Summary
-- **Applied**: ~150 changes across 45 files
-- **Net-new helpers**: 25 extracted functions/macros
-- **Test coverage**: 8 new test cases added
-- **Byte-compile warnings**: Eliminated all new warnings
+### 4. **Performance: Redundant Computation**
+Multiple hypotheses addressed caching and avoiding repeated work:
+- Caching regex compilation
+- Memoizing function results  
+- Reducing O(n²) to O(n) algorithms
+
+## High-Impact Fixes by File
+
+| File | Fixes | Impact |
+|------|-------|--------|
+| `gptel-ext-fsm-utils.el` | Cycle detection, nil guards | Safety + Correctness |
+| `gptel-sandbox.el` | Defensive checks, helper extraction | Clarity |
+| `gptel-benchmark-*.el` | plist/alist compatibility | Data integrity |
+| `gptel-tools-agent.el` | Error handling, state management | Robustness |
+
+## Rejected Patterns (Discarded Hypotheses)
+
+- Overly aggressive validation that changed behavior
+- Premature optimization without evidence
+- Hypotheses requiring too many changes for uncertain benefit
+
+## Success Metrics
+
+- **Vitality**: Error resilience through defensive programming
+- **Clarity**: Explicit assumptions via validation + named helpers
+- **Performance**: Targeted caching/complexity reduction
+
+The core recommendation: systematically add `(when (proper-list-p X) ...)` guards and ensure all `plist-put`/`setf` results are captured.
 ```
 
 ### Check Issues
 
-# Review: Research Distillation
+# Review: Research Strategy Distillation
 
-## Verdict: Needs Substantiation
-
-This document has **presentation quality** but lacks **technical rigor** for verification.
-
----
+## Overall Assessment
+Clear, well-structured summary. A few areas for improvement:
 
 ## Strengths
-- Categorized findings (validation, performance, structure)
-- Specific file names attached to issues
-- Quantified metrics (150 changes, 25 helpers, 8 tests)
+- Concrete before/after examples
+- Quantified findings (60%, 100+ files, 200+ hypotheses)
+- Explicit "rejected patterns" section
+- Actionable core recommendation
 
----
+## Issues & Suggestions
 
-## Critical Gaps
+### 1. Missing Context
+- What's the source of the 200+ hypotheses? Static analysis? Manual review?
+- Were any of these actual bugs or only potential issues?
 
-| Issue | Explanation |
-|-------|-------------|
-| No definitions | What are "φ Vitality" and "fractal Clarity"? Vague frameworks reduce credibility |
-| No evidence links | Where are the before/after diffs? PRs? Commits? |
-| Suspicious precision | ~80, ~35, ~25 vs "8 new test cases" - why exact vs approximate? |
-| "200+ hypotheses" framing | Unusual framing for code review. Was this automated analysis? Manual audit? Both? |
-| High-impact table lacks specifics | What exactly changed? Show code, not checkmarks |
-
----
-
-## Questions for Author
-
-1. **What tool/methodology produced the "200+ hypotheses"?** Was this `M-x checkdoc`, `byte-compile`, manual audit, or something else?
-
-2. **Can you share a representative diff?** E.g., the O(n²) → O(n) fix in `gptel-ext-fsm-utils.el`
-
-3. **What was the failure mode for "~80 nil guards missing"?** Did these cause actual test failures or reported bugs, or were they theoretical?
-
-4. **Why were 30 hypotheses discarded?** What's the inclusion/exclusion criteria?
-
----
-
-## What Would Make This Credible
-
+### 2. Technical Nits
 ```elisp
-;; BEFORE (dotted pair crash)
-(car (listp x))  ; wrong: listp returns boolean
+;; The nil guard pattern could be simplified:
+(when (and info (plist-member info :key))
+  (plist-get info :key))
 
-;; AFTER
-(when (proper-list-p x) (ca
+;; Since plist-get returns nil for missing keys, this is equivalent:
+(when info
+  (plist-get info :key))
+```
 
-... (truncated)
+### 3. Underspecified Sections
+- **Performance**: Only mentions three approaches generically
+- **Cycle detection**: Where found, how detected?
+- **Rejection criteria**: "too many changes" is vague
+
+### 4. Table Could Use Detail
+The file/fix/impact table is nice but minimal. Consider:
+- What specific bugs were fixed?
+- Any actual crashes prevented?
+
+## Suggested Improvements
+1. Add methodology section (how hypotheses were generated)
+2. Include concrete numbers: "X bugs found, Y fixed"
+3. Expand rejected patterns with specific examples
+4. Add before/after metrics if available
+
+Would you like me to help refine any specific section?
