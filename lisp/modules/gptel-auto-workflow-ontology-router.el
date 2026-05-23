@@ -922,11 +922,7 @@ DEGRADED → increments strikes, triggers actions at each level:
                                  :revalidate-champions t))))
            (_ (message "[verbum] 💀 DEAD %s: %d strikes — awaiting retest window" backend new-count)))))
       (_
-       (message "[verbum] %s lambda status %s — no strike change" backend status)))))
-
-(defun gptel-auto-workflow--backend-quarantined-p (backend)
-  "Return t if BACKEND is quarantined due to lambda degradation."
-  (member backend gptel-auto-workflow--quarantined-backends))
+        (message "[verbum] %s lambda status %s — no strike change" backend status)))))
 
 (defvar gptel-auto-workflow--lambda-trend-history (make-hash-table :test 'equal)
   "Ring buffer of last 5 lambda statuses per backend.

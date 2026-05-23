@@ -2217,7 +2217,7 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
          (backend-health-ratio (if (> backends 0) (/ (float healthy-backends) backends) 0.0))
          ;; Verbum: health-weighted experiment confidence
          (evidence-trust (if (fboundp 'gptel-auto-workflow--backend-health-weight)
-                             (let ((total-w 0.0) (trusted-w 0.0))
+                             (let ((total-w 0.0))
                                (dolist (b (mapcar #'car (gptel-auto-workflow--evolution-backend-stats)))
                                  (let ((w (gptel-auto-workflow--backend-health-weight b)))
                                    (cl-incf total-w w)))
