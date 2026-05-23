@@ -157,33 +157,53 @@ Auto-applies LLM backend failover when current provider is rate-limited."
             (message "[subagent] %s using fallback provider: %s"
                      agent-type
                      (or (plist-get override-preset :backend) "unknown")))
-        (if (fboundp 'my/gptel--agent-task-with-timeout)
-            (let ((my/gptel-agent-task-timeout
-                    (gptel-benchmark--subagent-timeout timeout override-preset))
-                  (gptel-agent-preset
-                    ;; Only use override if it supplies a backend.
-                    ;; Otherwise fall through to the global preset which
-                    ;; carries the nucleus-configured backend.
+        ;; Select the best available backend for this subagent.
+        ;; Uses the ordered headless fallback chain, skipping rate-limited
+        ;; and unavailable providers, with fallback to override/global preset.
+        (let* ((candidates
+                (and (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
+                     (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))
+               (excluded (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                              gptel-auto-workflow--rate-limited-backends))
+               (chain-backend
+                (when (and candidates
+                           (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
+                  (car (gptel-auto-workflow--first-available-provider-candidate
+                        candidates excluded))))
+               (selected-backend
+                (or chain-backend
+                    (when (plistp override-preset)
+                      (plist-get override-preset :backend))
+                    (when (plistp gptel-agent-preset)
+                      (plist-get gptel-agent-preset :backend)))))
+          (if (fboundp 'my/gptel--agent-task-with-timeout)
+              (let ((my/gptel-agent-task-timeout
+                      (gptel-benchmark--subagent-timeout timeout override-preset))
+                    (gptel-agent-preset
+                     (if (and (plistp override-preset)
+                              (plist-get override-preset :backend))
+                         override-preset
+                       (if selected-backend
+                           (list :backend selected-backend)
+                         gptel-agent-preset))))
+                (my/gptel--agent-task-with-timeout
+                 callback
+                 agent-type
+                 description
+                 prompt
+                 files))
+            (let ((gptel-agent-preset
                     (if (and (plistp override-preset)
                              (plist-get override-preset :backend))
                         override-preset
-                      gptel-agent-preset)))
-              (my/gptel--agent-task-with-timeout
+                      (if selected-backend
+                          (list :backend selected-backend)
+                        gptel-agent-preset))))
+              (gptel-agent--task
                callback
                agent-type
                description
-               prompt
-               files))
-          (let ((gptel-agent-preset
-                  (if (and (plistp override-preset)
-                           (plist-get override-preset :backend))
-                      override-preset
-                    gptel-agent-preset)))
-            (gptel-agent--task
-             callback
-             agent-type
-             description
-             prompt))))
+               prompt)))))
     (funcall callback (format "[MOCK] %s: %s"
                               type
                               (truncate-string-to-width prompt 100 nil nil "...")))))
