@@ -1565,11 +1565,11 @@ exhaustion.")
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
-  '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
+  '(("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))
+    ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
+    ("MiniMax" . "minimax-m2.7-highspeed"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
 Uses cheaper models to reduce costs:
