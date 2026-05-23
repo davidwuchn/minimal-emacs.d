@@ -192,15 +192,7 @@ Called when research context changes or run completes."
       
       ;; Verbum integration status
       (insert "Verbum Integration:\n")
-      (when (fboundp 'gptel-auto-workflow--verbum-current-session)
-        (let ((session (gptel-auto-workflow--verbum-current-session)))
-          (if session
-              (insert (format "  Latest session: %d\n" session))
-            (insert "  Latest session: unavailable\n"))))
-      (when (fboundp 'gptel-auto-workflow--lambda-verification-results)
-        (insert (format "  Lambda verification cache: %d backends checked\n" 
-                        (hash-table-count gptel-auto-workflow--lambda-verification-results))))
-      (when (fboundp 'gptel-auto-workflow--holographic-memory)
+      (when (boundp 'gptel-auto-workflow--holographic-memory)
         (insert (format "  Holographic memory: %d target-axis pairs\n" 
                         (length gptel-auto-workflow--holographic-memory))))
       ;; Lambda verification report

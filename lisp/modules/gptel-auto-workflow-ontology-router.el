@@ -351,9 +351,6 @@ Scoring incorporates four dimensions (not just raw keep-rate):
              ;; Quota health
              (quota (gptel-auto-workflow--backend-quota-health backend))
              (healthy (plist-get quota :healthy))
-             ;; Lambda health (verbum Phase 11): is backend producing λ?
-             (lambda-health (gethash backend gptel-auto-workflow--lambda-verification-results))
-             (lambda-degraded (eq lambda-health :degraded))
              ;; --- Score components ---
              ;; Delta from baseline: how much better/worse than peers?
              (delta (if (and all-rate baseline (> baseline 0.0))
@@ -376,8 +373,7 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                                   (* all-rate 30.0)      ; Raw keep-rate (30%)
                                   (* trend 20.0)         ; Direction of change (20%)
                                   (* confidence 10.0)    ; Data trust (10%)
-                                  (if healthy 0 -50.0)   ; Quota penalty
-                                  (if lambda-degraded -30.0 0))  ; Lambda degraded penalty
+                                  (if healthy 0 -50.0))  ; Quota penalty
                              -1.0))  ; No data = bottom
               scored)))
     
