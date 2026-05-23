@@ -392,8 +392,9 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
     (condition-case err
         (progn
           (setq default-directory proj-root
-                gptel-auto-workflow-persistent-headless t)
-          (gptel-auto-workflow--enable-headless-suppression)
+                 gptel-auto-workflow-persistent-headless t
+                 message-log-max 10000)
+           (gptel-auto-workflow--enable-headless-suppression)
           (if gptel-auto-workflow--running
               (progn
                 (message "[auto-workflow] Job already running; skipping new request")
