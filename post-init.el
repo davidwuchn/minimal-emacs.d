@@ -54,6 +54,15 @@
             (let ((load-verbose nil)
                   (inhibit-message t))
               (require 'init-ai)
+              ;; Force-reload key modules so chain-backend selection,
+              ;; OR-condition override, and nil-backend failover are
+              ;; available.  load-file always re-evaluates from source.
+              (dolist (mod '("gptel-tools-agent-error"
+                             "gptel-tools-agent-prompt-build"
+                             "gptel-benchmark-subagent"))
+                (load-file (expand-file-name
+                            (format "lisp/modules/%s.el" mod)
+                            minimal-emacs-user-directory)))
               (load (expand-file-name "lisp/modules/standalone-research.el"
                                        minimal-emacs-user-directory) nil 'nomessage)
               (when (fboundp 'slr-run-research)
