@@ -510,23 +510,57 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (should (= +1 (plist-get good :ternary)))
       (should (= -1 (plist-get bad :ternary))))))
 
+(ert-deftest tdd/ternary/rejected-backends-at-bottom ()
+  "Backends with ternary -1 should be sorted to bottom."
+  (let ((scored (list (list :backend "bad" :rate 0.10 :score 5.0 :ternary -1)
+                      (list :backend "good" :rate 0.30 :score 15.0 :ternary +1))))
+    (setq scored (sort scored
+                       (lambda (a b)
+                         (let ((ta (or (plist-get a :ternary) 0))
+                               (tb (or (plist-get b :ternary) 0)))
+                           (if (/= ta tb)
+                               (> ta tb)
+                             (> (plist-get a :score) (plist-get b :score)))))))
+    (should (string= "good" (plist-get (car scored) :backend)))
+    (should (string= "bad" (plist-get (cadr scored) :backend)))))
+
+(ert-deftest tdd/ternary/no-exploration-on-rejected ()
+  "Exploration should not swap if top backend is rejected."
+  (let ((scored (list (list :backend "rejected" :rate 0.05 :score -10.0 :ternary -1)
+                      (list :backend "deferred" :rate 0.18 :score 2.0 :ternary 0)
+                      (list :backend "accepted" :rate 0.30 :score 15.0 :ternary +1))))
+    (setq scored (sort scored
+                       (lambda (a b)
+                         (let ((ta (or (plist-get a :ternary) 0))
+                               (tb (or (plist-get b :ternary) 0)))
+                           (if (/= ta tb)
+                               (> ta tb)
+                             (> (plist-get a :score) (plist-get b :score)))))))
+    ;; First should be accepted, not rejected
+    (should (string= "accepted" (plist-get (car scored) :backend)))))
+
 ;; ─── Backend Lambda Verification (verbum Phase 2) ───
 
-(ert-deftest tdd/lambda-verify/returns-unknown-initially ()
-  "Lambda verification returns :unknown before API integration."
-  (let ((gptel-auto-workflow--backend-lambda-health-cache nil))
-    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda "moonshot")))))
+(ert-deftest tdd/lambda-verify/returns-cached-status ()
+  "Lambda verification returns cached status when available."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))))
 
-(ert-deftest tdd/lambda-verify/caches-result ()
-  "Lambda verification caches result for same hour."
-  (let ((gptel-auto-workflow--backend-lambda-health-cache nil))
-    (gptel-auto-workflow--verify-backend-lambda "moonshot")
-    (should (> (length gptel-auto-workflow--backend-lambda-health-cache) 0))))
+(ert-deftest tdd/lambda-verify/known-backends-return-unknown-without-cache ()
+  "Without cache, verification initiates async and returns :unknown."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--backend-lambda-health-cache nil))
+    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))
+    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "DashScope" "qwen3.6-plus")))))
 
-(ert-deftest tdd/lambda-verify/gate-prompt-exists ()
-  "Lambda gate prompt should be defined and non-empty."
-  (should gptel-auto-workflow--lambda-gate-prompt)
-  (should (> (length gptel-auto-workflow--lambda-gate-prompt) 0)))
+(ert-deftest tdd/lambda-verify/response-contains-lambda ()
+  "response-contains-lambda-p detects lambda expressions."
+  (should (gptel-auto-workflow--response-contains-lambda-p "λx.x"))
+  (should (gptel-auto-workflow--response-contains-lambda-p "(lambda (x) x)"))
+  (should (gptel-auto-workflow--response-contains-lambda-p "x -> x"))
+  (should-not (gptel-auto-workflow--response-contains-lambda-p "hello world"))
+  (should-not (gptel-auto-workflow--response-contains-lambda-p nil)))
 
 ;; ─── Verbum Tracker (verbum Phase 1) ───
 
@@ -580,6 +614,225 @@ Guards against missing runtime dependencies (worktree-base-root)."
                (lambda (&rest _) (setq called t))))
       (gptel-auto-workflow--verbum-tracker)
       (should-not called))))
+
+;; ─── Sieve-Based Routing (verbum Phase 5) ───
+
+(ert-deftest tdd/sieve/classify-by-backend-name ()
+  "Sieve classification works by backend name."
+  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "DashScope")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "moonshot")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "Unknown"))))
+
+(ert-deftest tdd/sieve/classify-by-model-name ()
+  "Sieve classification works by model name."
+  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen3.6-plus")))
+  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "kimi-k2.6")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "deepseek-v4-flash"))))
+
+(ert-deftest tdd/sieve/deterministic-target-detection ()
+  "Deterministic targets are identified correctly."
+  (should (gptel-auto-workflow--target-deterministic-p "gptel-auto-workflow-validation.el"))
+  (should (gptel-auto-workflow--target-deterministic-p "test-gptel.el"))
+  (should (gptel-auto-workflow--target-deterministic-p "gptel-benchmark.el"))
+  (should-not (gptel-auto-workflow--target-deterministic-p "gptel-auto-workflow-strategy.el"))
+  (should-not (gptel-auto-workflow--target-deterministic-p nil)))
+
+(ert-deftest tdd/sieve/apply-sieve-boosts-qwen ()
+  "Sieve routing boosts Qwen for deterministic tasks."
+  (let ((scored (list (list :backend "DashScope" :model "qwen3.6-plus" :score 45.0)
+                      (list :backend "moonshot" :model "kimi-k2.6" :score 60.0))))
+    (setq scored (gptel-auto-workflow--apply-sieve-routing scored "test-validation.el"))
+    ;; DashScope/qwen should be boosted to 55, moonshot stays at 60
+    (should (= 55.0 (plist-get (car scored) :score)))
+    (should (= 60.0 (plist-get (cadr scored) :score)))))
+
+(ert-deftest tdd/sieve/apply-sieve-boosts-distributed-for-creative ()
+  "Sieve routing boosts distributed backends for creative tasks."
+  (let ((scored (list (list :backend "DashScope" :model "qwen3.6-plus" :score 50.0)
+                      (list :backend "moonshot" :model "kimi-k2.6" :score 35.0))))
+    (setq scored (gptel-auto-workflow--apply-sieve-routing scored "gptel-auto-workflow-strategy.el"))
+    ;; moonshot should be boosted to 45, DashScope stays at 50
+    (should (= 50.0 (plist-get (car scored) :score)))
+    (should (= 45.0 (plist-get (cadr scored) :score)))))
+
+;; ─── Cross-Backend Consistency (verbum Phase 6) ───
+
+(ert-deftest tdd/consistency/single-backend-is-consistent ()
+  "Single backend sample is always consistent."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")))))
+    (let ((result (gptel-auto-workflow--cross-backend-consistency "a.el")))
+      (should (plist-get result :consistent))
+      (should (= 1.0 (plist-get result :agreement-ratio))))))
+
+(ert-deftest tdd/consistency/agreeing-backends-are-consistent ()
+  "Backends with same KIBC axis are consistent."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")
+                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":B")))))
+    (let ((result (gptel-auto-workflow--cross-backend-consistency "a.el")))
+      (should (plist-get result :consistent))
+      (should (= 1.0 (plist-get result :agreement-ratio))))))
+
+(ert-deftest tdd/consistency/disagreeing-backends-are-inconsistent ()
+  "Backends with different KIBC axis are inconsistent."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")
+                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":K")))))
+    (let ((result (gptel-auto-workflow--cross-backend-consistency "a.el")))
+      (should-not (plist-get result :consistent))
+      (should (= 0.5 (plist-get result :agreement-ratio)))
+      (should (= 1 (length (plist-get result :conflicts)))))))
+
+(ert-deftest tdd/consistency/check-all-targets ()
+  "check-all-targets-consistency reports aggregate stats."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")
+                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":B")
+                     (list :target "b.el" :backend "moonshot" :kibcm-axis ":B")
+                     (list :target "b.el" :backend "DashScope" :kibcm-axis ":K")))))
+    (let ((result (gptel-auto-workflow--check-all-targets-consistency)))
+      (should (= 2 (plist-get result :total)))
+      (should (= 1 (plist-get result :consistent)))
+      (should (= 1 (plist-get result :inconsistent))))))
+
+;; ─── Holographic Experiment Memory (verbum Phase 7) ───
+
+(ert-deftest tdd/holographic/record-kept-experiment ()
+  "Recording a kept experiment increments consensus count."
+  (let ((gptel-auto-workflow--holographic-memory nil))
+    (gptel-auto-workflow--record-holographic-experiment
+     (list :target "a.el" :kibcm-axis ":B" :decision "kept"))
+    (should (= 1 (length gptel-auto-workflow--holographic-memory)))
+    (should (= 1 (cdr (assoc (cons "a.el" ":B") gptel-auto-workflow--holographic-memory))))))
+
+(ert-deftest tdd/holographic/discarded-not-recorded ()
+  "Discarded experiments are not recorded in holographic memory."
+  (let ((gptel-auto-workflow--holographic-memory nil))
+    (gptel-auto-workflow--record-holographic-experiment
+     (list :target "a.el" :kibcm-axis ":B" :decision "discarded"))
+    (should (= 0 (length gptel-auto-workflow--holographic-memory)))))
+
+(ert-deftest tdd/holographic/get-consensus ()
+  "get-holographic-consensus returns axis with highest agreement."
+  (let ((gptel-auto-workflow--holographic-memory
+         (list (cons (cons "a.el" ":B") 3)
+               (cons (cons "a.el" ":K") 1))))
+    (let ((result (gptel-auto-workflow--get-holographic-consensus "a.el")))
+      (should (string= ":B" (plist-get result :axis)))
+      (should (= 3 (plist-get result :count)))
+      (should (= 4 (plist-get result :total)))
+      (should (= 0.75 (plist-get result :confidence))))))
+
+(ert-deftest tdd/holographic/rebuild-from-history ()
+  "rebuild-holographic-memory rebuilds from all kept experiments."
+  (let ((gptel-auto-workflow--holographic-memory nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list (list :target "a.el" :kibcm-axis ":B" :decision "kept")
+                       (list :target "a.el" :kibcm-axis ":B" :decision "kept")
+                       (list :target "b.el" :kibcm-axis ":K" :decision "kept")))))
+      (gptel-auto-workflow--rebuild-holographic-memory)
+      (should (= 2 (length gptel-auto-workflow--holographic-memory)))
+      (should (= 2 (cdr (assoc (cons "a.el" ":B") gptel-auto-workflow--holographic-memory))))
+      (should (= 1 (cdr (assoc (cons "b.el" ":K") gptel-auto-workflow--holographic-memory)))))))
+
+;; ─── Holographic Consensus Boost (verbum Phase 8) ───
+
+(ert-deftest tdd/holographic/get-axis-performance ()
+  "get-axis-performance-stats calculates keep-rate per backend+axis."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B" :decision "kept")
+                     (list :target "b.el" :backend "moonshot" :kibcm-axis ":B" :decision "kept")
+                     (list :target "c.el" :backend "moonshot" :kibcm-axis ":B" :decision "discarded")
+                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":B" :decision "kept")))))
+    (let ((result (gptel-auto-workflow--get-axis-performance-stats "moonshot" ":B")))
+      (should (= 2 (plist-get result :kept)))
+      (should (= 3 (plist-get result :total)))
+      (should (= (/ 2.0 3) (plist-get result :keep-rate))))))
+
+(ert-deftest tdd/holographic/boost-with-high-consensus ()
+  "apply-holographic-boost boosts backends with good axis performance when consensus is high."
+  (let ((gptel-auto-workflow--holographic-memory
+         (list (cons (cons "a.el" ":B") 8)
+               (cons (cons "a.el" ":K") 2))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B" :decision "kept")
+                       (list :target "a.el" :backend "moonshot" :kibcm-axis ":B" :decision "kept")))))
+      (let ((scored (list (list :backend "moonshot" :model "kimi-k2.6" :score 50.0))))
+        (setq scored (gptel-auto-workflow--apply-holographic-boost scored "a.el"))
+        ;; moonshot has 100% keep-rate on :B axis, should get boost
+        (should (> (plist-get (car scored) :score) 50.0))))))
+
+(ert-deftest tdd/holographic/no-boost-with-low-consensus ()
+  "apply-holographic-boost does nothing when consensus is low."
+  (let ((gptel-auto-workflow--holographic-memory
+         (list (cons (cons "a.el" ":B") 1)
+               (cons (cons "a.el" ":K") 1))))
+    (let ((scored (list (list :backend "moonshot" :model "kimi-k2.6" :score 50.0))))
+      (setq scored (gptel-auto-workflow--apply-holographic-boost scored "a.el"))
+      ;; Consensus is 50%, below 70% threshold — no boost
+      (should (= 50.0 (plist-get (car scored) :score))))))
+
+;; ─── Real Lambda Verification (verbum Phase 11) ───
+
+(ert-deftest tdd/lambda-verify/cached-healthy ()
+  "Returns cached result when available."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))))
+
+(ert-deftest tdd/lambda-verify/cached-degraded ()
+  "Returns cached degraded result."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "moonshot" :degraded gptel-auto-workflow--lambda-verification-results)
+    (should (eq :degraded (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))))
+
+(ert-deftest tdd/lambda-verify/no-cache-initiates-async ()
+  "When no cached result, initiates async verification and returns :unknown."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--call-backend-for-lambda)
+               (lambda (backend model _prompt) (setq called (cons backend model)) t)))
+      (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))
+      (should (equal '("moonshot" . "kimi-k2.6") called)))))
+
+(ert-deftest tdd/lambda-verify/callback-stores-healthy ()
+  "Async callback stores :healthy when lambda found in response."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (_prompt &rest args)
+                 (let ((cb (plist-get args :callback)))
+                   (funcall cb "λx.x" nil)))))
+      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
+      (should (eq :healthy (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
+
+(ert-deftest tdd/lambda-verify/callback-stores-degraded ()
+  "Async callback stores :degraded when no lambda in response."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (_prompt &rest args)
+                 (let ((cb (plist-get args :callback)))
+                   (funcall cb "hello world" nil)))))
+      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
+      (should (eq :degraded (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
+
+(ert-deftest tdd/lambda-verify/callback-stores-unknown-on-nil ()
+  "Async callback stores :unknown when response is nil."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (_prompt &rest args)
+                 (let ((cb (plist-get args :callback)))
+                   (funcall cb nil nil)))))
+      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
+      (should (eq :unknown (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
 
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

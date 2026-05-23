@@ -1834,6 +1834,13 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
    (setq gptel-auto-workflow--evolution-last-run now))
   ;; Restore cross-subsystem hints from disk (survives daemon restart)
   (gptel-auto-workflow--restore-next-cycle-hints)
+  ;; Rebuild holographic memory from history (verbum Phase 10)
+  (when (fboundp 'gptel-auto-workflow--rebuild-holographic-memory)
+    (condition-case err
+        (progn
+          (gptel-auto-workflow--rebuild-holographic-memory)
+          (message "[verbum] Holographic memory rebuilt"))
+      (error (message "[verbum] ERROR: holographic rebuild failed — %s" (error-message-string err)))))
   ;; Eight Keys convergence: skip evolution if scores haven't improved
   (when (and gptel-auto-workflow--evolution-last-objective
              (> gptel-auto-workflow--evolution-last-objective 0))
@@ -1965,6 +1972,45 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (run-with-idle-timer 30 nil #'gptel-auto-workflow--run-research-champion-league))
         (gptel-auto-workflow--consume-vsm-actions))
     (error (message "[feedback] ERROR: cross-subsystem failed — %s" (error-message-string err))))
+  ;; Verbum integration: monitor parallel research for new findings
+  (when (fboundp 'gptel-auto-workflow--verbum-tracker)
+    (condition-case err
+        (gptel-auto-workflow--verbum-tracker)
+      (error (message "[verbum] ERROR: tracker failed — %s" (error-message-string err)))))
+  ;; Verbum Phase 2: Lambda compiler verification (run every 6 hours)
+  (when (fboundp 'gptel-auto-workflow--verify-all-backends-lambda)
+    (let ((last-verify (get 'gptel-auto-workflow--verify-all-backends-lambda :last-run)))
+      (when (or (null last-verify)
+                (> (- (float-time) last-verify) 21600))  ; 6 hours
+        (condition-case err
+            (progn
+              (gptel-auto-workflow--verify-all-backends-lambda)
+              (put 'gptel-auto-workflow--verify-all-backends-lambda :last-run (float-time)))
+          (error (message "[verbum] ERROR: lambda verification failed — %s" (error-message-string err)))))))
+  ;; Verbum Phase 6+9: Cross-backend consistency + low-agreement alerts (run every 3 hours)
+  (when (fboundp 'gptel-auto-workflow--check-all-targets-consistency)
+    (let ((last-check (get 'gptel-auto-workflow--check-all-targets-consistency :last-run)))
+      (when (or (null last-check)
+                (> (- (float-time) last-check) 10800))  ; 3 hours
+        (condition-case err
+            (let ((result (gptel-auto-workflow--check-all-targets-consistency)))
+              (put 'gptel-auto-workflow--check-all-targets-consistency :last-run (float-time))
+              (when (> (plist-get result :inconsistent) 0)
+                (message "[verbum] ⚠ %d inconsistent targets detected"
+                         (plist-get result :inconsistent))
+                ;; Phase 9: detailed low-agreement alerts
+                (let ((low-agreement nil))
+                  (dolist (target-report (plist-get result :targets))
+                    (when (< (plist-get target-report :ratio) 0.5)
+                      (push target-report low-agreement)))
+                  (when low-agreement
+                    (message "[verbum] ⚠ LOW AGREEMENT (%d targets < 50%%):" (length low-agreement))
+                    (dolist (report (seq-take low-agreement 5))
+                       (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
+                                (plist-get report :target)
+                                (* 100 (plist-get report :ratio))
+                                (length (plist-get report :conflicts))))))))
+          (error (message "[verbum] ERROR: consistency check failed — %s" (error-message-string err)))))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))

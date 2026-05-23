@@ -21,6 +21,92 @@
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
 (defvar gptel-auto-workflow-headless-subagent-fallbacks)
 
+;; ─── Sieve-Based Backend Classification (verbum Phase 5) ───
+
+(defvar gptel-auto-workflow--backend-sieve-types
+  '(("DashScope" . single-neuron)          ; Backend name
+    ("qwen3.6-plus" . single-neuron)       ; Model name: Qwen3 family
+    ("qwen" . single-neuron)               ; Model family
+    ("moonshot" . distributed)             ; Backend name
+    ("kimi-k2.6" . distributed)            ; Model name
+    ("DeepSeek" . distributed)             ; Backend name
+    ("deepseek-v4-flash" . distributed)    ; Model name
+    ("MiniMax" . distributed)              ; Backend name
+    ("minimax-m2.7-highspeed" . distributed) ; Model name
+    ("CF-Gateway" . distributed)           ; Backend name
+    ("@cf/openai/gpt-oss-120b" . distributed)) ; Model name
+  "Sieve-type classification per backend/model (verbum crystal spine discovery).
+single-neuron: high compression, deterministic at bottleneck (Qwen3 family).
+distributed: lower compression, more redundancy (Mistral, OLMo, etc.).")
+
+(defun gptel-auto-workflow--backend-sieve-type (backend-or-model)
+  "Return sieve-type for BACKEND-OR-MODEL: single-neuron or distributed.
+Looks up by backend name first, then model name.
+Based on verbum crystal spine research (sessions 109-112)."
+  (or (cdr (assoc backend-or-model gptel-auto-workflow--backend-sieve-types))
+      ;; Try to match partial model name (e.g., "qwen" in "qwen3.6-plus")
+      (cl-some (lambda (entry)
+                 (when (string-match-p (car entry) backend-or-model)
+                   (cdr entry)))
+               gptel-auto-workflow--backend-sieve-types)
+      'distributed))  ; Default to distributed for unknown backends
+
+(defun gptel-auto-workflow--target-deterministic-p (target)
+  "Return t if TARGET is a deterministic task (suitable for single-neuron backends).
+Deterministic tasks: rule validation, type checking, test execution, λ parsing."
+  (when target
+    (let ((basename (file-name-nondirectory target)))
+      (or
+       ;; Validation, checking, testing = deterministic
+       (string-match-p "validat" basename)
+       (string-match-p "test" basename)
+       (string-match-p "check" basename)
+       (string-match-p "verify" basename)
+       ;; Type system = deterministic
+       (string-match-p "type" basename)
+       ;; Rule-based = deterministic
+       (string-match-p "rule" basename)
+       ;; Math kernel = deterministic
+       (string-match-p "kernel" basename)
+       ;; Benchmark = deterministic measurement
+       (string-match-p "benchmark" basename)
+       ;; FSM = deterministic state machine
+       (string-match-p "fsm" basename)))))
+
+(defun gptel-auto-workflow--apply-sieve-routing (scored target)
+  "Apply sieve-based routing to SCORED backends for TARGET.
+Boosts single-neuron backends for deterministic tasks.
+Boosts distributed backends for creative/exploratory tasks.
+Returns modified scored list."
+  (when target
+    (let ((is-deterministic (gptel-auto-workflow--target-deterministic-p target))
+          (result nil))
+      (dolist (entry scored)
+        (let* ((backend (plist-get entry :backend))
+               (model (plist-get entry :model))
+               ;; Check both backend name and model name for sieve type
+               (sieve-type-backend (gptel-auto-workflow--backend-sieve-type backend))
+               (sieve-type-model (when model (gptel-auto-workflow--backend-sieve-type model)))
+               (sieve-type (if (eq sieve-type-backend 'single-neuron) 'single-neuron
+                            (if (eq sieve-type-model 'single-neuron) 'single-neuron
+                              (or sieve-type-backend 'distributed))))
+               (score (plist-get entry :score))
+               ;; Boost matching backends by 10 points
+               (boost (if (and is-deterministic (eq sieve-type 'single-neuron))
+                          10.0
+                        (if (and (not is-deterministic) (eq sieve-type 'distributed))
+                            10.0
+                          0.0)))
+               (new-score (+ score boost)))
+          (when (> boost 0)
+            (message "[sieve] %s/%s %s for %s task (+%.0f)"
+                     backend model
+                     (if is-deterministic "boosted" "preferred")
+                     (if is-deterministic "deterministic" "creative")
+                     boost))
+          (push (plist-put entry :score new-score) result)))
+      (nreverse result))))
+
 (defcustom gptel-auto-workflow--ontology-reorder-min-samples 3
   "Minimum experiments before reordering fallback chain.
 Below this, use the static headless fallback order."
@@ -265,6 +351,9 @@ Scoring incorporates four dimensions (not just raw keep-rate):
              ;; Quota health
              (quota (gptel-auto-workflow--backend-quota-health backend))
              (healthy (plist-get quota :healthy))
+             ;; Lambda health (verbum Phase 11): is backend producing λ?
+             (lambda-health (gethash backend gptel-auto-workflow--lambda-verification-results))
+             (lambda-degraded (eq lambda-health :degraded))
              ;; --- Score components ---
              ;; Delta from baseline: how much better/worse than peers?
              (delta (if (and all-rate baseline (> baseline 0.0))
@@ -287,7 +376,8 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                                   (* all-rate 30.0)      ; Raw keep-rate (30%)
                                   (* trend 20.0)         ; Direction of change (20%)
                                   (* confidence 10.0)    ; Data trust (10%)
-                                  (if healthy 0 -50.0))  ; Quota penalty
+                                  (if healthy 0 -50.0)   ; Quota penalty
+                                  (if lambda-degraded -30.0 0))  ; Lambda degraded penalty
                              -1.0))  ; No data = bottom
               scored)))
     
@@ -301,25 +391,54 @@ Scoring incorporates four dimensions (not just raw keep-rate):
       (message "[onto-router] CATEGORY OVERRIDE: %s (%s) → %s (baseline=%.1f%%)"
                category target category-override (if baseline (* baseline 100) 0)))
     
-    ;; Sort by score descending
-    (setq scored (sort scored (lambda (a b) (> (plist-get a :score) (plist-get b :score)))))
+    ;; Apply ternary decisions (verbum Phase 1): reject backends below baseline
+    (when baseline
+      (setq scored (gptel-auto-workflow--apply-ternary-routing scored baseline))
+      ;; Log ternary decisions for observability
+      (dolist (s scored)
+        (let ((ternary (plist-get s :ternary)))
+          (when (= ternary -1)
+            (message "[ternary] REJECTED %s (rate=%.1f%% < baseline=%.1f%%)"
+                     (plist-get s :backend)
+                     (* (or (plist-get s :rate) 0) 100)
+                     (* baseline 100))))))
+    
+    ;; Apply sieve-based routing (verbum Phase 5): boost matching backends
+    (when target
+      (setq scored (gptel-auto-workflow--apply-sieve-routing scored target)))
+    
+    ;; Apply holographic consensus boost (verbum Phase 8): boost backends
+    ;; that perform well on the consensus KIBC axis for this target
+    (when target
+      (setq scored (gptel-auto-workflow--apply-holographic-boost scored target)))
+    
+    ;; Sort by score descending, but ternary -1 always at bottom
+    (setq scored (sort scored
+                       (lambda (a b)
+                         (let ((ta (or (plist-get a :ternary) 0))
+                               (tb (or (plist-get b :ternary) 0)))
+                           (if (/= ta tb)
+                               (> ta tb)  ; +1 > 0 > -1
+                             (> (plist-get a :score) (plist-get b :score)))))))
     
     ;; Log rich routing decision for observability
     (when (> (length scored) 1)
       (let ((top (car scored))
             (second (cadr scored)))
-        (message "[onto-router] ROUTE %s: %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f) > %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f)"
+        (message "[onto-router] ROUTE %s: %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s) > %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s)"
                  (or category "global")
                  (plist-get top :backend)
                  (plist-get top :delta)
                  (* (or (plist-get top :rate) 0) 100)
                  (plist-get top :trend)
                  (plist-get top :confidence)
+                 (pcase (plist-get top :ternary) (+1 "ACCEPT") (0 "DEFER") (-1 "REJECT"))
                  (plist-get second :backend)
                  (plist-get second :delta)
                  (* (or (plist-get second :rate) 0) 100)
                  (plist-get second :trend)
-                 (plist-get second :confidence))))
+                 (plist-get second :confidence)
+                 (pcase (plist-get second :ternary) (+1 "ACCEPT") (0 "DEFER") (-1 "REJECT")))))
     
     ;; Check if we have enough data to trust the reordering
     (let ((total-samples (cl-reduce #'+ scored
@@ -330,7 +449,10 @@ Scoring incorporates four dimensions (not just raw keep-rate):
             (message "[onto-router] Reordered %d backends by performance (≥%d samples)"
                      (length scored) total-samples)
             ;; Exploration: 15% chance to swap first two for learning
+            ;; Skip exploration if either top backend is rejected (ternary -1)
             (when (and (> (length scored) 1)
+                       (/= (or (plist-get (car scored) :ternary) 0) -1)
+                       (/= (or (plist-get (cadr scored) :ternary) 0) -1)
                        (< (random 100) (* gptel-auto-workflow--ontology-reorder-exploration-rate 100)))
               (let ((tmp (car scored)))
                 (setcar scored (cadr scored))
@@ -633,17 +755,320 @@ Format: ((backend . timestamp) . status) where status is :healthy/:degraded/:unk
 (defun gptel-auto-workflow--verify-backend-lambda (backend)
   "Check if BACKEND exhibits lambda compiler (verbum Phase 2).
 Returns :healthy, :degraded, or :unknown.
-Caches results for 1 hour to avoid repeated API calls."
-  (let* ((cache-key (cons backend (format-time-string "%Y-%m-%d-%H")))
-         (cached (assoc cache-key gptel-auto-workflow--backend-lambda-health-cache)))
-    (if cached
-        (cdr cached)
-      ;; TODO: Actually call backend with gate prompt when API integration ready
-      ;; For now, mark all as unknown until verbum integration complete
-      (let ((status :unknown))
-        (push (cons cache-key status) gptel-auto-workflow--backend-lambda-health-cache)
-        (message "[verbum] Lambda health for %s: %s (cache miss)" backend status)
-        status))))
+Caches results for 1 hour to avoid repeated API calls.
+Uses fallback chain if BACKEND is nil (verifies all backends)."
+  (if (null backend)
+      ;; Verify all backends in fallback chain
+      (gptel-auto-workflow--verify-all-backends-lambda)
+    ;; Verify single backend
+    (let* ((cache-key (cons backend (format-time-string "%Y-%m-%d-%H")))
+           (cached (assoc cache-key gptel-auto-workflow--backend-lambda-health-cache)))
+      (if cached
+          (cdr cached)
+        ;; Attempt verification via fallback chain
+        (let ((status (gptel-auto-workflow--verify-backend-lambda-impl backend)))
+          (push (cons cache-key status) gptel-auto-workflow--backend-lambda-health-cache)
+          (message "[verbum] Lambda health for %s: %s" backend status)
+          status)))))
+
+(defun gptel-auto-workflow--verify-all-backends-lambda ()
+  "Verify lambda compiler presence for all backends in fallback chain.
+Returns plist with :overall status and per-backend results."
+  (let ((fallbacks (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+                       gptel-auto-workflow-headless-subagent-fallbacks
+                     '(("MiniMax" . "minimax-m2.7-highspeed")
+                       ("moonshot" . "kimi-k2.6")
+                       ("DashScope" . "qwen3.6-plus")
+                       ("DeepSeek" . "deepseek-v4-flash")
+                       ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+        (results nil)
+        (healthy-count 0)
+        (degraded-count 0)
+        (unknown-count 0))
+    (message "[verbum] Verifying lambda compiler on %d backends..." (length fallbacks))
+    (dolist (entry fallbacks)
+      (let* ((backend (car entry))
+             (model (cdr entry))
+             (status (gptel-auto-workflow--verify-backend-lambda-impl backend model)))
+        (push (cons backend status) results)
+        (pcase status
+          (:healthy (cl-incf healthy-count))
+          (:degraded (cl-incf degraded-count))
+          (:unknown (cl-incf unknown-count)))))
+    (let ((overall (cond
+                    ((> degraded-count 0) :degraded)
+                    ((> unknown-count 0) :unknown)
+                    (t :healthy))))
+      (message "[verbum] Lambda verification complete: %d healthy, %d degraded, %d unknown → %s"
+               healthy-count degraded-count unknown-count overall)
+      (list :overall overall
+            :healthy healthy-count
+            :degraded degraded-count
+            :unknown unknown-count
+            :backends (nreverse results)))))
+
+(defvar gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)
+  "Hash table storing async lambda verification results.
+Keys are backend names, values are :healthy/:degraded/:unknown.")
+
+(defun gptel-auto-workflow--call-backend-for-lambda (backend model prompt)
+  "Call BACKEND with MODEL for lambda verification via API.
+Binds `gptel-backend' and `gptel-model' dynamically around `gptel-request'
+so each backend gets tested with its own model, not the active one.
+Result is stored in `gptel-auto-workflow--lambda-verification-results'.
+Returns t if request was initiated, nil on failure."
+  (condition-case err
+      (progn
+        (message "[verbum] Sending lambda gate prompt to %s/%s..." backend model)
+        (let ((gptel-backend (intern backend))
+              (gptel-model (intern model)))
+          (gptel-request prompt
+                         :callback (lambda (response info)
+                                     (if (null response)
+                                         (progn
+                                           (message "[verbum] %s returned no response" backend)
+                                           (puthash backend :unknown
+                                                    gptel-auto-workflow--lambda-verification-results))
+                                       (if (gptel-auto-workflow--response-contains-lambda-p response)
+                                           (progn
+                                             (message "[verbum] %s lambda compiler confirmed ✓" backend)
+                                             (puthash backend :healthy
+                                                      gptel-auto-workflow--lambda-verification-results))
+                                         (progn
+                                           (message "[verbum] %s no lambda in response" backend)
+                                           (puthash backend :degraded
+                                                    gptel-auto-workflow--lambda-verification-results)))))))
+        t)
+    (error
+     (message "[verbum] API call failed for %s: %s" backend (error-message-string err))
+     nil)))
+
+(defun gptel-auto-workflow--verify-backend-lambda-impl (backend model)
+  "Verify lambda compiler for BACKEND/MODEL using real API calls.
+Returns :healthy, :degraded, or :unknown.
+Initiates async verification if no cached result exists."
+  (condition-case err
+      (let ((cached (gethash backend gptel-auto-workflow--lambda-verification-results)))
+        (if cached
+            cached
+          ;; No cached result: initiate async verification with proper backend/model
+          (progn
+            (gptel-auto-workflow--call-backend-for-lambda
+             backend model gptel-auto-workflow--lambda-gate-prompt)
+            :unknown)))
+    (error
+     (message "[verbum] Lambda verification failed for %s: %s" backend (error-message-string err))
+     :unknown)))
+
+(defun gptel-auto-workflow--response-contains-lambda-p (response)
+  "Check if RESPONSE contains lambda expressions.
+Looks for λ, lambda, or -> patterns.
+TODO: Use proper parser when verbum integration complete."
+  (when response
+    (or (string-match-p "λ" response)
+        (string-match-p "\\\\lambda" response)
+        (string-match-p "->" response)
+        (string-match-p "lambda" response))))
+
+;; ─── Cross-Backend Consistency Checking (verbum Phase 6) ───
+
+(defun gptel-auto-workflow--cross-backend-consistency (target)
+  "Check consistency of KIBC classifications for TARGET across backends.
+Returns plist with :consistent t/nil, :agreement-ratio 0.0-1.0, :conflicts list.
+When backends disagree on KIBC axis, flags as conflict."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (target-results nil))
+    ;; Collect all experiments on this target
+    (dolist (r results)
+      (when (equal (plist-get r :target) target)
+        (push r target-results)))
+    ;; Group by backend, get most recent KIBC axis per backend
+    (let ((backend-axes nil))
+      (dolist (r target-results)
+        (let* ((backend (or (plist-get r :backend) "unknown"))
+               (axis (or (plist-get r :kibcm-axis) "?"))
+               (existing (assoc backend backend-axes)))
+          (if existing
+              ;; Update if this experiment is newer (later in list = newer)
+              (setcdr existing axis)
+            (push (cons backend axis) backend-axes))))
+      ;; Check consistency
+      (if (< (length backend-axes) 2)
+          (list :consistent t :agreement-ratio 1.0 :conflicts nil
+                :message "Only one backend sampled")
+        (let* ((axes (mapcar #'cdr backend-axes))
+               (unique-axes (cl-remove-duplicates axes :test #'string=))
+               (total (length axes))
+               (max-count (if unique-axes
+                             (apply #'max (mapcar (lambda (u)
+                                                    (cl-count u axes :test #'string=))
+                                                unique-axes))
+                           0))
+               (ratio (/ (float max-count) total))
+               (conflicts nil))
+          ;; Build conflict list for disagreeing backends
+          (when (> (length unique-axes) 1)
+            (let ((majority-axis (car (cl-sort unique-axes
+                                              (lambda (a b)
+                                                (> (cl-count a axes :test #'string=)
+                                                   (cl-count b axes :test #'string=)))))))
+              (dolist (entry backend-axes)
+                (unless (string= (cdr entry) majority-axis)
+                  (push (list :backend (car entry)
+                             :axis (cdr entry)
+                             :expected majority-axis)
+                        conflicts)))))
+          (when (> (length unique-axes) 1)
+            (message "[consistency] %s: %d backends, %d unique axes, %.0f%% agreement"
+                     target (length backend-axes) (length unique-axes) (* ratio 100)))
+          (list :consistent (= (length unique-axes) 1)
+                :agreement-ratio ratio
+                :conflicts conflicts
+                :backend-count (length backend-axes)
+                :unique-axes (length unique-axes)))))))
+
+(defun gptel-auto-workflow--check-all-targets-consistency ()
+  "Check cross-backend consistency for all targets with multiple backend samples.
+Returns plist with :total :consistent :inconsistent :targets."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (targets-seen (make-hash-table :test 'equal))
+        (total 0)
+        (consistent 0)
+        (inconsistent 0)
+        (target-reports nil))
+    ;; Find all targets with multiple backends
+    (dolist (r results)
+      (let ((target (plist-get r :target)))
+        (when target
+          (puthash target t targets-seen))))
+    ;; Check each target
+    (maphash (lambda (target _)
+               (let ((check (gptel-auto-workflow--cross-backend-consistency target)))
+                 (when (>= (plist-get check :backend-count) 2)
+                   (cl-incf total)
+                   (if (plist-get check :consistent)
+                       (cl-incf consistent)
+                     (cl-incf inconsistent)
+                     (push (list :target target
+                                :ratio (plist-get check :agreement-ratio)
+                                :conflicts (plist-get check :conflicts))
+                           target-reports)))))
+             targets-seen)
+    (message "[consistency] Checked %d targets: %d consistent, %d inconsistent"
+             total consistent inconsistent)
+    (list :total total
+          :consistent consistent
+          :inconsistent inconsistent
+          :targets (nreverse target-reports))))
+
+;; ─── Holographic Experiment Memory (verbum Phase 7) ───
+
+(defvar gptel-auto-workflow--holographic-memory nil
+  "Holographic memory of experiment consensus.
+Format: ((target . axis) . consensus-count) alist.
+Tracks how many operations (KIBC axes) agreed on each target.
+Inspired by verbum cross-op consensus etching.")
+
+(defun gptel-auto-workflow--record-holographic-experiment (experiment)
+  "Record EXPERIMENT into holographic memory.
+Increments consensus count for target+axis combination.
+EXPERIMENT is a plist with :target, :kibcm-axis, :decision."
+  (when (and experiment
+             (equal (plist-get experiment :decision) "kept"))
+    (let* ((target (plist-get experiment :target))
+           (axis (or (plist-get experiment :kibcm-axis) "?"))
+           (key (cons target axis))
+           (existing (assoc key gptel-auto-workflow--holographic-memory)))
+      (if existing
+          (setcdr existing (1+ (cdr existing)))
+        (push (cons key 1) gptel-auto-workflow--holographic-memory))
+      (message "[holographic] Recorded %s → %s (consensus: %d)"
+               target axis (or (cdr (assoc key gptel-auto-workflow--holographic-memory)) 0)))))
+
+(defun gptel-auto-workflow--get-holographic-consensus (target)
+  "Get holographic consensus for TARGET.
+Returns plist with :axis :count :total :confidence.
+Higher confidence = more operations agreed."
+  (let ((matches (cl-remove-if-not
+                  (lambda (entry) (equal (car (car entry)) target))
+                  gptel-auto-workflow--holographic-memory))
+        (total 0))
+    (dolist (m matches)
+      (setq total (+ total (cdr m))))
+    (if (null matches)
+        (list :axis "?" :count 0 :total 0 :confidence 0.0)
+      (let* ((best (cl-reduce (lambda (a b)
+                                (if (> (cdr a) (cdr b)) a b))
+                              matches))
+             (axis (cdr (car best)))
+             (count (cdr best)))
+        (list :axis axis
+              :count count
+              :total total
+              :confidence (if (> total 0) (/ (float count) total) 0.0))))))
+
+(defun gptel-auto-workflow--rebuild-holographic-memory ()
+  "Rebuild holographic memory from all historical kept experiments.
+Called on startup or after major changes."
+  (setq gptel-auto-workflow--holographic-memory nil)
+  (let ((results (gptel-auto-workflow--parse-all-results)))
+    (dolist (r results)
+      (when (equal (plist-get r :decision) "kept")
+        (gptel-auto-workflow--record-holographic-experiment r))))
+  (message "[holographic] Rebuilt memory: %d target-axis pairs"
+           (length gptel-auto-workflow--holographic-memory)))
+
+;; ─── Holographic Consensus Boost (verbum Phase 8) ───
+
+(defun gptel-auto-workflow--apply-holographic-boost (scored target)
+  "Apply holographic consensus boost to SCORED backends for TARGET.
+If holographic memory shows high consensus (>0.7) for TARGET's KIBC axis,
+boost backends that historically perform well on that axis.
+Returns modified scored list (or original if no boost applied)."
+  (if (null target)
+      scored
+    (let* ((consensus (gptel-auto-workflow--get-holographic-consensus target))
+           (confidence (plist-get consensus :confidence))
+           (axis (plist-get consensus :axis)))
+      (if (and (> confidence 0.7) (not (string= axis "?")))
+          (let ((result nil))
+            (dolist (entry scored)
+              (let* ((backend (plist-get entry :backend))
+                     ;; Check backend's historical performance on this axis
+                     (axis-stats (gptel-auto-workflow--get-axis-performance-stats backend axis))
+                     (axis-rate (plist-get axis-stats :keep-rate))
+                     (score (plist-get entry :score))
+                     ;; Boost if backend performs well on consensus axis
+                     (boost (if (and axis-rate (> axis-rate 0.5))
+                                (* axis-rate 5.0)  ; Up to +5.0 boost
+                              0.0))
+                     (new-score (+ score boost)))
+                (when (> boost 0)
+                  (message "[holographic] %s boosted +%.1f for %s (consensus %s, confidence %.0f%%)"
+                           backend boost target axis (* confidence 100)))
+                (push (plist-put entry :score new-score) result)))
+            (nreverse result))
+        ;; No boost: return original scored list
+        scored))))
+
+(defun gptel-auto-workflow--get-axis-performance-stats (backend axis)
+  "Get BACKEND performance stats for experiments with KIBC AXIS.
+Returns plist with :kept :total :keep-rate."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (kept 0)
+        (total 0))
+    (dolist (r results)
+      (let ((r-backend (or (plist-get r :backend) "unknown"))
+            (r-axis (or (plist-get r :kibcm-axis) "?"))
+            (r-decision (plist-get r :decision)))
+        (when (and (string= r-backend backend)
+                   (string= r-axis axis))
+          (setq total (1+ total))
+          (when (equal r-decision "kept")
+            (setq kept (1+ kept))))))
+    (list :kept kept
+          :total total
+          :keep-rate (if (> total 0) (/ (float kept) total) nil))))
 
 ;; ─── Ternary Decision Boundaries (verbum Phase 1) ───
 
@@ -667,19 +1092,26 @@ Based on verbum ternary weight research: {-1, 0, +1} creates cleaner boundaries.
 (defun gptel-auto-workflow--apply-ternary-routing (scored baseline)
   "Apply ternary decisions to SCORED backends using BASELINE.
 Modifies scored plist with :ternary field (-1, 0, +1).
-Backends with -1 are moved to bottom regardless of continuous score."
+Backends with -1 are moved to bottom regardless of continuous score.
+Category overrides (score = 9999.0) are always ACCEPT regardless of rate."
   (let ((result nil))
     (dolist (entry scored)
       (let* ((rate (or (plist-get entry :rate) 0.0))
-             (ternary (gptel-auto-workflow--backend-ternary-decision rate baseline)))
+             (score (plist-get entry :score))
+             ;; Category override: score = 9999.0 means forced top → ACCEPT
+             (has-override (and score (>= score 9999.0)))
+             (ternary (if has-override
+                          +1
+                        (gptel-auto-workflow--backend-ternary-decision rate baseline))))
         (push (plist-put entry :ternary ternary) result)
-        (message "[ternary] %s: rate=%.2f%% → %s"
+        (message "[ternary] %s: rate=%.2f%% → %s%s"
                  (plist-get entry :backend)
                  (* rate 100)
                  (pcase ternary
                    (-1 "REJECT")
                    (0 "DEFER")
-                   (+1 "ACCEPT")))))
+                   (+1 "ACCEPT"))
+                 (if has-override " [override]" ""))))
     (nreverse result)))
 
 ;; ─── Verbum Experiment Tracker ───
