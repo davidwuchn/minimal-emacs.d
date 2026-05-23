@@ -496,6 +496,34 @@ Uses standard skill loader so humans can edit researcher-prompt/SKILL.md."
         (message "[research] Loaded researcher skill (%d chars)" (length content))
         content))))
 
+(defun gptel-auto-workflow--json-read-hash-safe (file)
+  "Read JSON FILE into a hash-table without maphash corruption.
+Reads as plist internally, then manually builds hash table to avoid
+iterating JSON-created hash tables with maphash (Emacs 30.2 issue).
+Returns nil if FILE is missing or unreadable."
+  (when (file-readable-p file)
+    (condition-case nil
+        (let ((json-object-type 'plist)
+              (json-array-type 'list))
+          (let* ((data (json-read-file file))
+                 (ht (make-hash-table :test 'equal)))
+            (while data
+              (let* ((key (pop data))
+                     (val (pop data))
+                     (inner-ht (and (consp val) (keywordp (car val))
+                                    (make-hash-table :test 'equal))))
+                (if (and inner-ht (consp val) (keywordp (car val)))
+                    (let ((inner val))
+                      (while inner
+                        (let ((ik (pop inner))
+                              (iv (pop inner)))
+                          (when (and ik iv)
+                            (puthash (if (keywordp ik) (substring (symbol-name ik) 1) ik) iv inner-ht))))
+                      (puthash key inner-ht ht))
+                  (puthash key val ht))))
+            ht))
+      (error nil))))
+
 (defun gptel-auto-workflow--load-researcher-meta-learning ()
   "Load meta-learning data for researcher skill.
 Reads topic-performance.json and returns formatted stats.
@@ -505,17 +533,16 @@ Returns nil if data not available."
          (topic-file (expand-file-name "topic-performance.json" data-dir)))
     (when (file-exists-p topic-file)
       (condition-case err
-          (let* ((json-object-type 'hash-table)
-                 (json-array-type 'list)
-                 (data (json-read-file topic-file))
-                 (topics (gethash "topics" data)))
+          (let* ((data (gptel-auto-workflow--json-read-hash-safe topic-file))
+                 (topics (when data (gethash "topics" data))))
             (when (and topics (hash-table-p topics))
               (let ((total-exp (gethash "total_experiments" data 0))
                     (total-kept 0))
-                (dolist (topic-key (hash-table-keys topics))
-                  (let ((stats (gethash topic-key topics)))
-                    (when (hash-table-p stats)
-                      (setq total-kept (+ total-kept (gethash "kept" stats 0))))))
+                (maphash
+                 (lambda (_topic-key stats)
+                   (when (hash-table-p stats)
+                     (setq total-kept (+ total-kept (gethash "kept" stats 0)))))
+                 topics)
                 (list :effectiveness (if (> total-exp 0)
                                          (round (/ (* 100.0 total-kept) total-exp))
                                        0)
@@ -763,14 +790,15 @@ Returns placeholder message if TOPICS is nil or empty."
           (zerop (hash-table-count topics)))
       "*No topic performance data available.*"
     (let ((topic-list nil))
-      (dolist (topic-key (hash-table-keys topics))
-        (let ((stats (gethash topic-key topics)))
-          (when (hash-table-p stats)
-            (let ((success-rate (gethash "success_rate" stats 0))
-                  (total (gethash "total_experiments" stats 0))
-                  (kept (gethash "kept" stats 0))
-                  (trend (gethash "trend" stats "stable")))
-              (push (list topic-key success-rate total kept trend) topic-list)))))
+      (maphash
+       (lambda (topic-key stats)
+         (when (hash-table-p stats)
+           (let ((success-rate (gethash "success_rate" stats 0))
+                 (total (gethash "total_experiments" stats 0))
+                 (kept (gethash "kept" stats 0))
+                 (trend (gethash "trend" stats "stable")))
+             (push (list topic-key success-rate total kept trend) topic-list))))
+       topics)
       (setq topic-list (sort topic-list (lambda (a b) (> (nth 1 a) (nth 1 b)))))
       ;; Format as markdown
       (concat "| Topic | Success Rate | Kept/Total | Trend |\n"

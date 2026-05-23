@@ -13,7 +13,10 @@
 3. **Persisted category budget shape**: in-memory budget is alist `((:synthesis . 1) ...)`, but JSON restore returns plist `(:synthesis 1 ...)`. `enforce-category-budget` assumed alist and crashed on `car(:synthesis)`. Added normalizer used by budget enforcement and analyzer prompt formatting.
 4. **Test lexical scoping leak**: `inject-queued-targets-dedup` used `let` while initializing `result` from sibling binding `targets`; changed to `let*`.
 
-**Verification:** `./scripts/run-tests.sh unit` → 1940 tests, 1886 expected, 0 unexpected, 54 skipped.
+5. **Lambda verification `arrayp` error**: `call-backend-for-lambda` set `gptel-backend` to `(intern backend)` — a bare symbol. gptel expects a backend struct. Fixed by using `gptel-get-backend` to look up the real backend.
+6. **`maphash corruption` preventive**: JSON-read hash tables can corrupt when iterated with `maphash` in Emacs 30.2. Added `json-read-hash-safe` helper that reads as plist and manually builds hash tables. Updated `load-researcher-meta-learning` and `format-topic-performance`.
+
+**Verification:** `./scripts/run-tests.sh unit` → 1940 tests, 1886 expected, 0 unexpected, 54 skipped. No `arrayp` errors in log. `maphash corruption` in log is test mock, not real bug.
 
 ### Researcher Provider Routing Continued (2026-05-23)
 
