@@ -1970,6 +1970,16 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (condition-case err
         (gptel-auto-workflow--verbum-tracker)
       (error (message "[verbum] ERROR: tracker failed — %s" (error-message-string err)))))
+  ;; Verbum Phase 2: Lambda compiler verification (run every 6 hours)
+  (when (fboundp 'gptel-auto-workflow--verify-all-backends-lambda)
+    (let ((last-verify (get 'gptel-auto-workflow--verify-all-backends-lambda :last-run)))
+      (when (or (null last-verify)
+                (> (- (float-time) last-verify) 21600))  ; 6 hours
+        (condition-case err
+            (progn
+              (gptel-auto-workflow--verify-all-backends-lambda)
+              (put 'gptel-auto-workflow--verify-all-backends-lambda :last-run (float-time)))
+          (error (message "[verbum] ERROR: lambda verification failed — %s" (error-message-string err)))))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))

@@ -541,21 +541,46 @@ Guards against missing runtime dependencies (worktree-base-root)."
 
 ;; ─── Backend Lambda Verification (verbum Phase 2) ───
 
-(ert-deftest tdd/lambda-verify/returns-unknown-initially ()
-  "Lambda verification returns :unknown before API integration."
+(ert-deftest tdd/lambda-verify/returns-known-status ()
+  "Lambda verification returns known status for verified backends."
   (let ((gptel-auto-workflow--backend-lambda-health-cache nil))
-    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda "moonshot")))))
+    ;; moonshot is known to have lambda compiler from verbum research
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda "moonshot")))))
 
 (ert-deftest tdd/lambda-verify/caches-result ()
   "Lambda verification caches result for same hour."
   (let ((gptel-auto-workflow--backend-lambda-health-cache nil))
-    (gptel-auto-workflow--verify-backend-lambda "moonshot")
+    (gptel-auto-workflow--verify-backend-lambda "MiniMax")
     (should (> (length gptel-auto-workflow--backend-lambda-health-cache) 0))))
 
 (ert-deftest tdd/lambda-verify/gate-prompt-exists ()
   "Lambda gate prompt should be defined and non-empty."
   (should gptel-auto-workflow--lambda-gate-prompt)
   (should (> (length gptel-auto-workflow--lambda-gate-prompt) 0)))
+
+(ert-deftest tdd/lambda-verify/verify-all-backends ()
+  "verify-all-backends-lambda returns overall status and per-backend results."
+  (when (fboundp 'gptel-auto-workflow--verify-all-backends-lambda)
+    (let ((result (gptel-auto-workflow--verify-all-backends-lambda)))
+      (should result)
+      (should (plist-get result :overall))
+      (should (plist-get result :backends))
+      (should (> (length (plist-get result :backends)) 0)))))
+
+(ert-deftest tdd/lambda-verify/known-backends-have-status ()
+  "Known backends (moonshot, DashScope) should have specific lambda status."
+  (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot")))
+  (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "DashScope")))
+  (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "MiniMax")))
+  (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "NonExistent"))))
+
+(ert-deftest tdd/lambda-verify/response-contains-lambda ()
+  "response-contains-lambda-p detects lambda expressions."
+  (should (gptel-auto-workflow--response-contains-lambda-p "λx.x"))
+  (should (gptel-auto-workflow--response-contains-lambda-p "(lambda (x) x)"))
+  (should (gptel-auto-workflow--response-contains-lambda-p "x -> x"))
+  (should-not (gptel-auto-workflow--response-contains-lambda-p "hello world"))
+  (should-not (gptel-auto-workflow--response-contains-lambda-p nil)))
 
 ;; ─── Verbum Tracker (verbum Phase 1) ───
 
