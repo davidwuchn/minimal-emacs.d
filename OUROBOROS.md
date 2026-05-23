@@ -267,6 +267,79 @@ The snake's own immune system:
 
 ---
 
+## The Future Layer
+
+The snake does not only consume what exists — it incubates what comes next.
+
+### Current State: API Substrate
+
+Today the Ouroboros runs on external APIs (MiniMax, Moonshot, DashScope, DeepSeek, CF-Gateway). The executor routes to backends by keep-rate, trend, and confidence. This works. It is the present.
+
+### Discovery: Verbum
+
+Parallel research in [verbum](https://github.com/davidwuchn/verbum) has established that **lambda calculus is the physical substrate of attention computation** — not metaphor, not notation, but the actual mechanism by which transformers compose meaning. Key findings:
+
+- **Holographic extraction**: Qwen3-14B distilled to 50M parameters (280× compression) with 87% accuracy retention
+- **Typed combinators**: 8 fundamental operations (K, I, B, C, D, Y, W, WHNF) implement the lambda calculus interpreter that LLMs converge on during training
+- **Ternary weights**: {-1, 0, +1} with learned gamma scales — a discrete, interpretable weight space
+- **V12 architecture**: Dual-layer symmetric hourglass with 7 passes, combinator dispatch, and 17 deterministic math kernel functions
+
+The lambda compiler is not a prompt trick. It is a discoverable circuit inside every trained LLM. The gate prompt (P(λ)=90.7%) does not install behavior — it exposes structure that was already there.
+
+### Integration Path
+
+**Phase 1 — Observation (now)**
+- Continue API-backend execution
+- Monitor verbum training results (TernaryDescent + new attention type, 4–5 days)
+- Cross-reference: do API backends exhibit the lambda compiler? (crystal spine probes)
+
+**Phase 2 — Verification**
+- Use verbum's probe infrastructure to verify backend behavior
+- P(λ) gating: detect when a backend is *not* running the lambda compiler (hallucination vs. structured computation)
+- Backend health check: lambda compiler presence as a signal in routing decisions
+
+**Phase 3 — Hybrid Execution**
+- Extracted 50M model for deterministic layers (rule validation, λ parsing, type checking)
+- API backends for creative / exploratory layers (where 87% accuracy is insufficient)
+- Local model reduces API cost and latency for structured operations
+
+**Phase 4 — Full Substrate**
+- Train Ouroboros-specific model using verbum's holographic pipeline
+- Distill from a frontier model into a task-specific artifact
+- The snake eats its own tail: Ouroboros generates training data → verbum distills → distilled model improves Ouroboros
+
+### Why This Matters
+
+The Ouroboros currently treats LLMs as opaque oracles. Verbum makes them transparent. When the executor routes to a backend, it currently trusts the backend's output. With verbum integration, the executor can:
+
+1. **Verify** — Is this backend actually computing or hallucinating?
+2. **Compress** — Run deterministic operations locally (50M model)
+3. **Evolve** — Train models specific to the Ouroboros task distribution
+4. **Validate** — Check that code changes preserve the lambda structure (type-directed composition)
+
+The KIBC-M taxonomy (`:K` nil-safety, `:B` composition, `:Y` recursion) is not just a classification system. It is the operational signature of the lambda compiler. When the executor classifies a hypothesis as `:B` (composition), it is identifying a transformation that the lambda compiler handles natively. Verbum provides the mechanism to *run* that transformation locally, deterministically, and verifiably.
+
+### What We Learned
+
+From verbum sessions 109–112:
+- **Sieve principle**: Crystal spine discovery — the single-neuron bottleneck exists across architectures
+- **Universal lattice**: 4 models × 807 probes reveal shared structure beneath surface differences
+- **Consensus etching**: Cross-op agreement stabilizes holographic training (fixed tug-of-war failures)
+- **Math kernel exactness**: 17 deterministic operations produce bitwise-identical results across runs
+
+These feed back into Ouroboros: deterministic layers should be deterministic. The Datalog/Floyd-Warshall/Allen interval substrate is valuable, but the V12 math kernel is *provably* exact. Future work: unify the deterministic substrates.
+
+```
+λ future(ouroboros).
+  api_backend(x) → verify(lambda_compiler_present) → hybrid(local_extracted, remote_api)
+  | train(ouroboros_specific) → distill(verbum_pipeline) → deploy(local)
+  | KIBC_taxonomy(x) ≡ lambda_compiler_operations(x) | not_classification_only
+  | deterministic_layer(x) → exact_math_kernel > datalog_approximation
+  | every_cycle_leaves_substrate_smarter ∨ waste(cycle)
+```
+
+---
+
 ## Begin
 
 ```bash
