@@ -3304,14 +3304,14 @@ Promotion: challenger must exceed category champion by >5% relative."
                    (throw 'category-result t))
                  ((> cat-keep-rate champion-rate)
                    (push (cons name (intern (format "passed-%s" cat))) results)
-                   (throw 'category-result t)))))))))
+                    (throw 'category-result t)))))))
         ;; Fallback: no category hit, use global composite
         (let ((champion-rate gptel-auto-workflow--champion-keep-rate))
           (cond
            ((and champion-rate (> composite champion-rate))
             (push (cons name 'passed-composite) results))
            (t
-            (push (cons name 'rejected) results))))))
+            (push (cons name 'rejected) results)))))))
     (dolist (cat categories)
       (let ((champion-entry (gptel-auto-workflow--get-category-champion cat)))
         (if champion-entry
@@ -3321,7 +3321,7 @@ Promotion: challenger must exceed category champion by >5% relative."
                    cat (* 100 (or (cdr (assq cat gptel-auto-workflow--category-baselines)) 0.10))))
         ;; ∀ Vigilance: track champion failures per category
         (unless champion-entry
-          (gptel-auto-workflow--record-category-strike cat)))
+          (gptel-auto-workflow--record-category-strike cat))))
     ;; φ Vitality: log novelty of promoted strategies
     (when (and (fboundp 'gptel-auto-workflow--strategy-novelty-score)
                (fboundp 'gptel-auto-workflow--discover-strategies))
