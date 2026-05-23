@@ -154,38 +154,50 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                   (when base-preset
                     (gptel-auto-workflow--maybe-override-subagent-provider agent-type base-preset))))))
         (if override-preset
-            (message "[subagent] %s using fallback provider: %s"
+            (message "[subagent] %s using fallback provider: %s (model: %s)"
                      agent-type
-                     (or (plist-get override-preset :backend) "unknown")))
-        ;; Select the best available backend for this subagent.
-        ;; Uses the ordered headless fallback chain, skipping rate-limited
-        ;; and unavailable providers, with fallback to override/global preset.
-        (let* ((candidates
-                (and (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
-                     (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))
-               (excluded (and (boundp 'gptel-auto-workflow--rate-limited-backends)
-                              gptel-auto-workflow--rate-limited-backends))
-               (chain-backend
-                (when (and candidates
-                           (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
-                  (car (gptel-auto-workflow--first-available-provider-candidate
-                        candidates excluded))))
-               (selected-backend
-                (or chain-backend
-                    (when (plistp override-preset)
-                      (plist-get override-preset :backend))
-                    (when (plistp gptel-agent-preset)
-                      (plist-get gptel-agent-preset :backend)))))
+                     (or (plist-get override-preset :backend) "unknown")
+                     (or (plist-get override-preset :model) "unknown")))
+         ;; Select the best available backend for this subagent.
+         ;; Uses the ordered headless fallback chain, skipping rate-limited
+         ;; and unavailable providers, with fallback to override/global preset.
+         (let* ((candidates
+                 (and (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
+                      (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))
+                (excluded (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                               gptel-auto-workflow--rate-limited-backends))
+                (chain-pick
+                 (when (and candidates
+                            (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
+                   (gptel-auto-workflow--first-available-provider-candidate
+                    candidates excluded)))
+                (selected-backend
+                 (or (car chain-pick)
+                     (when (plistp override-preset)
+                       (plist-get override-preset :backend))
+                     (when (plistp gptel-agent-preset)
+                       (plist-get gptel-agent-preset :backend))))
+                (selected-model
+                 (or (cdr chain-pick)
+                     (when (plistp override-preset)
+                       (plist-get override-preset :model))
+                     (when (plistp gptel-agent-preset)
+                       (plist-get gptel-agent-preset :model)))))
           (if (fboundp 'my/gptel--agent-task-with-timeout)
-              (let ((my/gptel-agent-task-timeout
-                      (gptel-benchmark--subagent-timeout timeout override-preset))
-                    (gptel-agent-preset
-                     (if (and (plistp override-preset)
-                              (plist-get override-preset :backend))
-                         override-preset
-                       (if selected-backend
-                           (list :backend selected-backend)
-                         gptel-agent-preset))))
+               (let ((my/gptel-agent-task-timeout
+                       (gptel-benchmark--subagent-timeout timeout override-preset))
+                     (gptel-agent-preset
+                      (if (and (plistp override-preset)
+                               (plist-get override-preset :backend))
+                          override-preset
+                        (if selected-backend
+                            ;; Include both backend and model so gptel-with-preset
+                            ;; shadows gptel-model (blocking the MiniMax advice in
+                            ;; gptel-config.el from hijacking the model).
+                            (append (list :backend selected-backend)
+                                    (when selected-model
+                                      (list :model selected-model)))
+                          gptel-agent-preset))))
                 (my/gptel--agent-task-with-timeout
                  callback
                  agent-type
@@ -197,7 +209,9 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                              (plist-get override-preset :backend))
                         override-preset
                       (if selected-backend
-                          (list :backend selected-backend)
+                          (append (list :backend selected-backend)
+                                  (when selected-model
+                                    (list :model selected-model)))
                         gptel-agent-preset))))
               (gptel-agent--task
                callback
