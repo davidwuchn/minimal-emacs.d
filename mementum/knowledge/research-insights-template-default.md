@@ -542,338 +542,83 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distilled Research Strategy
+## Research Strategy Distillation: template-default
 
-**Core Problem Areas (ranked by frequency):**
+### Overview
+**1182 experiments** across 60+ Elisp modules targeting five improvement axes.
 
-### 1. Type Validation Gaps (highest priority)
-- **`proper-list-p` not used where plist operations follow** — ~40+ instances; `listp` fails on dotted pairs/circular lists
-- **Nil guards missing** — ~35+ functions crash on nil inputs
-- **`stringp` missing before string operations** — ~20+ instances
+---
 
-### 2. Cache Correctness Bugs
-- **Nil-caching**: Storing nil in cache prevents future lookups even after files are created
-- **Size counter drift**: `clrhash` doesn't reset counter, causing eviction logic to fail
-- **Missing invalidation**: Updates to one cache don't invalidate dependent caches
+### High-Impact Hypothesis Categories
 
-### 3. Code Duplication Patterns
-- **Validation patterns repeated** — Extract `my/gptel--parse-context-entry`, `gptel-benchmark--require-valid-string`, `gptel-auto-workflow--git-cmd-safe`
-- **Error handling duplicated** — Centralize transient-error detection, cache eviction
+#### 1. **Defensive Validation (Dominant Pattern)**
+Adding input guards is the primary intervention strategy:
 
-### 4. Performance (secondary to correctness)
-- **Memoization missing** — `gptel-benchmark-load-result`, `file-readable-p`, MD5 in fingerprints
-- **Redundant regex compilation** — Pre-compile with `regexp-opt`
+| Guard Type | Target | Impact |
+|------------|--------|--------|
+| `proper-list-p` before `plist-get` | 40+ functions | Prevents crashes on malformed data |
+| `stringp` before string ops | 25+ functions | Prevents type errors on nil/non-string |
+| `fboundp`/`boundp` | FSM/accessor functions | Resilient to missing APIs |
+| `functionp` before `funcall` | Callbacks | Prevents callback crashes |
 
-### 5. Data Structure Mismatches
-- **`plist-get` on alist data** — Several functions use wrong accessor
-- **Vector/list confusion** — Using list ops on vectors
+#### 2. **Cache Bug Fixes** (High Confidence)
+Multiple cache implementations share identical bugs:
+- **Nil-caching**: Storing `nil` results poisons cache for subsequent non-nil data
+- **Size counter drift**: `clrhash` doesn't reset counters, desynchronizing eviction logic
+- **Fix**: Only cache non-nil results; synchronize counters on `clrhash`
 
-**Files Needing Most Attention:**
-1. `gptel-sandbox.el` — 30+ hypotheses
-2. `gptel-agent-loop.el` — 20+ hypotheses  
-3. `gptel-auto-workflow*.el` — 25+ hypotheses
-4. `gptel-benchmark*.el` — 15+ hypotheses
+#### 3. **Data Structure Corrections**
+- `plistp` vs `listp`: Using `listp` allows dotted pairs that break `plist-get`
+- **Fix**: Replace `listp` → `proper-list-p` for plist operations
 
-**Top 5 Highest-Impact Fixes:**
-1. `proper-list-p` validation in sandbox state/args handling
-2. Cache size counter sync with `hash-table-count`
-3. Nil-caching prevention in `gptel-benchmark-load-result`
-4. Extract validation helpers to eliminate 6+ copy-paste patterns
-5. FSM type guards before accessor calls
+#### 4. **Code Quality Refactoring**
+Common extractions:
+- Duplicated regex patterns → named constants
+- Repeated `(or (ignore-errors ...) "")` → helper function
+- Multiple `plist-get info :key` → local binding
+
+---
+
+### Top 10 Highest-Confidence Fixes
+
+1. **Nil-caching in `gptel-benchmark-load-result`** — Prevents stale negative cache
+2. **`proper-list-p` in `gptel-agent-loop--compile-patterns`** — Prevents regex crashes
+3. **`fboundp` guard for `gptel-fsm-info`** — Prevents void-function errors
+4. **Cache size sync in `my/gptel--estimate-text-tokens`** — Prevents unbounded growth
+5. **`plistp` in `gptel-auto-workflow--activate-provider-failover`** — Fixes silent failures
+6. **Symbol type in `my/gptel--tool-call-fingerprint`** — Prevents `concat` crashes
+7. **Doom-loop run-count accumulation bug** — Prevents false-positive aborts
+8. **`alist-get` vs `plist-get` in `gptel-benchmark-diagnose-elements`** — Data structure mismatch
+9. **Token estimate cache eviction** — Prevents memory exhaustion
+10. **Broken symlink handling in `link-shared-runtime-path`** — Self-healing seeding
+
+---
+
+### Discarded Patterns
+
+- **Memoization alone without bug fixes** — Low yield (performance without correctness)
+- **Optimizing without validation first** — Correctness > Speed
+- **Generic `condition-case nil`** — Replaced by targeted error handling
+
+---
+
+### Recommended Priority Order
+
+```
+1. Safety (prevent crashes)     → Add validation guards
+2. Vitality (resilience)       → Fix cache bugs, nil guards  
+3. Clarity (maintainability)   → Extract helpers, name constants
+4. Performance (optimization)  → Memoize hot paths (after above)
+```
+
+---
+
+### Key Insight
+**~60% of hypotheses share the same root cause**: Elisp's dynamic typing allows nil/improper-list values to reach `plist-get`, `string-match`, and `funcall` without early failure. The solution pattern is uniform: **add explicit type guards at module boundaries**.
 ```
 

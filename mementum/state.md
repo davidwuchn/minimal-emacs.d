@@ -13,7 +13,10 @@
 3. **Persisted category budget shape**: in-memory budget is alist `((:synthesis . 1) ...)`, but JSON restore returns plist `(:synthesis 1 ...)`. `enforce-category-budget` assumed alist and crashed on `car(:synthesis)`. Added normalizer used by budget enforcement and analyzer prompt formatting.
 4. **Test lexical scoping leak**: `inject-queued-targets-dedup` used `let` while initializing `result` from sibling binding `targets`; changed to `let*`.
 
-**Verification:** `./scripts/run-tests.sh unit` → 1940 tests, 1886 expected, 0 unexpected, 54 skipped.
+5. **Lambda verification `arrayp` error**: `call-backend-for-lambda` set `gptel-backend` to `(intern backend)` — a bare symbol. gptel expects a backend struct. Fixed by using `gptel-get-backend` to look up the real backend.
+6. **`maphash corruption` preventive**: JSON-read hash tables can corrupt when iterated with `maphash` in Emacs 30.2. Added `json-read-hash-safe` helper that reads as plist and manually builds hash tables. Updated `load-researcher-meta-learning` and `format-topic-performance`.
+
+**Verification:** `./scripts/run-tests.sh unit` → 1940 tests, 1886 expected, 0 unexpected, 54 skipped. No `arrayp` errors in log. `maphash corruption` in log is test mock, not real bug.
 
 ### Researcher Provider Routing Continued (2026-05-23)
 
@@ -23,6 +26,14 @@
 - Added live reload of `gptel-tools-agent-prompt-build.el`, `gptel-tools-agent-error.el`, and `gptel-benchmark-subagent.el` in both `gptel-auto-workflow--reload-live-support` and the cron dispatch eval; `gptel-tools-agent.el` skips already-provided split modules.
 - Verified in live `copilot-researcher` daemon with no-network mocks: the actual task-runner boundary receives `gptel-agent-preset` containing `:backend "moonshot"` and `:model "kimi-k2.6"`.
 - Focused provider tests pass; full 532-test batch still has unrelated staging/payload failures.
+
+### Researcher Self-Evolution Wiring (2026-05-23)
+
+- After research completes (all projects), `gptel-auto-workflow--research-self-evolve` runs synchronously before daemon shutdown.
+- Wires four systems: AutoTTS (controller evolution from traces), ontology (backend fallback reorder), AutoGo (champion league), meta-harness (strategy evolution).
+- Each subsystem has its own data-sufficiency gates; calling with no fresh data is a safe no-op.
+- Verified in live researcher daemon: function completes cleanly (`"Self-evolution complete"`), each subsystem skips when no data.
+- Full 532-test batch: 447 pass, 22 fail, 63 skip — no regression introduced.
 
 ### Bugs Fixed (2026-05-23)
 
