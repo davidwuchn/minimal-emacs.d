@@ -37,6 +37,10 @@
 (declare-function gptel-fsm-info "gptel-fsm")
 (declare-function gptel-mementum-weekly-job "gptel-tools-agent")
 (declare-function gptel-benchmark-instincts-weekly-job "gptel-benchmark-instincts")
+(declare-function gptel-auto-workflow--run-autotts-evolution "gptel-auto-workflow-research-benchmark")
+(declare-function gptel-auto-workflow--reorder-fallbacks-by-ontology "gptel-auto-workflow-ontology-router")
+(declare-function gptel-auto-workflow--run-research-champion-league "gptel-auto-workflow-research-integration")
+(declare-function gptel-auto-workflow--run-strategy-evolution "gptel-auto-workflow-strategic")
 
 (defvar gptel-auto-workflow-projects
   (list (expand-file-name
@@ -859,17 +863,86 @@ which caused the pipeline to misdiagnose a crash."
       (setq gptel-auto-workflow--stats
             (plist-put gptel-auto-workflow--stats :phase "complete")))))
 
+(defun gptel-auto-workflow--research-self-evolve ()
+  "Run self-evolution systems after research findings are saved.
+Triggers AutoTTS controller evolution, ontology backend reordering,
+AutoGo champion league, and meta-harness strategy evolution.
+Each system is guarded by fboundp and internal data-sufficiency checks
+so calling this with no fresh data is a safe no-op."
+  (message "[research] Starting self-evolution after research...")
+  (let ((root (file-name-as-directory
+               (expand-file-name
+                (or (and (fboundp 'gptel-auto-workflow--default-dir)
+                         (gptel-auto-workflow--default-dir))
+                    default-directory)))))
+    ;; Ensure evolution modules are loaded.  The research daemon bootstrap
+    ;; may not load these modules unless the evolution cycle has already run.
+    (dolist (mod '("gptel-auto-workflow-ontology-router.el"
+                   "gptel-auto-workflow-research-integration.el"
+                   "gptel-auto-workflow-evolution.el"))
+      (let ((path (expand-file-name (concat "lisp/modules/" mod) root)))
+        (when (file-readable-p path)
+          (condition-case nil
+              (load-file path)
+            (error (message "[research] Could not load %s for self-evolution" mod))))))
+    ;; 1. AutoTTS: evolve multi-turn controller from fresh traces.
+    ;;    Internally gated: skips when no traces or convergence detected.
+    (when (fboundp 'gptel-auto-workflow--run-autotts-evolution)
+      (condition-case err
+          (progn
+            (message "[research] AutoTTS: evolving controller from traces...")
+            (gptel-auto-workflow--run-autotts-evolution)
+            (message "[research] AutoTTS: controller evolution complete"))
+        (error
+         (message "[research] AutoTTS evolution skipped: %s"
+                  (error-message-string err)))))
+    ;; 2. Ontology: reorder backend fallbacks based on performance data.
+    ;;    Uses experiment keep-rates; safe to call even with empty history.
+    (when (fboundp 'gptel-auto-workflow--reorder-fallbacks-by-ontology)
+      (condition-case err
+          (progn
+            (message "[research] Ontology: reordering backend fallbacks...")
+            (gptel-auto-workflow--reorder-fallbacks-by-ontology)
+            (message "[research] Ontology: backend reorder complete"))
+        (error
+         (message "[research] Ontology reorder skipped: %s"
+                  (error-message-string err)))))
+    ;; 3. AutoGo: champion league for proposed research strategies.
+    ;;    Internally gated: skips when no proposed strategies pending.
+    (when (fboundp 'gptel-auto-workflow--run-research-champion-league)
+      (condition-case err
+          (progn
+            (message "[research] AutoGo: running champion league...")
+            (gptel-auto-workflow--run-research-champion-league)
+            (message "[research] AutoGo: champion league complete"))
+        (error
+         (message "[research] AutoGo champion league skipped: %s"
+                  (error-message-string err)))))
+    ;; 4. Meta-harness: evolve research strategies.
+    ;;    Internally delegates to AutoTTS evolution so shares its gates.
+    (when (fboundp 'gptel-auto-workflow--run-strategy-evolution)
+      (condition-case err
+          (progn
+            (message "[research] Meta-harness: evolving strategies...")
+            (gptel-auto-workflow--run-strategy-evolution)
+            (message "[research] Meta-harness: strategy evolution complete"))
+        (error
+         (message "[research] Meta-harness evolution skipped: %s"
+                  (error-message-string err)))))
+    (message "[research] Self-evolution complete")))
+
 (defun gptel-auto-workflow-queue-all-research (&optional shutdown-after-completion)
   "Queue `gptel-auto-workflow-run-all-research' and return immediately."
   (interactive)
   (gptel-auto-workflow--queue-cron-job
    "research"
    (lambda (completion-callback)
-     (gptel-auto-workflow-run-all-research
-      (lambda (&rest args)
-        (funcall completion-callback)
-        (when shutdown-after-completion
-          (apply #'gptel-auto-workflow--shutdown-researcher-daemon-after-job args)))))
+      (gptel-auto-workflow-run-all-research
+       (lambda (&rest args)
+         (gptel-auto-workflow--research-self-evolve)
+         (funcall completion-callback)
+         (when shutdown-after-completion
+           (apply #'gptel-auto-workflow--shutdown-researcher-daemon-after-job args)))))
    t))
 
 ;;; Research Cache Management

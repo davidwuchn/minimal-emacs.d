@@ -24,6 +24,14 @@
 - Verified in live `copilot-researcher` daemon with no-network mocks: the actual task-runner boundary receives `gptel-agent-preset` containing `:backend "moonshot"` and `:model "kimi-k2.6"`.
 - Focused provider tests pass; full 532-test batch still has unrelated staging/payload failures.
 
+### Researcher Self-Evolution Wiring (2026-05-23)
+
+- After research completes (all projects), `gptel-auto-workflow--research-self-evolve` runs synchronously before daemon shutdown.
+- Wires four systems: AutoTTS (controller evolution from traces), ontology (backend fallback reorder), AutoGo (champion league), meta-harness (strategy evolution).
+- Each subsystem has its own data-sufficiency gates; calling with no fresh data is a safe no-op.
+- Verified in live researcher daemon: function completes cleanly (`"Self-evolution complete"`), each subsystem skips when no data.
+- Full 532-test batch: 447 pass, 22 fail, 63 skip — no regression introduced.
+
 ### Bugs Fixed (2026-05-23)
 
 1. **Verbum budget penalty**: `quarantined-backends` → `health-weight` API
