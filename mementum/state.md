@@ -2,51 +2,51 @@
 
 > Last session: 2026-05-23
 
-## Current Session: Verbum Integration — All 4 Phases Complete
+## Current Session: Verbum Integration — All 7 Phases + Wiring Complete
 
-**Status:** Complete — Implemented ternary decisions, verbum tracking, lambda verification.
+**Status:** Complete — Implemented and wired all verbum phases into production pipeline.
 
 ### What Was Built
 
-**Phase 1: Ternary Decision Boundaries**
-- `gptel-auto-workflow--backend-ternary-decision`: converts continuous scores to -1/0/+1
-- 5% threshold around baseline for clean boundaries
-- 6 tests: reject/accept/defer/nil/override/routing
+**Phase 1-7 (Complete):**
+1. **Ternary decisions** — Convert scores to -1/0/+1
+2. **Verbum tracker** — Auto-detect new verbum sessions
+3. **Ternary routing** — Sort rejected backends to bottom
+4. **Lambda verification** — Check backends for lambda compiler presence
+5. **Sieve routing** — Route deterministic tasks to Qwen, creative to distributed backends
+6. **Cross-backend consistency** — Compare KIBC axis across backends for same target
+7. **Holographic memory** — Track kept experiments by target+axis consensus
 
-**Phase 2: Verbum Tracker**
-- `gptel-auto-workflow--verbum-tracker`: auto-detects new verbum sessions
-- Wired into `evolution-run-cycle` — runs every cycle
-- 4 tests: state file, session parsing, nil handling, detection
+**Production Wiring (Complete):**
+- **Experiment completion hook**: auto-records to holographic memory
+- **Evolution cycle**: runs cross-backend consistency check every 3 hours
+- **Dashboard**: shows verbum session, lambda health cache, holographic memory stats
 
-**Phase 3: Ternary Routing Integration**
-- Rejected backends (-1) sorted to bottom regardless of score
-- Category overrides (score=9999) always ACCEPT
-- Exploration (15% swap) skipped if top backend rejected
-- 2 integration tests: rejected-at-bottom, no-exploration-on-rejected
-
-**Phase 4: Backend Lambda Verification**
-- `verify-all-backends-lambda`: checks all backends in fallback chain
-- `verify-backend-lambda-impl`: simulated verification based on verbum research
-  - moonshot/DashScope → :healthy (confirmed)
-  - MiniMax/DeepSeek/CF-Gateway → :unknown
-- `response-contains-lambda-p`: detects λ expressions
-- Wired into evolution cycle (every 6 hours)
-- 4 tests: verify-all, known-status, cache, response-parser
-
-**Test Results:** 52/52 router tests, 245/245 evolution regressions — all passing.
+**Test Results:** 65/65 router tests, 245/245 evolution tests — all passing.
 
 **Commits:**
 - `d85298b0` ◈ Add Future Layer: verbum integration roadmap
 - `893280c0` ⚒ Add verbum integration: ternary + lambda verification + tracker
 - `ebf91a2d` ⚒ Wire verbum tracker + ternary routing into evolution cycle
 - `97e01196` ⚒ Implement backend lambda verification (verbum Phase 4)
+- `6a0ac690` ⚒ Sieve-based backend routing (verbum Phase 5)
+- `b23aa60e` ⚒ Cross-backend consistency checking (verbum Phase 6)
+- `60c80a85` ⚒ Holographic experiment memory (verbum Phase 7)
+- `15b3dd5c` ⚒ Wire verbum integration into production pipeline
 
-### Next Improvements (Not Yet Done)
+### What's Running Now
+- **Verbum tracker**: checks for new verbum sessions every evolution cycle
+- **Lambda verification**: checks all backends every 6 hours
+- **Consistency check**: checks all multi-backend targets every 3 hours
+- **Holographic memory**: auto-records on every kept experiment completion
+- **Sieve routing**: boosts appropriate backends by +10 points per task type
 
-1. **Cross-backend consistency checking**: When multiple backends run same target, check if outputs agree structurally (lattice map distance)
-2. **Sieve-based backend routing**: Route deterministic tasks to single-neuron backends (Qwen3, Pythia), creative tasks to distributed backends (Mistral, OLMo)
-3. **Deterministic layer enhancement**: Replace Datalog/Floyd-Warshall with V12 math kernel for critical paths
-4. **Holographic experiment memory**: Store which operations agreed on each experiment (cross-op consensus)
+### Next Improvements
+
+1. **Actually call backends for lambda verification** — Replace simulated verification with real API calls using gate prompt
+2. **Use holographic consensus in routing** — Boost experiments with high consensus
+3. **Cross-backend consistency alerts** — Flag targets with <50% agreement for manual review
+4. **Verbum training monitoring** — Poll training checkpoints, auto-alert when complete
 
 ### Still Waiting On
 - Verbum TernaryDescent training to complete (4–5 days on Mac)
@@ -55,6 +55,12 @@
 ---
 
 ## Prior Sessions
+
+### Session: Verbum Integration (2026-05-23)
+- All 7 phases implemented
+- Production wiring complete
+- 8 commits, +400 lines of code
+- 65/65 tests passing
 
 ### Session: TDD Coverage Expansion (2026-05-16)
 - 89 test files scaffolded for 89 modules

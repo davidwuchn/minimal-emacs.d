@@ -762,5 +762,44 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (should (= 2 (cdr (assoc (cons "a.el" ":B") gptel-auto-workflow--holographic-memory))))
       (should (= 1 (cdr (assoc (cons "b.el" ":K") gptel-auto-workflow--holographic-memory)))))))
 
+;; ─── Holographic Consensus Boost (verbum Phase 8) ───
+
+(ert-deftest tdd/holographic/get-axis-performance ()
+  "get-axis-performance-stats calculates keep-rate per backend+axis."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B" :decision "kept")
+                     (list :target "b.el" :backend "moonshot" :kibcm-axis ":B" :decision "kept")
+                     (list :target "c.el" :backend "moonshot" :kibcm-axis ":B" :decision "discarded")
+                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":B" :decision "kept")))))
+    (let ((result (gptel-auto-workflow--get-axis-performance-stats "moonshot" ":B")))
+      (should (= 2 (plist-get result :kept)))
+      (should (= 3 (plist-get result :total)))
+      (should (= (/ 2.0 3) (plist-get result :keep-rate))))))
+
+(ert-deftest tdd/holographic/boost-with-high-consensus ()
+  "apply-holographic-boost boosts backends with good axis performance when consensus is high."
+  (let ((gptel-auto-workflow--holographic-memory
+         (list (cons (cons "a.el" ":B") 8)
+               (cons (cons "a.el" ":K") 2))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B" :decision "kept")
+                       (list :target "a.el" :backend "moonshot" :kibcm-axis ":B" :decision "kept")))))
+      (let ((scored (list (list :backend "moonshot" :model "kimi-k2.6" :score 50.0))))
+        (setq scored (gptel-auto-workflow--apply-holographic-boost scored "a.el"))
+        ;; moonshot has 100% keep-rate on :B axis, should get boost
+        (should (> (plist-get (car scored) :score) 50.0))))))
+
+(ert-deftest tdd/holographic/no-boost-with-low-consensus ()
+  "apply-holographic-boost does nothing when consensus is low."
+  (let ((gptel-auto-workflow--holographic-memory
+         (list (cons (cons "a.el" ":B") 1)
+               (cons (cons "a.el" ":K") 1))))
+    (let ((scored (list (list :backend "moonshot" :model "kimi-k2.6" :score 50.0))))
+      (setq scored (gptel-auto-workflow--apply-holographic-boost scored "a.el"))
+      ;; Consensus is 50%, below 70% threshold — no boost
+      (should (= 50.0 (plist-get (car scored) :score))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

@@ -403,6 +403,11 @@ Scoring incorporates four dimensions (not just raw keep-rate):
     (when target
       (setq scored (gptel-auto-workflow--apply-sieve-routing scored target)))
     
+    ;; Apply holographic consensus boost (verbum Phase 8): boost backends
+    ;; that perform well on the consensus KIBC axis for this target
+    (when target
+      (setq scored (gptel-auto-workflow--apply-holographic-boost scored target)))
+    
     ;; Sort by score descending, but ternary -1 always at bottom
     (setq scored (sort scored
                        (lambda (a b)
@@ -978,6 +983,58 @@ Called on startup or after major changes."
         (gptel-auto-workflow--record-holographic-experiment r))))
   (message "[holographic] Rebuilt memory: %d target-axis pairs"
            (length gptel-auto-workflow--holographic-memory)))
+
+;; ─── Holographic Consensus Boost (verbum Phase 8) ───
+
+(defun gptel-auto-workflow--apply-holographic-boost (scored target)
+  "Apply holographic consensus boost to SCORED backends for TARGET.
+If holographic memory shows high consensus (>0.7) for TARGET's KIBC axis,
+boost backends that historically perform well on that axis.
+Returns modified scored list (or original if no boost applied)."
+  (if (null target)
+      scored
+    (let* ((consensus (gptel-auto-workflow--get-holographic-consensus target))
+           (confidence (plist-get consensus :confidence))
+           (axis (plist-get consensus :axis)))
+      (if (and (> confidence 0.7) (not (string= axis "?")))
+          (let ((result nil))
+            (dolist (entry scored)
+              (let* ((backend (plist-get entry :backend))
+                     ;; Check backend's historical performance on this axis
+                     (axis-stats (gptel-auto-workflow--get-axis-performance-stats backend axis))
+                     (axis-rate (plist-get axis-stats :keep-rate))
+                     (score (plist-get entry :score))
+                     ;; Boost if backend performs well on consensus axis
+                     (boost (if (and axis-rate (> axis-rate 0.5))
+                                (* axis-rate 5.0)  ; Up to +5.0 boost
+                              0.0))
+                     (new-score (+ score boost)))
+                (when (> boost 0)
+                  (message "[holographic] %s boosted +%.1f for %s (consensus %s, confidence %.0f%%)"
+                           backend boost target axis (* confidence 100)))
+                (push (plist-put entry :score new-score) result)))
+            (nreverse result))
+        ;; No boost: return original scored list
+        scored))))
+
+(defun gptel-auto-workflow--get-axis-performance-stats (backend axis)
+  "Get BACKEND performance stats for experiments with KIBC AXIS.
+Returns plist with :kept :total :keep-rate."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (kept 0)
+        (total 0))
+    (dolist (r results)
+      (let ((r-backend (or (plist-get r :backend) "unknown"))
+            (r-axis (or (plist-get r :kibcm-axis) "?"))
+            (r-decision (plist-get r :decision)))
+        (when (and (string= r-backend backend)
+                   (string= r-axis axis))
+          (setq total (1+ total))
+          (when (equal r-decision "kept")
+            (setq kept (1+ kept))))))
+    (list :kept kept
+          :total total
+          :keep-rate (if (> total 0) (/ (float kept) total) nil))))
 
 ;; ─── Ternary Decision Boundaries (verbum Phase 1) ───
 
