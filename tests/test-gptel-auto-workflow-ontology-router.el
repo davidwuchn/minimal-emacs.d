@@ -635,5 +635,46 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (gptel-auto-workflow--verbum-tracker)
       (should-not called))))
 
+;; ─── Sieve-Based Routing (verbum Phase 5) ───
+
+(ert-deftest tdd/sieve/classify-by-backend-name ()
+  "Sieve classification works by backend name."
+  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "DashScope")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "moonshot")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "Unknown"))))
+
+(ert-deftest tdd/sieve/classify-by-model-name ()
+  "Sieve classification works by model name."
+  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen3.6-plus")))
+  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "kimi-k2.6")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "deepseek-v4-flash"))))
+
+(ert-deftest tdd/sieve/deterministic-target-detection ()
+  "Deterministic targets are identified correctly."
+  (should (gptel-auto-workflow--target-deterministic-p "gptel-auto-workflow-validation.el"))
+  (should (gptel-auto-workflow--target-deterministic-p "test-gptel.el"))
+  (should (gptel-auto-workflow--target-deterministic-p "gptel-benchmark.el"))
+  (should-not (gptel-auto-workflow--target-deterministic-p "gptel-auto-workflow-strategy.el"))
+  (should-not (gptel-auto-workflow--target-deterministic-p nil)))
+
+(ert-deftest tdd/sieve/apply-sieve-boosts-qwen ()
+  "Sieve routing boosts Qwen for deterministic tasks."
+  (let ((scored (list (list :backend "DashScope" :model "qwen3.6-plus" :score 45.0)
+                      (list :backend "moonshot" :model "kimi-k2.6" :score 60.0))))
+    (setq scored (gptel-auto-workflow--apply-sieve-routing scored "test-validation.el"))
+    ;; DashScope/qwen should be boosted to 55, moonshot stays at 60
+    (should (= 55.0 (plist-get (car scored) :score)))
+    (should (= 60.0 (plist-get (cadr scored) :score)))))
+
+(ert-deftest tdd/sieve/apply-sieve-boosts-distributed-for-creative ()
+  "Sieve routing boosts distributed backends for creative tasks."
+  (let ((scored (list (list :backend "DashScope" :model "qwen3.6-plus" :score 50.0)
+                      (list :backend "moonshot" :model "kimi-k2.6" :score 35.0))))
+    (setq scored (gptel-auto-workflow--apply-sieve-routing scored "gptel-auto-workflow-strategy.el"))
+    ;; moonshot should be boosted to 45, DashScope stays at 50
+    (should (= 50.0 (plist-get (car scored) :score)))
+    (should (= 45.0 (plist-get (cadr scored) :score)))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

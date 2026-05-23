@@ -21,6 +21,92 @@
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
 (defvar gptel-auto-workflow-headless-subagent-fallbacks)
 
+;; ─── Sieve-Based Backend Classification (verbum Phase 5) ───
+
+(defvar gptel-auto-workflow--backend-sieve-types
+  '(("DashScope" . single-neuron)          ; Backend name
+    ("qwen3.6-plus" . single-neuron)       ; Model name: Qwen3 family
+    ("qwen" . single-neuron)               ; Model family
+    ("moonshot" . distributed)             ; Backend name
+    ("kimi-k2.6" . distributed)            ; Model name
+    ("DeepSeek" . distributed)             ; Backend name
+    ("deepseek-v4-flash" . distributed)    ; Model name
+    ("MiniMax" . distributed)              ; Backend name
+    ("minimax-m2.7-highspeed" . distributed) ; Model name
+    ("CF-Gateway" . distributed)           ; Backend name
+    ("@cf/openai/gpt-oss-120b" . distributed)) ; Model name
+  "Sieve-type classification per backend/model (verbum crystal spine discovery).
+single-neuron: high compression, deterministic at bottleneck (Qwen3 family).
+distributed: lower compression, more redundancy (Mistral, OLMo, etc.).")
+
+(defun gptel-auto-workflow--backend-sieve-type (backend-or-model)
+  "Return sieve-type for BACKEND-OR-MODEL: single-neuron or distributed.
+Looks up by backend name first, then model name.
+Based on verbum crystal spine research (sessions 109-112)."
+  (or (cdr (assoc backend-or-model gptel-auto-workflow--backend-sieve-types))
+      ;; Try to match partial model name (e.g., "qwen" in "qwen3.6-plus")
+      (cl-some (lambda (entry)
+                 (when (string-match-p (car entry) backend-or-model)
+                   (cdr entry)))
+               gptel-auto-workflow--backend-sieve-types)
+      'distributed))  ; Default to distributed for unknown backends
+
+(defun gptel-auto-workflow--target-deterministic-p (target)
+  "Return t if TARGET is a deterministic task (suitable for single-neuron backends).
+Deterministic tasks: rule validation, type checking, test execution, λ parsing."
+  (when target
+    (let ((basename (file-name-nondirectory target)))
+      (or
+       ;; Validation, checking, testing = deterministic
+       (string-match-p "validat" basename)
+       (string-match-p "test" basename)
+       (string-match-p "check" basename)
+       (string-match-p "verify" basename)
+       ;; Type system = deterministic
+       (string-match-p "type" basename)
+       ;; Rule-based = deterministic
+       (string-match-p "rule" basename)
+       ;; Math kernel = deterministic
+       (string-match-p "kernel" basename)
+       ;; Benchmark = deterministic measurement
+       (string-match-p "benchmark" basename)
+       ;; FSM = deterministic state machine
+       (string-match-p "fsm" basename)))))
+
+(defun gptel-auto-workflow--apply-sieve-routing (scored target)
+  "Apply sieve-based routing to SCORED backends for TARGET.
+Boosts single-neuron backends for deterministic tasks.
+Boosts distributed backends for creative/exploratory tasks.
+Returns modified scored list."
+  (when target
+    (let ((is-deterministic (gptel-auto-workflow--target-deterministic-p target))
+          (result nil))
+      (dolist (entry scored)
+        (let* ((backend (plist-get entry :backend))
+               (model (plist-get entry :model))
+               ;; Check both backend name and model name for sieve type
+               (sieve-type-backend (gptel-auto-workflow--backend-sieve-type backend))
+               (sieve-type-model (when model (gptel-auto-workflow--backend-sieve-type model)))
+               (sieve-type (if (eq sieve-type-backend 'single-neuron) 'single-neuron
+                            (if (eq sieve-type-model 'single-neuron) 'single-neuron
+                              (or sieve-type-backend 'distributed))))
+               (score (plist-get entry :score))
+               ;; Boost matching backends by 10 points
+               (boost (if (and is-deterministic (eq sieve-type 'single-neuron))
+                          10.0
+                        (if (and (not is-deterministic) (eq sieve-type 'distributed))
+                            10.0
+                          0.0)))
+               (new-score (+ score boost)))
+          (when (> boost 0)
+            (message "[sieve] %s/%s %s for %s task (+%.0f)"
+                     backend model
+                     (if is-deterministic "boosted" "preferred")
+                     (if is-deterministic "deterministic" "creative")
+                     boost))
+          (push (plist-put entry :score new-score) result)))
+      (nreverse result))))
+
 (defcustom gptel-auto-workflow--ontology-reorder-min-samples 3
   "Minimum experiments before reordering fallback chain.
 Below this, use the static headless fallback order."
@@ -312,6 +398,10 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                      (plist-get s :backend)
                      (* (or (plist-get s :rate) 0) 100)
                      (* baseline 100))))))
+    
+    ;; Apply sieve-based routing (verbum Phase 5): boost matching backends
+    (when target
+      (setq scored (gptel-auto-workflow--apply-sieve-routing scored target)))
     
     ;; Sort by score descending, but ternary -1 always at bottom
     (setq scored (sort scored
