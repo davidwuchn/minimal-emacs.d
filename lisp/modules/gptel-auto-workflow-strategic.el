@@ -590,7 +590,7 @@ daemon's evolve_researcher.py, restores template variables before substituting."
               (setq skill-content
                     (replace-regexp-in-string
                      "{{strategy-guidance}}" guidance-md
-                     skill-content t t)))
+                  skill-content t t))))
           (setq skill-content
                 (replace-regexp-in-string
                   "{{strategy-guidance}}"
@@ -660,7 +660,7 @@ and timeout-heavy targets for the researcher to investigate."
         (push "\n**Researcher task**: find novel techniques for these high-attempt targets. Current strategies are failing.\n" lines))))
     (if lines
         (concat (mapconcat #'identity (nreverse lines) ""))
-      "No executor bottlenecks detected. Continue with current research topics.\n")))
+      "No executor bottlenecks detected. Continue with current research topics.\n"))
 
 (defun gptel-auto-workflow--research-champion-report ()
   "AutoGo: report current research strategy champion for the researcher.
