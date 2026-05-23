@@ -3,6 +3,9 @@
 (require 'seq)
 (require 'subr-x)
 
+(with-temp-file "/tmp/DEBUG-prompt-build-loaded-v2.txt"
+  (insert (format "LOADED prompt-build at %s\n" (current-time-string))))
+
 (defconst gptel-auto-experiment--axis-names
   '(("A" . "Error Handling")
     ("B" . "Performance")
@@ -1786,8 +1789,16 @@ chain so that subagent calls do not fall through to the mode-hook default
                                     :use-context nil
                                     :stream my/gptel-subagent-stream)
                               (copy-sequence (cdr agent-config)))))
-    ;; If the merged preset has no backend, try to pick one from the
-    ;; headless fallback chain.
+    ;; If the merged preset has no backend, use the global gptel-backend
+    ;; as the default.  This is simpler and more reliable than the headless
+    ;; chain auto-select, which depends on timeline-sensitive dynamic
+    ;; variables (--headless, --current-project) that may not be set in
+    ;; every daemon code-path.
+    (when (and (null (plist-get merged :backend))
+               (boundp 'gptel-backend)
+               gptel-backend)
+      (setq merged (plist-put merged :backend gptel-backend)))
+    ;; Fallback: headless chain auto-select (when global backend is nil)
     (when (and (null (plist-get merged :backend))
                (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
                (gptel-auto-workflow--headless-provider-override-active-p)

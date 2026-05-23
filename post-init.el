@@ -12,7 +12,16 @@
 ;; and the headless-provider-override never activates because it requires
 ;; this variable to be non-nil.
 (when (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
-  (setq gptel-auto-workflow-persistent-headless t))
+  (setq gptel-auto-workflow-persistent-headless t)
+  ;; For the research daemon, also set the global backend to DeepSeek
+  ;; before any gptel-mode buffer exists.  This survives through
+  ;; gptel-with-preset shadowing because the preset itself won't have
+  ;; a :backend (the agent config doesn't include one).  Without a
+  ;; :backend in the preset, gptel-with-preset does not shadow
+  ;; gptel-backend, so the global binding propagates.
+  (when (string= (getenv "MINIMAL_EMACS_WORKFLOW_ROLE") "research")
+    (setq gptel-backend (or (and (boundp 'gptel--deepseek) gptel--deepseek)
+                            gptel-backend))))
 
 ;; Add the local lisp directory to Emacs' load path using the true root directory
 ;; (not user-emacs-directory, since we changed that to var/)
@@ -54,6 +63,14 @@
             (let ((load-verbose nil)
                   (inhibit-message t))
               (require 'init-ai)
+              ;; Force DeepSeek as the global backend for the research daemon
+              ;; before any gptel-mode buffers exist.  persistent-headless blocks
+              ;; the MiniMax mode-hook default, leaving gptel-backend nil.  We
+              ;; set it here after backends are available.
+              (when (and (string= (getenv "MINIMAL_EMACS_WORKFLOW_ROLE") "research")
+                         (boundp 'gptel--deepseek)
+                         gptel--deepseek)
+                (setq gptel-backend gptel--deepseek))
               (load (expand-file-name "lisp/modules/standalone-research.el"
                                        minimal-emacs-user-directory) nil 'nomessage)
               (when (fboundp 'slr-run-research)

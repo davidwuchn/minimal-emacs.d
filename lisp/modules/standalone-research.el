@@ -150,53 +150,43 @@ This fallback is intentionally local-only and should be replaced by fresh extern
 
 (defun slr--run-single-turn (prompt completion-callback)
   "Run a single-turn research subagent call with PROMPT.
-Uses run-with-timer 0 to break the call stack and prevent C stack overflow
-during deeply nested subagent setup (FSM, 31 tools, preset, context init)."
+Bypasses gptel-benchmark-call-subagent and calls gptel-agent--task directly
+with DeepSeek backend to avoid the MiniMax fallthrough."
   (let ((timeout 300))
-    (message "[slr] Scheduling subagent with %ds timeout (timer-deferred)..." timeout)
+    (message "[slr] Calling subagent directly with DeepSeek backend...")
     (run-with-timer
      0 nil
      (lambda ()
-       (condition-case err
-           (gptel-benchmark-call-subagent
-            'researcher "External research" prompt
-            (lambda (result)
-              (let ((findings (or result "")))
-                (message "[slr] Subagent returned %d chars" (length findings))
-                (slr--finish-single-turn prompt findings completion-callback)))
-            timeout)
-         (error
-          (message "[slr] Single-turn subagent failed (%s), using local fallback" err)
-          (slr--finish-single-turn prompt (format "%s" err) completion-callback)))))))
+       (let ((gptel-backend (or (and (boundp 'gptel--deepseek) gptel--deepseek)
+                                gptel-backend))
+             (gptel-model (when (boundp 'my/gptel-plain-model)
+                            my/gptel-plain-model))
+             (gptel-agent-preset nil))
+         (condition-case err
+             (if (fboundp 'gptel-agent--task)
+                 (gptel-agent--task
+                  (lambda (result)
+                    (let ((findings (or result "")))
+                      (message "[slr] Direct subagent returned %d chars" (length findings))
+                      (slr--finish-single-turn prompt findings completion-callback)))
+                  "researcher" "External research" prompt)
+               (message "[slr] gptel-agent--task not available, using fallback")
+               (slr--finish-single-turn prompt "" completion-callback))
+           (error
+            (message "[slr] Direct subagent failed (%s), using local fallback" err)
+            (slr--finish-single-turn prompt (format "%s" err) completion-callback))))))))
 
 (defun slr-run-research (&optional completion-callback)
   "Run external research using subagent and save results.
-Tries multi-turn EMA controller first, falls back to single-turn.
+Uses direct gptel-agent--task call (via slr--run-single-turn) to bypass
+the MiniMax fallthrough in gptel-benchmark-call-subagent.
 COMPLETION-CALLBACK receives the saved findings when provided."
   (interactive)
-  ;; Try the full multi-turn research path first (with EMA momentum controller)
-  (if (and (fboundp 'gptel-auto-workflow--research-patterns)
-           (fboundp 'gptel-auto-workflow--build-research-prompt))
-      (condition-case err
-          (progn
-            (message "[slr] Multi-turn EMA research path available, delegating...")
-            (setq gptel-auto-workflow--research-in-progress nil)
-            (gptel-auto-workflow--research-patterns
-             (lambda (findings)
-               (if (slr--usable-findings-p findings)
-                   (progn
-                     (slr--save-findings findings)
-                     (when (functionp completion-callback)
-                       (funcall completion-callback findings)))
-                 (message "[slr] Multi-turn returned unusable findings (%d chars), falling back to single-turn"
-                          (length (or findings "")))
-                 (slr--run-single-turn (slr--build-prompt) completion-callback)))))
-        (error
-         (message "[slr] Multi-turn failed (%s), falling back to single-turn" err)
-         (message "[slr] Backtrace: %s" (with-output-to-string (backtrace)))
-         (slr--run-single-turn (slr--build-prompt) completion-callback)))
-    ;; Fallback: single-turn research (raw SKILL.md, no controller)
-    (slr--run-single-turn (slr--build-prompt) completion-callback)))
+  ;; Skip the multi-turn path entirely — its gptel-benchmark-call-subagent
+  ;; path always falls through to MiniMax regardless of global backend
+  ;; settings.  The single-turn path calls gptel-agent--task directly with
+  ;; DeepSeek bound dynamically.
+  (slr--run-single-turn (slr--build-prompt) completion-callback))
 
 (defun slr--build-prompt ()
   "Build research prompt with template variable substitution."

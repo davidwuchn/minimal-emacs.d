@@ -959,7 +959,7 @@ workflow_action_elisp() {
 
     case "$action" in
         auto-workflow) dispatch="(gptel-auto-workflow-queue-all-projects)" ;;
-    research) dispatch="(gptel-auto-workflow-queue-all-research t)" ;;
+    research) dispatch="(progn (when (and (boundp 'gptel--deepseek) gptel--deepseek) (setq gptel-backend gptel--deepseek)) (fmakunbound 'slr-run-research) (fmakunbound 'slr--run-single-turn) (fmakunbound 'gptel-auto-workflow--agent-base-preset) (fmakunbound 'gptel-auto-workflow--headless-provider-override-active-p) (load-file (expand-file-name \"lisp/modules/gptel-tools-agent-prompt-build.el\" root)) (load-file (expand-file-name \"lisp/modules/standalone-research.el\" root)) (when (fboundp 'slr-run-research) (defalias 'gptel-auto-workflow-run-research 'slr-run-research)) (gptel-auto-workflow-queue-all-research t))" ;;
         mementum) dispatch="(progn (setq gptel-mementum-headless-auto-approve t) (gptel-auto-workflow-queue-all-mementum))" ;;
         instincts) dispatch="(gptel-auto-workflow-queue-all-instincts)" ;;
         evolution) dispatch="(when (fboundp 'gptel-auto-workflow-evolution-run-cycle) (gptel-auto-workflow-evolution-run-cycle))" ;;
@@ -1112,17 +1112,11 @@ ensure_worker_daemon() {
     # Ensure SSH keys are loaded in agent (needed by Homebrew OpenSSH)
     ensure_ssh_keys_loaded
     
-    # Daemon mode selection:
-    #   --fg-daemon for researcher: avoids fork OOM on constrained hardware
-    #   --daemon for auto-workflow: session isolation + ulimit C stack protection
-    # The bash -c + setsid wrapper backgrounds the whole subshell, so --fg-daemon
-    # inside it still runs in the background of the outer script.
+    # Keep the dedicated workflow daemon truly headless and detached.
+    # Use `--daemon` (background fork) for session isolation and ulimit
+    # for C stack protection.
     hydrate_missing_worktree_submodules
     seed_worker_daemon_shared_var
-    local daemon_flag="--daemon"
-    if [ "$ACTION" = "research" ]; then
-        daemon_flag="--fg-daemon"
-    fi
     # Disable native compilation for workflow daemon to avoid stale cache issues
     if command -v setsid >/dev/null 2>&1; then
         setsid env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
@@ -1131,7 +1125,7 @@ ensure_worker_daemon() {
             MINIMAL_EMACS_WORKFLOW_ROLE="$ACTION" \
             MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
             MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" '"$daemon_flag"'="$2" </dev/null >>"$3" 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     else
         env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
@@ -1140,7 +1134,7 @@ ensure_worker_daemon() {
             MINIMAL_EMACS_WORKFLOW_ROLE="$ACTION" \
             MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
             MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" '"$daemon_flag"'="$2" </dev/null >>"$3" 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     fi
     for _ in $(seq 1 50); do
