@@ -967,7 +967,10 @@ Returns t if request was initiated, nil on failure."
   (condition-case err
       (progn
         (message "[verbum] Sending lambda gate prompt to %s/%s..." backend model)
-        (let ((gptel-backend (intern backend))
+        (let ((gptel-backend (when (fboundp 'gptel-get-backend)
+                                (condition-case nil
+                                    (gptel-get-backend backend)
+                                  (error nil))))
               (gptel-model (intern model)))
           (gptel-request prompt
                          :callback (lambda (response info)
