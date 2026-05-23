@@ -4,54 +4,56 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 1.9/10
-allium-issues: 3
+allium-issues: 4
 allium-severity: 0.00
 allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 1986 experiments (19% keep rate).*
+*Consolidated from 1267 experiments (19% keep rate).*
 
-**Performance:** 385 kept / 1122 discarded / 38 failed (EXTRACTED — from TSV)
+**Performance:** 244 kept / 674 discarded / 95 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-validation.el` (3 kept / 6 discarded / 2 failed)
-- `lisp/modules/gptel-benchmark-evolution.el` (7 kept / 18 discarded)
-- `lisp/modules/gptel-tools-agent-strategy-harness.el` (2 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 4 discarded)
-- `lisp/modules/gptel-ext-tool-confirm.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-ext-abort.el` (1 kept / 7 discarded)
-- `lisp/modules/gptel-ext-context.el` (13 kept / 18 discarded / 1 failed)
-- `lisp/modules/gptel-ext-reasoning.el` (2 kept / 4 discarded / 4 failed)
-- `lisp/modules/gptel-ext-retry.el` (17 kept / 50 discarded)
-- `lisp/modules/nucleus-tools-validate.el` (3 kept / 9 discarded)
+- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
+- `lisp/modules/gptel-benchmark-core.el` (20 kept / 31 discarded / 5 failed)
+- `lisp/modules/gptel-tools-memory.el` (11 kept / 17 discarded)
+- `lisp/modules/gptel-benchmark-principles.el` (5 kept / 4 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-staging-baseline.el` (2 kept / 5 discarded)
+- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 3 discarded)
+- `lisp/modules/gptel-ext-abort.el` (2 kept / 4 discarded / 2 failed)
+- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
+- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 13 discarded / 1 failed)
+- `lisp/modules/gptel-ext-context.el` (7 kept / 14 discarded)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-auto-experiment--invalid-cl-return-target-in-forms, gptel-auto-experiment--invalid-cl-return-target, gptel-auto-experiment--defensive-code-removal-p, gptel-auto-experiment--diff-against-head, gptel-auto-experiment--defined-function-symbols, gptel-auto-experiment--diff-added-lines, gptel-auto-experiment--call-symbols-in-line, gptel-auto-experiment--defined-runtime-call-p, gptel-auto-experiment--call-symbols-in-forms, gptel-auto-experiment--introduced-undefined-call, gptel-auto-experiment--forward-sexp-file, gptel-auto-experiment--validate-code
-requires: cl-lib, subr-x
-provides: gptel-tools-agent-validation
-declares: gptel-auto-workflow--read-file-contents
-errors: error, error, error, error, error, error
-handlers: err, err
+defuns: gptel-workflow--result-scores, gptel-workflow--tool-calls-list, gptel-workflow--tool-names, gptel-workflow--phase-active-p, gptel-workflow-load-tests, gptel-workflow--normalize-test, gptel-workflow--read-json, gptel-workflow--collect-tool-call, gptel-workflow--setup-hooks, gptel-workflow--teardown-hooks, gptel-workflow--tool-use-advice, gptel-workflow-retrieve-memories, gptel-workflow--format-memories-for-context, gptel-workflow-detect-phases, gptel-workflow--detect-p1, gptel-workflow--detect-p2, gptel-workflow--detect-p3, gptel-workflow--agent-type, gptel-workflow-run-test, gptel-workflow-score
+defvars: gptel-agent-loop--state), gptel-benchmark-eight-keys-definitions), gptel-workflow-tests-dir, gptel-workflow-results-dir, gptel-workflow-default-timeout, gptel-workflow--current-run, gptel-workflow--runs, gptel-workflow--tool-call-hook, gptel-workflow-benchmark--cancelled, gptel-workflow-feedback-file
+requires: cl-lib, json, subr-x
+provides: gptel-workflow-benchmark
+declares: gptel-agent-loop--task-continuation-count, gptel-agent-loop--task-step-count, gptel-agent--task, gptel-benchmark-eight-keys-score, gptel-benchmark-memory-search, gptel-benchmark-memory-read
+errors: error, error, error
+handlers: err, err, nil, nil, nil, nil
+advised: gptel--handle-tool-use
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-tools-agent-validation.el` (3 kept / 6 discarded / 2 failed)
-- `lisp/modules/gptel-auto-workflow-ontology-strategy.el` (4 discarded / 2 failed)
-- `lisp/modules/gptel-tools-agent-strategy-harness.el` (2 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-ext-context.el` (13 kept / 18 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-tests.el` (3 failed)
+- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
+- `lisp/modules/nucleus-tools.el` (6 kept / 14 discarded / 3 failed)
+- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent.el` (8 kept / 22 discarded / 4 failed)
+- `lisp/modules/gptel-benchmark-core.el` (20 kept / 31 discarded / 5 failed)
 
 ## Allium Behavioral Coherence
 
-*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+*4 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
 
 
 
@@ -60,375 +62,3 @@ These targets may need different research patterns or the research findings were
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Allium Behavioral Spec (auto-generated, v3)
-
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
-
-```allium
-# Research Strategy Distillation
-
-## Research Strategy: Template-Default
-
-## Target Files (46 core modules)
-Core agent loop, FSM utilities, sandbox, benchmark framework, workflow orchestration, tool sanitization, context caching, retry logic, and various extension modules.
-
----
-
-## Core Improvement Hypotheses (Consolidated by Category)
-
-### Safety & Error Resilience (Vitality)
-- Add `nil` guards and type validation (`proper-list-p`, `stringp`, `numberp`) to prevent runtime crashes
-- Replace `listp` with `proper-list-p` to reject dotted pairs/improper lists
-- Add `condition-case` error handling around process operations and callbacks
-- Fix discarded `plist-put` return values (state mutations not persisted)
-
-### Code Clarity (Explicit Assumptions)
-- Extract duplicated patterns into named helper functions (DRY principle)
-- Replace magic numbers/strings with named constants
-- Simplify nested `let`/`when` pyramids with `when-let*`
-- Make implicit nil/string checks explicit and testable
-
-### Performance
-- Replace O(n²) patterns (repeated `append`, nested loops) with O(n) alternatives
-- Add caching for repeated computations (context windows, git operations)
-- Pre-compile regex patterns at load time
-- Reduce redundant `hash-table-count` calls
-
-### Bug Fixes
-- Fix `prog1 t` that discards recursive results in FSM traversal
-- Fix cycle detection in recursive functions (missing `seen` hash tracking)
-- Fix `plist-get` misuse with cons cells vs proper plists
-- Fix off-by-one errors in boundary checks
-- Fix incorrect variable references in error messages
-
-### Data Structure Correctness
-- Ensure plist/alist format handling consistency across JSON round-trips
-- Add validation before `aref`/`plist-get` operations
-- Fix collection order semantics (first-wins vs last-wins)
-
----
-
-## Key Architectural Patterns
-
-1. **Defensive Programming**: Every function assumes inputs are valid → add explicit guards at boundaries
-2. **Progressive Refactoring**: Extract helpers, then wire them up across call sites
-3. **Caching for Hot Paths**: Context window lookups, git operations, token estimation
-4. **Explicit over Implicit**: Make assumptions testable through validation helpers
-```
-
-### Check Issues
-
-# Review: Research Strategy Distillation
-
-## Overall Assessment
-
-Solid foundation. Well-categorized with actionable technical specifics. Here's my analysis:
-
----
-
-## ✅ Strengths
-
-| Aspect | Comment |
-|--------|---------|
-| **Categorization** | Logical grouping by concern (safety, clarity, perf, bugs) |
-| **Specificity** | Concrete examples: `proper-list-p`, `condition-case`, `seen` hash tracking |
-| **Patterns identified** | The 4 architectural patterns provide good decision-making heuristics |
-| **Scope clarity** | 46 modules explicitly defined - bounded work |
-
----
-
-## ⚠️ Concerns & Questions
-
-### 1. **Prioritization Missing**
-No indication of:
-- Which fixes are **blocking** vs **nice-to-have**
-- Order of operations / dependencies between fixes
-- High-impact vs low-effort wins to tackle first
-
-**Recommendation**: Add a priority matrix (e.g., P0/P1/P2) or impact/effort scoring.
-
-### 2. **Scope Risk**
-46 modules is ambitious. Without phased delivery:
-- High integration risk
-- Hard to rollback if issues arise
-- Diff will be unmanageable for review
-
-**Recommendation**: Identify a **core subset** (maybe 5-10 modules) for Phase 1 pilot.
-
-### 3. **Test Strategy Omitted**
-Refactoring without tests = potential regression surface. The doc doesn't mention:
-- Adding test coverage alongside refactors
-- How to validate improvements don't break behavior
-
-**Recommendation**: Add "Testing Requirements" to each category.
-
-### 4. **Performance Caveat**
-Caching and guards have costs:
-- Memory overhead for cache
-- CPU overhea
-
-... (truncated)
