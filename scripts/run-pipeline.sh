@@ -99,6 +99,17 @@ wait_for_idle() {
                     return 0
                 fi
             fi
+            # Check if researcher daemon reports phase complete/idle
+            if [ "$daemon_was_seen" -eq 1 ]; then
+                local phase
+                phase="$(emacsclient --socket-name="copilot-researcher" \
+                    --eval '(if (and (boundp (quote gptel-auto-workflow--stats)) gptel-auto-workflow--stats) (plist-get gptel-auto-workflow--stats :phase) "unknown")' 2>/dev/null || echo "unknown")"
+                phase="${phase//\"/}"
+                if [ "$phase" = "complete" ] || [ "$phase" = "idle" ]; then
+                    log "$action daemon phase=$phase after ${elapsed}s"
+                    return 0
+                fi
+            fi
             # Actually check if researcher daemon is alive
             if emacsclient --socket-name="copilot-researcher" --eval 't' >/dev/null 2>&1; then
                 daemon_was_seen=1
