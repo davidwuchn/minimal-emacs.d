@@ -870,7 +870,11 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("deepseek-v4-flash"  . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
     ("deepseek-v4-pro"    . 3000000)
     ("deepseek-chat"      . 3000000)
-    ("deepseek-reasoner"  . 3000000))
+    ("deepseek-reasoner"  . 3000000)
+    ("moonshot"           . 800000)   ; kimi-k2.6 default, 262K tokens
+    ("DashScope"          . 400000)   ; qwen3.6-plus default, 131K tokens
+    ("DeepSeek"           . 3000000)  ; deepseek-v4-pro default, 1M tokens
+    ("MiniMax"            . 350000))  ; minimax-m2.7 default
   "Approximate max JSON byte size per model.
 
 Computed as context window × ~3.5 bytes/token, minus output reservation.
@@ -906,9 +910,13 @@ EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'.
   the :before advice runs before gptel populates :model in info."
   (let* ((model (or (plist-get info :model)
                     ;; :before advice runs before :model is in info plist.
-                    ;; Use the dynamically-bound gptel-model or gptel-backend name.
-                    (and (boundp 'gptel-model) (symbol-name gptel-model))
-                    (and (boundp 'gptel-backend) (format "%s" gptel-backend))))
+                    ;; Use the dynamically-bound gptel-model or backend name.
+                    (and (boundp 'gptel-model) gptel-model
+                         (if (stringp gptel-model) gptel-model (symbol-name gptel-model)))
+                    (and (boundp 'gptel-backend) gptel-backend
+                         (if (fboundp 'gptel-backend-name)
+                             (gptel-backend-name gptel-backend)
+                           (format "%s" gptel-backend)))))
          (global-limit (or my/gptel-payload-byte-limit my/gptel--unbounded-byte-limit))
          (model-limit
           (if (stringp model)
