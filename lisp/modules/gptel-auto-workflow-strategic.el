@@ -4,11 +4,6 @@
 ;; LLM-first target selection for auto-workflow.
 ;; Let the analyzer decide which files to optimize.
 
-(defvar lines nil
-  "Forward declaration: prevents void-variable errors from the known
-paren cascade in substitute-researcher-variables that swallows
-bottleneck-report's lexical scope.")
-;;
 ;; PURPOSE (ε):
 ;;   Goal: Automate intelligent selection of optimization targets
 ;;   Measurable outcome: Select 3 highest-impact files per run
@@ -517,13 +512,10 @@ Returns nil if data not available."
             (when (and topics (hash-table-p topics))
               (let ((total-exp (gethash "total_experiments" data 0))
                     (total-kept 0))
-                  ;; Calculate total kept across all topics.
-                  ;; Avoid maphash due to corruption issues in some Emacs builds.
-                  ;; Use manual key iteration instead.
-                  (dolist (topic-key (hash-table-keys topics))
-                    (let ((stats (gethash topic-key topics)))
-                      (when (hash-table-p stats)
-                        (setq total-kept (+ total-kept (gethash "kept" stats 0))))))
+                (dolist (topic-key (hash-table-keys topics))
+                  (let ((stats (gethash topic-key topics)))
+                    (when (hash-table-p stats)
+                      (setq total-kept (+ total-kept (gethash "kept" stats 0))))))
                 (list :effectiveness (if (> total-exp 0)
                                          (round (/ (* 100.0 total-kept) total-exp))
                                        0)
@@ -658,10 +650,10 @@ and timeout-heavy targets for the researcher to investigate."
                          (plist-get detail :total)
                          (* 100 (plist-get detail :rate)))
                   lines)))
-        (push "\n**Researcher task**: find novel techniques for these high-attempt targets. Current strategies are failing.\n" lines))))
+        (push "\n**Researcher task**: find novel techniques for these high-attempt targets. Current strategies are failing.\n" lines)))
     (if lines
         (concat (mapconcat #'identity (nreverse lines) ""))
-      "No executor bottlenecks detected. Continue with current research topics.\n"))
+      "No executor bottlenecks detected. Continue with current research topics.\n")))
 
 (defun gptel-auto-workflow--research-champion-report ()
   "AutoGo: report current research strategy champion for the researcher.
@@ -771,8 +763,6 @@ Returns placeholder message if TOPICS is nil or empty."
           (zerop (hash-table-count topics)))
       "*No topic performance data available.*"
     (let ((topic-list nil))
-      ;; Avoid maphash due to corruption issues in some Emacs builds.
-      ;; Use manual key iteration instead.
       (dolist (topic-key (hash-table-keys topics))
         (let ((stats (gethash topic-key topics)))
           (when (hash-table-p stats)
@@ -939,9 +929,6 @@ Returns empty string when no trace data is available."
               (puthash key (list (+ (nth 0 stats) (if success 1 0))
                                  (1+ (nth 1 stats)))
                        source-stats)))))
-      ;; Format outcome summary.
-      ;; Avoid maphash due to corruption issues in some Emacs builds.
-      ;; Use manual key iteration instead.
       (dolist (key (hash-table-keys source-stats))
         (let ((stats (gethash key source-stats)))
           (when stats
@@ -1330,7 +1317,19 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
         (hints-section
          (let* ((hints (and (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
                             gptel-auto-workflow--evolution-next-cycle-hints))
-                (budget (plist-get hints :category-budget))
+                 (raw-budget (plist-get hints :category-budget))
+                 (budget (cond
+                          ((fboundp 'gptel-auto-workflow--normalize-category-budget)
+                           (gptel-auto-workflow--normalize-category-budget raw-budget))
+                          ((and (listp raw-budget) (keywordp (car raw-budget)))
+                           (let ((tail raw-budget) entries)
+                             (while tail
+                               (let ((category (pop tail))
+                                     (quota (pop tail)))
+                                 (when (and (keywordp category) (numberp quota))
+                                   (push (cons category quota) entries))))
+                             (nreverse entries)))
+                          (t raw-budget)))
                 (champion-prev (plist-get hints :prev-champions))
                 (regressed (plist-get hints :regressed-targets))
                 (parts nil))
