@@ -161,7 +161,13 @@ Auto-applies LLM backend failover when current provider is rate-limited."
             (let ((my/gptel-agent-task-timeout
                     (gptel-benchmark--subagent-timeout timeout override-preset))
                   (gptel-agent-preset
-                    (or override-preset gptel-agent-preset)))
+                    ;; Only use override if it supplies a backend.
+                    ;; Otherwise fall through to the global preset which
+                    ;; carries the nucleus-configured backend.
+                    (if (and (plistp override-preset)
+                             (plist-get override-preset :backend))
+                        override-preset
+                      gptel-agent-preset)))
               (my/gptel--agent-task-with-timeout
                callback
                agent-type
@@ -169,7 +175,10 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                prompt
                files))
           (let ((gptel-agent-preset
-                 (or override-preset gptel-agent-preset)))
+                  (if (and (plistp override-preset)
+                           (plist-get override-preset :backend))
+                      override-preset
+                    gptel-agent-preset)))
             (gptel-agent--task
              callback
              agent-type
