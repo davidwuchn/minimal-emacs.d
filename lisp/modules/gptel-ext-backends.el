@@ -29,7 +29,7 @@ ARGS are passed to `gptel-make-openai'."
   (gptel-make-gemini "Gemini"
     :key (lambda () (my/gptel-api-key "generativelanguage.googleapis.com"))
     :stream t
-    :models '(gemini-3.1-pro-preview gemini-3-flash-preview)))
+    :models '(gemini-3.5-flash gemini-3.1-pro-preview gemini-3-flash-preview)))
 
 (defvar gptel--minimax
   (gptel-make-openai "MiniMax"
