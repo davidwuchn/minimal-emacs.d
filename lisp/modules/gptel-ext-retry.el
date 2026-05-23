@@ -901,8 +901,14 @@ with higher limits (e.g., DeepSeek 3MB, Kimi 800KB) should use them.
 
 ASSUMPTION: Model names may include backend prefixes (e.g., \"moonshot/kimi-k2.6\")
   or version/date suffixes. Uses substring matching to find family limits.
-EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'."
-  (let* ((model (plist-get info :model))
+EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'.
+  Also checks dynamically-bound gptel-model/gptel-backend since
+  the :before advice runs before gptel populates :model in info."
+  (let* ((model (or (plist-get info :model)
+                    ;; :before advice runs before :model is in info plist.
+                    ;; Use the dynamically-bound gptel-model or gptel-backend name.
+                    (and (boundp 'gptel-model) (symbol-name gptel-model))
+                    (and (boundp 'gptel-backend) (format "%s" gptel-backend))))
          (global-limit (or my/gptel-payload-byte-limit my/gptel--unbounded-byte-limit))
          (model-limit
           (if (stringp model)
