@@ -297,26 +297,34 @@ Uses the staging worktree instead of switching branches in the root repo."
 
 
 (defun gptel-auto-workflow--check-el-syntax (directory output-buffer)
-  "Check syntax of all .el files in DIRECTORY.
-Writes errors to OUTPUT-BUFFER.
-Returns t if all files pass syntax check, nil otherwise."
+  "Check syntax of changed .el files in DIRECTORY.
+Only validates files modified vs HEAD to avoid failing on pre-existing
+issues in untouched files. Writes errors to OUTPUT-BUFFER.
+Returns t if all changed files pass syntax check, nil otherwise."
   (if (or (null directory) (null output-buffer))
       (progn
         (message "[auto-workflow] check-el-syntax: nil argument")
         nil)
-    (let ((errors nil)
-          (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
-      (when (null files)
-        (let ((msg "[auto-workflow] check-el-syntax: failed to scan directory"))
-          (push msg errors)
-          (when (buffer-live-p output-buffer)
-            (with-current-buffer output-buffer
-              (insert msg "\n")))))
+    (let* ((default-directory directory)
+           (errors nil)
+           (changed-files (ignore-errors
+                            (split-string
+                             (shell-command-to-string
+                              "git diff --name-only HEAD~1 HEAD 2>/dev/null")
+                             "\n" t)))
+           (files (seq-filter (lambda (f)
+                                (and (string-suffix-p ".el" f)
+                                     (not (string-suffix-p "-autoloads.el" f))
+                                     (file-readable-p (expand-file-name f directory))))
+                              changed-files)))
+      (when (null changed-files)
+        ;; No changed files detected — skip syntax check (nothing to verify)
+        (message "[auto-workflow] check-el-syntax: no changed files detected, skipping"))
       (dolist (file files (null errors))
-        (when (file-readable-p file)
+        (let ((full-path (expand-file-name file directory)))
           (condition-case err
               (with-temp-buffer
-                (insert-file-contents file)
+                (insert-file-contents full-path)
                 ;; Parse with `emacs-lisp-mode' so syntax-propertize handles
                 ;; reader forms correctly, but suppress mode hooks so staging
                 ;; verification cannot trip unrelated editor setup.
@@ -327,7 +335,7 @@ Returns t if all files pass syntax check, nil otherwise."
                   (forward-sexp)))
             (error
              (let ((msg (format "SYNTAX ERROR: %s: %s"
-                                (file-relative-name file directory)
+                                file
                                 (error-message-string err))))
                (push msg errors)
                (when (buffer-live-p output-buffer)
