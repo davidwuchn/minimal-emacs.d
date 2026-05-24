@@ -31,8 +31,12 @@ Keys are tool name strings, values are t.")
        (gethash tool-name my/gptel-permitted-tools)))
 
 (defun my/gptel-permit-tool (tool-name)
-  "Permit TOOL-NAME for the rest of this Emacs session."
-  (puthash tool-name t my/gptel-permitted-tools))
+  "Permit TOOL-NAME for the rest of this Emacs session.
+TOOL-NAME must be a non-empty string."
+  ;; ASSUMPTION: tool-name is a valid tool identifier string
+  ;; EDGE CASE: nil or non-string inputs are silently ignored
+  (when (and (stringp tool-name) (not (string-empty-p tool-name)))
+    (puthash tool-name t my/gptel-permitted-tools)))
 
 (defun my/gptel-clear-permits ()
   "Clear all per-tool permits."
@@ -40,13 +44,22 @@ Keys are tool name strings, values are t.")
 
 (defun my/gptel--sync-to-upstream ()
   "Sync `my/gptel-confirm-mode' to upstream `gptel-confirm-tool-calls'."
+  ;; ASSUMPTION: gptel-confirm-tool-calls is a valid customizable variable
+  ;; BEHAVIOR: Sets the variable globally and in all gptel-mode buffers
+  ;; EDGE CASE: Buffers in inconsistent state are skipped, not fatal
+  ;; TEST: Toggle mode with gptel buffers open and closed
   (let ((val (if (eq my/gptel-confirm-mode 'auto) nil t)))
     (setq gptel-confirm-tool-calls val)
     (setq-default gptel-confirm-tool-calls val)
     (dolist (b (buffer-list))
-      (with-current-buffer b
-        (when (derived-mode-p 'gptel-mode)
-          (setq-local gptel-confirm-tool-calls val))))))
+      (condition-case err
+          (with-current-buffer b
+            (when (derived-mode-p 'gptel-mode)
+              (setq-local gptel-confirm-tool-calls val)))
+        (error
+         ;; Skip buffers that error during sync - don't break the loop
+         (message "Warning: could not sync buffer %s: %s"
+                  (buffer-name b) (error-message-string err)))))))
 
 ;;; --- User Commands ---
 
@@ -71,11 +84,12 @@ Switching to confirm-all clears all per-tool permits."
 (defun my/gptel-show-permits ()
   "Show currently permitted tools."
   (interactive)
-  (if (zerop (hash-table-count my/gptel-permitted-tools))
-      (message "No tools permitted (mode: %s)" my/gptel-confirm-mode)
-    (message "Permitted tools: %s (mode: %s)"
-             (string-join (hash-table-keys my/gptel-permitted-tools) ", ")
-             my/gptel-confirm-mode)))
+  (let ((tools (cl-loop for k being the hash-keys of my/gptel-permitted-tools collect k)))
+    (if (null tools)
+        (message "No tools permitted (mode: %s)" my/gptel-confirm-mode)
+      (message "Permitted tools: %s (mode: %s)"
+               (string-join tools ", ")
+               my/gptel-confirm-mode))))
 
 ;;;###autoload
 (defun my/gptel-emergency-stop ()
