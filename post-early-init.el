@@ -118,15 +118,6 @@
 ;; on another pipe read before the deferred sentinel runs. A 120s
 ;; cleanup timer ensures orphaned process pipes are closed.
 (when (daemonp)
-  ;; WRAP timer-event-handler: catch ALL timer errors.  The mystery
-  ;; "wrong-type-argument stringp <float>" error from an unknown timer
-  ;; kills the experiment flow.  This advice wraps every timer dispatch
-  ;; so no timer error can propagate to the C-level error handler.
-  (advice-add 'timer-event-handler :around
-              (lambda (orig-fn timer)
-                (ignore-errors
-                  (funcall orig-fn timer))))
-
   (with-eval-after-load 'gptel-request
     (advice-add 'gptel-curl--sentinel :around
                 (lambda (orig-fn process status &rest args)
@@ -147,7 +138,8 @@
   ;; (process-name <buffer>) or (memq <float> ...).
   (run-at-time 60 60
                (lambda ()
-                 (when (and (boundp 'gptel--request-alist)
+                 (ignore-errors
+                   (when (and (boundp 'gptel--request-alist)
                               (listp gptel--request-alist))
                      (let* ((all-keys (mapcar #'car gptel--request-alist))
                             (active-procs (cl-remove-if-not #'processp all-keys))
@@ -164,7 +156,7 @@
                                  (setq reaped (1+ reaped)))
                              (error nil))))
                        (when (> reaped 0)
-                         (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))))
+                         (message "[gptel] Reaped %d orphaned curl process(es)" reaped))))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; Async-safe message: prevent *Messages* buffer corruption
