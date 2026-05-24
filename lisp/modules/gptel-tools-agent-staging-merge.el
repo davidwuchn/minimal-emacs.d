@@ -386,8 +386,8 @@ Returns (success-p . output)."
                (test-result (when (and submodule-pass test-script (file-exists-p test-script))
                               (gptel-auto-workflow--call-process-with-watchdog
                                "bash" nil output-buffer nil test-script "unit")))
-              (_ (when test-result
-                   (message "[auto-workflow] Unit tests completed (exit=%d)" (cdr test-result))))
+               (_ (when test-result
+                    (message "[auto-workflow] Unit tests completed (exit=%d)" test-result)))
                (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
                                (let ((process-environment
                                       (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
