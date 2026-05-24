@@ -706,6 +706,51 @@ RETRY-COUNT tracks current retry attempt."
      (lambda (_logged-run-id exp-result)
        (push exp-result attempt-logs)))))
 
+(defconst gptel-auto-experiment--error-categories
+  ;; Each entry: (PATTERN CATEGORY DETAIL)
+  ;; PATTERN is a regexp matched case-insensitively against agent-output.
+  ;; CATEGORY is the error category keyword.
+  ;; DETAIL is either a string or a function (agent-output) -> string.
+  `(
+    ;; Rate limit sub-categories (checked after rate-limit-error-p)
+    ("hour allocated quota exceeded" :api-rate-limit "Hourly quota exhausted")
+    ("week allocated quota exceeded" :api-rate-limit "Weekly quota exhausted")
+    ("overloaded_error\\|cluster overloaded\\|529\\|负载较高" :api-rate-limit "Provider overloaded")
+    ;; Auth errors
+    ("authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+     :api-error "Provider authorization failed")
+    ;; Parameter errors
+    ("invalid_parameter_error\\|InvalidParameter\\|JSON format\\|Malformed JSON"
+     :api-error "API parameter error (invalid JSON format)")
+    ;; Timeouts
+    ("timeout\\|timed out\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
+     :timeout "Experiment timed out")
+    ;; Server errors
+    ("server_error\\|WebClientRequestException" :api-error "Provider server error")
+    ;; Tool execution errors
+    ("error.*executor\\|failed to finish" :tool-error "Tool execution failed")
+    ("could not finish" :api-error "API request failed")
+    ("Error:.*not available\\|Error:.*not found\\|Error:.*empty"
+     :tool-error ,(lambda (s)
+                    (format "Tool unavailable: %s"
+                            (gptel-auto-experiment--error-snippet s))))
+    ("^Error:" :tool-error ,(lambda (s)
+                              (let ((snip (gptel-auto-experiment--error-snippet s)))
+                                (message "[auto-experiment] Executor error: %s" snip)
+                                snip)))
+    ("^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS"
+     :grader-failed "Executor succeeded, grader returned score 0")
+    ("\\bBLOCKED:" :tool-error ,(lambda (s)
+                                  (gptel-auto-experiment--error-snippet s)))
+    ("error\\|failed\\|exception" :unknown ,(lambda (s)
+                                              (let ((snip (gptel-auto-experiment--error-snippet s)))
+                                                (message "[auto-experiment] Unknown error snippet: %s"
+                                                         (my/gptel--sanitize-for-logging snip))
+                                                (format "Error pattern: %s" snip)))))
+  "Data-driven error category patterns for `gptel-auto-experiment--categorize-error'.
+Each entry is (PATTERN CATEGORY DETAIL) where PATTERN is a case-insensitive
+regexp, CATEGORY is the error keyword, and DETAIL is a string or function.")
+
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
 Categories: :api-rate-limit :api-error :tool-error :timeout
@@ -716,50 +761,16 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :grader-failed "Grader returned no output"))
    ((gptel-auto-experiment--aborted-agent-output-p agent-output)
     (cons :tool-error "Subagent aborted"))
-   ((gptel-auto-experiment--rate-limit-error-p agent-output)
-    (cond
-     ((gptel-error--match-ignore-case "hour allocated quota exceeded" agent-output)
-      (cons :api-rate-limit "Hourly quota exhausted"))
-     ((gptel-error--match-ignore-case "week allocated quota exceeded" agent-output)
-      (cons :api-rate-limit "Weekly quota exhausted"))
-     ((gptel-auto-experiment--provider-usage-limit-error-p agent-output)
-      (cons :api-rate-limit "Provider usage limit reached"))
-     ((gptel-error--match-ignore-case "overloaded_error\\|cluster overloaded\\|529\\|负载较高" agent-output)
-      (cons :api-rate-limit "Provider overloaded"))
-     (t (cons :api-rate-limit "API rate limit exceeded"))))
-   ((gptel-auto-experiment--provider-auth-error-p agent-output)
-    (cons :api-error "Provider authorization failed"))
-   ((gptel-error--match-ignore-case "invalid_parameter_error\\|InvalidParameter\\|JSON format\\|Malformed JSON" agent-output)
-    (cons :api-error "API parameter error (invalid JSON format)"))
-   ((gptel-error--match-ignore-case "timeout\\|timed out\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out" agent-output)
-    (cons :timeout "Experiment timed out"))
-   ((gptel-error--match-ignore-case "server_error\\|WebClientRequestException" agent-output)
-    (cons :api-error "Provider server error"))
-   ((gptel-auto-experiment--shared-transient-error-p agent-output)
-    (cons :api-error "Transient provider response error"))
-   ((gptel-error--match-ignore-case "error.*executor\\|failed to finish" agent-output)
-    (cons :tool-error "Tool execution failed"))
-   ((gptel-error--match-ignore-case "could not finish" agent-output)
-    (cons :api-error "API request failed"))
-   ((gptel-error--match-ignore-case "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output)
-    (cons :tool-error (format "Tool unavailable: %s" (gptel-auto-experiment--error-snippet agent-output))))
-   ((gptel-error--match-ignore-case "^Error:" agent-output)
-    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
-      (message "[auto-experiment] Executor error: %s" snippet)
-      (cons :tool-error snippet)))
-   ((gptel-error--match-ignore-case "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
-    (cons :grader-failed "Executor succeeded, grader returned score 0"))
-   ((gptel-error--match-ignore-case "\\bBLOCKED:" agent-output)
-    (cons :tool-error (gptel-auto-experiment--error-snippet agent-output)))
-   ((gptel-error--match-ignore-case "error\\|failed\\|exception" agent-output)
-    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
-      (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
-      (cons :unknown (format "Error pattern: %s" snippet))))
-    (t
-     ;; Normal output — no error pattern match, don't log noise.
-     ;; Only errors should produce log output; benign agent output
-     ;; (e.g. "result two", "review ok") is expected and not actionable.
-     (cons :ok nil))))
+   (t
+    (let ((case-fold-search t))
+      (cl-loop for entry in gptel-auto-experiment--error-categories
+               when (string-match-p (car entry) agent-output)
+               return (cons (nth 1 entry)
+                            (let ((detail (nth 2 entry)))
+                              (if (functionp detail)
+                                  (funcall detail agent-output)
+                                detail)))
+               finally (cl-return (cons :ok nil)))))))
 
 (defun gptel-auto-experiment--should-reduce-experiments-p ()
   "Check if we should reduce experiment count due to API issues."
