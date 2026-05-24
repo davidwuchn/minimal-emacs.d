@@ -661,7 +661,7 @@ MAX-SUGGESTIONS limits results (default 5)."
   "Advice around experiment runner to apply ontology fallback ordering.
 Reorders fallback chain before each experiment based on historical performance."
   (let* ((target (car args))
-         (strategy (if (> (length args) 4) (nth 4 args) nil)))
+         (strategy nil))
     ;; Apply ontology-ordered fallbacks
     (gptel-auto-workflow--apply-ontology-fallback-order strategy target)
     ;; Run the experiment
