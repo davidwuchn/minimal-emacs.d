@@ -200,18 +200,17 @@ switch to a fallback without blacklisting (used for transient errors)."
         (unless skip-blacklist
           (cl-pushnew current-backend
                       gptel-auto-workflow--rate-limited-backends
-                      :test #'string=)
-          ;; Feed subagent failure into persistent health tracking so
-          ;; the Ouroboros smart routing deprioritizes this backend
-          ;; across runs, not just within this run.
-          (when (and (fboundp 'gptel-auto-workflow--record-lambda-strike)
-                     (not skip-blacklist))
-            (gptel-auto-workflow--record-lambda-strike current-backend :degraded))
-          ;; Move failed backend to end of fallback chain so subsequent
-          ;; subagent calls try working providers first.
-          (when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
-                     (fboundp 'gptel-auto-workflow--demote-backend-in-fallback-chain))
-            (gptel-auto-workflow--demote-backend-in-fallback-chain current-backend)))
+                      :test #'string=))
+        ;; Feed subagent failure into persistent health tracking so
+        ;; the Ouroboros smart routing deprioritizes this backend
+        ;; across runs, not just within this run.
+        (when (fboundp 'gptel-auto-workflow--record-lambda-strike)
+          (gptel-auto-workflow--record-lambda-strike current-backend :degraded))
+        ;; Move failed backend to end of fallback chain so subsequent
+        ;; subagent calls try working providers first.
+        (when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                   (fboundp 'gptel-auto-workflow--demote-backend-in-fallback-chain))
+          (gptel-auto-workflow--demote-backend-in-fallback-chain current-backend))
         (setq candidate
               (if skip-blacklist
                   (gptel-auto-workflow--first-available-provider-candidate
