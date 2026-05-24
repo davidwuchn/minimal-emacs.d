@@ -31,8 +31,12 @@ Keys are tool name strings, values are t.")
        (gethash tool-name my/gptel-permitted-tools)))
 
 (defun my/gptel-permit-tool (tool-name)
-  "Permit TOOL-NAME for the rest of this Emacs session."
-  (puthash tool-name t my/gptel-permitted-tools))
+  "Permit TOOL-NAME for the rest of this Emacs session.
+TOOL-NAME must be a non-empty string."
+  ;; ASSUMPTION: tool-name is a valid tool identifier string
+  ;; EDGE CASE: nil or non-string inputs are silently ignored
+  (when (and (stringp tool-name) (not (string-empty-p tool-name)))
+    (puthash tool-name t my/gptel-permitted-tools)))
 
 (defun my/gptel-clear-permits ()
   "Clear all per-tool permits."
