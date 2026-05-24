@@ -77,7 +77,7 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
   "Refresh the persisted workflow snapshot while the workflow is active."
   (if (or gptel-auto-workflow--running
           gptel-auto-workflow--cron-job-running)
-      (condition-case-unless-debug err
+      (condition-case err
           (gptel-auto-workflow--persist-status)
         (error
          (message "[auto-workflow] Status refresh failed: %s"
