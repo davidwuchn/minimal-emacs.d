@@ -358,16 +358,17 @@ Runs as :before advice on `gptel-curl--get-args'."
   "Sanitize text parts in multimodal CONTENT-VEC.
 CONTENT-VEC is a vector like [(:type \"text\" :text \"...\")].
 Handles both symbol :type 'text and string :type \"text\"."
-  (cl-loop for i from 0 below (length content-vec)
-           for part = (aref content-vec i)
-           when (and (listp part)
-                     (member (plist-get part :type) '(text "text"))
-                     (stringp (plist-get part :text)))
-           do
-           (let* ((text (plist-get part :text))
-                  (sanitized (my/gptel--sanitize-string-for-json text)))
-             (unless (string= sanitized text)
-               (aset content-vec i (plist-put part :text sanitized))))))
+  (when (vectorp content-vec)
+    (cl-loop for i from 0 below (length content-vec)
+             for part = (aref content-vec i)
+             when (and (listp part)
+                       (member (plist-get part :type) '(text "text"))
+                       (stringp (plist-get part :text)))
+             do
+             (let* ((text (plist-get part :text))
+                    (sanitized (my/gptel--sanitize-string-for-json text)))
+               (unless (string= sanitized text)
+                 (aset content-vec i (plist-put part :text sanitized)))))))
 
 
 (provide 'gptel-ext-core)
