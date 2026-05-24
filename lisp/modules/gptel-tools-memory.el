@@ -53,8 +53,17 @@ SIGNALS an error if SLUG contains path traversal or invalid characters."
     (error "Slug must not be empty"))
   (when (and knowledge-p (not (booleanp knowledge-p)))
     (error "Knowledge-p must be a boolean, got: %S" knowledge-p))
+  ;; ASSUMPTION: Slugs should be safe filenames across platforms
+  ;; EDGE CASE: Reject null bytes, control chars, and Windows-invalid chars
+  (when (string-match-p "[\x00-\x1f]" slug)
+    (error "Slug must not contain control characters"))
+  (when (string-match-p "[<>:\"|?*]" slug)
+    (error "Slug must not contain characters invalid on Windows filesystems: <>:\"|?*"))
   (when (string-match-p "\\.\\./" slug)
     (error "Slug must not contain path traversal sequences"))
+  (when (or (string-prefix-p "/" slug)
+            (string-prefix-p "\\" slug))
+    (error "Slug must not start with a path separator"))
   (let* ((root (gptel-tools-memory--project-root))
          (_ (when (null root)
               (error "Project root must not be nil; check `gptel-tools-memory--project-root'")))
