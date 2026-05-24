@@ -37,10 +37,11 @@ PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
 # Socket: /run/user/1000/emacs/server (explicit path prevents duplicates)
 # Schedule: 11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6 runs/day)
 # Pipeline: research → digestion → auto-workflow (evolution runs internally)
+# Mementum/Instincts: daily at 2AM/3AM (between pipeline slots, avoids conflicts)
 
 #0 23,3,7,11,15,19 * * * $HOME/.emacs.d/scripts/run-pipeline.sh >> $HOME/.emacs.d/var/tmp/cron/pipeline.log 2>&1
-#0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
-#0 5 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
+#0 2 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+#0 3 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
 
 # -----------------------------------------------------------------
 # MACOS: Daylight hours (interactive use) - SECTION: macos
@@ -49,8 +50,8 @@ PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
 # Pipeline: research → digestion → auto-workflow (evolution runs internally)
 
 #0 10,14,18 * * * $HOME/.emacs.d/scripts/run-pipeline.sh >> $HOME/.emacs.d/var/tmp/cron/pipeline.log 2>&1
-#0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
-#0 5 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
+#0 2 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+#0 3 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
 
 # -----------------------------------------------------------------
 # SINGLE: Single machine (any OS) - SECTION: single
@@ -59,5 +60,5 @@ PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
 # Pipeline: research → digestion → auto-workflow (evolution runs internally)
 
 #0 */4 * * * $HOME/.emacs.d/scripts/run-pipeline.sh >> $HOME/.emacs.d/var/tmp/cron/pipeline.log 2>&1
-#0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
-#0 5 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
+#0 2 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+#0 3 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1

@@ -123,10 +123,11 @@ When exceeded, oldest entries are evicted. Set to 0 for unlimited."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom my/gptel-subagent-include-history-default t
+(defcustom my/gptel-subagent-include-history-default nil
   "Default value for include_history when LLM doesn't specify.
-When t (default), subagents receive recent conversation history.
-When nil, subagents start with clean context unless explicitly requested."
+When nil (default), subagents start with clean context unless explicitly requested.
+When t, subagents receive recent conversation history (risks payload bloat on
+long-running daemons)."
   :type 'boolean
   :group 'gptel-tools-agent)
 

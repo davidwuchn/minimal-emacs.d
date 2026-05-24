@@ -207,13 +207,13 @@ case "$MACHINE" in
         ;;
     macos)
         PLATFORM="macOS"
-        SCHEDULE="10AM, 2PM, 6PM (3 pipeline runs/day) + weekly mementum/instincts"
+        SCHEDULE="10AM, 2PM, 6PM (3 pipeline runs/day) + daily mementum/instincts at 2AM/3AM"
         DAEMON_CMD="launchctl start emacs (or start Emacs.app)"
         MACHINE_RENDER="macos"
         ;;
     single)
         PLATFORM="Generic"
-        SCHEDULE="Every 4 hours (6 pipeline runs/day) + weekly mementum/instincts"
+        SCHEDULE="Every 4 hours (6 pipeline runs/day) + daily mementum/instincts at 2AM/3AM"
         DAEMON_CMD="emacs --daemon (or start Emacs GUI)"
         MACHINE_RENDER="single"
         ;;
