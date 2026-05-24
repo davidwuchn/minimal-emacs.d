@@ -193,6 +193,17 @@ Returns nil if no FSM, not a proper plist, or no error."
                       (fboundp 'gptel-fsm-info)
                       (gptel-fsm-info fsm))))
       (and (proper-list-p info) (plist-get info :error)))))
+(defun my/gptel--valid-position-p (pos)
+  "Return non-nil if POS is a valid buffer position for `goto-char`.
+A valid position is a positive integer <= (point-max) in current buffer.
+Returns nil for nil or out-of-bounds values."
+  (when (and (integerp pos) (> pos 0))
+    (<= pos (point-max))))
+
+(defun my/gptel--validate-end-for-goto (end)
+  "Return END if valid for `goto-char`, or fallback to (point-max).
+This prevents crashes when END is nil or out-of-bounds."
+  (if (my/gptel--valid-position-p end) end (point-max)))
 
 (defun my/gptel-add-prompt-marker (_start end)
   "Add a prompt marker after the response and move point there.
@@ -200,7 +211,8 @@ Returns nil if no FSM, not a proper plist, or no error."
 START and END are the response region positions passed by
 `gptel-post-response-functions'."
   (when (and gptel-mode
-             (not (my/gptel--has-fsm-error-p)))
+             (not (my/gptel--has-fsm-error-p))
+             (my/gptel--valid-position-p end))
     (save-excursion
       (goto-char end)
       ;; Only add marker if not already present at EOB

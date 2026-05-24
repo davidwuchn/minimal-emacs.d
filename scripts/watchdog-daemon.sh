@@ -7,7 +7,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SERVER_NAME="copilot-auto-workflow"
+SERVER_NAME="ov5-auto-workflow"
 SOCKET_PATH="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/emacs/$SERVER_NAME"
 LOG="$DIR/var/tmp/cron/watchdog.log"
 MAX_WAIT=60

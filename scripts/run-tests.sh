@@ -75,7 +75,7 @@ run_unit_tests() {
         return 1
     }
     chmod 700 "$runtime_dir"
-    workflow_server="copilot-auto-workflow-test-$(basename "$runtime_dir")"
+    workflow_server="ov5-auto-workflow-test-$(basename "$runtime_dir")"
     
     local output
     set +e

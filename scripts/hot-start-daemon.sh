@@ -1,7 +1,7 @@
 #!/bin/bash
 # Hot-start: boot daemon, hot-reload, then trigger run
 BASEDIR="/home/davidwu/.emacs.d"
-SOCKET="copilot-auto-workflow"
+SOCKET="ov5-auto-workflow"
 
 # Step 1: Start daemon via cron
 "$BASEDIR/scripts/run-auto-workflow-cron.sh" auto-workflow &

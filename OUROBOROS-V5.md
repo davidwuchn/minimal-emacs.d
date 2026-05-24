@@ -1,4 +1,4 @@
-# Ouroboros: Self-Regulating AI Architecture
+# OUROBOROS-V5: Self-Regulating AI Architecture
 
 > **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
 
@@ -34,7 +34,7 @@ Every subsystem is the same Ouroboros cycle, viewed at different scales:
 
 The frameworks aren't separate tools — they're the same tool at different zoom levels. **VSM** assigns _who_ does the work. **Ontology** classifies _what_ kind of work. **Eight Keys** measure _how well_ it was done. All map to the same five elements: Water → Wood → Fire → Earth → Metal → Water.
 
-Say "Ouroboros" and you mean: the full self-regulating cybernetic architecture.
+Say "Ouroboros V5" or "OV5" and you mean: the full self-regulating cybernetic architecture.
 
 ---
 

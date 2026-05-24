@@ -16,6 +16,7 @@ lisp/modules/*.elc
 !post-init.el
 !AGENTS.md
 !OUROBOROS.md
+!OUROBOROS-V5.md
 !.dir-locals.el
 !.gitmodules
 !assistant/

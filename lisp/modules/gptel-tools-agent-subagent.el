@@ -162,7 +162,7 @@ its async continuation layer in the worker daemon."
          (isolated-env
           (and headless-auto-workflow
                (gptel-auto-workflow--isolated-state-environment
-                "copilot-auto-workflow-subagent-"
+                "ov5-auto-workflow-subagent-"
                 nil
                 t)))
          (gptel-auto-workflow--defer-subagent-env-persistence

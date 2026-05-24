@@ -156,7 +156,7 @@ emacs_batch() {
 
 # Run emacsclient eval with timeout
 emacsclient_eval() {
-    local server_name="${1:-copilot-auto-workflow}"
+    local server_name="${1:-ov5-auto-workflow}"
     local elisp="$2"
     local timeout="${3:-10}"
     local EMACSCLIENT

@@ -205,8 +205,8 @@ experiment phases do not trip the real pre-grade target validator."
             (should (string-prefix-p (file-name-as-directory temp-root)
                                      (file-name-as-directory captured-tmp)))
             (should (string-match-p "auto-workflow-test-runtime\\." captured-tmp))
-            (should (string-prefix-p "copilot-auto-workflow-test-" captured-server))
-            (should-not (equal captured-server "copilot-auto-workflow"))))
+            (should (string-prefix-p "ov5-auto-workflow-test-" captured-server))
+            (should-not (equal captured-server "ov5-auto-workflow"))))
       (delete-directory fake-bin t)
       (delete-directory temp-root t)
       (delete-directory ambient-runtime t)
@@ -319,8 +319,8 @@ experiment phases do not trip the real pre-grade target validator."
             (should (string-prefix-p (file-name-as-directory temp-root)
                                      (file-name-as-directory captured-tmp)))
             (should (string-match-p "verify-nucleus-runtime\\." captured-tmp))
-            (should (string-prefix-p "copilot-auto-workflow-verify-" captured-server))
-            (should-not (equal captured-server "copilot-auto-workflow"))))
+            (should (string-prefix-p "ov5-auto-workflow-verify-" captured-server))
+            (should-not (equal captured-server "ov5-auto-workflow"))))
       (delete-directory temp-root t)
       (delete-directory ambient-runtime t)
       (when (file-exists-p env-log)
@@ -11341,7 +11341,7 @@ failure."
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
          (calls-file (expand-file-name "probe-calls.txt" status-dir))
-         (server-name "copilot-auto-workflow-test-timeout")
+         (server-name "ov5-auto-workflow-test-timeout")
          (tmp-root (make-temp-file "aw-tmp" t))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -11497,7 +11497,7 @@ failure."
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (tmp-root (make-temp-file "aw-tmp" t))
          (server-dir (expand-file-name (format "emacs%d" (user-uid)) tmp-root))
-         (server-socket (expand-file-name "copilot-auto-workflow" server-dir))
+         (server-socket (expand-file-name "ov5-auto-workflow" server-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
          (fake-lsof
@@ -11520,7 +11520,7 @@ failure."
             (insert "#!/usr/bin/env python3\n"
                     "import os, sys\n"
                     "tmpdir = os.environ.get('TMPDIR', '/tmp')\n"
-                    "path = os.path.join(tmpdir, f'emacs{os.getuid()}', 'copilot-auto-workflow')\n"
+                    "path = os.path.join(tmpdir, f'emacs{os.getuid()}', 'ov5-auto-workflow')\n"
                     "sys.stderr.write(f\"{sys.argv[0]}: can't connect to {path}: Connection refused\\n\")\n"
                     "raise SystemExit(1)\n"))
           (set-file-modes fake-emacsclient #o755)
@@ -11642,7 +11642,7 @@ failure."
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
-         (server-name "copilot-auto-workflow-test-stale")
+         (server-name "ov5-auto-workflow-test-stale")
          (tmp-root (make-temp-file "aw-tmp" t))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient
@@ -12765,7 +12765,7 @@ failure."
                      (lambda (elisp)
                        (and
                         (string-match-p
-                         (regexp-quote "(with-current-buffer (get-buffer-create \"*copilot-auto-workflow-eval*\")")
+                         (regexp-quote "(with-current-buffer (get-buffer-create \"*ov5-auto-workflow-eval*\")")
                          elisp)
                         (string-match-p
                          (regexp-quote "(setenv \"SSH_AUTH_SOCK\" \"/tmp/test-agent.sock\")")
@@ -13299,9 +13299,9 @@ failure."
            (with-temp-buffer
               (insert-file-contents emacs-log)
               (let ((output (buffer-string)))
-                 (should (string-match-p "--daemon=copilot-auto-workflow" output))
+                 (should (string-match-p "--daemon=ov5-auto-workflow" output))
                  (should (string-match-p
-                         (regexp-quote (format "ARGV:--init-directory=%s --daemon=copilot-auto-workflow"
+                         (regexp-quote (format "ARGV:--init-directory=%s --daemon=ov5-auto-workflow"
                                                repo-root))
                          output))
                 (should-not (string-match-p "ARGV:.*-Q" output))
@@ -13716,7 +13716,7 @@ failure."
          (messages-file (make-temp-file "aw-messages-tail"))
          (tmp-root (make-temp-file "aw-tmp" t))
          (server-dir (expand-file-name (format "emacs%d" (user-uid)) tmp-root))
-         (server-socket (expand-file-name "copilot-auto-workflow" server-dir))
+         (server-socket (expand-file-name "ov5-auto-workflow" server-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (emacs-log (make-temp-file "aw-emacs-log"))
@@ -13789,8 +13789,8 @@ failure."
          (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
          (auto-status-file (expand-file-name "auto-workflow-status.sexp" cron-dir))
          (auto-messages-file (expand-file-name "auto-workflow-messages-tail.txt" cron-dir))
-         (research-status-file (expand-file-name "copilot-researcher-status.sexp" cron-dir))
-         (research-messages-file (expand-file-name "copilot-researcher-messages-tail.txt" cron-dir))
+         (research-status-file (expand-file-name "ov5-researcher-status.sexp" cron-dir))
+         (research-messages-file (expand-file-name "ov5-researcher-messages-tail.txt" cron-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (fake-emacsclient
@@ -13808,7 +13808,7 @@ failure."
                       "if expr == 't':\n"
                       "    print('t')\n"
                       "elif 'gptel-auto-workflow--status-plist' in expr:\n"
-                      "    if server == 'copilot-researcher':\n"
+                      "    if server == 'ov5-researcher':\n"
                       "        print('(:running t :kept 0 :total 1 :phase \"running\" :run-id \"2026-04-13T190001Z-research\" :results \"var/tmp/experiments/research/results.tsv\")')\n"
                       "    else:\n"
                       "        print('(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-13T190001Z-auto\" :results \"var/tmp/experiments/auto/results.tsv\")')\n"
@@ -13860,7 +13860,7 @@ failure."
                   (length (split-string (buffer-string) "\n" t))))))
           (let ((process-environment
                  (append (list path-entry
-                               "AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher")
+                               "AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher")
                          base-environment)))
             (let ((output (shell-command-to-string (format "%s status" script))))
               (should (string-match-p "2026-04-13T190001Z-research" output)))
@@ -13883,8 +13883,8 @@ failure."
             (should (string-match-p "2026-04-13T190001Z-research" (buffer-string))))
           (with-temp-buffer
             (insert-file-contents argv-log)
-            (should (string-match-p "copilot-auto-workflow" (buffer-string)))
-            (should (string-match-p "copilot-researcher" (buffer-string)))))
+            (should (string-match-p "ov5-auto-workflow" (buffer-string)))
+            (should (string-match-p "ov5-researcher" (buffer-string)))))
       (delete-directory temp-root t)
       (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
@@ -13896,9 +13896,9 @@ failure."
          (script-dir (expand-file-name "scripts" temp-root))
          (cron-dir (expand-file-name "var/tmp/cron" temp-root))
          (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
-         (research-cache (expand-file-name "copilot-researcher-snapshot-paths.txt" cron-dir))
-         (research-status-file (expand-file-name "copilot-researcher-status.sexp" cron-dir))
-         (research-messages-file (expand-file-name "copilot-researcher-messages-tail.txt" cron-dir))
+         (research-cache (expand-file-name "ov5-researcher-snapshot-paths.txt" cron-dir))
+         (research-status-file (expand-file-name "ov5-researcher-status.sexp" cron-dir))
+         (research-messages-file (expand-file-name "ov5-researcher-messages-tail.txt" cron-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (fake-emacsclient
@@ -13915,7 +13915,7 @@ failure."
            process-environment))
          (process-environment
           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
-                        "AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher")
+                        "AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher")
                   base-environment))
          (default-directory temp-root))
     (unwind-protect
@@ -13948,7 +13948,7 @@ failure."
          (script-dir (expand-file-name "scripts" temp-root))
          (cron-dir (expand-file-name "var/tmp/cron" temp-root))
          (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
-         (auto-cache (expand-file-name "copilot-auto-workflow-snapshot-paths.txt" cron-dir))
+         (auto-cache (expand-file-name "ov5-auto-workflow-snapshot-paths.txt" cron-dir))
          (instincts-cache (expand-file-name "instincts-snapshot-paths.txt" cron-dir))
          (auto-status-file (expand-file-name "auto-workflow-status.sexp" cron-dir))
          (auto-messages-file (expand-file-name "auto-workflow-messages-tail.txt" cron-dir))
@@ -14006,11 +14006,11 @@ failure."
          (script-dir (expand-file-name "scripts" temp-root))
          (cron-dir (expand-file-name "var/tmp/cron" temp-root))
          (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
-         (research-cache (expand-file-name "copilot-researcher-snapshot-paths.txt" cron-dir))
+         (research-cache (expand-file-name "ov5-researcher-snapshot-paths.txt" cron-dir))
          (auto-status-file (expand-file-name "auto-workflow-status.sexp" cron-dir))
          (auto-messages-file (expand-file-name "auto-workflow-messages-tail.txt" cron-dir))
-         (research-status-file (expand-file-name "copilot-researcher-status.sexp" cron-dir))
-         (research-messages-file (expand-file-name "copilot-researcher-messages-tail.txt" cron-dir))
+         (research-status-file (expand-file-name "ov5-researcher-status.sexp" cron-dir))
+         (research-messages-file (expand-file-name "ov5-researcher-messages-tail.txt" cron-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (fake-emacsclient
@@ -14027,7 +14027,7 @@ failure."
            process-environment))
          (process-environment
           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
-                        "AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher")
+                        "AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher")
                   base-environment))
          (default-directory temp-root))
     (unwind-protect
@@ -15423,7 +15423,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               (should (file-name-absolute-p status-file))
               (should (member "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1" captured-env))
               (should server-name)
-              (should (string-prefix-p "copilot-auto-workflow-test-" server-name))
+              (should (string-prefix-p "ov5-auto-workflow-test-" server-name))
               (should-not (equal server-name "test-server"))
               (should-not
                (seq-find (lambda (item)
@@ -15459,7 +15459,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (let ((temporary-file-directory temp-dir))
           (setq isolated-env
                 (gptel-auto-workflow--isolated-state-environment
-                 "copilot-auto-workflow-test-"))
+                 "ov5-auto-workflow-test-"))
           (should
            (seq-find
             (lambda (item)
@@ -15731,7 +15731,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (should-not (equal messages-file "/tmp/live-messages.txt"))
         (should-not (equal snapshot-file "/tmp/live-snapshots.txt"))
          (should-not (equal server-name "live-server"))
-         (should (string-prefix-p "copilot-auto-workflow-subagent-" server-name))
+         (should (string-prefix-p "ov5-auto-workflow-subagent-" server-name))
          (should-not (file-exists-p status-file))
          (should-not (file-exists-p messages-file))
          (should-not (file-exists-p snapshot-file))))))
@@ -15775,7 +15775,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should stored-env)
       (should server-name)
       (should-not (equal server-name "live-server"))
-      (should (string-prefix-p "copilot-auto-workflow-subagent-" server-name)))))
+      (should (string-prefix-p "ov5-auto-workflow-subagent-" server-name)))))
 
 (ert-deftest regression/subagent/headless-task-launch-defers-buffer-local-env-persistence ()
   "Headless task launch should avoid buffer-local env warnings during startup."

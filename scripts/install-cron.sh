@@ -282,7 +282,7 @@ case "$MODE" in
         echo "1. Smoke test pipeline:     ./scripts/run-pipeline.sh"
         echo "2. Check daemon status:     ./scripts/run-auto-workflow-cron.sh status"
         echo "3. View pipeline logs:      tail -f var/tmp/cron/pipeline.log"
-        echo "4. View experiment logs:    tail -f var/tmp/cron/copilot-auto-workflow.log"
+        echo "4. View experiment logs:    tail -f var/tmp/cron/ov5-auto-workflow.log"
         echo "5. Quota-aware skip:        SKIP_IF_QUOTA_EXHAUSTED=yes ./scripts/run-pipeline.sh"
         echo
         echo "Done."

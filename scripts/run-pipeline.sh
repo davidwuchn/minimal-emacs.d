@@ -61,14 +61,14 @@ fi
 wait_for_idle() {
     local action="$1"
     local max_wait="${2:-900}"
-    local socket_name="${3:-copilot-auto-workflow}"
+    local socket_name="${3:-ov5-auto-workflow}"
     local elapsed=0
     local daemon_was_seen=0
     local min_start_wait="${4:-60}"
 
     log "Waiting for $action to complete (max ${max_wait}s)..."
     while [ "$elapsed" -lt "$max_wait" ]; do
-        if [ "$socket_name" = "copilot-auto-workflow" ]; then
+        if [ "$socket_name" = "ov5-auto-workflow" ]; then
             local status
             status="$($SCRIPT status 2>/dev/null || true)"
             if printf '%s' "$status" | grep -Eq ':phase "(idle|complete|skipped|quota-exhausted)"|:running nil'; then
@@ -84,7 +84,7 @@ wait_for_idle() {
                 fi
             fi
             daemon_was_seen=1
-        elif [ "$socket_name" = "copilot-researcher" ]; then
+        elif [ "$socket_name" = "ov5-researcher" ]; then
             # Researcher daemon is persistent; wait for findings file instead
             if [ -f "$FINDINGS_FILE" ] && [ "$(wc -c < "$FINDINGS_FILE" 2>/dev/null || echo 0)" -gt 100 ]; then
                 if findings_mtime="$(stat -f %m "$FINDINGS_FILE" 2>/dev/null)"; then
@@ -102,7 +102,7 @@ wait_for_idle() {
             # Check if researcher daemon reports phase complete/idle
             if [ "$daemon_was_seen" -eq 1 ]; then
                 local phase
-                phase="$(emacsclient --socket-name="copilot-researcher" \
+                phase="$(emacsclient --socket-name="ov5-researcher" \
                     --eval '(if (and (boundp (quote gptel-auto-workflow--stats)) gptel-auto-workflow--stats) (plist-get gptel-auto-workflow--stats :phase) "unknown")' 2>/dev/null || echo "unknown")"
                 phase="${phase//\"/}"
                 if [ "$phase" = "complete" ] || [ "$phase" = "idle" ]; then
@@ -111,7 +111,7 @@ wait_for_idle() {
                 fi
             fi
             # Actually check if researcher daemon is alive
-            if emacsclient --socket-name="copilot-researcher" --eval 't' >/dev/null 2>&1; then
+            if emacsclient --socket-name="ov5-researcher" --eval 't' >/dev/null 2>&1; then
                 daemon_was_seen=1
             elif [ "$daemon_was_seen" -eq 1 ]; then
                 log "WARNING: $action daemon stopped after ${elapsed}s without findings"
@@ -250,8 +250,8 @@ find "$DIR/lisp/modules" -name "*.elc" -delete 2>/dev/null || true
 log "Cleared stale .elc files from lisp/modules/"
 
 # ─── Force-kill all stale Emacs daemons ───
-# Matches: --daemon=copilot-*, --fg-daemon=copilot-*, --bg-daemon=copilot-*
-STALE_PIDS=$(pgrep -f "emacs.*copilot-(auto-workflow|researcher)" 2>/dev/null || true)
+# Matches: --daemon=ov5-*, --fg-daemon=ov5-*, --bg-daemon=ov5-*
+STALE_PIDS=$(pgrep -f "emacs.*(ov5|copilot)-(auto-workflow|researcher)" 2>/dev/null || true)
 if [ -n "$STALE_PIDS" ]; then
     STALE_COUNT=$(echo "$STALE_PIDS" | wc -l | tr -d ' ')
     log "Killing $STALE_COUNT stale daemon process(es)..."
@@ -272,15 +272,15 @@ if [ -S /tmp/emacs"$(id -u)"/server ]; then
     rm -f /tmp/emacs"$(id -u)"/server 2>/dev/null || true
     log "Cleared stale default server socket (linux)"
 fi
-if [ -S /tmp/emacs"$(id -u)"/copilot-auto-workflow ]; then
-    rm -f /tmp/emacs"$(id -u)"/copilot-auto-workflow 2>/dev/null || true
-    log "Cleared stale copilot-auto-workflow socket"
+if [ -S /tmp/emacs"$(id -u)"/ov5-auto-workflow ]; then
+    rm -f /tmp/emacs"$(id -u)"/ov5-auto-workflow 2>/dev/null || true
+    log "Cleared stale ov5-auto-workflow socket"
 fi
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
 "$SCRIPT" stop >/dev/null 2>&1 || true
-AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
+AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
 # Force-remove stale staging worktree so auto-workflow recreates from latest main
 rm -rf "$DIR/var/tmp/experiments/staging-verify" 2>/dev/null || true
 rm -rf "$DIR/var/tmp/experiments/optimize" 2>/dev/null || true
@@ -309,7 +309,7 @@ MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
     "$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
 # Researcher daemon startup can take 90-120s (emacs init + package loading).
 # Use min_start_wait=120 to give it enough time before giving up.
-if ! wait_for_idle "research" "$MAX_WAIT_RESEARCH" "copilot-researcher" 180; then
+if ! wait_for_idle "research" "$MAX_WAIT_RESEARCH" "ov5-researcher" 180; then
     log "Research still in progress after timeout — continuing with partial findings"
     # Do NOT kill the daemon — let it keep working for next cycle
 fi
@@ -458,7 +458,7 @@ if [ "$PIPELINE_SMOKE_ONLY" = "yes" ]; then
     exit 0
 fi
 # Stop researcher daemon so it doesn't hold the cron-job lock
-AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
+AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
 sleep 2
 # Queue the workflow job (daemon will be started if not running)
 # Retry if evolution is still running (returns "already-running")
@@ -473,7 +473,7 @@ for retry in 0 1 2 3 4; do
         break
     fi
 done
-wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "copilot-auto-workflow" || true
+wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "ov5-auto-workflow" || true
 
 # Verify auto-workflow actually completed (not timed out)
 workflow_status="$($SCRIPT status 2>/dev/null || true)"

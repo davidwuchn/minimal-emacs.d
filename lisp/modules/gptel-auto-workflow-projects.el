@@ -860,7 +860,7 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
 The researcher daemon stays running so the pipeline can detect its
 phase as 'complete' or 'idle'. Previously shut down via kill-emacs
 which caused the pipeline to misdiagnose a crash."
-  (when (equal (or (daemonp) "") "copilot-researcher")
+  (when (equal (or (daemonp) "") "ov5-researcher")
     (message "[research] Research job complete — daemon staying alive")
     ;; Mark phase as complete so pipeline detects it
     (when (boundp 'gptel-auto-workflow--stats)
