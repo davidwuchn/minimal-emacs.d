@@ -1779,14 +1779,12 @@ chain so that subagent calls do not fall through to the mode-hook default
                                     :stream my/gptel-subagent-stream)
                               (copy-sequence (cdr agent-config)))))
     ;; When headless mode is active, prefer the ranked backend chain
-    ;; over the global gptel-backend.  This ensures DashScope
-    ;; (configured first in fallbacks) is used instead of the
-    ;; interactive default (MiniMax).  The headless chain pick also
-    ;; avoids burning MiniMax rate limits on the very first subagent
-    ;; call — the rate-limit failover path only activates after a
-    ;; backend has already failed.
-    (if (and (null (plist-get merged :backend))
-             (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
+    ;; over any preset backend or the global gptel-backend.  The
+    ;; executor agent config often has :backend \"MiniMax\" hardcoded in
+    ;; its agent plist — this overrides even a non-nil preset backend
+    ;; so DashScope is used first (avoiding MiniMax rate-limit death
+    ;; spiral on first subagent call).
+    (if (and (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
              (gptel-auto-workflow--headless-provider-override-active-p)
              (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
              (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
@@ -1803,12 +1801,12 @@ chain so that subagent calls do not fall through to the mode-hook default
                   (setq merged (plist-put merged :model (cdr pick)))))
             ;; Headless active but no candidates: fall back to
             ;; gptel-backend so the call goes through.
-            (when (and (boundp 'gptel-backend) gptel-backend)
+            (when (and (null (plist-get merged :backend))
+                       (boundp 'gptel-backend) gptel-backend)
               (setq merged (plist-put merged :backend gptel-backend)))))
-      ;; Not headless: use the global gptel-backend as default.
+      ;; Not headless: use the preset backend or global gptel-backend.
       (when (and (null (plist-get merged :backend))
-                 (boundp 'gptel-backend)
-                 gptel-backend)
+                 (boundp 'gptel-backend) gptel-backend)
         (setq merged (plist-put merged :backend gptel-backend))))
     merged))
 
