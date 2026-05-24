@@ -291,6 +291,17 @@ Usage:
     (gptel-auto-workflow--migrate-legacy-provider-defaults)
     (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
     (gptel-auto-workflow--clear-rate-limited-backends)
+    ;; Default to Moonshot when available instead of global MiniMax
+    ;; (which is usually quota-exhausted).  The ontology router will
+    ;; reorder backends once it has experiment data.
+    (when (and (boundp 'gptel--moonshot)
+               gptel--moonshot
+               (fboundp 'my/gptel-api-key)
+               (my/gptel-api-key "api.kimi.com"))
+      (unless (and (boundp 'gptel-auto-workflow-persistent-headless)
+                   gptel-auto-workflow-persistent-headless)
+        (setq gptel-backend gptel--moonshot
+              gptel-model 'kimi-k2.6)))
     ;; Restore research context from findings file.  Survives daemon restart
     ;; between pipeline Steps 3 and 4 — loads the findings saved by the
     ;; researcher so experiment metadata links back to the research trace.
