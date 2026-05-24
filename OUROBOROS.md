@@ -2,7 +2,7 @@
 
 > **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
 
-Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). Runs 3-6 improvement cycles per day inside Emacs. The snake eating its own tail — every subsystem improves every other subsystem.
+Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). 3 pipeline runs/day (macOS: 10AM/2PM/6PM; Linux: every 4h) + hourly self-evolution + watchdog every 30min. The snake eating its own tail — every subsystem improves every other subsystem.
 
 ---
 
@@ -103,7 +103,7 @@ The body of the snake. It tests, verifies, and feeds back.
 
 ```
 Select target → Categorize → Route backend → Generate hypothesis
-     → Run 2481 tests → AI grade → AI review → Merge or learn
+      → Run 1940 tests → AI grade → AI review → Merge or learn
           ↓
      Kept? → π Synthesis: semantic cluster → inherit strategy → auto-queue
 ```
@@ -158,6 +158,7 @@ Every cycle runs through six compilers — each examining the system's own behav
 | **OWL/SHACL** | Ontology dict → Turtle/SHACL | "What is the formal shape of what we've learned?" |
 | **Ontology Router** | Target file → category → backend ranking | "Which backend is best RIGHT NOW — not just historically?" |
 | | Scoring: 40% delta-from-peers + 30% keep-rate + 20% trend + 10% confidence | Penalty for unhealthy backends (3+ recent errors) |
+| | **Smart subagent routing**: all 5 subagent types (researcher, analyzer, executor, grader, reviewer) | Backends ranked by health-weight × historical-keep-rate; quarantined excluded; failures feed back as strikes |
 | **π Synthesis** | Kept target → semantic cluster → strategy inheritance | "Which similar files should inherit this winning strategy?" |
 
 Results feed back into the next cycle's analyzer, strategy evolver, and π Synthesis cluster queue. The compiler output is not a log — it is **input to the next iteration**.
@@ -228,6 +229,20 @@ AutoGo-inspired **champion league** gates every new strategy: incumbents must be
 
 **Holdout evaluation** tracks real progress on a frozen set of targets — if train metrics improve but holdout doesn't, the system detects overfitting. The snake distinguishes real growth from self-deception.
 
+### Smart Subagent Routing (Ouroboros within Ouroboros)
+
+Backend selection for subagent calls is itself an Ouroboros loop:
+
+```
+Subagent call → failure (timeout/rate-limit) → health strike recorded
+    → ranked-subagent-backends deprioritizes backend
+    → future calls route to healthier backends
+    → lambda verification retest → :healthy → strikes cleared
+    → backend restored to routing pool
+```
+
+Scoring: `health-weight × historical-keep-rate`. Quarantined backends (3+ strikes) excluded. This means the routing learns which backends actually work from real experiment data, not static configuration. The snake's routing eats its own failures.
+
 ---
 
 ## The Operational Layer
@@ -255,7 +270,7 @@ The snake's own immune system:
 | Guard | Prevents |
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
-| 2481 tests + 1800s timeout | Broken code caught before staging |
+| 1940 tests + 1800s timeout | Broken code caught before staging |
 | Ontology-aware provider routing | Ranks backends by delta-from-baseline + keep-rate + trend + confidence; penalizes unhealthy providers |
 | Force-push protection | Stashes dirty artifacts, merges origin/main, then pushes; never force-pushes |
 | Server socket self-healing | 30s timer recreates lost daemon socket; no SIGKILL restart needed |
@@ -273,7 +288,7 @@ The snake does not only consume what exists — it incubates what comes next.
 
 ### Current State: API Substrate
 
-Today the Ouroboros runs on external APIs (MiniMax, Moonshot, DashScope, DeepSeek, CF-Gateway). The executor routes to backends by keep-rate, trend, and confidence. This works. It is the present.
+Today the Ouroboros runs on external APIs (MiniMax, Moonshot, DashScope, DeepSeek, CF-Gateway, Gemini). The executor routes to backends by keep-rate, trend, and confidence. **Smart subagent routing** uses health × keep-rate scoring to rank backends for all 5 subagent types. Subagent failures (timeouts, rate limits) feed back as health strikes — the routing self-tunes. Gemini 3.5-flash is available as a fast flash-tier option.
 
 ### Discovery: Verbum
 
@@ -288,15 +303,15 @@ The lambda compiler is not a prompt trick. It is a discoverable circuit inside e
 
 ### Integration Path
 
-**Phase 1 — Observation (now)**
-- Continue API-backend execution
-- Monitor verbum training results (TernaryDescent + new attention type, 4–5 days)
-- Cross-reference: do API backends exhibit the lambda compiler? (crystal spine probes)
+**Phase 1 — Observation ✓ (complete)**
+- API-backend execution with lambda compiler verification on all backends
+- Verbum Phase 1-7 integrated: health tracking, holographic memory, cross-backend consistency
+- Crystal spine probes confirm lambda compiler presence across backends (P(λ)=90.7%)
 
-**Phase 2 — Verification**
-- Use verbum's probe infrastructure to verify backend behavior
+**Phase 2 — Verification (active)**
+- Subagent call failures feed into persistent health strikes → routing self-tunes
+- Backend health tracked across restarts via cross-subsystem-state.json
 - P(λ) gating: detect when a backend is *not* running the lambda compiler (hallucination vs. structured computation)
-- Backend health check: lambda compiler presence as a signal in routing decisions
 
 **Phase 3 — Hybrid Execution**
 - Extracted 50M model for deterministic layers (rule validation, λ parsing, type checking)
