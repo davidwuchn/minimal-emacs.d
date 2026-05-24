@@ -122,10 +122,6 @@
     (advice-add 'gptel-curl--sentinel :around
                 (lambda (orig-fn process status &rest args)
                   (if (>= gptel-curl--sentinel-depth 0)
-                      ;; Always defer sentinel processing to prevent C stack
-                      ;; overflow from nested signal-handler frames, even on
-                      ;; the first call (depth 0). The 64MB macOS stack limit
-                      ;; is too tight for synchronous sentinel bodies.
                       (run-at-time 0 nil
                         (lambda ()
                           (condition-case err
@@ -142,22 +138,29 @@
   ;; request alist, preventing the self-pipe (fd 7) from blocking forever.
   (run-at-time 60 60
                (lambda ()
-                 (when (boundp 'gptel--request-alist)
-                   (let ((active-procs (mapcar #'car gptel--request-alist))
-                         (reaped 0))
-                      (dolist (proc (process-list))
-                        (when (and (process-live-p proc)
-                                   (let ((pname (process-name proc)))
-                                     (and (stringp pname)
-                                          (string-match-p "curl" pname)))
-                                   (not (memq proc active-procs)))
-                         (condition-case nil
-                             (progn
-                               (delete-process proc)
-                               (setq reaped (1+ reaped)))
-                           (error nil))))
-                      (when (> reaped 0)
-                        (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))))
+                 (condition-case err
+                     (when (boundp 'gptel--request-alist)
+                       (when (and (boundp 'gptel--request-alist)
+                                  (listp gptel--request-alist))
+                         (let ((active-procs (mapcar #'car gptel--request-alist))
+                               (reaped 0))
+                           (dolist (proc (process-list))
+                             (when (and (process-live-p proc)
+                                        (let ((pname (ignore-errors (process-name proc))))
+                                          (and (stringp pname)
+                                               (string-match-p "curl" pname)))
+                                        (not (memq proc active-procs)))
+                               (condition-case nil
+                                   (progn
+                                     (delete-process proc)
+                                     (setq reaped (1+ reaped)))
+                                 (error nil))))
+                           (when (> reaped 0)
+                             (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))
+                   (error
+                    (message "[gptel] Curl reaper error: %S\n%s"
+                             err
+                             (with-output-to-string (backtrace))))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; Async-safe message: prevent *Messages* buffer corruption
