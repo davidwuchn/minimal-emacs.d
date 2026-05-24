@@ -13,7 +13,8 @@
 
 ;;; Code:
 
-(require 'gptel-auto-workflow-evolution)
+(require 'cl-lib)
+(declare-function gptel-auto-workflow--run-evolution-script "gptel-auto-workflow-evolution" (script-name &rest args))
 
 (defconst gptel-auto-workflow--cq-to-skills
   '(("Which strategies are effective?" . ("strategy-proposer" "strategy-harness"))
