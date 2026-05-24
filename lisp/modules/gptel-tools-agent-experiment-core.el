@@ -217,13 +217,24 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                agent-output executor-prompt target experiment-worktree))
                               (effective-agent-output
                                (or salvaged-agent-output agent-output))
-                              ;; Capture actual backend AFTER executor completes
-                              ;; (backend may have switched during execution due to rate-limit)
-                              (actual-backend
-                               (if (and (boundp 'gptel-backend) gptel-backend
-                                        (fboundp 'gptel-backend-name))
-                                   (gptel-backend-name gptel-backend)
-                                 experiment-backend))
+                              ;; Capture actual backend AFTER executor completes.
+                               ;; gptel-backend may have been dynamically rebound by
+                               ;; cl-progv inside the subagent task override — after
+                               ;; the callback runs, the global default (MiniMax) is
+                               ;; restored.  Fall back to the pre-computed
+                               ;; experiment-backend when gptel-backend is MiniMax
+                               ;; (the interactive default, not the routed one).
+                               (actual-backend
+                                (let* ((post-backend (and (boundp 'gptel-backend) gptel-backend
+                                                         (fboundp 'gptel-backend-name)
+                                                         (gptel-backend-name gptel-backend)))
+                                       (pre-backend (and (stringp experiment-backend)
+                                                         experiment-backend))
+                                       (global-default "MiniMax"))
+                                  (if (and (stringp post-backend)
+                                           (not (string= post-backend global-default)))
+                                      post-backend
+                                    (or pre-backend post-backend global-default))))
                               (actual-model
                                (or (and (boundp 'gptel-model) gptel-model)
                                    experiment-model))

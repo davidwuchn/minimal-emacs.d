@@ -1581,30 +1581,23 @@ DashScope first (faster, more reliable), then Moonshot, DeepSeek, CF-Gateway, Mi
   '("analyzer" "comparator" "executor" "grader" "researcher" "reviewer")
   "Headless subagents that should use the fallback provider list.
 
-Headless workflow runs prefer MiniMax as the workhorse, falling back to
-moonshot and others when rate-limited or unavailable."
+DashScope is preferred for headless runs (faster, independent quota).
+The fallback chain DNS-polls through DashScope, DeepSeek, moonshot,
+MiniMax, then CF-Gateway."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("moonshot" . "kimi-k2.6")
-    ("MiniMax" . "minimax-m2.7-highspeed")
-    ("DashScope" . "qwen3.6-plus")
+  '(("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-pro")
+    ("moonshot" . "kimi-k2.6")
+    ("MiniMax" . "minimax-m2.7-highspeed")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
 
-Uses capable models for code generation:
-- moonshot: kimi-k2.6 (best for code changes)
-- DashScope: glm-5 (capable and cost-effective)
-- DeepSeek: deepseek-v4-pro (strong reasoning)
-- CF-Gateway: @cf/moonshotai/kimi-k2.6 (262k context, reasoning,
-  function calling)
-
-Headless executor prefers MiniMax by default.  When the active executor
-backend returns a rate-limit error during a headless run, later retries
-in that same run can advance through this list instead of repeatedly
-hammering the same provider."
+DashScope first (independent quota, won't cascade MiniMax/moonshot
+rate limits).  Moonshot/MiniMax share a KIMI quota bucket — when one
+is exhausted, the other is too — so DeepSeek gets priority over both."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
