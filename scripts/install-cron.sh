@@ -31,16 +31,16 @@ render_crontab() {
         awk '/^SHELL=/{exit} {print}' "$CRON_FILE"
         echo "SHELL=/bin/bash"
         if [ "$machine" = "macos" ]; then
-            echo "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin"
+            echo "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin"
         else
-            echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin"
+            echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin"
         fi
         if [ "$machine" = "pi5" ] || [ "$machine" = "linux" ]; then
-            echo "XDG_RUNTIME_DIR=/run/user/$(id -u)"
+            echo "XDG_RUNTIME_DIR=/run/user/\$(id -u)"
         fi
         echo
         echo "# Watchdog: restart daemon if unresponsive (every 30min, reaper handles 95%)"
-        echo "*/30 * * * * $HOME/.emacs.d/scripts/watchdog-daemon.sh"
+        echo "*/30 * * * * \$HOME/.emacs.d/scripts/watchdog-daemon.sh"
         echo
         # Sections: start from first '---' separator; strip env vars already emitted above
         awk -v machine="$machine" '
