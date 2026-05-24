@@ -1,0 +1,1 @@
+{"name":"experiment-velocity-context","version":"1.0","hypothesis":"Varying context granularity based on experiment progress balances exploration vs exploitation","axis":"F","components":["stage-awareness","velocity-compression","temporal-context"]}
