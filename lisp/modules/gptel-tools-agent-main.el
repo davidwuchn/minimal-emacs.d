@@ -393,7 +393,10 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
         (progn
           (setq default-directory proj-root
                  gptel-auto-workflow-persistent-headless t
-                 message-log-max 10000)
+                 message-log-max 10000
+                 gptel-auto-experiment-max-retries 1
+                 gptel-auto-experiment-time-budget 900
+                 gptel-auto-experiment-validation-retry-time-budget 120)
            (gptel-auto-workflow--enable-headless-suppression)
           (if gptel-auto-workflow--running
               (progn

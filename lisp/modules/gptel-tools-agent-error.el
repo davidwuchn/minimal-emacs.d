@@ -776,9 +776,10 @@ Also logs agent-output snippet for debugging when category is :unknown."
 
 ;;; Retry Logic (Never Ask User, Just Try Again)
 
-(defcustom gptel-auto-experiment-max-retries 3
+(defcustom gptel-auto-experiment-max-retries 1
   "Maximum retries for transient failures.
-Auto-workflow never asks user - just retries until success or max retries."
+Reduced from 3 to 1 because moonshot/kimi-k2.6 always times out (Curl 28).
+Fewer retries on failing providers → faster fallback to working provider."
   :type 'integer
   :group 'gptel-tools-agent)
 
