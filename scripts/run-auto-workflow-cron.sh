@@ -319,12 +319,22 @@ stale_active_snapshot_recoverable() {
 
 worker_daemon_pids() {
     # Emacs --bg-daemon=\n3,4\nSERVER_NAME embeds literal newline chars
-    # (octal \012 = 0x0A) between --bg-daemon= and the server name,
-    # so the full string spans two lines.  Use regex match on the
-    # server name alone rather than concatenating with --daemon=.
-    ps -eo pid=,args= | awk -v s="$SERVER_NAME" '
-        tolower($2) ~ /(^|\/)emacs/ && index($0, s) { print $1 }
-    '
+    # (octal \012 = 0x0A) between --bg-daemon= and the server name.
+    # ps output embeds these as real newlines, splitting the command
+    # across multiple awk records — so index() and regex can never
+    # match the full --bg-daemon=SERVER_NAME pattern in a single record.
+    # Use pgrep -f to search the full process list (handles embedded
+    # newlines correctly).
+    if command -v pgrep >/dev/null 2>&1; then
+        pgrep -f "$SERVER_NAME" 2>/dev/null || true
+    else
+        # Fallback: ps with no standard/wide output, awk across records
+        ps -eo pid=,args= | awk -v s="$SERVER_NAME" '
+            tolower($2) ~ /(^|\/)emacs/ { found = index($0, s) }
+            /./ { if (!found) prev = prev $0 "\n" }
+            END { if (found) print $1 }
+        '
+    fi
 }
 
 worker_daemon_pid() {
