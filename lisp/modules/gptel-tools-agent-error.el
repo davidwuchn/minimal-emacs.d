@@ -47,9 +47,7 @@
 Returns alist of (category . pattern) or nil."
   (when (fboundp 'gptel-auto-workflow--load-skill-content)
     (let ((skill (gptel-auto-workflow--load-skill-content "provider-error-analyzer")))
-      (when skill
-        ;; Parse patterns from skill markdown
-        ;; Look for **Pattern**: `regex` format
+      (when (stringp skill)
         (let ((patterns nil)
               (pos 0))
           (while (string-match "^\\*\\*Pattern\\*\\*: `\\([^`]+\\)`" skill pos)
