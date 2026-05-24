@@ -1467,9 +1467,9 @@ Example: gptel-tools-agent.el (11,481 lines) is EXCLUDED. Focus on smaller files
 
 MANDATORY: For each **Apply:** pattern in EXTERNAL RESEARCH FINDINGS below,
 find the SINGLE most relevant existing file in lisp/modules/ and add it as a target.
-  Example: Apply: "Add gptel-agent-mode" → target lisp/modules/gptel-tools-agent.el
-  Example: Apply: "Add stage-state to gptel-agent-loop" → target lisp/modules/gptel-agent-loop.el
-  Example: Apply: "Add gptel-agent-queue with file-notify" → target lisp/modules/gptel-tools-agent-subagent.el
+  Example: Apply: \"Add gptel-agent-mode\" → target lisp/modules/gptel-tools-agent.el
+  Example: Apply: \"Add stage-state to gptel-agent-loop\" → target lisp/modules/gptel-agent-loop.el
+  Example: Apply: \"Add gptel-agent-queue with file-notify\" → target lisp/modules/gptel-tools-agent-subagent.el
 Each Apply: pattern MUST map to at least one target.  If no file is a perfect match,
 choose the closest one — the executor will adapt the pattern to fit.
 AVOID: Recently-refactored files with no remaining issues.
