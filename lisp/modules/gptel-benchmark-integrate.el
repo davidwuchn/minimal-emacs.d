@@ -65,8 +65,8 @@ This combines:
          
          ;; Step 2: Generate improvements (try LLM first, fallback to template)
          (improvements (or (and gptel-benchmark-llm-enabled
-                               (gptel-benchmark-llm-suggest-improvements-sync name type anti-patterns))
-                          (gptel-benchmark-generate-improvements name type anti-patterns)))
+                                (gptel-benchmark-llm-suggest-improvements-sync name type anti-patterns))
+                           (gptel-benchmark-generate-improvements name type anti-patterns)))
          
          ;; Step 3: Apply improvements with verification
          (apply-result (gptel-benchmark--apply-with-verification name type improvements results))
@@ -80,7 +80,7 @@ This combines:
          
          ;; Step 6: Feed forward
          (fed-forward (gptel-benchmark--feed-forward-improvement
-                        name type anti-patterns (plist-get apply-result :applied) capabilities)))
+                       name type anti-patterns (plist-get apply-result :applied) capabilities)))
     
     (list :name name
           :type type
@@ -102,6 +102,8 @@ This combines:
 (defun gptel-benchmark--apply-with-verification (name type improvements before-results)
   "Apply IMPROVEMENTS to NAME of TYPE with verification against BEFORE-RESULTS.
 Returns plist with :applied count and :verified boolean."
+  ;; ASSUMPTION: improvements is a list, before-results is a plist
+  ;; EDGE CASE: nil after-results treated as verification failure
   (let ((checkpoints '())
         (applied 0)
         (verified t))
@@ -113,7 +115,8 @@ Returns plist with :applied count and :verified boolean."
       (let* ((after-results (gptel-benchmark--run-quick-benchmark name type))
              (before-score (gptel-benchmark--extract-score before-results))
              (after-score (gptel-benchmark--extract-score after-results)))
-        (when (<= after-score (+ before-score gptel-benchmark-verify-threshold))
+        (when (or (null after-results)
+                  (<= after-score (+ before-score gptel-benchmark-verify-threshold)))
           (setq verified nil)
           (message "[integrate] No improvement, rolling back...")
           (when checkpoints
@@ -147,9 +150,13 @@ Try real benchmark if gptel-agent--task is available, else mock."
 
 (defun gptel-benchmark--extract-score (results)
   "Extract overall score from RESULTS."
-  (or (plist-get results :overall-score)
-      (/ (or (plist-get results :average-score) 75) 100.0)
-      0.75))
+  ;; ASSUMPTION: results is a proper plist or nil
+  ;; EDGE CASE: nil or improper list returns safe default
+  (if (and results (proper-list-p results))
+      (or (plist-get results :overall-score)
+          (/ (or (plist-get results :average-score) 75) 100.0)
+          0.75)
+    0.75))
 
 (defun gptel-benchmark--get-target-file (name type)
   "Get target file path for NAME of TYPE."
