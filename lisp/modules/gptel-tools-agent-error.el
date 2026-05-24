@@ -87,10 +87,13 @@ CDR: Transient pressure patterns (used in provider-pressure-error-p).")
 
 EXCLUDED-BACKENDS may be nil, a backend name string, or a list of backend
 name strings."
+  ;; ASSUMPTION: excluded-backends is nil, a string, or a proper list
+  ;; BEHAVIOR: Normalizes excluded-backends to a proper list for seq-some
+  ;; EDGE CASE: Improper lists (dotted pairs) are treated as single items
   (let ((excluded
          (cond
           ((null excluded-backends) nil)
-          ((listp excluded-backends) excluded-backends)
+          ((proper-list-p excluded-backends) excluded-backends)
           (t (list excluded-backends)))))
     (seq-find
      (lambda (entry)
