@@ -293,9 +293,13 @@ Usage:
     ;; Restore research context from findings file.  Survives daemon restart
     ;; between pipeline Steps 3 and 4 — loads the findings saved by the
     ;; researcher so experiment metadata links back to the research trace.
-    (when (fboundp 'gptel-auto-workflow--ensure-research-context)
-      (gptel-auto-workflow--ensure-research-context
-       (or (gptel-auto-workflow-load-research-findings) "")))
+    (condition-case err
+        (when (fboundp 'gptel-auto-workflow--ensure-research-context)
+          (gptel-auto-workflow--ensure-research-context
+           (or (gptel-auto-workflow-load-research-findings) "")))
+      (error
+       (message "[auto-workflow] Research context restore skipped: %s"
+                (error-message-string err))))
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
