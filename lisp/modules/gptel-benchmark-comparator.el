@@ -83,7 +83,11 @@ Call this when benchmark files are updated."
   (gptel-benchmark--require-valid-name name)
   (let* ((current-version (gptel-benchmark-current-version name))
          (baseline-version (gptel-benchmark-baseline-version name))
-         (comparison (gptel-benchmark-compare-file-versions name current-version baseline-version)))
+         ;; ASSUMPTION: compare-summaries treats version-a as baseline and
+         ;; version-b as candidate (improvement = score-b - score-a).
+         ;; Pass baseline as version-a and current as version-b so
+         ;; improvement reflects current relative to baseline.
+         (comparison (gptel-benchmark-compare-file-versions name baseline-version current-version)))
     comparison))
 
 (defun gptel-benchmark--get-trend-summary (name version)
