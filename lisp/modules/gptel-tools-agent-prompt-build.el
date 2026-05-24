@@ -1827,6 +1827,7 @@ chain so that subagent calls do not fall through to the mode-hook default
   "Return a readable backend name for BACKEND."
   (cond
    ((stringp backend) backend)
+   ((keywordp backend) (substring (symbol-name backend) 1))
    ((and backend (fboundp 'gptel-backend-name))
     (gptel-backend-name backend))
    (t nil)))

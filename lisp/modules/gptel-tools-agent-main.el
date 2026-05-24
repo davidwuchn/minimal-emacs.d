@@ -5,6 +5,7 @@
 
 ;; Forward declarations for dynamic variables used throughout this file
 (defvar gptel-auto-workflow--running)
+(defvar gptel-auto-workflow--results)
 (defvar gptel-auto-workflow--cron-job-running)
 (defvar gptel-auto-workflow--watchdog-timer)
 (defvar gptel-auto-workflow--status-refresh-timer)
