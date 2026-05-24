@@ -1,5 +1,5 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 1290 experiments across 13 models
+> Auto-generated from 1285 experiments across 13 models
 
 ## Model Rankings (by keep-rate)
 
@@ -9,7 +9,7 @@
 - **MiniMax/unknown**: 20.3%
 - **DeepSeek/none**: 19.0%
 - **CF-Gateway/unknown**: 15.6%
-- **MiniMax/minimax-m2.7-highspeed**: 15.3%
+- **MiniMax/minimax-m2.7-highspeed**: 14.9%
 - **MiniMax/own-repos-first**: 12.5%
 - **moonshot/none**: 10.7%
 - **MiniMax/[strategy-evolution] REJECTED candidate: Proposed name ’dynamic-skill-relevance’ is generic (must be descriptive)**: 10.5%
@@ -34,7 +34,7 @@
 
 ## MiniMax/unknown vs MiniMax/minimax-m2.7-highspeed (winner: **MiniMax/unknown**)
 - MiniMax/unknown: 25.6% keep-rate
-- MiniMax/minimax-m2.7-highspeed: 18.3% keep-rate
+- MiniMax/minimax-m2.7-highspeed: 17.9% keep-rate
 - Shared targets: 7 | won 5, won 2, ties 0
 
 ## MiniMax/unknown vs DeepSeek/none (winner: **tie**)
@@ -328,4 +328,4 @@
 - Shared targets: 1 | won 1, won 0, ties 0
 
 
-*Generated: 2026-05-24 15:34*
+*Generated: 2026-05-24 11:29*
