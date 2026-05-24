@@ -8,10 +8,38 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_NAME="ov5-auto-workflow"
-SOCKET_PATH="/tmp/emacs$(id -u)/$SERVER_NAME"
+SOCKET_PATH=""  # Resolved below from candidates
 LOG="$DIR/var/tmp/cron/watchdog.log"
 MAX_WAIT=60
 RESTART_COOLDOWN=300  # 5 min between restarts to avoid restart loops
+
+# Socket path resolution: try all candidate paths in priority order.
+# Emacs creates the daemon socket at the first available of:
+#   1. $XDG_RUNTIME_DIR/emacs/$name  (systemd Linux — /run/user/UID/emacs/$name)
+#   2. $TMPDIR/emacs$UID/$name        (macOS default)
+#   3. /tmp/emacs$UID/$name           (fallback for all platforms)
+resolve_socket_path() {
+    local name="$1"
+    local uid="$2"
+    # Check XDG_RUNTIME_DIR first (Debian/Ubuntu with systemd)
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "$XDG_RUNTIME_DIR/emacs/$name" ]; then
+        echo "$XDG_RUNTIME_DIR/emacs/$name"
+        return
+    fi
+    # Check TMPDIR (macOS)
+    if [ -n "${TMPDIR:-}" ] && [ -S "$TMPDIR/emacs$uid/$name" ]; then
+        echo "$TMPDIR/emacs$uid/$name"
+        return
+    fi
+    # Fallback: /tmp/emacs$uid/$name
+    if [ -S "/tmp/emacs$uid/$name" ]; then
+        echo "/tmp/emacs$uid/$name"
+        return
+    fi
+    echo "/tmp/emacs$uid/$name"  # Last resort: assume this path
+}
+
+SOCKET_PATH=$(resolve_socket_path "$SERVER_NAME" "$(id -u)")
 
 mkdir -p "$(dirname "$LOG")"
 
