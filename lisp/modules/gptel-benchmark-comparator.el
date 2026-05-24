@@ -46,7 +46,12 @@ Returns VERSION if valid."
   (gptel-benchmark--require-valid-string version 'version))
 
 (defun gptel-benchmark--cache-put (key value)
-  "Store KEY-VALUE pair in result cache."
+  "Store KEY-VALUE pair in result cache.
+KEY and VALUE must be non-nil."
+  (unless key
+    (signal 'wrong-type-argument (list 'non-nil key)))
+  (unless value
+    (signal 'wrong-type-argument (list 'non-nil value)))
   (puthash key value gptel-benchmark-result-cache))
 
 (defun gptel-benchmark--clear-result-cache ()
