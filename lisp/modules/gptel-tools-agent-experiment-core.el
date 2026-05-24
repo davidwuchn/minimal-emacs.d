@@ -64,6 +64,29 @@
 (defvar gptel-model)
 (defvar gptel-backend)
 
+(defun gptel-auto-experiment--validate-all-modified-files (worktree)
+  "Validate all modified .el files in WORKTREE.
+Returns nil if all pass, or error message string for first failure."
+  (let ((default-directory worktree)
+        (modified-files (ignore-errors
+                          (split-string
+                           (shell-command-to-string
+                            "git diff --name-only HEAD 2>/dev/null")
+                           "\n" t))))
+    (catch 'validation-error
+      (dolist (file modified-files)
+        (when (and (string-suffix-p ".el" file)
+                   (not (string-suffix-p "-autoloads.el" file)))
+          (let ((full-path (expand-file-name file worktree)))
+            (when (file-exists-p full-path)
+              (let ((error (gptel-auto-experiment--validate-code full-path)))
+                (when error
+                  (message "[auto-exp] ✗ Validation failed for %s: %s"
+                           file
+                           (my/gptel--sanitize-for-logging error 120))
+                  (throw 'validation-error
+                         (format "%s in %s" error file)))))))))))
+
 (defun gptel-auto-experiment--maybe-failover-main-backend ()
   "Switch `gptel-backend' to a fallback if the current one is rate-limited.
 Checks `gptel-auto-workflow--rate-limited-backends' and uses
@@ -261,12 +284,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                     (gptel-auto-workflow--apply-category-vigilance target 'discarded))
                                   (funcall log-fn run-id exp-result)
                                   (funcall callback exp-result))
-                             ;; Validate syntax BEFORE calling grader to avoid wasting API calls
-                             (let ((validation-error
-                                    (when target
-                                      (gptel-auto-experiment--validate-code
-                                       (expand-file-name target experiment-worktree)))))
-                               (if validation-error
+                              ;; Validate syntax BEFORE calling grader to avoid wasting API calls
+                              ;; Check ALL modified files, not just target — agent may edit dependencies
+                              (let ((validation-error
+                                     (when target
+                                       (or (gptel-auto-experiment--validate-all-modified-files experiment-worktree)
+                                           (gptel-auto-experiment--validate-code
+                                            (expand-file-name target experiment-worktree))))))
+                                (if validation-error
                                    (progn
                                      (message "[auto-exp] ✗ Pre-grade validation failed: %s"
                                               (my/gptel--sanitize-for-logging validation-error 200))
