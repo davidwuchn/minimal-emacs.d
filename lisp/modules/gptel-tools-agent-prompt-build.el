@@ -1634,6 +1634,8 @@ and advance through the configured fallback chain instead.")
 
 (defun gptel-auto-workflow--backend-available-p (backend-name)
   "Return non-nil when BACKEND-NAME has credentials configured."
+  (when (keywordp backend-name)
+    (setq backend-name (substring (symbol-name backend-name) 1)))
   (let ((host (alist-get backend-name gptel-auto-workflow--backend-key-hosts
                            nil nil #'string=)))
     (cond
@@ -1652,7 +1654,14 @@ and advance through the configured fallback chain instead.")
        (bound-and-true-p gptel-auto-workflow--current-project)))
 
 (defun gptel-auto-workflow--backend-object (backend-name)
-  "Return the backend object for BACKEND-NAME, or nil when unavailable."
+  "Return the backend object for BACKEND-NAME, or nil when unavailable.
+BACKEND-NAME may be a string (\"DashScope\"), a keyword (:DashScope),
+or a symbol (DashScope).  Keywords and symbols are converted to
+strings for lookup."
+  (when (keywordp backend-name)
+    (setq backend-name (substring (symbol-name backend-name) 1)))
+  (when (symbolp backend-name)
+    (setq backend-name (symbol-name backend-name)))
   (when-let* ((var (alist-get backend-name gptel-auto-workflow--backend-object-vars
                               nil nil #'string=))
               ((boundp var)))
