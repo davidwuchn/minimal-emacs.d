@@ -44,19 +44,27 @@ if [ -n "$DAEMON_PID" ]; then
         # Actively executing — don't kill, it's busy
         exit 0
     fi
-    # Check for known stuck-on-pipe states (anon_pipe_read, pipe_wait, etc.)
-    PROC_WCHAN=$(cat /proc/$DAEMON_PID/wchan 2>/dev/null || echo "")
-    if echo "$PROC_WCHAN" | grep -q "anon_pipe_read\|pipe_wait\|pipe_read"; then
-        echo "[$(date '+%H:%M:%S')] Daemon stuck on pipe I/O (wchan=$PROC_WCHAN), restarting" >> "$LOG"
-        kill -9 "$DAEMON_PID" 2>/dev/null || true
-        sleep 2
-        rm -f "$SOCKET_PATH" 2>/dev/null || true
-        echo "$(date +%s)" > "$LAST_RESTART_FILE"
-        MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
-            "$DIR" "$SERVER_NAME" &
-        echo "[$(date '+%H:%M:%S')] Daemon restarted after pipe stuck" >> "$LOG"
-        exit 0
+    # Skip pipe-I/O kill when a workflow is active.  The daemon
+    # legitimately waits on pipe I/O during LLM API calls (curl via
+    # url-retrieve) and during blocking subprocesses (byte-compile,
+    # git).  Killing mid-workflow loses progress and orphaned state.
+    # Let the socket-response test below handle truly stuck daemons.
+    if ! timeout 10 emacsclient -s "$SERVER_NAME" --eval \
+         '(and (boundp (quote gptel-auto-workflow--running))
+               gptel-auto-workflow--running)' >/dev/null 2>&1; then
+        PROC_WCHAN=$(cat /proc/$DAEMON_PID/wchan 2>/dev/null || echo "")
+        if echo "$PROC_WCHAN" | grep -q "anon_pipe_read\|pipe_wait\|pipe_read"; then
+            echo "[$(date '+%H:%M:%S')] Daemon stuck on pipe I/O (wchan=$PROC_WCHAN), restarting" >> "$LOG"
+            kill -9 "$DAEMON_PID" 2>/dev/null || true
+            sleep 2
+            rm -f "$SOCKET_PATH" 2>/dev/null || true
+            echo "$(date +%s)" > "$LAST_RESTART_FILE"
+            MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+                bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
+                "$DIR" "$SERVER_NAME" &
+            echo "[$(date '+%H:%M:%S')] Daemon restarted after pipe stuck" >> "$LOG"
+            exit 0
+        fi
     fi
 fi
 
