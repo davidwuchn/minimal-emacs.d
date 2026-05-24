@@ -156,27 +156,25 @@
   ;; (process-name <buffer>) or (memq <float> ...).
   (run-at-time 60 60
                (lambda ()
-                 (condition-case err
-                     (when (and (boundp 'gptel--request-alist)
-                                (listp gptel--request-alist))
-                       (let* ((all-keys (mapcar #'car gptel--request-alist))
-                              (active-procs (cl-remove-if-not #'processp all-keys))
-                              (reaped 0))
-                         (dolist (proc (process-list))
-                           (when (and (process-live-p proc)
-                                      (let ((pname (process-name proc)))
-                                        (and (stringp pname)
-                                             (string-match-p "curl" pname)))
-                                      (not (memq proc active-procs)))
-                             (condition-case nil
-                                 (progn
-                                   (delete-process proc)
-                                   (setq reaped (1+ reaped)))
-                               (error nil))))
-                         (when (> reaped 0)
-                           (message "[gptel] Reaped %d orphaned curl process(es)" reaped))))
-                   (error
-                     (message "[gptel] Reaper error: %S" err))))))
+                 (ignore-errors
+                   (when (and (boundp 'gptel--request-alist)
+                              (listp gptel--request-alist))
+                     (let* ((all-keys (mapcar #'car gptel--request-alist))
+                            (active-procs (cl-remove-if-not #'processp all-keys))
+                            (reaped 0))
+                       (dolist (proc (process-list))
+                         (when (and (process-live-p proc)
+                                    (let ((pname (process-name proc)))
+                                      (and (stringp pname)
+                                           (string-match-p "curl" pname)))
+                                    (not (memq proc active-procs)))
+                           (condition-case nil
+                               (progn
+                                 (delete-process proc)
+                                 (setq reaped (1+ reaped)))
+                             (error nil))))
+                       (when (> reaped 0)
+                         (message "[gptel] Reaped %d orphaned curl process(es)" reaped))))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; Async-safe message: prevent *Messages* buffer corruption
