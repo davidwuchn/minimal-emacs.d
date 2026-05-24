@@ -135,6 +135,18 @@
                              (when (process-live-p process)
                                (delete-process process))))))
                     (apply orig-fn process status args)))))
+  ;; WRAP TIMER CALLBACKS: Catch errors with backtrace to identify the
+  ;; source of the mystery 'wrong-type-argument stringp <float>' error
+  ;; that kills the experiment flow after every baseline message.
+  (advice-add 'timer-event-handler :around
+              (lambda (orig-fn timer)
+                (condition-case err
+                    (funcall orig-fn timer)
+                  (error
+                   (message "[timer] Error in %S: %S\n%s"
+                            (and (timerp timer) (prin1-to-string (timer--function timer)))
+                            err
+                            (with-output-to-string (backtrace)))))))
   ;; ZOMBIE REAPER: Periodic cleanup of orphaned gptel curl processes.
   ;; Even with sentinel condition-case guards, a process pipe can become
   ;; orphaned (e.g. if Emacs's self-pipe blocks before the sentinel fires).
