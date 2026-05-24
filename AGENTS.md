@@ -1,7 +1,7 @@
 # AGENTS.md
 
 > VSM architecture for minimal-emacs.d + gptel-nucleus.
-> This is the **Ouroboros** — see [OUROBOROS.md](OUROBOROS.md) for the full self-regulating architecture.
+> This is the **Ouroboros V5** — see [OUROBOROS-V5.md](OUROBOROS-V5.md) for the full self-regulating architecture.
 > A unified Emacs + AI environment built on mathematical attention.
 
 ```
@@ -17,7 +17,7 @@
 | Document | Purpose | Start Here If... |
 |----------|---------|------------------|
 | **AGENTS.md** | This file - VSM system architecture | You need the full framework |
-| **[OUROBOROS.md](OUROBOROS.md)** | Ouroboros architecture & self-regulating design | You're new to this setup |
+| **[OUROBOROS-V5.md](OUROBOROS-V5.md)** | Ouroboros V5 architecture & self-regulating design | You're new to this setup |
 | **[README.md](README.md)** | Upstream user documentation | You need base Emacs info |
 | **[eca/AGENTS.md](eca/AGENTS.md)** | ECA configuration & subagents | You need AI provider info |
 | **mementum/** | AI memory system | Session continuity |
@@ -419,7 +419,7 @@ If rules conflict:
 | File | Purpose | Fidelity |
 | ---- | ------- | -------- |
 | AGENTS.md | Bootstrap (this file) | Reference |
-| OUROBOROS.md | Ouroboros architecture & self-regulating design | Guide |
+| OUROBOROS-V5.md | Ouroboros V5 architecture & self-regulating design | Guide |
 | README.md | Upstream user documentation | Guide |
 | **mementum/** | AI memory system | Full |
 
@@ -593,6 +593,6 @@ When something feels wrong, trace it through the elements.
 
 ---
 
-**See Also:** [OUROBOROS](OUROBOROS.md) · [README](README.md) · [mementum/](mementum/) · [eca/AGENTS.md](eca/AGENTS.md)
+**See Also:** [OUROBOROS-V5](OUROBOROS-V5.md) · [README](README.md) · [mementum/](mementum/) · [eca/AGENTS.md](eca/AGENTS.md)
 
 *Patterns and protocols: see mementum/knowledge/*
