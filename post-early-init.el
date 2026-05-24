@@ -131,6 +131,24 @@
                              (when (process-live-p process)
                                (delete-process process))))))
                     (apply orig-fn process status args)))))
+  ;; DIAGNOSTIC: Identify the source of the "wrong-type-argument stringp
+  ;; <float>" timer error.  The error appears after every experiment
+  ;; baseline and kills the flow before the executor runs.  Wrap
+  ;; timer-event-handler to log the timer function + backtrace.  Use a
+  ;; simple string format with no nested backtrace to avoid inner errors.
+  (advice-add 'timer-event-handler :around
+              (lambda (orig-fn timer)
+                (condition-case err
+                    (funcall orig-fn timer)
+                  (error
+                   (let* ((fn (condition-case nil
+                                  (prin1-to-string
+                                   (if (byte-code-function-p (timer--function timer))
+                                       (aref (timer--function timer) 1)
+                                     (timer--function timer)))
+                                (error "?"))))
+                     (message "[diag] timer err: %s fn: %s" (error-message-string err) fn))
+                   (signal (car err) (cdr err))))))
   ;; ZOMBIE REAPER: Periodic cleanup of orphaned gptel curl processes.
   ;; Even with sentinel condition-case guards, a process pipe can become
   ;; orphaned (e.g. if Emacs's self-pipe blocks before the sentinel fires).
