@@ -502,7 +502,13 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
         (let ((err-msg (error-message-string err))
               (bt (with-output-to-string (backtrace))))
           (message "[auto-workflow] Cron error: %s" err-msg)
-          (message "[auto-workflow] Backtrace: %s" bt)
+          (with-temp-file (expand-file-name "var/tmp/cron-error.txt"
+                                            (or (and (boundp 'minimal-emacs-user-directory)
+                                                     minimal-emacs-user-directory)
+                                                default-directory))
+            (insert (format "Time: %s\nError: %s\nBacktrace:\n%s\n"
+                            (format-time-string "%Y-%m-%dT%H:%M:%S")
+                            err-msg bt)))
           (setq gptel-auto-workflow--stats
                  (list :phase "error" :total 0 :kept 0))
            (gptel-auto-workflow--persist-status))
