@@ -59,7 +59,7 @@ ARGS are passed to `gptel-make-openai'."
                   `(("Authorization" . ,(concat "Bearer " (gptel--get-api-key)))
                     ("User-Agent"    . "KimiCLI/1.3")))
         :stream t
-        :curl-args '("--http1.1" "--max-time" "180" "--connect-timeout" "30")
+        :curl-args '("--http1.1" "--max-time" "120" "--connect-timeout" "15")
         :models '((kimi-k2.6
                    :request-params (:reasoning (:effort "high")
                                                :thinking  (:type "enabled")))
