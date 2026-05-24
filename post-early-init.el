@@ -118,6 +118,15 @@
 ;; on another pipe read before the deferred sentinel runs. A 120s
 ;; cleanup timer ensures orphaned process pipes are closed.
 (when (daemonp)
+  ;; WRAP timer-event-handler: catch ALL timer errors.  The mystery
+  ;; "wrong-type-argument stringp <float>" error from an unknown timer
+  ;; kills the experiment flow.  This advice wraps every timer dispatch
+  ;; so no timer error can propagate to the C-level error handler.
+  (advice-add 'timer-event-handler :around
+              (lambda (orig-fn timer)
+                (ignore-errors
+                  (funcall orig-fn timer))))
+
   (with-eval-after-load 'gptel-request
     (advice-add 'gptel-curl--sentinel :around
                 (lambda (orig-fn process status &rest args)
@@ -131,24 +140,6 @@
                              (when (process-live-p process)
                                (delete-process process))))))
                     (apply orig-fn process status args)))))
-  ;; DIAGNOSTIC: Identify the source of the "wrong-type-argument stringp
-  ;; <float>" timer error.  The error appears after every experiment
-  ;; baseline and kills the flow before the executor runs.  Wrap
-  ;; timer-event-handler to log the timer function + backtrace.  Use a
-  ;; simple string format with no nested backtrace to avoid inner errors.
-  (advice-add 'timer-event-handler :around
-              (lambda (orig-fn timer)
-                (condition-case err
-                    (funcall orig-fn timer)
-                  (error
-                   (let* ((fn (condition-case nil
-                                  (prin1-to-string
-                                   (if (byte-code-function-p (timer--function timer))
-                                       (aref (timer--function timer) 1)
-                                     (timer--function timer)))
-                                (error "?"))))
-                     (message "[diag] timer err: %s fn: %s" (error-message-string err) fn))
-                   (signal (car err) (cdr err))))))
   ;; ZOMBIE REAPER: Periodic cleanup of orphaned gptel curl processes.
   ;; gptel--request-alist can contain non-process entries (buffers from
   ;; async completions, or corrupted float values).  Filter active-procs
@@ -156,8 +147,7 @@
   ;; (process-name <buffer>) or (memq <float> ...).
   (run-at-time 60 60
                (lambda ()
-                 (ignore-errors
-                   (when (and (boundp 'gptel--request-alist)
+                 (when (and (boundp 'gptel--request-alist)
                               (listp gptel--request-alist))
                      (let* ((all-keys (mapcar #'car gptel--request-alist))
                             (active-procs (cl-remove-if-not #'processp all-keys))
@@ -174,7 +164,7 @@
                                  (setq reaped (1+ reaped)))
                              (error nil))))
                        (when (> reaped 0)
-                         (message "[gptel] Reaped %d orphaned curl process(es)" reaped))))))))
+                         (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; Async-safe message: prevent *Messages* buffer corruption

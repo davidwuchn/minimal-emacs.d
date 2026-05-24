@@ -9,12 +9,14 @@
 
 ((nil
   . ((gptel-auto-workflow-targets
-       . ("lisp/modules/gptel-tools-agent.el"
+       . ("lisp/modules/gptel-auto-workflow-projects.el"
           "lisp/modules/gptel-auto-workflow-strategic.el"
-          "lisp/modules/gptel-benchmark-core.el"))
+          "lisp/modules/gptel-tools-agent-prompt-build.el"
+          "lisp/modules/gptel-tools-agent-error.el"
+          "lisp/modules/gptel-benchmark-subagent.el"))
       (gptel-auto-experiment-max-per-target . 5)
       (gptel-auto-experiment-time-budget . 1200)
       (gptel-auto-experiment-no-improvement-threshold . 3)
-      (gptel-model . minimax-m2.7-highspeed))))
+      (gptel-model . kimi-k2.6))))
 
 ;;; .dir-locals.el ends here
