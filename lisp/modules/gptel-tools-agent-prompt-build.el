@@ -1755,13 +1755,18 @@ Call at the start of a new workflow run."
   (setq gptel-auto-workflow--rate-limited-backends nil))
 
 (defun gptel-auto-workflow--rate-limit-failover-candidates (agent-type)
-  "Return fallback provider candidates for AGENT-TYPE after rate limiting."
+  "Return fallback provider candidates for AGENT-TYPE after rate limiting.
+When ontology health data is available, ranks backends by health × keep-rate
+using `gptel-auto-workflow--ranked-subagent-backends'.
+Returns the static fallback chain as a last resort."
   (cond
    ((not (stringp agent-type)) nil)
    ((string= agent-type "executor")
     gptel-auto-workflow-executor-rate-limit-fallbacks)
    ((member agent-type gptel-auto-workflow-headless-fallback-agents)
-    gptel-auto-workflow-headless-subagent-fallbacks)))
+    (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
+             (gptel-auto-workflow--ranked-subagent-backends))
+        gptel-auto-workflow-headless-subagent-fallbacks))))
 
 (defun gptel-auto-workflow--agent-base-preset (agent-type)
   "Return the current base preset plist for AGENT-TYPE, or nil when unavailable.
