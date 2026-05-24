@@ -876,6 +876,35 @@ Key: backend name, value: float-time when retest is allowed.")
   "Return t if BACKEND is probation or worse (health level >= 3)."
   (>= (gptel-auto-workflow--backend-health-level backend) 3))
 
+(defun gptel-auto-workflow--ranked-subagent-backends ()
+  "Return ordered backend/model alist for subagent routing.
+Ranks backends by health-weight × historical-keep-rate, best first.
+Health data from lambda verification strikes; keep-rate from ontology.
+Falls back to the static headless-subagent-fallbacks if no data available."
+  (let ((scored nil)
+        (default-models '(("moonshot" . "kimi-k2.6")
+                          ("DashScope" . "qwen3.6-plus")
+                          ("DeepSeek" . "deepseek-v4-flash")
+                          ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
+                          ("MiniMax" . "minimax-m2.7-highspeed"))))
+    (dolist (entry default-models)
+      (let* ((backend (car entry))
+             (model (cdr entry))
+             (health (if (fboundp 'gptel-auto-workflow--backend-health-weight)
+                         (gptel-auto-workflow--backend-health-weight backend)
+                       1.0))
+             (keep-rate (if (fboundp 'gptel-auto-workflow--get-backend-keep-rate)
+                            (or (gptel-auto-workflow--get-backend-keep-rate backend) 0.2)
+                          0.2))
+             (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
+                               (gptel-auto-workflow--backend-quarantined-p backend)))
+             (score (if quarantined -1.0 (* health keep-rate))))
+        (when (>= score 0.0)
+          (push (cons (cons backend model) score) scored))))
+    (if scored
+        (mapcar #'car (sort scored (lambda (a b) (> (cdr a) (cdr b)))))
+      default-models)))
+
 (defvar gptel-auto-workflow--conflicted-targets nil
   "Alist of (target . ratio) for targets with <50%% backend agreement.
 Populated by Phase 6 consistency check. Targets are deferred until
