@@ -1,4 +1,5 @@
 ; -*- lexical-binding: t; -*-
+(require 'cl-lib)
 (declare-function cl-every "cl-lib")
 (declare-function cl-set-difference "cl-lib")
 (declare-function gptel-auto-workflow--default-dir "gptel-tools-agent-base")
@@ -180,6 +181,8 @@ staging baseline ref."
   "Return (PASS-P . NOTE) comparing STAGING-OUTPUT against main baseline.
 Checks verification failures."
   (let ((staging-failures (gptel-auto-workflow--extract-failed-tests staging-output)))
+    (message "[auto-workflow] Baseline check: staging has %d failures: %S"
+             (length staging-failures) staging-failures)
     (cond
      ((null staging-failures)
       (cons t "Staging tests passed: no failures detected"))
@@ -190,6 +193,10 @@ Checks verification failures."
              (baseline-failures (plist-get baseline :failed-tests))
              (new-failures (cl-set-difference staging-failures baseline-failures
                                               :test #'string=)))
+        (message "[auto-workflow] Baseline check: %s baseline has %d failures: %S"
+                 baseline-ref (length baseline-failures) baseline-failures)
+        (message "[auto-workflow] Baseline check: new failures: %S"
+                 new-failures)
         (cond
          (baseline-error
           (cons nil (format "Failed to determine %s baseline: %s"
