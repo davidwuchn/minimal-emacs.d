@@ -360,6 +360,10 @@ Use symbols in commit messages for searchable git history.
 λ package_dir(x).   var/elpa/ ≡ package_directory
                     | ¬elpa/ at repository_root
                     | configured_in(pre-early-init.el)
+
+λ socket_path(x).   /tmp/emacs$(id -u)/ ≡ daemon_socket_dir
+                    | ¬XDG_RUNTIME_DIR/ (unreliable on macOS)
+                    | $(id -u) preferred over XDG_RUNTIME_DIR
 ```
 
 **Earth provides the solid foundation.** S3 is the grounding center that manages daily reality and distributes resources.
