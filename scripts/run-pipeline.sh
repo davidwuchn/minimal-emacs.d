@@ -247,7 +247,8 @@ verify_research_feedback_loop() {
 
 # ─── Clear stale byte-compiled files to force source reload ───
 find "$DIR/lisp/modules" -name "*.elc" -delete 2>/dev/null || true
-log "Cleared stale .elc files from lisp/modules/"
+find "$DIR/var/eln-cache" -name "*.eln" -delete -maxdepth 3 2>/dev/null || true
+log "Cleared stale .elc + .eln files from lisp/modules/"
 
 # ─── Force-kill all stale Emacs daemons ───
 # Matches: --daemon=ov5-*, --fg-daemon=ov5-*, --bg-daemon=ov5-*

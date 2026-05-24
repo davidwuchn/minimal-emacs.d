@@ -1109,6 +1109,10 @@ ensure_worker_daemon() {
     # Daemons can crash without cleaning up their socket files.
     clean_orphaned_sockets
     
+    # Clear stale native-compile cache to avoid "End of file during parsing"
+    # errors when .el sources changed but .eln cache is stale.
+    find "$DIR/var/eln-cache" -name "*.eln" -delete -maxdepth 3 2>/dev/null || true
+    
     # Ensure SSH keys are loaded in agent (needed by Homebrew OpenSSH)
     ensure_ssh_keys_loaded
     
