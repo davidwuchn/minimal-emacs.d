@@ -412,8 +412,11 @@ before headless operation.")
 (defvar gptel-auto-workflow--messages-start-pos nil
   "Buffer position where the current workflow run's messages begin.")
 
-(defvar gptel-auto-workflow--max-stuck-minutes 90
-  "Maximum minutes workflow can be stuck before auto-stopping.")
+(defvar gptel-auto-workflow--max-stuck-minutes 10
+  "Maximum minutes without progress before watchdog force-stops the workflow.
+Reduced from 90m to 10m: when a subagent task hangs or the experiment loop
+gets stuck between experiments, the old timeout let daemon burn CPU for 1.5
+hours before recovery.")
 
 (defcustom gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"
   "Path to the persisted auto-workflow status snapshot.
@@ -1062,52 +1065,55 @@ is set but the path doesn't exist, recreates the worktree."
 
 (defun gptel-auto-workflow--watchdog-check ()
   "Check if workflow is stuck and force-stop if necessary.
-Prevents workflow from hanging indefinitely due to callback failures."
+Prevents workflow from hanging indefinitely due to callback failures.
+Force-stops when:
+- No progress time recorded (stuck before first subagent)
+- Zero active subagent tasks but workflow still says running
+- Stuck for more than `gptel-auto-workflow--max-stuck-minutes' minutes"
   (when gptel-auto-workflow--running
-    (let ((stuck-minutes (and gptel-auto-workflow--last-progress-time
-                              (/ (float-time (time-subtract (current-time) gptel-auto-workflow--last-progress-time))
-                                 60))))
+    (let* ((stuck-minutes (and gptel-auto-workflow--last-progress-time
+                               (/ (float-time (time-subtract (current-time) gptel-auto-workflow--last-progress-time))
+                                  60)))
+           (active-tasks (and (boundp 'my/gptel--agent-task-state)
+                              (hash-table-p my/gptel--agent-task-state)
+                              (hash-table-count my/gptel--agent-task-state))))
       (cond
+       ((and (numberp stuck-minutes)
+             (> stuck-minutes 2)
+             (not (and (numberp active-tasks) (> active-tasks 0))))
+        ;; Running but no active subagent tasks for >2 min → stuck between experiments
+        (message "[auto-workflow] WATCHDOG: No active subagent tasks for %.1f min, force-stopping"
+                 stuck-minutes)
+        (gptel-auto-workflow--force-stop))
        ((null stuck-minutes)
         (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
-        (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-        (setq gptel-auto-workflow--running nil
-              gptel-auto-workflow--cron-job-running nil
-              gptel-auto-workflow--run-project-root nil
-              gptel-auto-workflow--current-project nil
-              gptel-auto-workflow--current-target nil)
-        (setq gptel-auto-workflow--stats
-              (if (proper-list-p gptel-auto-workflow--stats)
-                  (plist-put gptel-auto-workflow--stats :phase "idle")
-                (list :phase "idle")))
-        (gptel-auto-workflow--persist-status)
-        (when gptel-auto-workflow--watchdog-timer
-          (cancel-timer gptel-auto-workflow--watchdog-timer)
-          (setq gptel-auto-workflow--watchdog-timer nil))
-        (gptel-auto-workflow--stop-status-refresh-timer)
-        nil)
+        (gptel-auto-workflow--force-stop))
        ((> stuck-minutes gptel-auto-workflow--max-stuck-minutes)
         (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
                  stuck-minutes)
-        (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-        (setq gptel-auto-workflow--running nil
-              gptel-auto-workflow--cron-job-running nil
-              gptel-auto-workflow--run-project-root nil
-              gptel-auto-workflow--current-project nil
-              gptel-auto-workflow--current-target nil)
-        (setq gptel-auto-workflow--stats
-              (if (proper-list-p gptel-auto-workflow--stats)
-                  (plist-put gptel-auto-workflow--stats :phase "idle")
-                (list :phase "idle")))
-        (gptel-auto-workflow--persist-status)
-        (when gptel-auto-workflow--watchdog-timer
-          (cancel-timer gptel-auto-workflow--watchdog-timer)
-          (setq gptel-auto-workflow--watchdog-timer nil))
-        (gptel-auto-workflow--stop-status-refresh-timer)
-        nil)
+        (gptel-auto-workflow--force-stop))
        (t
         ;; Still running normally, check again in 5 minutes
         t)))))
+
+(defun gptel-auto-workflow--force-stop ()
+  "Force-stop the current workflow run and clean up state."
+  (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+  (setq gptel-auto-workflow--running nil
+        gptel-auto-workflow--cron-job-running nil
+        gptel-auto-workflow--run-project-root nil
+        gptel-auto-workflow--current-project nil
+        gptel-auto-workflow--current-target nil)
+  (setq gptel-auto-workflow--stats
+        (if (proper-list-p gptel-auto-workflow--stats)
+            (plist-put gptel-auto-workflow--stats :phase "idle")
+          (list :phase "idle")))
+  (gptel-auto-workflow--persist-status)
+  (when gptel-auto-workflow--watchdog-timer
+    (cancel-timer gptel-auto-workflow--watchdog-timer)
+    (setq gptel-auto-workflow--watchdog-timer nil))
+  (gptel-auto-workflow--stop-status-refresh-timer)
+  nil)
 
 (defun gptel-auto-workflow--update-progress ()
   "Update progress timestamp for watchdog tracking."
