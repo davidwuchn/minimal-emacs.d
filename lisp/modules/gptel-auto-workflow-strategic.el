@@ -1481,9 +1481,18 @@ OUTPUT JSON ONLY:
             (or (plist-get context :git-history) "")
             (or (plist-get context :file-sizes) "")
             (or (plist-get context :todos) "")
-            (if (or (null research-findings) (string-empty-p research-findings))
-                "Not available (research disabled)"
-              (truncate-string-to-width research-findings 3500 nil nil "..."))
+             (if (or (null research-findings) (string-empty-p research-findings))
+                 "Not available (research disabled)"
+               (let* ((lines (split-string research-findings "\n"))
+                      (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
+                      (apply-section
+                       (if apply-lines
+                           (concat "\n### Actionable Research Patterns (match to files below)\n"
+                                   (mapconcat #'identity apply-lines "\n")
+                                   "\n\n")
+                         "")))
+                 (concat apply-section
+                         (truncate-string-to-width research-findings 3000 nil nil "..."))))
             max-targets
             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
                 (gptel-auto-workflow--evolution-get-knowledge)
