@@ -20,7 +20,9 @@
 ;; ─── Automatic Evolution ───
 
 (defun gptel-auto-workflow--maybe-run-evolution ()
-  "Run evolution cycle if enabled and not already running."
+  "Run evolution cycle if enabled and not already running.
+Also runs periodic mementum maintenance (index rebuild + synthesis)
+every cycle when there are candidate memories to process."
   (when (and gptel-auto-workflow-evolution-enabled
              (fboundp 'gptel-auto-workflow-evolution-run-cycle))
     ;; Ensure base functions are available (breaks circular require)
@@ -34,7 +36,16 @@
           (gptel-auto-workflow-evolution-run-cycle)
           (message "[auto-workflow] Evolution cycle complete."))
       (error
-       (message "[auto-workflow] Evolution cycle error: %s" err)))))
+       (message "[auto-workflow] Evolution cycle error: %s" err)))
+    ;; Mementum maintenance: rebuild index + synthesize candidates.
+    ;; Runs every cycle (hourly) but is cheap when no new memories exist.
+    (condition-case nil
+        (when (fboundp 'gptel-mementum-build-index)
+          (gptel-mementum-build-index)
+          (when (fboundp 'gptel-mementum-synthesize-all-candidates)
+            (gptel-mementum-synthesize-all-candidates nil t)))
+      (error
+       (message "[mementum] Maintenance error in evolution cycle")))))
 
 (defun gptel-auto-workflow-start-evolution-timer ()
   "Start periodic evolution timer."
