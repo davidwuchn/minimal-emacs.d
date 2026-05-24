@@ -1785,32 +1785,38 @@ chain so that subagent calls do not fall through to the mode-hook default
                                     :use-context nil
                                     :stream my/gptel-subagent-stream)
                               (copy-sequence (cdr agent-config)))))
-    ;; If the merged preset has no backend, use the global gptel-backend
-    ;; as the default.  This is simpler and more reliable than the headless
-    ;; chain auto-select, which depends on timeline-sensitive dynamic
-    ;; variables (--headless, --current-project) that may not be set in
-    ;; every daemon code-path.
-    (when (and (null (plist-get merged :backend))
-               (boundp 'gptel-backend)
-               gptel-backend)
-      (setq merged (plist-put merged :backend gptel-backend)))
-    ;; Fallback: headless chain auto-select (when global backend is nil)
-    (when (and (null (plist-get merged :backend))
-               (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
-               (gptel-auto-workflow--headless-provider-override-active-p)
-               (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
-               (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
-      (let ((candidates (gptel-auto-workflow--rate-limit-failover-candidates agent-type))
-            (excluded (and (boundp 'gptel-auto-workflow--rate-limited-backends)
-                           gptel-auto-workflow--rate-limited-backends)))
-        (when candidates
-          (let ((pick (gptel-auto-workflow--first-available-provider-candidate
-                       candidates excluded)))
-            (when pick
-              (message "[subagent] %s base-preset auto-selected %s/%s"
-                       agent-type (car pick) (cdr pick))
-              (setq merged (plist-put merged :backend (car pick)))
-              (setq merged (plist-put merged :model (cdr pick))))))))
+    ;; When headless mode is active, prefer the ranked backend chain
+    ;; over the global gptel-backend.  This ensures DashScope
+    ;; (configured first in fallbacks) is used instead of the
+    ;; interactive default (MiniMax).  The headless chain pick also
+    ;; avoids burning MiniMax rate limits on the very first subagent
+    ;; call — the rate-limit failover path only activates after a
+    ;; backend has already failed.
+    (if (and (null (plist-get merged :backend))
+             (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
+             (gptel-auto-workflow--headless-provider-override-active-p)
+             (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
+             (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
+        (let ((candidates (gptel-auto-workflow--rate-limit-failover-candidates agent-type))
+              (excluded (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                             gptel-auto-workflow--rate-limited-backends)))
+          (if candidates
+              (let ((pick (gptel-auto-workflow--first-available-provider-candidate
+                           candidates excluded)))
+                (when pick
+                  (message "[subagent] %s base-preset auto-selected %s/%s"
+                           agent-type (car pick) (cdr pick))
+                  (setq merged (plist-put merged :backend (car pick)))
+                  (setq merged (plist-put merged :model (cdr pick)))))
+            ;; Headless active but no candidates: fall back to
+            ;; gptel-backend so the call goes through.
+            (when (and (boundp 'gptel-backend) gptel-backend)
+              (setq merged (plist-put merged :backend gptel-backend)))))
+      ;; Not headless: use the global gptel-backend as default.
+      (when (and (null (plist-get merged :backend))
+                 (boundp 'gptel-backend)
+                 gptel-backend)
+        (setq merged (plist-put merged :backend gptel-backend))))
     merged))
 
 (defun gptel-auto-workflow--runtime-subagent-provider-override (agent-type)
