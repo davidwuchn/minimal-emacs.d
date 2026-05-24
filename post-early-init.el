@@ -122,10 +122,6 @@
     (advice-add 'gptel-curl--sentinel :around
                 (lambda (orig-fn process status &rest args)
                   (if (>= gptel-curl--sentinel-depth 0)
-                      ;; Always defer sentinel processing to prevent C stack
-                      ;; overflow from nested signal-handler frames, even on
-                      ;; the first call (depth 0). The 64MB macOS stack limit
-                      ;; is too tight for synchronous sentinel bodies.
                       (run-at-time 0 nil
                         (lambda ()
                           (condition-case err
@@ -135,18 +131,6 @@
                              (when (process-live-p process)
                                (delete-process process))))))
                     (apply orig-fn process status args)))))
-  ;; WRAP TIMER CALLBACKS: Catch errors with backtrace to identify the
-  ;; source of the mystery 'wrong-type-argument stringp <float>' error
-  ;; that kills the experiment flow after every baseline message.
-  (advice-add 'timer-event-handler :around
-              (lambda (orig-fn timer)
-                (condition-case err
-                    (funcall orig-fn timer)
-                  (error
-                   (message "[timer] Error in %S: %S\n%s"
-                            (and (timerp timer) (prin1-to-string (timer--function timer)))
-                            err
-                            (with-output-to-string (backtrace)))))))
   ;; ZOMBIE REAPER: Periodic cleanup of orphaned gptel curl processes.
   ;; Even with sentinel condition-case guards, a process pipe can become
   ;; orphaned (e.g. if Emacs's self-pipe blocks before the sentinel fires).
@@ -156,21 +140,23 @@
                (lambda ()
                  (condition-case err
                      (when (boundp 'gptel--request-alist)
-                       (let ((active-procs (mapcar #'car gptel--request-alist))
-                             (reaped 0))
-                         (dolist (proc (process-list))
-                           (when (and (process-live-p proc)
-                                      (let ((pname (process-name proc)))
-                                        (and (stringp pname)
-                                             (string-match-p "curl" pname)))
-                                      (not (memq proc active-procs)))
-                             (condition-case nil
-                                 (progn
-                                   (delete-process proc)
-                                   (setq reaped (1+ reaped)))
-                               (error nil))))
-                         (when (> reaped 0)
-                           (message "[gptel] Reaped %d orphaned curl process(es)" reaped))))
+                       (when (and (boundp 'gptel--request-alist)
+                                  (listp gptel--request-alist))
+                         (let ((active-procs (mapcar #'car gptel--request-alist))
+                               (reaped 0))
+                           (dolist (proc (process-list))
+                             (when (and (process-live-p proc)
+                                        (let ((pname (ignore-errors (process-name proc))))
+                                          (and (stringp pname)
+                                               (string-match-p "curl" pname)))
+                                        (not (memq proc active-procs)))
+                               (condition-case nil
+                                   (progn
+                                     (delete-process proc)
+                                     (setq reaped (1+ reaped)))
+                                 (error nil))))
+                           (when (> reaped 0)
+                             (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))
                    (error
                     (message "[gptel] Curl reaper error: %S\n%s"
                              err
