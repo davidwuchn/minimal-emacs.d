@@ -198,6 +198,12 @@ switch to a fallback without blacklisting (used for transient errors)."
           (cl-pushnew current-backend
                       gptel-auto-workflow--rate-limited-backends
                       :test #'string=)
+          ;; Feed subagent failure into persistent health tracking so
+          ;; the Ouroboros smart routing deprioritizes this backend
+          ;; across runs, not just within this run.
+          (when (and (fboundp 'gptel-auto-workflow--record-lambda-strike)
+                     (not skip-blacklist))
+            (gptel-auto-workflow--record-lambda-strike current-backend :degraded))
           ;; Move failed backend to end of fallback chain so subsequent
           ;; subagent calls try working providers first.
           (when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
