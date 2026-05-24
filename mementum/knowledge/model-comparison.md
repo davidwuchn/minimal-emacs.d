@@ -1,5 +1,5 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 1285 experiments across 13 models
+> Auto-generated from 1294 experiments across 13 models
 
 ## Model Rankings (by keep-rate)
 
@@ -8,8 +8,8 @@
 - **MiniMax/persisted-findings**: 22.0%
 - **MiniMax/unknown**: 20.3%
 - **DeepSeek/none**: 19.0%
+- **MiniMax/minimax-m2.7-highspeed**: 15.8%
 - **CF-Gateway/unknown**: 15.6%
-- **MiniMax/minimax-m2.7-highspeed**: 14.9%
 - **MiniMax/own-repos-first**: 12.5%
 - **moonshot/none**: 10.7%
 - **MiniMax/[strategy-evolution] REJECTED candidate: Proposed name ’dynamic-skill-relevance’ is generic (must be descriptive)**: 10.5%
@@ -34,8 +34,8 @@
 
 ## MiniMax/unknown vs MiniMax/minimax-m2.7-highspeed (winner: **MiniMax/unknown**)
 - MiniMax/unknown: 25.6% keep-rate
-- MiniMax/minimax-m2.7-highspeed: 17.9% keep-rate
-- Shared targets: 7 | won 5, won 2, ties 0
+- MiniMax/minimax-m2.7-highspeed: 18.8% keep-rate
+- Shared targets: 8 | won 5, won 3, ties 0
 
 ## MiniMax/unknown vs DeepSeek/none (winner: **tie**)
 - MiniMax/unknown: 19.0% keep-rate
@@ -139,8 +139,8 @@
 
 ## MiniMax/persisted-findings vs MiniMax/minimax-m2.7-highspeed (winner: **MiniMax/persisted-findings**)
 - MiniMax/persisted-findings: 24.2% keep-rate
-- MiniMax/minimax-m2.7-highspeed: 14.3% keep-rate
-- Shared targets: 3 | won 2, won 0, ties 1
+- MiniMax/minimax-m2.7-highspeed: 13.6% keep-rate
+- Shared targets: 3 | won 3, won 0, ties 0
 
 ## MiniMax/template-default vs CF-Gateway/none (winner: **MiniMax/template-default**)
 - MiniMax/template-default: 10.0% keep-rate
@@ -167,11 +167,6 @@
 - DashScope/none: 0.0% keep-rate
 - Shared targets: 2 | won 1, won 0, ties 1
 
-## MiniMax/minimax-m2.7-highspeed vs MiniMax/own-repos-first (winner: **MiniMax/minimax-m2.7-highspeed**)
-- MiniMax/minimax-m2.7-highspeed: 33.3% keep-rate
-- MiniMax/own-repos-first: 0.0% keep-rate
-- Shared targets: 2 | won 2, won 0, ties 0
-
 ## CF-Gateway/unknown vs DashScope/none (winner: **CF-Gateway/unknown**)
 - CF-Gateway/unknown: 18.2% keep-rate
 - DashScope/none: 0.0% keep-rate
@@ -187,10 +182,15 @@
 - moonshot/none: 12.5% keep-rate
 - Shared targets: 2 | won 1, won 1, ties 0
 
-## CF-Gateway/unknown vs MiniMax/minimax-m2.7-highspeed (winner: **CF-Gateway/unknown**)
-- CF-Gateway/unknown: 23.5% keep-rate
-- MiniMax/minimax-m2.7-highspeed: 20.0% keep-rate
+## MiniMax/minimax-m2.7-highspeed vs MiniMax/own-repos-first (winner: **MiniMax/minimax-m2.7-highspeed**)
+- MiniMax/minimax-m2.7-highspeed: 31.2% keep-rate
+- MiniMax/own-repos-first: 0.0% keep-rate
 - Shared targets: 2 | won 2, won 0, ties 0
+
+## MiniMax/minimax-m2.7-highspeed vs CF-Gateway/unknown (winner: **CF-Gateway/unknown**)
+- MiniMax/minimax-m2.7-highspeed: 18.8% keep-rate
+- CF-Gateway/unknown: 23.5% keep-rate
+- Shared targets: 2 | won 0, won 2, ties 0
 
 ## DeepSeek/none vs DashScope/none (winner: **DeepSeek/none**)
 - DeepSeek/none: 12.5% keep-rate
@@ -201,6 +201,11 @@
 - DeepSeek/none: 25.0% keep-rate
 - MiniMax/temporal-pattern-weighting: 0.0% keep-rate
 - Shared targets: 2 | won 2, won 0, ties 0
+
+## DeepSeek/none vs MiniMax/minimax-m2.7-highspeed (winner: **DeepSeek/none**)
+- DeepSeek/none: 14.3% keep-rate
+- MiniMax/minimax-m2.7-highspeed: 11.1% keep-rate
+- Shared targets: 2 | won 1, won 1, ties 0
 
 ## MiniMax/unknown vs MiniMax/[strategy-evolution] REJECTED candidate: Proposed name ’dynamic-skill-relevance’ is generic (must be descriptive) (winner: **MiniMax/unknown**)
 - MiniMax/unknown: 31.4% keep-rate
@@ -234,7 +239,7 @@
 
 ## MiniMax/none vs MiniMax/minimax-m2.7-highspeed (winner: **MiniMax/minimax-m2.7-highspeed**)
 - MiniMax/none: 15.4% keep-rate
-- MiniMax/minimax-m2.7-highspeed: 20.0% keep-rate
+- MiniMax/minimax-m2.7-highspeed: 18.8% keep-rate
 - Shared targets: 2 | won 0, won 0, ties 2
 
 ## MiniMax/none vs DeepSeek/none (winner: **DeepSeek/none**)
@@ -277,6 +282,11 @@
 - MiniMax/[strategy-evolution] REJECTED candidate: Proposed name ’dynamic-skill-relevance’ is generic (must be descriptive): 33.3% keep-rate
 - Shared targets: 1 | won 0, won 1, ties 0
 
+## CF-Gateway/unknown vs MiniMax/temporal-pattern-weighting (winner: **tie**)
+- CF-Gateway/unknown: 0.0% keep-rate
+- MiniMax/temporal-pattern-weighting: 0.0% keep-rate
+- Shared targets: 1 | won 0, won 0, ties 1
+
 ## MiniMax/minimax-m2.7-highspeed vs MiniMax/temporal-pattern-weighting (winner: **MiniMax/minimax-m2.7-highspeed**)
 - MiniMax/minimax-m2.7-highspeed: 66.7% keep-rate
 - MiniMax/temporal-pattern-weighting: 0.0% keep-rate
@@ -288,19 +298,9 @@
 - Shared targets: 1 | won 0, won 1, ties 0
 
 ## MiniMax/minimax-m2.7-highspeed vs MiniMax/[strategy-evolution] REJECTED candidate: Proposed name ’dynamic-skill-relevance’ is generic (must be descriptive) (winner: **MiniMax/[strategy-evolution] REJECTED candidate: Proposed name ’dynamic-skill-relevance’ is generic (must be descriptive)**)
-- MiniMax/minimax-m2.7-highspeed: 25.0% keep-rate
+- MiniMax/minimax-m2.7-highspeed: 23.1% keep-rate
 - MiniMax/[strategy-evolution] REJECTED candidate: Proposed name ’dynamic-skill-relevance’ is generic (must be descriptive): 33.3% keep-rate
 - Shared targets: 1 | won 0, won 1, ties 0
-
-## CF-Gateway/unknown vs MiniMax/temporal-pattern-weighting (winner: **tie**)
-- CF-Gateway/unknown: 0.0% keep-rate
-- MiniMax/temporal-pattern-weighting: 0.0% keep-rate
-- Shared targets: 1 | won 0, won 0, ties 1
-
-## DeepSeek/none vs MiniMax/minimax-m2.7-highspeed (winner: **DeepSeek/none**)
-- DeepSeek/none: 25.0% keep-rate
-- MiniMax/minimax-m2.7-highspeed: 0.0% keep-rate
-- Shared targets: 1 | won 1, won 0, ties 0
 
 ## DeepSeek/none vs CF-Gateway/unknown (winner: **DeepSeek/none**)
 - DeepSeek/none: 25.0% keep-rate
@@ -328,4 +328,4 @@
 - Shared targets: 1 | won 1, won 0, ties 0
 
 
-*Generated: 2026-05-24 11:29*
+*Generated: 2026-05-24 19:05*

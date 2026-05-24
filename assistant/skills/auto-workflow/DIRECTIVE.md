@@ -2,8 +2,8 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.24
-total-experiments: 1285
-total-kept: 244
+total-experiments: 1294
+total-kept: 246
 ---
 
 # Auto-Workflow Program
@@ -19,12 +19,12 @@ total-kept: 244
 |--------|-----------|-------|------|--------|
 | `lisp/modules/gptel-agent-loop.el` | 31% | 65 | 20 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-staging-baseline.el` | 29% | 7 | 2 | 🟡 Active |
-| `lisp/modules/gptel-benchmark-core.el` | 28% | 71 | 20 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-core.el` | 28% | 72 | 20 | 🟡 Active |
 | `lisp/modules/gptel-benchmark-principles.el` | 28% | 18 | 5 | 🟡 Active |
 | `lisp/modules/gptel-ext-context.el` | 27% | 26 | 7 | 🟡 Active |
 | `lisp/modules/nucleus-tools.el` | 26% | 23 | 6 | 🟡 Active |
 | `lisp/modules/gptel-ext-abort.el` | 25% | 8 | 2 | 🟡 Active |
-| `lisp/modules/gptel-tools-memory.el` | 24% | 45 | 11 | 🟡 Active |
+| `lisp/modules/gptel-tools-memory.el` | 24% | 49 | 12 | 🟡 Active |
 | `lisp/modules/gptel-ext-retry.el` | 23% | 53 | 12 | 🟡 Active |
 | `lisp/modules/gptel-auto-workflow-behavioral-tests.el` | 22% | 9 | 2 | 🟡 Active |
 
@@ -57,10 +57,10 @@ total-kept: 244
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (1118×): Investigate root cause
+- **other** (1124×): Investigate root cause
 - **validation-failed** (95×): Improve pre-grade validation prompts
 - **timeout** (36×): Add smaller batch sizes or chunked processing
-- **api-limit** (20×): Implement provider fallback or rate limit handling
+- **api-limit** (23×): Implement provider fallback or rate limit handling
 - **test-failure** (13×): Run tests before committing experiments
 
 ## Success Patterns
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1285 experiments (244 kept locally across 1285 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1294 experiments (246 kept locally across 1294 local records). It evolves every self-evolution cycle.*
