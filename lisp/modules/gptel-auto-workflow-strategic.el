@@ -1458,6 +1458,8 @@ EXTERNAL RESEARCH FINDINGS (new ideas from internet):
 %s
 
 TASK: Select exactly %d files from lisp/modules/ to optimize.
+At LEAST 2 of these MUST match the **Apply:** patterns in EXTERNAL RESEARCH FINDINGS.
+The remaining targets should be standard improvement targets (recent failures, high-complexity modules).
 Do NOT choose files from packages/ or any nested git repo. Those are optimized separately and cannot be merged into the root staging branch by this workflow.
 
 SIZE CONSTRAINT: Skip files over 1000 lines. They are too large for focused experiments.
@@ -1465,15 +1467,11 @@ Example: gptel-tools-agent.el (11,481 lines) is EXCLUDED. Focus on smaller files
 
 %s
 
-MANDATORY: For each **Apply:** pattern in EXTERNAL RESEARCH FINDINGS below,
-find the SINGLE most relevant existing file in lisp/modules/ and add it as a target.
+For **Apply:** patterns: match each to the most relevant existing file.
   Example: Apply: \"Add gptel-agent-mode\" → target lisp/modules/gptel-tools-agent.el
   Example: Apply: \"Add stage-state to gptel-agent-loop\" → target lisp/modules/gptel-agent-loop.el
   Example: Apply: \"Add gptel-agent-queue with file-notify\" → target lisp/modules/gptel-tools-agent-subagent.el
-Each Apply: pattern MUST map to at least one target.  If no file is a perfect match,
-choose the closest one — the executor will adapt the pattern to fit.
-AVOID: Recently-refactored files with no remaining issues.
-AVOID: Files over 1000 lines (too large for focused changes).
+If no file is a perfect match, choose the closest one — the executor will adapt.
 
 OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"

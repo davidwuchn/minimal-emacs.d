@@ -311,11 +311,13 @@ large-result truncation, and result caching."
       ;; gptel-benchmark-call-subagent after chain selection).  When present
       ;; with a :backend, use it directly instead of recomputing from the
       ;; global gptel-backend, which avoids the MiniMax default hijack.
+      ;; BUT: in headless mode, ALWAYS route through the headless chain
+      ;; (agent-base-preset) so the ranked backend list is consulted.
+      ;; gptel-agent-preset may be stale from a previous subagent call's
+      ;; dynamic let-binding leaking across async boundaries.
       (let* ((preset
-              (or (and (boundp 'gptel-agent-preset)
-                       (plistp gptel-agent-preset)
-                       (plist-get gptel-agent-preset :backend)
-                       gptel-agent-preset)
+              (if (and (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
+                       (gptel-auto-workflow--headless-provider-override-active-p))
                   (gptel-auto-workflow--maybe-override-subagent-provider
                    agent-type
                    (or (gptel-auto-workflow--agent-base-preset agent-type)
@@ -323,7 +325,19 @@ large-result truncation, and result caching."
                                     :use-tools t
                                     :use-context nil
                                     :stream my/gptel-subagent-stream)
-                              (cdr agent-config))))))
+                              (cdr agent-config))))
+                (or (and (boundp 'gptel-agent-preset)
+                         (plistp gptel-agent-preset)
+                         (plist-get gptel-agent-preset :backend)
+                         gptel-agent-preset)
+                    (gptel-auto-workflow--maybe-override-subagent-provider
+                     agent-type
+                     (or (gptel-auto-workflow--agent-base-preset agent-type)
+                         (nconc (list :include-reasoning nil
+                                      :use-tools t
+                                      :use-context nil
+                                      :stream my/gptel-subagent-stream)
+                                (cdr agent-config)))))))
              (syms (cons 'gptel--preset (gptel--preset-syms preset)))
              (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
         (cl-progv syms vals

@@ -318,10 +318,12 @@ stale_active_snapshot_recoverable() {
 }
 
 worker_daemon_pids() {
-    ps -eo pid=,args= | awk -v bg="--bg-daemon=$SERVER_NAME" \
-        -v d="--daemon=$SERVER_NAME" \
-        -v fg="--fg-daemon=$SERVER_NAME" '
-        tolower($2) ~ /(^|\/)emacs/ && (index($0, bg) || index($0, d) || index($0, fg)) { print $1 }
+    # Emacs --bg-daemon=\n3,4\nSERVER_NAME embeds literal newline chars
+    # (octal \012 = 0x0A) between --bg-daemon= and the server name,
+    # so the full string spans two lines.  Use regex match on the
+    # server name alone rather than concatenating with --daemon=.
+    ps -eo pid=,args= | awk -v s="$SERVER_NAME" '
+        tolower($2) ~ /(^|\/)emacs/ && index($0, s) { print $1 }
     '
 }
 

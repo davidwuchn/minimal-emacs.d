@@ -954,33 +954,36 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                     workflow-root))
                 ;; Capture the backend and model that will actually be used by the
                 ;; executor, including any subagent provider override.
+                ;; Note: gptel-auto-workflow--get-active-agent-preset does not exist.
+                ;; Use agent-base-preset + maybe-override-subagent-provider directly.
                 (setq experiment-backend
-                      (let* ((executor-preset
-                              (when (fboundp 'gptel-auto-workflow--get-active-agent-preset)
-                                (gptel-auto-workflow--get-active-agent-preset "executor")))
+                      (let* ((base-preset
+                              (when (fboundp 'gptel-auto-workflow--agent-base-preset)
+                                (gptel-auto-workflow--agent-base-preset "executor")))
                              (override-preset
-                              (when (and executor-preset
+                              (when (and base-preset
                                          (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
-                                (gptel-auto-workflow--maybe-override-subagent-provider "executor" executor-preset)))
+                                (gptel-auto-workflow--maybe-override-subagent-provider "executor" base-preset)))
+                             (effective-preset (or override-preset base-preset))
                              (effective-backend
-                              (or (and override-preset
+                              (or (and effective-preset
                                        (fboundp 'gptel-auto-workflow--preset-backend-name)
                                        (gptel-auto-workflow--preset-backend-name
-                                        (plist-get override-preset :backend)))
+                                        (plist-get effective-preset :backend)))
                                   (and (boundp 'gptel-backend) gptel-backend
                                        (fboundp 'gptel-backend-name)
                                        (gptel-backend-name gptel-backend))
                                   "unknown")))
                         effective-backend))
                 (setq experiment-model
-                      (let* ((executor-preset
-                              (when (fboundp 'gptel-auto-workflow--get-active-agent-preset)
-                                (gptel-auto-workflow--get-active-agent-preset "executor")))
+                      (let* ((base-preset
+                              (when (fboundp 'gptel-auto-workflow--agent-base-preset)
+                                (gptel-auto-workflow--agent-base-preset "executor")))
                              (override-preset
-                              (when (and executor-preset
+                              (when (and base-preset
                                          (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
-                                (gptel-auto-workflow--maybe-override-subagent-provider "executor" executor-preset)))
-                             (effective-preset (or override-preset executor-preset))
+                                (gptel-auto-workflow--maybe-override-subagent-provider "executor" base-preset)))
+                             (effective-preset (or override-preset base-preset))
                              (effective-model
                               (or (and effective-preset (plist-get effective-preset :model))
                                   (and (boundp 'gptel-model) gptel-model)
