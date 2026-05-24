@@ -499,11 +499,11 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                 (funcall finish nil))
               started)))
       (error
-       (let ((err-msg (my/gptel--sanitize-for-logging
-                       (error-message-string err) 160)))
-         (message "[auto-workflow] Cron error: %s" err-msg)
-         (unless (string-match-p "Already running" err-msg)
-           (setq gptel-auto-workflow--stats
+        (let ((err-msg (error-message-string err))
+              (bt (with-output-to-string (backtrace))))
+          (message "[auto-workflow] Cron error: %s" err-msg)
+          (message "[auto-workflow] Backtrace: %s" bt)
+          (setq gptel-auto-workflow--stats
                  (list :phase "error" :total 0 :kept 0))
            (gptel-auto-workflow--persist-status))
           (funcall finish nil)
