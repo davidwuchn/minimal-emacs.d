@@ -917,10 +917,8 @@ EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'.
                          (if (fboundp 'gptel-backend-name)
                              (gptel-backend-name gptel-backend)
                            (format "%s" gptel-backend))))
-               (model-str (cond
-                           ((stringp model) model)
-                           ((symbolp model) (symbol-name model))
-                           (t (format "%s" model)))))
+               (model-str (if (stringp model) model
+                            (format "%s" model))))
          (global-limit (or my/gptel-payload-byte-limit my/gptel--unbounded-byte-limit))
          (model-limit
           (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
