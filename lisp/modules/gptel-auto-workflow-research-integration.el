@@ -19,24 +19,28 @@
   "Parse ===RESULT=== JSON blocks from research OUTPUT.
 Returns list of trace plists with :phase, :confidence, :tokens, :decision.
 AutoTTS: research sessions emit structured trace blocks for token-optimal stopping."
-  (let ((traces nil)
-        (pos 0))
-    (while (string-match "===RESULT===" output pos)
-      ;; Save match-end BEFORE json-read-from-string clobbers it
-      (let ((result-end (match-end 0))
-            (brace-pos (string-match "{" output (match-end 0))))
-        (when brace-pos
-          (let* ((json-object-type 'plist)
-                 (json-array-type 'list)
-                 (json-key-type 'keyword))
-            (condition-case nil
-                (let ((trace (json-read-from-string (substring output brace-pos))))
-                  (when (plist-get trace :phase)
-                    (push trace traces)))
-              (error nil)))
-          ;; Use saved result-end, not clobbered match-end
-          (setq pos result-end))))
-    (nreverse traces)))
+  ;; ASSUMPTION: output is a string; nil/empty means no traces to parse
+  ;; EDGE CASE: nil or empty string returns empty list immediately
+  (if (string-empty-p (or output ""))
+      nil
+    (let ((traces nil)
+          (pos 0))
+      (while (string-match "===RESULT===" output pos)
+        ;; Save match-end BEFORE json-read-from-string clobbers it
+        (let ((result-end (match-end 0))
+              (brace-pos (string-match "{" output (match-end 0))))
+          (when brace-pos
+            (let* ((json-object-type 'plist)
+                   (json-array-type 'list)
+                   (json-key-type 'keyword))
+              (condition-case nil
+                  (let ((trace (json-read-from-string (substring output brace-pos))))
+                    (when (plist-get trace :phase)
+                      (push trace traces)))
+                (error nil)))
+            ;; Use saved result-end, not clobbered match-end
+            (setq pos result-end))))
+      (nreverse traces))))
 
 (defun gptel-auto-workflow--research-autotts-stop-early-p (traces)
   "Return non-nil if research should STOP early based on TRACE analysis.
@@ -59,14 +63,18 @@ AutoGo champion league applied to research: best strategy per topic category.")
 (defun gptel-auto-workflow--research-category-for-topic (topic)
   "Classify research TOPIC into ontology category.
 Returns :programming, :agentic, :tool-calls, or :natural-language."
-  (cond
-   ((string-match-p "\\(?:elisp\\|emacs\\|lisp\\|code\\|function\\|module\\)" topic)
-    :programming)
-   ((string-match-p "\\(?:agent\\|workflow\\|daemon\\|pipeline\\|orchestrat\\)" topic)
-    :agentic)
-   ((string-match-p "\\(?:tool\\|backend\\|api\\|provider\\|gateway\\)" topic)
-    :tool-calls)
-   (t :natural-language)))
+  ;; ASSUMPTION: topic is a string; nil/non-string defaults to natural-language
+  ;; EDGE CASE: nil or non-string topic safely falls through to default category
+  (if (stringp topic)
+      (cond
+       ((string-match-p "\\(?:elisp\\|emacs\\|lisp\\|code\\|function\\|module\\)" topic)
+        :programming)
+       ((string-match-p "\\(?:agent\\|workflow\\|daemon\\|pipeline\\|orchestrat\\)" topic)
+        :agentic)
+       ((string-match-p "\\(?:tool\\|backend\\|api\\|provider\\|gateway\\)" topic)
+        :tool-calls)
+       (t :natural-language))
+    :natural-language))
 
 (defun gptel-auto-workflow--update-research-strategy-champion (topic strategy keep-rate)
   "AutoGo: crown research STRATEGY as champion for TOPIC category if it beats baseline.
@@ -172,29 +180,33 @@ Champion league gates them: must beat incumbent before adoption.")
 NAME is strategy identifier. DESCRIPTION is human-readable.
 PHASES is list of phase plists (:name :prompt :stop-condition).
 Strategy is queued for champion league evaluation against existing 4 strategies."
-  (unless (member name gptel-auto-workflow--research-strategies)
-    (push name gptel-auto-workflow--proposed-research-strategies)
-    (message "[meta-harness] Proposed research strategy: %s — queued for champion league"
-             name)
-    ;; Write strategy definition for later benchmark when running in the full workflow.
-    (when (fboundp 'gptel-auto-workflow--worktree-base-root)
-      (let ((strategy-file (expand-file-name
-                            (format "assistant/skills/researcher-prompt/strategies/%s.json"
-                                    name)
-                            (gptel-auto-workflow--worktree-base-root))))
-        (make-directory (file-name-directory strategy-file) t)
-        (with-temp-file strategy-file
-          (let ((json-object-type 'hash-table)
-                (json-array-type 'list)
-                (json-key-type 'string))
-            (insert (json-encode
-                     (let ((h (make-hash-table :test 'equal)))
-                       (puthash "name" name h)
-                       (puthash "description" description h)
-                       (puthash "phases" phases h)
-                       (puthash "status" "proposed" h)
-                       h)))))))
-    name))
+  ;; ASSUMPTION: name is a non-empty string; nil/empty means invalid proposal
+  ;; EDGE CASE: nil or empty name is rejected silently, preventing corrupt strategy files
+  (if (string-empty-p (or name ""))
+      nil
+    (unless (member name gptel-auto-workflow--research-strategies)
+      (push name gptel-auto-workflow--proposed-research-strategies)
+      (message "[meta-harness] Proposed research strategy: %s — queued for champion league"
+               name)
+      ;; Write strategy definition for later benchmark when running in the full workflow.
+      (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+        (let ((strategy-file (expand-file-name
+                              (format "assistant/skills/researcher-prompt/strategies/%s.json"
+                                      name)
+                              (gptel-auto-workflow--worktree-base-root))))
+          (make-directory (file-name-directory strategy-file) t)
+          (with-temp-file strategy-file
+            (let ((json-object-type 'hash-table)
+                  (json-array-type 'list)
+                  (json-key-type 'string))
+              (insert (json-encode
+                       (let ((h (make-hash-table :test 'equal)))
+                         (puthash "name" name h)
+                         (puthash "description" description h)
+                         (puthash "phases" phases h)
+                         (puthash "status" "proposed" h)
+                         h)))))))
+      name)))
 
 (defun gptel-auto-workflow--run-research-champion-league ()
   "AutoGo: benchmark all proposed strategies against incumbents.
@@ -218,8 +230,8 @@ Adopts winners, discards losers. Called from evolution cycle.
                (message "[research-champion] REJECTED: %s (efficiency=%.3f <= %.3f)"
                         proposed efficiency baseline))
              (setq gptel-auto-workflow--proposed-research-strategies
-                     (cl-remove proposed gptel-auto-workflow--proposed-research-strategies
-                                :test #'string=)))))))))
+                   (cl-remove proposed gptel-auto-workflow--proposed-research-strategies
+                              :test #'string=)))))))))
 
 (provide 'gptel-auto-workflow-research-integration)
 ;;; gptel-auto-workflow-research-integration.el ends here
