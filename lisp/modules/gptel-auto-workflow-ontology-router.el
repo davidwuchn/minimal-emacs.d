@@ -904,12 +904,15 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
              (keep-rate (if (fboundp 'gptel-auto-workflow--get-backend-keep-rate)
                             (or (gptel-auto-workflow--get-backend-keep-rate backend) 0.2)
                           0.2))
-             (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
-                               (gptel-auto-workflow--backend-quarantined-p backend)))
-             (score (cond
-                     (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
-                     (quarantined -1.0)       ; health gate: hard exclude
-                     (t (* health keep-rate)))))
+              (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
+                                (gptel-auto-workflow--backend-quarantined-p backend)))
+              (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                                 (member backend gptel-auto-workflow--rate-limited-backends)))
+              (score (cond
+                      (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
+                      (quarantined -1.0)       ; health gate: hard exclude
+                      (rate-limited 0.01)      ; demoted but still available as last resort
+                      (t (* health keep-rate)))))
         (when (>= score 0.0)
           (push (cons (cons backend model) score) scored))))
     (if scored
