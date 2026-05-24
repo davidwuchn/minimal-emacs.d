@@ -404,11 +404,11 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                  gptel-auto-experiment-time-budget 900
                  gptel-auto-experiment-validation-retry-time-budget 120)
            (gptel-auto-workflow--enable-headless-suppression)
-          (if gptel-auto-workflow--running
-              (progn
-                (message "[auto-workflow] Job already running; skipping new request")
-                (funcall finish nil)
-                nil)
+           (if gptel-auto-workflow--running
+               (progn
+                 (message "[auto-workflow] Job already running; skipping new request")
+                 (gptel-auto-workflow--disable-headless-suppression)
+                 nil)
             ;; HARDEN: Disable native-comp deferred compilation during workflow startup
             ;; to prevent void-variable bugs in closures on arm64 Emacs 30.1.
             (when (and (featurep 'native-compile)
@@ -495,13 +495,15 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                 (funcall finish nil))
               started)))
       (error
-       (message "[auto-workflow] Cron error: %s"
-                (my/gptel--sanitize-for-logging (error-message-string err) 160))
-       (setq gptel-auto-workflow--stats
-             (list :phase "error" :total 0 :kept 0))
-       (gptel-auto-workflow--persist-status)
-       (funcall finish nil)
-       nil))))
+       (let ((err-msg (my/gptel--sanitize-for-logging
+                       (error-message-string err) 160)))
+         (message "[auto-workflow] Cron error: %s" err-msg)
+         (unless (string-match-p "Already running" err-msg)
+           (setq gptel-auto-workflow--stats
+                 (list :phase "error" :total 0 :kept 0))
+           (gptel-auto-workflow--persist-status))
+          (funcall finish nil)
+          nil)))))
 
 
 (defun gptel-auto-workflow--experiment-suffix ()
