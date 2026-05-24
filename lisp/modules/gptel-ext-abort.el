@@ -168,18 +168,20 @@ request is active."
     ;; the nucleus [Plan]/[Agent] toggle on top.  Calling gptel-use-header-line
     ;; alone blows away the toggle; nucleus--header-line-apply-preset-label
     ;; alone doesn't work if header-line-format was wiped by gptel internals.
-    (when (and gptel-mode gptel-use-header-line)
-      (when (fboundp 'gptel-use-header-line)
-        (gptel-use-header-line))
-      (when (fboundp 'nucleus--header-line-apply-preset-label)
-        (nucleus--header-line-apply-preset-label)))
-    ;; Add prompt marker and position cursor for next input
-    (when gptel-mode
-      (let ((inhibit-read-only t))
-        (goto-char (point-max))
-        (my/gptel--insert-prompt-marker-at-eob)
-        ;; Position cursor after marker
-        (my/gptel--goto-prompt-marker-end)))
+    (let ((gptel-mode-val (bound-and-true-p gptel-mode))
+          (gptel-use-hl (bound-and-true-p gptel-use-header-line)))
+      (when (and gptel-mode-val gptel-use-hl)
+        (when (fboundp 'gptel-use-header-line)
+          (gptel-use-header-line))
+        (when (fboundp 'nucleus--header-line-apply-preset-label)
+          (nucleus--header-line-apply-preset-label)))
+      ;; Add prompt marker and position cursor for next input
+      (when gptel-mode-val
+        (let ((inhibit-read-only t))
+          (goto-char (point-max))
+          (my/gptel--insert-prompt-marker-at-eob)
+          ;; Position cursor after marker
+          (my/gptel--goto-prompt-marker-end))))
     (message "Aborted gptel activity (%d process%s killed) - ready for next prompt"
              killed (if (= killed 1) "" "es"))))
 

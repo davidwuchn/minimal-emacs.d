@@ -916,14 +916,16 @@ EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'.
                     (and (boundp 'gptel-backend) gptel-backend
                          (if (fboundp 'gptel-backend-name)
                              (gptel-backend-name gptel-backend)
-                           (format "%s" gptel-backend)))))
+                           (format "%s" gptel-backend))))
+               (model-str (cond
+                           ((stringp model) model)
+                           ((symbolp model) (symbol-name model))
+                           (t (format "%s" model)))))
          (global-limit (or my/gptel-payload-byte-limit my/gptel--unbounded-byte-limit))
          (model-limit
-          (if (stringp model)
-              (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
-                       when (string-match (regexp-quote pattern) model)
-                       return limit)
-            nil)))
+          (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
+                   when (string-match (regexp-quote pattern) model-str)
+                   return limit)))
     (if model-limit
         ;; Model has a declared limit — use it directly.
         ;; The global limit is a safety net for unknown/unlisted models.
