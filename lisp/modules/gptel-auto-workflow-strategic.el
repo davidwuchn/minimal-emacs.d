@@ -2605,10 +2605,10 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
 (defun gptel-auto-workflow--researcher-daemon-p ()
   "Return non-nil when running inside the dedicated researcher daemon."
   (or (equal (getenv "MINIMAL_EMACS_WORKFLOW_ROLE") "research")
-      (equal (getenv "AUTO_WORKFLOW_EMACS_SERVER") "copilot-researcher")
-      (equal (or (daemonp) "") "copilot-researcher")
+      (equal (getenv "AUTO_WORKFLOW_EMACS_SERVER") "ov5-researcher")
+      (equal (or (daemonp) "") "ov5-researcher")
       (and (boundp 'server-name)
-           (equal server-name "copilot-researcher"))))
+           (equal server-name "ov5-researcher"))))
 
 (defun gptel-auto-workflow-stop-periodic-research ()
   "Stop periodic researcher runs."

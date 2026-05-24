@@ -1,10 +1,10 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 1182 experiments across 9 models
+> Auto-generated from 1192 experiments across 9 models
 
 ## Model Rankings (by keep-rate)
 
 - **MiniMax/template-default**: 33.3%
-- **MiniMax/minimax-m2.7-highspeed**: 27.6%
+- **MiniMax/minimax-m2.7-highspeed**: 25.4%
 - **MiniMax/unknown**: 22.1%
 - **MiniMax/none**: 15.2%
 - **MiniMax/persisted-findings**: 14.7%
@@ -18,15 +18,15 @@
 - MiniMax/none: 16.2% keep-rate
 - Shared targets: 18 | won 7, won 6, ties 5
 
+## MiniMax/minimax-m2.7-highspeed vs MiniMax/unknown (winner: **tie**)
+- MiniMax/minimax-m2.7-highspeed: 26.6% keep-rate
+- MiniMax/unknown: 25.6% keep-rate
+- Shared targets: 10 | won 3, won 4, ties 3
+
 ## MiniMax/unknown vs DashScope/none (winner: **MiniMax/unknown**)
 - MiniMax/unknown: 18.4% keep-rate
 - DashScope/none: 0.0% keep-rate
 - Shared targets: 8 | won 7, won 0, ties 1
-
-## MiniMax/minimax-m2.7-highspeed vs MiniMax/unknown (winner: **tie**)
-- MiniMax/minimax-m2.7-highspeed: 30.0% keep-rate
-- MiniMax/unknown: 27.8% keep-rate
-- Shared targets: 8 | won 3, won 2, ties 3
 
 ## MiniMax/none vs DashScope/none (winner: **MiniMax/none**)
 - MiniMax/none: 10.8% keep-rate
@@ -59,9 +59,9 @@
 - Shared targets: 4 | won 1, won 2, ties 1
 
 ## MiniMax/minimax-m2.7-highspeed vs MiniMax/none (winner: **MiniMax/none**)
-- MiniMax/minimax-m2.7-highspeed: 34.1% keep-rate
+- MiniMax/minimax-m2.7-highspeed: 32.6% keep-rate
 - MiniMax/none: 40.6% keep-rate
-- Shared targets: 4 | won 1, won 2, ties 1
+- Shared targets: 4 | won 0, won 2, ties 2
 
 ## DashScope/none vs CF-Gateway/none (winner: **tie**)
 - DashScope/none: 0.0% keep-rate
@@ -133,5 +133,10 @@
 - MiniMax/persisted-findings: 33.3% keep-rate
 - Shared targets: 1 | won 1, won 0, ties 0
 
+## MiniMax/template-default vs MiniMax/minimax-m2.7-highspeed (winner: **MiniMax/template-default**)
+- MiniMax/template-default: 50.0% keep-rate
+- MiniMax/minimax-m2.7-highspeed: 0.0% keep-rate
+- Shared targets: 1 | won 1, won 0, ties 0
 
-*Generated: 2026-05-23 18:44*
+
+*Generated: 2026-05-24 11:14*

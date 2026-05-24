@@ -107,7 +107,7 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
          (default-directory worktree)
          (process-environment
           (gptel-auto-workflow--isolated-state-environment
-           "copilot-auto-workflow-test-"
+           "ov5-auto-workflow-test-"
            (list "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1")))
          (isolated-status-file (getenv "AUTO_WORKFLOW_STATUS_FILE"))
          (test-script (expand-file-name "scripts/run-tests.sh" worktree))

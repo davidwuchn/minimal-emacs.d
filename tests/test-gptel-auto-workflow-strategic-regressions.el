@@ -214,7 +214,7 @@ Note: This test fails in batch mode because retry uses run-with-timer async sche
         (timer-scheduled nil)
         (ran-immediately nil))
     (cl-letf (((symbol-function 'daemonp)
-               (lambda (&rest _) "copilot-researcher"))
+               (lambda (&rest _) "ov5-researcher"))
               ((symbol-function 'run-with-timer)
                (lambda (&rest args)
                  (setq timer-scheduled args)

@@ -89,3 +89,71 @@
 
 (provide 'test-gptel-ext-abort)
 ;;; test-gptel-ext-abort.el ends here
+;;; Position validation tests
+
+(ert-deftest test-abort/valid-position-p/positive-integer ()
+  "Positive integers within buffer bounds should be valid."
+  (let ((buf (generate-new-buffer "*test-valid*")))
+    (with-current-buffer buf
+      (insert "hello")
+      (should (my/gptel--valid-position-p 1))
+      (should (my/gptel--valid-position-p 5))
+      (should (my/gptel--valid-position-p (point-max))))
+    (kill-buffer buf)))
+
+(ert-deftest test-abort/valid-position-p/invalid-values ()
+  "Nil, zero, negative, and out-of-bounds values should be invalid."
+  (let ((buf (generate-new-buffer "*test-valid*")))
+    (with-current-buffer buf
+      (insert "hello")
+      (should-not (my/gptel--valid-position-p nil))
+      (should-not (my/gptel--valid-position-p 0))
+      (should-not (my/gptel--valid-position-p -1))
+      (should-not (my/gptel--valid-position-p 100))
+      (should-not (my/gptel--valid-position-p (1+ (point-max)))))
+    (kill-buffer buf)))
+
+(ert-deftest test-abort/valid-position-p/non-integers ()
+  "Non-integer values should be invalid."
+  (should-not (my/gptel--valid-position-p "5"))
+  (should-not (my/gptel--valid-position-p 'foo))
+  (should-not (my/gptel--valid-position-p 5.0)))
+
+(ert-deftest test-abort/validate-end-for-goto/valid-end ()
+  "Valid end should be returned as-is."
+  (let ((buf (generate-new-buffer "*test-validate*")))
+    (with-current-buffer buf
+      (insert "hello")
+      (should (= (my/gptel--validate-end-for-goto 5) 5))
+      (should (= (my/gptel--validate-end-for-goto (point-max)) (point-max))))
+    (kill-buffer buf)))
+
+(ert-deftest test-abort/validate-end-for-goto/invalid-end-fallback ()
+  "Invalid end should fallback to point-max."
+  (let ((buf (generate-new-buffer "*test-validate*")))
+    (with-current-buffer buf
+      (insert "hello")
+      (should (= (my/gptel--validate-end-for-goto nil) (point-max)))
+      (should (= (my/gptel--validate-end-for-goto -1) (point-max)))
+      (should (= (my/gptel--validate-end-for-goto 100) (point-max))))
+    (kill-buffer buf)))
+
+(ert-deftest test-abort/add-prompt-marker-ignores-nil-end ()
+  "add-prompt-marker should not crash on nil end."
+  (let ((buf (generate-new-buffer "*test-marker*")))
+    (with-current-buffer buf
+      (setq-local gptel-mode t)
+      (my/gptel-add-prompt-marker 1 nil)  ; Should not error
+      (should (= (point) 1)))  ; Point unchanged
+    (kill-buffer buf)))
+
+(ert-deftest test-abort/add-prompt-marker-ignores-out-of-bounds-end ()
+  "add-prompt-marker should not crash on out-of-bounds end."
+  (let ((buf (generate-new-buffer "*test-marker*")))
+    (with-current-buffer buf
+      (insert "hello")
+      (setq-local gptel-mode t)
+      (my/gptel-add-prompt-marker 1 9999)  ; Should not error
+      (should (= (point) (1+ (length "hello")))))  ; Point at EOB
+    (kill-buffer buf)))
+

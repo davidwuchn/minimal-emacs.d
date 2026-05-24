@@ -828,7 +828,7 @@ When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
           (and include-messages-p
                (make-temp-file "auto-workflow-snapshot-paths-" nil ".txt")))
          (isolated-server-name
-          (make-temp-name (or server-prefix "copilot-auto-workflow-test-")))
+          (make-temp-name (or server-prefix "ov5-auto-workflow-test-")))
          (env
           (append
            extra-env

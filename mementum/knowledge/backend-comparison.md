@@ -1,5 +1,5 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 1182 experiments across 3 backends
+> Auto-generated from 1192 experiments across 3 backends
 
 ## MiniMax vs DashScope (winner: **MiniMax**)
 - MiniMax: 15.6% keep-rate
@@ -17,4 +17,4 @@
 - Shared targets: 3 | DashScope won 0, CF-Gateway won 0, ties 3
 
 
-*Generated: 2026-05-23 18:44*
+*Generated: 2026-05-24 11:14*

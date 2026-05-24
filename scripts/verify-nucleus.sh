@@ -18,7 +18,7 @@ RUNTIME_DIR=$(mktemp -d "${TMPDIR:-/tmp}/verify-nucleus-runtime.XXXXXX") || {
     echo "Failed to create isolated verifier runtime directory" >&2
     exit 1
 }
-WORKFLOW_SERVER="copilot-auto-workflow-verify-$(basename "$RUNTIME_DIR")"
+WORKFLOW_SERVER="ov5-auto-workflow-verify-$(basename "$RUNTIME_DIR")"
 
 cleanup() {
     rm -f "$TMP_ELISP"

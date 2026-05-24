@@ -1,8 +1,8 @@
 ---
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
-version: 2026.05.23
-total-experiments: 1181
+version: 2026.05.24
+total-experiments: 1191
 total-kept: 218
 ---
 
@@ -26,7 +26,7 @@ total-kept: 218
 | `lisp/modules/gptel-tools-agent-runtime.el` | 29% | 35 | 10 | 🟡 Active |
 | `lisp/modules/gptel-agent-loop.el` | 28% | 39 | 11 | 🟡 Active |
 | `lisp/modules/gptel-tools-agent-git.el` | 28% | 39 | 11 | 🟡 Active |
-| `lisp/modules/gptel-ext-abort.el` | 27% | 30 | 8 | 🟡 Active |
+| `lisp/modules/gptel-ext-abort.el` | 25% | 32 | 8 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -57,8 +57,8 @@ total-kept: 218
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (988×): Investigate root cause
-- **timeout** (110×): Add smaller batch sizes or chunked processing
+- **other** (997×): Investigate root cause
+- **timeout** (111×): Add smaller batch sizes or chunked processing
 - **validation-failed** (53×): Improve pre-grade validation prompts
 - **api-limit** (20×): Implement provider fallback or rate limit handling
 - **test-failure** (11×): Run tests before committing experiments
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1181 experiments (218 kept locally across 1181 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1191 experiments (218 kept locally across 1191 local records). It evolves every self-evolution cycle.*

@@ -10,7 +10,7 @@ SOCKET_PIDS=()
 DAEMON_SERVERS=()
 DAEMON_RUNTIME_DIRS=()
 TEMP_ARTIFACTS=()
-GLOBAL_SNAPSHOT_CACHE="$DIR/var/tmp/cron/copilot-auto-workflow-snapshot-paths.txt"
+GLOBAL_SNAPSHOT_CACHE="$DIR/var/tmp/cron/ov5-auto-workflow-snapshot-paths.txt"
 GLOBAL_SNAPSHOT_CACHE_BACKUP=""
 GLOBAL_SNAPSHOT_CACHE_HAD_FILE=0
 
