@@ -497,14 +497,13 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
        (error
         (message "[auto-workflow] Cron error: %s"
                  (my/gptel--sanitize-for-logging (error-message-string err) 160))
-        (when (fboundp 'backtrace--print)
-          (message "[auto-workflow] Cron backtrace:\n%s"
-                   (with-output-to-string
-                     (backtrace))))
         (setq gptel-auto-workflow--stats
              (list :phase "error" :total 0 :kept 0))
        (gptel-auto-workflow--persist-status)
-       (funcall finish nil)
+       (condition-case nil
+           (funcall finish nil)
+         (error (message "[auto-workflow] Finish callback also failed: %s"
+                         (error-message-string err))))
        nil))))
 
 
