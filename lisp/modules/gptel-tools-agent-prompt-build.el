@@ -1762,7 +1762,9 @@ Returns the static fallback chain as a last resort."
   (cond
    ((not (stringp agent-type)) nil)
    ((string= agent-type "executor")
-    gptel-auto-workflow-executor-rate-limit-fallbacks)
+    (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
+             (gptel-auto-workflow--ranked-subagent-backends))
+        gptel-auto-workflow-executor-rate-limit-fallbacks))
    ((member agent-type gptel-auto-workflow-headless-fallback-agents)
     (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
              (gptel-auto-workflow--ranked-subagent-backends))

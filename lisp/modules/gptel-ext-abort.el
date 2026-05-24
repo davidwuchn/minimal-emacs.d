@@ -23,8 +23,11 @@
   :type 'integer
   :group 'my/gptel-interrupt)
 
-(defcustom my/gptel-curl-max-time 180
-  "Maximum seconds for a single gptel curl request."
+(defcustom my/gptel-curl-max-time 300
+  "Maximum seconds for a single gptel curl request.
+Increased from 180 to 300 because executor subagent code-generation
+prompts (20-30KB) routinely exceed 180s on DashScope and DeepSeek.
+Analyzer/grader/comparator are smaller (30-60s)."
   :type 'integer
   :group 'my/gptel-interrupt)
 
