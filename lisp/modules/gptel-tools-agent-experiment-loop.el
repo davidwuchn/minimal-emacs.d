@@ -1070,31 +1070,35 @@ Force-stops when:
 - No progress time recorded (stuck before first subagent)
 - Zero active subagent tasks but workflow still says running
 - Stuck for more than `gptel-auto-workflow--max-stuck-minutes' minutes"
-  (when gptel-auto-workflow--running
-    (let* ((stuck-minutes (and gptel-auto-workflow--last-progress-time
-                               (/ (float-time (time-subtract (current-time) gptel-auto-workflow--last-progress-time))
-                                  60)))
-           (active-tasks (and (boundp 'my/gptel--agent-task-state)
-                              (hash-table-p my/gptel--agent-task-state)
-                              (hash-table-count my/gptel--agent-task-state))))
-      (cond
-       ((and (numberp stuck-minutes)
-             (> stuck-minutes 2)
-             (not (and (numberp active-tasks) (> active-tasks 0))))
-        ;; Running but no active subagent tasks for >2 min → stuck between experiments
-        (message "[auto-workflow] WATCHDOG: No active subagent tasks for %.1f min, force-stopping"
-                 stuck-minutes)
-        (gptel-auto-workflow--force-stop))
-       ((null stuck-minutes)
-        (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
-        (gptel-auto-workflow--force-stop))
-       ((> stuck-minutes gptel-auto-workflow--max-stuck-minutes)
-        (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
-                 stuck-minutes)
-        (gptel-auto-workflow--force-stop))
-       (t
-        ;; Still running normally, check again in 5 minutes
-        t)))))
+  (condition-case err
+      (when gptel-auto-workflow--running
+        (let* ((stuck-minutes (and gptel-auto-workflow--last-progress-time
+                                   (/ (float-time (time-subtract (current-time) gptel-auto-workflow--last-progress-time))
+                                      60)))
+               (active-tasks (and (boundp 'my/gptel--agent-task-state)
+                                  (hash-table-p my/gptel--agent-task-state)
+                                  (hash-table-count my/gptel--agent-task-state))))
+          (cond
+           ((and (numberp stuck-minutes)
+                 (> stuck-minutes 2)
+                 (not (and (numberp active-tasks) (> active-tasks 0))))
+            (message "[auto-workflow] WATCHDOG: No active subagent tasks for %.1f min, force-stopping"
+                     stuck-minutes)
+            (gptel-auto-workflow--force-stop))
+           ((null stuck-minutes)
+            (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
+            (gptel-auto-workflow--force-stop))
+           ((> stuck-minutes gptel-auto-workflow--max-stuck-minutes)
+            (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
+                     stuck-minutes)
+            (gptel-auto-workflow--force-stop))
+           (t
+            t))))
+    (error
+     (message "[auto-workflow] WATCHDOG: Check failed: %S\n%s"
+              err
+              (with-output-to-string (backtrace)))
+     nil)))
 
 (defun gptel-auto-workflow--force-stop ()
   "Force-stop the current workflow run and clean up state."

@@ -142,22 +142,27 @@
   ;; request alist, preventing the self-pipe (fd 7) from blocking forever.
   (run-at-time 60 60
                (lambda ()
-                 (when (boundp 'gptel--request-alist)
-                   (let ((active-procs (mapcar #'car gptel--request-alist))
-                         (reaped 0))
-                      (dolist (proc (process-list))
-                        (when (and (process-live-p proc)
-                                   (let ((pname (process-name proc)))
-                                     (and (stringp pname)
-                                          (string-match-p "curl" pname)))
-                                   (not (memq proc active-procs)))
-                         (condition-case nil
-                             (progn
-                               (delete-process proc)
-                               (setq reaped (1+ reaped)))
-                           (error nil))))
-                      (when (> reaped 0)
-                        (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))))
+                 (condition-case err
+                     (when (boundp 'gptel--request-alist)
+                       (let ((active-procs (mapcar #'car gptel--request-alist))
+                             (reaped 0))
+                         (dolist (proc (process-list))
+                           (when (and (process-live-p proc)
+                                      (let ((pname (process-name proc)))
+                                        (and (stringp pname)
+                                             (string-match-p "curl" pname)))
+                                      (not (memq proc active-procs)))
+                             (condition-case nil
+                                 (progn
+                                   (delete-process proc)
+                                   (setq reaped (1+ reaped)))
+                               (error nil))))
+                         (when (> reaped 0)
+                           (message "[gptel] Reaped %d orphaned curl process(es)" reaped))))
+                   (error
+                    (message "[gptel] Curl reaper error: %S\n%s"
+                             err
+                             (with-output-to-string (backtrace))))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; Async-safe message: prevent *Messages* buffer corruption
