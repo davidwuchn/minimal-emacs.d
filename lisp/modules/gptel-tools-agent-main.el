@@ -293,9 +293,13 @@ Usage:
     ;; Restore research context from findings file.  Survives daemon restart
     ;; between pipeline Steps 3 and 4 — loads the findings saved by the
     ;; researcher so experiment metadata links back to the research trace.
-    (when (fboundp 'gptel-auto-workflow--ensure-research-context)
-      (gptel-auto-workflow--ensure-research-context
-       (or (gptel-auto-workflow-load-research-findings) "")))
+    (condition-case err
+        (when (fboundp 'gptel-auto-workflow--ensure-research-context)
+          (gptel-auto-workflow--ensure-research-context
+           (or (gptel-auto-workflow-load-research-findings) "")))
+      (error
+       (message "[auto-workflow] Research context restore skipped: %s"
+                (error-message-string err))))
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
@@ -404,11 +408,11 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                  gptel-auto-experiment-time-budget 900
                  gptel-auto-experiment-validation-retry-time-budget 120)
            (gptel-auto-workflow--enable-headless-suppression)
-          (if gptel-auto-workflow--running
-              (progn
-                (message "[auto-workflow] Job already running; skipping new request")
-                (funcall finish nil)
-                nil)
+           (if gptel-auto-workflow--running
+               (progn
+                 (message "[auto-workflow] Job already running; skipping new request")
+                 (gptel-auto-workflow--disable-headless-suppression)
+                 nil)
             ;; HARDEN: Disable native-comp deferred compilation during workflow startup
             ;; to prevent void-variable bugs in closures on arm64 Emacs 30.1.
             (when (and (featurep 'native-compile)
@@ -494,14 +498,26 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
               (unless started
                 (funcall finish nil))
               started)))
-      (error
-       (message "[auto-workflow] Cron error: %s"
-                (my/gptel--sanitize-for-logging (error-message-string err) 160))
-       (setq gptel-auto-workflow--stats
-             (list :phase "error" :total 0 :kept 0))
-       (gptel-auto-workflow--persist-status)
-       (funcall finish nil)
-       nil))))
+       (error
+         (let* ((err-msg (my/gptel--sanitize-for-logging
+                          (error-message-string err) 160))
+                (bt (with-output-to-string (backtrace))))
+           (message "[auto-workflow] Cron error: %s" err-msg)
+           (with-temp-file (expand-file-name "var/tmp/cron-error.txt"
+                                             (or (and (boundp 'minimal-emacs-user-directory)
+                                                      minimal-emacs-user-directory)
+                                                 default-directory))
+             (insert (format "Time: %s\nError: %s\nBacktrace:\n%s\n"
+                             (format-time-string "%Y-%m-%dT%H:%M:%S")
+                             err-msg bt)))
+           (setq gptel-auto-workflow--stats
+                 (list :phase "error" :total 0 :kept 0))
+           (gptel-auto-workflow--persist-status)
+           (condition-case nil
+               (funcall finish nil)
+             (error (message "[auto-workflow] Finish callback also failed: %s"
+                             (error-message-string err))))
+           nil)))))
 
 
 (defun gptel-auto-workflow--experiment-suffix ()

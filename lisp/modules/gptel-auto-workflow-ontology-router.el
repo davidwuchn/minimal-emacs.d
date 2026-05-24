@@ -880,7 +880,11 @@ Key: backend name, value: float-time when retest is allowed.")
   "Return ordered backend/model alist for subagent routing.
 Ranks backends by health-weight × historical-keep-rate, best first.
 Health data from lambda verification strikes; keep-rate from ontology.
-Falls back to the static headless-subagent-fallbacks if no data available."
+Falls back to the static headless-subagent-fallbacks if no data available.
+
+Phase 2 P(λ) gating: backends with :degraded lambda verification are
+excluded entirely (score 0), not just deprioritized. This implements the
+hard gate: if a backend fails the lambda compiler check, it's not used."
   (let ((scored nil)
         (default-models '(("moonshot" . "kimi-k2.6")
                           ("DashScope" . "qwen3.6-plus")
@@ -890,15 +894,25 @@ Falls back to the static headless-subagent-fallbacks if no data available."
     (dolist (entry default-models)
       (let* ((backend (car entry))
              (model (cdr entry))
+             ;; P(λ) gate: hard-exclude backends that fail lambda verification
+             (lambda-status (and (boundp 'gptel-auto-workflow--lambda-verification-results)
+                                 (gethash backend gptel-auto-workflow--lambda-verification-results)))
+             (lambda-degraded (eq lambda-status :degraded))
              (health (if (fboundp 'gptel-auto-workflow--backend-health-weight)
                          (gptel-auto-workflow--backend-health-weight backend)
                        1.0))
              (keep-rate (if (fboundp 'gptel-auto-workflow--get-backend-keep-rate)
                             (or (gptel-auto-workflow--get-backend-keep-rate backend) 0.2)
                           0.2))
-             (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
-                               (gptel-auto-workflow--backend-quarantined-p backend)))
-             (score (if quarantined -1.0 (* health keep-rate))))
+              (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
+                                (gptel-auto-workflow--backend-quarantined-p backend)))
+              (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                                 (member backend gptel-auto-workflow--rate-limited-backends)))
+              (score (cond
+                      (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
+                      (quarantined -1.0)       ; health gate: hard exclude
+                      (rate-limited 0.01)      ; demoted but still available as last resort
+                      (t (* health keep-rate)))))
         (when (>= score 0.0)
           (push (cons (cons backend model) score) scored))))
     (if scored

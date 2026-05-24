@@ -1,0 +1,1 @@
+{"name":"contextual-dependencies","version":"1.0","hypothesis":"Including signatures of functions from required libraries helps the AI understand available utilities","axis":"B","components":["context","libraries","signatures"]}
