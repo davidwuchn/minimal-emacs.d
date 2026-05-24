@@ -1444,7 +1444,7 @@ row for the same experiment and target."
             (gptel-auto-workflow--experiment-complete-hook experiment)
              (let ((exp-id (round (or (gptel-auto-workflow--plist-get experiment :id) 0))))
                (when (and (> exp-id 0) (zerop (% exp-id 5)))
-                 (run-with-idle-timer 30 nil #'gptel-auto-workflow-evolution-run-cycle))))
+                 (run-with-idle-timer 30 nil (lambda () (condition-case err (gptel-auto-workflow-evolution-run-cycle) (error (message "[evolution] Timer error: %s" err))))))))
         (error
          (message "[auto-workflow] Evolution hook error: %s" err))))
     (gptel-auto-workflow--sync-live-kept-count run-id file)))
