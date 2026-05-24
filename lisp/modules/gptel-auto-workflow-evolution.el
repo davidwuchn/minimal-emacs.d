@@ -1884,31 +1884,49 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (message "[evolution] External research available: controller thresholds optimized")))
     (when findings-file
       (message "[evolution] Findings file: %s" findings-file)))
-  (gptel-auto-workflow--evolution-synthesize)
-  (gptel-auto-workflow--evolution-consolidate-insights)
+  (condition-case err
+      (gptel-auto-workflow--evolution-synthesize)
+    (error (message "[evolution] Step synthesize: %s" err)))
+  (condition-case err
+      (gptel-auto-workflow--evolution-consolidate-insights)
+    (error (message "[evolution] Step consolidate-insights: %s" err)))
   ;; Step A: Controller evolution (traces → strategy-guidance.json)
   (when (fboundp 'gptel-auto-workflow--run-autotts-evolution)
     (message "[auto-workflow] Running controller evolution from traces...")
-    (gptel-auto-workflow--run-autotts-evolution))
+    (condition-case err
+        (gptel-auto-workflow--run-autotts-evolution)
+      (error (message "[evolution] Step autotts-evolution: %s" err))))
   ;; Step A.5: Controller code generation agent (AutoTTS-defining feature)
   ;; Runs LLM-driven controller design: agent writes code, tests against replay store, iterates
   ;; Skip when no new experiments — no data to design from
   (when (and (fboundp 'gptel-auto-workflow--run-controller-design-agent)
              (>= (gptel-auto-workflow--evolution-count-new) 3))
     (message "[auto-workflow] Running controller design agent...")
-    (gptel-auto-workflow--run-controller-design-agent 3))
+    (condition-case err
+        (gptel-auto-workflow--run-controller-design-agent 3)
+      (error (message "[evolution] Step controller-design: %s" err))))
   ;; Step B: Skill evolution (TSV data → SKILL.md, uses {{strategy-guidance}} from step A)
-  (gptel-auto-workflow--evolve-all-skills)
+  (condition-case err
+      (gptel-auto-workflow--evolve-all-skills)
+    (error (message "[evolution] Step evolve-skills: %s" err)))
   ;; Run AutoTTS-style strategy evolution using benchmark results
   (when (fboundp 'gptel-auto-workflow--run-strategy-evolution)
     (message "[auto-workflow] Running strategy evolution...")
-    (gptel-auto-workflow--run-strategy-evolution))
+    (condition-case err
+        (gptel-auto-workflow--run-strategy-evolution)
+      (error (message "[evolution] Step strategy-evolution: %s" err))))
   ;; Step C: Skill governance (scan health, inject canaries, dashboard)
   (when (fboundp 'gptel-auto-workflow--skill-governance-run-cycle)
     (message "[auto-workflow] Running skill governance cycle...")
-    (gptel-auto-workflow--skill-governance-run-cycle))
-  (gptel-auto-workflow--evolution-record-score)
-  (gptel-auto-workflow--evolution-optimize-backend-order)
+    (condition-case err
+        (gptel-auto-workflow--skill-governance-run-cycle)
+      (error (message "[evolution] Step skill-governance: %s" err))))
+  (condition-case err
+      (gptel-auto-workflow--evolution-record-score)
+    (error (message "[evolution] Step record-score: %s" err)))
+  (condition-case err
+      (gptel-auto-workflow--evolution-optimize-backend-order)
+    (error (message "[evolution] Step optimize-backend-order: %s" err)))
   ;; Step C.5: Head-to-head backend comparison (data-driven, no LLM calls)
   (gptel-auto-workflow--evolution-persist-backend-comparison)
   ;; Step C.6: Model-level comparison (backend/model granularity)

@@ -293,7 +293,9 @@ Usage:
     (gptel-auto-workflow--clear-rate-limited-backends)
     ;; Default to Moonshot for headless workflows instead of global MiniMax
     ;; (which is usually quota-exhausted).  The ontology router will
-    ;; reorder backends once it has experiment data.
+    ;; reorder backends once it has experiment data. Only set when
+    ;; persistent-headless is active so interactive sessions keep the
+    ;; user's chosen default.
     (when (and (boundp 'gptel-auto-workflow-persistent-headless)
                gptel-auto-workflow-persistent-headless
                (boundp 'gptel--moonshot)
