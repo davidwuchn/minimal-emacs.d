@@ -84,11 +84,12 @@ Switching to confirm-all clears all per-tool permits."
 (defun my/gptel-show-permits ()
   "Show currently permitted tools."
   (interactive)
-  (if (zerop (hash-table-count my/gptel-permitted-tools))
-      (message "No tools permitted (mode: %s)" my/gptel-confirm-mode)
-    (message "Permitted tools: %s (mode: %s)"
-             (string-join (hash-table-keys my/gptel-permitted-tools) ", ")
-             my/gptel-confirm-mode)))
+  (let ((tools (cl-loop for k being the hash-keys of my/gptel-permitted-tools collect k)))
+    (if (null tools)
+        (message "No tools permitted (mode: %s)" my/gptel-confirm-mode)
+      (message "Permitted tools: %s (mode: %s)"
+               (string-join tools ", ")
+               my/gptel-confirm-mode))))
 
 ;;;###autoload
 (defun my/gptel-emergency-stop ()
