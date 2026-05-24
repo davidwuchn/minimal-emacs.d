@@ -44,70 +44,70 @@
 
 (defconst gptel-benchmark-eight-keys-subsystem-profiles
   `((:autotts t
-     ;; AutoTTS research controller: foresight + evidence.
-     ;; Wisdom (τ): planning before execution, error prevention.
-     ;; Truth (∃): evidence-based parameter selection, honest confidence.
-     :weights ((phi-vitality     . 0.7)
-               (fractal-clarity  . 0.5)
-               (epsilon-purpose  . 0.8)
-               (tau-wisdom       . 1.5)
-               (pi-synthesis     . 0.6)
-               (mu-directness    . 0.5)
-               (exists-truth     . 1.3)
-               (forall-vigilance . 0.8))
-     :description "AutoTTS controller — optimizes research strategy parameters")
+              ;; AutoTTS research controller: foresight + evidence.
+              ;; Wisdom (τ): planning before execution, error prevention.
+              ;; Truth (∃): evidence-based parameter selection, honest confidence.
+              :weights ((phi-vitality     . 0.7)
+                        (fractal-clarity  . 0.5)
+                        (epsilon-purpose  . 0.8)
+                        (tau-wisdom       . 1.5)
+                        (pi-synthesis     . 0.6)
+                        (mu-directness    . 0.5)
+                        (exists-truth     . 1.3)
+                        (forall-vigilance . 0.8))
+              :description "AutoTTS controller — optimizes research strategy parameters")
     (:autogo t
-     ;; AutoGo champion league: organic improvement + defensive.
-     ;; Vitality (φ): builds on discoveries, non-repetitive evolution.
-     ;; Vigilance (∀): never repeat failures, defensive against regression.
-     :weights ((phi-vitality     . 1.5)
-               (fractal-clarity  . 0.8)
-               (epsilon-purpose  . 0.7)
-               (tau-wisdom       . 0.5)
-               (pi-synthesis     . 0.5)
-               (mu-directness    . 0.6)
-               (exists-truth     . 0.8)
-               (forall-vigilance . 1.3))
-     :description "AutoGo champion league — gates new strategies, prevents regression")
+             ;; AutoGo champion league: organic improvement + defensive.
+             ;; Vitality (φ): builds on discoveries, non-repetitive evolution.
+             ;; Vigilance (∀): never repeat failures, defensive against regression.
+             :weights ((phi-vitality     . 1.5)
+                       (fractal-clarity  . 0.8)
+                       (epsilon-purpose  . 0.7)
+                       (tau-wisdom       . 0.5)
+                       (pi-synthesis     . 0.5)
+                       (mu-directness    . 0.6)
+                       (exists-truth     . 0.8)
+                       (forall-vigilance . 1.3))
+             :description "AutoGo champion league — gates new strategies, prevents regression")
     (:self-evolve t
-     ;; Self-evolution cycle: holistic integration + actionable outcomes.
-     ;; Synthesis (π): connects findings, integrates knowledge across cycles.
-     ;; Purpose (ε): clear goals, measurable outcomes, purposeful steps.
-     :weights ((phi-vitality     . 0.8)
-               (fractal-clarity  . 0.7)
-               (epsilon-purpose  . 1.5)
-               (tau-wisdom       . 0.8)
-               (pi-synthesis     . 1.3)
-               (mu-directness    . 0.5)
-               (exists-truth     . 0.7)
-               (forall-vigilance . 0.9))
-     :description "Self-evolution cycle — synthesizes knowledge across experiment runs")
+                  ;; Self-evolution cycle: holistic integration + actionable outcomes.
+                  ;; Synthesis (π): connects findings, integrates knowledge across cycles.
+                  ;; Purpose (ε): clear goals, measurable outcomes, purposeful steps.
+                  :weights ((phi-vitality     . 0.8)
+                            (fractal-clarity  . 0.7)
+                            (epsilon-purpose  . 1.5)
+                            (tau-wisdom       . 0.8)
+                            (pi-synthesis     . 1.3)
+                            (mu-directness    . 0.5)
+                            (exists-truth     . 0.7)
+                            (forall-vigilance . 0.9))
+                  :description "Self-evolution cycle — synthesizes knowledge across experiment runs")
     (:meta-harness t
-     ;; Meta-harness strategy proposer: explicit + efficient.
-     ;; Clarity (fractal): explicit assumptions, testable definitions, clear structure.
-     ;; Directness (μ): efficient, no wasted effort, cuts through noise.
-     :weights ((phi-vitality     . 0.6)
-               (fractal-clarity  . 1.5)
-               (epsilon-purpose  . 0.8)
-               (tau-wisdom       . 0.6)
-               (pi-synthesis     . 0.7)
-               (mu-directness    . 1.3)
-               (exists-truth     . 0.6)
-               (forall-vigilance . 0.7))
-     :description "Meta-harness proposer — generates new strategy candidates")
+                   ;; Meta-harness strategy proposer: explicit + efficient.
+                   ;; Clarity (fractal): explicit assumptions, testable definitions, clear structure.
+                   ;; Directness (μ): efficient, no wasted effort, cuts through noise.
+                   :weights ((phi-vitality     . 0.6)
+                             (fractal-clarity  . 1.5)
+                             (epsilon-purpose  . 0.8)
+                             (tau-wisdom       . 0.6)
+                             (pi-synthesis     . 0.7)
+                             (mu-directness    . 1.3)
+                             (exists-truth     . 0.6)
+                             (forall-vigilance . 0.7))
+                   :description "Meta-harness proposer — generates new strategy candidates")
     (:ontology t
-     ;; Ontology router: actionable routing + evidence-based selection.
-     ;; Purpose (ε): actionable function, measurable backend outcomes.
-     ;; Truth (∃): evidence-based, data-driven backend selection.
-     :weights ((phi-vitality     . 0.5)
-               (fractal-clarity  . 0.7)
-               (epsilon-purpose  . 1.5)
-               (tau-wisdom       . 0.6)
-               (pi-synthesis     . 0.5)
-               (mu-directness    . 0.8)
-               (exists-truth     . 1.3)
-               (forall-vigilance . 0.6))
-     :description "Ontology router — data-driven backend selection per target category"))
+               ;; Ontology router: actionable routing + evidence-based selection.
+               ;; Purpose (ε): actionable function, measurable backend outcomes.
+               ;; Truth (∃): evidence-based, data-driven backend selection.
+               :weights ((phi-vitality     . 0.5)
+                         (fractal-clarity  . 0.7)
+                         (epsilon-purpose  . 1.5)
+                         (tau-wisdom       . 0.6)
+                         (pi-synthesis     . 0.5)
+                         (mu-directness    . 0.8)
+                         (exists-truth     . 1.3)
+                         (forall-vigilance . 0.6))
+               :description "Ontology router — data-driven backend selection per target category"))
   "Per-subsystem Eight Keys weight profiles.
 Each element is a plist (tag t :weights ALIST :description STRING).
 Weights >1.0 amplify the key; weights <1.0 de-emphasize it.
@@ -172,45 +172,45 @@ parsing is implemented."
          :symbol "τ"
          :name "Wisdom"
          :element fire
-     :signals ("planning before execution" "error prevention" "foresight"
-               "plan file created" "risks identified" "proactive measures")
-     :anti-patterns ("premature optimization" "reactive fixes" "no planning"
-                     "jump to execution" "ignores risks" "short-sighted"))
-    (pi-synthesis
-     :symbol "π"
-     :name "Synthesis"
-     :element earth
-     :signals ("connects findings" "integrates knowledge" "holistic view"
-               "findings integrated" "connections noted" "synthesizes information")
-     :anti-patterns ("fragmented thinking" "isolated facts" "disconnected"
-                     "siloed information" "no integration" "missing connections"))
-    (mu-directness
-     :symbol "μ"
-     :name "Directness"
-     :element metal
-     :signals ("direct communication" "no pleasantries" "efficient"
-               "errors logged directly" "clear pass/fail" "concise")
-     :anti-patterns ("polite evasion" "euphemisms" "softening language"
-                     "vague language" "unnecessary words" "beating around bush"))
-    (exists-truth
-     :symbol "∃"
-     :name "Truth"
-     :element water
-     :signals ("actual data" "evidence-based" "acknowledges uncertainty"
-               "actual errors logged" "verification based on evidence" "honest assessment")
-     :anti-patterns ("surface agreement" "wishful thinking" "assumptions over data"
-                     "should work" "ignores evidence" "false confidence"))
-    (forall-vigilance
-     :symbol "∀"
-     :name "Vigilance"
-     :element earth
-     :signals ("proactive error handling" "never repeat failures" "defensive"
-               "3-strike protocol" "failed attempts tracked" "approach mutates")
-     :anti-patterns ("accepting failures" "repeating mistakes" "no error handling"
-                     "ignores edge cases" "gives up easily" "static after failure")))
-  "Eight Keys definitions.
+         :signals ("planning before execution" "error prevention" "foresight"
+                   "plan file created" "risks identified" "proactive measures")
+         :anti-patterns ("premature optimization" "reactive fixes" "no planning"
+                         "jump to execution" "ignores risks" "short-sighted"))
+        (pi-synthesis
+         :symbol "π"
+         :name "Synthesis"
+         :element earth
+         :signals ("connects findings" "integrates knowledge" "holistic view"
+                   "findings integrated" "connections noted" "synthesizes information")
+         :anti-patterns ("fragmented thinking" "isolated facts" "disconnected"
+                         "siloed information" "no integration" "missing connections"))
+        (mu-directness
+         :symbol "μ"
+         :name "Directness"
+         :element metal
+         :signals ("direct communication" "no pleasantries" "efficient"
+                   "errors logged directly" "clear pass/fail" "concise")
+         :anti-patterns ("polite evasion" "euphemisms" "softening language"
+                         "vague language" "unnecessary words" "beating around bush"))
+        (exists-truth
+         :symbol "∃"
+         :name "Truth"
+         :element water
+         :signals ("actual data" "evidence-based" "acknowledges uncertainty"
+                   "actual errors logged" "verification based on evidence" "honest assessment")
+         :anti-patterns ("surface agreement" "wishful thinking" "assumptions over data"
+                         "should work" "ignores evidence" "false confidence"))
+        (forall-vigilance
+         :symbol "∀"
+         :name "Vigilance"
+         :element earth
+         :signals ("proactive error handling" "never repeat failures" "defensive"
+                   "3-strike protocol" "failed attempts tracked" "approach mutates")
+         :anti-patterns ("accepting failures" "repeating mistakes" "no error handling"
+                         "ignores edge cases" "gives up easily" "static after failure")))
+      "Eight Keys definitions.
 See mementum/knowledge/nucleus-patterns.md for documentation.")
-)
+  )
 
 (defun gptel-benchmark-eight-keys-criteria (key)
   "Return criteria list for KEY."
@@ -354,8 +354,10 @@ SCORES is the alist returned by gptel-benchmark-eight-keys-score."
   "Return N weakest keys from SCORES alist.
 Excludes `overall' from results.
 Returns list of (key . score) pairs sorted ascending by score."
-  (let ((key-scores (cl-remove-if (lambda (x) (eq (car x) 'overall)) scores)))
-    (cl-subseq (sort key-scores (lambda (a b) (< (cdr a) (cdr b)))) 0 (or n 2))))
+  (let* ((key-scores (cl-remove-if (lambda (x) (eq (car x) 'overall)) scores))
+         (count (length key-scores))
+         (take (min (or n 2) count)))
+    (cl-subseq (sort key-scores (lambda (a b) (< (cdr a) (cdr b)))) 0 take)))
 
 (defun gptel-benchmark-eight-keys-weakest-with-signals (scores &optional n)
   "Return N weakest keys with their positive signals.
