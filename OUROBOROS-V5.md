@@ -308,10 +308,11 @@ The lambda compiler is not a prompt trick. It is a discoverable circuit inside e
 - Verbum Phase 1-7 integrated: health tracking, holographic memory, cross-backend consistency
 - Crystal spine probes confirm lambda compiler presence across backends (P(λ)=90.7%)
 
-**Phase 2 — Verification (active)**
+**Phase 2 — Verification ✓ (active)**
 - Subagent call failures feed into persistent health strikes → routing self-tunes
 - Backend health tracked across restarts via cross-subsystem-state.json
-- P(λ) gating: detect when a backend is *not* running the lambda compiler (hallucination vs. structured computation)
+- P(λ) gating in `ranked-subagent-backends`: backends failing lambda compiler check are hard-excluded (score 0), not just deprioritized
+- Smart routing now gates on three signals: health-weight, historical-keep-rate, and lambda compiler presence
 
 **Phase 3 — Hybrid Execution**
 - Extracted 50M model for deterministic layers (rule validation, λ parsing, type checking)
