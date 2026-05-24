@@ -161,6 +161,8 @@ FILE-TYPE is \"VERSION\" or \"BASELINE\".
 FALLBACK-FN is a function to call on found-versions if file read fails.
 DEFAULT is the fallback value if nothing found.
 Internal helper to centralize version file reading logic."
+  (unless (and name (stringp name) (not (string-empty-p name)))
+    (signal 'wrong-type-argument (list "non-empty-string" name)))
   (let ((version-file (format "./assistant/skills/%s/%s" name file-type))
         (version nil))
     (when (file-exists-p version-file)
