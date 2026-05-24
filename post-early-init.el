@@ -150,35 +150,33 @@
                      (message "[diag] timer err: %s fn: %s" (error-message-string err) fn))
                    (signal (car err) (cdr err))))))
   ;; ZOMBIE REAPER: Periodic cleanup of orphaned gptel curl processes.
-  ;; Even with sentinel condition-case guards, a process pipe can become
-  ;; orphaned (e.g. if Emacs's self-pipe blocks before the sentinel fires).
-  ;; This timer runs every 60s to kill any curl process not in the active
-  ;; request alist, preventing the self-pipe (fd 7) from blocking forever.
+  ;; gptel--request-alist can contain non-process entries (buffers from
+  ;; async completions, or corrupted float values).  Filter active-procs
+  ;; with processp to skip non-process keys, preventing crashes from
+  ;; (process-name <buffer>) or (memq <float> ...).
   (run-at-time 60 60
                (lambda ()
                  (condition-case err
-                     (when (boundp 'gptel--request-alist)
-                       (when (and (boundp 'gptel--request-alist)
-                                  (listp gptel--request-alist))
-                         (let ((active-procs (mapcar #'car gptel--request-alist))
-                               (reaped 0))
-                           (dolist (proc (process-list))
-                             (when (and (process-live-p proc)
-                                        (let ((pname (ignore-errors (process-name proc))))
-                                          (and (stringp pname)
-                                               (string-match-p "curl" pname)))
-                                        (not (memq proc active-procs)))
-                               (condition-case nil
-                                   (progn
-                                     (delete-process proc)
-                                     (setq reaped (1+ reaped)))
-                                 (error nil))))
-                           (when (> reaped 0)
-                             (message "[gptel] Reaped %d orphaned curl process(es)" reaped)))))
+                     (when (and (boundp 'gptel--request-alist)
+                                (listp gptel--request-alist))
+                       (let* ((all-keys (mapcar #'car gptel--request-alist))
+                              (active-procs (cl-remove-if-not #'processp all-keys))
+                              (reaped 0))
+                         (dolist (proc (process-list))
+                           (when (and (process-live-p proc)
+                                      (let ((pname (process-name proc)))
+                                        (and (stringp pname)
+                                             (string-match-p "curl" pname)))
+                                      (not (memq proc active-procs)))
+                             (condition-case nil
+                                 (progn
+                                   (delete-process proc)
+                                   (setq reaped (1+ reaped)))
+                               (error nil))))
+                         (when (> reaped 0)
+                           (message "[gptel] Reaped %d orphaned curl process(es)" reaped))))
                    (error
-                    (message "[gptel] Curl reaper error: %S\n%s"
-                             err
-                             (with-output-to-string (backtrace))))))))
+                     (message "[gptel] Reaper error: %S" err))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; Async-safe message: prevent *Messages* buffer corruption
