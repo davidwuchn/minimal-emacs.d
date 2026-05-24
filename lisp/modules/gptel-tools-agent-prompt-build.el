@@ -1565,22 +1565,14 @@ exhaustion.")
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
-  '(("moonshot" . "kimi-k2.6")
-    ("DashScope" . "qwen3.6-plus")
+  '(("DashScope" . "qwen3.6-plus")
+    ("moonshot" . "kimi-k2.6")
     ("DeepSeek" . "deepseek-v4-flash")
     ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
     ("MiniMax" . "minimax-m2.7-highspeed"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
-Uses cheaper models to reduce costs:
-- moonshot: kimi-k2.6 (high reasoning effort)
-- DashScope: glm-5 (cheaper than qwen)
-- DeepSeek: deepseek-v4-flash (faster/cheaper than pro)
-- CF-Gateway: @cf/openai/gpt-oss-120b (fast reasoning, 128k context)
-
-Each entry is (BACKEND . MODEL), where BACKEND matches the agent preset backend
-string and MODEL is the model string to use with that backend. The workflow
-tries backends in order when the primary is unavailable or rate-limited."
+DashScope first (faster, more reliable), then Moonshot, DeepSeek, CF-Gateway, MiniMax."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
