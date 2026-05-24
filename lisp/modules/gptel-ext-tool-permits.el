@@ -44,13 +44,22 @@ TOOL-NAME must be a non-empty string."
 
 (defun my/gptel--sync-to-upstream ()
   "Sync `my/gptel-confirm-mode' to upstream `gptel-confirm-tool-calls'."
+  ;; ASSUMPTION: gptel-confirm-tool-calls is a valid customizable variable
+  ;; BEHAVIOR: Sets the variable globally and in all gptel-mode buffers
+  ;; EDGE CASE: Buffers in inconsistent state are skipped, not fatal
+  ;; TEST: Toggle mode with gptel buffers open and closed
   (let ((val (if (eq my/gptel-confirm-mode 'auto) nil t)))
     (setq gptel-confirm-tool-calls val)
     (setq-default gptel-confirm-tool-calls val)
     (dolist (b (buffer-list))
-      (with-current-buffer b
-        (when (derived-mode-p 'gptel-mode)
-          (setq-local gptel-confirm-tool-calls val))))))
+      (condition-case err
+          (with-current-buffer b
+            (when (derived-mode-p 'gptel-mode)
+              (setq-local gptel-confirm-tool-calls val)))
+        (error
+         ;; Skip buffers that error during sync - don't break the loop
+         (message "Warning: could not sync buffer %s: %s"
+                  (buffer-name b) (error-message-string err)))))))
 
 ;;; --- User Commands ---
 
