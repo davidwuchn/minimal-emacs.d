@@ -253,6 +253,20 @@
   (should (advice-member-p #'gptel-auto-workflow--ontology-fallback-advice
                            'gptel-auto-experiment-run)))
 
+(ert-deftest regression/ontology-router/advice-does-not-treat-code-quality-as-strategy ()
+  "Experiment arg 5 is baseline code quality, not strategy."
+  (let ((captured-strategy :unset))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--apply-ontology-fallback-order)
+               (lambda (strategy target)
+                 (setq captured-strategy strategy)
+                 (should (equal target "lisp/modules/example.el"))))
+              ((symbol-function 'gptel-auto-workflow--reset-fallback-order)
+               (lambda () nil)))
+      (gptel-auto-workflow--ontology-fallback-advice
+       (lambda (&rest _args) :ok)
+       "lisp/modules/example.el" 1 9 0.40 0.8625 nil #'ignore)
+      (should (null captured-strategy)))))
+
 (ert-deftest tdd/ontology-router/apply-reorders-fallbacks ()
   "apply-ontology-fallback-order reorders executor fallbacks for a target.
 Guards against missing runtime dependencies (worktree-base-root)."
