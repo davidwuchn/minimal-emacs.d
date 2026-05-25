@@ -38,6 +38,8 @@
 (defvar gptel-benchmark-default-dir)
 (defvar my/gptel-agent-task-timeout)
 (defvar gptel-agent-preset)
+(defvar gptel-auto-workflow--analyzer-failed-backends nil
+  "Analyzer backend names skipped during target-selection retry.")
 
 (declare-function gptel-agent--task "gptel-tools-agent")
 (declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent")
@@ -174,8 +176,12 @@ Auto-applies LLM backend failover when current provider is rate-limited."
               (and headless-provider-override-active
                    (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
                    (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))
-             (excluded (and (boundp 'gptel-auto-workflow--rate-limited-backends)
-                            gptel-auto-workflow--rate-limited-backends))
+              (excluded (append
+                         (and (string= agent-type "analyzer")
+                              (boundp 'gptel-auto-workflow--analyzer-failed-backends)
+                              gptel-auto-workflow--analyzer-failed-backends)
+                         (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                              gptel-auto-workflow--rate-limited-backends)))
              (chain-pick
               (when (and candidates
                          (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
