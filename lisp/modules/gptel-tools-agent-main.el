@@ -294,6 +294,15 @@ Usage:
       (condition-case nil
           (gptel-auto-workflow--ensure-backend-preference-loaded)
         (error nil)))
+    ;; Recover experiments stuck in staging-pending before starting new work.
+    ;; Safe to call every run: already-merged branches are skipped.
+    (when (and gptel-auto-workflow-use-staging
+               (fboundp 'gptel-auto-experiment--recover-stale-staging-pending))
+      (condition-case err
+          (gptel-auto-experiment--recover-stale-staging-pending)
+        (error
+         (message "[staging-recovery] Recovery sweep skipped: %s"
+                  (error-message-string err)))))
     (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
     (gptel-auto-workflow--clear-rate-limited-backends)
     (when (fboundp 'gptel-auto-workflow--clear-run-failed-backends)
@@ -329,10 +338,11 @@ Usage:
     (unless (and (boundp 'gptel-auto-workflow-targets)
                  gptel-auto-workflow-targets)
       (when (fboundp 'gptel-auto-workflow--discover-targets)
-        (setq-default gptel-auto-workflow-targets
-                     (gptel-auto-workflow--discover-targets))
-        (message "[auto-workflow] Auto-discovered %d targets"
-                 (length gptel-auto-workflow-targets))))
+        (let ((discovered (gptel-auto-workflow--discover-targets)))
+          (setq gptel-auto-workflow-targets discovered)
+          (setq-default gptel-auto-workflow-targets discovered)
+          (message "[auto-workflow] Auto-discovered %d targets"
+                   (length discovered)))))
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
