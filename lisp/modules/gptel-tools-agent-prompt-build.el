@@ -895,9 +895,6 @@ Returns template string or fallback hardcoded template."
 ## Skills (Context from Learned Patterns)
 {{self-evolution}}
 
-## Routing Decision
-{{routing-context}}
-
 ## Research Quality (Allium Audit)
 {{allium-issues}}
 
@@ -1088,14 +1085,7 @@ Implements section-level A/B testing to identify effective prompt components."
                                             (gptel-auto-workflow--evolution-get-knowledge)
                                           "")
                                       ""))
-                (routing-context . ,(if (and (fboundp 'gptel-auto-workflow--routing-context)
-                                             (boundp 'gptel-backend)
-                                             (boundp 'gptel-model))
-                                        (gptel-auto-workflow--routing-context
-                                         (gptel-auto-workflow--safe-backend-name gptel-backend)
-                                         (symbol-name gptel-model))
-                                      ""))
-                (allium-issues . ,(if (funcall section-included-p 'self-evolution)
+                 (allium-issues . ,(if (funcall section-included-p 'self-evolution)
                                        (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-target)
                                            (gptel-auto-workflow--allium-load-issues-for-target target)
                                          "")
