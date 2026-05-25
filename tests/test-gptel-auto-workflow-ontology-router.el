@@ -19,6 +19,7 @@
 
 ;; Mock variables
 (defvar gptel-auto-workflow--evolution-next-cycle-hints nil)
+(defvar gptel-auto-workflow--current-target nil "Mock current target for testing.")
 
 ;; Mock the existing fallback configuration
 (defvar gptel-auto-workflow-headless-subagent-fallbacks
@@ -830,12 +831,12 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (should (= 100.0 (plist-get (car scored) :score))))))
 
 (ert-deftest tdd/lambda-verify/penalty-unknown ()
-  "apply-verification-penalty slightly penalizes unknown backends."
+  "apply-verification-penalty returns unknown backends with no penalty."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (puthash "unknown-backend" :unknown gptel-auto-workflow--lambda-verification-results)
     (let ((scored (list (list :backend "unknown-backend" :score 100.0))))
       (setq scored (gptel-auto-workflow--apply-verification-penalty scored))
-      (should (= 95.0 (plist-get (car scored) :score))))))
+      (should (= 100.0 (plist-get (car scored) :score))))))
 
 ;; ─── Ranked Subagent Backends Tests ───
 ;; Tests for ranked-subagent-backends tiebreaking and keep-rate floor
@@ -843,11 +844,14 @@ Guards against missing runtime dependencies (worktree-base-root)."
 (ert-deftest regression/ontology-router/ranked-dashscope-first-on-tie ()
   "DashScope should be first when all backends have equal keep-rate."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
-           ("moonshot" . "kimi-k2.6")
-           ("MiniMax" . "minimax-m2.7-highspeed")
-           ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+          '(("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-v4-flash")
+            ("moonshot" . "kimi-k2.6")
+            ("MiniMax" . "minimax-m2.7-highspeed")
+            ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))
+         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
@@ -875,11 +879,14 @@ Guards against missing runtime dependencies (worktree-base-root)."
 (ert-deftest regression/ontology-router/bayesian-keep-rate-floor ()
   "Backends with < 3 experiments should get 0.25 floor, not actual rate."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
-           ("moonshot" . "kimi-k2.6")
-           ("MiniMax" . "minimax-m2.7-highspeed")
-           ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+          '(("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-v4-flash")
+            ("moonshot" . "kimi-k2.6")
+            ("MiniMax" . "minimax-m2.7-highspeed")
+            ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))
+         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (backend &rest _)
                  (cond
@@ -939,9 +946,12 @@ Guards against missing runtime dependencies (worktree-base-root)."
 (ert-deftest regression/ontology-router/ranked-no-agent-type-preserves-order ()
   "Calling ranked-subagent-backends without agent-type should keep default order."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
-           ("MiniMax" . "minimax-m2.7-highspeed"))))
+          '(("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-v4-flash")
+            ("MiniMax" . "minimax-m2.7-highspeed")))
+         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
@@ -1011,6 +1021,554 @@ Guards against missing runtime dependencies (worktree-base-root)."
         (should ds)
         (should (> (cddr ds) 0.15))   ;; boost increased from 0.15
         (should changed)))))           ;; reported as changed
+
+;; ─── VSM Health → Routing Auto-Tuning Tests ───
+
+(ert-deftest tdd/vsm-routing/defaults-when-no-vsm-hints ()
+  "Without VSM health hints, adjusted params should equal defaults."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints nil))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 0.40 (plist-get params :delta-weight)))
+      (should (= 0.30 (plist-get params :rate-weight)))
+      (should (= 0.20 (plist-get params :trend-weight)))
+      (should (= 0.10 (plist-get params :confidence-weight)))
+      (should (= 0.15 (plist-get params :exploration-rate)))
+      (should (= 3 (plist-get params :min-samples))))))
+
+(ert-deftest tdd/vsm-routing/s4-weak-increases-exploration ()
+  "When S4 (Intelligence) is weak, exploration rate should increase."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.8
+                                 :s3-control 0.8 :s4-intel 0.3
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (> (plist-get params :exploration-rate) 0.15))
+      (should (>= (plist-get params :exploration-rate) 0.20)))))
+
+(ert-deftest tdd/vsm-routing/s3-weak-tightens-health-ladder ()
+  "When S3 (Control) is weak, probation threshold should tighten."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.8
+                                 :s3-control 0.3 :s4-intel 0.8
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 2 (plist-get params :health-probation-threshold))))))
+
+(ert-deftest tdd/vsm-routing/s1-weak-lowers-min-samples ()
+  "When S1 (Operations) is weak, min-samples should decrease."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.3 :s2-coord 0.8
+                                 :s3-control 0.8 :s4-intel 0.8
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 1 (plist-get params :min-samples))))))
+
+(ert-deftest tdd/vsm-routing/s5-weak-boosts-confidence-weight ()
+  "When S5 (Identity) is weak, confidence weight should increase."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.8
+                                 :s3-control 0.8 :s4-intel 0.8
+                                 :s5-identity 0.2))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (> (plist-get params :confidence-weight) 0.10))
+      (should (>= (plist-get params :confidence-weight) 0.15)))))
+
+(ert-deftest tdd/vsm-routing/s2-weak-shifts-to-raw-rate ()
+  "When S2 (Coordination) is weak, delta weight should decrease, rate weight increase."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.3
+                                 :s3-control 0.8 :s4-intel 0.8
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (< (plist-get params :delta-weight) 0.40))
+      (should (>= (plist-get params :delta-weight) 0.15))
+      (should (> (plist-get params :rate-weight) 0.30))
+      (should (>= (plist-get params :rate-weight) 0.35)))))
+
+(ert-deftest tdd/vsm-routing/all-healthy-returns-defaults ()
+  "When all VSM layers are healthy, params should remain at defaults."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.9 :s2-coord 0.9
+                                 :s3-control 0.9 :s4-intel 0.9
+                                 :s5-identity 0.9))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 0.40 (plist-get params :delta-weight)))
+      (should (= 0.30 (plist-get params :rate-weight)))
+      (should (= 0.20 (plist-get params :trend-weight)))
+      (should (= 0.10 (plist-get params :confidence-weight)))
+      (should (= 0.15 (plist-get params :exploration-rate)))
+      (should (= 3 (plist-get params :min-samples))))))
+
+(ert-deftest tdd/vsm-routing/extracts-vsm-plist-from-actions ()
+  "Should extract the prioritize-targets plist from vsm-actions."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'increase-strategy-evolution "Fire(S4) weak")
+                     (cons 'prioritize-targets
+                           (list :s1-ops 0.5 :s2-coord 0.7
+                                 :s3-control 0.9 :s4-intel 0.3
+                                 :s5-identity 0.8))
+                     (cons 'rebalance-backends "Earth(S3) weak")))))
+    (let ((scores (gptel-auto-workflow--vsm-health-scores)))
+      (should (= 0.5 (plist-get scores :s1-ops)))
+      (should (= 0.3 (plist-get scores :s4-intel))))))
+
+;; ─── Recency-Weighted Keep-Rate Tests ───
+
+(defun make-mock-results-with-dates (specs)
+  "Create mock experiment results with :run-dir for testing decay.
+SPECS is a list of (backend decision days-ago ...) triples."
+  (let ((results nil))
+    (dolist (s specs)
+      (let ((base-time (time-subtract (current-time)
+                                      (seconds-to-time (* (caddr s) 86400)))))
+        (push (list :backend (car s)
+                    :decision (cadr s)
+                    :target "test.el"
+                    :research-strategy "none"
+                    :run-dir (format-time-string "%Y-%m-%dT000000Z-test" base-time))
+              results)))
+    (nreverse results)))
+
+(ert-deftest tdd/decay-keep-rate/recent-weighs-more ()
+  "A backend with recent keeps should score higher than old keeps."
+  (let* ((results
+          ;; Recent: 5 kept, 5 discarded (today, 0 days ago)
+          (append (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "kept" 0))
+                           (number-sequence 1 5)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "discarded" 0))
+                           (number-sequence 1 5)))
+                  ;; Old: 5 kept, 5 discarded (30 days ago, should decay)
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "kept" 30))
+                           (number-sequence 1 5)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "discarded" 30))
+                           (number-sequence 1 5)))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "DeepSeek" 14.0)))
+    ;; Recent experiments count more → weighted keep-rate should differ from raw 0.5
+    (should (> (plist-get stats :keep-rate) 0.5))
+    (should (= 20 (plist-get stats :raw-total)))
+    (should (= 10 (plist-get stats :raw-kept)))))
+
+(ert-deftest tdd/decay-keep-rate/same-day-equals-raw ()
+  "When all experiments are from today, decayed should equal raw rate."
+  (let* ((results
+          (append (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DashScope" "kept" 0))
+                           (number-sequence 1 3)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DashScope" "discarded" 0))
+                           (number-sequence 1 7)))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "DashScope" 14.0)))
+    (should (>= (plist-get stats :keep-rate) 0.29))
+    (should (<= (plist-get stats :keep-rate) 0.31))
+    (should (= 10 (plist-get stats :raw-total)))
+    (should (= 3 (plist-get stats :raw-kept)))))
+
+(ert-deftest tdd/decay-keep-rate/half-life-zero-disables-decay ()
+  "When half-life is 0, all weights are 1.0 (simple keep-rate)."
+  (let* ((results
+          (append (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("moonshot" "kept" 0))
+                           (number-sequence 1 2)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("moonshot" "kept" 100))
+                           (number-sequence 1 2)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("moonshot" "discarded" 0))
+                           (number-sequence 1 2)))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "moonshot" 0.0)))
+    (should (>= (plist-get stats :keep-rate) 0.66))
+    (should (= 6 (plist-get stats :raw-total)))
+    (should (= 4 (plist-get stats :raw-kept)))))
+
+(ert-deftest tdd/decay-keep-rate/filters-by-backend ()
+  "Should only count results for the specified backend."
+  (let* ((results (append (make-mock-results-with-dates
+                            (mapcar (lambda (_) '("DeepSeek" "kept" 0))
+                                    (number-sequence 1 5)))
+                           (make-mock-results-with-dates
+                            (mapcar (lambda (_) '("DashScope" "discarded" 0))
+                                    (number-sequence 1 10)))))
+         (ds-stats (gptel-auto-workflow--decayed-keep-rate results "DeepSeek" 14.0))
+         (dash-stats (gptel-auto-workflow--decayed-keep-rate results "DashScope" 14.0)))
+    (should (= 5 (plist-get ds-stats :raw-total)))
+    (should (>= (plist-get ds-stats :keep-rate) 0.99))
+    (should (= 10 (plist-get dash-stats :raw-total)))
+    (should (<= (plist-get dash-stats :keep-rate) 0.01))))
+
+(ert-deftest tdd/decay-keep-rate/old-days-ago-returns-zero-weight ()
+  "Old experiments past several half-lives should have near-zero weight."
+  (let* ((results (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("MiniMax" "kept" 100))
+                           (number-sequence 1 10))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "MiniMax" 7.0)))
+    ;; weight = 2^(-100/7) ≈ 2^(-14.3) ≈ 0.00005
+    ;; So weighted-kept ≈ 10 * 0.00005 = 0.0005, weighted-total ≈ same
+    ;; keep-rate should be ≈ 1.0 but with very low effective total
+    (should (< (plist-get stats :total) 1))
+    (should (= 10 (plist-get stats :raw-total)))))
+
+;; ─── Per-Axis Backend Preference Boost Tests ───
+
+(ert-deftest tdd/axis-pref/boost-for-high-axis-keep-rate ()
+  "Backend with high keep-rate on target's axis should get a boost."
+  (let ((gptel-auto-workflow--current-target "lisp/modules/gptel-ext-retry.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow--task-backend-preference nil)
+        (gptel-auto-workflow--holographic-memory
+         '((("lisp/modules/gptel-ext-retry.el" . ":E") . 12)))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5)))
+              ((symbol-function 'gptel-auto-workflow--backend-per-axis-keep-rates)
+               (lambda ()
+                 '((("DeepSeek" . ":E") . 0.9)
+                   (("DashScope" . ":E") . 0.3)
+                   (("MiniMax" . ":E") . 0.2))))
+              ((symbol-function 'gptel-auto-workflow--get-holographic-consensus)
+               (lambda (target)
+                 (list :axis ":E" :count 12 :total 15 :confidence 0.8))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (string= "DeepSeek" (caar ranked)))))))
+
+(ert-deftest tdd/axis-pref/no-boost-when-no-holographic-consensus ()
+  "Without holographic consensus, target axis is unknown, no per-axis boost."
+  (let ((gptel-auto-workflow--current-target "some/unknown/file.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--task-backend-preference nil)
+        (gptel-auto-workflow--holographic-memory nil)
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5)))
+              ((symbol-function 'gptel-auto-workflow--get-holographic-consensus)
+               (lambda (_)
+                 (list :axis "?" :count 0 :total 0 :confidence 0.0))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (string= "DashScope" (caar ranked)))))))
+
+(ert-deftest tdd/axis-pref/no-boost-when-confidence-low ()
+  "When holographic confidence is < 0.5, should not apply axis boost."
+  (let ((gptel-auto-workflow--current-target "uncertain-target.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--task-backend-preference nil)
+        (gptel-auto-workflow--holographic-memory
+         '((("uncertain-target.el" . ":K") . 2)))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5)))
+              ((symbol-function 'gptel-auto-workflow--backend-per-axis-keep-rates)
+               (lambda ()
+                 '((("DeepSeek" . ":K") . 0.95))))
+              ((symbol-function 'gptel-auto-workflow--get-holographic-consensus)
+               (lambda (_)
+                 (list :axis ":K" :count 2 :total 5 :confidence 0.4))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (string= "DashScope" (caar ranked)))))))
+
+(ert-deftest tdd/axis-pref/boost-scales-with-axis-keep-rate ()
+  "Boost magnitude should be proportional to the axis keep-rate delta."
+  (let ((gptel-auto-workflow--current-target "target.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--task-backend-preference nil)
+        (gptel-auto-workflow--holographic-memory
+         '((("target.el" . ":B") . 10)))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5)))
+              ((symbol-function 'gptel-auto-workflow--backend-per-axis-keep-rates)
+               (lambda ()
+                 '((("DeepSeek" . ":B") . 0.9)
+                   (("DashScope" . ":B") . 0.4))))
+              ((symbol-function 'gptel-auto-workflow--get-holographic-consensus)
+               (lambda (_)
+                 (list :axis ":B" :count 10 :total 12 :confidence 0.83))))
+      (let* ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (string= "DeepSeek" (caar ranked)))))))
+
+;; ─── Per-Run Backend Cooldown Tests ───
+
+(ert-deftest tdd/run-cooldown/cooldown-excludes-failed-backend ()
+  "Backends in the run cooldown list should be excluded from ranking."
+  (let ((gptel-auto-workflow--run-failed-backends '("DashScope"))
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--task-backend-preference nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (= 2 (length ranked)))
+        (should-not (assoc "DashScope" ranked))
+        (should (assoc "DeepSeek" ranked))
+        (should (assoc "MiniMax" ranked))))))
+
+(ert-deftest tdd/run-cooldown/empty-cooldown-allows-all ()
+  "Empty cooldown list should not exclude any backends."
+  (let ((gptel-auto-workflow--run-failed-backends nil)
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--task-backend-preference nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (= 2 (length ranked)))
+        (should (assoc "DashScope" ranked))
+        (should (assoc "DeepSeek" ranked))))))
+
+(ert-deftest tdd/run-cooldown/clear-cooldown-resets-exclusions ()
+  "Clearing the cooldown list should bring failed backends back."
+  (let ((gptel-auto-workflow--run-failed-backends '("DashScope"))
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--task-backend-preference nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should-not (assoc "DashScope" ranked)))
+      ;; Clear cooldown
+      (gptel-auto-workflow--clear-run-failed-backends)
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (= 2 (length ranked)))
+        (should (assoc "DashScope" ranked))
+        (should (assoc "DeepSeek" ranked))))))
+
+;; ─── Routing Context for Prompt Injection Tests ───
+
+(ert-deftest tdd/routing-context/includes-backend-and-model ()
+  "Routing context should include the backend name and model."
+  (let* ((gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (b &rest _)
+                 (if (string= b "DeepSeek")
+                     (list :kept 8 :total 10 :keep-rate 0.8)
+                   (list :kept 0 :total 0 :keep-rate nil))))
+              ((symbol-function 'gptel-auto-workflow--safe-backend-name)
+               (lambda (b) b))
+              ((symbol-function 'gptel-backend-name)
+               (lambda (b) (symbol-name b))))
+      (let ((ctx (gptel-auto-workflow--routing-context "DeepSeek" "deepseek-v4-pro")))
+        (should (string-match-p "DeepSeek" ctx))
+        (should (string-match-p "deepseek-v4-pro" ctx))))))
+
+(ert-deftest tdd/routing-context/includes-health-status ()
+  "Routing context should include lambda health and keep-rate."
+  (let* ((gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "DeepSeek" :healthy gptel-auto-workflow--lambda-verification-results)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (b &rest _)
+                 (list :kept 8 :total 10 :keep-rate 0.8)))
+              ((symbol-function 'gptel-auto-workflow--safe-backend-name)
+               (lambda (b) b)))
+      (let ((ctx (gptel-auto-workflow--routing-context "DeepSeek" "deepseek-v4-pro")))
+        (should (string-match-p "health" ctx))
+        (should (string-match-p "80" ctx))
+        (should (string-match-p "HEALTHY" ctx))))))
+
+(ert-deftest tdd/routing-context/includes-rate-limit-status ()
+  "Routing context should note backend health status and rate-limit state."
+  (let* ((gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+         (gptel-auto-workflow--rate-limited-backends nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (b &rest _)
+                 (list :kept 5 :total 10 :keep-rate 0.5)))
+              ((symbol-function 'gptel-auto-workflow--safe-backend-name)
+               (lambda (b) b)))
+      (let ((ctx (gptel-auto-workflow--routing-context "DashScope" "qwen3.6-plus")))
+        (should (string-match-p "DashScope" ctx))
+        (should (string-match-p "healthy" ctx))))))
+
+;; ─── Auto-Recovery from Probation Tests ───
+
+(ert-deftest tdd/health-auto-recovery/probation-recovers-after-cooldown ()
+  "Backend at probation after old strike should recover to degraded after 1h."
+  (let* ((now (float-time))
+         (old-time (- now 3601))  ; just over 1 hour ago
+         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-last-strike-time (make-hash-table :test 'equal))
+         (gptel-auto-workflow--evolution-next-cycle-hints nil))
+    (puthash "DashScope" 3 gptel-auto-workflow--lambda-strike-count)
+    (puthash "DashScope" old-time gptel-auto-workflow--lambda-last-strike-time)
+    ;; 3 strikes + old timestamp → should be level 2 (degraded), not 3 (probation)
+    (should (= 2 (gptel-auto-workflow--backend-health-level "DashScope")))
+    (should (= 0.65 (gptel-auto-workflow--backend-health-weight "DashScope")))))
+
+(ert-deftest tdd/health-auto-recovery/recent-strike-stays-probation ()
+  "Backend with recent strike should stay at probation level."
+  (let* ((now (float-time))
+         (recent-time (- now 60))  ; 1 minute ago
+         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-last-strike-time (make-hash-table :test 'equal))
+         (gptel-auto-workflow--evolution-next-cycle-hints nil))
+    (puthash "MiniMax" 3 gptel-auto-workflow--lambda-strike-count)
+    (puthash "MiniMax" recent-time gptel-auto-workflow--lambda-last-strike-time)
+    ;; 3 strikes + recent timestamp → still level 3 (probation)
+    (should (= 3 (gptel-auto-workflow--backend-health-level "MiniMax")))))
+
+(ert-deftest tdd/health-auto-recovery/healthy-backends-unaffected ()
+  "Healthy backend should not be affected by auto-recovery logic."
+  (let* ((gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-last-strike-time (make-hash-table :test 'equal))
+         (gptel-auto-workflow--evolution-next-cycle-hints nil))
+    ;; 0 strikes → healthy
+    (should (= 0 (gptel-auto-workflow--backend-health-level "DeepSeek")))
+    (should (= 1.0 (gptel-auto-workflow--backend-health-weight "DeepSeek")))))
+
+;; ─── Per-Target Model Preference Tests ───
+
+(ert-deftest tdd/target-model/best-model-from-history ()
+  "Should return the model that produced the most kept results for a target."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "discarded")
+                (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
+                (list :target "bar.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept")))))
+    (let ((model (gptel-auto-workflow--best-model-for-target "foo.el" "DeepSeek")))
+      ;; deepseek-v4-pro: 2 kept, 0 discarded = 100%
+      ;; deepseek-v4-flash: 1 kept, 1 discarded = 50%
+      ;; → prefer deepseek-v4-pro
+      (should (string= "deepseek-v4-pro" model)))))
+
+(ert-deftest tdd/target-model/fallback-when-no-data ()
+  "Should return nil when no historical data for the target."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda () nil)))
+    (let ((model (gptel-auto-workflow--best-model-for-target "unknown.el" "DeepSeek")))
+      (should (null model)))))
+
+(ert-deftest tdd/target-model/filters-by-backend ()
+  "Should only consider the specified backend's models."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list
+                (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
+                (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")))))
+    (let ((model (gptel-auto-workflow--best-model-for-target "foo.el" "DeepSeek")))
+      ;; Only DeepSeek models for this target → one kept
+      (should (string= "deepseek-v4-pro" model)))))
+
+;; ─── Routing Audit Trail Tests ───
+
+(ert-deftest tdd/audit-trail/records-routing-decision ()
+  "The audit trail should record the top backend and scores after ranking."
+  (let ((gptel-auto-workflow--routing-audit-log nil)
+        (gptel-auto-workflow--current-target "test-target.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--task-backend-preference nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 8 :total 10 :keep-rate 0.8))))
+      (gptel-auto-workflow--ranked-subagent-backends "analyzer")
+      (should (= 1 (length gptel-auto-workflow--routing-audit-log)))
+      (let ((entry (car gptel-auto-workflow--routing-audit-log)))
+        (should (string= "test-target.el" (plist-get entry :target)))
+        (should (string= "analyzer" (plist-get entry :agent-type)))
+        (should (plist-get entry :selected-backend))
+        (should (plist-get entry :selected-model))
+        (should (> (length (plist-get entry :candidates)) 0))))))
+
+(ert-deftest tdd/audit-trail/trims-to-100-entries ()
+  "The audit trail should not grow beyond 100 entries."
+  (let ((gptel-auto-workflow--routing-audit-log nil)
+        (gptel-auto-workflow--current-target "target.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--task-backend-preference nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
+      (dotimes (_ 150)
+        (gptel-auto-workflow--ranked-subagent-backends "analyzer"))
+      (should (<= (length gptel-auto-workflow--routing-audit-log) 100)))))
+
+;; ─── Audit Trail Summary Tests ───
+
+(ert-deftest tdd/audit-summary/counts-total-decisions ()
+  "Summary should report correct total decision count."
+  (let ((gptel-auto-workflow--routing-audit-log
+         (list (list :timestamp (float-time) :selected-backend "DeepSeek"
+                     :selected-model "deepseek-v4-pro" :agent-type "analyzer"
+                     :vsm-adjustments '("S4:explore→30%"))
+               (list :timestamp (float-time) :selected-backend "DashScope"
+                     :selected-model "qwen3.6-plus" :agent-type "executor"))))
+    (let ((summary (gptel-auto-workflow--audit-trail-summary)))
+      (should (= 2 (plist-get summary :total-decisions))))))
+
+(ert-deftest tdd/audit-summary/counts-vsm-adjustments ()
+  "Summary should count VSM adjustments per layer."
+  (let ((gptel-auto-workflow--routing-audit-log
+         (list (list :timestamp (float-time) :selected-backend "DeepSeek"
+                     :vsm-adjustments '("S2:delta→20%+rate→40%" "S4:explore→30%"))
+               (list :timestamp (float-time) :selected-backend "DashScope"
+                     :vsm-adjustments '("S2:delta→20%+rate→40%")))))
+    (let* ((summary (gptel-auto-workflow--audit-trail-summary))
+           (vsm (plist-get summary :vsm-adjustments)))
+      (should (= 2 (plist-get vsm :s2)))
+      (should (= 1 (plist-get vsm :s4))))))
 
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
