@@ -41,7 +41,13 @@
         (make-symbolic-link source target t)
         t))))
    ((file-exists-p target)
-    t)
+    (if (file-directory-p target)
+        t
+      ;; BEHAVIOR: Replace stale regular file with symlink to keep target in sync
+      ;; EDGE CASE: Directories are left untouched (cannot symlink over them)
+      (ignore-errors (delete-file target))
+      (make-symbolic-link source target t)
+      t))
    (t
     (let ((dir (file-name-directory target)))
       (when dir
