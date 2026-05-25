@@ -2750,6 +2750,44 @@ must not override it to MiniMax via setq-local in subagent buffers."
           (should (eq 'alive (gethash "DeepSeek" verification-results))))
       (delete-directory root t))))
 
+(ert-deftest tdd/evolution/loads-without-parse-error ()
+  "gptel-auto-workflow-evolution.el must load without 'End of file during parsing'."
+  ;; Derive repo root: test file is in tests/ relative to repo root.
+  (let* ((test-dir (file-name-directory
+                    (or load-file-name buffer-file-name
+                        (and (boundp 'minimal-emacs-user-directory)
+                             minimal-emacs-user-directory)
+                        "~/.emacs.d/tests/")))
+         (repo-root (file-name-directory (directory-file-name test-dir)))
+         (file (expand-file-name "lisp/modules/gptel-auto-workflow-evolution.el" repo-root)))
+    (should (file-exists-p file))
+    (should (condition-case err
+                (progn (load-file file) t)
+              (error (progn (message "PARSE ERROR: %s" err) nil))))))
+
+(ert-deftest tdd/evolution/safe-backend-name-handles-all-types ()
+  "gptel-auto-workflow--safe-backend-name must handle strings, keywords, nil, and structs."
+  (dolist (test '(("string" . "string")
+                  (:MiniMax . "MiniMax")
+                  (nil . "nil")))
+    (let ((result (gptel-auto-workflow--safe-backend-name (car test))))
+      (should (stringp result))
+      (message "safe-backend-name %S → %S" (car test) result))))
+
+(ert-deftest tdd/evolution/agent-base-preset-returns-plist ()
+  "gptel-auto-workflow--agent-base-preset must return a plist with :backend
+when a gptel backend and agent config are available."
+  (when (and (fboundp 'gptel-auto-workflow--agent-base-preset)
+             (boundp 'gptel-agent--agents)
+             (assoc "executor" gptel-agent--agents)
+             (boundp 'gptel-backend)
+             gptel-backend)
+    (let ((preset (gptel-auto-workflow--agent-base-preset "executor")))
+      (should (plistp preset))
+      (should (plist-get preset :backend))
+      (should (stringp (gptel-auto-workflow--preset-backend-name
+                        (plist-get preset :backend)))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
