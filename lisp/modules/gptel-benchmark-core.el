@@ -461,7 +461,7 @@ RESULTS should contain :eight-keys-scores in each entry."
   (let* ((default-log (expand-file-name "benchmark-feedback.log"
                                         gptel-benchmark-default-dir))
          (file (or log-file default-log))
-         (dir (file-name-directory file)))
+         (dir (or (file-name-directory file) ".")))
     (gptel-benchmark--ensure-dir dir)
     (let ((log-entry (format "[%s] %s: %s\n"
                              (format-time-string "%Y-%m-%d %H:%M:%S")
