@@ -30,16 +30,17 @@
 (declare-function gptel-auto-workflow--get-worktree-dir
                   "gptel-tools-agent-subagent")
 (declare-function gptel-auto-workflow--project-root
-                  "gptel-tools-agent-benchmark")
-(declare-function package-desc-version "package")
-(declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git")
-(declare-function gptel-benchmark-llm-synthesize-knowledge "gptel-benchmark-llm"
-                  (topic memories &optional callback))
-(declare-function gptel-benchmark-llm-synthesize-knowledge-sync "gptel-benchmark-llm"
-                  (topic memories &optional timeout-seconds))
-(declare-function my/gptel--transient-error-p "gptel-ext-retry" (error-data http-status))
-(declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
-
+                   "gptel-tools-agent-benchmark")
+;; Moved up early so any circular require chain can call it.
+(defun gptel-auto-workflow--worktree-base-root ()
+  "Return a stable root for workflow-owned worktree artifacts.
+Prefer the root captured at workflow start over mutable experiment context."
+  (expand-file-name
+   (or (and (boundp 'gptel-auto-workflow--run-project-root)
+            gptel-auto-workflow--run-project-root)
+       (and (boundp 'gptel-auto-workflow--current-project)
+            gptel-auto-workflow--current-project)
+       (gptel-auto-workflow--default-dir))))
 ;; Ensure evolution production module is loaded for timer and hook variables
 (require 'gptel-auto-workflow-production nil t)
 
@@ -329,16 +330,6 @@ deleted directory."
     (gptel-auto-workflow--seed-live-root-load-path root)
     (gptel-auto-workflow--prefer-elpa-transient root)
     root))
-
-(defun gptel-auto-workflow--worktree-base-root ()
-  "Return a stable root for workflow-owned worktree artifacts.
-Prefer the root captured at workflow start over mutable experiment context."
-  (expand-file-name
-   (or (and (boundp 'gptel-auto-workflow--run-project-root)
-            gptel-auto-workflow--run-project-root)
-       (and (boundp 'gptel-auto-workflow--current-project)
-            gptel-auto-workflow--current-project)
-       (gptel-auto-workflow--default-dir))))
 
 (defun gptel-auto-workflow--resolve-run-root (&optional fallback)
   "Return a stable project root for workflow callbacks.
