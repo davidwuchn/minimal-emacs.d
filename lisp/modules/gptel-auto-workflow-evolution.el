@@ -5530,10 +5530,16 @@ Like promptfoo's model-specific comparison: which exact model performs best."
     (dolist (result (gptel-auto-workflow--parse-all-results))
       (let* ((backend (or (plist-get result :backend) "unknown"))
              (model (or (plist-get result :model) "unknown"))
+             ;; Replace unknown/none/empty model names with the provider's
+             ;; default model from the headless fallback chain.
+             (model (if (string-match-p "\\`\\(unknown\\|none\\|\\|\\?\\)\\'" model)
+                        (gptel-auto-workflow--default-model-for-backend backend)
+                      model))
              (key (format "%s/%s" backend model))
              (kept (equal (plist-get result :decision) "kept")))
         ;; Skip invalid backends
-        (unless (member backend '("0" "unknown" ""))
+        (unless (or (member backend '("0" "unknown" ""))
+                    (string-match-p "\\`\\(0\\|unknown\\)/" key))
           (let ((entry (or (gethash key by-model) (cons 0 0))))
             (setcar entry (1+ (car entry)))
             (when kept (setcdr entry (1+ (cdr entry))))
@@ -5543,6 +5549,17 @@ Like promptfoo's model-specific comparison: which exact model performs best."
                  (push (cons key (/ (float (cdr counts)) (car counts))) stats)))
              by-model)
     (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
+
+(defun gptel-auto-workflow--default-model-for-backend (backend)
+  "Return the default model name for BACKEND from the headless fallback chain.
+If BACKEND is not found, returns \"unknown\"."
+  (or (and (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+           (cdr (assoc backend gptel-auto-workflow-headless-subagent-fallbacks
+                       (lambda (a b) (string= a (car b))))))
+      (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+           (cdr (assoc backend gptel-auto-workflow-executor-rate-limit-fallbacks
+                       (lambda (a b) (string= a (car b))))))
+      "unknown"))
 
 (defun gptel-auto-workflow--model-head-to-head-stats (model-a model-b)
   "Compare MODEL-A vs MODEL-B on shared targets.
@@ -5609,8 +5626,8 @@ Compares specific models (e.g. DeepSeek/deepseek-v4-pro vs DeepSeek/deepseek-v4-
           (when (and (not (equal a b))
                      (not (gethash (list b a) seen))
                      ;; Exclude invalid backends (0, unknown, empty)
-                     (not (string-match-p "^\\(0\\|unknown\\)/" a))
-                     (not (string-match-p "^\\(0\\|unknown\\)/" b)))
+                      (not (string-match-p "\\`\\(0\\|unknown\\|none\\)/" a))
+                     (not (string-match-p "\\`\\(0\\|unknown\\|none\\)/" b)))
             (puthash (list a b) t seen)
             (let ((h2h (gptel-auto-workflow--model-head-to-head-stats a b)))
               (when (>= (plist-get h2h :shared-targets) 1)
