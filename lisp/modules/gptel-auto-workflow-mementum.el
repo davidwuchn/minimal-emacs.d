@@ -70,7 +70,11 @@ Returns empty string if TEXT is nil or empty."
 (defun gptel-auto-workflow--mementum-write-memory (symbol slug content)
   "Write a memory file with SYMBOL prefix and SLUG.
 CONTENT is the body text."
-  (let* ((dir (expand-file-name gptel-auto-workflow-mementum-memory-dir
+  (let* ((content (or content ""))
+         (slug (if (string-match-p "/" slug)
+                   (replace-regexp-in-string "/" "-" slug)
+                 slug))
+         (dir (expand-file-name gptel-auto-workflow-mementum-memory-dir
                                 (gptel-auto-workflow--worktree-base-root)))
          (prefix (gptel-auto-workflow--mementum-symbol-prefix symbol))
          (file (expand-file-name (format "%s-%s.md" prefix slug) dir)))
