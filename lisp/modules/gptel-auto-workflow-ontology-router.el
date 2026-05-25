@@ -1006,60 +1006,87 @@ Returns alist of ((backend axis) . keep-rate). Pairs with < 5 samples are exclud
              pairs)
     rates))
 
+(defun gptel-auto-workflow--beta-mean (alpha beta)
+  "Return mean of Beta(ALPHA, BETA) distribution."
+  (/ (float alpha) (+ alpha beta)))
+
+(defun gptel-auto-workflow--beta-sample (alpha beta)
+  "Approximate sample from Beta(ALPHA, BETA) -- uses posterior mean.
+Deterministic: returns expected value for preference boost calculation."
+  (gptel-auto-workflow--beta-mean alpha beta))
+
 (defun gptel-auto-workflow--evolve-backend-preference ()
-  "Auto-evolve per-axis backend preference boosts from historical keep-rates.
-For each (backend, kibcm-axis) pair with >=5 samples, compare the per-axis
-keep-rate against the global backend keep-rate. If significantly better,
-increase the preference boost. If worse, decrease it. Results are bounded
-[0.0, 0.25] and persisted to `gptel-auto-workflow--preference-persist-file'."
+  "Evolve backend preference via Beta-Bernoulli Thompson Sampling.
+
+For each (backend, kibcm-axis) pair, maintains Beta(kept+1, discarded+1)
+posterior. Boost = expected lift over global, bounded [0.0, 0.25].
+Beta(1,1) prior = uniform: few samples = conservative boost.
+Persisted to `gptel-auto-workflow--preference-persist-file'."
   (interactive)
-  (let* ((per-axis (gptel-auto-workflow--backend-per-axis-keep-rates))
-         (global-cache (make-hash-table :test 'equal))
+  (let* ((all-results (gptel-auto-workflow--parse-all-results))
+         (alpha-pair (make-hash-table :test 'equal))
+         (beta-pair (make-hash-table :test 'equal))
+         (alpha-global (make-hash-table :test 'equal))
+         (beta-global (make-hash-table :test 'equal))
          (changed nil))
-    (dolist (r (gptel-auto-workflow--parse-all-results))
+    (dolist (r all-results)
       (let ((backend (or (plist-get r :backend) "unknown"))
+            (axis (or (plist-get r :kibcm-axis) "?"))
             (kept (equal (plist-get r :decision) "kept")))
         (unless (member backend '("0" "unknown" ""))
-          (let ((entry (or (gethash backend global-cache) (cons 0 0))))
-            (setcar entry (1+ (car entry)))
-            (when kept (setcdr entry (1+ (cdr entry))))
-            (puthash backend entry global-cache)))))
-    (dolist (pair per-axis)
-      (let* ((backend (car (car pair)))
-             (axis (cdr (car pair)))
-             (axis-keep (cdr pair))
-             (global-entry (gethash backend global-cache))
-             (global-total (car global-entry))
-             (global-kept (cdr global-entry))
-             (global-keep (if (> global-total 0) (/ (float global-kept) global-total) 0.5))
-             (delta (- axis-keep global-keep))
-             (agent-type (pcase axis
-                           ("A" "analyzer")
-                           ("B" "executor")
-                           ("C" "reviewer")
-                           ("D" "executor")
-                           ("E" "grader")
-                           ("F" "executor")
-                           ("G" "reviewer")
-                           ("H" "analyzer")
-                           ("I" "comparator")
-                           (_ nil))))
-        (when (and agent-type (>= (abs delta) 0.05))
-          (let* ((existing (cl-find-if
-                            (lambda (e)
-                              (and (string= (nth 0 e) agent-type)
-                                   (string= (nth 1 e) backend)))
-                            gptel-auto-workflow--task-backend-preference))
-                 (current-boost (if (consp existing) (cddr existing) 0.0))
-                 (new-boost (max 0.0 (min 0.25 (+ current-boost delta)))))
-            (when (> (abs (- current-boost new-boost)) 0.001)
-              (if existing
-                  (setcdr (cdr existing) new-boost)
-                (nconc gptel-auto-workflow--task-backend-preference
-                       (list (list agent-type backend new-boost))))
-              (setq changed t)
-              (message "[preference] %s/%s on axis %s: boost %.3f -> %.3f (delta=%.3f)"
-                       agent-type backend axis current-boost new-boost delta))))))
+          (unless (gethash backend alpha-global)
+            (puthash backend 1 alpha-global)
+            (puthash backend 1 beta-global))
+          (if kept
+              (cl-incf (gethash backend alpha-global))
+            (cl-incf (gethash backend beta-global)))
+          (let ((key (cons backend axis)))
+            (unless (gethash key alpha-pair)
+              (puthash key 1 alpha-pair)
+              (puthash key 1 beta-pair))
+            (if kept
+                (cl-incf (gethash key alpha-pair))
+              (cl-incf (gethash key beta-pair)))))))
+    (maphash
+     (lambda (key a-pair)
+       (let* ((backend (car key))
+              (axis (cdr key))
+              (b-pair (gethash key beta-pair))
+              (total-pair (+ a-pair b-pair -2))
+              (a-glob (gethash backend alpha-global))
+              (b-glob (gethash backend beta-global))
+              (pair-mean (gptel-auto-workflow--beta-mean a-pair b-pair))
+              (global-mean (gptel-auto-workflow--beta-mean a-glob b-glob))
+              (agent-type (pcase axis
+                            ("A" "analyzer")
+                            ("B" "executor")
+                            ("C" "reviewer")
+                            ("D" "executor")
+                            ("E" "grader")
+                            ("F" "executor")
+                            ("G" "reviewer")
+                            ("H" "analyzer")
+                            ("I" "comparator")
+                            (_ nil))))
+         (when (and agent-type (>= total-pair 5)
+                    (>= (abs (- pair-mean global-mean)) 0.03))
+           (let* ((existing (cl-find-if
+                             (lambda (e)
+                               (and (string= (nth 0 e) agent-type)
+                                    (string= (nth 1 e) backend)))
+                             gptel-auto-workflow--task-backend-preference))
+                  (current (if (consp existing) (cddr existing) 0.0))
+                  (new (min 0.25 (max 0.0 (- pair-mean global-mean)))))
+             (when (> (abs (- current new)) 0.005)
+               (if existing
+                   (setcdr (cdr existing) new)
+                 (nconc gptel-auto-workflow--task-backend-preference
+                        (list (list agent-type backend new))))
+               (setq changed t)
+               (message
+                "[preference] %s/%s on axis %s: boost %.3f -> %.3f (Bayesian lift=%.3f n=%d)"
+                agent-type backend axis current new (- pair-mean global-mean) total-pair))))))
+     alpha-pair)
     (when changed
       (gptel-auto-workflow--persist-backend-preference)
       (gptel-auto-workflow--commit-backend-preference)
