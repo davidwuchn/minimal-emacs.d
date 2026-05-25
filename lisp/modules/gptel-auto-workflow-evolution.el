@@ -5551,14 +5551,16 @@ markdown table, and writes to mementum/knowledge/semantic-relationships.md.
 
 (defun gptel-auto-workflow--model-combination-valid-p (model-key)
   "Return non-nil when MODEL-KEY (\"Backend/Model\") is a valid combination.
-Checks that the model belongs to its backend using `model-valid-for-backend-p'."
+Checks that the model belongs to its backend when the per-task model
+map is available.  Without the map, passes all combinations through."
   (when (stringp model-key)
     (let* ((parts (split-string model-key "/"))
            (backend (car parts))
            (model (cadr parts)))
       (and (stringp backend) (stringp model)
            (not (string-match-p "\\`\\(0\\|unknown\\|none\\)$" backend))
-           (gptel-auto-workflow--model-valid-for-backend-p model backend)))))
+           (or (not (boundp 'gptel-auto-workflow-per-task-model-map))
+               (gptel-auto-workflow--model-valid-for-backend-p model backend))))))
 
 (defun gptel-auto-workflow--evolution-model-stats ()
   "Analyze model (backend+model) performance from all experiment results.
@@ -5658,8 +5660,6 @@ Compares specific models (e.g. DeepSeek/deepseek-v4-pro vs DeepSeek/deepseek-v4-
                       (not (string-match-p "\\`\\(0\\|unknown\\|none\\)/" a))
                      (not (string-match-p "\\`\\(0\\|unknown\\|none\\)/" b)))
             (puthash (list a b) t seen)
-                      (gptel-auto-workflow--model-combination-valid-p a)
-                      (gptel-auto-workflow--model-combination-valid-p b)
             (let ((h2h (gptel-auto-workflow--model-head-to-head-stats a b)))
               (when (>= (plist-get h2h :shared-targets) 1)
                 (push (cons (cons a b) h2h) pairs)))))))
