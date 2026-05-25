@@ -78,7 +78,9 @@
 
 (ert-deftest regression/ontology-router/reorder-puts-best-first ()
   "Backend with highest keep-rate should be first in reordered list."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")
@@ -94,7 +96,9 @@
 
 (ert-deftest regression/ontology-router/reorder-keeps-all-backends ()
   "Reordering should preserve all backends from static list."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :decision "kept"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
@@ -109,7 +113,9 @@
 
 (ert-deftest regression/ontology-router/insufficient-data-uses-static ()
   "When insufficient data, should return static order unchanged."
-  (let ((mock-results nil))
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                (lambda () mock-results)))
       (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology)))
@@ -118,7 +124,9 @@
 
 (ert-deftest regression/ontology-router/exploration-can-swap ()
   "With exploration enabled, top 2 backends can be swapped."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")
@@ -166,7 +174,9 @@
 
 (ert-deftest regression/ontology-router/category-override-programming ()
   "Programming targets should prefer DeepSeek."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :target "lisp/modules/gptel-ext-fsm.el" :decision "kept")
           (list :backend "moonshot" :target "lisp/modules/gptel-ext-fsm.el" :decision "kept")
@@ -183,7 +193,9 @@
 
 (ert-deftest regression/ontology-router/category-override-tool-calls ()
   "Tool-call targets have no override — use ontology ordering (MiniMax default)."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :target "lisp/modules/gptel-sandbox.el" :decision "kept")
           (list :backend "moonshot" :target "lisp/modules/gptel-sandbox.el" :decision "kept")
@@ -198,7 +210,9 @@
 
 (ert-deftest regression/ontology-router/category-override-natural-language ()
   "Natural-language targets should prefer DeepSeek."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :target "lisp/modules/gptel-ext-context.el" :decision "kept")
           (list :backend "moonshot" :target "lisp/modules/gptel-ext-context.el" :decision "kept")
@@ -214,7 +228,9 @@
 
 (ert-deftest regression/ontology-router/category-override-agentic ()
   "Agentic targets have no override — use ontology ordering."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "CF-Gateway" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
           (list :backend "CF-Gateway" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
@@ -232,12 +248,14 @@
 
 (ert-deftest regression/ontology-router/apply-and-reset ()
   "Applying ontology order should modify fallback chain, reset should restore."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")))
-        (original-order gptel-auto-workflow-executor-rate-limit-fallbacks))
+        (original-order gptel-auto-workflow-headless-subagent-fallbacks))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                (lambda () mock-results))
               ((symbol-function 'random) (lambda (_) 999)))
