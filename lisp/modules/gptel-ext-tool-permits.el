@@ -111,7 +111,9 @@ Use this when the agent is misbehaving or you need immediate control back."
   (let* ((mode my/gptel-confirm-mode)
          (permits (hash-table-count my/gptel-permitted-tools))
          (preset (and (boundp 'gptel--preset) gptel--preset))
-         (tools (and (boundp 'gptel-tools) (length gptel-tools)))
+         (tools (and (boundp 'gptel-tools)
+                     (proper-list-p gptel-tools)
+                     (length gptel-tools)))
          (active-procs
           (cl-count-if (lambda (p)
                          (and (process-live-p p)
