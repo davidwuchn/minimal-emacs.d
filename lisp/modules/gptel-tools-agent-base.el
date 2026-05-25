@@ -31,7 +31,15 @@
                   "gptel-tools-agent-subagent")
 (declare-function gptel-auto-workflow--project-root
                    "gptel-tools-agent-benchmark")
-;; Moved up early so any circular require chain can call it.
+;; Moved up early so any circular require chain can call them.
+(defun gptel-auto-workflow--default-dir ()
+  "Return default directory for git operations.
+Use `gptel-auto-workflow--project-root' if available.
+Fall back to ~/.emacs.d/."
+  (or (and (fboundp 'gptel-auto-workflow--project-root)
+           (ignore-errors (gptel-auto-workflow--project-root)))
+      (expand-file-name "~/.emacs.d/")))
+
 (defun gptel-auto-workflow--worktree-base-root ()
   "Return a stable root for workflow-owned worktree artifacts.
 Prefer the root captured at workflow start over mutable experiment context."
@@ -169,14 +177,6 @@ Signals user-error if either dependency fails to load."
     (user-error "magit-worktree is required"))
   (unless (require 'magit-git nil t)
     (user-error "magit-git is required")))
-
-(defun gptel-auto-workflow--default-dir ()
-  "Return default directory for git operations.
-Use `gptel-auto-workflow--project-root' if available.
-Fall back to ~/.emacs.d/."
-  (or (and (fboundp 'gptel-auto-workflow--project-root)
-           (ignore-errors (gptel-auto-workflow--project-root)))
-      (expand-file-name "~/.emacs.d/")))
 
 (defun gptel-auto-workflow--elpa-package-dir (proj-root package)
   "Return the repo-local ELPA directory for PACKAGE under PROJ-ROOT, or nil."
