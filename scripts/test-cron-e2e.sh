@@ -83,10 +83,10 @@ else
     fail "SHELL not set to /bin/bash"
 fi
 
-if grep -q 'run-auto-workflow-cron.sh auto-workflow' "$CRON_FILE"; then
-    pass "Template uses wrapper for auto-workflow"
+if grep -q 'run-pipeline.sh' "$CRON_FILE"; then
+    pass "Template uses pipeline wrapper for auto-workflow"
 else
-    fail "Template does not use wrapper for auto-workflow"
+    fail "Template does not use pipeline wrapper for auto-workflow"
 fi
 
 RENDERED=$(mktemp)

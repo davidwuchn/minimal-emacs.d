@@ -381,10 +381,10 @@ run_e2e_tests() {
     # Cron configuration
     echo ""
     echo "Checking cron configuration..."
-    if crontab -l 2>/dev/null | grep -Eq '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow'; then
-        pass "Auto-workflow cron job installed"
+    if crontab -l 2>/dev/null | grep -Eq '^[0-9*@].*run-pipeline\.sh'; then
+        pass "Auto-workflow pipeline cron job installed"
     else
-        fail "Wrapper-based auto-workflow cron job not found"
+        fail "Pipeline-based auto-workflow cron job not found"
         return 1
     fi
     
