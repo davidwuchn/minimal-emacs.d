@@ -2806,6 +2806,63 @@ when a gptel backend and agent config are available."
       (should (stringp (gptel-auto-workflow--preset-backend-name
                         (plist-get preset :backend)))))))
 
+(ert-deftest tdd/evolution/per-task-model-map-covers-all-backends ()
+  "Every agent type in per-task-model-map must have entries for all 5 backends."
+  (let ((backends '("MiniMax" "moonshot" "DashScope" "DeepSeek" "CF-Gateway"))
+        (agent-types '("analyzer" "grader" "executor" "researcher" "reviewer" "comparator"))
+        (map (and (boundp 'gptel-auto-workflow-per-task-model-map)
+                  gptel-auto-workflow-per-task-model-map))
+        (failures nil))
+    (when map
+      (dolist (agent agent-types)
+        (dolist (backend backends)
+          (unless (cl-some (lambda (e)
+                            (and (equal (nth 0 e) agent)
+                                 (equal (nth 1 e) backend)))
+                          map)
+            (push (format "%s/%s" agent backend) failures))))
+      (should (null failures))
+      (when failures
+        (message "Missing per-task model entries: %s" (string-join failures ", "))))))
+
+(ert-deftest tdd/evolution/per-task-model-map-no-wrong-models ()
+  "No backend in per-task-model-map should have a model from a different provider."
+  (let ((map (and (boundp 'gptel-auto-workflow-per-task-model-map)
+                  gptel-auto-workflow-per-task-model-map))
+        (failures nil))
+    (when map
+      (dolist (entry map)
+        (let* ((backend (nth 1 entry))
+               (model (cddr entry))
+               (backend-prefix (cond
+                                ((string= backend "MiniMax") "minimax")
+                                ((string= backend "moonshot") "kimi")
+                                ((string= backend "DashScope") "qwen\\|glm")
+                                ((string= backend "DeepSeek") "deepseek")
+                                ((string= backend "CF-Gateway") "kimi\\|gpt-oss")
+                                (t nil))))
+          (when (and backend-prefix (not (string-match-p backend-prefix model)))
+            (push (format "%s → %s" backend model) failures)))))
+    (should (null failures))
+    (when failures
+      (message "Wrong model for backend:\n%s" (string-join failures "\n")))))
+
+(ert-deftest tdd/evolution/default-model-for-backend-returns-correct-model ()
+  "gptel-auto-workflow--default-model-for-backend must return the correct
+model string for each known backend."
+  (dolist (test '(("MiniMax" . "minimax-m2.7-highspeed")
+                  ("moonshot" . "kimi-k2.6")
+                  ("DashScope" . "qwen3.6-plus")
+                  ("DeepSeek" . "deepseek-v4-flash")
+                  ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))
+    (let* ((backend (car test))
+           (expected (cdr test))
+           (actual (gptel-auto-workflow--default-model-for-backend backend)))
+      (should (stringp actual))
+      (should (string= actual expected))
+      (unless (string= actual expected)
+        (message "%s: expected %s, got %s" backend expected actual)))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
