@@ -193,7 +193,8 @@ request is active."
 Returns nil if no FSM, not a proper plist, or no error."
   (when (boundp 'gptel--fsm-last)
     (let* ((fsm-val (buffer-local-value 'gptel--fsm-last (current-buffer)))
-           (fsm (and fsm-val (my/gptel--coerce-fsm fsm-val)))
+           (fsm (and (proper-list-p fsm-val)
+                     (my/gptel--coerce-fsm fsm-val)))
            (info (and fsm
                       (fboundp 'gptel-fsm-info)
                       (gptel-fsm-info fsm))))
