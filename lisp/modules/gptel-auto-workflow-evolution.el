@@ -1825,6 +1825,9 @@ Extract → Verify → Controller Evolution → Skill Evolution.
 Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (interactive)
   (cl-block gptel-auto-workflow-evolution-run-cycle
+  ;; DEBUG: wrap early portion to isolate MiniMax error
+  (condition-case early-err
+      (progn
   ;; Throttle: don't run more than once per 300s (5min) unless forced
   (let ((now (float-time (current-time))))
     (when (and gptel-auto-workflow--evolution-last-run
@@ -1855,6 +1858,9 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (setq gptel-auto-workflow--evolution-last-objective current-obj)
         (message "[evolution] Eight Keys score: %.3f" current-obj))))
   (message "[auto-workflow] Running self-evolution cycle...")
+    (error
+     (message "[evolution] EARLY error (pre-steps): %s" (error-message-string early-err))
+     (cl-return-from gptel-auto-workflow-evolution-run-cycle (format "early-error: %s" early-err))))
   ;; Pipeline validation (Semantica PipelineValidator)
   (condition-case nil
       (let ((v (gptel-auto-workflow--validate-pipeline)))
