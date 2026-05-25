@@ -289,6 +289,11 @@ Usage:
         (cl-return-from gptel-auto-workflow-run-async nil)))
     (gptel-auto-workflow--require-magit-dependencies)
     (gptel-auto-workflow--migrate-legacy-provider-defaults)
+    ;; Load git-tracked backend preference before any experiment runs.
+    (when (fboundp 'gptel-auto-workflow--ensure-backend-preference-loaded)
+      (condition-case nil
+          (gptel-auto-workflow--ensure-backend-preference-loaded)
+        (error nil)))
     (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
     (gptel-auto-workflow--clear-rate-limited-backends)
     ;; Default to Moonshot for headless workflows instead of global MiniMax

@@ -377,21 +377,23 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
       (/ (alist-get score-type score-totals) (float total))
     0.0))
 
+(defun gptel-benchmark--empty-summary ()
+  "Return empty summary plist with zero values for all score types."
+  (append (list :total-tests 0 :passed-tests 0)
+          (mapcan (lambda (m) (list (cdr m) 0.0))
+                  gptel-benchmark--score-type-averages)))
+
 (defun gptel-benchmark-summarize-results (results)
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
   (cond
    ((null results)
-    (append (list :total-tests 0 :passed-tests 0)
-            (mapcan (lambda (m) (list (cdr m) 0.0))
-                    gptel-benchmark--score-type-averages)))
+    (gptel-benchmark--empty-summary))
    ((not (and (listp results) (proper-list-p results))) nil)
    (t
     (if gptel-benchmark--cancelled
-      (append (list :total-tests 0 :passed-tests 0)
-              (mapcan (lambda (m) (list (cdr m) 0.0))
-                      gptel-benchmark--score-type-averages))
+        (gptel-benchmark--empty-summary)
     (let ((total 0)
           (passed 0)
           (score-totals (mapcar (lambda (st) (cons st 0.0)) gptel-benchmark--score-types)))
@@ -461,7 +463,7 @@ RESULTS should contain :eight-keys-scores in each entry."
   (let* ((default-log (expand-file-name "benchmark-feedback.log"
                                         gptel-benchmark-default-dir))
          (file (or log-file default-log))
-         (dir (file-name-directory file)))
+         (dir (or (file-name-directory file) ".")))
     (gptel-benchmark--ensure-dir dir)
     (let ((log-entry (format "[%s] %s: %s\n"
                              (format-time-string "%Y-%m-%d %H:%M:%S")

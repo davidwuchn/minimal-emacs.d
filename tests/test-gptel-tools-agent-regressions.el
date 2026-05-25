@@ -3936,13 +3936,15 @@ experiment phases do not trip the real pre-grade target validator."
          '(("MiniMax" . "minimax-m2.7-highspeed")
            ("DashScope" . "qwen3.6-plus"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--ranked-subagent-backends)
-               (lambda ()
+               (lambda (&optional _agent-type)
                  '(("MiniMax" . "minimax-m2.7-highspeed")
                    ("DashScope" . "qwen3.6-plus")))))
+      ;; Non-executor agents now route through ranked-subagent-backends too,
+      ;; so analyzer chain matches the ranked mock (MiniMax first).
       (should (equal (gptel-auto-workflow--rate-limit-failover-candidates "analyzer")
-                     '(("DashScope" . "qwen3.6-plus")
-                       ("DeepSeek" . "deepseek-v4-flash")
-                       ("MiniMax" . "minimax-m2.7-highspeed"))))
+                     '(("MiniMax" . "minimax-m2.7-highspeed")
+                       ("DashScope" . "qwen3.6-plus"))))
+      ;; Executor also routes through ranked with agent-type passed.
       (should (equal (gptel-auto-workflow--rate-limit-failover-candidates "executor")
                      '(("MiniMax" . "minimax-m2.7-highspeed")
                        ("DashScope" . "qwen3.6-plus")))))))
