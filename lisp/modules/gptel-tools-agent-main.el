@@ -335,10 +335,10 @@ Usage:
        (message "[auto-workflow] Research context restore skipped: %s"
                 (error-message-string err))))
     ;; Auto-discover targets when .dir-locals.el didn't set them (daemon restart).
-    (unless (and (boundp 'gptel-auto-workflow-targets)
-                 gptel-auto-workflow-targets)
-      (when (fboundp 'gptel-auto-workflow--discover-targets)
-        (let ((discovered (gptel-auto-workflow--discover-targets)))
+    (unless gptel-auto-workflow-targets
+      (let ((discovered (and (fboundp 'gptel-auto-workflow--discover-targets)
+                             (gptel-auto-workflow--discover-targets))))
+        (when discovered
           (setq gptel-auto-workflow-targets discovered)
           (setq-default gptel-auto-workflow-targets discovered)
           (message "[auto-workflow] Auto-discovered %d targets"

@@ -2129,10 +2129,13 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
               (if (gptel-auto-workflow--handle-analyzer-error-state targets safe-targets callback)
                   nil  ; Error already handled
                 (if (null targets)
-                    (progn
-                      (message "[auto-workflow] Analyzer returned no targets; using static targets")
-                      (let ((augmented (gptel-auto-workflow--semantic-target-augmentation safe-targets)))
-                       (funcall callback augmented)))
+                    (let* ((effective-static (or safe-targets
+                                                  (and (fboundp 'gptel-auto-workflow--discover-targets)
+                                                       (gptel-auto-workflow--discover-targets))))
+                           (augmented (gptel-auto-workflow--semantic-target-augmentation effective-static)))
+                      (message "[auto-workflow] Analyzer returned no targets; using %s targets"
+                               (if safe-targets "static" "auto-discovered"))
+                      (funcall callback augmented))
                   (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
                          (final-targets (if (and filtered-targets (listp filtered-targets))
                                             filtered-targets
