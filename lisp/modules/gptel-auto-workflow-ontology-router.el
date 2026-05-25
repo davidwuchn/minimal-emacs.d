@@ -1436,11 +1436,23 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
         ;; reorder-fallbacks-by-ontology) is picked up here too.
         (default-models (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
                                 gptel-auto-workflow-executor-rate-limit-fallbacks)
-                            '(("MiniMax" . "minimax-m2.7-highspeed")
-                              ("DeepSeek" . "deepseek-v4-flash")
-                              ("DashScope" . "qwen3.6-plus")
-                              ("moonshot" . "kimi-k2.6")
-                              ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))))
+            '(("MiniMax" . "minimax-m2.7-highspeed")
+              ("DeepSeek" . "deepseek-v4-flash")
+              ("DashScope" . "qwen3.6-plus")
+              ("moonshot" . "kimi-k2.6")
+              ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+        ;; Pre-compute once for all backends
+        (axis-rates-cache (when (fboundp 'gptel-auto-workflow--backend-per-axis-keep-rates)
+                            (condition-case nil
+                                (gptel-auto-workflow--backend-per-axis-keep-rates)
+                              (error nil))))
+        (target-axis-cache (when (and (boundp 'gptel-auto-workflow--current-target)
+                                      gptel-auto-workflow--current-target
+                                      (fboundp 'gptel-auto-workflow--get-holographic-consensus))
+                             (condition-case nil
+                                 (gptel-auto-workflow--get-holographic-consensus
+                                  gptel-auto-workflow--current-target)
+                               (error nil)))))
     (dolist (entry default-models)
       (let* ((backend (car entry))
              (model (cdr entry))
@@ -1482,7 +1494,7 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                                   0.0)
                             0.0))
               ;; Phase ω: per-axis boost based on holographic consensus.
-              (axis-boost (gptel-auto-workflow--axis-preference-boost backend))
+              (axis-boost (gptel-auto-workflow--axis-preference-boost backend axis-rates-cache target-axis-cache))
               (score (cond
                       (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
                       (quarantined -1.0)       ; health gate: hard exclude
@@ -1992,22 +2004,26 @@ Category overrides (score = 9999.0) are always ACCEPT regardless of rate."
 
 ;; ─── Per-Axis Backend Preference Boost ───
 
-(defun gptel-auto-workflow--axis-preference-boost (backend)
+(defun gptel-auto-workflow--axis-preference-boost (backend &optional axis-rates target-axis)
   "Return per-axis boost for BACKEND based on current target's KIBC axis.
 Reads `gptel-auto-workflow--current-target', holographic consensus,
-and per-axis keep-rates. Returns 0.0 when no consensus data exists.
+and per-axis keep-rates. When AXIS-RATES and TARGET-AXIS are supplied,
+skips recomputation (caller pre-computes for efficiency).
+Returns 0.0 when no consensus data exists.
 Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
   (let* ((target (and (boundp 'gptel-auto-workflow--current-target)
                       gptel-auto-workflow--current-target))
-         (axis-rates (when (fboundp 'gptel-auto-workflow--backend-per-axis-keep-rates)
-                       (condition-case nil
-                           (gptel-auto-workflow--backend-per-axis-keep-rates)
-                         (error nil))))
-         (consensus (when (and target
-                               (fboundp 'gptel-auto-workflow--get-holographic-consensus))
-                      (condition-case nil
-                          (gptel-auto-workflow--get-holographic-consensus target)
-                        (error nil))))
+         (axis-rates (or axis-rates
+                         (when (fboundp 'gptel-auto-workflow--backend-per-axis-keep-rates)
+                           (condition-case nil
+                               (gptel-auto-workflow--backend-per-axis-keep-rates)
+                             (error nil)))))
+         (consensus (or target-axis
+                        (when (and target
+                                   (fboundp 'gptel-auto-workflow--get-holographic-consensus))
+                          (condition-case nil
+                              (gptel-auto-workflow--get-holographic-consensus target)
+                            (error nil)))))
          (axis (plist-get consensus :axis))
          (confidence (plist-get consensus :confidence))
          (count (plist-get consensus :count)))
