@@ -1285,6 +1285,42 @@ and why that backend was selected."
          "This backend has elevated health warnings — results may be unreliable."
        "Trust appears adequate for this task."))))
 
+;; ─── Routing Decision Audit Trail ───
+
+(defvar gptel-auto-workflow--routing-audit-log nil
+  "Audit trail of routing decisions for observability.
+Each entry is a plist: (:timestamp :target :agent-type :selected-backend
+:selected-model :candidates). Candidates is a list of plists with
+:backend :model :health :keep-rate :pref-boost :axis-boost :score.")
+
+(defun gptel-auto-workflow--record-routing-decision (agent-type scored)
+  "Record a routing decision into the audit trail.
+SCORED is the scored list from `ranked-subagent-backends' (with scores attached).
+Keeps the last 100 decisions."
+  (let ((target (and (boundp 'gptel-auto-workflow--current-target)
+                     gptel-auto-workflow--current-target))
+        (top (car scored))
+        (candidates nil))
+    (when top
+      (dolist (entry (seq-take scored 5))
+        (let ((pair (car entry))
+              (score (cdr entry)))
+          (push (list :backend (car pair)
+                      :model (cdr pair)
+                      :score score)
+                candidates)))
+      (push (list :timestamp (float-time)
+                  :target (or target "unknown")
+                  :agent-type (or agent-type "unknown")
+                  :selected-backend (caar top)
+                  :selected-model (cdar top)
+                  :candidates (nreverse candidates))
+            gptel-auto-workflow--routing-audit-log)
+      ;; Keep last 100 entries
+      (when (> (length gptel-auto-workflow--routing-audit-log) 100)
+        (setq gptel-auto-workflow--routing-audit-log
+              (seq-take gptel-auto-workflow--routing-audit-log 100))))))
+
 ;; ─── Per-Target Model Preference ───
 
 (defun gptel-auto-workflow--best-model-for-target (target backend)
@@ -1400,9 +1436,10 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
         (when (>= score 0.0)
           (push (cons (cons backend model) score) scored))))
     (if scored
-        ;; nreverse: push reverses, restore original order so stable sort
-        ;; preserves the default-models order (DashScope first) as tiebreaker.
-        (mapcar #'car (sort (nreverse scored) (lambda (a b) (> (cdr a) (cdr b)))))
+        (let ((sorted (sort (nreverse scored) (lambda (a b) (> (cdr a) (cdr b))))))
+          ;; Record routing decision for audit trail
+          (gptel-auto-workflow--record-routing-decision agent-type sorted)
+          (mapcar #'car sorted))
       default-models)))
 
 (defvar gptel-auto-workflow--conflicted-targets nil

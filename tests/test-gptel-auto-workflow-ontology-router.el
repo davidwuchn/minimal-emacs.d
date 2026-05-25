@@ -1491,5 +1491,45 @@ SPECS is a list of (backend decision days-ago ...) triples."
       ;; Only DeepSeek models for this target → one kept
       (should (string= "deepseek-v4-pro" model)))))
 
+;; ─── Routing Audit Trail Tests ───
+
+(ert-deftest tdd/audit-trail/records-routing-decision ()
+  "The audit trail should record the top backend and scores after ranking."
+  (let ((gptel-auto-workflow--routing-audit-log nil)
+        (gptel-auto-workflow--current-target "test-target.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--task-backend-preference nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 8 :total 10 :keep-rate 0.8))))
+      (gptel-auto-workflow--ranked-subagent-backends "analyzer")
+      (should (= 1 (length gptel-auto-workflow--routing-audit-log)))
+      (let ((entry (car gptel-auto-workflow--routing-audit-log)))
+        (should (string= "test-target.el" (plist-get entry :target)))
+        (should (string= "analyzer" (plist-get entry :agent-type)))
+        (should (plist-get entry :selected-backend))
+        (should (plist-get entry :selected-model))
+        (should (> (length (plist-get entry :candidates)) 0))))))
+
+(ert-deftest tdd/audit-trail/trims-to-100-entries ()
+  "The audit trail should not grow beyond 100 entries."
+  (let ((gptel-auto-workflow--routing-audit-log nil)
+        (gptel-auto-workflow--current-target "target.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--task-backend-preference nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
+      (dotimes (_ 150)
+        (gptel-auto-workflow--ranked-subagent-backends "analyzer"))
+      (should (<= (length gptel-auto-workflow--routing-audit-log) 100)))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
