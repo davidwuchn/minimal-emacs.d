@@ -5549,6 +5549,19 @@ markdown table, and writes to mementum/knowledge/semantic-relationships.md.
 
 ;; ─── Model-Level Head-to-Head Comparison ───
 
+(defun gptel-auto-workflow--model-combination-valid-p (model-key)
+  "Return non-nil when MODEL-KEY (\"Backend/Model\") is a valid combination.
+Checks that the model belongs to its backend when the per-task model
+map is available.  Without the map, passes all combinations through."
+  (when (stringp model-key)
+    (let* ((parts (split-string model-key "/"))
+           (backend (car parts))
+           (model (cadr parts)))
+      (and (stringp backend) (stringp model)
+           (not (string-match-p "\\`\\(0\\|unknown\\|none\\)$" backend))
+           (or (not (boundp 'gptel-auto-workflow-per-task-model-map))
+               (gptel-auto-workflow--model-valid-for-backend-p model backend))))))
+
 (defun gptel-auto-workflow--evolution-model-stats ()
   "Analyze model (backend+model) performance from all experiment results.
 Returns alist of (\"Backend/model\" . keep-rate) sorted by performance descending.
@@ -5567,7 +5580,8 @@ Like promptfoo's model-specific comparison: which exact model performs best."
              (kept (equal (plist-get result :decision) "kept")))
         ;; Skip invalid backends
         (unless (or (member backend '("0" "unknown" ""))
-                    (string-match-p "\\`\\(0\\|unknown\\)/" key))
+                     (string-match-p "\\`\\(0\\|unknown\\)/" key)
+                     (not (gptel-auto-workflow--model-combination-valid-p key)))
           (let ((entry (or (gethash key by-model) (cons 0 0))))
             (setcar entry (1+ (car entry)))
             (when kept (setcdr entry (1+ (cdr entry))))
