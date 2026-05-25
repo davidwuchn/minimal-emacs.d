@@ -886,14 +886,16 @@ Phase 2 P(λ) gating: backends with :degraded lambda verification are
 excluded entirely (score 0), not just deprioritized. This implements the
 hard gate: if a backend fails the lambda compiler check, it's not used."
   (let ((scored nil)
-        ;; Order matters for stable-sort tiebreaking: push reverses iteration,
-        ;; so the last entry wins when scores are equal.  DashScope last = first
-        ;; tried = preferred default when no health or keep-rate data exists yet.
-        (default-models '(("MiniMax" . "minimax-m2.7-highspeed")
-                          ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
-                          ("DeepSeek" . "deepseek-v4-flash")
-                          ("moonshot" . "kimi-k2.6")
-                          ("DashScope" . "qwen3.6-plus"))))
+        ;; Use the live fallback chain as default-models so any ontology
+        ;; reordering (applied to executor-rate-limit-fallbacks by
+        ;; reorder-fallbacks-by-ontology) is picked up here too.
+        (default-models (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                                gptel-auto-workflow-executor-rate-limit-fallbacks)
+                            '(("MiniMax" . "minimax-m2.7-highspeed")
+                              ("DeepSeek" . "deepseek-v4-flash")
+                              ("DashScope" . "qwen3.6-plus")
+                              ("moonshot" . "kimi-k2.6")
+                              ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))))
     (dolist (entry default-models)
       (let* ((backend (car entry))
              (model (cdr entry))
