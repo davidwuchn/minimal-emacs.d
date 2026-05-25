@@ -637,8 +637,29 @@ STRATEGY and TARGET filter the performance data.
                (let ((tmp (car scored)))
                  (setcar scored (cadr scored))
                  (setcar (cdr scored) tmp))
-               (message "[onto-router] EXPLORATION: swapped top 2 backends for learning"))
-             ;; Return as (backend . model) cons cells
+              (message "[onto-router] EXPLORATION: swapped top 2 backends for learning"))
+              ;; Record experiment-level routing decision for audit
+              (let ((top-5 (seq-take scored 5)))
+                (push (list :timestamp (float-time)
+                            :level 'experiment
+                            :target (or target "global")
+                            :strategy (or strategy "none")
+                            :weights (list :delta delta-weight :rate rate-weight
+                                           :trend trend-weight :confidence confidence-weight)
+                            :vsm-adjustments (plist-get vsm-params :adjustments)
+                            :top-backends (mapcar (lambda (s)
+                                                    (list :backend (plist-get s :backend)
+                                                          :model (plist-get s :model)
+                                                          :score (plist-get s :score)
+                                                          :delta (plist-get s :delta)
+                                                          :trend (plist-get s :trend)
+                                                          :confidence (plist-get s :confidence)))
+                                                  top-5))
+                      gptel-auto-workflow--routing-audit-log)
+                (when (> (length gptel-auto-workflow--routing-audit-log) 100)
+                  (setq gptel-auto-workflow--routing-audit-log
+                        (seq-take gptel-auto-workflow--routing-audit-log 100))))
+              ;; Return as (backend . model) cons cells
              (mapcar (lambda (s) (cons (plist-get s :backend) (plist-get s :model))) scored))
          ;; Not enough data - return static order
          (progn
