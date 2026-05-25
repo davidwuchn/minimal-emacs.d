@@ -1370,9 +1370,10 @@ Each entry is a plist: (:timestamp :target :agent-type :selected-backend
 :selected-model :candidates). Candidates is a list of plists with
 :backend :model :health :keep-rate :pref-boost :axis-boost :score.")
 
-(defun gptel-auto-workflow--record-routing-decision (agent-type scored)
+(defun gptel-auto-workflow--record-routing-decision (agent-type scored &optional vsm-adjustments)
   "Record a routing decision into the audit trail.
 SCORED is the scored list from `ranked-subagent-backends' (with scores attached).
+VSM-ADJUSTMENTS is an optional list of VSM layer adjustment strings.
 Keeps the last 100 decisions."
   (let ((target (and (boundp 'gptel-auto-workflow--current-target)
                      gptel-auto-workflow--current-target))
@@ -1400,6 +1401,7 @@ Keeps the last 100 decisions."
                   :agent-type (or agent-type "unknown")
                   :selected-backend (caar top)
                   :selected-model (cdar top)
+                  :vsm-adjustments vsm-adjustments
                   :candidates (nreverse candidates))
             gptel-auto-workflow--routing-audit-log)
       ;; Keep last 100 entries
@@ -1511,7 +1513,7 @@ Falls back to the static headless-subagent-fallbacks if no data available.
 Phase 2 P(λ) gating: backends with :degraded lambda verification are
 excluded entirely (score 0), not just deprioritized. This implements the
 hard gate: if a backend fails the lambda compiler check, it's not used."
-  (let ((scored nil)
+  (let* ((scored nil)
         ;; Use the live fallback chain as default-models so any ontology
         ;; reordering (applied to executor-rate-limit-fallbacks by
         ;; reorder-fallbacks-by-ontology) is picked up here too.
@@ -1533,7 +1535,10 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                              (condition-case nil
                                  (gptel-auto-workflow--get-holographic-consensus
                                   gptel-auto-workflow--current-target)
-                               (error nil)))))
+                               (error nil))))
+        ;; VSM routing params for audit trail
+        (vsm-params (gptel-auto-workflow--vsm-adjusted-routing-params))
+        (vsm-adjustments (plist-get vsm-params :adjustments)))
     (dolist (entry default-models)
       (let* ((backend (car entry))
              (model (cdr entry))
@@ -1592,7 +1597,7 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                             (lambda (a b) (> (plist-get (cdr a) :score)
                                              (plist-get (cdr b) :score))))))
           ;; Record routing decision for audit trail
-          (gptel-auto-workflow--record-routing-decision agent-type sorted)
+          (gptel-auto-workflow--record-routing-decision agent-type sorted vsm-adjustments)
           (mapcar #'car sorted))
       default-models)))
 
