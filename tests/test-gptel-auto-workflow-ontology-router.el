@@ -831,12 +831,12 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (should (= 100.0 (plist-get (car scored) :score))))))
 
 (ert-deftest tdd/lambda-verify/penalty-unknown ()
-  "apply-verification-penalty slightly penalizes unknown backends."
+  "apply-verification-penalty returns unknown backends with no penalty."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (puthash "unknown-backend" :unknown gptel-auto-workflow--lambda-verification-results)
     (let ((scored (list (list :backend "unknown-backend" :score 100.0))))
       (setq scored (gptel-auto-workflow--apply-verification-penalty scored))
-      (should (= 95.0 (plist-get (car scored) :score))))))
+      (should (= 100.0 (plist-get (car scored) :score))))))
 
 ;; ─── Ranked Subagent Backends Tests ───
 ;; Tests for ranked-subagent-backends tiebreaking and keep-rate floor

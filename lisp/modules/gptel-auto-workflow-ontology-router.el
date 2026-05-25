@@ -1673,47 +1673,54 @@ Returns plist with :total :consistent :inconsistent :targets."
 
 (defvar gptel-auto-workflow--holographic-memory nil
   "Holographic memory of experiment consensus.
-Format: ((target . axis) . consensus-count) alist.
-Tracks how many operations (KIBC axes) agreed on each target.
+Format: ((target . axis) . weight) alist where weight is a delta-weighted
+float. Higher deltas contribute more to consensus confidence.
 Inspired by verbum cross-op consensus etching.")
 
 (defun gptel-auto-workflow--record-holographic-experiment (experiment)
-  "Record EXPERIMENT into holographic memory.
-Increments consensus count for target+axis combination.
-EXPERIMENT is a plist with :target, :kibcm-axis, :decision."
+  "Record EXPERIMENT into holographic memory with delta-weighted confidence.
+Increments consensus weight for target+axis combination, scaled by the
+experiment's code-quality delta so larger improvements count more.
+EXPERIMENT is a plist with :target, :kibcm-axis, :decision, :delta."
   (when (and experiment
              (equal (plist-get experiment :decision) "kept"))
     (let* ((target (plist-get experiment :target))
            (axis (or (plist-get experiment :kibcm-axis) "?"))
+           (delta-str (plist-get experiment :delta))
+           (delta (cond ((and (stringp delta-str) (string-match "\\`[+-]?[0-9.]+\\'" delta-str))
+                         (string-to-number delta-str))
+                        (t 0.0)))
+           (weight (+ 1.0 (max 0.0 delta)))  ; base 1.0 + improvement bonus
            (key (cons target axis))
            (existing (assoc key gptel-auto-workflow--holographic-memory)))
       (if existing
-          (setcdr existing (1+ (cdr existing)))
-        (push (cons key 1) gptel-auto-workflow--holographic-memory))
-      (message "[holographic] Recorded %s → %s (consensus: %d)"
-               target axis (or (cdr (assoc key gptel-auto-workflow--holographic-memory)) 0)))))
+          (setcdr existing (+ (cdr existing) weight))
+        (push (cons key weight) gptel-auto-workflow--holographic-memory))
+      (message "[holographic] Recorded %s → %s (Δ=%.3f weight=%.1f → total=%.1f)"
+               target axis delta weight
+               (or (cdr (assoc key gptel-auto-workflow--holographic-memory)) 0.0)))))
 
 (defun gptel-auto-workflow--get-holographic-consensus (target)
-  "Get holographic consensus for TARGET.
+  "Get holographic consensus for TARGET with delta-weighted confidence.
 Returns plist with :axis :count :total :confidence.
-Higher confidence = more operations agreed."
+Higher confidence = more experiments with larger deltas agreed."
   (let ((matches (cl-remove-if-not
                   (lambda (entry) (equal (car (car entry)) target))
                   gptel-auto-workflow--holographic-memory))
-        (total 0))
+        (total 0.0))
     (dolist (m matches)
-      (setq total (+ total (cdr m))))
+      (cl-incf total (cdr m)))
     (if (null matches)
-        (list :axis "?" :count 0 :total 0 :confidence 0.0)
+        (list :axis "?" :count 0 :total 0.0 :confidence 0.0)
       (let* ((best (cl-reduce (lambda (a b)
                                 (if (> (cdr a) (cdr b)) a b))
                               matches))
              (axis (cdr (car best)))
-             (count (cdr best)))
+             (count (round (cdr best))))
         (list :axis axis
               :count count
               :total total
-              :confidence (if (> total 0) (/ (float count) total) 0.0))))))
+              :confidence (if (> total 0.0) (/ (cdr best) total) 0.0))))))
 
 (defun gptel-auto-workflow--rebuild-holographic-memory ()
   "Rebuild holographic memory from all historical kept experiments.
