@@ -66,6 +66,10 @@ TOOL-NAME must be a non-empty string."
          (message "Warning: could not sync buffer %s: %s"
                   (buffer-name b) (error-message-string err)))))))
 
+(defun my/gptel--mode-label ()
+  "Return display label for current confirmation mode."
+  (if (eq my/gptel-confirm-mode 'auto) "AUTO" "CONFIRM-ALL"))
+
 ;;; --- User Commands ---
 
 ;;;###autoload
@@ -78,18 +82,24 @@ Switching to confirm-all clears all per-tool permits."
   (when (eq my/gptel-confirm-mode 'confirm-all)
     (my/gptel-clear-permits))
   (my/gptel--sync-to-upstream)
-  (message "Tool confirmation: %s%s"
-           (if (eq my/gptel-confirm-mode 'auto) "AUTO" "CONFIRM-ALL")
-           (if (eq my/gptel-confirm-mode 'auto)
-               ""
-             (format " (%d tools permitted)"
-                     (hash-table-count my/gptel-permitted-tools)))))
+  ;; ASSUMPTION: permit count is only meaningful in auto mode or before clear
+  ;; BEHAVIOR: Shows count only when permits exist (auto mode), not after clear
+  (let ((permit-count (hash-table-count my/gptel-permitted-tools)))
+    (message "Tool confirmation: %s%s"
+             (my/gptel--mode-label)
+             (if (and (eq my/gptel-confirm-mode 'auto) (> permit-count 0))
+                 (format " (%d tools permitted)" permit-count)
+               ""))))
 
 ;;;###autoload
 (defun my/gptel-show-permits ()
   "Show currently permitted tools."
   (interactive)
-  (let ((tools (cl-loop for k being the hash-keys of my/gptel-permitted-tools collect k)))
+  ;; ASSUMPTION: Hash keys should be strings (tool names)
+  ;; EDGE CASE: Non-string keys from corrupted state are filtered out
+  ;; TEST: Call with normal permits and verify display
+  (let ((tools (cl-loop for k being the hash-keys of my/gptel-permitted-tools
+                        when (stringp k) collect k)))
     (if (null tools)
         (message "No tools permitted (mode: %s)" my/gptel-confirm-mode)
       (message "Permitted tools: %s (mode: %s)"
@@ -113,18 +123,22 @@ Use this when the agent is misbehaving or you need immediate control back."
 (defun my/gptel-health-check ()
   "Show tool system status: mode, permits, preset, registered tools."
   (interactive)
-  (let* ((mode my/gptel-confirm-mode)
-         (permits (hash-table-count my/gptel-permitted-tools))
+  (let* ((permits (hash-table-count my/gptel-permitted-tools))
          (preset (and (boundp 'gptel--preset) gptel--preset))
-         (tools (and (boundp 'gptel-tools) (length gptel-tools)))
+         (tools (and (boundp 'gptel-tools)
+                     (proper-list-p gptel-tools)
+                     (length gptel-tools)))
          (active-procs
           (cl-count-if (lambda (p)
-                         (and (process-live-p p)
+                         (and (processp p)
+                              (process-live-p p)
                               (or (process-get p 'my/gptel-managed)
                                   (string-prefix-p "gptel-" (process-name p)))))
                        (process-list))))
+    ;; ASSUMPTION: process-list returns valid process objects or nil
+    ;; EDGE CASE: Non-process items in process-list are filtered by processp
     (message "Tool Health: %s | Permits: %d | Preset: %s | Tools: %s | Active: %d"
-             (if (eq mode 'auto) "AUTO" "CONFIRM")
+             (my/gptel--mode-label)
              permits
              (or preset "none")
              (or tools 0)

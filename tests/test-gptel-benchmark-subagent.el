@@ -52,5 +52,41 @@
   (let ((score (gptel-benchmark--function-length-score nil)))
     (should (>= score 0))))
 
+(ert-deftest test-subagent/analyzer-chain-skips-local-failed-backends ()
+  "Analyzer retry selection should exclude analyzer-local failed providers."
+  (let ((gptel-benchmark-use-subagents t)
+        (gptel-agent-preset nil)
+        (gptel-auto-workflow--analyzer-failed-backends '("DashScope"))
+        (gptel-auto-workflow--rate-limited-backends nil)
+        captured-preset
+        result)
+    (cl-letf (((symbol-function 'gptel-agent--task)
+               (lambda (callback _agent-type _description _prompt)
+                 (setq captured-preset gptel-agent-preset)
+                 (funcall callback "ok")))
+              ((symbol-function 'gptel-auto-workflow--headless-provider-override-active-p)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--agent-base-preset)
+               (lambda (_agent-type) '(:backend "DashScope" :model "qwen3.6-plus")))
+              ((symbol-function 'gptel-auto-workflow--maybe-override-subagent-provider)
+               (lambda (_agent-type preset) preset))
+              ((symbol-function 'gptel-auto-workflow--rate-limit-failover-candidates)
+               (lambda (_agent-type)
+                 '(("DashScope" . "qwen3.6-plus")
+                   ("DeepSeek" . "deepseek-v4-flash"))))
+              ((symbol-function 'gptel-auto-workflow--first-available-provider-candidate)
+               (lambda (candidates excluded)
+                 (cl-find-if (lambda (entry)
+                               (not (member (car entry) excluded)))
+                             candidates)))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-benchmark-call-subagent
+       'analyzer "Select targets" "Prompt"
+       (lambda (value) (setq result value)))
+      (should (equal result "ok"))
+      (should (equal (plist-get captured-preset :backend) "DeepSeek"))
+      (should (equal (plist-get captured-preset :model) "deepseek-v4-flash")))))
+
 (provide 'test-gptel-benchmark-subagent)
 ;;; test-gptel-benchmark-subagent.el ends here

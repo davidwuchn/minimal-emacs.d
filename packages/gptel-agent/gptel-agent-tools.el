@@ -1438,7 +1438,10 @@ PROMPT is the detailed prompt instructing the agent on what is required."
                      (cl-etypecase gptel-agent-preset
                        (symbol (gptel-get-preset gptel-agent-preset))
                        (list gptel-agent-preset))))
-              (cdr (assoc agent-type gptel-agent--agents)))
+              ;; MUST copy: nconc setcdr-modifies the last cons, corrupting
+              ;; the shared agent config in gptel-agent--agents on first call.
+              (copy-sequence
+               (cdr (assoc agent-type gptel-agent--agents))))
     (let* ((info (gptel-fsm-info gptel--fsm-last))
            (where (or (plist-get info :tracking-marker)
                       (plist-get info :position)))

@@ -1566,13 +1566,13 @@ exhaustion.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("DashScope" . "qwen3.6-plus")
-    ("moonshot" . "kimi-k2.6")
     ("DeepSeek" . "deepseek-v4-flash")
+    ("moonshot" . "kimi-k2.6")
     ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
     ("MiniMax" . "minimax-m2.7-highspeed"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
-DashScope first (faster, more reliable), then Moonshot, DeepSeek, CF-Gateway, MiniMax."
+DashScope first (faster, more reliable), then DeepSeek, Moonshot, CF-Gateway, MiniMax."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
@@ -1583,7 +1583,7 @@ DashScope first (faster, more reliable), then Moonshot, DeepSeek, CF-Gateway, Mi
 
 DashScope is preferred for headless runs (faster, independent quota).
 The fallback chain DNS-polls through DashScope, DeepSeek, moonshot,
-MiniMax, then CF-Gateway."
+CF-Gateway, then MiniMax."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 
@@ -1599,6 +1599,38 @@ DashScope first (independent quota, won't cascade MiniMax/moonshot
 rate limits).  Moonshot/MiniMax share a KIMI quota bucket — when one
 is exhausted, the other is too — so DeepSeek gets priority over both."
   :type '(repeat (cons (string :tag "Backend")
+                       (string :tag "Model")))
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-per-task-model-map
+  '(("analyzer"   "DashScope"  . "qwen3.6-plus")
+    ("analyzer"   "DeepSeek"   . "deepseek-v4-flash")
+    ("analyzer"   "moonshot"   . "kimi-k2.6")
+    ("grader"     "DashScope"  . "qwen3.6-plus")
+    ("grader"     "DeepSeek"   . "deepseek-v4-flash")
+    ("grader"     "moonshot"   . "kimi-k2.6")
+    ("executor"   "DashScope"  . "qwen3.6-plus")
+    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
+    ("executor"   "moonshot"   . "kimi-k2.6")
+    ("researcher" "DashScope"  . "qwen3.6-plus")
+    ("researcher" "DeepSeek"   . "deepseek-v4-flash")
+    ("researcher" "moonshot"   . "kimi-k2.6")
+    ("reviewer"   "DashScope"  . "qwen3.6-plus")
+    ("reviewer"   "DeepSeek"   . "deepseek-v4-pro")
+    ("reviewer"   "moonshot"   . "kimi-k2.6")
+    ("comparator" "DashScope"  . "qwen3.6-plus")
+    ("comparator" "DeepSeek"   . "deepseek-v4-flash")
+    ("comparator" "moonshot"   . "kimi-k2.6"))
+  "Per-task-type model selection for each backend.
+Each element is (AGENT-TYPE BACKEND . MODEL).
+When selecting a backend+model pair for AGENT-TYPE, this map takes
+priority over the static fallback lists — ensuring code-generation
+tasks (executor) use the capable deepseek-v4-pro while analysis tasks
+(analyzer, grader) use the faster deepseek-v4-flash.
+Backend entries not listed here fall back to their default model from
+`gptel-auto-workflow-headless-subagent-fallbacks`."
+  :type '(repeat (list (string :tag "Agent type")
+                       (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
 
@@ -1637,7 +1669,7 @@ and advance through the configured fallback chain instead.")
   (when (keywordp backend-name)
     (setq backend-name (substring (symbol-name backend-name) 1)))
   (let ((host (alist-get backend-name gptel-auto-workflow--backend-key-hosts
-                           nil nil #'string=)))
+                            nil nil #'string=)))
     (cond
      ((and host (fboundp 'my/gptel-api-key))
       (gptel-auto-workflow--non-empty-string-p
@@ -1646,6 +1678,35 @@ and advance through the configured fallback chain instead.")
      ;; Unknown backends have no auth-source host mapping, so a bound backend
      ;; object is the only availability signal we can use.
      (t (gptel-auto-workflow--backend-object backend-name)))))
+
+(defun gptel-auto-workflow--best-model-for-task (agent-type backend)
+  "Return the best MODEL for AGENT-TYPE when using BACKEND.
+Looks up `gptel-auto-workflow-per-task-model-map' first.
+Falls back to the default model from the headless fallback chain
+if no per-task mapping exists for this backend."
+  (or (and (boundp 'gptel-auto-workflow-per-task-model-map)
+           (let ((entry (cl-find-if
+                         (lambda (e)
+                           (and (equal (nth 0 e) agent-type)
+                                (equal (nth 1 e) backend)))
+                          gptel-auto-workflow-per-task-model-map)))
+              (when (consp entry) (cddr entry))))
+      (gptel-auto-workflow--default-model-for-backend backend)))
+
+(defun gptel-auto-workflow--default-model-for-backend (backend)
+  "Return the default model name for BACKEND from the headless fallback chain.
+If BACKEND is not found, returns \"unknown\"."
+  (when (keywordp backend)
+    (setq backend (substring (symbol-name backend) 1)))
+  (or (and (stringp backend)
+           (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+           (cdr (assoc backend gptel-auto-workflow-headless-subagent-fallbacks
+                       #'string=)))
+      (and (stringp backend)
+           (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+           (cdr (assoc backend gptel-auto-workflow-executor-rate-limit-fallbacks
+                       #'string=)))
+      "unknown"))
 
 (defun gptel-auto-workflow--headless-provider-override-active-p ()
   "Return non-nil when headless auto-workflow provider override should apply."
@@ -1691,16 +1752,21 @@ the user has not explicitly customized the variable."
         (push 'gptel-auto-workflow-headless-fallback-agents migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-headless-subagent-fallbacks)
-      (when (equal gptel-auto-workflow-headless-subagent-fallbacks
-                   '(("MiniMax" . "minimax-m2.7-highspeed")
-                     ("DashScope" . "qwen3.6-plus")
-                     ("DeepSeek" . "deepseek-chat")
-                     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-                     ("Gemini" . "gemini-3.1-pro-preview")))
+      (when (member gptel-auto-workflow-headless-subagent-fallbacks
+                    '((("MiniMax" . "minimax-m2.7-highspeed")
+                       ("DashScope" . "qwen3.6-plus")
+                       ("DeepSeek" . "deepseek-chat")
+                       ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+                       ("Gemini" . "gemini-3.1-pro-preview"))
+                      (("DashScope" . "qwen3.6-plus")
+                       ("moonshot" . "kimi-k2.6")
+                       ("DeepSeek" . "deepseek-v4-flash")
+                       ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
+                       ("MiniMax" . "minimax-m2.7-highspeed"))))
         (setq gptel-auto-workflow-headless-subagent-fallbacks
-              '(("moonshot" . "kimi-k2.6")
-                ("DashScope" . "qwen3.6-plus")
+              '(("DashScope" . "qwen3.6-plus")
                 ("DeepSeek" . "deepseek-v4-flash")
+                ("moonshot" . "kimi-k2.6")
                 ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
                 ("MiniMax" . "minimax-m2.7-highspeed")))
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
@@ -1768,9 +1834,7 @@ Returns the static fallback chain as a last resort."
              (gptel-auto-workflow--ranked-subagent-backends))
         gptel-auto-workflow-executor-rate-limit-fallbacks))
    ((member agent-type gptel-auto-workflow-headless-fallback-agents)
-    (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
-             (gptel-auto-workflow--ranked-subagent-backends))
-        gptel-auto-workflow-headless-subagent-fallbacks))))
+    gptel-auto-workflow-headless-subagent-fallbacks)))
 
 (defun gptel-auto-workflow--agent-base-preset (agent-type)
   "Return the current base preset plist for AGENT-TYPE, or nil when unavailable.
@@ -1804,10 +1868,13 @@ chain so that subagent calls do not fall through to the mode-hook default
               (let ((pick (gptel-auto-workflow--first-available-provider-candidate
                            candidates excluded)))
                 (when pick
-                  (message "[subagent] %s base-preset auto-selected %s/%s"
-                           agent-type (car pick) (cdr pick))
-                  (setq merged (plist-put merged :backend (car pick)))
-                  (setq merged (plist-put merged :model (cdr pick)))))
+                  (let ((task-model (and (fboundp 'gptel-auto-workflow--best-model-for-task)
+                                        (gptel-auto-workflow--best-model-for-task
+                                         agent-type (car pick)))))
+                    (message "[subagent] %s base-preset auto-selected %s/%s"
+                             agent-type (car pick) (or task-model (cdr pick)))
+                    (setq merged (plist-put merged :backend (car pick)))
+                    (setq merged (plist-put merged :model (or task-model (cdr pick)))))))
             ;; Headless active but no candidates: fall back to
             ;; gptel-backend so the call goes through.
             (when (and (null (plist-get merged :backend))
@@ -1839,17 +1906,27 @@ Handles gptel-backend structs, strings, and keyword symbols."
    ((stringp backend) backend)
    ((keywordp backend) (substring (symbol-name backend) 1))
    ((and backend (fboundp 'gptel-backend-name))
-    (condition-case nil
-        (gptel-backend-name backend)
-      (error
-       (let ((name (format "%s" backend)))
-         (message "[backend] Warning: gptel-backend-name failed for %S, using %s"
-                  backend name)
-         name))))
+     (gptel-auto-workflow--safe-backend-name backend))
    (t (let ((name (format "%s" backend)))
         (message "[backend] Warning: unknown backend type %S, using %s"
                  (type-of backend) name)
         name))))
+
+(defun gptel-auto-workflow--safe-backend-name (backend)
+  "Safe wrapper around `gptel-backend-name'.
+Catches type errors and falls back to format \"%s\"."
+  (cond
+   ((stringp backend) backend)
+   ((keywordp backend) (substring (symbol-name backend) 1))
+   ((null backend) "nil")
+   (t
+    (condition-case nil
+        (gptel-backend-name backend)
+      (error
+       (let ((name (format "%s" backend)))
+         (message "[backend] gptel-backend-name failed for %S, using %s"
+                  backend name)
+         name))))))
 
 (defun gptel-auto-workflow--model-max-output-tokens (model-id)
   "Return the documented max output tokens for MODEL-ID, or nil when unknown."

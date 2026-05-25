@@ -3921,8 +3921,38 @@ experiment phases do not trip the real pre-grade target validator."
                (lambda (&rest _) nil)))
        (let ((override
               (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
-         (should (equal (plist-get override :backend) "MiniMax"))
-         (should (equal (plist-get override :model) "minimax-m2.7-highspeed"))))))
+        (should (equal (plist-get override :backend) "MiniMax"))
+        (should (equal (plist-get override :model) "minimax-m2.7-highspeed"))))))
+
+(ert-deftest regression/auto-workflow/non-executor-failover-uses-headless-chain-not-ranked-history ()
+  "Analyzer routing should not let executor keep-rates promote MiniMax first."
+  (let ((gptel-auto-workflow-headless-fallback-agents
+         '("analyzer" "executor" "grader" "reviewer"))
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("MiniMax" . "minimax-m2.7-highspeed")
+           ("DashScope" . "qwen3.6-plus"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--ranked-subagent-backends)
+               (lambda ()
+                 '(("MiniMax" . "minimax-m2.7-highspeed")
+                   ("DashScope" . "qwen3.6-plus")))))
+      (should (equal (gptel-auto-workflow--rate-limit-failover-candidates "analyzer")
+                     '(("DashScope" . "qwen3.6-plus")
+                       ("DeepSeek" . "deepseek-v4-flash")
+                       ("MiniMax" . "minimax-m2.7-highspeed"))))
+      (should (equal (gptel-auto-workflow--rate-limit-failover-candidates "executor")
+                     '(("MiniMax" . "minimax-m2.7-highspeed")
+                       ("DashScope" . "qwen3.6-plus")))))))
+
+(ert-deftest regression/auto-workflow/best-model-for-task-handles-dotted-map-entry ()
+  "Per-task model entries use dotted pairs, so the model is in cddr."
+  (let ((gptel-auto-workflow-per-task-model-map
+         '(("analyzer" "DashScope" . "qwen3.6-plus"))))
+    (should (equal (gptel-auto-workflow--best-model-for-task "analyzer" "DashScope")
+                   "qwen3.6-plus"))))
 
 (ert-deftest regression/auto-workflow/provider-rate-limit-failover-applies-across-headless-subagents ()
   "A backend rate limit should fail over all headless subagents using it."
@@ -4490,7 +4520,7 @@ experiment phases do not trip the real pre-grade target validator."
       (put 'gptel-auto-experiment-validation-retry-active-grace 'customized-value old-customized)
       (put 'gptel-auto-experiment-validation-retry-active-grace 'theme-value old-theme))))
 
-(ert-deftest regression/auto-workflow/migrates-legacy-headless-subagent-fallbacks-to-moonshot-first ()
+(ert-deftest regression/auto-workflow/migrates-legacy-headless-subagent-fallbacks-to-dashscope-first ()
   "Legacy headless subagent defaults should not restore MiniMax-first routing."
   (let* ((legacy-subagent
           '(("MiniMax" . "minimax-m2.7-highspeed")
@@ -4515,12 +4545,12 @@ experiment phases do not trip the real pre-grade target validator."
                      (lambda (&rest _) nil)))
             (should (member 'gptel-auto-workflow-headless-subagent-fallbacks
                             (gptel-auto-workflow--migrate-legacy-provider-defaults))))
-          (should (equal gptel-auto-workflow-headless-subagent-fallbacks
-                         '(("moonshot" . "kimi-k2.6")
-                           ("DashScope" . "qwen3.6-plus")
-                           ("DeepSeek" . "deepseek-v4-flash")
-                           ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
-                           ("MiniMax" . "minimax-m2.7-highspeed")))))
+           (should (equal gptel-auto-workflow-headless-subagent-fallbacks
+                          '(("DashScope" . "qwen3.6-plus")
+                            ("DeepSeek" . "deepseek-v4-flash")
+                            ("moonshot" . "kimi-k2.6")
+                            ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
+                            ("MiniMax" . "minimax-m2.7-highspeed")))))
       (setq gptel-auto-workflow-headless-subagent-fallbacks old-subagent)
       (put 'gptel-auto-workflow-headless-subagent-fallbacks 'saved-value old-subagent-saved)
       (put 'gptel-auto-workflow-headless-subagent-fallbacks 'customized-value old-subagent-customized)

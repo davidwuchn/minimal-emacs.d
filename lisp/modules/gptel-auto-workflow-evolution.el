@@ -16,9 +16,9 @@
 (require 'subr-x)
 
 ;; Soft require: research-integration may not exist on all deployments
-(condition-case nil (require 'gptel-auto-workflow-research-integration nil t) (ignore))
+(require 'gptel-auto-workflow-research-integration nil t)
 ;; Soft require: research-benchmark provides load-research-traces
-(condition-case nil (require 'gptel-auto-workflow-research-benchmark nil t) (ignore))
+(require 'gptel-auto-workflow-research-benchmark nil t)
 
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
@@ -1825,6 +1825,9 @@ Extract → Verify → Controller Evolution → Skill Evolution.
 Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (interactive)
   (cl-block gptel-auto-workflow-evolution-run-cycle
+  ;; DEBUG: wrap early portion to isolate MiniMax error
+  (condition-case early-err
+      (progn
   ;; Throttle: don't run more than once per 300s (5min) unless forced
   (let ((now (float-time (current-time))))
     (when (and gptel-auto-workflow--evolution-last-run
@@ -1855,6 +1858,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (setq gptel-auto-workflow--evolution-last-objective current-obj)
         (message "[evolution] Eight Keys score: %.3f" current-obj))))
   (message "[auto-workflow] Running self-evolution cycle...")
+    )
+    (error
+     (message "[evolution] EARLY error (pre-steps): %s" (error-message-string early-err))
+     (cl-return-from gptel-auto-workflow-evolution-run-cycle (format "early-error: %s" early-err))))
   ;; Pipeline validation (Semantica PipelineValidator)
   (condition-case nil
       (let ((v (gptel-auto-workflow--validate-pipeline)))
@@ -1863,7 +1870,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (message "[pipeline] ERROR: %s" e)))
         (dolist (w (plist-get v :warnings))
           (message "[pipeline] WARN: %s" w)))
-    (ignore))
+    (error nil))
   (let ((new-experiments (gptel-auto-workflow--evolution-count-new))
         (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                            (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
@@ -4910,6 +4917,20 @@ Also persists EMA confidence history for cross-session trend analysis."
       (with-temp-file file
         (insert (json-encode hints))))))
 
+(defun gptel-auto-workflow--json-map-entries (value)
+  "Return VALUE as alist entries after JSON plist/alist restoration."
+  (cond
+   ((null value) nil)
+   ((and (listp value) (keywordp (car value)))
+    (let (entries)
+      (while value
+        (let ((key (pop value))
+              (val (and value (pop value))))
+          (when (keywordp key)
+            (push (cons (substring (symbol-name key) 1) val) entries))))
+      (nreverse entries)))
+   ((listp value) value)))
+
 (defun gptel-auto-workflow--restore-next-cycle-hints ()
   "Restore evolution-next-cycle-hints from disk after daemon restart.
 Also restores EMA confidence history for cross-session trend analysis."
@@ -4942,18 +4963,24 @@ Also restores EMA confidence history for cross-session trend analysis."
         (let ((strikes (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-strikes)))
           (when strikes
             (clrhash gptel-auto-workflow--lambda-strike-count)
-            (dolist (s strikes) (puthash (car s) (cdr s) gptel-auto-workflow--lambda-strike-count)))))
+            (dolist (s (gptel-auto-workflow--json-map-entries strikes))
+              (when (consp s)
+                (puthash (car s) (cdr s) gptel-auto-workflow--lambda-strike-count))))))
       (when (boundp 'gptel-auto-workflow--lambda-dead-until)
         (let ((dead (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-dead)))
           (when dead
             (clrhash gptel-auto-workflow--lambda-dead-until)
-            (dolist (d dead) (puthash (car d) (cdr d) gptel-auto-workflow--lambda-dead-until)))))
+            (dolist (d (gptel-auto-workflow--json-map-entries dead))
+              (when (consp d)
+                (puthash (car d) (cdr d) gptel-auto-workflow--lambda-dead-until))))))
       (when (boundp 'gptel-auto-workflow--lambda-verification-results)
         (let ((results (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-results)))
           (when results
             (clrhash gptel-auto-workflow--lambda-verification-results)
-            (dolist (r results)
-              (puthash (car r) (intern (cdr r)) gptel-auto-workflow--lambda-verification-results))))))))
+            (dolist (r (gptel-auto-workflow--json-map-entries results))
+              (when (consp r)
+                (puthash (car r) (intern (format "%s" (cdr r)))
+                         gptel-auto-workflow--lambda-verification-results)))))))))
 
 (defun gptel-auto-workflow--wire-regressed-targets ()
   "Populate :regressed-targets from cross-cycle knowledge-page diff.
@@ -5549,17 +5576,6 @@ Like promptfoo's model-specific comparison: which exact model performs best."
                  (push (cons key (/ (float (cdr counts)) (car counts))) stats)))
              by-model)
     (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
-
-(defun gptel-auto-workflow--default-model-for-backend (backend)
-  "Return the default model name for BACKEND from the headless fallback chain.
-If BACKEND is not found, returns \"unknown\"."
-  (or (and (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
-           (cdr (assoc backend gptel-auto-workflow-headless-subagent-fallbacks
-                       (lambda (a b) (string= a (car b))))))
-      (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
-           (cdr (assoc backend gptel-auto-workflow-executor-rate-limit-fallbacks
-                       (lambda (a b) (string= a (car b))))))
-      "unknown"))
 
 (defun gptel-auto-workflow--model-head-to-head-stats (model-a model-b)
   "Compare MODEL-A vs MODEL-B on shared targets.

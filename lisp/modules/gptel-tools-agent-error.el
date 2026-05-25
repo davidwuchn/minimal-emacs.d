@@ -95,7 +95,9 @@ name strings."
           (t (list excluded-backends)))))
     (seq-find
      (lambda (entry)
-       (and (not (seq-some (lambda (backend-name)
+       (and (consp entry)
+            (stringp (car entry))
+            (not (seq-some (lambda (backend-name)
                              (and (stringp backend-name)
                                   (string= (car entry) backend-name)))
                            excluded))

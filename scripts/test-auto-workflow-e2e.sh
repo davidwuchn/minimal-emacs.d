@@ -365,11 +365,11 @@ done
 
 echo
 echo "[9/12] Checking cron configuration..."
-if crontab -l 2>/dev/null | grep -Eq '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow'; then
-    echo "  ✓ Auto-workflow cron job installed via wrapper"
-    crontab -l | grep -E '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow' | head -1 | sed 's/^/    /'
+if crontab -l 2>/dev/null | grep -Eq '^[0-9*@].*run-pipeline\.sh'; then
+    echo "  ✓ Auto-workflow pipeline cron job installed"
+    crontab -l | grep -E '^[0-9*@].*run-pipeline\.sh' | head -1 | sed 's/^/    /'
 else
-    echo "  ✗ Wrapper-based auto-workflow cron job not found"
+    echo "  ✗ Pipeline-based auto-workflow cron job not found"
     echo "    Run: ./scripts/install-cron.sh"
     exit 1
 fi
@@ -407,6 +407,6 @@ echo
 echo "=== All E2E Tests Passed ==="
 echo
 echo "Next steps:"
-echo "1. Test manual run: ./scripts/run-auto-workflow-cron.sh auto-workflow"
+echo "1. Test manual run: ./scripts/run-pipeline.sh"
 echo "2. Inspect status/output: ./scripts/run-auto-workflow-cron.sh status && ./scripts/run-auto-workflow-cron.sh messages"
 echo "3. Check logs: tail -f var/tmp/cron/auto-workflow.log"
