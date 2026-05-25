@@ -4,7 +4,7 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-25T16:01
+Generated: 2026-05-25T16:46
 
 | lisp/modules/gptel-tools-agent-main.el | lisp/modules/gptel-tools-agent.el | 0.861 |
 | lisp/modules/gptel-tools-agent-git.el | lisp/modules/gptel-tools-agent.el | 0.851 |
@@ -53,7 +53,7 @@ Generated: 2026-05-25T16:01
 | lisp/modules/gptel-auto-workflow-strategic.el | lisp/modules/gptel-tools-agent-experiment-loop.el | 0.804 |
 | lisp/modules/gptel-tools-memory.el | lisp/modules/gptel-benchmark-memory.el | 0.803 |
 | lisp/modules/gptel-benchmark-memory.el | lisp/modules/gptel-benchmark-core.el | 0.803 |
-| lisp/modules/gptel-tools-agent-worktree.el | lisp/modules/gptel-auto-workflow-projects.el | 0.803 |
+| lisp/modules/gptel-tools-agent-worktree.el | lisp/modules/gptel-auto-workflow-projects.el | 0.802 |
 | lisp/modules/gptel-sandbox.el | lisp/modules/gptel-tools-programmatic.el | 0.802 |
 | lisp/modules/nucleus-tools-validate.el | lisp/modules/nucleus-tools.el | 0.801 |
 | lisp/modules/gptel-tools-agent-worktree.el | lisp/modules/gptel-tools-agent-main.el | 0.800 |
@@ -70,7 +70,6 @@ Generated: 2026-05-25T16:01
 | lisp/modules/gptel-agent-loop.el | lisp/modules/gptel-tools-agent-subagent.el | 0.787 |
 | lisp/modules/nucleus-tools-validate.el | lisp/modules/nucleus-tools-verify.el | 0.786 |
 | lisp/modules/gptel-tools-agent-staging-baseline.el | lisp/modules/gptel-tools-agent-subagent.el | 0.786 |
-| lisp/modules/gptel-agent-loop.el | lisp/modules/gptel-tools-agent-git.el | 0.785 |
 | lisp/modules/gptel-ext-reasoning.el | lisp/modules/gptel-auto-workflow-behavioral-tests.el | 0.785 |
 | lisp/modules/gptel-ext-reasoning.el | lisp/modules/gptel-tools-agent-validation.el | 0.779 |
 | lisp/modules/gptel-ext-reasoning.el | lisp/modules/gptel-tools-code.el | 0.779 |
