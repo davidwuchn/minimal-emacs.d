@@ -2734,7 +2734,16 @@ must not override it to MiniMax via setq-local in subagent buffers."
   (let ((root (make-temp-file "aw-cross-state" t))
         (strike-count (make-hash-table :test 'equal))
         (dead-until (make-hash-table :test 'equal))
-        (verification-results (make-hash-table :test 'equal)))
+        (verification-results (make-hash-table :test 'equal))
+        (old-strikes (when (boundp 'gptel-auto-workflow--lambda-strike-count)
+                       gptel-auto-workflow--lambda-strike-count))
+        (old-dead (when (boundp 'gptel-auto-workflow--lambda-dead-until)
+                    gptel-auto-workflow--lambda-dead-until))
+        (old-verify (when (boundp 'gptel-auto-workflow--lambda-verification-results)
+                      gptel-auto-workflow--lambda-verification-results))
+        (was-strikes (boundp 'gptel-auto-workflow--lambda-strike-count))
+        (was-dead (boundp 'gptel-auto-workflow--lambda-dead-until))
+        (was-verify (boundp 'gptel-auto-workflow--lambda-verification-results)))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
                    (lambda () root)))
@@ -2748,7 +2757,16 @@ must not override it to MiniMax via setq-local in subagent buffers."
           (should (= 1 (gethash "DashScope" strike-count)))
           (should (= 123.0 (gethash "MiniMax" dead-until)))
           (should (eq 'alive (gethash "DeepSeek" verification-results))))
-      (delete-directory root t))))
+      (delete-directory root t)
+      (if was-strikes
+          (setq gptel-auto-workflow--lambda-strike-count old-strikes)
+        (makunbound 'gptel-auto-workflow--lambda-strike-count))
+      (if was-dead
+          (setq gptel-auto-workflow--lambda-dead-until old-dead)
+        (makunbound 'gptel-auto-workflow--lambda-dead-until))
+      (if was-verify
+          (setq gptel-auto-workflow--lambda-verification-results old-verify)
+        (makunbound 'gptel-auto-workflow--lambda-verification-results)))))
 
 (ert-deftest tdd/evolution/loads-without-parse-error ()
   "gptel-auto-workflow-evolution.el must load without 'End of file during parsing'."
