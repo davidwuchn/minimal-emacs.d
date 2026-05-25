@@ -76,11 +76,14 @@ PREDICATE-FN should accept a list of benchmark results for a single test-id."
 
 (defun gptel-benchmark--group-by-test-id (data)
   "Group benchmark DATA by test-id.
-Returns a hash table mapping test-id to list of results."
+Returns a hash table mapping test-id to list of results.
+Skips entries with nil or non-list data."
   (let ((table (make-hash-table :test 'equal)))
     (dolist (result data)
-      (let ((test-id (plist-get result :test-id)))
-        (puthash test-id (cons result (gethash test-id table '())) table)))
+      (when (and result (listp result))
+        (let ((test-id (plist-get result :test-id)))
+          (when test-id
+            (puthash test-id (cons result (gethash test-id table '())) table)))))
     table))
 
 (defun gptel-benchmark--result-passed-p (result)
@@ -88,7 +91,7 @@ Returns a hash table mapping test-id to list of results."
 Returns t if the result passed, nil otherwise.
 Returns nil for missing or malformed grade data."
   (let ((grade (plist-get result :grade)))
-    (and (listp grade) (plist-get grade :passed))))
+    (and (proper-list-p grade) (plist-get grade :passed))))
 
 (defun gptel-benchmark--flaky-test-p (results)
   "Check if RESULTS show inconsistent pass/fail across runs.
