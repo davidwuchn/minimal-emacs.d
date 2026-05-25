@@ -1487,7 +1487,9 @@ SPECS is a list of (backend decision days-ago ...) triples."
                 (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")
                 (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "discarded")
                 (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
-                (list :target "bar.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept")))))
+                (list :target "bar.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept"))))
+            ((symbol-function 'gptel-auto-workflow--model-combination-valid-p)
+             (lambda (_) t)))  ; all combinations valid in test
     (let ((model (gptel-auto-workflow--best-model-for-target "foo.el" "DeepSeek")))
       ;; deepseek-v4-pro: 2 kept, 0 discarded = 100%
       ;; deepseek-v4-flash: 1 kept, 1 discarded = 50%
@@ -1508,7 +1510,9 @@ SPECS is a list of (backend decision days-ago ...) triples."
                (list
                 (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
                 (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
-                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")))))
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept"))))
+            ((symbol-function 'gptel-auto-workflow--model-combination-valid-p)
+             (lambda (_) t)))
     (let ((model (gptel-auto-workflow--best-model-for-target "foo.el" "DeepSeek")))
       ;; Only DeepSeek models for this target → one kept
       (should (string= "deepseek-v4-pro" model)))))
