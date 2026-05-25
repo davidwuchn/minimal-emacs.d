@@ -222,20 +222,31 @@ BETA is in [0,1]: 0 = conservative (few turns, easy to stop),
   "Update EMA with NEW-CONFIDENCE reading.
 Uses gptel-auto-workflow--research-ema-alpha for smoothing.
 Adjusts alpha based on mementum knowledge page confidence."
-  (let* ((mementum-conf (when (fboundp 'gptel-auto-workflow--mementum-confidence-factor)
+  ;; ASSUMPTION: new-confidence should be a number; caller may pass nil
+  ;; BEHAVIOR: Clamp nil/non-number to 0.0, compute adaptive EMA update
+  ;; EDGE CASE: nil or non-number new-confidence defaults to 0.0
+  ;; TEST: Call with nil, non-number, and valid number inputs
+  (let* ((new-confidence (if (numberp new-confidence) new-confidence 0.0))
+         (mementum-conf (when (fboundp 'gptel-auto-workflow--mementum-confidence-factor)
                           (gptel-auto-workflow--mementum-confidence-factor "template-default")))
-         (alpha (* gptel-auto-workflow--research-ema-alpha
-                   (cond ((and mementum-conf (> mementum-conf 0.7)) 0.7)
-                         ((and mementum-conf (< mementum-conf 0.3)) 1.3)
+         (alpha (* (if (numberp gptel-auto-workflow--research-ema-alpha)
+                       gptel-auto-workflow--research-ema-alpha
+                     0.5)
+                   (cond ((and mementum-conf (numberp mementum-conf) (> mementum-conf 0.7)) 0.7)
+                         ((and mementum-conf (numberp mementum-conf) (< mementum-conf 0.3)) 1.3)
                          (t 1.0)))))
     (setq gptel-auto-workflow--research-ema-conf
-          (+ (* (- 1.0 alpha) gptel-auto-workflow--research-ema-conf)
+          (+ (* (- 1.0 alpha) (if (numberp gptel-auto-workflow--research-ema-conf)
+                                  gptel-auto-workflow--research-ema-conf
+                                0.0))
              (* alpha new-confidence)))
-    (push gptel-auto-workflow--research-ema-conf 
+    (push gptel-auto-workflow--research-ema-conf
           gptel-auto-workflow--research-ema-history)
     ;; Keep only recent history
     (when (> (length gptel-auto-workflow--research-ema-history)
-             gptel-auto-workflow--research-ema-window)
+             (if (natnump gptel-auto-workflow--research-ema-window)
+                 gptel-auto-workflow--research-ema-window
+               6))
       (setq gptel-auto-workflow--research-ema-history
             (butlast gptel-auto-workflow--research-ema-history)))
     gptel-auto-workflow--research-ema-conf))
