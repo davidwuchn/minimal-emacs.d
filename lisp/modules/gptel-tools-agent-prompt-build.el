@@ -1698,11 +1698,11 @@ if no per-task mapping exists for this backend."
 If BACKEND is not found, returns \"unknown\"."
   (or (and (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
            (cdr (assoc backend gptel-auto-workflow-headless-subagent-fallbacks
-                       (lambda (a b) (string= a (car b))))))
+                       (lambda (a b) (string= a b)))))
       (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
-           (cdr (assoc backend gptel-auto-workflow-executor-rate-limit-fallbacks
-                       (lambda (a b) (string= a (car b))))))
-      "unknown"))
+            (cdr (assoc backend gptel-auto-workflow-executor-rate-limit-fallbacks
+                       (lambda (a b) (string= a b)))))
+       "unknown"))
 
 (defun gptel-auto-workflow--headless-provider-override-active-p ()
   "Return non-nil when headless auto-workflow provider override should apply."
