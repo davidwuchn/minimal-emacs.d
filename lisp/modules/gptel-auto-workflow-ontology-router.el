@@ -1025,10 +1025,6 @@ Keys are backend names, values are :healthy/:degraded/:unknown.")
   "Consecutive degraded lambda checks per backend.
 Reset to 0 when :healthy. Quarantine at >= 3 strikes.")
 
-(defvar gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal)
-  "Consecutive degraded lambda checks per backend.
-Reset to 0 when :healthy.")
-
 (defvar gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal)
   "Timestamp when DEAD backends can be retried (exponential backoff).
 Key: backend name, value: float-time when retest is allowed.")

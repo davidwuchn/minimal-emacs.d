@@ -1,10 +1,40 @@
 # Mementum State
 
-> Last session: 2026-05-25
+> Last session: 2026-05-25 (complete)
 
-## Current Session: OV5 Routing Architecture — 6 Improvements
+## Session Complete: OV5 Closed-Loop Routing Architecture
 
-**Status:** All 6 routing improvements (A-F) deployed. Tests: 0 unexpected, 0 skipped.
+**Status:** 25 commits, 2006 tests, 0 unexpected, 54 skipped. All 6 routing improvements (A-F) + 12 follow-ups deployed. 38 stale stashes cleared.
+
+### Architecture Achieved
+
+OV5 now has a fully closed-loop routing system at both experiment and subagent levels:
+
+```
+Evolution (VSM health, parse-all-results)
+    │
+    ├── VSM auto-tunes routing weights (all 5 layers)
+    ├── Per-axis KIBC boost from holographic consensus
+    ├── Recency-weighted keep-rate (14d half-life)
+    ├── Delta-weighted holographic memory
+    │
+    ▼
+Ontology Router (reorder-fallbacks-by-ontology + ranked-subagent-backends)
+    │
+    ├── 9-step scoring pipeline with VSM-tuned weights
+    ├── Health ladder with auto-recovery (1h probation cooldown)
+    ├── Per-run failure cooldown (hard-exclude)
+    ├── Per-target model preference
+    ├── Audit trail (both levels, component scores + VSM adjustments)
+    │
+    ▼
+Subagent Dispatch (call-subagent)
+    │
+    ├── Accurate routing context at dispatch time
+    ├── Actionable LLM guidance (health, keep-rate, axis rationale)
+    │
+    ▼
+  Results → parse-all-results → evolution → (loop)
 
 ### Improvements (2026-05-25)
 
