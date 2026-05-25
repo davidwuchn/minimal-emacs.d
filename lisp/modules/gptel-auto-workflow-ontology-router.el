@@ -168,34 +168,31 @@ When a layer is weak, the corresponding parameter is adjusted:
           (adjustments nil))
     (when (< s1 0.4)
       (setq min-samples 1)
-      (push "S1↓:min-samples→1" adjustments))
+      (push "S1:min-samples→1" adjustments))
     (when (< s2 0.5)
       (setq delta-w 0.20)
       (setq rate-w 0.40)
-      (push "S2↓:delta→20%+rate→40%" adjustments))
+      (push "S2:delta→20%+rate→40%" adjustments))
     (when (< s3 0.5)
       (setq probation 2)
-      (push "S3↓:probation→2" adjustments))
+      (push "S3:probation→2" adjustments))
     (when (< s4 0.5)
       (setq exploration 0.30)
-      (push "S4↓:explore→30%" adjustments))
+      (push "S4:explore→30%" adjustments))
     (when (< s5 0.4)
       (setq confidence-w 0.20)
       (setq delta-w (max delta-w 0.30))
       (setq rate-w (max rate-w 0.30))
       (setq trend-w 0.20)
-      (push "S5↓:confidence→20%" adjustments))
-    (when adjustments
-      (message "[vsm-routing] Auto-tuned: %s (S1=%.2f S2=%.2f S3=%.2f S4=%.2f S5=%.2f)"
-               (mapconcat #'identity (nreverse adjustments) ", ")
-               s1 s2 s3 s4 s5))
+      (push "S5:confidence→20%" adjustments))
     (list :delta-weight delta-w
           :rate-weight rate-w
           :trend-weight trend-w
           :confidence-weight confidence-w
-          :exploration-rate exploration
-          :min-samples min-samples
-          :health-probation-threshold probation)))
+           :exploration-rate exploration
+           :min-samples min-samples
+           :health-probation-threshold probation
+           :adjustments (nreverse adjustments))))
 
 ;; ─── Recency-Weighted Keep-Rate ───
 
@@ -623,8 +620,11 @@ STRATEGY and TARGET filter the performance data.
                                      :key (lambda (s) (or (plist-get s :total) 0))
                                      :initial-value 0)))
        (if (>= total-samples (plist-get vsm-params :min-samples))
-           (progn
-             (message "[onto-router] Reordered %d backends by performance (≥%d samples, explore=%.0f%%)"
+            (progn
+              (let ((adj (plist-get vsm-params :adjustments)))
+                (when adj
+                  (message "[vsm-routing] %s" (mapconcat #'identity adj ", "))))
+              (message "[onto-router] Reordered %d backends by performance (≥%d samples, explore=%.0f%%)"
                       (length scored) total-samples
                       (* 100 (plist-get vsm-params :exploration-rate)))
              ;; Exploration: swap top 2 backends for learning
