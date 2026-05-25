@@ -174,7 +174,9 @@
 
 (ert-deftest regression/ontology-router/category-override-programming ()
   "Programming targets should prefer DeepSeek."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :target "lisp/modules/gptel-ext-fsm.el" :decision "kept")
           (list :backend "moonshot" :target "lisp/modules/gptel-ext-fsm.el" :decision "kept")
@@ -191,7 +193,9 @@
 
 (ert-deftest regression/ontology-router/category-override-tool-calls ()
   "Tool-call targets have no override — use ontology ordering (MiniMax default)."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :target "lisp/modules/gptel-sandbox.el" :decision "kept")
           (list :backend "moonshot" :target "lisp/modules/gptel-sandbox.el" :decision "kept")
@@ -206,7 +210,9 @@
 
 (ert-deftest regression/ontology-router/category-override-natural-language ()
   "Natural-language targets should prefer DeepSeek."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :target "lisp/modules/gptel-ext-context.el" :decision "kept")
           (list :backend "moonshot" :target "lisp/modules/gptel-ext-context.el" :decision "kept")
@@ -222,7 +228,9 @@
 
 (ert-deftest regression/ontology-router/category-override-agentic ()
   "Agentic targets have no override — use ontology ordering."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "CF-Gateway" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
           (list :backend "CF-Gateway" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
@@ -240,12 +248,14 @@
 
 (ert-deftest regression/ontology-router/apply-and-reset ()
   "Applying ontology order should modify fallback chain, reset should restore."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")))
-        (original-order gptel-auto-workflow-executor-rate-limit-fallbacks))
+        (original-order gptel-auto-workflow-headless-subagent-fallbacks))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                (lambda () mock-results))
               ((symbol-function 'random) (lambda (_) 999)))
