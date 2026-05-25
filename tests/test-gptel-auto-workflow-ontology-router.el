@@ -1081,6 +1081,20 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (should (> (plist-get params :confidence-weight) 0.10))
       (should (>= (plist-get params :confidence-weight) 0.15)))))
 
+(ert-deftest tdd/vsm-routing/s2-weak-shifts-to-raw-rate ()
+  "When S2 (Coordination) is weak, delta weight should decrease, rate weight increase."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.3
+                                 :s3-control 0.8 :s4-intel 0.8
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (< (plist-get params :delta-weight) 0.40))
+      (should (>= (plist-get params :delta-weight) 0.15))
+      (should (> (plist-get params :rate-weight) 0.30))
+      (should (>= (plist-get params :rate-weight) 0.35)))))
+
 (ert-deftest tdd/vsm-routing/all-healthy-returns-defaults ()
   "When all VSM layers are healthy, params should remain at defaults."
   (let ((gptel-auto-workflow--evolution-next-cycle-hints

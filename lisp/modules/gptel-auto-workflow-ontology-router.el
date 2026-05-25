@@ -143,14 +143,18 @@ When a layer is weak, the corresponding parameter is adjusted:
 
   S4 (Intelligence/Fire) weak (< 0.5) → exploration 0.15→0.30
        (try more backends to gather data faster)
-  S3 (Control/Earth) weak (< 0.5) → probation threshold 3→2
+   S3 (Control/Earth) weak (< 0.5) → probation threshold 3→2
        (exclude bad backends faster to prevent waste)
-  S1 (Operations/Wood) weak (< 0.4) → min-samples 3→1
+   S1 (Operations/Wood) weak (< 0.4) → min-samples 3→1
        (accept routing with less data to keep the pipeline moving)
-  S5 (Identity/Water) weak (< 0.4) → confidence weight 0.10→0.20
+   S2 (Coordination/Metal) weak (< 0.5) → delta weight 0.40→0.20
+       rate weight 0.30→0.40
+       (trust raw keep-rate more when backends disagree on classification)
+   S5 (Identity/Water) weak (< 0.4) → confidence weight 0.10→0.20
        (trust historical data more when values are unclear)"
   (let* ((vsm (gptel-auto-workflow--vsm-health-scores))
          (s1 (or (plist-get vsm :s1-ops) 1.0))
+         (s2 (or (plist-get vsm :s2-coord) 1.0))
          (s3 (or (plist-get vsm :s3-control) 1.0))
          (s4 (or (plist-get vsm :s4-intel) 1.0))
          (s5 (or (plist-get vsm :s5-identity) 1.0))
@@ -163,14 +167,17 @@ When a layer is weak, the corresponding parameter is adjusted:
          (probation 3))
     (when (< s1 0.4)
       (setq min-samples 1))
+    (when (< s2 0.5)
+      (setq delta-w 0.20)
+      (setq rate-w 0.40))
     (when (< s3 0.5)
       (setq probation 2))
     (when (< s4 0.5)
       (setq exploration 0.30))
     (when (< s5 0.4)
       (setq confidence-w 0.20)
-      (setq delta-w 0.30)
-      (setq rate-w 0.30)
+      (setq delta-w (max delta-w 0.30))
+      (setq rate-w (max rate-w 0.30))
       (setq trend-w 0.20))
     (list :delta-weight delta-w
           :rate-weight rate-w
