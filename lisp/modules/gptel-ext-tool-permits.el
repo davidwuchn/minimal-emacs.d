@@ -27,7 +27,8 @@ Keys are tool name strings, values are t.")
 
 (defun my/gptel-tool-permitted-p (tool-name)
   "Return non-nil if TOOL-NAME has been permitted this session."
-  (and (stringp tool-name)
+  (and (hash-table-p my/gptel-permitted-tools)
+       (stringp tool-name)
        (gethash tool-name my/gptel-permitted-tools)))
 
 (defun my/gptel-permit-tool (tool-name)
@@ -35,12 +36,16 @@ Keys are tool name strings, values are t.")
 TOOL-NAME must be a non-empty string."
   ;; ASSUMPTION: tool-name is a valid tool identifier string
   ;; EDGE CASE: nil or non-string inputs are silently ignored
-  (when (and (stringp tool-name) (not (string-empty-p tool-name)))
+  ;; EDGE CASE: uninitialized hash table is handled gracefully
+  (when (and (hash-table-p my/gptel-permitted-tools)
+             (stringp tool-name)
+             (not (string-empty-p tool-name)))
     (puthash tool-name t my/gptel-permitted-tools)))
 
 (defun my/gptel-clear-permits ()
   "Clear all per-tool permits."
-  (clrhash my/gptel-permitted-tools))
+  (when (hash-table-p my/gptel-permitted-tools)
+    (clrhash my/gptel-permitted-tools)))
 
 (defun my/gptel--sync-to-upstream ()
   "Sync `my/gptel-confirm-mode' to upstream `gptel-confirm-tool-calls'."
