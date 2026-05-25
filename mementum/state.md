@@ -1,33 +1,41 @@
 # Mementum State
 
-> Last session: 2026-05-23
+> Last session: 2026-05-25
 
-## Current Session: Provider Routing + Analyzer Failover
+## Current Session: OV5 Routing Architecture — 6 Improvements
 
-**Status:** Fixed `listp "MiniMax"`, `listp "qwen3.6-plus"`, non-executor MiniMax ranking, and analyzer retry loops. Live daemon now routes analyzer to DashScope first and skips it to DeepSeek after timeout.
+**Status:** All 6 routing improvements (A-F) deployed. Tests: 0 unexpected, 0 skipped.
 
-### Bugs Fixed (2026-05-25)
+### Improvements (2026-05-25)
 
-1. **`listp "MiniMax"` analyzer crash**: `gptel-auto-workflow--default-model-for-backend` used an `assoc` comparator that called `(car b)`, but Emacs passes the candidate key string as `b`. Replaced with `#'string=` and keyword normalization.
-2. **Malformed fallback candidates hardening**: `gptel-auto-workflow--first-available-provider-candidate` now ignores non-cons/non-string entries instead of crashing on `(car entry)`.
-3. **Analyzer MiniMax ranking leak**: non-executor subagents now use `gptel-auto-workflow-headless-subagent-fallbacks` directly; ontology/ranked backend history remains executor-only.
-4. **Headless fallback order**: default and legacy migration now use DashScope -> DeepSeek -> moonshot -> CF-Gateway -> MiniMax.
-5. **`listp "qwen3.6-plus"` model-map crash**: `gptel-auto-workflow-per-task-model-map` stores dotted entries like `("analyzer" "DashScope" . "qwen3.6-plus")`; `best-model-for-task` now reads `(cddr entry)` instead of `(nth 2 entry)`.
-6. **Analyzer retry repeated same timed-out provider**: analyzer target selection records failed analyzer backends and `gptel-benchmark-call-subagent` excludes them for analyzer retries, so DashScope timeout advances to DeepSeek.
+1. **A — Recency-weighted keep-rate** (`61eb125a`): `gptel-auto-workflow--decayed-keep-rate` with 14-day half-life. Each experiment gets weight `2^(-days_ago / 14)`. Recent performance matters more. Wired into `reorder-fallbacks-by-ontology` scoring formula alongside origin's Bayesian floor.
 
-**Verification:** 6 targeted ERT regressions passed: malformed provider candidate, non-executor chain bypassing ranked history, dotted model-map, legacy fallback migration, analyzer failed-backend exclusion, analyzer quota smoke. Byte-compile of modified modules completed with existing warnings only.
+2. **B — VSM health auto-tunes routing** (`838500f8`): Evolution cycle's VSM layer health now auto-tunes:
+   - S4 (Intelligence) weak → exploration rate 15%→30%
+   - S3 (Control) weak → probation threshold 3→2 strikes
+   - S1 (Operations) weak → min-samples 3→1
+   - S5 (Identity) weak → confidence weight 10%→20%
 
-**Live proof:** `emacs-34045.log` shows analyzer selected `DashScope/qwen3.6-plus`; after the 300s timeout, live failover candidate was `DeepSeek/deepseek-v4-flash` with `DashScope` in analyzer failed/rate-limited lists.
+3. **C — Per-axis backend preference** (`8972ce85`): `gptel-auto-workflow--axis-preference-boost` reads `gptel-auto-workflow--current-target`, looks up holographic consensus KIBC axis, and boosts backends with above-average keep-rate on that axis (delta × confidence × 0.15).
 
-### Bugs Fixed (2026-05-23, follow-up)
+4. **D — Per-run backend cooldown** (`adbec398`): `gptel-auto-workflow--run-failed-backends` tracks backends that failed during the current run. Hard-excluded (score -1.0) for remainder of run. Cleared at run start. Wired into ontology-fallback-advice.
 
-1. **`defvar lines` band-aid removed**: bottleneck report had one extra `)` closing the local `let*` before final `(if lines ...)`, so `lines` escaped scope. `defvar lines` only made the escaped read hit a global special variable; it also made the report always fall back. Fixed paren structure and added regression proving bottlenecks are emitted.
-2. **Allium `listp "kept"` root cause**: `allium-diff-opposing-hypotheses` did `(car (cl-find ...))`, converting the matched cons cell `("kept" . hypothesis)` into string `"kept"`, then `(cdr kept)` crashed. Kept the cons cell and pass `(cdr kept)` / `(cdr discarded)`.
-3. **Persisted category budget shape**: in-memory budget is alist `((:synthesis . 1) ...)`, but JSON restore returns plist `(:synthesis 1 ...)`. `enforce-category-budget` assumed alist and crashed on `car(:synthesis)`. Added normalizer used by budget enforcement and analyzer prompt formatting.
-4. **Test lexical scoping leak**: `inject-queued-targets-dedup` used `let` while initializing `result` from sibling binding `targets`; changed to `let*`.
+5. **E — Routing context in prompts** (`f3c479aa`): `{{routing-context}}` template variable tells the LLM which backend/model it runs on, lambda health, keep-rate, rate-limit status. Injected via `gptel-auto-workflow--routing-context`.
 
-5. **Lambda verification `arrayp` error**: `call-backend-for-lambda` set `gptel-backend` to `(intern backend)` — a bare symbol. gptel expects a backend struct. Fixed by using `gptel-get-backend` to look up the real backend.
-6. **`maphash corruption` preventive**: JSON-read hash tables can corrupt when iterated with `maphash` in Emacs 30.2. Added `json-read-hash-safe` helper that reads as plist and manually builds hash tables. Updated `load-researcher-meta-learning` and `format-topic-performance`.
+6. **F — Auto-recovery from probation** (`811a0493`): `gptel-auto-workflow--lambda-last-strike-time` tracks strike timestamps. Probation backends (level 3) with >1h since last strike auto-recover to level 2 (DEGRADED, weight 0.65 instead of 0.0).
+
+### Follow-up (2026-05-25, same session)
+
+7. **Delta-weighted holographic memory** (`14c0c2e9`): `record-holographic-experiment` now stores weighted floats (`weight = 1.0 + max(0, delta)`) instead of raw counts. Larger improvements contribute more to consensus confidence.
+
+8. **Fixed `penalty-unknown` test**: Origin changed `:unknown` verification penalty from -5 to 0. Test updated to match.
+
+### Architecture Notes
+
+- `gptel-auto-workflow--ranked-subagent-backends` is the central subagent routing function. Score formula: `health × keep-rate + pref-boost + axis-boost`. Hard gates: lambda-degraded, quarantined, cooldown (-1.0). Soft gate: rate-limited (0.01).
+- `reorder-fallbacks-by-ontology` is the experiment-level router with 9-step pipeline: health filter → 4D scoring (VSM-tuned weights) → category override → ternary → sieve → holographic → lambda penalty → sort → exploration.
+- Both routers use `gptel-auto-workflow--backend-health-level` which auto-tunes probation threshold from VSM health and auto-recovers after 1h cooldown.
+- Key files: `gptel-auto-workflow-ontology-router.el` (~1900 lines), `gptel-auto-workflow-evolution.el`, `gptel-tools-agent-prompt-build.el`.
 
 **Verification:** `./scripts/run-tests.sh unit` → 1940 tests, 1886 expected, 0 unexpected, 54 skipped. No `arrayp` errors in log. `maphash corruption` in log is test mock, not real bug.
 
