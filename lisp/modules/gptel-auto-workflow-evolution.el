@@ -1858,6 +1858,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (setq gptel-auto-workflow--evolution-last-objective current-obj)
         (message "[evolution] Eight Keys score: %.3f" current-obj))))
   (message "[auto-workflow] Running self-evolution cycle...")
+    )
     (error
      (message "[evolution] EARLY error (pre-steps): %s" (error-message-string early-err))
      (cl-return-from gptel-auto-workflow-evolution-run-cycle (format "early-error: %s" early-err))))
