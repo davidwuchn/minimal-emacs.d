@@ -1,5 +1,5 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 1342 experiments across 5 backends
+> Auto-generated from 1346 experiments across 5 backends
 
 ## MiniMax vs CF-Gateway (winner: **MiniMax**)
 - MiniMax: 22.8% keep-rate
@@ -26,10 +26,10 @@
 - moonshot: 9.1% keep-rate
 - Shared targets: 3 | CF-Gateway won 1, moonshot won 1, ties 1
 
-## CF-Gateway vs DashScope (winner: **CF-Gateway**)
-- CF-Gateway: 14.3% keep-rate
+## DashScope vs CF-Gateway (winner: **CF-Gateway**)
 - DashScope: 11.1% keep-rate
-- Shared targets: 2 | CF-Gateway won 1, DashScope won 1, ties 0
+- CF-Gateway: 14.3% keep-rate
+- Shared targets: 2 | DashScope won 1, CF-Gateway won 1, ties 0
 
 ## DeepSeek vs DashScope (winner: **DeepSeek**)
 - DeepSeek: 12.5% keep-rate
@@ -52,4 +52,4 @@
 - Shared targets: 1 | DeepSeek won 1, CF-Gateway won 0, ties 0
 
 
-*Generated: 2026-05-25 19:26*
+*Generated: 2026-05-25 20:11*

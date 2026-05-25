@@ -1,8 +1,9 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 1342 experiments across 12 models
+> Auto-generated from 1346 experiments across 13 models
 
 ## Model Rankings (by keep-rate)
 
+- **DashScope/kimi-k2.6**: 22.2%
 - **MiniMax/template-default**: 22.2%
 - **MiniMax/persisted-findings**: 22.0%
 - **MiniMax/minimax-m2.7-highspeed**: 21.0%
@@ -122,4 +123,4 @@
 - Shared targets: 1 | won 1, won 0, ties 0
 
 
-*Generated: 2026-05-25 19:27*
+*Generated: 2026-05-25 20:11*

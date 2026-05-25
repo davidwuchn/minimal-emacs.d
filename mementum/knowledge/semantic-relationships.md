@@ -4,7 +4,7 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-25T19:27
+Generated: 2026-05-25T20:01
 
 | lisp/modules/gptel-tools-agent-main.el | lisp/modules/gptel-tools-agent.el | 0.861 |
 | lisp/modules/gptel-tools-agent-git.el | lisp/modules/gptel-tools-agent.el | 0.851 |
@@ -24,6 +24,7 @@ Generated: 2026-05-25T19:27
 | lisp/modules/gptel-benchmark-evolution.el | lisp/modules/gptel-benchmark-integrate.el | 0.823 |
 | lisp/modules/gptel-tools-agent-benchmark.el | lisp/modules/gptel-tools-agent.el | 0.822 |
 | lisp/modules/gptel-tools-agent-worktree.el | lisp/modules/gptel-tools-agent-runtime.el | 0.821 |
+| lisp/modules/gptel-tools-agent-prompt-build.el | lisp/modules/gptel-tools-agent.el | 0.819 |
 | lisp/modules/gptel-benchmark-core.el | lisp/modules/gptel-programmatic-benchmark.el | 0.819 |
 | lisp/modules/gptel-benchmark-memory.el | lisp/modules/gptel-benchmark-llm.el | 0.819 |
 | lisp/modules/gptel-agent-loop.el | lisp/modules/gptel-tools-agent.el | 0.819 |
@@ -39,11 +40,13 @@ Generated: 2026-05-25T19:27
 | lisp/modules/gptel-sandbox.el | lisp/modules/gptel-ext-security.el | 0.812 |
 | lisp/modules/gptel-auto-workflow-strategic.el | lisp/modules/gptel-auto-workflow-bootstrap.el | 0.811 |
 | lisp/modules/nucleus-tools.el | lisp/modules/nucleus-prompts.el | 0.811 |
+| lisp/modules/gptel-benchmark-core.el | lisp/modules/gptel-skill-benchmark.el | 0.811 |
 | lisp/modules/gptel-tools-agent.el | lisp/modules/gptel-tools-programmatic.el | 0.810 |
 | lisp/modules/gptel-benchmark-principles.el | lisp/modules/gptel-benchmark-auto-improve.el | 0.810 |
 | lisp/modules/gptel-tools-agent-worktree.el | lisp/modules/gptel-auto-workflow-bootstrap.el | 0.808 |
 | lisp/modules/gptel-ext-tool-sanitize.el | lisp/modules/gptel-ext-core.el | 0.808 |
 | lisp/modules/gptel-tools-agent-worktree.el | lisp/modules/gptel-tools-agent-subagent.el | 0.808 |
+| lisp/modules/gptel-tools-agent-main.el | lisp/modules/gptel-tools-programmatic.el | 0.808 |
 | lisp/modules/gptel-auto-workflow-strategic.el | lisp/modules/gptel-auto-workflow-projects.el | 0.808 |
 | lisp/modules/gptel-benchmark-principles.el | lisp/modules/gptel-benchmark-comparator.el | 0.806 |
 | lisp/modules/gptel-benchmark-principles.el | lisp/modules/gptel-benchmark-core.el | 0.806 |
@@ -56,11 +59,13 @@ Generated: 2026-05-25T19:27
 | lisp/modules/gptel-sandbox.el | lisp/modules/gptel-tools-programmatic.el | 0.802 |
 | lisp/modules/gptel-tools-agent-worktree.el | lisp/modules/gptel-tools-agent-main.el | 0.802 |
 | lisp/modules/gptel-tools-agent-worktree.el | lisp/modules/gptel-auto-workflow-projects.el | 0.802 |
+| lisp/modules/gptel-benchmark-principles.el | lisp/modules/gptel-benchmark-tests.el | 0.802 |
 | lisp/modules/nucleus-tools-validate.el | lisp/modules/nucleus-tools.el | 0.801 |
 | lisp/modules/gptel-sandbox.el | lisp/modules/gptel-tools-agent-validation.el | 0.800 |
 | lisp/modules/gptel-benchmark-comparator.el | lisp/modules/gptel-benchmark-subagent.el | 0.799 |
 | lisp/modules/gptel-benchmark-comparator.el | lisp/modules/gptel-skill-benchmark.el | 0.798 |
 | lisp/modules/gptel-tools-memory.el | lisp/modules/gptel-tools-agent-research.el | 0.798 |
+| lisp/modules/gptel-benchmark-comparator.el | lisp/modules/gptel-benchmark-core.el | 0.796 |
 | lisp/modules/gptel-benchmark-comparator.el | lisp/modules/gptel-tools-agent-validation.el | 0.796 |
 | lisp/modules/gptel-ext-tool-sanitize.el | lisp/modules/gptel-tools-code.el | 0.796 |
 | lisp/modules/gptel-tools-agent-staging-baseline.el | lisp/modules/gptel-tools-agent.el | 0.793 |
@@ -70,6 +75,7 @@ Generated: 2026-05-25T19:27
 | lisp/modules/gptel-agent-loop.el | lisp/modules/gptel-tools-agent-subagent.el | 0.787 |
 | lisp/modules/nucleus-tools-validate.el | lisp/modules/nucleus-tools-verify.el | 0.786 |
 | lisp/modules/gptel-tools-agent-staging-baseline.el | lisp/modules/gptel-tools-agent-subagent.el | 0.786 |
+| lisp/modules/gptel-agent-loop.el | lisp/modules/gptel-tools-agent-git.el | 0.785 |
 | lisp/modules/gptel-ext-reasoning.el | lisp/modules/gptel-auto-workflow-behavioral-tests.el | 0.785 |
 | lisp/modules/gptel-ext-reasoning.el | lisp/modules/gptel-tools-agent-validation.el | 0.779 |
 | lisp/modules/gptel-ext-reasoning.el | lisp/modules/gptel-tools-code.el | 0.779 |
@@ -77,6 +83,7 @@ Generated: 2026-05-25T19:27
 | lisp/modules/gptel-ext-retry.el | lisp/modules/gptel-ext-abort.el | 0.772 |
 | lisp/modules/gptel-ext-abort.el | lisp/modules/gptel-tools-code.el | 0.771 |
 | lisp/modules/gptel-tools-introspection.el | lisp/modules/gptel-tools-programmatic.el | 0.767 |
+| lisp/modules/gptel-ext-fsm.el | lisp/modules/gptel-tools-agent-validation.el | 0.767 |
 | lisp/modules/gptel-tools-agent-staging-merge.el | lisp/modules/gptel-tools-agent-subagent.el | 0.763 |
 | lisp/modules/gptel-ext-abort.el | lisp/modules/gptel-tools-agent-validation.el | 0.759 |
 | lisp/modules/gptel-tools-agent-staging-merge.el | lisp/modules/gptel-tools-agent-validation.el | 0.755 |
