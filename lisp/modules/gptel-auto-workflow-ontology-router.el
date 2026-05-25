@@ -1482,7 +1482,11 @@ the model with the highest keep-rate. Returns nil if no data."
                  (let ((total (car stats))
                        (kept (cdr stats)))
                    (when (and (> total 0)
-                              (>= (/ (float kept) total) best-rate))
+                              (>= (/ (float kept) total) best-rate)
+                              ;; Validate backend/model combination
+                              (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
+                                  (gptel-auto-workflow--model-combination-valid-p
+                                   (concat backend "/" model))))
                      (setq best-rate (/ (float kept) total))
                      (setq best-model model))))
                model-stats)
