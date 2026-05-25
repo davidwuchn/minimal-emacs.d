@@ -253,10 +253,13 @@ RunAgent was registered, leaving it out of the buffer's tool list."
 ;; threshold and fingerprint logic are taken directly from OpenCode's
 ;; packages/opencode/src/session/processor.ts (DOOM_LOOP_THRESHOLD = 3).
 
-(defcustom my/gptel-doom-loop-threshold 3
+(defcustom my/gptel-doom-loop-threshold 5
   "Number of consecutive identical tool calls that trigger doom-loop abort.
 Mirrors OpenCode's DOOM_LOOP_THRESHOLD.  Only calls with the same tool name
-AND the same arguments count; different tools or different args do not."
+AND the same arguments count; different tools or different args do not.
+Raised from 3 to 5 because TodoWrite (progress tracking) and other
+planning tools can legitimately repeat 3-4 times as the model iterates
+on different approaches to the same task."
   :type 'integer
   :group 'gptel)
 
