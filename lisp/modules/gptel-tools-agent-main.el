@@ -381,7 +381,7 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/gptel-benchmark-subagent.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
-    (condition-case nil (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)) (error (message "[reload] strategic.el skipped (load error)")))
+    (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)) (error (message "[reload] strategic.el skipped (load error: %s)" (error-message-string err))))
     ;; Populate targets if empty (daemon mode doesn't load .dir-locals.el)
     (when (and (boundp 'gptel-auto-workflow-targets)
                (or (null gptel-auto-workflow-targets)
@@ -391,13 +391,13 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
           (when discovered
             (setq gptel-auto-workflow-targets discovered)
             (message "[init] Populated %d auto-workflow targets" (length discovered))))))
-    (condition-case nil (load-file (expand-file-name "lisp/modules/strategic-daemon-functions.el" root)) (error (message "[reload] daemon-functions.el skipped (load error)")))
+    (condition-case err (load-file (expand-file-name "lisp/modules/strategic-daemon-functions.el" root)) (error (message "[reload] daemon-functions.el skipped (load error: %s)" (error-message-string err))))
     ;; strategic.el requires gptel-auto-workflow-research-cache via (require '... nil t).
     ;; If that require succeeded, featurep will be t and we skip the re-load.
     (unless (featurep 'gptel-auto-workflow-research-cache)
-      (condition-case nil (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-research-cache.el" root)) (error (message "[reload] research-cache.el skipped (load error)"))))
-    (condition-case nil (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-research-benchmark.el" root)) (error (message "[reload] research-benchmark.el skipped (load error)")))
-    (condition-case nil (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root)) (error (message "[reload] projects.el skipped (load error)")))
+      (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-research-cache.el" root)) (error (message "[reload] research-cache.el skipped (load error: %s)" (error-message-string err)))))
+    (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-research-benchmark.el" root)) (error (message "[reload] research-benchmark.el skipped (load error: %s)" (error-message-string err))))
+    (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root)) (error (message "[reload] projects.el skipped (load error: %s)" (error-message-string err))))
     (if (fboundp 'nucleus-presets-setup-agents)
         (progn
           (nucleus-presets-setup-agents)
