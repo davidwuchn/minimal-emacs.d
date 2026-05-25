@@ -1400,7 +1400,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
         (should (string-match-p "HEALTHY" ctx))))))
 
 (ert-deftest tdd/routing-context/includes-rate-limit-status ()
-  "Routing context should note when a backend has no rate limits active."
+  "Routing context should note backend health status and rate-limit state."
   (let* ((gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
          (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
          (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
@@ -1412,7 +1412,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
                (lambda (b) b)))
       (let ((ctx (gptel-auto-workflow--routing-context "DashScope" "qwen3.6-plus")))
         (should (string-match-p "DashScope" ctx))
-        (should (string-match-p "no rate limit" ctx))))))
+        (should (string-match-p "healthy" ctx))))))
 
 ;; ─── Auto-Recovery from Probation Tests ───
 

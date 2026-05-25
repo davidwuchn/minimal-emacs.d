@@ -1247,8 +1247,8 @@ Persisted to `gptel-auto-workflow--preference-persist-file'."
 
 (defun gptel-auto-workflow--routing-context (backend model)
   "Generate a concise routing rationale string for BACKEND/MODEL.
-Injected into experiment prompts so the LLM knows which backend it runs on
-and why that backend was selected."
+Injected at subagent dispatch time so the LLM knows exactly which backend
+it runs on, why that backend was selected, and any relevant caveats."
   (let* ((bn (or (and (fboundp 'gptel-auto-workflow--safe-backend-name)
                       (gptel-auto-workflow--safe-backend-name backend))
                  (and (fboundp 'gptel-backend-name)
@@ -1269,21 +1269,50 @@ and why that backend was selected."
          (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
                             (member backend gptel-auto-workflow--rate-limited-backends)))
          (in-cooldown (and (boundp 'gptel-auto-workflow--run-failed-backends)
-                           (member backend gptel-auto-workflow--run-failed-backends))))
+                           (member backend gptel-auto-workflow--run-failed-backends)))
+         ;; Per-axis selection rationale
+         (target (and (boundp 'gptel-auto-workflow--current-target)
+                      gptel-auto-workflow--current-target))
+         (consensus (when (and target
+                               (fboundp 'gptel-auto-workflow--get-holographic-consensus))
+                      (condition-case nil
+                          (gptel-auto-workflow--get-holographic-consensus target)
+                        (error nil))))
+         (axis (plist-get consensus :axis))
+         (axis-conf (plist-get consensus :confidence)))
     (format
-     "You are running on %s/%s. Lambda compiler verified: %s. Health: %s (level %d). %d experiments on this backend, %.0f%% keep-rate. %s%s"
+     "You are running on %s/%s. Lambda compiler: %s. Health: %s (level %d, %d experiments, %.0f%% keep-rate).%s%s%s%s"
      bn model
-     (or (and lambda-status (format "%s" lambda-status)) "unknown")
+     (or (and lambda-status (format "%s" lambda-status)) "unverified")
      (or health-label "N/A")
      (or health-level 0)
      (or total-exps 0)
      (if keep-rate (* 100 keep-rate) 0)
-     (cond (in-cooldown "NOTE: This backend failed earlier in this run — it is being used as a last resort. ")
-           (rate-limited "NOTE: This backend has active rate limits. ")
-           (t "No rate limits active. "))
-     (if (>= (or health-level 0) 2)
-         "This backend has elevated health warnings — results may be unreliable."
-       "Trust appears adequate for this task."))))
+     ;; Health guidance
+     (cond ((>= (or health-level 0) 3)
+            "\nCAUTION: This backend is on probation — verify ALL outputs carefully. ")
+           ((>= (or health-level 0) 2)
+            "\nNote: This backend has elevated health warnings — results may be inconsistent. ")
+           (t ""))
+     ;; Per-axis context
+     (if (and axis (> axis-conf 0.5))
+         (format "\nThis backend was selected for target %s (KIBC axis %s, confidence %.0f%%). "
+                 (file-name-nondirectory target) axis (* 100 axis-conf))
+       "")
+     ;; Rate-limit / cooldown context
+     (cond (in-cooldown
+            "\nWARNING: This backend failed earlier in this run — it is being used as a last resort. Expect potential issues. ")
+           (rate-limited
+            "\nNote: This backend has active rate limits — responses may be throttled. ")
+           (t
+            (if (= (or health-level 0) 0)
+                "\nThis backend is healthy and recommended for this task. "
+              "")))
+     (if (and keep-rate (>= keep-rate 0.7) (>= (or total-exps 0) 10))
+         "High confidence in this routing decision (strong historical track record)."
+       (if (>= (or total-exps 0) 5)
+           "Moderate confidence — sufficient data supports this routing choice."
+         "Low confidence — limited historical data for this backend/target combination.")))))
 
 ;; ─── Routing Decision Audit Trail ───
 
