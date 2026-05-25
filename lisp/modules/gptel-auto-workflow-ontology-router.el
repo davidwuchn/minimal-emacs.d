@@ -1228,6 +1228,48 @@ Persisted to `gptel-auto-workflow--preference-persist-file'."
              (fboundp 'gptel-auto-workflow--worktree-base-root))
     (gptel-auto-workflow--load-backend-preference)))
 
+;; ─── Routing Context for Prompt Injection ───
+
+(defun gptel-auto-workflow--routing-context (backend model)
+  "Generate a concise routing rationale string for BACKEND/MODEL.
+Injected into experiment prompts so the LLM knows which backend it runs on
+and why that backend was selected."
+  (let* ((bn (or (and (fboundp 'gptel-auto-workflow--safe-backend-name)
+                      (gptel-auto-workflow--safe-backend-name backend))
+                 (and (fboundp 'gptel-backend-name)
+                      (gptel-backend-name backend))
+                 (format "%s" backend)))
+         (lambda-status (and (boundp 'gptel-auto-workflow--lambda-verification-results)
+                              (gethash backend gptel-auto-workflow--lambda-verification-results)))
+         (health-level (and (fboundp 'gptel-auto-workflow--backend-health-level)
+                            (gptel-auto-workflow--backend-health-level backend)))
+         (health-label (and (fboundp 'gptel-auto-workflow--backend-health-label)
+                            (gptel-auto-workflow--backend-health-label backend)))
+         (stats (when (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
+                  (condition-case nil
+                      (gptel-auto-workflow--get-backend-performance-stats backend)
+                    (error nil))))
+         (keep-rate (plist-get stats :keep-rate))
+         (total-exps (plist-get stats :total))
+         (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                            (member backend gptel-auto-workflow--rate-limited-backends)))
+         (in-cooldown (and (boundp 'gptel-auto-workflow--run-failed-backends)
+                           (member backend gptel-auto-workflow--run-failed-backends))))
+    (format
+     "You are running on %s/%s. Lambda compiler verified: %s. Health: %s (level %d). %d experiments on this backend, %.0f%% keep-rate. %s%s"
+     bn model
+     (or (and lambda-status (format "%s" lambda-status)) "unknown")
+     (or health-label "N/A")
+     (or health-level 0)
+     (or total-exps 0)
+     (if keep-rate (* 100 keep-rate) 0)
+     (cond (in-cooldown "NOTE: This backend failed earlier in this run — it is being used as a last resort. ")
+           (rate-limited "NOTE: This backend has active rate limits. ")
+           (t "No rate limits active. "))
+     (if (>= (or health-level 0) 2)
+         "This backend has elevated health warnings — results may be unreliable."
+       "Trust appears adequate for this task."))))
+
 ;; ─── Per-Run Backend Cooldown ───
 
 (defvar gptel-auto-workflow--run-failed-backends nil

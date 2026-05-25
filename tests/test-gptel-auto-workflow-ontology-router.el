@@ -1363,5 +1363,56 @@ SPECS is a list of (backend decision days-ago ...) triples."
         (should (assoc "DashScope" ranked))
         (should (assoc "DeepSeek" ranked))))))
 
+;; ─── Routing Context for Prompt Injection Tests ───
+
+(ert-deftest tdd/routing-context/includes-backend-and-model ()
+  "Routing context should include the backend name and model."
+  (let* ((gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (b &rest _)
+                 (if (string= b "DeepSeek")
+                     (list :kept 8 :total 10 :keep-rate 0.8)
+                   (list :kept 0 :total 0 :keep-rate nil))))
+              ((symbol-function 'gptel-auto-workflow--safe-backend-name)
+               (lambda (b) b))
+              ((symbol-function 'gptel-backend-name)
+               (lambda (b) (symbol-name b))))
+      (let ((ctx (gptel-auto-workflow--routing-context "DeepSeek" "deepseek-v4-pro")))
+        (should (string-match-p "DeepSeek" ctx))
+        (should (string-match-p "deepseek-v4-pro" ctx))))))
+
+(ert-deftest tdd/routing-context/includes-health-status ()
+  "Routing context should include lambda health and keep-rate."
+  (let* ((gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "DeepSeek" :healthy gptel-auto-workflow--lambda-verification-results)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (b &rest _)
+                 (list :kept 8 :total 10 :keep-rate 0.8)))
+              ((symbol-function 'gptel-auto-workflow--safe-backend-name)
+               (lambda (b) b)))
+      (let ((ctx (gptel-auto-workflow--routing-context "DeepSeek" "deepseek-v4-pro")))
+        (should (string-match-p "health" ctx))
+        (should (string-match-p "80" ctx))
+        (should (string-match-p "HEALTHY" ctx))))))
+
+(ert-deftest tdd/routing-context/includes-rate-limit-status ()
+  "Routing context should note when a backend has no rate limits active."
+  (let* ((gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+         (gptel-auto-workflow--rate-limited-backends nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (b &rest _)
+                 (list :kept 5 :total 10 :keep-rate 0.5)))
+              ((symbol-function 'gptel-auto-workflow--safe-backend-name)
+               (lambda (b) b)))
+      (let ((ctx (gptel-auto-workflow--routing-context "DashScope" "qwen3.6-plus")))
+        (should (string-match-p "DashScope" ctx))
+        (should (string-match-p "no rate limit" ctx))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
