@@ -1021,5 +1021,94 @@ Guards against missing runtime dependencies (worktree-base-root)."
         (should (> (cddr ds) 0.15))   ;; boost increased from 0.15
         (should changed)))))           ;; reported as changed
 
+;; ─── VSM Health → Routing Auto-Tuning Tests ───
+
+(ert-deftest tdd/vsm-routing/defaults-when-no-vsm-hints ()
+  "Without VSM health hints, adjusted params should equal defaults."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints nil))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 0.40 (plist-get params :delta-weight)))
+      (should (= 0.30 (plist-get params :rate-weight)))
+      (should (= 0.20 (plist-get params :trend-weight)))
+      (should (= 0.10 (plist-get params :confidence-weight)))
+      (should (= 0.15 (plist-get params :exploration-rate)))
+      (should (= 3 (plist-get params :min-samples))))))
+
+(ert-deftest tdd/vsm-routing/s4-weak-increases-exploration ()
+  "When S4 (Intelligence) is weak, exploration rate should increase."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.8
+                                 :s3-control 0.8 :s4-intel 0.3
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (> (plist-get params :exploration-rate) 0.15))
+      (should (>= (plist-get params :exploration-rate) 0.20)))))
+
+(ert-deftest tdd/vsm-routing/s3-weak-tightens-health-ladder ()
+  "When S3 (Control) is weak, probation threshold should tighten."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.8
+                                 :s3-control 0.3 :s4-intel 0.8
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 2 (plist-get params :health-probation-threshold))))))
+
+(ert-deftest tdd/vsm-routing/s1-weak-lowers-min-samples ()
+  "When S1 (Operations) is weak, min-samples should decrease."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.3 :s2-coord 0.8
+                                 :s3-control 0.8 :s4-intel 0.8
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 1 (plist-get params :min-samples))))))
+
+(ert-deftest tdd/vsm-routing/s5-weak-boosts-confidence-weight ()
+  "When S5 (Identity) is weak, confidence weight should increase."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.8
+                                 :s3-control 0.8 :s4-intel 0.8
+                                 :s5-identity 0.2))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (> (plist-get params :confidence-weight) 0.10))
+      (should (>= (plist-get params :confidence-weight) 0.15)))))
+
+(ert-deftest tdd/vsm-routing/all-healthy-returns-defaults ()
+  "When all VSM layers are healthy, params should remain at defaults."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.9 :s2-coord 0.9
+                                 :s3-control 0.9 :s4-intel 0.9
+                                 :s5-identity 0.9))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 0.40 (plist-get params :delta-weight)))
+      (should (= 0.30 (plist-get params :rate-weight)))
+      (should (= 0.20 (plist-get params :trend-weight)))
+      (should (= 0.10 (plist-get params :confidence-weight)))
+      (should (= 0.15 (plist-get params :exploration-rate)))
+      (should (= 3 (plist-get params :min-samples))))))
+
+(ert-deftest tdd/vsm-routing/extracts-vsm-plist-from-actions ()
+  "Should extract the prioritize-targets plist from vsm-actions."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'increase-strategy-evolution "Fire(S4) weak")
+                     (cons 'prioritize-targets
+                           (list :s1-ops 0.5 :s2-coord 0.7
+                                 :s3-control 0.9 :s4-intel 0.3
+                                 :s5-identity 0.8))
+                     (cons 'rebalance-backends "Earth(S3) weak")))))
+    (let ((scores (gptel-auto-workflow--vsm-health-scores)))
+      (should (= 0.5 (plist-get scores :s1-ops)))
+      (should (= 0.3 (plist-get scores :s4-intel))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

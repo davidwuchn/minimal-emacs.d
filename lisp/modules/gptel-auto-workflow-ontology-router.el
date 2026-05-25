@@ -119,6 +119,67 @@ Ensures all backends get samples for fair comparison."
   :type 'float
   :group 'gptel-auto-workflow)
 
+;; ─── VSM Health → Routing Auto-Tuning ───
+
+(defun gptel-auto-workflow--vsm-health-scores ()
+  "Extract VSM layer health scores from evolution-next-cycle-hints.
+Returns the prioritize-targets plist with :s1-ops ... :s5-identity,
+or nil if no VSM health data exists."
+  (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+    (let* ((hints gptel-auto-workflow--evolution-next-cycle-hints)
+           (actions (plist-get hints :vsm-actions))
+           (target-entry (and (consp actions)
+                              (assoc 'prioritize-targets actions))))
+      (cdr target-entry))))
+
+(defun gptel-auto-workflow--vsm-adjusted-routing-params ()
+  "Return routing parameters adjusted by VSM layer health.
+Returns a plist with:
+  :delta-weight, :rate-weight, :trend-weight, :confidence-weight
+  :exploration-rate, :min-samples, :health-probation-threshold
+
+When VSM health data is absent, returns the default hardcoded values.
+When a layer is weak, the corresponding parameter is adjusted:
+
+  S4 (Intelligence/Fire) weak (< 0.5) → exploration 0.15→0.30
+       (try more backends to gather data faster)
+  S3 (Control/Earth) weak (< 0.5) → probation threshold 3→2
+       (exclude bad backends faster to prevent waste)
+  S1 (Operations/Wood) weak (< 0.4) → min-samples 3→1
+       (accept routing with less data to keep the pipeline moving)
+  S5 (Identity/Water) weak (< 0.4) → confidence weight 0.10→0.20
+       (trust historical data more when values are unclear)"
+  (let* ((vsm (gptel-auto-workflow--vsm-health-scores))
+         (s1 (or (plist-get vsm :s1-ops) 1.0))
+         (s3 (or (plist-get vsm :s3-control) 1.0))
+         (s4 (or (plist-get vsm :s4-intel) 1.0))
+         (s5 (or (plist-get vsm :s5-identity) 1.0))
+         (delta-w 0.40)
+         (rate-w 0.30)
+         (trend-w 0.20)
+         (confidence-w 0.10)
+         (exploration 0.15)
+         (min-samples 3)
+         (probation 3))
+    (when (< s1 0.4)
+      (setq min-samples 1))
+    (when (< s3 0.5)
+      (setq probation 2))
+    (when (< s4 0.5)
+      (setq exploration 0.30))
+    (when (< s5 0.4)
+      (setq confidence-w 0.20)
+      (setq delta-w 0.30)
+      (setq rate-w 0.30)
+      (setq trend-w 0.20))
+    (list :delta-weight delta-w
+          :rate-weight rate-w
+          :trend-weight trend-w
+          :confidence-weight confidence-w
+          :exploration-rate exploration
+          :min-samples min-samples
+          :health-probation-threshold probation)))
+
 ;; ─── Performance Lookup ───
 
 (defun gptel-auto-workflow--get-backend-performance-stats (backend &optional strategy target)
@@ -315,12 +376,13 @@ Agentic → nil (use default ontology ordering, MiniMax is baseline).")
 Returns new ordered list of (backend . model) cons cells.
 STRATEGY and TARGET filter the performance data.
 
-Scoring incorporates four dimensions (not just raw keep-rate):
-  1. DELTA from category baseline — how much better/worse vs peers?      (40%)
-  2. RAW keep-rate — historical performance on this category               (30%)
-  3. TREND — is performance improving or declining recently?               (20%)
-  4. CONFIDENCE — how much data backs this score?                          (10%)
-  Penalty: unhealthy backends (3+ recent errors) drop to bottom."
+   Scoring incorporates four dimensions (not just raw keep-rate):
+   1. DELTA from category baseline — how much better/worse vs peers?
+   2. RAW keep-rate — historical performance on this category
+   3. TREND — is performance improving or declining recently?
+   4. CONFIDENCE — how much data backs this score?
+   Weights auto-tune from VSM health when available (defaults 40/30/20/10).
+   Penalty: unhealthy backends (3+ recent errors) drop to bottom."
   (let* ((static-fallbacks (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
                                 gptel-auto-workflow-headless-subagent-fallbacks
                               '(("MiniMax" . "minimax-m2.7-highspeed")
@@ -328,11 +390,17 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                                 ("DashScope" . "qwen3.6-plus")
                                 ("DeepSeek" . "deepseek-v4-flash")
                                 ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
-          (category (when target (gptel-auto-workflow--categorize-target target)))
-          (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
-          ;; Compute baseline once per category
-          (baseline (when category (gptel-auto-workflow--category-baseline-keep-rate category strategy)))
-          (scored nil))
+           (category (when target (gptel-auto-workflow--categorize-target target)))
+           (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
+           ;; Compute baseline once per category
+           (baseline (when category (gptel-auto-workflow--category-baseline-keep-rate category strategy)))
+           ;; VSM health → routing auto-tuning
+           (vsm-params (gptel-auto-workflow--vsm-adjusted-routing-params))
+           (delta-weight (plist-get vsm-params :delta-weight))
+           (rate-weight (plist-get vsm-params :rate-weight))
+           (trend-weight (plist-get vsm-params :trend-weight))
+           (confidence-weight (plist-get vsm-params :confidence-weight))
+           (scored nil))
     
     ;; Health ladder: filter probation/dead backends, apply weight reduction
     (let ((filtered nil))
@@ -341,7 +409,7 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                (level (gptel-auto-workflow--backend-health-level backend))
                (override (and category-override (string= backend category-override))))
           (cond
-           ((>= level 3)
+           ((>= level (plist-get vsm-params :health-probation-threshold))
             (if override
                 (push entry filtered)  ; category override bypasses probation
               (message "[verbum] ⚠ SKIPPING %s backend %s (level=%d)"
@@ -384,12 +452,12 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                     :delta delta :trend trend :confidence confidence
                     :healthy healthy
                     :score (if all-rate
-                               (+ (* delta 40.0)        ; Delta from peers (40%)
-                                  (* all-rate 30.0)      ; Raw keep-rate (30%)
-                                  (* trend 20.0)         ; Direction of change (20%)
-                                  (* confidence 10.0)    ; Data trust (10%)
-                                  (if healthy 0 -50.0))  ; Quota penalty
-                             -1.0))  ; No data = bottom
+                                (+ (* delta (* delta-weight 100.0))
+                                   (* all-rate (* rate-weight 100.0))
+                                   (* trend (* trend-weight 100.0))
+                                   (* confidence (* confidence-weight 100.0))
+                                   (if healthy 0 -50.0))  ; Quota penalty
+                              -1.0))  ; No data = bottom
               scored)))
     
     ;; Apply category override if available
@@ -461,27 +529,29 @@ Scoring incorporates four dimensions (not just raw keep-rate):
     (let ((total-samples (cl-reduce #'+ scored
                                      :key (lambda (s) (or (plist-get s :total) 0))
                                      :initial-value 0)))
-      (if (>= total-samples gptel-auto-workflow--ontology-reorder-min-samples)
-          (progn
-            (message "[onto-router] Reordered %d backends by performance (≥%d samples)"
-                     (length scored) total-samples)
-            ;; Exploration: 15% chance to swap first two for learning
-            ;; Skip exploration if either top backend is rejected (ternary -1)
-            (when (and (> (length scored) 1)
-                       (/= (or (plist-get (car scored) :ternary) 0) -1)
-                       (/= (or (plist-get (cadr scored) :ternary) 0) -1)
-                       (< (random 100) (* gptel-auto-workflow--ontology-reorder-exploration-rate 100)))
-              (let ((tmp (car scored)))
-                (setcar scored (cadr scored))
-                (setcar (cdr scored) tmp))
-              (message "[onto-router] EXPLORATION: swapped top 2 backends for learning"))
-            ;; Return as (backend . model) cons cells
-            (mapcar (lambda (s) (cons (plist-get s :backend) (plist-get s :model))) scored))
-        ;; Not enough data - return static order
-        (progn
-          (message "[onto-router] Using static order (%d samples < %d threshold)"
-                   total-samples gptel-auto-workflow--ontology-reorder-min-samples)
-          static-fallbacks)))))
+       (if (>= total-samples (plist-get vsm-params :min-samples))
+           (progn
+             (message "[onto-router] Reordered %d backends by performance (≥%d samples, explore=%.0f%%)"
+                      (length scored) total-samples
+                      (* 100 (plist-get vsm-params :exploration-rate)))
+             ;; Exploration: swap top 2 backends for learning
+             ;; Rate auto-tuned by VSM health (default 15%, up to 30% when S4 weak)
+             ;; Skip exploration if either top backend is rejected (ternary -1)
+             (when (and (> (length scored) 1)
+                        (/= (or (plist-get (car scored) :ternary) 0) -1)
+                        (/= (or (plist-get (cadr scored) :ternary) 0) -1)
+                        (< (random 100) (* (plist-get vsm-params :exploration-rate) 100)))
+               (let ((tmp (car scored)))
+                 (setcar scored (cadr scored))
+                 (setcar (cdr scored) tmp))
+               (message "[onto-router] EXPLORATION: swapped top 2 backends for learning"))
+             ;; Return as (backend . model) cons cells
+             (mapcar (lambda (s) (cons (plist-get s :backend) (plist-get s :model))) scored))
+         ;; Not enough data - return static order
+         (progn
+           (message "[onto-router] Using static order (%d samples < %d threshold)"
+                    total-samples (plist-get vsm-params :min-samples))
+           static-fallbacks)))))
 
 ;; ─── Integration with Existing Fallback System ───
 
@@ -839,9 +909,16 @@ Key: backend name, value: float-time when retest is allowed.")
 (defun gptel-auto-workflow--backend-health-level (backend)
   "Return health level for BACKEND: 0-4.
 0=HEALTHY (full trust), 1=WARNING (-15%%), 2=DEGRADED (-35%%),
-3=PROBATION (canary only), 4=DEAD (waiting for backoff)."
-  (let ((strikes (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
-        (dead-until (gethash backend gptel-auto-workflow--lambda-dead-until)))
+3=PROBATION (canary only), 4=DEAD (waiting for backoff).
+Probation threshold auto-tunes from VSM health when available
+(default 3 strikes; tightens to 2 when S3 Control is weak)."
+  (let* ((probation-threshold
+          (or (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+                (plist-get (gptel-auto-workflow--vsm-adjusted-routing-params)
+                           :health-probation-threshold))
+              3))
+         (strikes (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
+         (dead-until (gethash backend gptel-auto-workflow--lambda-dead-until)))
     (cond
      ;; DEAD: waiting for backoff timer
      ((and dead-until (> dead-until (float-time))) 4)
@@ -849,8 +926,8 @@ Key: backend name, value: float-time when retest is allowed.")
      (dead-until 3)
      ;; 5+ strikes → DEAD with exponential backoff
      ((>= strikes 5) 4)
-     ;; 3-4 strikes → PROBATION (canary tasks only)
-     ((>= strikes 3) 3)
+     ;; probation-threshold..4 strikes → PROBATION (canary tasks only)
+     ((>= strikes probation-threshold) 3)
      ;; 2 strikes → DEGRADED (reduced weight)
      ((>= strikes 2) 2)
      ;; 1 strike → WARNING (slight penalty)
