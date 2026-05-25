@@ -876,7 +876,166 @@ Key: backend name, value: float-time when retest is allowed.")
   "Return t if BACKEND is probation or worse (health level >= 3)."
   (>= (gptel-auto-workflow--backend-health-level backend) 3))
 
-(defun gptel-auto-workflow--ranked-subagent-backends ()
+(defvar gptel-auto-workflow--task-backend-preference
+  '(("analyzer"   "DeepSeek"  . 0.15)
+    ("analyzer"   "DashScope" . 0.05)
+    ("grader"     "moonshot"  . 0.15)
+    ("grader"     "DeepSeek"  . 0.05)
+    ("executor"   "DashScope" . 0.15)
+    ("executor"   "DeepSeek"  . 0.05)
+    ("researcher" "DeepSeek"  . 0.10)
+    ("researcher" "DashScope" . 0.05)
+    ("reviewer"   "DeepSeek"  . 0.10)
+    ("comparator" "DashScope" . 0.10))
+  "Per-task-type backend preference boost added to ranking score.
+Larger values shift routing toward backends best suited for each task:
+- DeepSeek V4 thinks → analyzer, researcher
+- moonshot/Kimi elaborates → grader
+- DashScope/Qwen executes → executor")
+
+(defconst gptel-auto-workflow--preference-persist-file
+  "assistant/strategies/provider-routing/backend-preference.el"
+  "Git-tracked file for per-axis backend preference data.
+Shared across machines via git. Auto-committed after each evolution cycle.")
+
+(defun gptel-auto-workflow--preference-file ()
+  "Return absolute path to the git-tracked backend preference file."
+  (expand-file-name gptel-auto-workflow--preference-persist-file
+                    (gptel-auto-workflow--worktree-base-root)))
+
+(defun gptel-auto-workflow--backend-per-axis-keep-rates ()
+  "Compute keep-rates per (backend, kibcm-axis) pair from all results.
+Returns alist of ((backend axis) . keep-rate). Pairs with < 5 samples are excluded."
+  (let ((pairs (make-hash-table :test 'equal))
+        (rates nil))
+    (dolist (r (gptel-auto-workflow--parse-all-results))
+      (let ((backend (or (plist-get r :backend) "unknown"))
+            (axis (or (plist-get r :kibcm-axis) "?"))
+            (kept (equal (plist-get r :decision) "kept")))
+        (unless (member backend '("0" "unknown" ""))
+          (let* ((key (cons backend axis))
+                 (entry (or (gethash key pairs) (cons 0 0))))
+            (setcar entry (1+ (car entry)))
+            (when kept (setcdr entry (1+ (cdr entry))))
+            (puthash key entry pairs)))))
+    (maphash (lambda (key counts)
+               (let ((total (car counts))
+                     (kept (cdr counts)))
+                 (when (>= total 5)
+                   (push (cons key (/ (float kept) total)) rates))))
+             pairs)
+    rates))
+
+(defun gptel-auto-workflow--evolve-backend-preference ()
+  "Auto-evolve per-axis backend preference boosts from historical keep-rates.
+For each (backend, kibcm-axis) pair with >=5 samples, compare the per-axis
+keep-rate against the global backend keep-rate. If significantly better,
+increase the preference boost. If worse, decrease it. Results are bounded
+[0.0, 0.25] and persisted to `gptel-auto-workflow--preference-persist-file'."
+  (interactive)
+  (let* ((per-axis (gptel-auto-workflow--backend-per-axis-keep-rates))
+         (global-cache (make-hash-table :test 'equal))
+         (changed nil))
+    (dolist (r (gptel-auto-workflow--parse-all-results))
+      (let ((backend (or (plist-get r :backend) "unknown"))
+            (kept (equal (plist-get r :decision) "kept")))
+        (unless (member backend '("0" "unknown" ""))
+          (let ((entry (or (gethash backend global-cache) (cons 0 0))))
+            (setcar entry (1+ (car entry)))
+            (when kept (setcdr entry (1+ (cdr entry))))
+            (puthash backend entry global-cache)))))
+    (dolist (pair per-axis)
+      (let* ((backend (car (car pair)))
+             (axis (cdr (car pair)))
+             (axis-keep (cdr pair))
+             (global-entry (gethash backend global-cache))
+             (global-total (car global-entry))
+             (global-kept (cdr global-entry))
+             (global-keep (if (> global-total 0) (/ (float global-kept) global-total) 0.5))
+             (delta (- axis-keep global-keep))
+             (agent-type (pcase axis
+                           ("A" "analyzer")
+                           ("B" "executor")
+                           ("C" "reviewer")
+                           ("D" "executor")
+                           ("E" "grader")
+                           ("F" "executor")
+                           ("G" "reviewer")
+                           ("H" "analyzer")
+                           ("I" "comparator")
+                           (_ nil))))
+        (when (and agent-type (>= (abs delta) 0.05))
+          (let* ((existing (cl-find-if
+                            (lambda (e)
+                              (and (string= (nth 0 e) agent-type)
+                                   (string= (nth 1 e) backend)))
+                            gptel-auto-workflow--task-backend-preference))
+                 (current-boost (if (consp existing) (cddr existing) 0.0))
+                 (new-boost (max 0.0 (min 0.25 (+ current-boost delta)))))
+            (when (> (abs (- current-boost new-boost)) 0.001)
+              (if existing
+                  (setcdr (cdr existing) new-boost)
+                (nconc gptel-auto-workflow--task-backend-preference
+                       (list (list agent-type backend new-boost))))
+              (setq changed t)
+              (message "[preference] %s/%s on axis %s: boost %.3f -> %.3f (delta=%.3f)"
+                       agent-type backend axis current-boost new-boost delta))))))
+    (when changed
+      (gptel-auto-workflow--persist-backend-preference)
+      (gptel-auto-workflow--commit-backend-preference)
+      (message "[preference] Evolved and committed backend preference"))
+    changed))
+
+(defun gptel-auto-workflow--persist-backend-preference ()
+  "Persist current task-backend-preference to the git-tracked strategy file."
+  (let ((file (gptel-auto-workflow--preference-file)))
+    (make-directory (file-name-directory file) t)
+    (with-temp-file file
+      (insert ";; Auto-evolved per-axis backend preference\n")
+      (insert (format ";; Generated: %s\n" (format-time-string "%Y-%m-%d %H:%M")))
+      (insert ";; Git-tracked - shared across machines. Commit after evolution.\n")
+      (insert (format "(setq gptel-auto-workflow--task-backend-preference\n      '%S)\n"
+                      gptel-auto-workflow--task-backend-preference)))))
+
+(defun gptel-auto-workflow--commit-backend-preference ()
+  "Git-commit the evolved backend preference so other machines pick it up."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (rel gptel-auto-workflow--preference-persist-file)
+         (file (expand-file-name rel root))
+         (default-directory (file-name-as-directory root)))
+    (when (file-exists-p file)
+      (condition-case nil
+          (progn
+            (call-process "git" nil nil nil "add" rel)
+            (call-process "git" nil nil nil "commit" "-m"
+                          (format "Auto-evolve backend preference (%s)"
+                                  (format-time-string "%Y-%m-%d %H:%M"))
+                          rel)
+            (message "[preference] Committed %s" rel))
+        (error
+         (message "[preference] Git commit failed (non-fatal)"))))))
+
+(defun gptel-auto-workflow--load-backend-preference ()
+  "Load git-tracked backend preference."
+  (let ((file (gptel-auto-workflow--preference-file)))
+    (when (file-exists-p file)
+      (condition-case nil
+          (progn
+            (load-file file)
+            (message "[preference] Loaded tracked strategy from %s"
+                     gptel-auto-workflow--preference-persist-file))
+        (error
+         (message "[preference] Failed to load %s" file))))))
+
+;; Deferred load: preference file depends on worktree-base-root which may
+;; not be available at module load time.  Run when worktree is live.
+(defun gptel-auto-workflow--ensure-backend-preference-loaded ()
+  "Load git-tracked backend preference if available."
+  (when (and (fboundp 'gptel-auto-workflow--load-backend-preference)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (gptel-auto-workflow--load-backend-preference)))
+
+(defun gptel-auto-workflow--ranked-subagent-backends (&optional agent-type)
   "Return ordered backend/model alist for subagent routing.
 Ranks backends by health-weight × historical-keep-rate, best first.
 Health data from lambda verification strikes; keep-rate from ontology.
@@ -921,11 +1080,23 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                                 (gptel-auto-workflow--backend-quarantined-p backend)))
               (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
                                  (member backend gptel-auto-workflow--rate-limited-backends)))
+              ;; Task-specific preference boost: shifts score for backends
+              ;; known to excel at particular agent types.
+              (pref-boost (if (and agent-type (stringp agent-type)
+                                 (boundp 'gptel-auto-workflow--task-backend-preference))
+                              (or (let ((match (cl-find-if
+                                                (lambda (e)
+                                                  (and (string= (nth 0 e) agent-type)
+                                                       (string= (nth 1 e) backend)))
+                                                gptel-auto-workflow--task-backend-preference)))
+                                    (and (consp match) (cddr match)))
+                                  0.0)
+                            0.0))
               (score (cond
                       (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
                       (quarantined -1.0)       ; health gate: hard exclude
                       (rate-limited 0.01)      ; demoted but still available as last resort
-                      (t (* health keep-rate)))))
+                      (t (+ (* health keep-rate) pref-boost)))))
         (when (>= score 0.0)
           (push (cons (cons backend model) score) scored))))
     (if scored

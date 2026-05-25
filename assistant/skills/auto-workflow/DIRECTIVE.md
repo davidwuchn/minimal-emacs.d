@@ -2,8 +2,8 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.25
-total-experiments: 1323
-total-kept: 249
+total-experiments: 1335
+total-kept: 251
 ---
 
 # Auto-Workflow Program
@@ -17,10 +17,10 @@ total-kept: 249
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-ext-tool-permits.el` | 38% | 8 | 3 | ✅ High yield |
+| `lisp/modules/gptel-ext-tool-permits.el` | 30% | 10 | 3 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-staging-baseline.el` | 29% | 7 | 2 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-core.el` | 28% | 78 | 22 | 🟡 Active |
 | `lisp/modules/gptel-agent-loop.el` | 28% | 72 | 20 | 🟡 Active |
-| `lisp/modules/gptel-benchmark-core.el` | 28% | 72 | 20 | 🟡 Active |
 | `lisp/modules/gptel-benchmark-principles.el` | 28% | 18 | 5 | 🟡 Active |
 | `lisp/modules/gptel-ext-context.el` | 27% | 26 | 7 | 🟡 Active |
 | `lisp/modules/nucleus-tools.el` | 26% | 23 | 6 | 🟡 Active |
@@ -57,11 +57,11 @@ total-kept: 249
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (1149×): Investigate root cause
-- **validation-failed** (96×): Improve pre-grade validation prompts
+- **other** (1156×): Investigate root cause
+- **validation-failed** (99×): Improve pre-grade validation prompts
 - **timeout** (39×): Add smaller batch sizes or chunked processing
 - **api-limit** (23×): Implement provider fallback or rate limit handling
-- **test-failure** (13×): Run tests before committing experiments
+- **test-failure** (15×): Run tests before committing experiments
 
 ## Success Patterns
 
@@ -78,7 +78,7 @@ total-kept: 249
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-ext-tool-permits.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 38%)
+- **lisp/modules/gptel-ext-tool-permits.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 30%)
 - **lisp/modules/gptel-tools-agent-staging-baseline.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 29%)
 - **lisp/modules/gptel-benchmark-core.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 28%)
 - **lisp/modules/gptel-ext-tool-sanitize.el**: Try validation guards or error handling improvements (previous experiments discarded)
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1323 experiments (249 kept locally across 1323 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1335 experiments (251 kept locally across 1335 local records). It evolves every self-evolution cycle.*
