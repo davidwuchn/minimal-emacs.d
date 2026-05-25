@@ -78,7 +78,9 @@
 
 (ert-deftest regression/ontology-router/reorder-puts-best-first ()
   "Backend with highest keep-rate should be first in reordered list."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")
@@ -94,7 +96,9 @@
 
 (ert-deftest regression/ontology-router/reorder-keeps-all-backends ()
   "Reordering should preserve all backends from static list."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :decision "kept"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
@@ -109,7 +113,9 @@
 
 (ert-deftest regression/ontology-router/insufficient-data-uses-static ()
   "When insufficient data, should return static order unchanged."
-  (let ((mock-results nil))
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                (lambda () mock-results)))
       (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology)))
@@ -118,7 +124,9 @@
 
 (ert-deftest regression/ontology-router/exploration-can-swap ()
   "With exploration enabled, top 2 backends can be swapped."
-  (let ((mock-results
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         gptel-auto-workflow-headless-subagent-fallbacks)
+        (mock-results
          (list
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")
