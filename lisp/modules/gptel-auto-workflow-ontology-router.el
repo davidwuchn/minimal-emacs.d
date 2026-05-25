@@ -1370,9 +1370,10 @@ Each entry is a plist: (:timestamp :target :agent-type :selected-backend
 :selected-model :candidates). Candidates is a list of plists with
 :backend :model :health :keep-rate :pref-boost :axis-boost :score.")
 
-(defun gptel-auto-workflow--record-routing-decision (agent-type scored)
+(defun gptel-auto-workflow--record-routing-decision (agent-type scored &optional vsm-adjustments)
   "Record a routing decision into the audit trail.
 SCORED is the scored list from `ranked-subagent-backends' (with scores attached).
+VSM-ADJUSTMENTS is an optional list of VSM layer adjustment strings.
 Keeps the last 100 decisions."
   (let ((target (and (boundp 'gptel-auto-workflow--current-target)
                      gptel-auto-workflow--current-target))
@@ -1400,12 +1401,63 @@ Keeps the last 100 decisions."
                   :agent-type (or agent-type "unknown")
                   :selected-backend (caar top)
                   :selected-model (cdar top)
+                  :vsm-adjustments vsm-adjustments
                   :candidates (nreverse candidates))
             gptel-auto-workflow--routing-audit-log)
       ;; Keep last 100 entries
       (when (> (length gptel-auto-workflow--routing-audit-log) 100)
         (setq gptel-auto-workflow--routing-audit-log
               (seq-take gptel-auto-workflow--routing-audit-log 100))))))
+
+;; ─── Audit Trail Analysis ───
+
+(defun gptel-auto-workflow--audit-trail-summary ()
+  "Return a plist summarizing the routing audit trail.
+Fields: :total-decisions, :backend-counts (alist of backend→count),
+:avg-health (hash of backend→avg health level),
+:avg-keep-rate (hash of backend→avg keep-rate),
+:vsm-adjustment-counts (plist of layer→times-active)."
+  (let ((total 0)
+        (backend-counts (make-hash-table :test 'equal))
+        (backend-health-sum (make-hash-table :test 'equal))
+        (backend-rate-sum (make-hash-table :test 'equal))
+        (vsm-s1 0) (vsm-s2 0) (vsm-s3 0) (vsm-s4 0) (vsm-s5 0))
+    (dolist (entry gptel-auto-workflow--routing-audit-log)
+      (cl-incf total)
+      ;; Per-backend counts
+      (let ((backend (plist-get entry :selected-backend))
+            (candidates (plist-get entry :candidates)))
+        (when backend
+          (let ((count (gethash backend backend-counts)))
+            (puthash backend (if count (1+ count) 1) backend-counts)))
+        ;; Per-candidate health/rate aggregation
+        (when candidates
+          (dolist (c (if (listp candidates) candidates (list candidates)))
+            (when (listp c)
+              (let* ((b (plist-get c :backend))
+                     (health (plist-get c :health))
+                     (rate (plist-get c :keep-rate)))
+                (when (and b health)
+                  (puthash b (+ (or (gethash b backend-health-sum) 0) health)
+                           backend-health-sum))
+                (when (and b rate)
+                  (puthash b (+ (or (gethash b backend-rate-sum) 0) rate)
+                           backend-rate-sum))))))
+        ;; VSM adjustment counts
+        (let ((adj (plist-get entry :vsm-adjustments)))
+          (when adj
+            (dolist (a adj)
+              (cond ((string-match-p "S1:" a) (cl-incf vsm-s1))
+                    ((string-match-p "S2:" a) (cl-incf vsm-s2))
+                    ((string-match-p "S3:" a) (cl-incf vsm-s3))
+                    ((string-match-p "S4:" a) (cl-incf vsm-s4))
+                    ((string-match-p "S5:" a) (cl-incf vsm-s5))))))))
+    (list :total-decisions total
+          :backend-counts backend-counts
+          :avg-health backend-health-sum
+          :avg-keep-rate backend-rate-sum
+          :vsm-adjustments (list :s1 vsm-s1 :s2 vsm-s2
+                                 :s3 vsm-s3 :s4 vsm-s4 :s5 vsm-s5))))
 
 ;; ─── Per-Target Model Preference ───
 
@@ -1461,7 +1513,7 @@ Falls back to the static headless-subagent-fallbacks if no data available.
 Phase 2 P(λ) gating: backends with :degraded lambda verification are
 excluded entirely (score 0), not just deprioritized. This implements the
 hard gate: if a backend fails the lambda compiler check, it's not used."
-  (let ((scored nil)
+  (let* ((scored nil)
         ;; Use the live fallback chain as default-models so any ontology
         ;; reordering (applied to executor-rate-limit-fallbacks by
         ;; reorder-fallbacks-by-ontology) is picked up here too.
@@ -1483,7 +1535,10 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                              (condition-case nil
                                  (gptel-auto-workflow--get-holographic-consensus
                                   gptel-auto-workflow--current-target)
-                               (error nil)))))
+                               (error nil))))
+        ;; VSM routing params for audit trail
+        (vsm-params (gptel-auto-workflow--vsm-adjusted-routing-params))
+        (vsm-adjustments (plist-get vsm-params :adjustments)))
     (dolist (entry default-models)
       (let* ((backend (car entry))
              (model (cdr entry))
@@ -1542,7 +1597,7 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                             (lambda (a b) (> (plist-get (cdr a) :score)
                                              (plist-get (cdr b) :score))))))
           ;; Record routing decision for audit trail
-          (gptel-auto-workflow--record-routing-decision agent-type sorted)
+          (gptel-auto-workflow--record-routing-decision agent-type sorted vsm-adjustments)
           (mapcar #'car sorted))
       default-models)))
 

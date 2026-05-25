@@ -1545,5 +1545,30 @@ SPECS is a list of (backend decision days-ago ...) triples."
         (gptel-auto-workflow--ranked-subagent-backends "analyzer"))
       (should (<= (length gptel-auto-workflow--routing-audit-log) 100)))))
 
+;; ─── Audit Trail Summary Tests ───
+
+(ert-deftest tdd/audit-summary/counts-total-decisions ()
+  "Summary should report correct total decision count."
+  (let ((gptel-auto-workflow--routing-audit-log
+         (list (list :timestamp (float-time) :selected-backend "DeepSeek"
+                     :selected-model "deepseek-v4-pro" :agent-type "analyzer"
+                     :vsm-adjustments '("S4:explore→30%"))
+               (list :timestamp (float-time) :selected-backend "DashScope"
+                     :selected-model "qwen3.6-plus" :agent-type "executor"))))
+    (let ((summary (gptel-auto-workflow--audit-trail-summary)))
+      (should (= 2 (plist-get summary :total-decisions))))))
+
+(ert-deftest tdd/audit-summary/counts-vsm-adjustments ()
+  "Summary should count VSM adjustments per layer."
+  (let ((gptel-auto-workflow--routing-audit-log
+         (list (list :timestamp (float-time) :selected-backend "DeepSeek"
+                     :vsm-adjustments '("S2:delta→20%+rate→40%" "S4:explore→30%"))
+               (list :timestamp (float-time) :selected-backend "DashScope"
+                     :vsm-adjustments '("S2:delta→20%+rate→40%")))))
+    (let* ((summary (gptel-auto-workflow--audit-trail-summary))
+           (vsm (plist-get summary :vsm-adjustments)))
+      (should (= 2 (plist-get vsm :s2)))
+      (should (= 1 (plist-get vsm :s4))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
