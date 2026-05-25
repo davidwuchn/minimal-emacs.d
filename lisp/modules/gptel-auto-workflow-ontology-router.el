@@ -906,9 +906,17 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
              (health (if (fboundp 'gptel-auto-workflow--backend-health-weight)
                          (gptel-auto-workflow--backend-health-weight backend)
                        1.0))
-             (keep-rate (if (fboundp 'gptel-auto-workflow--get-backend-keep-rate)
-                            (or (gptel-auto-workflow--get-backend-keep-rate backend) 0.2)
-                          0.2))
+             ;; Bayesian-smoothed keep-rate: backends with < 3 experiments
+             ;; get the 0.25 floor (DeepSeek's earned keep-rate) to avoid
+             ;; cold-start bias from a single discarded experiment.
+             ;; This gives DashScope (and other untested backends) equal
+             ;; footing so the fallback-chain order breaks ties.
+             (keep-rate (if (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
+                             (let* ((stats (gptel-auto-workflow--get-backend-performance-stats backend))
+                                    (raw (plist-get stats :keep-rate))
+                                    (total (plist-get stats :total)))
+                               (if (or (null raw) (< total 3)) 0.25 raw))
+                           0.25))
               (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
                                 (gptel-auto-workflow--backend-quarantined-p backend)))
               (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
@@ -921,7 +929,9 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
         (when (>= score 0.0)
           (push (cons (cons backend model) score) scored))))
     (if scored
-        (mapcar #'car (sort scored (lambda (a b) (> (cdr a) (cdr b)))))
+        ;; nreverse: push reverses, restore original order so stable sort
+        ;; preserves the default-models order (DashScope first) as tiebreaker.
+        (mapcar #'car (sort (nreverse scored) (lambda (a b) (> (cdr a) (cdr b)))))
       default-models)))
 
 (defvar gptel-auto-workflow--conflicted-targets nil
