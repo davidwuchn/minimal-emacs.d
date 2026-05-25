@@ -1,9 +1,9 @@
 ---
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
-version: 2026.05.24
-total-experiments: 1191
-total-kept: 219
+version: 2026.05.25
+total-experiments: 1226
+total-kept: 220
 ---
 
 # Auto-Workflow Program
@@ -57,10 +57,10 @@ total-kept: 219
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (998×): Investigate root cause
+- **other** (1028×): Investigate root cause
 - **timeout** (110×): Add smaller batch sizes or chunked processing
-- **validation-failed** (53×): Improve pre-grade validation prompts
-- **api-limit** (20×): Implement provider fallback or rate limit handling
+- **validation-failed** (57×): Improve pre-grade validation prompts
+- **api-limit** (21×): Implement provider fallback or rate limit handling
 - **test-failure** (11×): Run tests before committing experiments
 
 ## Success Patterns
@@ -82,7 +82,7 @@ total-kept: 219
 - **lisp/modules/gptel-tools-agent-experiment-loop.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 40%)
 - **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 39%)
 - **lisp/modules/gptel-sandbox.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-fsm-utils.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1191 experiments (219 kept locally across 1191 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1226 experiments (220 kept locally across 1226 local records). It evolves every self-evolution cycle.*
