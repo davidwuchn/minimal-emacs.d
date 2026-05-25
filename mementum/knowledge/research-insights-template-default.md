@@ -11,125 +11,48 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 1290 experiments (19% keep rate).*
+*Consolidated from 1342 experiments (19% keep rate).*
 
-**Performance:** 245 kept / 681 discarded / 95 failed (EXTRACTED — from TSV)
+**Performance:** 253 kept / 689 discarded / 101 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-memory.el` (12 kept / 18 discarded)
+- `lisp/modules/gptel-auto-workflow-projects.el` (12 kept / 22 discarded / 2 failed)
+- `lisp/modules/gptel-tools-agent-runtime.el` (2 kept / 4 discarded / 2 failed)
+- `lisp/modules/gptel-benchmark-core.el` (22 kept / 32 discarded / 7 failed)
+- `lisp/modules/gptel-ext-tool-permits.el` (3 kept / 2 discarded)
+- `lisp/modules/gptel-benchmark-comparator.el` (3 kept / 14 discarded / 1 failed)
+- `lisp/modules/gptel-tools-memory.el` (12 kept / 20 discarded)
 - `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
-- `lisp/modules/gptel-benchmark-core.el` (20 kept / 31 discarded / 5 failed)
 - `lisp/modules/gptel-benchmark-principles.el` (5 kept / 4 discarded / 1 failed)
 - `lisp/modules/gptel-tools-agent-staging-baseline.el` (2 kept / 5 discarded)
-- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 3 discarded)
 - `lisp/modules/gptel-ext-abort.el` (2 kept / 4 discarded / 2 failed)
-- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 13 discarded / 1 failed)
-- `lisp/modules/gptel-ext-context.el` (7 kept / 14 discarded)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-tools-memory--project-root, gptel-tools-memory--invalidate-cache, gptel-tools-memory--resolve-path, gptel-tools-memory--read, gptel-tools-memory--write, gptel-tools-memory--collect-dir, gptel-tools-memory--list, gptel-tools-memory-register
-defvars: gptel-tools-memory-dir, gptel-tools-memory-knowledge-dir, gptel-tools-memory--cached-root, gptel-tools-memory-max-content-size
-requires: cl-lib, subr-x
-provides: gptel-tools-memory
-errors: error, error, error, error, error, error, error, error, error, error, error, error, error, error, error, error, error, error, error, error
-handlers: err
+defuns: gptel-auto-workflow--ensure-buffer-tables, gptel-auto-workflow--normalized-projects, gptel-auto-workflow--normalize-worktree-dir, gptel-auto-workflow--buffer-tool-snapshot, gptel-auto-workflow--routed-fsm-info, gptel-auto-workflow--get-worktree-buffer, gptel-auto-workflow--get-project-buffer, gptel-auto-workflow-add-project, gptel-auto-workflow-remove-project, gptel-auto-workflow-list-projects, gptel-auto-workflow-run-all-projects, gptel-auto-workflow--finish-queued-cron-job, gptel-auto-workflow--queue-cron-job, gptel-auto-workflow-queue-all-projects, gptel-auto-workflow--get-project-for-context, gptel-auto-workflow--advice-task-override, gptel-auto-workflow-enable-per-project-subagents, gptel-auto-workflow-disable-per-project-subagents, gptel-auto-workflow--advice-task-overlay-buffer, gptel-auto-workflow--enable-overlay-buffer-advice
+defvars: gptel-auto-workflow--async, gptel-auto-workflow--process, gptel-auto-workflow--worktree-state, gptel-auto-workflow-worktree-base, gptel-auto-workflow--current-target, gptel-auto-workflow-projects, gptel-auto-workflow--project-buffers, gptel-auto-workflow--current-project, gptel-auto-workflow--run-project-root, gptel-auto-workflow--cron-job-running, gptel-auto-workflow--stats, gptel-auto-workflow--running, gptel-auto-workflow--cron-job-timer, gptel-auto-workflow--defer-subagent-env-persistence, mementum-root, gptel-auto-workflow--project-root-override), gptel-auto-workflow--research-findings-cache, gptel-auto-workflow--worktree-buffers, gptel-auto-workflow--normalized-projects-cache, gptel-auto-workflow--normalized-projects-hash
+requires: cl-lib, gptel-tools-agent
+provides: gptel-auto-workflow-projects
+declares: gptel-auto-workflow--project-root, gptel-auto-workflow--get-worktree-dir, gptel-auto-workflow--mark-messages-start, gptel-auto-workflow--persist-status, gptel-auto-workflow-cron-safe, gptel-auto-workflow-run-async--guarded, gptel-auto-workflow-run-research, gptel-fsm-info, gptel-mementum-weekly-job, gptel-benchmark-instincts-weekly-job, gptel-auto-workflow--run-autotts-evolution, gptel-auto-workflow--reorder-fallbacks-by-ontology, gptel-auto-workflow--run-research-champion-league, gptel-auto-workflow--run-strategy-evolution
+errors: error, error, error, error, error, error, error, user-error, error, error, error, error, error
+handlers: err, err, err, err, nil, nil, err, nil, nil, err, err, err, err, err, err, err, err
+advised: gptel-agent--task, gptel-agent--task-overlay
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
+- `lisp/modules/gptel-auto-workflow-evolution.el` (1 failed)
+- `lisp/modules/gptel-tools-agent-runtime.el` (2 kept / 4 discarded / 2 failed)
+- `lisp/modules/gptel-benchmark-core.el` (22 kept / 32 discarded / 7 failed)
+- `lisp/modules/gptel-tools-agent-subagent.el` (1 failed)
 - `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
-- `lisp/modules/nucleus-tools.el` (6 kept / 14 discarded / 3 failed)
-- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
-- `lisp/modules/gptel-tools-agent.el` (8 kept / 22 discarded / 4 failed)
-- `lisp/modules/gptel-benchmark-core.el` (20 kept / 31 discarded / 5 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Allium Behavioral Spec (auto-generated, v3)
-
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
-
-```allium
-(reasoning . <think>
-The user wants me to distill this massive list of hypotheses. Let me analyze what they're about.
-
-Looking at the content, this is a research strategy document with template-default approach. It contains:
-1. A list of 1226 experiments across many targets (Emacs Lisp files)
-2. "Kept hypotheses" - a huge list of potential improvements
-3. "Discarded hypotheses" - things that were considered but rejected
-
-The hypotheses seem to be focused on:
-- Adding nil guards and type validation
-- Fixing bugs (inverted logic, caching bugs, data structure issues)
-- Improving code clarity and reducing duplication
-- Error resilience
-- Performance improvements through caching/memoization
-- Safety improvements through validation
-
-Let me distill this down to the essential patterns and themes.
-</think>)
-```
-
