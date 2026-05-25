@@ -209,22 +209,23 @@ Uses cached value from load time, or detects from current directory."
                              (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
                              (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
                              (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
-                           (push (list :target target
-                                       :hypothesis hypothesis
-                                       :score-before score-before
-                                       :score-after score-after
-                                       :code-quality quality
-                                       :delta delta-str
-                                       :decision decision
-                                       :grader-quality grader-q
-                                       :prompt-chars prompt-chars
-                                       :backend backend
-                                       :research-strategy research-strategy
-                                       :research-hash research-hash
-                                       :research-quality research-quality
-                                       :kibcm-axis kibcm-axis
-                                       :model model)
-                                records))))
+                            (push (list :target target
+                                        :hypothesis hypothesis
+                                        :score-before score-before
+                                        :score-after score-after
+                                        :code-quality quality
+                                        :delta delta-str
+                                        :decision decision
+                                        :grader-quality grader-q
+                                        :prompt-chars prompt-chars
+                                        :backend backend
+                                        :research-strategy research-strategy
+                                        :research-hash research-hash
+                                        :research-quality research-quality
+                                        :kibcm-axis kibcm-axis
+                                        :model model
+                                        :run-dir (file-name-nondirectory run-dir))
+                                 records))))
                 (forward-line 1)))))))
     (nreverse records)))
 
