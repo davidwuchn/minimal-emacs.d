@@ -907,14 +907,16 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                          (gptel-auto-workflow--backend-health-weight backend)
                        1.0))
              ;; Bayesian-smoothed keep-rate: backends with < 3 experiments
-             ;; get the default 0.2 floor to avoid cold-start bias from
-             ;; a single discarded experiment tanking their rank.
+             ;; get the 0.25 floor (DeepSeek's earned keep-rate) to avoid
+             ;; cold-start bias from a single discarded experiment.
+             ;; This gives DashScope (and other untested backends) equal
+             ;; footing so the fallback-chain order breaks ties.
              (keep-rate (if (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
                              (let* ((stats (gptel-auto-workflow--get-backend-performance-stats backend))
                                     (raw (plist-get stats :keep-rate))
                                     (total (plist-get stats :total)))
-                               (if (or (null raw) (< total 3)) 0.2 raw))
-                           0.2))
+                               (if (or (null raw) (< total 3)) 0.25 raw))
+                           0.25))
               (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
                                 (gptel-auto-workflow--backend-quarantined-p backend)))
               (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
