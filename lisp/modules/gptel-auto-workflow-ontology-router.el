@@ -1303,11 +1303,20 @@ Keeps the last 100 decisions."
         (candidates nil))
     (when top
       (dolist (entry (seq-take scored 5))
-        (let ((pair (car entry))
-              (score (cdr entry)))
+        (let* ((pair (car entry))
+               (details (cdr entry))
+               (score (plist-get details :score))
+               (health (plist-get details :health))
+               (keep-rate (plist-get details :keep-rate))
+               (pref (plist-get details :pref-boost))
+               (axis (plist-get details :axis-boost)))
           (push (list :backend (car pair)
                       :model (cdr pair)
-                      :score score)
+                      :score score
+                      :health health
+                      :keep-rate keep-rate
+                      :pref-boost pref
+                      :axis-boost axis)
                 candidates)))
       (push (list :timestamp (float-time)
                   :target (or target "unknown")
@@ -1426,17 +1435,23 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                                     (and (consp match) (cddr match)))
                                   0.0)
                             0.0))
+              ;; Phase ω: per-axis boost based on holographic consensus.
+              (axis-boost (gptel-auto-workflow--axis-preference-boost backend))
               (score (cond
                       (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
                       (quarantined -1.0)       ; health gate: hard exclude
                       (cooldown -1.0)           ; per-run: hard exclude
                       (rate-limited 0.01)      ; demoted but still available as last resort
-                       (t (+ (* health keep-rate) pref-boost
-                             (gptel-auto-workflow--axis-preference-boost backend))))))
+                       (t (+ (* health keep-rate) pref-boost axis-boost)))))
         (when (>= score 0.0)
-          (push (cons (cons backend model) score) scored))))
+          (push (cons (cons backend model)
+                      (list :score score :health health :keep-rate keep-rate
+                            :pref-boost pref-boost :axis-boost axis-boost))
+                scored))))
     (if scored
-        (let ((sorted (sort (nreverse scored) (lambda (a b) (> (cdr a) (cdr b))))))
+        (let ((sorted (sort (nreverse scored)
+                            (lambda (a b) (> (plist-get (cdr a) :score)
+                                             (plist-get (cdr b) :score))))))
           ;; Record routing decision for audit trail
           (gptel-auto-workflow--record-routing-decision agent-type sorted)
           (mapcar #'car sorted))
