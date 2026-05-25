@@ -10,8 +10,8 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(condition-case nil (require 'gptel) (ignore))
-(condition-case nil (require 'gptel-agent) (ignore))
+(condition-case nil (require 'gptel) (error nil))
+(condition-case nil (require 'gptel-agent) (error nil))
 (require 'magit-git nil t)
 
 (defvar gptel-send--transitions)

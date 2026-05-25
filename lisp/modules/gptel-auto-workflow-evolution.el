@@ -1869,7 +1869,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (message "[pipeline] ERROR: %s" e)))
         (dolist (w (plist-get v :warnings))
           (message "[pipeline] WARN: %s" w)))
-    (ignore))
+    (error nil))
   (let ((new-experiments (gptel-auto-workflow--evolution-count-new))
         (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                            (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
