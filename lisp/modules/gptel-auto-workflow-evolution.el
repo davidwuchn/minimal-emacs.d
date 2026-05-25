@@ -5550,17 +5550,6 @@ Like promptfoo's model-specific comparison: which exact model performs best."
              by-model)
     (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
 
-(defun gptel-auto-workflow--default-model-for-backend (backend)
-  "Return the default model name for BACKEND from the headless fallback chain.
-If BACKEND is not found, returns \"unknown\"."
-  (or (and (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
-           (cdr (assoc backend gptel-auto-workflow-headless-subagent-fallbacks
-                       (lambda (a b) (string= a (car b))))))
-      (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
-           (cdr (assoc backend gptel-auto-workflow-executor-rate-limit-fallbacks
-                       (lambda (a b) (string= a (car b))))))
-      "unknown"))
-
 (defun gptel-auto-workflow--model-head-to-head-stats (model-a model-b)
   "Compare MODEL-A vs MODEL-B on shared targets.
 MODEL-A and MODEL-B are \"Backend/model\" strings (e.g. \"MiniMax/minimax-m2.7-highspeed\").
