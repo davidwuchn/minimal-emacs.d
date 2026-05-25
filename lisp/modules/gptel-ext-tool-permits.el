@@ -73,12 +73,14 @@ Switching to confirm-all clears all per-tool permits."
   (when (eq my/gptel-confirm-mode 'confirm-all)
     (my/gptel-clear-permits))
   (my/gptel--sync-to-upstream)
-  (message "Tool confirmation: %s%s"
-           (if (eq my/gptel-confirm-mode 'auto) "AUTO" "CONFIRM-ALL")
-           (if (eq my/gptel-confirm-mode 'auto)
-               ""
-             (format " (%d tools permitted)"
-                     (hash-table-count my/gptel-permitted-tools)))))
+  ;; ASSUMPTION: permit count is only meaningful in auto mode or before clear
+  ;; BEHAVIOR: Shows count only when permits exist (auto mode), not after clear
+  (let ((permit-count (hash-table-count my/gptel-permitted-tools)))
+    (message "Tool confirmation: %s%s"
+             (if (eq my/gptel-confirm-mode 'auto) "AUTO" "CONFIRM-ALL")
+             (if (and (eq my/gptel-confirm-mode 'auto) (> permit-count 0))
+                 (format " (%d tools permitted)" permit-count)
+               ""))))
 
 ;;;###autoload
 (defun my/gptel-show-permits ()
@@ -116,10 +118,13 @@ Use this when the agent is misbehaving or you need immediate control back."
                      (length gptel-tools)))
          (active-procs
           (cl-count-if (lambda (p)
-                         (and (process-live-p p)
+                         (and (processp p)
+                              (process-live-p p)
                               (or (process-get p 'my/gptel-managed)
                                   (string-prefix-p "gptel-" (process-name p)))))
                        (process-list))))
+    ;; ASSUMPTION: process-list returns valid process objects or nil
+    ;; EDGE CASE: Non-process items in process-list are filtered by processp
     (message "Tool Health: %s | Permits: %d | Preset: %s | Tools: %s | Active: %d"
              (if (eq mode 'auto) "AUTO" "CONFIRM")
              permits
