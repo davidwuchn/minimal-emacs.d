@@ -1686,19 +1686,42 @@ Then looks up `gptel-auto-workflow-per-task-model-map'.
 Falls back to the default model from the headless fallback chain
 if no per-task mapping exists for this backend."
   (or ;; Phase π: per-target model preference from historical results
-   (and (boundp 'gptel-auto-workflow--current-target)
-        gptel-auto-workflow--current-target
-        (fboundp 'gptel-auto-workflow--best-model-for-target)
-        (gptel-auto-workflow--best-model-for-target
-         gptel-auto-workflow--current-target backend))
-   (and (boundp 'gptel-auto-workflow-per-task-model-map)
+      ;; ASSUMPTION: The historical model must be a known model for this
+      ;; backend (from the per-task model map or fallback chain).  This
+      ;; prevents stale data from injecting wrong models (e.g. kimi-k2.6
+      ;; for DashScope when only qwen3.6-plus is valid).
+      (and (boundp 'gptel-auto-workflow--current-target)
+           gptel-auto-workflow--current-target
+           (fboundp 'gptel-auto-workflow--best-model-for-target)
+           (let ((historical (gptel-auto-workflow--best-model-for-target
+                              gptel-auto-workflow--current-target backend)))
+             (and historical
+                  (gptel-auto-workflow--model-valid-for-backend-p
+                   historical backend agent-type)
+                  historical)))
+      (and (boundp 'gptel-auto-workflow-per-task-model-map)
         (let ((entry (cl-find-if
                       (lambda (e)
                         (and (equal (nth 0 e) agent-type)
                              (equal (nth 1 e) backend)))
                       gptel-auto-workflow-per-task-model-map)))
           (when (consp entry) (cddr entry))))
-   (gptel-auto-workflow--default-model-for-backend backend)))
+    (gptel-auto-workflow--default-model-for-backend backend)))
+
+(defun gptel-auto-workflow--model-valid-for-backend-p (model backend &optional _agent-type)
+  "Return non-nil when MODEL is a known valid model for BACKEND.
+Checks the per-task model map and fallback chains.
+Returns t for unknown backends to avoid false rejections."
+  (let ((expected (gptel-auto-workflow--default-model-for-backend backend)))
+    (or (not (stringp model))
+        (not (stringp backend))
+        (string= model expected)
+        ;; Check per-task model map for alternative valid models
+        (and (boundp 'gptel-auto-workflow-per-task-model-map)
+             (cl-some (lambda (e)
+                        (and (string= (nth 1 e) backend)
+                             (string= (nth 2 e) model)))
+                      gptel-auto-workflow-per-task-model-map)))))
 
 (defun gptel-auto-workflow--default-model-for-backend (backend)
   "Return the default model name for BACKEND from the headless fallback chain.
