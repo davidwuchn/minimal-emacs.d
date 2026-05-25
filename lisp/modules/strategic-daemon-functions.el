@@ -1059,15 +1059,21 @@ Budget: %.0f%% own repos, %.0f%% external."
 
 ;; ─── End Programmatic Source Scheduling ───
 
-(defun gptel-auto-workflow--build-adaptive-followup-prompt (base-prompt accumulated-findings turn 
+(defun gptel-auto-workflow--build-adaptive-followup-prompt (base-prompt accumulated-findings turn
                                                                &optional previous-decision)
   "Build adaptive follow-up prompt with EMA-aware guidance.
 BASE-PROMPT is the original research prompt.
 PREVIOUS-DECISION is the controller decision from the previous turn."
+  ;; ASSUMPTION: base-prompt is a non-empty string
+  (unless (stringp base-prompt)
+    (error "gptel-auto-workflow--build-adaptive-followup-prompt: base-prompt must be a string, got %S" base-prompt))
+  ;; ASSUMPTION: turn is a non-negative integer
+  (unless (and (integerp turn) (>= turn 0))
+    (error "gptel-auto-workflow--build-adaptive-followup-prompt: turn must be a non-negative integer, got %S" turn))
   (let* ((ema-conf gptel-auto-workflow--research-ema-conf)
          (ema-delta (gptel-auto-workflow--research-ema-delta))
          (accumulated-findings (or accumulated-findings ""))
-         (controller-guidance 
+         (controller-guidance
           (cond
            ;; BRANCH: Previous approach was stagnant, try different angle
            ((eq previous-decision 'branch)
@@ -1080,7 +1086,7 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
            ;; Default / first turn
            (t
             "**Continue researching.** Focus on gaps or new angles not covered above. Avoid repeating what was already found.")))
-         (budget-guidance 
+         (budget-guidance
           (if (> turn 1)
               (format "\n\n**Budget Note:** This is turn %d+. EMA confidence: %.2f. Be concise. Focus on highest-impact insights only."
                       (1+ turn) ema-conf)

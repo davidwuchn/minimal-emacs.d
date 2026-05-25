@@ -470,7 +470,7 @@ Returns a short description of what the user was asking for."
            (user-lines (and (listp lines-list)
                             (cl-remove-if-not #'my/gptel--user-line-prefix-p lines-list)))
            (user-list user-lines)
-           (last-user (and user-list (car (last user-list))))
+           (last-user (and (proper-list-p user-list) user-list (car (last user-list))))
            (task (if (and last-user (not (string-empty-p last-user)))
                      (my/gptel--strip-user-prefix last-user)
                    "Continue the task")))

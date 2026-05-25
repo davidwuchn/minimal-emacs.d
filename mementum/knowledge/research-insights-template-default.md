@@ -27,6 +27,8 @@ allium-status: coherent
 - `lisp/modules/gptel-tools-agent-staging-baseline.el` (2 kept / 5 discarded)
 - `lisp/modules/gptel-ext-abort.el` (2 kept / 4 discarded / 2 failed)
 - `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
+- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 13 discarded / 1 failed)
+- `lisp/modules/gptel-ext-context.el` (7 kept / 14 discarded)
 
 ### Structure (deterministic scan)
 
@@ -54,6 +56,40 @@ These targets may need different research patterns or the research findings were
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

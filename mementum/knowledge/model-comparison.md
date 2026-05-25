@@ -36,10 +36,10 @@
 - MiniMax/own-repos-first: 12.5% keep-rate
 - Shared targets: 2 | won 1, won 1, ties 0
 
-## MiniMax/minimax-m2.7-highspeed vs MiniMax/own-repos-first (winner: **MiniMax/minimax-m2.7-highspeed**)
-- MiniMax/minimax-m2.7-highspeed: 31.2% keep-rate
-- MiniMax/own-repos-first: 0.0% keep-rate
-- Shared targets: 2 | won 2, won 0, ties 0
+## MiniMax/none vs MiniMax/persisted-findings (winner: **MiniMax/none**)
+- MiniMax/none: 28.6% keep-rate
+- MiniMax/persisted-findings: 17.4% keep-rate
+- Shared targets: 3 | won 1, won 2, ties 0
 
 ## MiniMax/minimax-m2.7-highspeed vs MiniMax/kimi-k2.6 (winner: **MiniMax/kimi-k2.6**)
 - MiniMax/minimax-m2.7-highspeed: 18.9% keep-rate

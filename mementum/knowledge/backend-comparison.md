@@ -29,27 +29,17 @@
 ## CF-Gateway vs DashScope (winner: **CF-Gateway**)
 - CF-Gateway: 14.3% keep-rate
 - DashScope: 0.0% keep-rate
-- Shared targets: 2 | CF-Gateway won 1, DashScope won 0, ties 1
+- Shared targets: 8 | MiniMax won 8, DashScope won 0, ties 0
 
-## DeepSeek vs DashScope (winner: **DeepSeek**)
-- DeepSeek: 12.5% keep-rate
-- DashScope: 0.0% keep-rate
-- Shared targets: 2 | DeepSeek won 1, DashScope won 0, ties 1
-
-## DashScope vs moonshot (winner: **tie**)
-- DashScope: 0.0% keep-rate
-- moonshot: 0.0% keep-rate
-- Shared targets: 1 | DashScope won 0, moonshot won 0, ties 1
-
-## DeepSeek vs moonshot (winner: **DeepSeek**)
-- DeepSeek: 25.0% keep-rate
-- moonshot: 0.0% keep-rate
-- Shared targets: 1 | DeepSeek won 1, moonshot won 0, ties 0
-
-## DeepSeek vs CF-Gateway (winner: **DeepSeek**)
-- DeepSeek: 25.0% keep-rate
+## MiniMax vs CF-Gateway (winner: **MiniMax**)
+- MiniMax: 18.9% keep-rate
 - CF-Gateway: 0.0% keep-rate
-- Shared targets: 1 | DeepSeek won 1, CF-Gateway won 0, ties 0
+- Shared targets: 5 | MiniMax won 5, CF-Gateway won 0, ties 0
+
+## DashScope vs CF-Gateway (winner: **tie**)
+- DashScope: 0.0% keep-rate
+- CF-Gateway: 0.0% keep-rate
+- Shared targets: 3 | DashScope won 0, CF-Gateway won 0, ties 3
 
 
 *Generated: 2026-05-25 16:00*
