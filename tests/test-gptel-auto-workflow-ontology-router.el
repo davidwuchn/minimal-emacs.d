@@ -1414,5 +1414,44 @@ SPECS is a list of (backend decision days-ago ...) triples."
         (should (string-match-p "DashScope" ctx))
         (should (string-match-p "no rate limit" ctx))))))
 
+;; ─── Auto-Recovery from Probation Tests ───
+
+(ert-deftest tdd/health-auto-recovery/probation-recovers-after-cooldown ()
+  "Backend at probation after old strike should recover to degraded after 1h."
+  (let* ((now (float-time))
+         (old-time (- now 3601))  ; just over 1 hour ago
+         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-last-strike-time (make-hash-table :test 'equal))
+         (gptel-auto-workflow--evolution-next-cycle-hints nil))
+    (puthash "DashScope" 3 gptel-auto-workflow--lambda-strike-count)
+    (puthash "DashScope" old-time gptel-auto-workflow--lambda-last-strike-time)
+    ;; 3 strikes + old timestamp → should be level 2 (degraded), not 3 (probation)
+    (should (= 2 (gptel-auto-workflow--backend-health-level "DashScope")))
+    (should (= 0.65 (gptel-auto-workflow--backend-health-weight "DashScope")))))
+
+(ert-deftest tdd/health-auto-recovery/recent-strike-stays-probation ()
+  "Backend with recent strike should stay at probation level."
+  (let* ((now (float-time))
+         (recent-time (- now 60))  ; 1 minute ago
+         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-last-strike-time (make-hash-table :test 'equal))
+         (gptel-auto-workflow--evolution-next-cycle-hints nil))
+    (puthash "MiniMax" 3 gptel-auto-workflow--lambda-strike-count)
+    (puthash "MiniMax" recent-time gptel-auto-workflow--lambda-last-strike-time)
+    ;; 3 strikes + recent timestamp → still level 3 (probation)
+    (should (= 3 (gptel-auto-workflow--backend-health-level "MiniMax")))))
+
+(ert-deftest tdd/health-auto-recovery/healthy-backends-unaffected ()
+  "Healthy backend should not be affected by auto-recovery logic."
+  (let* ((gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-last-strike-time (make-hash-table :test 'equal))
+         (gptel-auto-workflow--evolution-next-cycle-hints nil))
+    ;; 0 strikes → healthy
+    (should (= 0 (gptel-auto-workflow--backend-health-level "DeepSeek")))
+    (should (= 1.0 (gptel-auto-workflow--backend-health-weight "DeepSeek")))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

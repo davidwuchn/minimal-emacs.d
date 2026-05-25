@@ -995,6 +995,15 @@ Reset to 0 when :healthy.")
   "Timestamp when DEAD backends can be retried (exponential backoff).
 Key: backend name, value: float-time when retest is allowed.")
 
+(defvar gptel-auto-workflow--lambda-last-strike-time (make-hash-table :test 'equal)
+  "Timestamp of the most recent lambda degradation per backend.
+Used for auto-recovery: if no new strikes for > 1 hour, probation
+backends auto-demote to degraded level 2.")
+
+(defconst gptel-auto-workflow--probation-recovery-seconds 3600
+  "Seconds before a probation backend auto-recovers to degraded.
+After this period without new strikes, level 3 → level 2.")
+
 (defun gptel-auto-workflow--backend-health-level (backend)
   "Return health level for BACKEND: 0-4.
 0=HEALTHY (full trust), 1=WARNING (-15%%), 2=DEGRADED (-35%%),
@@ -1015,8 +1024,14 @@ Probation threshold auto-tunes from VSM health when available
      (dead-until 3)
      ;; 5+ strikes → DEAD with exponential backoff
      ((>= strikes 5) 4)
-     ;; probation-threshold..4 strikes → PROBATION (canary tasks only)
-     ((>= strikes probation-threshold) 3)
+      ;; probation-threshold..4 strikes → PROBATION (canary tasks only)
+      ;; Auto-recovery: if last strike was > 1h ago, degrade to level 2
+      ((>= strikes probation-threshold)
+       (let ((last-strike (gethash backend gptel-auto-workflow--lambda-last-strike-time)))
+         (if (and last-strike
+                  (> (float-time) (+ last-strike gptel-auto-workflow--probation-recovery-seconds)))
+             2    ; auto-recovered: probation → degraded
+           3)))
      ;; 2 strikes → DEGRADED (reduced weight)
      ((>= strikes 2) 2)
      ;; 1 strike → WARNING (slight penalty)
@@ -1374,16 +1389,18 @@ DEGRADED → increments strikes, triggers actions at each level:
   (let ((count (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
         (old-level (gptel-auto-workflow--backend-health-level backend)))
     (pcase status
-      (:healthy
-       (puthash backend 0 gptel-auto-workflow--lambda-strike-count)
-       (remhash backend gptel-auto-workflow--lambda-dead-until)
-       (when (>= old-level 1)
-         (message "[verbum] ✓ %s recovered: %s→HEALTHY (strikes cleared)"
-                  backend (gptel-auto-workflow--backend-health-label backend))))
-      (:degraded
-       (let* ((new-count (1+ count))
-              (new-level (gptel-auto-workflow--backend-health-level backend)))
-         (puthash backend new-count gptel-auto-workflow--lambda-strike-count)
+       (:healthy
+        (puthash backend 0 gptel-auto-workflow--lambda-strike-count)
+        (remhash backend gptel-auto-workflow--lambda-dead-until)
+        (remhash backend gptel-auto-workflow--lambda-last-strike-time)
+        (when (>= old-level 1)
+          (message "[verbum] ✓ %s recovered: %s→HEALTHY (strikes cleared)"
+                   backend (gptel-auto-workflow--backend-health-label backend))))
+       (:degraded
+        (let* ((new-count (1+ count))
+               (new-level (gptel-auto-workflow--backend-health-level backend)))
+          (puthash backend new-count gptel-auto-workflow--lambda-strike-count)
+          (puthash backend (float-time) gptel-auto-workflow--lambda-last-strike-time)
          (pcase new-level
            (1 (message "[verbum] ⚠ WARNING %s: 1 strike (lambda degraded)" backend))
            (2 (message "[verbum] ⚠ DEGRADED %s: 2 strikes (routing weight -35%%)" backend))
