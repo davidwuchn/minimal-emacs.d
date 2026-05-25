@@ -1,0 +1,1 @@
+{"name":"dynamic-template","version":"1.0","hypothesis":"Selecting template architecture based on computed code complexity improves focus","axis":"A","components":["template-selection","complexity-metrics"]}

@@ -908,28 +908,34 @@ ASSUMPTION: Model names may include backend prefixes (e.g., \"moonshot/kimi-k2.6
 EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'.
   Also checks dynamically-bound gptel-model/gptel-backend since
   the :before advice runs before gptel populates :model in info."
-  (let* ((model (or (plist-get info :model)
-                    ;; :before advice runs before :model is in info plist.
-                    ;; Use the dynamically-bound gptel-model or backend name.
-                    (and (boundp 'gptel-model) gptel-model
-                         (if (stringp gptel-model) gptel-model (symbol-name gptel-model)))
-                    (and (boundp 'gptel-backend) gptel-backend
-                         (if (fboundp 'gptel-backend-name)
-                             (gptel-backend-name gptel-backend)
-                           (format "%s" gptel-backend)))))
+  (let* ((model (my/gptel--resolve-model-name info))
+         (model-str (my/gptel--normalize-model-str model))
          (global-limit (or my/gptel-payload-byte-limit my/gptel--unbounded-byte-limit))
          (model-limit
-          (if (stringp model)
-              (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
-                       when (string-match (regexp-quote pattern) model)
-                       return limit)
-            nil)))
+          (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
+                   when (string-match (regexp-quote pattern) model-str)
+                   return limit)))
     (if model-limit
-        ;; Model has a declared limit — use it directly.
-        ;; The global limit is a safety net for unknown/unlisted models.
         model-limit
-      ;; Unknown model: use global limit as safety net.
       global-limit)))
+
+(defun my/gptel--resolve-model-name (info)
+  "Resolve the model name from INFO plist or dynamic bindings.
+Returns a string or nil if no model can be determined."
+  (or (plist-get info :model)
+      (and (boundp 'gptel-model) gptel-model
+           (if (stringp gptel-model) gptel-model (symbol-name gptel-model)))
+      (and (boundp 'gptel-backend) gptel-backend
+           (if (fboundp 'gptel-backend-name)
+               (gptel-backend-name gptel-backend)
+             (format "%s" gptel-backend)))))
+
+(defun my/gptel--normalize-model-str (model)
+  "Return MODEL as a string. Handles string, symbol, or nil."
+  (cond
+   ((stringp model) model)
+   ((symbolp model) (symbol-name model))
+   (t (format "%s" model))))
 
 (defconst my/gptel--compaction-passes
   `((1 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i 1 t))
