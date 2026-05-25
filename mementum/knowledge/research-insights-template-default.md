@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 1.9/10
+insight-quality: 2.1/10
 allium-issues: 0
 allium-severity: 0.00
 allium-status: coherent
@@ -11,43 +11,44 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 1323 experiments (19% keep rate).*
+*Consolidated from 1120 experiments (21% keep rate).*
 
-**Performance:** 249 kept / 686 discarded / 96 failed (EXTRACTED — from TSV)
+**Performance:** 236 kept / 588 discarded / 36 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-ext-tool-permits.el` (3 kept / 2 discarded)
-- `lisp/modules/gptel-benchmark-comparator.el` (3 kept / 14 discarded / 1 failed)
-- `lisp/modules/gptel-tools-memory.el` (12 kept / 20 discarded)
-- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
-- `lisp/modules/gptel-benchmark-core.el` (20 kept / 31 discarded / 5 failed)
-- `lisp/modules/gptel-benchmark-principles.el` (5 kept / 4 discarded / 1 failed)
-- `lisp/modules/gptel-tools-agent-staging-baseline.el` (2 kept / 5 discarded)
-- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-ext-abort.el` (2 kept / 4 discarded / 2 failed)
-- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
+- `lisp/modules/strategic-daemon-functions.el` (5 kept / 2 discarded / 1 failed)
+- `lisp/modules/gptel-benchmark-analysis.el` (1 kept / 2 discarded)
+- `lisp/modules/gptel-ext-abort.el` (3 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-auto-workflow-mementum.el` (1 kept / 1 discarded)
+- `lisp/modules/gptel-benchmark-principles.el` (2 kept / 3 discarded / 1 failed)
+- `lisp/modules/standalone-research.el` (1 kept / 3 discarded)
+- `lisp/modules/gptel-tools-agent-experiment-loop.el` (5 kept / 6 discarded)
+- `lisp/modules/gptel-auto-workflow-research-benchmark.el` (2 kept / 2 discarded)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (15 kept / 35 discarded / 3 failed)
+- `lisp/modules/gptel-tools-memory.el` (2 kept / 6 discarded / 1 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: my/gptel-tool-permitted-p, my/gptel-permit-tool, my/gptel-clear-permits, my/gptel--sync-to-upstream, my/gptel-toggle-confirm, my/gptel-show-permits, my/gptel-emergency-stop, my/gptel-health-check, my/gptel-setup-tool-ui
-defvars: my/gptel-confirm-mode, my/gptel-permitted-tools
-requires: gptel
-provides: gptel-ext-tool-permits
-errors: error
-handlers: err
+defuns: gptel-auto-workflow--autotts-root, gptel-auto-workflow--autotts-file, gptel-auto-workflow--load-evolved-controller-config, gptel-auto-workflow--branch-pool-init, gptel-auto-workflow--branch-pool-active-count, gptel-auto-workflow--branch-pool-add, gptel-auto-workflow--branch-pool-remove, gptel-auto-workflow--branch-pool-get-best, gptel-auto-workflow--branch-pool-get-deviant, gptel-auto-workflow--branch-pool-stagnation-p, gptel-auto-workflow--branch-pool-widen, gptel-auto-workflow--research-beta-schedule, gptel-auto-workflow--update-research-ema, gptel-auto-workflow--research-ema-delta, gptel-auto-workflow--record-research-trace, gptel-auto-workflow--reset-research-ema, gptel-auto-workflow--load-statistical-model, gptel-auto-workflow--load-researcher-feedback, gptel-auto-workflow--load-skill-topic-priors, gptel-auto-workflow--load-autotts-controller
+defvars: gptel-auto-workflow--research-accumulated-findings), gptel-auto-workflow--research-total-tokens), gptel-auto-workflow--research-current-turn), gptel-auto-workflow--research-prompt), gptel-auto-workflow--research-controller-config), gptel-auto-workflow--current-research-context), gptel-auto-workflow--research-beta, gptel-auto-workflow--research-ema-conf, gptel-auto-workflow--research-ema-history, gptel-auto-workflow--research-ema-alpha, gptel-auto-workflow--research-ema-window, gptel-auto-workflow--controller-decision-history, gptel-auto-workflow--controller-doom-loop-threshold, gptel-auto-workflow--research-trace-log, gptel-auto-workflow--branch-pool, gptel-auto-workflow--branch-pool-max, gptel-auto-workflow--branch-id-counter, gptel-auto-workflow--source-effectiveness-table, gptel-auto-workflow--research-params-file
+requires: cl-lib, json, subr-x
+provides: strategic-daemon-functions
+declares: gptel-sandbox--eval-expr, gptel-auto-workflow--normalize-response, gptel-auto-workflow--research-has-external-content-p, gptel-auto-workflow--research-error-p, gptel-auto-workflow--local-research-patterns, gptel-auto-workflow--estimate-confidence, gptel-auto-workflow--log-research-step, gptel-auto-workflow--format-research-strategy-prompt, gptel-auto-workflow--save-research-trace, gptel-auto-workflow--digest-research-findings, gptel-auto-workflow--statistical-prob-kept, gptel-benchmark-call-subagent
+errors: error, signal
+handlers: err, err, err, nil, err, err
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-tools-agent-subagent.el` (1 failed)
-- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
-- `lisp/modules/nucleus-tools.el` (6 kept / 14 discarded / 3 failed)
-- `lisp/modules/nucleus-tools-validate.el` (5 kept / 10 discarded / 1 failed)
-- `lisp/modules/gptel-tools-agent.el` (8 kept / 22 discarded / 4 failed)
+- `lisp/modules/gptel-benchmark-principles.el` (2 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-ext-core.el` (1 kept / 10 discarded / 1 failed)
+- `lisp/modules/gptel-tools-memory.el` (2 kept / 6 discarded / 1 failed)
+- `lisp/modules/gptel-ext-abort.el` (3 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 7 discarded / 1 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -56,41 +57,11 @@ These targets may need different research patterns or the research findings were
 - Try combining with git history for recency bias.
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-(reasoning . <think>
-The user is asking me to "distill" this massive research strategy document. Looking at the content, this appears to be a template-default research strategy with an enormous number of hypotheses (many hundreds) that were generated across 1323 experiments across various target files in the gptel codebase.
-
-The user wants me to distill this down to something more manageable. Let me analyze what these hypotheses have in common and distill them into meaningful categories.
-
-Looking at the patterns in the hypotheses:
-
-1. **Validation Guards** - Many hypotheses are about adding `proper-list-p`, `listp`, `nil` guards, type validation before operations
-2. **Cache/Memoization** - Adding caches to reduce redundant computations
-3. **Bug Fixes** - Fixing incorrect logic (off-by-one, wrong conditionals, incorrect type checks)
-4. **Helper Extraction** - Extracting duplicated code into named functions
-5. **Performance** - Replacing O(n²) with O(n), using `copy-hash-table` instead of manual maphash, etc.
-6. **Code Structure** - Fixing misplaced `provide` statements, dead code removal
-7. **Error Handling** - Wrapping with `condition-case`, `ignore-errors`
-
-Let me distill this into a coherent summary that captures the essence of the research strategy without the overwhelming detail.
-</think>)
+nil
 ```
 

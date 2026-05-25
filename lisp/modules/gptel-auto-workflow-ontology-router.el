@@ -421,16 +421,19 @@ STRATEGY and TARGET filter the performance data.
     (dolist (entry static-fallbacks)
       (let* ((backend (car entry))
              (model (cdr entry))
-             ;; All-time category stats
-             (all-stats (if category
-                            (gptel-auto-workflow--get-category-performance-stats backend category strategy)
-                          (gptel-auto-workflow--get-backend-performance-stats backend strategy target)))
-             (all-rate (plist-get all-stats :keep-rate))
-             (all-total (plist-get all-stats :total))
-             ;; Recent stats for trend
-             (recent-stats (when category
-                             (gptel-auto-workflow--get-recent-performance-stats backend category strategy)))
-             (recent-rate (plist-get recent-stats :keep-rate))
+              ;; All-time category stats
+              (all-stats (if category
+                             (gptel-auto-workflow--get-category-performance-stats backend category strategy)
+                           (gptel-auto-workflow--get-backend-performance-stats backend strategy target)))
+              (all-raw-rate (plist-get all-stats :keep-rate))
+              (all-total (plist-get all-stats :total))
+              ;; Bayesian floor: backends with < 3 experiments get 0.25
+              ;; to avoid cold-start bias from a single discarded experiment.
+              (all-rate (if (or (null all-raw-rate) (< all-total 3)) 0.25 all-raw-rate))
+              ;; Recent stats for trend
+              (recent-stats (when category
+                              (gptel-auto-workflow--get-recent-performance-stats backend category strategy)))
+              (recent-rate (plist-get recent-stats :keep-rate))
              ;; Quota health
              (quota (gptel-auto-workflow--backend-quota-health backend))
              (healthy (plist-get quota :healthy))
