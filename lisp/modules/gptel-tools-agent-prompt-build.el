@@ -1602,6 +1602,38 @@ is exhausted, the other is too — so DeepSeek gets priority over both."
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-per-task-model-map
+  '(("analyzer"   "DashScope"  . "qwen3.6-plus")
+    ("analyzer"   "DeepSeek"   . "deepseek-v4-flash")
+    ("analyzer"   "moonshot"   . "kimi-k2.6")
+    ("grader"     "DashScope"  . "qwen3.6-plus")
+    ("grader"     "DeepSeek"   . "deepseek-v4-flash")
+    ("grader"     "moonshot"   . "kimi-k2.6")
+    ("executor"   "DashScope"  . "qwen3.6-plus")
+    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
+    ("executor"   "moonshot"   . "kimi-k2.6")
+    ("researcher" "DashScope"  . "qwen3.6-plus")
+    ("researcher" "DeepSeek"   . "deepseek-v4-flash")
+    ("researcher" "moonshot"   . "kimi-k2.6")
+    ("reviewer"   "DashScope"  . "qwen3.6-plus")
+    ("reviewer"   "DeepSeek"   . "deepseek-v4-pro")
+    ("reviewer"   "moonshot"   . "kimi-k2.6")
+    ("comparator" "DashScope"  . "qwen3.6-plus")
+    ("comparator" "DeepSeek"   . "deepseek-v4-flash")
+    ("comparator" "moonshot"   . "kimi-k2.6"))
+  "Per-task-type model selection for each backend.
+Each element is (AGENT-TYPE BACKEND . MODEL).
+When selecting a backend+model pair for AGENT-TYPE, this map takes
+priority over the static fallback lists — ensuring code-generation
+tasks (executor) use the capable deepseek-v4-pro while analysis tasks
+(analyzer, grader) use the faster deepseek-v4-flash.
+Backend entries not listed here fall back to their default model from
+`gptel-auto-workflow-headless-subagent-fallbacks`."
+  :type '(repeat (list (string :tag "Agent type")
+                       (string :tag "Backend")
+                       (string :tag "Model")))
+  :group 'gptel-tools-agent)
+
 (defvar gptel-auto-workflow--runtime-subagent-provider-overrides nil
   "Per-run provider overrides activated by live workflow failures.
 
@@ -1637,7 +1669,7 @@ and advance through the configured fallback chain instead.")
   (when (keywordp backend-name)
     (setq backend-name (substring (symbol-name backend-name) 1)))
   (let ((host (alist-get backend-name gptel-auto-workflow--backend-key-hosts
-                           nil nil #'string=)))
+                            nil nil #'string=)))
     (cond
      ((and host (fboundp 'my/gptel-api-key))
       (gptel-auto-workflow--non-empty-string-p
@@ -1646,6 +1678,31 @@ and advance through the configured fallback chain instead.")
      ;; Unknown backends have no auth-source host mapping, so a bound backend
      ;; object is the only availability signal we can use.
      (t (gptel-auto-workflow--backend-object backend-name)))))
+
+(defun gptel-auto-workflow--best-model-for-task (agent-type backend)
+  "Return the best MODEL for AGENT-TYPE when using BACKEND.
+Looks up `gptel-auto-workflow-per-task-model-map' first.
+Falls back to the default model from the headless fallback chain
+if no per-task mapping exists for this backend."
+  (or (and (boundp 'gptel-auto-workflow-per-task-model-map)
+           (let ((entry (cl-find-if
+                         (lambda (e)
+                           (and (equal (nth 0 e) agent-type)
+                                (equal (nth 1 e) backend)))
+                         gptel-auto-workflow-per-task-model-map)))
+             (when (consp entry) (nth 2 entry))))
+      (gptel-auto-workflow--default-model-for-backend backend)))
+
+(defun gptel-auto-workflow--default-model-for-backend (backend)
+  "Return the default model name for BACKEND from the headless fallback chain.
+If BACKEND is not found, returns \"unknown\"."
+  (or (and (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+           (cdr (assoc backend gptel-auto-workflow-headless-subagent-fallbacks
+                       :test #'string=)))
+      (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+           (cdr (assoc backend gptel-auto-workflow-executor-rate-limit-fallbacks
+                       :test #'string=)))
+      "unknown"))
 
 (defun gptel-auto-workflow--headless-provider-override-active-p ()
   "Return non-nil when headless auto-workflow provider override should apply."
@@ -1804,10 +1861,13 @@ chain so that subagent calls do not fall through to the mode-hook default
               (let ((pick (gptel-auto-workflow--first-available-provider-candidate
                            candidates excluded)))
                 (when pick
-                  (message "[subagent] %s base-preset auto-selected %s/%s"
-                           agent-type (car pick) (cdr pick))
-                  (setq merged (plist-put merged :backend (car pick)))
-                  (setq merged (plist-put merged :model (cdr pick)))))
+                  (let ((task-model (and (fboundp 'gptel-auto-workflow--best-model-for-task)
+                                        (gptel-auto-workflow--best-model-for-task
+                                         agent-type (car pick)))))
+                    (message "[subagent] %s base-preset auto-selected %s/%s"
+                             agent-type (car pick) (or task-model (cdr pick)))
+                    (setq merged (plist-put merged :backend (car pick)))
+                    (setq merged (plist-put merged :model (or task-model (cdr pick)))))))
             ;; Headless active but no candidates: fall back to
             ;; gptel-backend so the call goes through.
             (when (and (null (plist-get merged :backend))
