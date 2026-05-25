@@ -196,6 +196,9 @@ Cache is invalidated after 5 minutes to avoid stale data.")
 (defvar gptel-auto-workflow--analyzer-quota-exhausted nil
   "Non-nil when analyzer target selection hit provider quota limits.")
 
+(defvar gptel-auto-workflow--analyzer-failed-backends nil
+  "Backend names to skip when retrying analyzer target selection.")
+
 (defun gptel-auto-workflow--clear-analyzer-error-state ()
   "Reset analyzer target-selection error flags before a fresh attempt."
   (setq gptel-auto-workflow--analyzer-transient-failure nil
@@ -210,8 +213,9 @@ Cache is invalidated after 5 minutes to avoid stale data.")
            (gptel-auto-workflow--rate-limit-failover-candidates "analyzer")))
       (and (listp candidates)
            (gptel-auto-workflow--first-available-provider-candidate
-            candidates
-            gptel-auto-workflow--rate-limited-backends)))))
+             candidates
+             (append gptel-auto-workflow--analyzer-failed-backends
+                     gptel-auto-workflow--rate-limited-backends))))))
 
 (defun gptel-auto-workflow--normalized-cache-key (&optional proj-root)
   "Return normalized cache key for PROJ-ROOT.
@@ -1511,35 +1515,50 @@ EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget 
                                     0)
                                 gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
-                  context research-findings max-targets)))
+                   context research-findings max-targets)))
     (if (and gptel-auto-experiment-use-subagents
-             (fboundp 'gptel-benchmark-call-subagent))
+              (fboundp 'gptel-benchmark-call-subagent))
         (cl-labels
             ((request-analyzer (attempt)
-               (gptel-benchmark-call-subagent
-                'analyzer
-                "Select targets"
-                prompt
-                (lambda (result)
-                  (let* ((targets (gptel-auto-workflow--parse-targets result))
-                         (candidate
-                          (and (zerop attempt)
-                               (null targets)
-                               (or gptel-auto-workflow--analyzer-quota-exhausted
-                                   gptel-auto-workflow--analyzer-transient-failure)
-                               (gptel-auto-workflow--analyzer-failover-candidate))))
-                    (if candidate
-                        (progn
-                          (message "[auto-workflow] Retrying analyzer target selection with %s/%s"
-                                   (car candidate)
-                                   (cdr candidate))
-                          (gptel-auto-workflow--clear-analyzer-error-state)
-                          (let ((att (1+ attempt)))
-                            (run-with-timer 0 nil
-                                            (lambda () (request-analyzer att)))))
-                      (funcall callback targets))))
-                analyzer-timeout)))
+               (let ((attempt-candidate
+                      (gptel-auto-workflow--analyzer-failover-candidate)))
+                 (gptel-benchmark-call-subagent
+                  'analyzer
+                  "Select targets"
+                  prompt
+                  (lambda (result)
+                    (let* ((targets (gptel-auto-workflow--parse-targets result))
+                           (failed-backend
+                            (and (null targets)
+                                 (or gptel-auto-workflow--analyzer-quota-exhausted
+                                     gptel-auto-workflow--analyzer-transient-failure)
+                                 (or (car-safe attempt-candidate)
+                                     (and (plistp gptel-agent-preset)
+                                          (gptel-auto-workflow--preset-backend-name
+                                           (plist-get gptel-agent-preset :backend)))))))
+                      (when (and failed-backend
+                                 (not (member failed-backend
+                                              gptel-auto-workflow--analyzer-failed-backends)))
+                        (push failed-backend
+                              gptel-auto-workflow--analyzer-failed-backends))
+                      (if-let* ((candidate
+                                 (and (zerop attempt)
+                                      (null targets)
+                                      (or gptel-auto-workflow--analyzer-quota-exhausted
+                                          gptel-auto-workflow--analyzer-transient-failure)
+                                      (gptel-auto-workflow--analyzer-failover-candidate))))
+                          (progn
+                            (message "[auto-workflow] Retrying analyzer target selection with %s/%s"
+                                     (car candidate)
+                                     (cdr candidate))
+                            (gptel-auto-workflow--clear-analyzer-error-state)
+                            (let ((att (1+ attempt)))
+                              (run-with-timer 0 nil
+                                              (lambda () (request-analyzer att)))))
+                        (funcall callback targets))))
+                  analyzer-timeout))))
           (message "[auto-workflow] Asking analyzer to select targets...")
+          (setq gptel-auto-workflow--analyzer-failed-backends nil)
           (request-analyzer 0))
       (funcall callback nil))))
 

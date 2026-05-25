@@ -2,9 +2,22 @@
 
 > Last session: 2026-05-23
 
-## Current Session: Deep Debugging + gptel Payload Fix
+## Current Session: Provider Routing + Analyzer Failover
 
-**Status:** Researcher scope + allium/persisted-budget bugs fixed. 1940 ERT unit tests, 0 unexpected.
+**Status:** Fixed `listp "MiniMax"`, `listp "qwen3.6-plus"`, non-executor MiniMax ranking, and analyzer retry loops. Live daemon now routes analyzer to DashScope first and skips it to DeepSeek after timeout.
+
+### Bugs Fixed (2026-05-25)
+
+1. **`listp "MiniMax"` analyzer crash**: `gptel-auto-workflow--default-model-for-backend` used an `assoc` comparator that called `(car b)`, but Emacs passes the candidate key string as `b`. Replaced with `#'string=` and keyword normalization.
+2. **Malformed fallback candidates hardening**: `gptel-auto-workflow--first-available-provider-candidate` now ignores non-cons/non-string entries instead of crashing on `(car entry)`.
+3. **Analyzer MiniMax ranking leak**: non-executor subagents now use `gptel-auto-workflow-headless-subagent-fallbacks` directly; ontology/ranked backend history remains executor-only.
+4. **Headless fallback order**: default and legacy migration now use DashScope -> DeepSeek -> moonshot -> CF-Gateway -> MiniMax.
+5. **`listp "qwen3.6-plus"` model-map crash**: `gptel-auto-workflow-per-task-model-map` stores dotted entries like `("analyzer" "DashScope" . "qwen3.6-plus")`; `best-model-for-task` now reads `(cddr entry)` instead of `(nth 2 entry)`.
+6. **Analyzer retry repeated same timed-out provider**: analyzer target selection records failed analyzer backends and `gptel-benchmark-call-subagent` excludes them for analyzer retries, so DashScope timeout advances to DeepSeek.
+
+**Verification:** 6 targeted ERT regressions passed: malformed provider candidate, non-executor chain bypassing ranked history, dotted model-map, legacy fallback migration, analyzer failed-backend exclusion, analyzer quota smoke. Byte-compile of modified modules completed with existing warnings only.
+
+**Live proof:** `emacs-34045.log` shows analyzer selected `DashScope/qwen3.6-plus`; after the 300s timeout, live failover candidate was `DeepSeek/deepseek-v4-flash` with `DashScope` in analyzer failed/rate-limited lists.
 
 ### Bugs Fixed (2026-05-23, follow-up)
 

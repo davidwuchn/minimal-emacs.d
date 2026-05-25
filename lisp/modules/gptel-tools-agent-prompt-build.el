@@ -1566,13 +1566,13 @@ exhaustion.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("DashScope" . "qwen3.6-plus")
-    ("moonshot" . "kimi-k2.6")
     ("DeepSeek" . "deepseek-v4-flash")
+    ("moonshot" . "kimi-k2.6")
     ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
     ("MiniMax" . "minimax-m2.7-highspeed"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
-DashScope first (faster, more reliable), then Moonshot, DeepSeek, CF-Gateway, MiniMax."
+DashScope first (faster, more reliable), then DeepSeek, Moonshot, CF-Gateway, MiniMax."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
@@ -1583,7 +1583,7 @@ DashScope first (faster, more reliable), then Moonshot, DeepSeek, CF-Gateway, Mi
 
 DashScope is preferred for headless runs (faster, independent quota).
 The fallback chain DNS-polls through DashScope, DeepSeek, moonshot,
-MiniMax, then CF-Gateway."
+CF-Gateway, then MiniMax."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 
@@ -1689,19 +1689,23 @@ if no per-task mapping exists for this backend."
                          (lambda (e)
                            (and (equal (nth 0 e) agent-type)
                                 (equal (nth 1 e) backend)))
-                         gptel-auto-workflow-per-task-model-map)))
-             (when (consp entry) (nth 2 entry))))
+                          gptel-auto-workflow-per-task-model-map)))
+              (when (consp entry) (cddr entry))))
       (gptel-auto-workflow--default-model-for-backend backend)))
 
 (defun gptel-auto-workflow--default-model-for-backend (backend)
   "Return the default model name for BACKEND from the headless fallback chain.
 If BACKEND is not found, returns \"unknown\"."
-  (or (and (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+  (when (keywordp backend)
+    (setq backend (substring (symbol-name backend) 1)))
+  (or (and (stringp backend)
+           (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
            (cdr (assoc backend gptel-auto-workflow-headless-subagent-fallbacks
-                       (lambda (a b) (string= a (car b))))))
-      (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                       #'string=)))
+      (and (stringp backend)
+           (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
            (cdr (assoc backend gptel-auto-workflow-executor-rate-limit-fallbacks
-                       (lambda (a b) (string= a (car b))))))
+                       #'string=)))
       "unknown"))
 
 (defun gptel-auto-workflow--headless-provider-override-active-p ()
@@ -1748,16 +1752,21 @@ the user has not explicitly customized the variable."
         (push 'gptel-auto-workflow-headless-fallback-agents migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-headless-subagent-fallbacks)
-      (when (equal gptel-auto-workflow-headless-subagent-fallbacks
-                   '(("MiniMax" . "minimax-m2.7-highspeed")
-                     ("DashScope" . "qwen3.6-plus")
-                     ("DeepSeek" . "deepseek-chat")
-                     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-                     ("Gemini" . "gemini-3.1-pro-preview")))
+      (when (member gptel-auto-workflow-headless-subagent-fallbacks
+                    '((("MiniMax" . "minimax-m2.7-highspeed")
+                       ("DashScope" . "qwen3.6-plus")
+                       ("DeepSeek" . "deepseek-chat")
+                       ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+                       ("Gemini" . "gemini-3.1-pro-preview"))
+                      (("DashScope" . "qwen3.6-plus")
+                       ("moonshot" . "kimi-k2.6")
+                       ("DeepSeek" . "deepseek-v4-flash")
+                       ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
+                       ("MiniMax" . "minimax-m2.7-highspeed"))))
         (setq gptel-auto-workflow-headless-subagent-fallbacks
-              '(("moonshot" . "kimi-k2.6")
-                ("DashScope" . "qwen3.6-plus")
+              '(("DashScope" . "qwen3.6-plus")
                 ("DeepSeek" . "deepseek-v4-flash")
+                ("moonshot" . "kimi-k2.6")
                 ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
                 ("MiniMax" . "minimax-m2.7-highspeed")))
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
@@ -1825,9 +1834,7 @@ Returns the static fallback chain as a last resort."
              (gptel-auto-workflow--ranked-subagent-backends))
         gptel-auto-workflow-executor-rate-limit-fallbacks))
    ((member agent-type gptel-auto-workflow-headless-fallback-agents)
-    (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
-             (gptel-auto-workflow--ranked-subagent-backends))
-        gptel-auto-workflow-headless-subagent-fallbacks))))
+    gptel-auto-workflow-headless-subagent-fallbacks)))
 
 (defun gptel-auto-workflow--agent-base-preset (agent-type)
   "Return the current base preset plist for AGENT-TYPE, or nil when unavailable.
