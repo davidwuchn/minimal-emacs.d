@@ -805,15 +805,28 @@ MAX-SUGGESTIONS limits results (default 5)."
 
 (defun gptel-auto-workflow--ontology-fallback-advice (orig-fun &rest args)
   "Advice around experiment runner to apply ontology fallback ordering.
-Reorders fallback chain before each experiment based on historical performance."
+Reorders fallback chain before each experiment based on historical performance.
+After each experiment, copies any new rate-limited backends into the per-run
+cooldown list so subsequent experiments hard-exclude failed backends."
   (let* ((target (car args))
-         (strategy nil))
+         (strategy nil)
+         (prior-rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                                  (copy-sequence gptel-auto-workflow--rate-limited-backends))))
     ;; Apply ontology-ordered fallbacks
     (gptel-auto-workflow--apply-ontology-fallback-order strategy target)
     ;; Run the experiment
     (unwind-protect
         (apply orig-fun args)
-      ;; Reset to static order after experiment
+      ;; After experiment: any NEW rate-limited backends → per-run cooldown
+      (let ((new-failures (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                               (cl-set-difference gptel-auto-workflow--rate-limited-backends
+                                                  prior-rate-limited
+                                                  :test #'string=))))
+        (dolist (b new-failures)
+          (unless (member b gptel-auto-workflow--run-failed-backends)
+            (push b gptel-auto-workflow--run-failed-backends)
+            (message "[cooldown] %s added to per-run exclusion list" b))))
+      ;; Reset to static order (ontology re-evaluates fresh each time)
       (gptel-auto-workflow--reset-fallback-order))))
 
 ;; Enabled: ontology-aware fallback reordering on every experiment
@@ -1215,6 +1228,18 @@ Persisted to `gptel-auto-workflow--preference-persist-file'."
              (fboundp 'gptel-auto-workflow--worktree-base-root))
     (gptel-auto-workflow--load-backend-preference)))
 
+;; ─── Per-Run Backend Cooldown ───
+
+(defvar gptel-auto-workflow--run-failed-backends nil
+  "List of backend names that failed during the current run.
+Backends in this list are excluded from routing for the remainder
+of the run. Cleared when a new run starts via `gptel-auto-workflow--clear-run-failed-backends'.")
+
+(defun gptel-auto-workflow--clear-run-failed-backends ()
+  "Clear the per-run backend cooldown list.
+Call at the start of a new workflow run."
+  (setq gptel-auto-workflow--run-failed-backends nil))
+
 (defun gptel-auto-workflow--ranked-subagent-backends (&optional agent-type)
   "Return ordered backend/model alist for subagent routing.
 Ranks backends by health-weight × historical-keep-rate, best first.
@@ -1260,6 +1285,9 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                                 (gptel-auto-workflow--backend-quarantined-p backend)))
               (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
                                  (member backend gptel-auto-workflow--rate-limited-backends)))
+              ;; Per-run cooldown: backends that failed this run are excluded
+              (cooldown (and (boundp 'gptel-auto-workflow--run-failed-backends)
+                             (member backend gptel-auto-workflow--run-failed-backends)))
               ;; Task-specific preference boost: shifts score for backends
               ;; known to excel at particular agent types.
               (pref-boost (if (and agent-type (stringp agent-type)
@@ -1275,6 +1303,7 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
               (score (cond
                       (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
                       (quarantined -1.0)       ; health gate: hard exclude
+                      (cooldown -1.0)           ; per-run: hard exclude
                       (rate-limited 0.01)      ; demoted but still available as last resort
                        (t (+ (* health keep-rate) pref-boost
                              (gptel-auto-workflow--axis-preference-boost backend))))))

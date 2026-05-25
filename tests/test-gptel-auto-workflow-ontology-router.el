@@ -1304,5 +1304,64 @@ SPECS is a list of (backend decision days-ago ...) triples."
       (let* ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
         (should (string= "DeepSeek" (caar ranked)))))))
 
+;; ─── Per-Run Backend Cooldown Tests ───
+
+(ert-deftest tdd/run-cooldown/cooldown-excludes-failed-backend ()
+  "Backends in the run cooldown list should be excluded from ranking."
+  (let ((gptel-auto-workflow--run-failed-backends '("DashScope"))
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--task-backend-preference nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (= 2 (length ranked)))
+        (should-not (assoc "DashScope" ranked))
+        (should (assoc "DeepSeek" ranked))
+        (should (assoc "MiniMax" ranked))))))
+
+(ert-deftest tdd/run-cooldown/empty-cooldown-allows-all ()
+  "Empty cooldown list should not exclude any backends."
+  (let ((gptel-auto-workflow--run-failed-backends nil)
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--task-backend-preference nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (= 2 (length ranked)))
+        (should (assoc "DashScope" ranked))
+        (should (assoc "DeepSeek" ranked))))))
+
+(ert-deftest tdd/run-cooldown/clear-cooldown-resets-exclusions ()
+  "Clearing the cooldown list should bring failed backends back."
+  (let ((gptel-auto-workflow--run-failed-backends '("DashScope"))
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
+        (gptel-auto-workflow--task-backend-preference nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should-not (assoc "DashScope" ranked)))
+      ;; Clear cooldown
+      (gptel-auto-workflow--clear-run-failed-backends)
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (= 2 (length ranked)))
+        (should (assoc "DashScope" ranked))
+        (should (assoc "DeepSeek" ranked))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

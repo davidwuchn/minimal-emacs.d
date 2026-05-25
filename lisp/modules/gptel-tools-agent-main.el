@@ -296,6 +296,8 @@ Usage:
         (error nil)))
     (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
     (gptel-auto-workflow--clear-rate-limited-backends)
+    (when (fboundp 'gptel-auto-workflow--clear-run-failed-backends)
+      (gptel-auto-workflow--clear-run-failed-backends))
     ;; Default to Moonshot for headless workflows instead of global MiniMax
     ;; (which is usually quota-exhausted).  The ontology router will
     ;; reorder backends once it has experiment data. Only set when
