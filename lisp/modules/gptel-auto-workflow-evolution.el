@@ -4917,6 +4917,20 @@ Also persists EMA confidence history for cross-session trend analysis."
       (with-temp-file file
         (insert (json-encode hints))))))
 
+(defun gptel-auto-workflow--json-map-entries (value)
+  "Return VALUE as alist entries after JSON plist/alist restoration."
+  (cond
+   ((null value) nil)
+   ((and (listp value) (keywordp (car value)))
+    (let (entries)
+      (while value
+        (let ((key (pop value))
+              (val (and value (pop value))))
+          (when (keywordp key)
+            (push (cons (substring (symbol-name key) 1) val) entries))))
+      (nreverse entries)))
+   ((listp value) value)))
+
 (defun gptel-auto-workflow--restore-next-cycle-hints ()
   "Restore evolution-next-cycle-hints from disk after daemon restart.
 Also restores EMA confidence history for cross-session trend analysis."
@@ -4949,18 +4963,24 @@ Also restores EMA confidence history for cross-session trend analysis."
         (let ((strikes (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-strikes)))
           (when strikes
             (clrhash gptel-auto-workflow--lambda-strike-count)
-            (dolist (s strikes) (puthash (car s) (cdr s) gptel-auto-workflow--lambda-strike-count)))))
+            (dolist (s (gptel-auto-workflow--json-map-entries strikes))
+              (when (consp s)
+                (puthash (car s) (cdr s) gptel-auto-workflow--lambda-strike-count))))))
       (when (boundp 'gptel-auto-workflow--lambda-dead-until)
         (let ((dead (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-dead)))
           (when dead
             (clrhash gptel-auto-workflow--lambda-dead-until)
-            (dolist (d dead) (puthash (car d) (cdr d) gptel-auto-workflow--lambda-dead-until)))))
+            (dolist (d (gptel-auto-workflow--json-map-entries dead))
+              (when (consp d)
+                (puthash (car d) (cdr d) gptel-auto-workflow--lambda-dead-until))))))
       (when (boundp 'gptel-auto-workflow--lambda-verification-results)
         (let ((results (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-results)))
           (when results
             (clrhash gptel-auto-workflow--lambda-verification-results)
-            (dolist (r results)
-              (puthash (car r) (intern (cdr r)) gptel-auto-workflow--lambda-verification-results))))))))
+            (dolist (r (gptel-auto-workflow--json-map-entries results))
+              (when (consp r)
+                (puthash (car r) (intern (format "%s" (cdr r)))
+                         gptel-auto-workflow--lambda-verification-results)))))))))
 
 (defun gptel-auto-workflow--wire-regressed-targets ()
   "Populate :regressed-targets from cross-cycle knowledge-page diff.

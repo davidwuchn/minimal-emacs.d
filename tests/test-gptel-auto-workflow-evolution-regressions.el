@@ -2729,6 +2729,27 @@ must not override it to MiniMax via setq-local in subagent buffers."
         ;; S5 weak → nucleus-tools.el should be front (matches nucleus pattern)
         (should (string-match-p "nucleus" first))))))
 
+(ert-deftest regression/auto-workflow-evolution/restore-json-keyword-lambda-state ()
+  "JSON object maps restore as keyword plists; immune memory needs alist entries."
+  (let ((root (make-temp-file "aw-cross-state" t))
+        (strike-count (make-hash-table :test 'equal))
+        (dead-until (make-hash-table :test 'equal))
+        (verification-results (make-hash-table :test 'equal)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () root)))
+          (setq gptel-auto-workflow--lambda-strike-count strike-count
+                gptel-auto-workflow--lambda-dead-until dead-until
+                gptel-auto-workflow--lambda-verification-results verification-results)
+          (make-directory (expand-file-name "var/tmp" root) t)
+          (with-temp-file (expand-file-name "var/tmp/cross-subsystem-state.json" root)
+            (insert "{\"lambda-strikes\":{\"DashScope\":1},\"lambda-dead\":{\"MiniMax\":123.0},\"lambda-results\":{\"DeepSeek\":\"alive\"}}"))
+          (gptel-auto-workflow--restore-next-cycle-hints)
+          (should (= 1 (gethash "DashScope" strike-count)))
+          (should (= 123.0 (gethash "MiniMax" dead-until)))
+          (should (eq 'alive (gethash "DeepSeek" verification-results))))
+      (delete-directory root t))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
