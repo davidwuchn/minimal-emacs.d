@@ -1110,5 +1110,104 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (should (= 0.5 (plist-get scores :s1-ops)))
       (should (= 0.3 (plist-get scores :s4-intel))))))
 
+;; ─── Recency-Weighted Keep-Rate Tests ───
+
+(defun make-mock-results-with-dates (specs)
+  "Create mock experiment results with :run-dir for testing decay.
+SPECS is a list of (backend decision days-ago ...) triples."
+  (let ((results nil))
+    (dolist (s specs)
+      (let ((base-time (time-subtract (current-time)
+                                      (seconds-to-time (* (caddr s) 86400)))))
+        (push (list :backend (car s)
+                    :decision (cadr s)
+                    :target "test.el"
+                    :research-strategy "none"
+                    :run-dir (format-time-string "%Y-%m-%dT000000Z-test" base-time))
+              results)))
+    (nreverse results)))
+
+(ert-deftest tdd/decay-keep-rate/recent-weighs-more ()
+  "A backend with recent keeps should score higher than old keeps."
+  (let* ((results
+          ;; Recent: 5 kept, 5 discarded (today, 0 days ago)
+          (append (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "kept" 0))
+                           (number-sequence 1 5)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "discarded" 0))
+                           (number-sequence 1 5)))
+                  ;; Old: 5 kept, 5 discarded (30 days ago, should decay)
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "kept" 30))
+                           (number-sequence 1 5)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "discarded" 30))
+                           (number-sequence 1 5)))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "DeepSeek" 14.0)))
+    ;; Recent experiments count more → weighted keep-rate should differ from raw 0.5
+    (should (> (plist-get stats :keep-rate) 0.5))
+    (should (= 20 (plist-get stats :raw-total)))
+    (should (= 10 (plist-get stats :raw-kept)))))
+
+(ert-deftest tdd/decay-keep-rate/same-day-equals-raw ()
+  "When all experiments are from today, decayed should equal raw rate."
+  (let* ((results
+          (append (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DashScope" "kept" 0))
+                           (number-sequence 1 3)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DashScope" "discarded" 0))
+                           (number-sequence 1 7)))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "DashScope" 14.0)))
+    (should (>= (plist-get stats :keep-rate) 0.29))
+    (should (<= (plist-get stats :keep-rate) 0.31))
+    (should (= 10 (plist-get stats :raw-total)))
+    (should (= 3 (plist-get stats :raw-kept)))))
+
+(ert-deftest tdd/decay-keep-rate/half-life-zero-disables-decay ()
+  "When half-life is 0, all weights are 1.0 (simple keep-rate)."
+  (let* ((results
+          (append (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("moonshot" "kept" 0))
+                           (number-sequence 1 2)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("moonshot" "kept" 100))
+                           (number-sequence 1 2)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("moonshot" "discarded" 0))
+                           (number-sequence 1 2)))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "moonshot" 0.0)))
+    (should (>= (plist-get stats :keep-rate) 0.66))
+    (should (= 6 (plist-get stats :raw-total)))
+    (should (= 4 (plist-get stats :raw-kept)))))
+
+(ert-deftest tdd/decay-keep-rate/filters-by-backend ()
+  "Should only count results for the specified backend."
+  (let* ((results (append (make-mock-results-with-dates
+                            (mapcar (lambda (_) '("DeepSeek" "kept" 0))
+                                    (number-sequence 1 5)))
+                           (make-mock-results-with-dates
+                            (mapcar (lambda (_) '("DashScope" "discarded" 0))
+                                    (number-sequence 1 10)))))
+         (ds-stats (gptel-auto-workflow--decayed-keep-rate results "DeepSeek" 14.0))
+         (dash-stats (gptel-auto-workflow--decayed-keep-rate results "DashScope" 14.0)))
+    (should (= 5 (plist-get ds-stats :raw-total)))
+    (should (>= (plist-get ds-stats :keep-rate) 0.99))
+    (should (= 10 (plist-get dash-stats :raw-total)))
+    (should (<= (plist-get dash-stats :keep-rate) 0.01))))
+
+(ert-deftest tdd/decay-keep-rate/old-days-ago-returns-zero-weight ()
+  "Old experiments past several half-lives should have near-zero weight."
+  (let* ((results (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("MiniMax" "kept" 100))
+                           (number-sequence 1 10))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "MiniMax" 7.0)))
+    ;; weight = 2^(-100/7) ≈ 2^(-14.3) ≈ 0.00005
+    ;; So weighted-kept ≈ 10 * 0.00005 = 0.0005, weighted-total ≈ same
+    ;; keep-rate should be ≈ 1.0 but with very low effective total
+    (should (< (plist-get stats :total) 1))
+    (should (= 10 (plist-get stats :raw-total)))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

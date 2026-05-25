@@ -180,6 +180,73 @@ When a layer is weak, the corresponding parameter is adjusted:
           :min-samples min-samples
           :health-probation-threshold probation)))
 
+;; ─── Recency-Weighted Keep-Rate ───
+
+(defcustom gptel-auto-workflow--keep-rate-half-life-days 14.0
+  "Half-life in days for recency-weighted keep-rate.
+Each experiment's weight halves every N days.
+Recent performance matters more than historical averages.
+Set to 0 to disable (use simple keep-rate)."
+  :type 'float
+  :group 'gptel-auto-workflow)
+
+(defun gptel-auto-workflow--run-dir-days-ago (run-dir)
+  "Return days since the experiment in RUN-DIR was executed.
+RUN-DIR is the directory name like 2026-05-21T140000Z-abc123.
+Returns a float, or nil if the date cannot be parsed."
+  (let* ((date-str (substring run-dir 0 10))
+         (time (condition-case nil
+                   (date-to-time date-str)
+                 (error nil))))
+    (when time
+      (/ (float-time (time-since time)) 86400.0))))
+
+(defun gptel-auto-workflow--decayed-keep-rate (results backend &optional half-life filter-category filter-strategy)
+  "Compute recency-weighted keep-rate for BACKEND from RESULTS.
+Each experiment gets weight 2^(-days_ago / HALF-LIFE), default 14 days.
+When HALF-LIFE is nil, uses `gptel-auto-workflow--keep-rate-half-life-days'.
+When HALF-LIFE is 0.0, all weights are 1.0 (simple keep-rate, no decay).
+Optional FILTER-CATEGORY and FILTER-STRATEGY restrict which rows count.
+Returns a plist with :kept :total :keep-rate :raw-kept :raw-total :raw-rate."
+  (let* ((hl (if half-life half-life
+               gptel-auto-workflow--keep-rate-half-life-days))
+         (decay-enabled (and (> hl 0.0) hl))
+        (weighted-kept 0.0)
+        (weighted-total 0.0)
+        (raw-kept 0)
+        (raw-total 0))
+    (dolist (r results)
+      (let ((r-backend (plist-get r :backend))
+            (r-decision (plist-get r :decision))
+            (r-target (plist-get r :target))
+            (r-strategy (plist-get r :research-strategy)))
+        (when (and (string= (or r-backend "") backend)
+                   (or (null filter-category)
+                       (eq (gptel-auto-workflow--categorize-target r-target) filter-category))
+                   (or (null filter-strategy)
+                       (string= (or r-strategy "") filter-strategy)))
+          (let* ((run-dir (plist-get r :run-dir))
+                 (days-ago (and run-dir (gptel-auto-workflow--run-dir-days-ago run-dir)))
+                 (weight (cond ((not decay-enabled) 1.0)
+                               ((not days-ago) 1.0)
+                               (t (expt 0.5 (/ days-ago decay-enabled)))))
+                 (kept (equal r-decision "kept")))
+            (cl-incf raw-total)
+            (cl-incf weighted-total weight)
+            (when kept
+              (cl-incf raw-kept)
+              (cl-incf weighted-kept weight))))))
+    (list :kept (round weighted-kept)
+          :total (round weighted-total)
+          :keep-rate (if (> weighted-total 0)
+                         (/ weighted-kept weighted-total)
+                       nil)
+          :raw-kept raw-kept
+          :raw-total raw-total
+          :raw-rate (if (> raw-total 0)
+                        (/ (float raw-kept) raw-total)
+                      nil))))
+
 ;; ─── Performance Lookup ───
 
 (defun gptel-auto-workflow--get-backend-performance-stats (backend &optional strategy target)
@@ -417,16 +484,20 @@ STRATEGY and TARGET filter the performance data.
            (t (push entry filtered)))))
       (setq static-fallbacks (nreverse filtered)))
     
-    ;; Score each backend from static list
+     ;; Score each backend from static list
     (dolist (entry static-fallbacks)
       (let* ((backend (car entry))
              (model (cdr entry))
-             ;; All-time category stats
+             ;; All-time category stats (raw, for confidence/totals)
              (all-stats (if category
                             (gptel-auto-workflow--get-category-performance-stats backend category strategy)
                           (gptel-auto-workflow--get-backend-performance-stats backend strategy target)))
-             (all-rate (plist-get all-stats :keep-rate))
              (all-total (plist-get all-stats :total))
+             ;; Recency-weighted keep-rate (recent experiments count more)
+             (decayed-stats (gptel-auto-workflow--decayed-keep-rate
+                             (gptel-auto-workflow--parse-all-results) backend nil category strategy))
+             (all-rate (or (plist-get decayed-stats :keep-rate)
+                           (plist-get all-stats :keep-rate)))
              ;; Recent stats for trend
              (recent-stats (when category
                              (gptel-auto-workflow--get-recent-performance-stats backend category strategy)))
