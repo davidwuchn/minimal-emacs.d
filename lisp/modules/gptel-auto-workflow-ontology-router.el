@@ -1407,6 +1407,56 @@ Keeps the last 100 decisions."
         (setq gptel-auto-workflow--routing-audit-log
               (seq-take gptel-auto-workflow--routing-audit-log 100))))))
 
+;; ─── Audit Trail Analysis ───
+
+(defun gptel-auto-workflow--audit-trail-summary ()
+  "Return a plist summarizing the routing audit trail.
+Fields: :total-decisions, :backend-counts (alist of backend→count),
+:avg-health (hash of backend→avg health level),
+:avg-keep-rate (hash of backend→avg keep-rate),
+:vsm-adjustment-counts (plist of layer→times-active)."
+  (let ((total 0)
+        (backend-counts (make-hash-table :test 'equal))
+        (backend-health-sum (make-hash-table :test 'equal))
+        (backend-rate-sum (make-hash-table :test 'equal))
+        (vsm-s1 0) (vsm-s2 0) (vsm-s3 0) (vsm-s4 0) (vsm-s5 0))
+    (dolist (entry gptel-auto-workflow--routing-audit-log)
+      (cl-incf total)
+      ;; Per-backend counts
+      (let ((backend (plist-get entry :selected-backend))
+            (candidates (plist-get entry :candidates)))
+        (when backend
+          (let ((count (gethash backend backend-counts)))
+            (puthash backend (if count (1+ count) 1) backend-counts)))
+        ;; Per-candidate health/rate aggregation
+        (when candidates
+          (dolist (c (if (listp candidates) candidates (list candidates)))
+            (when (listp c)
+              (let* ((b (plist-get c :backend))
+                     (health (plist-get c :health))
+                     (rate (plist-get c :keep-rate)))
+                (when (and b health)
+                  (puthash b (+ (or (gethash b backend-health-sum) 0) health)
+                           backend-health-sum))
+                (when (and b rate)
+                  (puthash b (+ (or (gethash b backend-rate-sum) 0) rate)
+                           backend-rate-sum))))))
+        ;; VSM adjustment counts
+        (let ((adj (plist-get entry :vsm-adjustments)))
+          (when adj
+            (dolist (a adj)
+              (cond ((string-match-p "S1:" a) (cl-incf vsm-s1))
+                    ((string-match-p "S2:" a) (cl-incf vsm-s2))
+                    ((string-match-p "S3:" a) (cl-incf vsm-s3))
+                    ((string-match-p "S4:" a) (cl-incf vsm-s4))
+                    ((string-match-p "S5:" a) (cl-incf vsm-s5))))))))
+    (list :total-decisions total
+          :backend-counts backend-counts
+          :avg-health backend-health-sum
+          :avg-keep-rate backend-rate-sum
+          :vsm-adjustments (list :s1 vsm-s1 :s2 vsm-s2
+                                 :s3 vsm-s3 :s4 vsm-s4 :s5 vsm-s5))))
+
 ;; ─── Per-Target Model Preference ───
 
 (defun gptel-auto-workflow--best-model-for-target (target backend)
