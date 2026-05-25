@@ -1021,5 +1021,193 @@ Guards against missing runtime dependencies (worktree-base-root)."
         (should (> (cddr ds) 0.15))   ;; boost increased from 0.15
         (should changed)))))           ;; reported as changed
 
+;; ─── VSM Health → Routing Auto-Tuning Tests ───
+
+(ert-deftest tdd/vsm-routing/defaults-when-no-vsm-hints ()
+  "Without VSM health hints, adjusted params should equal defaults."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints nil))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 0.40 (plist-get params :delta-weight)))
+      (should (= 0.30 (plist-get params :rate-weight)))
+      (should (= 0.20 (plist-get params :trend-weight)))
+      (should (= 0.10 (plist-get params :confidence-weight)))
+      (should (= 0.15 (plist-get params :exploration-rate)))
+      (should (= 3 (plist-get params :min-samples))))))
+
+(ert-deftest tdd/vsm-routing/s4-weak-increases-exploration ()
+  "When S4 (Intelligence) is weak, exploration rate should increase."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.8
+                                 :s3-control 0.8 :s4-intel 0.3
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (> (plist-get params :exploration-rate) 0.15))
+      (should (>= (plist-get params :exploration-rate) 0.20)))))
+
+(ert-deftest tdd/vsm-routing/s3-weak-tightens-health-ladder ()
+  "When S3 (Control) is weak, probation threshold should tighten."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.8
+                                 :s3-control 0.3 :s4-intel 0.8
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 2 (plist-get params :health-probation-threshold))))))
+
+(ert-deftest tdd/vsm-routing/s1-weak-lowers-min-samples ()
+  "When S1 (Operations) is weak, min-samples should decrease."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.3 :s2-coord 0.8
+                                 :s3-control 0.8 :s4-intel 0.8
+                                 :s5-identity 0.8))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 1 (plist-get params :min-samples))))))
+
+(ert-deftest tdd/vsm-routing/s5-weak-boosts-confidence-weight ()
+  "When S5 (Identity) is weak, confidence weight should increase."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.8 :s2-coord 0.8
+                                 :s3-control 0.8 :s4-intel 0.8
+                                 :s5-identity 0.2))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (> (plist-get params :confidence-weight) 0.10))
+      (should (>= (plist-get params :confidence-weight) 0.15)))))
+
+(ert-deftest tdd/vsm-routing/all-healthy-returns-defaults ()
+  "When all VSM layers are healthy, params should remain at defaults."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'prioritize-targets
+                           (list :s1-ops 0.9 :s2-coord 0.9
+                                 :s3-control 0.9 :s4-intel 0.9
+                                 :s5-identity 0.9))))))
+    (let ((params (gptel-auto-workflow--vsm-adjusted-routing-params)))
+      (should (= 0.40 (plist-get params :delta-weight)))
+      (should (= 0.30 (plist-get params :rate-weight)))
+      (should (= 0.20 (plist-get params :trend-weight)))
+      (should (= 0.10 (plist-get params :confidence-weight)))
+      (should (= 0.15 (plist-get params :exploration-rate)))
+      (should (= 3 (plist-get params :min-samples))))))
+
+(ert-deftest tdd/vsm-routing/extracts-vsm-plist-from-actions ()
+  "Should extract the prioritize-targets plist from vsm-actions."
+  (let ((gptel-auto-workflow--evolution-next-cycle-hints
+         (list :vsm-actions
+               (list (cons 'increase-strategy-evolution "Fire(S4) weak")
+                     (cons 'prioritize-targets
+                           (list :s1-ops 0.5 :s2-coord 0.7
+                                 :s3-control 0.9 :s4-intel 0.3
+                                 :s5-identity 0.8))
+                     (cons 'rebalance-backends "Earth(S3) weak")))))
+    (let ((scores (gptel-auto-workflow--vsm-health-scores)))
+      (should (= 0.5 (plist-get scores :s1-ops)))
+      (should (= 0.3 (plist-get scores :s4-intel))))))
+
+;; ─── Recency-Weighted Keep-Rate Tests ───
+
+(defun make-mock-results-with-dates (specs)
+  "Create mock experiment results with :run-dir for testing decay.
+SPECS is a list of (backend decision days-ago ...) triples."
+  (let ((results nil))
+    (dolist (s specs)
+      (let ((base-time (time-subtract (current-time)
+                                      (seconds-to-time (* (caddr s) 86400)))))
+        (push (list :backend (car s)
+                    :decision (cadr s)
+                    :target "test.el"
+                    :research-strategy "none"
+                    :run-dir (format-time-string "%Y-%m-%dT000000Z-test" base-time))
+              results)))
+    (nreverse results)))
+
+(ert-deftest tdd/decay-keep-rate/recent-weighs-more ()
+  "A backend with recent keeps should score higher than old keeps."
+  (let* ((results
+          ;; Recent: 5 kept, 5 discarded (today, 0 days ago)
+          (append (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "kept" 0))
+                           (number-sequence 1 5)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "discarded" 0))
+                           (number-sequence 1 5)))
+                  ;; Old: 5 kept, 5 discarded (30 days ago, should decay)
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "kept" 30))
+                           (number-sequence 1 5)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DeepSeek" "discarded" 30))
+                           (number-sequence 1 5)))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "DeepSeek" 14.0)))
+    ;; Recent experiments count more → weighted keep-rate should differ from raw 0.5
+    (should (> (plist-get stats :keep-rate) 0.5))
+    (should (= 20 (plist-get stats :raw-total)))
+    (should (= 10 (plist-get stats :raw-kept)))))
+
+(ert-deftest tdd/decay-keep-rate/same-day-equals-raw ()
+  "When all experiments are from today, decayed should equal raw rate."
+  (let* ((results
+          (append (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DashScope" "kept" 0))
+                           (number-sequence 1 3)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("DashScope" "discarded" 0))
+                           (number-sequence 1 7)))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "DashScope" 14.0)))
+    (should (>= (plist-get stats :keep-rate) 0.29))
+    (should (<= (plist-get stats :keep-rate) 0.31))
+    (should (= 10 (plist-get stats :raw-total)))
+    (should (= 3 (plist-get stats :raw-kept)))))
+
+(ert-deftest tdd/decay-keep-rate/half-life-zero-disables-decay ()
+  "When half-life is 0, all weights are 1.0 (simple keep-rate)."
+  (let* ((results
+          (append (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("moonshot" "kept" 0))
+                           (number-sequence 1 2)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("moonshot" "kept" 100))
+                           (number-sequence 1 2)))
+                  (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("moonshot" "discarded" 0))
+                           (number-sequence 1 2)))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "moonshot" 0.0)))
+    (should (>= (plist-get stats :keep-rate) 0.66))
+    (should (= 6 (plist-get stats :raw-total)))
+    (should (= 4 (plist-get stats :raw-kept)))))
+
+(ert-deftest tdd/decay-keep-rate/filters-by-backend ()
+  "Should only count results for the specified backend."
+  (let* ((results (append (make-mock-results-with-dates
+                            (mapcar (lambda (_) '("DeepSeek" "kept" 0))
+                                    (number-sequence 1 5)))
+                           (make-mock-results-with-dates
+                            (mapcar (lambda (_) '("DashScope" "discarded" 0))
+                                    (number-sequence 1 10)))))
+         (ds-stats (gptel-auto-workflow--decayed-keep-rate results "DeepSeek" 14.0))
+         (dash-stats (gptel-auto-workflow--decayed-keep-rate results "DashScope" 14.0)))
+    (should (= 5 (plist-get ds-stats :raw-total)))
+    (should (>= (plist-get ds-stats :keep-rate) 0.99))
+    (should (= 10 (plist-get dash-stats :raw-total)))
+    (should (<= (plist-get dash-stats :keep-rate) 0.01))))
+
+(ert-deftest tdd/decay-keep-rate/old-days-ago-returns-zero-weight ()
+  "Old experiments past several half-lives should have near-zero weight."
+  (let* ((results (make-mock-results-with-dates
+                   (mapcar (lambda (_) '("MiniMax" "kept" 100))
+                           (number-sequence 1 10))))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "MiniMax" 7.0)))
+    ;; weight = 2^(-100/7) ≈ 2^(-14.3) ≈ 0.00005
+    ;; So weighted-kept ≈ 10 * 0.00005 = 0.0005, weighted-total ≈ same
+    ;; keep-rate should be ≈ 1.0 but with very low effective total
+    (should (< (plist-get stats :total) 1))
+    (should (= 10 (plist-get stats :raw-total)))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
