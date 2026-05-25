@@ -101,12 +101,22 @@
 ;; 320000 caused macOS C stack overflow (64MB SIP limit) → silent SEGFAULT.
 ;; 15000 provides headroom while staying within macOS stack budget.
 ;; Root cause fixed: gptel-abort now defers callback to break sync recursion.
+<<<<<<< Updated upstream
 (setq max-lisp-eval-depth 15000)
 
 ;; Increase max-specpdl-size for subagent chain depth
 ;; REQUIRED: 5+ nested subagent layers without C stack overflow.
 ;; Reduced from 50000 to avoid macOS C stack exhaustion.
 (setq max-specpdl-size 8000)
+=======
+(setq max-lisp-eval-depth 8000)
+
+;; Increase max-specpdl-size for subagent chain depth
+;; REQUIRED: 5+ nested subagent layers without C stack overflow.
+;; Kept at 5000 to stay well within macOS 64MB C stack limit.
+;; (320000 caused silent SEGFAULT from C stack overflow under SIP.)
+(setq max-specpdl-size 5000)
+>>>>>>> Stashed changes
 
 ;; HARDEN: Defer gptel curl sentinel via run-at-time 0 to break
 ;; synchronous recursion chains (sentinel → FSM → HTTP → sentinel).

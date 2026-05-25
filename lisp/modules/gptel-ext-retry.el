@@ -927,7 +927,7 @@ Returns a string or nil if no model can be determined."
            (if (stringp gptel-model) gptel-model (symbol-name gptel-model)))
       (and (boundp 'gptel-backend) gptel-backend
            (if (fboundp 'gptel-backend-name)
-               (gptel-backend-name gptel-backend)
+               (gptel-auto-workflow--safe-backend-name gptel-backend)
              (format "%s" gptel-backend)))))
 
 (defun my/gptel--normalize-model-str (model)
