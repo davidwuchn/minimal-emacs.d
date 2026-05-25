@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Watchdog: restart auto-workflow daemon if unresponsive
-# Runs from cron every 2 hours. Checks daemon socket via emacsclient.
-# If daemon doesn't respond within 60s, kill and restart.
+# Runs from cron every 30min. Checks daemon socket via emacsclient.
+# If daemon doesn't respond within 60s (600s when workflow active), kill and restart.
 # Skips if daemon is CPU-busy (state R) — means it's executing code.
 
 set -euo pipefail
@@ -96,9 +96,23 @@ if [ -n "$DAEMON_PID" ]; then
     fi
 fi
 
-# Check if daemon responds
-if ! timeout "$MAX_WAIT" emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
-    echo "[$(date '+%H:%M:%S')] Daemon unresponsive (${MAX_WAIT}s timeout), killing" >> "$LOG"
+# Check if daemon responds.  When a workflow is running, use a generous
+# timeout (600s) to avoid killing the daemon mid-experiment during an API call.
+WORKFLOW_ACTIVE=0
+if timeout 5 emacsclient -a false -s "$SERVER_NAME" --eval \
+    '(and (boundp (quote gptel-auto-workflow--running)) gptel-auto-workflow--running)' >/dev/null 2>&1; then
+    WORKFLOW_ACTIVE=1
+fi
+
+if [ "$WORKFLOW_ACTIVE" -eq 1 ]; then
+    WORKFLOW_TIMEOUT=600  # 10 min grace period when busy
+    echo "[$(date '+%H:%M:%S')] Workflow active — using ${WORKFLOW_TIMEOUT}s timeout" >> "$LOG"
+else
+    WORKFLOW_TIMEOUT="$MAX_WAIT"
+fi
+
+if ! timeout "$WORKFLOW_TIMEOUT" emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
+    echo "[$(date '+%H:%M:%S')] Daemon unresponsive (${WORKFLOW_TIMEOUT}s timeout, workflow_active=$WORKFLOW_ACTIVE), killing" >> "$LOG"
     # Kill all processes with this server name
     pgrep -f "emacs.*--\(daemon\|fg-daemon\)=${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
     sleep 2
