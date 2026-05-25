@@ -1,5 +1,5 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 1339 experiments across 5 backends
+> Auto-generated from 1340 experiments across 5 backends
 
 ## MiniMax vs CF-Gateway (winner: **MiniMax**)
 - MiniMax: 22.8% keep-rate
@@ -11,15 +11,15 @@
 - DeepSeek: 19.6% keep-rate
 - Shared targets: 9 | MiniMax won 3, DeepSeek won 4, ties 2
 
+## MiniMax vs DashScope (winner: **MiniMax**)
+- MiniMax: 19.7% keep-rate
+- DashScope: 9.5% keep-rate
+- Shared targets: 6 | MiniMax won 5, DashScope won 1, ties 0
+
 ## MiniMax vs moonshot (winner: **MiniMax**)
 - MiniMax: 24.6% keep-rate
 - moonshot: 11.5% keep-rate
 - Shared targets: 6 | MiniMax won 4, moonshot won 0, ties 2
-
-## MiniMax vs DashScope (winner: **MiniMax**)
-- MiniMax: 19.7% keep-rate
-- DashScope: 10.0% keep-rate
-- Shared targets: 6 | MiniMax won 5, DashScope won 1, ties 0
 
 ## CF-Gateway vs moonshot (winner: **tie**)
 - CF-Gateway: 6.2% keep-rate
@@ -29,17 +29,27 @@
 ## CF-Gateway vs DashScope (winner: **CF-Gateway**)
 - CF-Gateway: 14.3% keep-rate
 - DashScope: 0.0% keep-rate
-- Shared targets: 8 | MiniMax won 8, DashScope won 0, ties 0
+- Shared targets: 2 | CF-Gateway won 1, DashScope won 0, ties 1
 
-## MiniMax vs CF-Gateway (winner: **MiniMax**)
-- MiniMax: 18.9% keep-rate
-- CF-Gateway: 0.0% keep-rate
-- Shared targets: 5 | MiniMax won 5, CF-Gateway won 0, ties 0
-
-## DashScope vs CF-Gateway (winner: **tie**)
+## DeepSeek vs DashScope (winner: **DeepSeek**)
+- DeepSeek: 12.5% keep-rate
 - DashScope: 0.0% keep-rate
+- Shared targets: 2 | DeepSeek won 1, DashScope won 0, ties 1
+
+## moonshot vs DashScope (winner: **tie**)
+- moonshot: 0.0% keep-rate
+- DashScope: 0.0% keep-rate
+- Shared targets: 1 | moonshot won 0, DashScope won 0, ties 1
+
+## DeepSeek vs moonshot (winner: **DeepSeek**)
+- DeepSeek: 25.0% keep-rate
+- moonshot: 0.0% keep-rate
+- Shared targets: 1 | DeepSeek won 1, moonshot won 0, ties 0
+
+## DeepSeek vs CF-Gateway (winner: **DeepSeek**)
+- DeepSeek: 25.0% keep-rate
 - CF-Gateway: 0.0% keep-rate
-- Shared targets: 3 | DashScope won 0, CF-Gateway won 0, ties 3
+- Shared targets: 1 | DeepSeek won 1, CF-Gateway won 0, ties 0
 
 
-*Generated: 2026-05-25 16:00*
+*Generated: 2026-05-25 16:45*
