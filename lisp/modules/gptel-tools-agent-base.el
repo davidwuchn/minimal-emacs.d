@@ -10,8 +10,8 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(condition-case nil (require 'gptel) (error nil))
-(condition-case nil (require 'gptel-agent) (error nil))
+(require 'gptel nil t)
+(require 'gptel-agent nil t)
 (require 'magit-git nil t)
 
 (defvar gptel-send--transitions)
@@ -41,7 +41,7 @@
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 
 ;; Ensure evolution production module is loaded for timer and hook variables
-(condition-case nil (require 'gptel-auto-workflow-production nil t) (ignore))
+(require 'gptel-auto-workflow-production nil t)
 
 ;; Forward declaration for variable defined in gptel-auto-workflow-projects.el.
 ;; Do not initialize it here, or later `defvar' initializers in the projects

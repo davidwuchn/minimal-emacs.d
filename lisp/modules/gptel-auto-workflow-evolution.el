@@ -16,9 +16,9 @@
 (require 'subr-x)
 
 ;; Soft require: research-integration may not exist on all deployments
-(condition-case nil (require 'gptel-auto-workflow-research-integration nil t) (ignore))
+(require 'gptel-auto-workflow-research-integration nil t)
 ;; Soft require: research-benchmark provides load-research-traces
-(condition-case nil (require 'gptel-auto-workflow-research-benchmark nil t) (ignore))
+(require 'gptel-auto-workflow-research-benchmark nil t)
 
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
