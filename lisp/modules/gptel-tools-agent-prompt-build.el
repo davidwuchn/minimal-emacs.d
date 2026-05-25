@@ -1831,10 +1831,12 @@ Returns the static fallback chain as a last resort."
    ((not (stringp agent-type)) nil)
    ((string= agent-type "executor")
     (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
-             (gptel-auto-workflow--ranked-subagent-backends))
+             (gptel-auto-workflow--ranked-subagent-backends agent-type))
         gptel-auto-workflow-executor-rate-limit-fallbacks))
    ((member agent-type gptel-auto-workflow-headless-fallback-agents)
-    gptel-auto-workflow-headless-subagent-fallbacks)))
+    (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
+             (gptel-auto-workflow--ranked-subagent-backends agent-type))
+        gptel-auto-workflow-headless-subagent-fallbacks))))
 
 (defun gptel-auto-workflow--agent-base-preset (agent-type)
   "Return the current base preset plist for AGENT-TYPE, or nil when unavailable.

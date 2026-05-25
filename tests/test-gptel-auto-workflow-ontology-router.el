@@ -843,11 +843,14 @@ Guards against missing runtime dependencies (worktree-base-root)."
 (ert-deftest regression/ontology-router/ranked-dashscope-first-on-tie ()
   "DashScope should be first when all backends have equal keep-rate."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
-           ("moonshot" . "kimi-k2.6")
-           ("MiniMax" . "minimax-m2.7-highspeed")
-           ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+          '(("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-v4-flash")
+            ("moonshot" . "kimi-k2.6")
+            ("MiniMax" . "minimax-m2.7-highspeed")
+            ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))
+         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
@@ -875,11 +878,14 @@ Guards against missing runtime dependencies (worktree-base-root)."
 (ert-deftest regression/ontology-router/bayesian-keep-rate-floor ()
   "Backends with < 3 experiments should get 0.25 floor, not actual rate."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
-           ("moonshot" . "kimi-k2.6")
-           ("MiniMax" . "minimax-m2.7-highspeed")
-           ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+          '(("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-v4-flash")
+            ("moonshot" . "kimi-k2.6")
+            ("MiniMax" . "minimax-m2.7-highspeed")
+            ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))
+         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (backend &rest _)
                  (cond
@@ -891,6 +897,129 @@ Guards against missing runtime dependencies (worktree-base-root)."
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
         (should (string= "DashScope" (caar ranked)))
         (should (assoc "DeepSeek" ranked))))))
+
+(ert-deftest regression/ontology-router/ranked-analyzer-prefers-deepseek ()
+  "Analyzer routing should rank DeepSeek first due to preference boost."
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow--task-backend-preference
+         '(("analyzer" "DeepSeek" . 0.15))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (string= "DeepSeek" (caar ranked)))
+        (should (string= "deepseek-v4-flash" (cdar ranked)))))))
+
+(ert-deftest regression/ontology-router/ranked-grader-prefers-moonshot ()
+  "Grader routing should rank moonshot first due to preference boost."
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("moonshot" . "kimi-k2.6")
+           ("MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow--task-backend-preference
+         '(("grader" "moonshot" . 0.15))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "grader")))
+        (should (string= "moonshot" (caar ranked)))
+        (should (string= "kimi-k2.6" (cdar ranked)))))))
+
+(ert-deftest regression/ontology-router/ranked-executor-prefers-dashscope ()
+  "Executor routing should rank DashScope first due to preference boost."
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("moonshot" . "kimi-k2.6")
+           ("MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow--task-backend-preference
+         '(("executor" "DashScope" . 0.15))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "executor")))
+        (should (string= "DashScope" (caar ranked)))
+        (should (string= "qwen3.6-plus" (cdar ranked)))))))
+
+(ert-deftest regression/ontology-router/ranked-no-agent-type-preserves-order ()
+  "Calling ranked-subagent-backends without agent-type should keep default order."
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-v4-flash")
+            ("MiniMax" . "minimax-m2.7-highspeed")))
+         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
+        (should (string= "DashScope" (caar ranked)))
+        (should (= 3 (length ranked)))))))
+
+;; ─── Backend Preference Evolution Tests ───
+
+(ert-deftest regression/ontology-router/per-axis-keep-rate-groups-by-axis ()
+  "Per-axis keep-rates should group results by (backend, axis) pair."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (append
+                ;; DeepSeek/A: 3 kept + 2 discarded = 5
+                (make-list 3 (list :backend "DeepSeek" :kibcm-axis "A" :decision "kept"))
+                (make-list 2 (list :backend "DeepSeek" :kibcm-axis "A" :decision "discarded"))
+                ;; DeepSeek/B: 3 kept + 2 discarded = 5
+                (make-list 3 (list :backend "DeepSeek" :kibcm-axis "B" :decision "kept"))
+                (make-list 2 (list :backend "DeepSeek" :kibcm-axis "B" :decision "discarded"))
+                ;; DashScope/A: 3 kept + 3 discarded = 6
+                (make-list 3 (list :backend "DashScope" :kibcm-axis "A" :decision "kept"))
+                (make-list 3 (list :backend "DashScope" :kibcm-axis "A" :decision "discarded"))))))
+    (let ((rates (gptel-auto-workflow--backend-per-axis-keep-rates)))
+      (should (= 3 (length rates)))
+      (should (assoc '("DeepSeek" . "A") rates))
+      (should (assoc '("DeepSeek" . "B") rates))
+      (should (assoc '("DashScope" . "A") rates)))))
+
+(ert-deftest regression/ontology-router/per-axis-min-5-samples ()
+  "Pairs with < 5 samples should be excluded from keep-rate analysis."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list (list :backend "MiniMax" :kibcm-axis "A" :decision "kept")
+                     (list :backend "MiniMax" :kibcm-axis "A" :decision "kept")
+                     (list :backend "MiniMax" :kibcm-axis "A" :decision "kept")
+                     (list :backend "MiniMax" :kibcm-axis "A" :decision "discarded")))))
+    (let ((rates (gptel-auto-workflow--backend-per-axis-keep-rates)))
+      (should (= 0 (length rates)))
+      (should-not (assoc '("MiniMax" . "A") rates)))))
+
+(ert-deftest regression/ontology-router/evolve-preference-adjusts-on-delta ()
+  "Preference evolution should adjust boost when axis keep-rate differs from global."
+  (let ((gptel-auto-workflow--task-backend-preference
+         '(("analyzer" "DeepSeek" . 0.15)
+           ("executor" "DashScope" . 0.15)))
+        (gptel-auto-workflow--preference-persist-file
+         (make-temp-file "aw-pref-test-" nil ".el")))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 ;; DeepSeek global: 3/10 = 0.3, axis A: 4/5 = 0.8, delta=+0.50
+                 ;; DashScope global: 0/10 = 0.0, axis D: 0/5 = 0.0, delta=0.0
+                 (append
+                  (make-list 3 (list :backend "DeepSeek" :kibcm-axis "B" :decision "kept"))
+                  (make-list 7 (list :backend "DeepSeek" :kibcm-axis "B" :decision "discarded"))
+                  (make-list 4 (list :backend "DeepSeek" :kibcm-axis "A" :decision "kept"))
+                  (make-list 1 (list :backend "DeepSeek" :kibcm-axis "A" :decision "discarded"))
+                  (make-list 10 (list :backend "DashScope" :kibcm-axis "A" :decision "discarded"))
+                  (make-list 5 (list :backend "DashScope" :kibcm-axis "D" :decision "discarded")))))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () (make-temp-file "aw-pref-root-" t))))
+      (let* ((changed (gptel-auto-workflow--evolve-backend-preference))
+             (pref gptel-auto-workflow--task-backend-preference)
+             (ds (cl-find-if (lambda (e)
+                               (and (string= (nth 0 e) "analyzer")
+                                    (string= (nth 1 e) "DeepSeek")))
+                             pref)))
+        (should ds)
+        (should (> (cddr ds) 0.15))   ;; boost increased from 0.15
+        (should changed)))))           ;; reported as changed
 
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

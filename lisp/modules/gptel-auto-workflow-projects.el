@@ -889,6 +889,11 @@ so calling this with no fresh data is a safe no-op."
           (condition-case nil
               (load-file path)
             (error (message "[research] Could not load %s for self-evolution" mod))))))
+    ;; 0b. Load git-tracked backend preference (shared across machines).
+    (when (fboundp 'gptel-auto-workflow--ensure-backend-preference-loaded)
+      (condition-case nil
+          (gptel-auto-workflow--ensure-backend-preference-loaded)
+        (error nil)))
     ;; 1. AutoTTS: evolve multi-turn controller from fresh traces.
     ;;    Internally gated: skips when no traces or convergence detected.
     (when (fboundp 'gptel-auto-workflow--run-autotts-evolution)
@@ -910,6 +915,13 @@ so calling this with no fresh data is a safe no-op."
             (message "[research] Ontology: backend reorder complete"))
         (error
          (message "[research] Ontology reorder skipped: %s"
+                  (error-message-string err)))))
+    ;; 2b. Auto-evolve per-axis backend preference from historical keep-rates.
+    (when (fboundp 'gptel-auto-workflow--evolve-backend-preference)
+      (condition-case err
+          (gptel-auto-workflow--evolve-backend-preference)
+        (error
+         (message "[preference] Evolution skipped: %s"
                   (error-message-string err)))))
     ;; 3. AutoGo: champion league for proposed research strategies.
     ;;    Internally gated: skips when no proposed strategies pending.
