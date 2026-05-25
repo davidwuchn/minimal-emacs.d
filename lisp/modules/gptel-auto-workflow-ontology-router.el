@@ -1038,6 +1038,10 @@ Key: backend name, value: float-time when retest is allowed.")
 Used for auto-recovery: if no new strikes for > 1 hour, probation
 backends auto-demote to degraded level 2.")
 
+(defvar gptel-auto-workflow--cached-probation-threshold nil
+  "Cached probation threshold to avoid recomputing VSM params per backend.
+Cons cell: (timestamp . threshold). Invalidated after 5 seconds.")
+
 (defconst gptel-auto-workflow--probation-recovery-seconds 3600
   "Seconds before a probation backend auto-recovers to degraded.
 After this period without new strikes, level 3 → level 2.")
@@ -1049,9 +1053,15 @@ After this period without new strikes, level 3 → level 2.")
 Probation threshold auto-tunes from VSM health when available
 (default 3 strikes; tightens to 2 when S3 Control is weak)."
   (let* ((probation-threshold
-          (or (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
-                (plist-get (gptel-auto-workflow--vsm-adjusted-routing-params)
-                           :health-probation-threshold))
+          (or (when (and gptel-auto-workflow--cached-probation-threshold
+                         (< (float-time) (+ (car gptel-auto-workflow--cached-probation-threshold) 5)))
+                (cdr gptel-auto-workflow--cached-probation-threshold))
+              (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+                (let ((threshold (plist-get (gptel-auto-workflow--vsm-adjusted-routing-params)
+                                            :health-probation-threshold)))
+                  (setq gptel-auto-workflow--cached-probation-threshold
+                        (cons (float-time) threshold))
+                  threshold))
               3))
          (strikes (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
          (dead-until (gethash backend gptel-auto-workflow--lambda-dead-until)))
