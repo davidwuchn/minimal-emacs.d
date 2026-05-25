@@ -382,7 +382,6 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
     (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)) (error (message "[reload] strategic.el skipped (load error: %s)" (error-message-string err))))
-<<<<<<< Updated upstream
     ;; Populate targets if empty (daemon mode doesn't load .dir-locals.el)
     (when (and (boundp 'gptel-auto-workflow-targets)
                (or (null gptel-auto-workflow-targets)
@@ -392,8 +391,6 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
           (when discovered
             (setq gptel-auto-workflow-targets discovered)
             (message "[init] Populated %d auto-workflow targets" (length discovered))))))
-=======
->>>>>>> Stashed changes
     (condition-case err (load-file (expand-file-name "lisp/modules/strategic-daemon-functions.el" root)) (error (message "[reload] daemon-functions.el skipped (load error: %s)" (error-message-string err))))
     ;; strategic.el requires gptel-auto-workflow-research-cache via (require '... nil t).
     ;; If that require succeeded, featurep will be t and we skip the re-load.
