@@ -16,9 +16,9 @@
 (require 'subr-x)
 
 ;; Soft require: research-integration may not exist on all deployments
-(condition-case nil (require 'gptel-auto-workflow-research-integration nil t) (ignore))
+(require 'gptel-auto-workflow-research-integration nil t)
 ;; Soft require: research-benchmark provides load-research-traces
-(condition-case nil (require 'gptel-auto-workflow-research-benchmark nil t) (ignore))
+(require 'gptel-auto-workflow-research-benchmark nil t)
 
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
@@ -1825,6 +1825,9 @@ Extract → Verify → Controller Evolution → Skill Evolution.
 Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (interactive)
   (cl-block gptel-auto-workflow-evolution-run-cycle
+  ;; DEBUG: wrap early portion to isolate MiniMax error
+  (condition-case early-err
+      (progn
   ;; Throttle: don't run more than once per 300s (5min) unless forced
   (let ((now (float-time (current-time))))
     (when (and gptel-auto-workflow--evolution-last-run
@@ -1855,6 +1858,9 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (setq gptel-auto-workflow--evolution-last-objective current-obj)
         (message "[evolution] Eight Keys score: %.3f" current-obj))))
   (message "[auto-workflow] Running self-evolution cycle...")
+    (error
+     (message "[evolution] EARLY error (pre-steps): %s" (error-message-string early-err))
+     (cl-return-from gptel-auto-workflow-evolution-run-cycle (format "early-error: %s" early-err))))
   ;; Pipeline validation (Semantica PipelineValidator)
   (condition-case nil
       (let ((v (gptel-auto-workflow--validate-pipeline)))
@@ -1863,7 +1869,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (message "[pipeline] ERROR: %s" e)))
         (dolist (w (plist-get v :warnings))
           (message "[pipeline] WARN: %s" w)))
-    (ignore))
+    (error nil))
   (let ((new-experiments (gptel-auto-workflow--evolution-count-new))
         (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                            (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
