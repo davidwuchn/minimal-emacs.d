@@ -1,5 +1,5 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 1337 experiments across 5 backends
+> Auto-generated from 1339 experiments across 5 backends
 
 ## MiniMax vs CF-Gateway (winner: **MiniMax**)
 - MiniMax: 22.8% keep-rate
@@ -52,4 +52,4 @@
 - Shared targets: 1 | DeepSeek won 1, CF-Gateway won 0, ties 0
 
 
-*Generated: 2026-05-25 15:11*
+*Generated: 2026-05-25 16:00*
