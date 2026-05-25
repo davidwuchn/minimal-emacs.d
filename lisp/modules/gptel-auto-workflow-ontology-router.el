@@ -1285,6 +1285,39 @@ and why that backend was selected."
          "This backend has elevated health warnings — results may be unreliable."
        "Trust appears adequate for this task."))))
 
+;; ─── Per-Target Model Preference ───
+
+(defun gptel-auto-workflow--best-model-for-target (target backend)
+  "Return the best historical model for TARGET on BACKEND.
+Searches all kept experiments for this target+backend pair and returns
+the model with the highest keep-rate. Returns nil if no data."
+  (when (and target backend (fboundp 'gptel-auto-workflow--parse-all-results))
+    (let ((model-stats (make-hash-table :test 'equal))
+          (best-model nil)
+          (best-rate 0.0))
+      (dolist (r (gptel-auto-workflow--parse-all-results))
+        (let ((r-target (plist-get r :target))
+              (r-backend (plist-get r :backend))
+              (r-model (plist-get r :model))
+              (r-decision (plist-get r :decision)))
+          (when (and (string= (or r-target "") target)
+                     (string= (or r-backend "") backend)
+                     (stringp r-model))
+            (let ((stats (or (gethash r-model model-stats) (cons 0 0))))
+              (cl-incf (car stats))
+              (when (equal r-decision "kept")
+                (cl-incf (cdr stats)))
+              (puthash r-model stats model-stats)))))
+      (maphash (lambda (model stats)
+                 (let ((total (car stats))
+                       (kept (cdr stats)))
+                   (when (and (> total 0)
+                              (>= (/ (float kept) total) best-rate))
+                     (setq best-rate (/ (float kept) total))
+                     (setq best-model model))))
+               model-stats)
+      best-model)))
+
 ;; ─── Per-Run Backend Cooldown ───
 
 (defvar gptel-auto-workflow--run-failed-backends nil

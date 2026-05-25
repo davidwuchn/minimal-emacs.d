@@ -1691,10 +1691,17 @@ and advance through the configured fallback chain instead.")
 
 (defun gptel-auto-workflow--best-model-for-task (agent-type backend)
   "Return the best MODEL for AGENT-TYPE when using BACKEND.
-Looks up `gptel-auto-workflow-per-task-model-map' first.
+First checks per-target historical performance via holographic data.
+Then looks up `gptel-auto-workflow-per-task-model-map'.
 Falls back to the default model from the headless fallback chain
 if no per-task mapping exists for this backend."
-  (or (and (boundp 'gptel-auto-workflow-per-task-model-map)
+  (or ;; Phase π: per-target model preference from historical results
+      (and (boundp 'gptel-auto-workflow--current-target)
+           gptel-auto-workflow--current-target
+           (fboundp 'gptel-auto-workflow--best-model-for-target)
+           (gptel-auto-workflow--best-model-for-target
+            gptel-auto-workflow--current-target backend))
+      (and (boundp 'gptel-auto-workflow-per-task-model-map)
            (let ((entry (cl-find-if
                          (lambda (e)
                            (and (equal (nth 0 e) agent-type)

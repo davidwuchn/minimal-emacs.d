@@ -1453,5 +1453,43 @@ SPECS is a list of (backend decision days-ago ...) triples."
     (should (= 0 (gptel-auto-workflow--backend-health-level "DeepSeek")))
     (should (= 1.0 (gptel-auto-workflow--backend-health-weight "DeepSeek")))))
 
+;; ─── Per-Target Model Preference Tests ───
+
+(ert-deftest tdd/target-model/best-model-from-history ()
+  "Should return the model that produced the most kept results for a target."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "discarded")
+                (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
+                (list :target "bar.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept")))))
+    (let ((model (gptel-auto-workflow--best-model-for-target "foo.el" "DeepSeek")))
+      ;; deepseek-v4-pro: 2 kept, 0 discarded = 100%
+      ;; deepseek-v4-flash: 1 kept, 1 discarded = 50%
+      ;; → prefer deepseek-v4-pro
+      (should (string= "deepseek-v4-pro" model)))))
+
+(ert-deftest tdd/target-model/fallback-when-no-data ()
+  "Should return nil when no historical data for the target."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda () nil)))
+    (let ((model (gptel-auto-workflow--best-model-for-target "unknown.el" "DeepSeek")))
+      (should (null model)))))
+
+(ert-deftest tdd/target-model/filters-by-backend ()
+  "Should only consider the specified backend's models."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (list
+                (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
+                (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")))))
+    (let ((model (gptel-auto-workflow--best-model-for-target "foo.el" "DeepSeek")))
+      ;; Only DeepSeek models for this target → one kept
+      (should (string= "deepseek-v4-pro" model)))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
