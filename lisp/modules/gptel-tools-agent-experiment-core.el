@@ -1050,8 +1050,7 @@ Safe to call multiple times: already-merged branches are skipped."
              (fboundp 'gptel-auto-workflow--parse-all-results))
     (let ((recovered 0)
           (results-dir (expand-file-name "var/tmp/experiments"
-                        (gptel-auto-workflow--worktree-base-root)))
-          (host (system-name)))
+                        (gptel-auto-workflow--worktree-base-root))))
       (dolist (run-dir (directory-files results-dir t "^202[0-9]-"))
         (let* ((tsv-file (expand-file-name "results.tsv" run-dir))
                (run-id (file-name-nondirectory run-dir)))
@@ -1070,7 +1069,7 @@ Safe to call multiple times: already-merged branches are skipped."
                              (experiment-id (nth 0 fields))
                              (target (nth 1 fields))
                              (exp-ts (and (string-match
-                                           "\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}:[0-9]\\{2\\}:[0-9]\\{2\\}\\)Z"
+                                           "\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}[0-9]\\{2\\}[0-9]\\{2\\}\\)Z"
                                            run-id)
                                           (float-time
                                            (date-to-time (match-string 1 run-id)))))
