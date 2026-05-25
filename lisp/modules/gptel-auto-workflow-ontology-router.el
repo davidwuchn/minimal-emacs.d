@@ -1477,11 +1477,11 @@ Returns modified scored list."
              (status (or (gethash backend gptel-auto-workflow--lambda-verification-results)
                          :unknown))
              (score (plist-get entry :score))
-             (penalty (pcase status
-                        (:degraded -20.0)
-                        (:unknown -5.0)
-                        (:healthy 0.0)
-                        (_ -5.0)))
+              (penalty (pcase status
+                         (:degraded -20.0)
+                         (:unknown 0.0)
+                         (:healthy 0.0)
+                         (_ -5.0)))
              (new-score (+ score penalty)))
         (when (/= penalty 0)
           (message "[verbum] %s penalized %.0f for lambda status: %s"

@@ -905,6 +905,18 @@ so calling this with no fresh data is a safe no-op."
         (error
          (message "[research] AutoTTS evolution skipped: %s"
                   (error-message-string err)))))
+    ;; 1b. Lambda verification: check which backends have a lambda compiler.
+    ;;    Async: initiates API calls, results arrive later via callbacks.
+    ;;    Until verified, backends get a -5 penalty (unknown → penalized equally,
+    ;;    so ordering is unaffected).
+    (when (fboundp 'gptel-auto-workflow--verify-all-backends-lambda)
+      (condition-case err
+          (progn
+            (message "[verbum] Verifying lambda compiler on all backends...")
+            (gptel-auto-workflow--verify-all-backends-lambda))
+        (error
+         (message "[verbum] Lambda verification skipped: %s"
+                  (error-message-string err)))))
     ;; 2. Ontology: reorder backend fallbacks based on performance data.
     ;;    Uses experiment keep-rates; safe to call even with empty history.
     (when (fboundp 'gptel-auto-workflow--reorder-fallbacks-by-ontology)
