@@ -189,7 +189,7 @@ CALLBACK receives non-nil for approval and nil for rejection."
   "Confirm TOOL-CALLS via minibuffer with per-tool permit support.
 Shows each tool call with arguments, offering inspect (i) and permit (p) actions."
   (let* ((minibuffer-allow-text-properties t)
-         (backend-name (gptel-backend-name (plist-get info :backend)))
+         (backend-name (gptel-auto-workflow--safe-backend-name (plist-get info :backend)))
          (programmaticp (plist-get info :programmatic-confirm))
          (aggregatep (plist-get info :programmatic-aggregate))
          (prompt (format "%s wants to run " backend-name)))
@@ -259,7 +259,7 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
 (defun my/gptel--confirm-tool-calls-overlay (tool-calls info start-marker tracking-marker)
   "Confirm TOOL-CALLS via chat buffer overlay with previews and keybindings.
 START-MARKER and TRACKING-MARKER delimit the response region."
-  (let* ((backend-name (gptel-backend-name (plist-get info :backend)))
+  (let* ((backend-name (gptel-auto-workflow--safe-backend-name (plist-get info :backend)))
          (programmaticp (plist-get info :programmatic-confirm))
          (aggregatep (plist-get info :programmatic-aggregate))
          (actions-string
