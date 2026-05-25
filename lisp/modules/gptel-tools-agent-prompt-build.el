@@ -1698,10 +1698,10 @@ if no per-task mapping exists for this backend."
 If BACKEND is not found, returns \"unknown\"."
   (or (and (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
            (cdr (assoc backend gptel-auto-workflow-headless-subagent-fallbacks
-                       :test #'string=)))
+                       (lambda (a b) (string= a (car b))))))
       (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
            (cdr (assoc backend gptel-auto-workflow-executor-rate-limit-fallbacks
-                       :test #'string=)))
+                       (lambda (a b) (string= a (car b))))))
       "unknown"))
 
 (defun gptel-auto-workflow--headless-provider-override-active-p ()
