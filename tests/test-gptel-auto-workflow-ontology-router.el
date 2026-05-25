@@ -19,6 +19,7 @@
 
 ;; Mock variables
 (defvar gptel-auto-workflow--evolution-next-cycle-hints nil)
+(defvar gptel-auto-workflow--current-target nil "Mock current target for testing.")
 
 ;; Mock the existing fallback configuration
 (defvar gptel-auto-workflow-headless-subagent-fallbacks
@@ -1208,6 +1209,100 @@ SPECS is a list of (backend decision days-ago ...) triples."
     ;; keep-rate should be ≈ 1.0 but with very low effective total
     (should (< (plist-get stats :total) 1))
     (should (= 10 (plist-get stats :raw-total)))))
+
+;; ─── Per-Axis Backend Preference Boost Tests ───
+
+(ert-deftest tdd/axis-pref/boost-for-high-axis-keep-rate ()
+  "Backend with high keep-rate on target's axis should get a boost."
+  (let ((gptel-auto-workflow--current-target "lisp/modules/gptel-ext-retry.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow--task-backend-preference nil)
+        (gptel-auto-workflow--holographic-memory
+         '((("lisp/modules/gptel-ext-retry.el" . ":E") . 12)))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5)))
+              ((symbol-function 'gptel-auto-workflow--backend-per-axis-keep-rates)
+               (lambda ()
+                 '((("DeepSeek" . ":E") . 0.9)
+                   (("DashScope" . ":E") . 0.3)
+                   (("MiniMax" . ":E") . 0.2))))
+              ((symbol-function 'gptel-auto-workflow--get-holographic-consensus)
+               (lambda (target)
+                 (list :axis ":E" :count 12 :total 15 :confidence 0.8))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (string= "DeepSeek" (caar ranked)))))))
+
+(ert-deftest tdd/axis-pref/no-boost-when-no-holographic-consensus ()
+  "Without holographic consensus, target axis is unknown, no per-axis boost."
+  (let ((gptel-auto-workflow--current-target "some/unknown/file.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--task-backend-preference nil)
+        (gptel-auto-workflow--holographic-memory nil)
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5)))
+              ((symbol-function 'gptel-auto-workflow--get-holographic-consensus)
+               (lambda (_)
+                 (list :axis "?" :count 0 :total 0 :confidence 0.0))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (string= "DashScope" (caar ranked)))))))
+
+(ert-deftest tdd/axis-pref/no-boost-when-confidence-low ()
+  "When holographic confidence is < 0.5, should not apply axis boost."
+  (let ((gptel-auto-workflow--current-target "uncertain-target.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--task-backend-preference nil)
+        (gptel-auto-workflow--holographic-memory
+         '((("uncertain-target.el" . ":K") . 2)))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5)))
+              ((symbol-function 'gptel-auto-workflow--backend-per-axis-keep-rates)
+               (lambda ()
+                 '((("DeepSeek" . ":K") . 0.95))))
+              ((symbol-function 'gptel-auto-workflow--get-holographic-consensus)
+               (lambda (_)
+                 (list :axis ":K" :count 2 :total 5 :confidence 0.4))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (string= "DashScope" (caar ranked)))))))
+
+(ert-deftest tdd/axis-pref/boost-scales-with-axis-keep-rate ()
+  "Boost magnitude should be proportional to the axis keep-rate delta."
+  (let ((gptel-auto-workflow--current-target "target.el")
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")))
+        (gptel-auto-workflow--task-backend-preference nil)
+        (gptel-auto-workflow--holographic-memory
+         '((("target.el" . ":B") . 10)))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5)))
+              ((symbol-function 'gptel-auto-workflow--backend-per-axis-keep-rates)
+               (lambda ()
+                 '((("DeepSeek" . ":B") . 0.9)
+                   (("DashScope" . ":B") . 0.4))))
+              ((symbol-function 'gptel-auto-workflow--get-holographic-consensus)
+               (lambda (_)
+                 (list :axis ":B" :count 10 :total 12 :confidence 0.83))))
+      (let* ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
+        (should (string= "DeepSeek" (caar ranked)))))))
 
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

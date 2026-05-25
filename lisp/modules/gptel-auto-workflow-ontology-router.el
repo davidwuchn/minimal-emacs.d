@@ -1276,7 +1276,8 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                       (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
                       (quarantined -1.0)       ; health gate: hard exclude
                       (rate-limited 0.01)      ; demoted but still available as last resort
-                      (t (+ (* health keep-rate) pref-boost)))))
+                       (t (+ (* health keep-rate) pref-boost
+                             (gptel-auto-workflow--axis-preference-boost backend))))))
         (when (>= score 0.0)
           (push (cons (cons backend model) score) scored))))
     (if scored
@@ -1762,6 +1763,45 @@ Category overrides (score = 9999.0) are always ACCEPT regardless of rate."
                    (+1 "ACCEPT"))
                  (if has-override " [override]" ""))))
     (nreverse result)))
+
+;; ─── Per-Axis Backend Preference Boost ───
+
+(defun gptel-auto-workflow--axis-preference-boost (backend)
+  "Return per-axis boost for BACKEND based on current target's KIBC axis.
+Reads `gptel-auto-workflow--current-target', holographic consensus,
+and per-axis keep-rates. Returns 0.0 when no consensus data exists.
+Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
+  (let* ((target (and (boundp 'gptel-auto-workflow--current-target)
+                      gptel-auto-workflow--current-target))
+         (axis-rates (when (fboundp 'gptel-auto-workflow--backend-per-axis-keep-rates)
+                       (condition-case nil
+                           (gptel-auto-workflow--backend-per-axis-keep-rates)
+                         (error nil))))
+         (consensus (when (and target
+                               (fboundp 'gptel-auto-workflow--get-holographic-consensus))
+                      (condition-case nil
+                          (gptel-auto-workflow--get-holographic-consensus target)
+                        (error nil))))
+         (axis (plist-get consensus :axis))
+         (confidence (plist-get consensus :confidence))
+         (count (plist-get consensus :count)))
+    (if (and axis axis-rates (> confidence 0.5) (> count 1))
+        (let* ((axis-match (cl-find-if
+                            (lambda (a)
+                              (and (string= (cdar a) axis)
+                                   (string= (caar a) backend)))
+                            axis-rates))
+               (axis-rate (and axis-match (cdr axis-match)))
+               (avg-rate (let ((sum 0.0) (n 0))
+                           (dolist (a axis-rates)
+                             (when (string= (cdar a) axis)
+                               (cl-incf sum (cdr a))
+                               (cl-incf n)))
+                           (if (> n 0) (/ sum n) 0.0))))
+          (if (and axis-rate (> axis-rate avg-rate 0.0))
+              (* (- axis-rate avg-rate) confidence 0.15)
+            0.0))
+      0.0)))
 
 ;; ─── Verbum Experiment Tracker ───
 
