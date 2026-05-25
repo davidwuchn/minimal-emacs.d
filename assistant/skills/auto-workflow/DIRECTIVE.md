@@ -2,8 +2,13 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.25
+<<<<<<< Updated upstream
 total-experiments: 1346
 total-kept: 254
+=======
+total-experiments: 1131
+total-kept: 236
+>>>>>>> Stashed changes
 ---
 
 # Auto-Workflow Program
@@ -17,6 +22,7 @@ total-kept: 254
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
+<<<<<<< Updated upstream
 | `lisp/modules/gptel-ext-tool-permits.el` | 30% | 10 | 3 | ✅ High yield |
 | `lisp/modules/gptel-tools-agent-staging-baseline.el` | 29% | 7 | 2 | 🟡 Active |
 | `lisp/modules/gptel-benchmark-core.el` | 28% | 78 | 22 | 🟡 Active |
@@ -27,6 +33,18 @@ total-kept: 254
 | `lisp/modules/gptel-ext-abort.el` | 25% | 8 | 2 | 🟡 Active |
 | `lisp/modules/gptel-tools-agent-prompt-build.el` | 25% | 4 | 1 | 🟡 Active |
 | `lisp/modules/gptel-ext-retry.el` | 23% | 53 | 12 | 🟡 Active |
+=======
+| `lisp/modules/gptel-benchmark-comparator.el` | 100% | 1 | 1 | ✅ High yield |
+| `lisp/modules/strategic-daemon-functions.el` | 62% | 8 | 5 | ✅ High yield |
+| `lisp/modules/gptel-auto-workflow-mementum.el` | 50% | 2 | 1 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-experiment-loop.el` | 45% | 11 | 5 | ✅ High yield |
+| `lisp/modules/gptel-agent-loop.el` | 34% | 89 | 30 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-worktree.el` | 33% | 9 | 3 | ✅ High yield |
+| `lisp/modules/gptel-auto-workflow-research-benchmark.el` | 33% | 6 | 2 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-evolution.el` | 30% | 20 | 6 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-core.el` | 29% | 52 | 15 | 🟡 Active |
+| `lisp/modules/gptel-sandbox.el` | 28% | 121 | 34 | 🟡 Active |
+>>>>>>> Stashed changes
 
 ## 🧬 Meta-Learned Patterns
 
@@ -57,11 +75,19 @@ total-kept: 254
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
+<<<<<<< Updated upstream
 - **other** (1165×): Investigate root cause
 - **validation-failed** (101×): Improve pre-grade validation prompts
 - **timeout** (39×): Add smaller batch sizes or chunked processing
 - **api-limit** (23×): Implement provider fallback or rate limit handling
 - **test-failure** (15×): Run tests before committing experiments
+=======
+- **other** (908×): Investigate root cause
+- **timeout** (99×): Add smaller batch sizes or chunked processing
+- **test-failure** (58×): Run tests before committing experiments
+- **validation-failed** (36×): Improve pre-grade validation prompts
+- **api-limit** (24×): Implement provider fallback or rate limit handling
+>>>>>>> Stashed changes
 
 ## Success Patterns
 
@@ -108,4 +134,8 @@ var/elpa/**
 
 ---
 
+<<<<<<< Updated upstream
 *This directive was auto-generated from 1346 experiments (254 kept locally across 1346 local records). It evolves every self-evolution cycle.*
+=======
+*This directive was auto-generated from 1131 experiments (236 kept locally across 1131 local records). It evolves every self-evolution cycle.*
+>>>>>>> Stashed changes

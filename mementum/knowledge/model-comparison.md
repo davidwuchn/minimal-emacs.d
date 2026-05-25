@@ -1,4 +1,5 @@
 # Model-Level Head-to-Head Comparison
+<<<<<<< Updated upstream
 > Auto-generated from 1346 experiments across 13 models
 
 ## Model Rankings (by keep-rate)
@@ -16,6 +17,21 @@
 - **moonshot/kimi-k2.6**: 8.8%
 - **MiniMax/temporal-pattern-weighting**: 0.0%
 - **DashScope/qwen3.6-plus**: 0.0%
+=======
+> Auto-generated from 1131 experiments across 9 models
+
+## Model Rankings (by keep-rate)
+
+- **DeepSeek/kimi-k2.6**: 30.0%
+- **moonshot/kimi-k2.6**: 28.6%
+- **MiniMax/minimax-m2.7-highspeed**: 24.1%
+- **MiniMax/template-default**: 19.0%
+- **DeepSeek/minimax-m2.7-highspeed**: 9.1%
+- **MiniMax/persisted-findings**: 8.7%
+- **MiniMax/topic-knowledge-amplification**: 0.0%
+- **MiniMax/[strategy-evolution] REJECTED candidate: Proposed name ’pattern-triggered-skills’ is generic (must be descriptive)**: 0.0%
+- **CF-Gateway/@cf/openai/gpt-oss-120b**: 0.0%
+>>>>>>> Stashed changes
 
 ## MiniMax/own-repos-first vs MiniMax/temporal-pattern-weighting (winner: **MiniMax/own-repos-first**)
 - MiniMax/own-repos-first: 6.2% keep-rate
@@ -123,4 +139,8 @@
 - Shared targets: 1 | won 1, won 0, ties 0
 
 
+<<<<<<< Updated upstream
 *Generated: 2026-05-25 20:11*
+=======
+*Generated: 2026-05-25 20:03*
+>>>>>>> Stashed changes

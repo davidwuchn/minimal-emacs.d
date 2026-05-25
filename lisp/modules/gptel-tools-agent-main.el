@@ -338,10 +338,11 @@ Usage:
     (unless (and (boundp 'gptel-auto-workflow-targets)
                  gptel-auto-workflow-targets)
       (when (fboundp 'gptel-auto-workflow--discover-targets)
-        (setq-default gptel-auto-workflow-targets
-                     (gptel-auto-workflow--discover-targets))
-        (message "[auto-workflow] Auto-discovered %d targets"
-                 (length gptel-auto-workflow-targets))))
+        (let ((discovered (gptel-auto-workflow--discover-targets)))
+          (setq gptel-auto-workflow-targets discovered)
+          (setq-default gptel-auto-workflow-targets discovered)
+          (message "[auto-workflow] Auto-discovered %d targets"
+                   (length discovered)))))
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id

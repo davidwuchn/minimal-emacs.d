@@ -11,7 +11,11 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
+<<<<<<< Updated upstream
 *Consolidated from 1346 experiments (19% keep rate).*
+=======
+*Consolidated from 1131 experiments (21% keep rate).*
+>>>>>>> Stashed changes
 
 **Performance:** 254 kept / 692 discarded / 101 failed (EXTRACTED — from TSV)
 
