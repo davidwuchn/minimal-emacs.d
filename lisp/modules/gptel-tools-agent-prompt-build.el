@@ -1915,13 +1915,18 @@ Handles gptel-backend structs, strings, and keyword symbols."
 (defun gptel-auto-workflow--safe-backend-name (backend)
   "Safe wrapper around `gptel-backend-name'.
 Catches type errors and falls back to format \"%s\"."
-  (condition-case nil
-      (gptel-backend-name backend)
-    (error
-     (let ((name (format "%s" backend)))
-       (message "[backend] gptel-backend-name failed for %S, using %s"
-                backend name)
-       name))))
+  (cond
+   ((stringp backend) backend)
+   ((keywordp backend) (substring (symbol-name backend) 1))
+   ((null backend) "nil")
+   (t
+    (condition-case nil
+        (gptel-backend-name backend)
+      (error
+       (let ((name (format "%s" backend)))
+         (message "[backend] gptel-backend-name failed for %S, using %s"
+                  backend name)
+         name))))))
 
 (defun gptel-auto-workflow--model-max-output-tokens (model-id)
   "Return the documented max output tokens for MODEL-ID, or nil when unknown."

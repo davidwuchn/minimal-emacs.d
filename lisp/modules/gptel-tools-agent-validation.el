@@ -118,6 +118,29 @@ regular file content."
         setq-local throw unless unwind-protect when while)
   "Special forms and defining forms that are valid even when not `fboundp'.")
 
+(defconst gptel-auto-experiment--safe-validation-requires
+  '(cl-lib json seq subr-x)
+  "Features safe to load while validating generated code.")
+
+(defun gptel-auto-experiment--required-features (forms)
+  "Return top-level `require' features from FORMS."
+  (let (features)
+    (dolist (form forms)
+      (when (and (consp form) (eq (car form) 'require))
+        (let ((feature-form (cadr form)))
+          (when (and (consp feature-form)
+                     (eq (car feature-form) 'quote))
+            (setq feature-form (cadr feature-form)))
+          (when (symbolp feature-form)
+            (push feature-form features)))))
+    (delete-dups features)))
+
+(defun gptel-auto-experiment--load-safe-required-features (forms)
+  "Load safe top-level dependencies declared in FORMS."
+  (dolist (feature (gptel-auto-experiment--required-features forms))
+    (when (memq feature gptel-auto-experiment--safe-validation-requires)
+      (require feature nil t))))
+
 (defun gptel-auto-experiment--defined-function-symbols (forms)
   "Return function symbols declared or defined by top-level FORMS."
   (let (symbols)
@@ -147,6 +170,17 @@ regular file content."
         (insert diff)
         (goto-char (point-min))
         (while (re-search-forward "^+\\([^+].*\\)$" nil t)
+          (push (match-string 1) lines))))
+    (nreverse lines)))
+
+(defun gptel-auto-experiment--diff-removed-lines (diff)
+  "Return removed source lines from unified DIFF, excluding file headers."
+  (let (lines)
+    (when (stringp diff)
+      (with-temp-buffer
+        (insert diff)
+        (goto-char (point-min))
+        (while (re-search-forward "^-\\([^-].*\\)$" nil t)
           (push (match-string 1) lines))))
     (nreverse lines)))
 
@@ -187,30 +221,53 @@ variable names are not mistaken for undefined function calls."
         ((walk (form)
            (cond
             ((atom form) nil)
-            ((not (proper-list-p form)) nil)
-            (t
-             (let ((head (car form)))
-               (when (symbolp head)
-                 (push head calls))
-               (pcase head
-                 ((or 'quote 'function 'backquote 'quasiquote) nil)
-                 ((or 'defun 'defmacro 'defsubst 'cl-defun 'cl-defmacro 'cl-defsubst
-                      'define-minor-mode 'define-derived-mode 'define-globalized-minor-mode)
-                  (mapc #'walk (nthcdr 3 form)))
-                 ((or 'lambda 'closure)
-                  (mapc #'walk (cddr form)))
-                 ((or 'let 'let*)
-                  (dolist (binding (nth 1 form))
-                    (when (consp binding)
-                      (mapc #'walk (cdr binding))))
-                  (mapc #'walk (nthcdr 2 form)))
-                 ((or 'cl-labels 'cl-flet)
-                  (dolist (binding (nth 1 form))
-                    (when (consp binding)
-                      (mapc #'walk (cddr binding))))
-                  (mapc #'walk (nthcdr 2 form)))
-                 (_
-                  (mapc #'walk (cdr form)))))))))
+             ((not (proper-list-p form)) nil)
+             (t
+              (let ((head (car form)))
+                (pcase head
+                  ((or 'quote 'function 'backquote 'quasiquote) nil)
+                  ((pred (lambda (symbol)
+                           (and (symbolp symbol)
+                                (member (symbol-name symbol) '("`" "," ",@")))))
+                   nil)
+                  ((or 'defun 'defmacro 'defsubst 'cl-defun 'cl-defmacro 'cl-defsubst
+                       'define-minor-mode 'define-derived-mode 'define-globalized-minor-mode)
+                   (push head calls)
+                   (mapc #'walk (nthcdr 3 form)))
+                  ((or 'declare-function 'autoload) nil)
+                  ((or 'lambda 'closure)
+                   (push head calls)
+                   (mapc #'walk (cddr form)))
+                  ((or 'let 'let*)
+                   (push head calls)
+                   (dolist (binding (nth 1 form))
+                     (when (consp binding)
+                       (mapc #'walk (cdr binding))))
+                   (mapc #'walk (nthcdr 2 form)))
+                  ('dolist
+                   (push head calls)
+                   (let ((spec (nth 1 form)))
+                     (when (consp spec)
+                       (walk (cadr spec))
+                       (walk (caddr spec))))
+                   (mapc #'walk (nthcdr 2 form)))
+                  ('dotimes
+                   (push head calls)
+                   (let ((spec (nth 1 form)))
+                     (when (consp spec)
+                       (walk (cadr spec))
+                       (walk (caddr spec))))
+                   (mapc #'walk (nthcdr 2 form)))
+                  ((or 'cl-labels 'cl-flet)
+                   (push head calls)
+                   (dolist (binding (nth 1 form))
+                     (when (consp binding)
+                       (mapc #'walk (cddr binding))))
+                   (mapc #'walk (nthcdr 2 form)))
+                  (_
+                   (when (symbolp head)
+                     (push head calls))
+                   (mapc #'walk (cdr form)))))))))
       (mapc #'walk forms))
     (delete-dups calls))))
 
@@ -222,16 +279,22 @@ forward references.  FORMS are the parsed top-level forms from the full file and
 are used to recognize local definitions and `declare-function' declarations."
   (unless (proper-list-p forms)
     (error "ASSUMPTION VIOLATION: forms must be a proper list, got: %S" forms))
+  (gptel-auto-experiment--load-safe-required-features forms)
   (let* ((local-defs (gptel-auto-experiment--defined-function-symbols forms))
          (actual-calls (gptel-auto-experiment--call-symbols-in-forms forms))
-         (calls nil))
+          (removed-calls nil)
+          (calls nil))
+    (dolist (line (gptel-auto-experiment--diff-removed-lines diff))
+      (setq removed-calls (append (gptel-auto-experiment--call-symbols-in-line line)
+                                  removed-calls)))
     (dolist (line (gptel-auto-experiment--diff-added-lines diff))
       (setq calls (append (gptel-auto-experiment--call-symbols-in-line line)
                           calls)))
     (cl-find-if
      (lambda (symbol)
-       (and (memq symbol actual-calls)
-            (not (gptel-auto-experiment--defined-runtime-call-p symbol local-defs))))
+        (and (memq symbol actual-calls)
+             (not (memq symbol removed-calls))
+             (not (gptel-auto-experiment--defined-runtime-call-p symbol local-defs))))
      (delete-dups (nreverse calls)))))
 
 (defun gptel-auto-experiment--forward-sexp-file (file)
