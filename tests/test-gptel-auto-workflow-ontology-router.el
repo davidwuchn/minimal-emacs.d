@@ -30,7 +30,11 @@
   "Mock headless fallback list for testing.")
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
-  gptel-auto-workflow-headless-subagent-fallbacks
+  '(("DashScope" . "qwen3.6-plus")
+    ("DeepSeek" . "deepseek-v4-flash")
+    ("moonshot" . "kimi-k2.6")
+    ("MiniMax" . "minimax-m2.7-highspeed")
+    ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))
   "Mock executor fallback list for testing.")
 
 (load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-ontology-router.el"
@@ -832,6 +836,61 @@ Guards against missing runtime dependencies (worktree-base-root)."
     (let ((scored (list (list :backend "unknown-backend" :score 100.0))))
       (setq scored (gptel-auto-workflow--apply-verification-penalty scored))
       (should (= 95.0 (plist-get (car scored) :score))))))
+
+;; ─── Ranked Subagent Backends Tests ───
+;; Tests for ranked-subagent-backends tiebreaking and keep-rate floor
+
+(ert-deftest regression/ontology-router/ranked-dashscope-first-on-tie ()
+  "DashScope should be first when all backends have equal keep-rate."
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("moonshot" . "kimi-k2.6")
+           ("MiniMax" . "minimax-m2.7-highspeed")
+           ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
+        (should (string= "DashScope" (caar ranked)))
+        (should (string= "qwen3.6-plus" (cdar ranked)))))))
+
+(ert-deftest regression/ontology-router/ranked-keeps-all-backends ()
+  "ranked-subagent-backends should include all backends from fallback list."
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("moonshot" . "kimi-k2.6")
+           ("MiniMax" . "minimax-m2.7-highspeed")
+           ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
+        (should (= 5 (length ranked)))
+        (should (assoc "DashScope" ranked))
+        (should (assoc "DeepSeek" ranked))
+        (should (assoc "moonshot" ranked))
+        (should (assoc "MiniMax" ranked))
+        (should (assoc "CF-Gateway" ranked))))))
+
+(ert-deftest regression/ontology-router/bayesian-keep-rate-floor ()
+  "Backends with < 3 experiments should get 0.25 floor, not actual rate."
+  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
+           ("moonshot" . "kimi-k2.6")
+           ("MiniMax" . "minimax-m2.7-highspeed")
+           ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
+               (lambda (backend &rest _)
+                 (cond
+                  ((string= backend "DashScope")
+                   (list :kept 0 :total 1 :keep-rate 0.0))
+                  ((string= backend "DeepSeek")
+                   (list :kept 2 :total 8 :keep-rate 0.25))
+                  (t (list :kept 0 :total 0 :keep-rate nil))))))
+      (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
+        (should (string= "DashScope" (caar ranked)))
+        (should (assoc "DeepSeek" ranked))))))
 
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

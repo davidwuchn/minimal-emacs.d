@@ -35,6 +35,8 @@ Signals an error if the directory cannot be determined or does not exist."
 (defun gptel-tools-agent--module-path (feature-name)
   "Return the full path for module with FEATURE-NAME (a symbol).
 Ensures the module directory exists before constructing the path."
+  (unless (and feature-name (symbolp feature-name))
+    (error "Feature name must be a non-nil symbol: %S" feature-name))
   (expand-file-name (format "%s.el" feature-name)
                     (gptel-tools-agent--ensure-module-dir)))
 
