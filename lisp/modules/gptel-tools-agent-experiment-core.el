@@ -96,7 +96,7 @@ Checks `gptel-auto-workflow--rate-limited-backends' and uses
              (fboundp 'gptel-auto-workflow--backend-rate-limited-p)
              (fboundp 'gptel-auto-workflow--first-available-provider-candidate)
              (fboundp 'gptel-auto-workflow--backend-object))
-    (let* ((current-name (gptel-backend-name gptel-backend))
+    (let* ((current-name (gptel-auto-workflow--safe-backend-name gptel-backend))
            (is-limited (gptel-auto-workflow--backend-rate-limited-p current-name)))
       (when is-limited
         (if-let* ((fallback (gptel-auto-workflow--first-available-provider-candidate
@@ -227,7 +227,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                (actual-backend
                                 (let* ((post-backend (and (boundp 'gptel-backend) gptel-backend
                                                          (fboundp 'gptel-backend-name)
-                                                         (gptel-backend-name gptel-backend)))
+                                                         (gptel-auto-workflow--safe-backend-name gptel-backend)))
                                        (pre-backend (and (stringp experiment-backend)
                                                          experiment-backend))
                                        (global-default "MiniMax"))
@@ -975,7 +975,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                             (plist-get effective-preset :backend)))
                                       (and (boundp 'gptel-backend) gptel-backend
                                            (fboundp 'gptel-backend-name)
-                                           (gptel-backend-name gptel-backend))
+                                           (gptel-auto-workflow--safe-backend-name gptel-backend))
                                       "unknown")))
                             effective-backend))
                   (error
@@ -983,7 +983,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                    (setq experiment-backend
                          (and (boundp 'gptel-backend) gptel-backend
                               (fboundp 'gptel-backend-name)
-                              (gptel-backend-name gptel-backend)))))
+                              (gptel-auto-workflow--safe-backend-name gptel-backend)))))
                 (condition-case err
                     (setq experiment-model
                           (let* ((base-preset

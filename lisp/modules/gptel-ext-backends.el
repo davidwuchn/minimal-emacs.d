@@ -97,7 +97,7 @@ ARGS are passed to `gptel-make-openai'."
   (let ((result (funcall orig-fun backend response info)))
     (if (and (null result)
              (eq (type-of backend) 'gptel-openai)
-             (string= (gptel-backend-name backend) "CF-Gateway"))
+             (string= (gptel-auto-workflow--safe-backend-name backend) "CF-Gateway"))
         (let* ((choice0 (map-nested-elt response '(:choices 0)))
                (message (plist-get choice0 :message))
                (reasoning (plist-get message :reasoning_content)))

@@ -45,7 +45,7 @@ Skips special buffers like *Message* that may have gptel-mode enabled."
                    (propertize " " 'display '(space :align-to 0))
                    (format "%s"
                            (if (fboundp 'gptel-backend-name)
-                               (gptel-backend-name gptel-backend)
+                               (gptel-auto-workflow--safe-backend-name gptel-backend)
                              "gptel"))
                    (propertize
                     (if (fboundp 'buttonize)
