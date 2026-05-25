@@ -474,7 +474,7 @@ for retry in 0 1 2 3 4; do
         break
     fi
 done
-wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "ov5-auto-workflow" || true
+wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "ov5-auto-workflow" || :
 
 # Verify auto-workflow actually completed (not timed out)
 workflow_status="$($SCRIPT status 2>/dev/null || true)"
