@@ -44,11 +44,11 @@
        nil
        (lambda (targets)
          (setq parsed-targets targets)))
-      (should (= captured-timeout 120))
+      (should (= captured-timeout 60))
       (should (equal parsed-targets '("lisp/modules/target.el"))))))
 
 (ert-deftest regression/auto-workflow-strategic/ask-analyzer-keeps-higher-global-timeout ()
-  "Analyzer target selection should not shorten a larger global timeout."
+  "Analyzer target selection should clamp to the dedicated time budget."
   (let ((gptel-auto-experiment-use-subagents t)
         (gptel-auto-workflow-analyzer-time-budget 120)
         (my/gptel-agent-task-timeout 300)
@@ -64,7 +64,7 @@
                  (setq captured-timeout timeout)
                  (funcall callback "[]"))))
       (gptel-auto-workflow--ask-analyzer-with-findings nil #'ignore)
-      (should (= captured-timeout 300)))))
+      (should (= captured-timeout 120)))))
 
 (ert-deftest regression/auto-workflow-strategic/ask-analyzer-retries-on-provider-failover ()
   "Analyzer target selection should rerun once on the promoted failover provider.
