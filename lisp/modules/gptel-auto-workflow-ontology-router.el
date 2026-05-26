@@ -1707,14 +1707,26 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
              ;; Bayesian-smoothed keep-rate: backends with < 3 experiments
              ;; get the 0.25 floor (DeepSeek's earned keep-rate) to avoid
              ;; cold-start bias from a single discarded experiment.
-             ;; This gives DashScope (and other untested backends) equal
-             ;; footing so the fallback-chain order breaks ties.
              (keep-rate (if (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
                              (let* ((stats (gptel-auto-workflow--get-backend-performance-stats backend))
                                     (raw (plist-get stats :keep-rate))
                                     (total (plist-get stats :total)))
                                (if (or (null raw) (< total 3)) 0.25 raw))
                            0.25))
+             ;; Cold-start exploration boost: backends with very few
+             ;; experiments get a temporary score lift so they can
+             ;; accumulate data and prove themselves. Without this,
+             ;; established backends (DashScope, DeepSeek) permanently
+             ;; dominate and new backends (moonshot/kimi-k2.6) never
+             ;; get a chance to compete.
+             (cold-start-boost
+              (if (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
+                  (let* ((stats (gptel-auto-workflow--get-backend-performance-stats backend))
+                         (total (plist-get stats :total)))
+                    (cond ((< total 3) 0.15)     ; almost no data → significant boost
+                          ((< total 5) 0.05)     ; some data → small boost
+                          (t 0.0)))
+                0.15))  ; if stats unavailable, treat as cold-start
               (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
                                 (gptel-auto-workflow--backend-quarantined-p backend)))
               (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
@@ -1741,7 +1753,7 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                       (quarantined -1.0)       ; health gate: hard exclude
                       (cooldown -1.0)           ; per-run: hard exclude
                       (rate-limited 0.01)      ; demoted but still available as last resort
-                       (t (+ (* health keep-rate) pref-boost axis-boost)))))
+                       (t (+ (* health keep-rate) pref-boost axis-boost cold-start-boost)))))
         (when (>= score 0.0)
           (push (cons (cons backend model)
                       (list :score score :health health :keep-rate keep-rate
