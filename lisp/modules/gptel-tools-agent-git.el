@@ -498,8 +498,8 @@ ORIG is `gptel-agent--truncate-buffer'. PREFIX and MAX-LINES are passed through.
                  (goto-char (point-min))
                  (re-search-forward "-\\*-" (line-end-position) t))))
          (temp-dir (and (> (buffer-size) 20000)
-                        (expand-file-name "gptel-agent-temp/"
-                                          (temporary-file-directory))))
+                        (expand-file-name "var/tmp/gptel-agent-temp/"
+                                          user-emacs-directory)))
          temp-file)
     (when temp-dir
       (make-directory temp-dir t))
