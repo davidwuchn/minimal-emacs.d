@@ -1936,35 +1936,44 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (gptel-auto-workflow--evolution-optimize-backend-order)
     (error (message "[evolution] Step optimize-backend-order: %s" err)))
   ;; Step C.5: Head-to-head backend comparison (data-driven, no LLM calls)
-  (gptel-auto-workflow--evolution-persist-backend-comparison)
+  (condition-case err
+      (gptel-auto-workflow--evolution-persist-backend-comparison)
+    (error (message "[evolution] Step backend-comparison: %s" err)))
   ;; Step C.6: Model-level comparison (backend/model granularity)
   (condition-case err
       (gptel-auto-workflow--evolution-persist-model-comparison)
-    (error
-     (message "[evolution] Step model-comparison: %s" err)))
+    (error (message "[evolution] Step model-comparison: %s" err)))
   ;; Step C.7: Semantic relationship discovery (git-embed ontology enrichment)
-  (when (fboundp 'gptel-auto-workflow--evolution-persist-semantic-relationships)
-    (gptel-auto-workflow--evolution-persist-semantic-relationships))
+  (condition-case err
+      (when (fboundp 'gptel-auto-workflow--evolution-persist-semantic-relationships)
+        (gptel-auto-workflow--evolution-persist-semantic-relationships))
+    (error (message "[evolution] Step semantic-relationships: %s" err)))
   ;; Step C.7b: Nucleus persona auto-tuning from measured impact
   (when (fboundp 'gptel-auto-workflow--auto-tune-personas)
     (condition-case err
         (gptel-auto-workflow--auto-tune-personas)
       (error (message "[evolution] Step persona-auto-tune: %s" err))))
   ;; Step C.8: Allium issue trend analysis + regression detection
-  (let ((trends-report (gptel-auto-workflow--allium-trends-report)))
-    (when (> (length trends-report) 30)
-      (let ((file (expand-file-name "mementum/knowledge/allium-trends.md"
-                                    (gptel-auto-workflow--worktree-base-root))))
-        (make-directory (file-name-directory file) t)
-        (with-temp-file file (insert trends-report)))))
+  (condition-case err
+      (let ((trends-report (gptel-auto-workflow--allium-trends-report)))
+        (when (> (length trends-report) 30)
+          (let ((file (expand-file-name "mementum/knowledge/allium-trends.md"
+                                        (gptel-auto-workflow--worktree-base-root))))
+            (make-directory (file-name-directory file) t)
+            (with-temp-file file (insert trends-report)))))
+    (error (message "[evolution] Step allium-trends: %s" err)))
   ;; Step C.9: Save Allium regression baselines for next cycle
-  (gptel-auto-workflow--allium-save-regression-baseline)
+  (condition-case err
+      (gptel-auto-workflow--allium-save-regression-baseline)
+    (error (message "[evolution] Step allium-regression: %s" err)))
   ;; Throttle VSM health check to 1x/15min (expensive: allium LLM calls)
-  (let ((now (float-time (current-time))))
-    (when (or (null gptel-auto-workflow--vsm-health-last-run)
-              (> (- now gptel-auto-workflow--vsm-health-last-run) 900))
-      (setq gptel-auto-workflow--vsm-health-last-run now)
-      (gptel-auto-workflow--evolution-vsm-health-check)))
+  (condition-case err
+      (let ((now (float-time (current-time))))
+        (when (or (null gptel-auto-workflow--vsm-health-last-run)
+                  (> (- now gptel-auto-workflow--vsm-health-last-run) 900))
+          (setq gptel-auto-workflow--vsm-health-last-run now)
+          (gptel-auto-workflow--evolution-vsm-health-check)))
+    (error (message "[evolution] Step vsm-health: %s" err)))
   ;; Change impact classification (Semantica ChangeLogAnalyzer pattern)
   (condition-case nil
       (let ((impact (gptel-auto-workflow--classify-experiment-impact)))

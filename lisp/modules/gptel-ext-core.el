@@ -380,12 +380,20 @@ Handles both symbol :type 'text and string :type \"text\"."
 
 (defun my/gptel--gptel-request-callback-guard (orig-fn &optional prompt &rest args)
   "Ensure `gptel-request' always has a function callback.
-Prevents the (void-function nil) flood when FSM info callback is missing."
+Prevents the (void-function nil) flood when FSM info callback is missing.
+Also guards against (gptel-request ... :callback nil) where the key is
+present but the value is nil — still triggers void-function nil."
   (let* ((keys (cl-loop for (k v) on args by #'cddr collect k))
-         (has-callback (memq :callback keys)))
-    (if has-callback
+         (has-callback (memq :callback keys))
+         (callback-val (and has-callback (plist-get (cons nil args) :callback))))
+    (if (and has-callback (functionp callback-val))
         (apply orig-fn prompt args)
-      (apply orig-fn prompt :callback #'ignore args))))
+      (apply orig-fn prompt :callback (or (and (functionp callback-val) callback-val)
+                                          #'ignore)
+             ;; Pass remaining args minus any stale :callback key
+             (cl-loop for (k v) on args by #'cddr
+                      unless (eq k :callback)
+                      append (list k v))))))
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-request :around #'my/gptel--gptel-request-callback-guard))
 
