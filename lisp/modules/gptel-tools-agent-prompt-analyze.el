@@ -228,9 +228,14 @@ Speculative or purely defensive hardening language does not count."
 (defun gptel-auto-experiment--promote-correctness-fix-decision
     (decision tests-passed grade-score grade-total grade-details &optional hypothesis)
   "Return DECISION or a promoted keep decision for high-confidence ties.
-Promotion is allowed only for non-regressing ties with passing tests, some
+Promotion is allowed for non-regressing ties with passing tests, some
 positive quality/combined improvement, strong grader evidence of a real
-correctness fix, and no explicit rejection from the local decision gate."
+correctness fix.
+
+Additionally, when the gate rejects a confirmed bug fix because code quality
+drops slightly (guard code adds necessary complexity), the correctness bypass
+overrides the rejection.  A bug fix that the grader scores 8+/9 should not be
+rejected solely because nil guards or validation checks increase complexity."
   (let* ((improvement (and (listp decision) (plist-get decision :improvement)))
          (decision-threshold 0.005)
          (score-delta (if (listp improvement)
@@ -252,29 +257,56 @@ correctness fix, and no explicit rejection from the local decision gate."
          (speculative-hypothesis-p
           (gptel-auto-experiment--speculative-correctness-language-p
            hypothesis))
+         (strong-grade-p
+          (gptel-auto-experiment--strong-grade-pass-p
+           grade-score grade-total))
+         (score-acceptable-p
+          (> score-delta (- decision-threshold)))
+         (correctness-bypass-p
+          (and (listp decision)
+               (not (plist-get decision :keep))
+               tests-passed
+               correctness-fix-p
+               (not speculative-hypothesis-p)
+               strong-grade-p
+               score-acceptable-p))
          (override-note
-          "Override: keep non-regressing high-confidence tie with passing tests"))
-    (if (or (not (listp decision))
-            (plist-get decision :keep)
-            (not tests-passed)
-            (<= score-delta (- decision-threshold))
-            (<= quality-delta 0)
-            (<= combined-delta 0)
-            gate-rejected-p
-            (not correctness-fix-p)
-            speculative-hypothesis-p
-            (not (gptel-auto-experiment--strong-grade-pass-p
-                  grade-score grade-total)))
-        decision
-      (let ((promoted (copy-sequence decision)))
-        (setq promoted (plist-put promoted :keep t))
-        (plist-put
-         promoted
-         :reasoning
-         (if (and (stringp reasoning)
-                  (not (string-match-p (regexp-quote override-note) reasoning)))
-             (format "%s | %s" override-note reasoning)
-           override-note))))))
+          (if correctness-bypass-p
+              (format "Correctness fix: grader %d/%d confirms real bug fix keeping despite quality delta %.3f"
+                      grade-score (or grade-total 9) quality-delta)
+            "Override: keep non-regressing high-confidence tie with passing tests")))
+    ;; Correctness bypass: promote genuine bug fixes that the grader strongly confirms.
+    (if correctness-bypass-p
+        (let ((promoted (copy-sequence decision)))
+          (setq promoted (plist-put promoted :keep t))
+          (plist-put
+           promoted
+           :reasoning
+           (if (and (stringp reasoning)
+                    (not (string-match-p (regexp-quote override-note) reasoning)))
+               (format "%s | %s" override-note reasoning)
+             override-note)))
+      ;; Standard promotion: only for non-rejecting score-ties with positive quality.
+      (if (or (not (listp decision))
+              (plist-get decision :keep)
+              (not tests-passed)
+              (<= score-delta (- decision-threshold))
+              (<= quality-delta 0)
+              (<= combined-delta 0)
+              gate-rejected-p
+              (not correctness-fix-p)
+              speculative-hypothesis-p
+              (not strong-grade-p))
+          decision
+        (let ((promoted (copy-sequence decision)))
+          (setq promoted (plist-put promoted :keep t))
+          (plist-put
+           promoted
+           :reasoning
+           (if (and (stringp reasoning)
+                    (not (string-match-p (regexp-quote override-note) reasoning)))
+               (format "%s | %s" override-note reasoning)
+             override-note)))))))
 
 ;;; Prompt Building
 

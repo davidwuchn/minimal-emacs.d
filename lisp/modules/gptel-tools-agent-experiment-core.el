@@ -249,7 +249,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                     nil))))
                               (repeated-focus
                                (gptel-auto-experiment--repeated-focus-match
-                                effective-agent-output previous-results)))
+                                effective-agent-output previous-results target)))
                           (when candidate-validation
                              (let ((best-score (plist-get (cdar candidate-validation) :score)))
                               (message "[auto-exp] Validated %d candidates for %s, best score: %.2f"

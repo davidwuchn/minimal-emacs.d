@@ -518,25 +518,31 @@ short-circuiting repeats."
         (while (re-search-forward "`\\([^`\n]+\\)`" nil t)
           (let ((candidate (match-string 1)))
             (when (and (stringp candidate)
-                       (string-match-p "--\\|::" candidate)
-                       (not (string-match-p "\\.el\\'" candidate)))
+                       (string-match-p "--\\|::" candidate))
               (push candidate symbols))))))
     (nreverse (cl-remove-duplicates symbols :test #'string=))))
 
-(defun gptel-auto-experiment--repeated-focus-match (output previous-results)
+(defun gptel-auto-experiment--repeated-focus-match (output previous-results &optional target-file)
   "Return plist when OUTPUT repeats a changed symbol in PREVIOUS-RESULTS.
 Only counts prior non-kept results and triggers once a symbol appears in at
-least `gptel-auto-experiment-repeat-focus-threshold' previous attempts."
+least `gptel-auto-experiment-repeat-focus-threshold' previous attempts.
+When TARGET-FILE is non-nil, also counts per-target-file discards so
+repeatedly failing files get deprioritized across symbol changes."
   (let ((current-symbols (gptel-auto-experiment--extract-focus-symbols output)))
+    (when target-file
+      (push target-file current-symbols))
     (when current-symbols
       (let ((counts (make-hash-table :test 'equal))
             matches)
         (dolist (result previous-results)
           (when (and (proper-list-p result) (not (gptel-auto-workflow--plist-get result :kept nil)))
-            (dolist (symbol
-                     (gptel-auto-experiment--extract-focus-symbols
-                      (gptel-auto-workflow--plist-get result :agent-output "")))
-              (puthash symbol (1+ (gethash symbol counts 0)) counts))))
+            (let ((prev-symbols (gptel-auto-experiment--extract-focus-symbols
+                                 (gptel-auto-workflow--plist-get result :agent-output ""))))
+              (when (and (stringp target-file)
+                         (equal target-file (gptel-auto-workflow--plist-get result :target "")))
+                (push target-file prev-symbols))
+              (dolist (symbol prev-symbols)
+                (puthash symbol (1+ (gethash symbol counts 0)) counts)))))
         (dolist (symbol current-symbols)
           (let ((count (gethash symbol counts 0)))
             (when (>= count gptel-auto-experiment-repeat-focus-threshold)
