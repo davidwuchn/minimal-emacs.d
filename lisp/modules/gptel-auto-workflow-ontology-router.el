@@ -723,8 +723,22 @@ and the semantic-relationships knowledge page."
                               (expand-file-name "bin/git-embed" root)))
            (kept-targets nil)
            (edges nil)
-           (seen (make-hash-table :test 'equal)))
-      (when (and (file-executable-p git-embed-bin)
+           (seen (make-hash-table :test 'equal))
+           ;; Pi5 has 8GB shared with GPU; git-embed's ONNX model (~2GB)
+           ;; exhausts available memory. Skip vector search on low-memory hosts.
+           (low-memory-p
+            (or (let ((host (system-name)))
+                  (and (stringp host)
+                       (string-match-p "pi5\\|raspberrypi\\|onepi" host)))
+                (condition-case nil
+                    (let* ((meminfo (shell-command-to-string
+                                    "sysctl -n hw.memsize 2>/dev/null || grep MemTotal /proc/meminfo 2>/dev/null || echo 0"))
+                           (mem-bytes (if (string-match "[0-9]+" meminfo)
+                                          (string-to-number (match-string 0 meminfo))
+                                        0)))
+                      (< mem-bytes (* 4 1024 1024 1024)))  ; < 4GB
+                  (error nil)))))
+      (when (and (or low-memory-p (file-executable-p git-embed-bin))
                  (fboundp 'gptel-auto-workflow--parse-all-results))
         (dolist (r (gptel-auto-workflow--parse-all-results))
           (when (equal (plist-get r :decision) "kept")
@@ -733,7 +747,7 @@ and the semantic-relationships knowledge page."
                 (puthash target t seen)
                 (push target kept-targets))))))
       (when kept-targets
-        (if (file-executable-p git-embed-bin)
+        (if (and (not low-memory-p) (file-executable-p git-embed-bin))
             ;; Primary: git-embed vector similarity (nomic-embed-text-v1.5)
             (dolist (source kept-targets)
               (condition-case nil
@@ -753,7 +767,8 @@ and the semantic-relationships knowledge page."
                                 edges)))))
                 (error nil)))
           ;; Fallback: git co-commit Jaccard similarity (no embedding model needed)
-          (message "[semantic] git-embed not available — using co-commit fallback")
+          (message "[semantic] %s — using co-commit fallback"
+                   (if low-memory-p "git-embed skipped (low memory)" "git-embed not available"))
           (let ((fallback-threshold (max 0.10 (/ threshold 3.0))))  ; co-commit scores are lower
             (condition-case nil
                 (let ((co-occur (make-hash-table :test 'equal))
@@ -847,9 +862,18 @@ MAX-SUGGESTIONS limits results (default 5)."
   "Advice around experiment runner to apply ontology fallback ordering.
 Reorders fallback chain before each experiment based on historical performance.
 After each experiment, copies any new rate-limited backends into the per-run
-cooldown list so subsequent experiments hard-exclude failed backends."
+cooldown list so subsequent experiments hard-exclude failed backends.
+SAFETY: Saves and restores all globals this advice touches, so OLTP tests
+in unrelated test files are not affected by side effects."
   (let* ((target (car args))
          (strategy nil)
+         ;; Save ALL globals this advice might modify
+         (saved-rate-limit-fallbacks (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                                         (copy-sequence gptel-auto-workflow-executor-rate-limit-fallbacks)))
+         (saved-rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                                  (copy-sequence gptel-auto-workflow--rate-limited-backends)))
+         (saved-run-failed (and (boundp 'gptel-auto-workflow--run-failed-backends)
+                                (copy-sequence gptel-auto-workflow--run-failed-backends)))
          (prior-rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
                                   (copy-sequence gptel-auto-workflow--rate-limited-backends))))
     ;; Apply ontology-ordered fallbacks
@@ -866,8 +890,13 @@ cooldown list so subsequent experiments hard-exclude failed backends."
           (unless (member b gptel-auto-workflow--run-failed-backends)
             (push b gptel-auto-workflow--run-failed-backends)
             (message "[cooldown] %s added to per-run exclusion list" b))))
-      ;; Reset to static order (ontology re-evaluates fresh each time)
-      (gptel-auto-workflow--reset-fallback-order))))
+      ;; Restore ALL saved globals to prevent side-effect leakage across tests
+      (when saved-rate-limit-fallbacks
+        (setq gptel-auto-workflow-executor-rate-limit-fallbacks saved-rate-limit-fallbacks))
+      (when saved-rate-limited
+        (setq gptel-auto-workflow--rate-limited-backends saved-rate-limited))
+      (when saved-run-failed
+        (setq gptel-auto-workflow--run-failed-backends saved-run-failed)))))
 
 ;; Enabled: ontology-aware fallback reordering on every experiment
 (advice-add 'gptel-auto-experiment-run
@@ -1104,14 +1133,14 @@ Probation threshold auto-tunes from VSM health when available
   (>= (gptel-auto-workflow--backend-health-level backend) 3))
 
 (defvar gptel-auto-workflow--task-backend-preference
-  '(("analyzer"   "DeepSeek"  . 0.15)
-    ("analyzer"   "DashScope" . 0.05)
+  '(("analyzer"   "DashScope" . 0.25)
+    ("analyzer"   "DeepSeek"  . 0.10)
     ("grader"     "moonshot"  . 0.15)
-    ("grader"     "DeepSeek"  . 0.05)
+    ("grader"     "DeepSeek"  . 0.10)
     ("executor"   "DashScope" . 0.15)
     ("executor"   "DeepSeek"  . 0.05)
-    ("researcher" "DeepSeek"  . 0.10)
-    ("researcher" "DashScope" . 0.05)
+    ("researcher" "DeepSeek"  . 0.15)
+    ("researcher" "DashScope" . 0.10)
     ("reviewer"   "DeepSeek"  . 0.10)
     ("comparator" "DashScope" . 0.10))
   "Per-task-type backend preference boost added to ranking score.

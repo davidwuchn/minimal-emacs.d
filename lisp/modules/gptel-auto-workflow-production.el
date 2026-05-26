@@ -39,11 +39,13 @@ every cycle when there are candidate memories to process."
        (message "[auto-workflow] Evolution cycle error: %s" err)))
     ;; Mementum maintenance: rebuild index + synthesize candidates.
     ;; Runs every cycle (hourly) but is cheap when no new memories exist.
+    ;; Enable auto-approve in headless so synthesis actually writes files.
     (condition-case nil
         (when (fboundp 'gptel-mementum-build-index)
-          (gptel-mementum-build-index)
-          (when (fboundp 'gptel-mementum-synthesize-all-candidates)
-            (gptel-mementum-synthesize-all-candidates nil t)))
+          (let ((gptel-mementum-headless-auto-approve t))
+            (gptel-mementum-build-index)
+            (when (fboundp 'gptel-mementum-synthesize-all-candidates)
+              (gptel-mementum-synthesize-all-candidates nil t))))
       (error
        (message "[mementum] Maintenance error in evolution cycle")))))
 
