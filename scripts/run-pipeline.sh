@@ -219,6 +219,27 @@ EOF
     log "Generated local research fallback after: $reason"
 }
 
+# Kill all ov5- daemon processes by PID (not socket — socket may be orphaned).
+# Uses pgrep on daemon name suffix (appears after \012 newline in macOS --bg-daemon).
+kill_ov5_daemons() {
+    local pids label="$1"
+    pids=$(pgrep -f "ov5-(auto-workflow|researcher)" 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+        local count=$(echo "$pids" | wc -l | tr -d ' ')
+        log "Killing $count daemon(s) by PID${label:+ ($label)}"
+        echo "$pids" | xargs kill -9 2>/dev/null || true
+        sleep 2
+        # Verify all are dead
+        local remaining=$(pgrep -f "ov5-(auto-workflow|researcher)" 2>/dev/null || true)
+        if [ -n "$remaining" ]; then
+            local still=$(echo "$remaining" | wc -l | tr -d ' ')
+            log "WARNING: $still daemon(s) still alive after SIGKILL — retrying"
+            echo "$remaining" | xargs kill -9 2>/dev/null || true
+            sleep 2
+        fi
+    fi
+}
+
 verify_research_feedback_loop() {
     local results_file="$1"
     local data_rows linked_rows
@@ -289,6 +310,8 @@ clean_stale_socket "ov5-researcher"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
+kill_ov5_daemons "pre-cleanup"
+# Also try socket-based stop as fallback (handles edge cases)
 "$SCRIPT" stop >/dev/null 2>&1 || true
 AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
 # Force-remove stale staging worktree so auto-workflow recreates from latest main
@@ -455,6 +478,8 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     fi
     # Restart daemon to pick up any evolved code changes
     log "Restarting daemon to load evolved code..."
+    # Kill by PID first (socket may be orphaned), then fallback to socket stop
+    kill_ov5_daemons "evolution-restart"
     "$SCRIPT" stop >/dev/null 2>&1 || true
     # Clean stale sockets from ALL candidate directories (macOS: $TMPDIR, Linux: /tmp).
     # After the daemon is killed, a stale socket prevents new daemon startup.
@@ -482,6 +507,8 @@ if [ "$PIPELINE_SMOKE_ONLY" = "yes" ]; then
     exit 0
 fi
 # Stop researcher daemon so it doesn't hold the cron-job lock
+# Kill by PID first (socket may be orphaned from evolution restart socket cleanup)
+kill_ov5_daemons "pre-workflow"
 AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
 sleep 2
 # Queue the workflow job (daemon will be started if not running)
