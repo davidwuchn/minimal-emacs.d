@@ -43,6 +43,21 @@
 ;; commands). Force-load it so gptel-config and all agent modules are
 ;; available for the auto-workflow pipeline.
 (when (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
+  ;; Clean stale daemon socket from previous crashed instance.
+  ;; At init time the server hasn't started yet, so any existing
+  ;; socket with our name is orphaned from a prior crash. If we
+  ;; don't remove it, Emacs creates the new socket at an alternate
+  ;; path (/tmp) and emacsclient -s can't reach it.
+  (condition-case nil
+      (let ((stale (expand-file-name server-name
+                                     (if (fboundp 'server-socket-dir)
+                                         (server-socket-dir)
+                                       (expand-file-name (format "emacs%d" (user-uid))
+                                                         (or (getenv "TMPDIR") "/tmp"))))))
+        (when (file-exists-p stale)
+          (delete-file stale)
+          (message "[init-ai] Cleaned stale daemon socket: %s" stale)))
+    (error nil))
   (unless (featurep 'gptel)
     (message "[init-ai] Workflow daemon detected; force-loading gptel")
     (require 'gptel)
