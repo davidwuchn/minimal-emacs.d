@@ -442,18 +442,15 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (when (and (boundp 'gptel-auto-workflow-targets)
                (or (null gptel-auto-workflow-targets)
                    (equal gptel-auto-workflow-targets '())))
-      (let ((dir (and (boundp 'gptel-auto-workflow--current-project)
-                      gptel-auto-workflow--current-project)))
-        (when dir
-          (condition-case nil
-              (with-temp-buffer
-                (setq-local default-directory dir)
-                (hack-dir-local-variables-non-file-buffer)
-                (when (local-variable-p 'gptel-auto-workflow-targets)
-                  (setq gptel-auto-workflow-targets
-                        (buffer-local-value 'gptel-auto-workflow-targets
-                                            (current-buffer)))))
-            (error nil))))
+      (condition-case nil
+          (with-temp-buffer
+            (setq-local default-directory root)
+            (hack-dir-local-variables-non-file-buffer)
+            (when (local-variable-p 'gptel-auto-workflow-targets)
+              (setq gptel-auto-workflow-targets
+                    (buffer-local-value 'gptel-auto-workflow-targets
+                                        (current-buffer)))))
+        (error nil))
       (when (and (boundp 'gptel-auto-workflow-targets)
                  (or (null gptel-auto-workflow-targets)
                      (equal gptel-auto-workflow-targets '())))
