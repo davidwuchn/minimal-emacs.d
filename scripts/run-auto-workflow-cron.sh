@@ -978,7 +978,7 @@ workflow_action_elisp() {
         *) return 1 ;;
     esac
 
-    printf '(let ((root (file-name-as-directory "%s"))) (let ((inhibit-message t) (load-verbose nil)) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)) (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el" "gptel-auto-workflow-projects.el")) (load-file (expand-file-name (concat "lisp/modules/" module) root))) (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root))) %s)' \
+    printf '(let ((root (file-name-as-directory "%s"))) (let ((inhibit-message t) (load-verbose nil)) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)) (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el")) (load-file (expand-file-name (concat "lisp/modules/" module) root))) (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root))) %s)' \
            "$ROOT_LISP" "$dispatch"
 }
 

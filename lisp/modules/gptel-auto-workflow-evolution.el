@@ -4720,25 +4720,25 @@ Persists updated config to var/tmp/researcher-controller.json."
             (category (plist-get change :category)))
         (cond
          ((eq action 'new-champion)
-          (plist-put existing :champion-category (symbol-name category))
-          (plist-put existing :min-confidence-stop (min 0.85 (+ 0.7 rate)))
+          (setq existing (plist-put existing :champion-category (symbol-name category)))
+          (setq existing (plist-put existing :min-confidence-stop (min 0.85 (+ 0.7 rate))))
           (message "[controller] New %s champion — stop-threshold adjusted to %.2f"
                    category (plist-get existing :min-confidence-stop)))
          ((eq action 'promoted)
-          (plist-put existing :champion-category (symbol-name category))
-          (plist-put existing :min-confidence-stop (min 0.85 (+ 0.65 rate)))
+          (setq existing (plist-put existing :champion-category (symbol-name category)))
+          (setq existing (plist-put existing :min-confidence-stop (min 0.85 (+ 0.65 rate))))
           (message "[controller] %s champion promoted — stop-threshold adjusted to %.2f"
                    category (plist-get existing :min-confidence-stop)))
          ((eq action 'improving)
-          (plist-put existing :champion-rate rate)
+          (setq existing (plist-put existing :champion-rate rate))
           (message "[controller] %s champion improving — rate=%.1f%%" category (* 100 rate))))))
     (when (and config-file gptel-auto-workflow--category-champions)
-      (plist-put existing :last-champion-update (format-time-string "%Y-%m-%dT%H:%M"))
-      (plist-put existing :active-champions
+      (setq existing (plist-put existing :last-champion-update (format-time-string "%Y-%m-%dT%H:%M")))
+      (setq existing (plist-put existing :active-champions
                  (mapcar (lambda (e) (list :category (symbol-name (car e))
                                            :strategy (cadr e)
                                            :rate (cddr e)))
-                         gptel-auto-workflow--category-champions))
+                         gptel-auto-workflow--category-champions)))
       (make-directory (file-name-directory config-file) t)
       (with-temp-file config-file
         (insert (json-encode existing))))))

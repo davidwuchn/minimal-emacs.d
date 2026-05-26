@@ -10,6 +10,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'gptel-benchmark-subagent)
+(require 'gptel-auto-workflow-ontology-router nil t)
 
 ;; Reset globals that may have been corrupted by earlier test files
 (when (boundp 'gptel-auto-workflow--rate-limited-backends)
@@ -106,7 +107,8 @@
       (if (equal result "ok")
           (progn
             (should (equal (plist-get captured-preset :backend) "DeepSeek"))
-            (should (equal (plist-get captured-preset :model) "deepseek-v4-flash")))
+            (should (equal (format "%s" (plist-get captured-preset :model))
+                           "deepseek-v4-flash")))
         (message "Test skipped: result=%S (my/gptel--agent-task-with-timeout not available in this context)"
                  result)))))
 

@@ -51,6 +51,22 @@ clean_all_sockets() {
     done
 }
 
+# Resolve the live socket path for a given server name and UID.
+# Checks candidate directories, verifies a process is actually listening.
+# Returns 0 with SOCKET_PATH set on success, 1 on failure.
+resolve_live_socket() {
+    local name="$1" uid="$2" sock=""
+    for base in "${XDG_RUNTIME_DIR:-}" "${TMPDIR:-}" /tmp; do
+        [ -n "$base" ] || continue
+        sock="$base/emacs$uid/$name"
+        if [ -S "$sock" ]; then
+            SOCKET_PATH="$sock"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Check if daemon is reachable via emacsclient (the most reliable method).
 # Returns 0 if responsive, 1 otherwise.
 daemon_responds() {
@@ -61,6 +77,14 @@ daemon_responds() {
 workflow_active() {
     timeout 5 emacsclient -s "$SERVER_NAME" --eval \
         '(and (boundp (quote gptel-auto-workflow--running)) gptel-auto-workflow--running)' >/dev/null 2>&1
+}
+
+# Check if a process is actively running (not stuck) without /proc.
+# macOS-compatible: uses ps to get process state.
+proc_is_running() {
+    local pid="$1"
+    [ -z "$pid" ] && return 1
+    ps -p "$pid" -o state= 2>/dev/null | grep -qE '^[RSU]'
 }
 
 mkdir -p "$(dirname "$LOG")"
@@ -112,68 +136,6 @@ fi
 
 # Daemon is truly gone. Kill all processes, clean sockets, restart.
 echo "[$(date '+%H:%M:%S')] Daemon unresponsive — restarting" >> "$LOG"
-pgrep -f "emacs.*daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
-pgrep -f "emacs.*--bg-daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
-pgrep -f "emacs.*--daemon=${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
-sleep 3
-clean_all_sockets "$SERVER_NAME" "$MY_UID"
-echo "$(date +%s)" > "$LAST_RESTART_FILE"
-MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-    bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
-    "$DIR" "$SERVER_NAME" &
-echo "[$(date '+%H:%M:%S')] Daemon restarted" >> "$LOG"
-exit 0
-    fi
-    # Idle daemon, responsive — all good
-    exit 0
-fi
-
-# Daemon not responding to emacsclient. Find out why.
-
-# Resolve the live socket (with listener check, not just file existence)
-SOCKET_PATH=""
-if SOCKET_PATH=$(resolve_live_socket "$SERVER_NAME" "$MY_UID"); then
-    :  # Live socket found — daemon has a socket but not responding
-else
-    # No live socket. Check if there's a socket file without listener (stale).
-    # Clean ALL candidate paths so the next daemon starts clean.
-    echo "[$(date '+%H:%M:%S')] No live socket — cleaning stale sockets and restarting" >> "$LOG"
-    clean_all_sockets "$SERVER_NAME" "$MY_UID"
-    echo "$(date +%s)" > "$LAST_RESTART_FILE"
-    MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-        bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
-        "$DIR" "$SERVER_NAME" &
-        echo "[$(date '+%H:%M:%S')] Daemon restarted after socket cleanup" >> "$LOG"
-    exit 0
-fi
-
-# Check if daemon process exists
-DAEMON_PID=$(pgrep -f "emacs.*--daemon=${SERVER_NAME}" 2>/dev/null || true | head -1)
-if [ -n "$DAEMON_PID" ]; then
-    # Check if daemon is actively running (not stuck on I/O)
-    PROC_STATE=$(cat /proc/$DAEMON_PID/status 2>/dev/null | grep "^State:" | awk '{print $2}' || echo "?")
-    if [ "$PROC_STATE" = "R" ]; then
-        # Actively executing — don't kill, it's busy
-        exit 0
-    fi
-    # Check if workflow is active - if so, use generous timeout
-    WORKFLOW_ACTIVE=0
-    if timeout 5 emacsclient -s "$SERVER_NAME" --eval \
-        '(and (boundp (quote gptel-auto-workflow--running)) gptel-auto-workflow--running)' >/dev/null 2>&1; then
-        WORKFLOW_ACTIVE=1
-    fi
-    if [ "$WORKFLOW_ACTIVE" -eq 1 ]; then
-        echo "[$(date '+%H:%M:%S')] Workflow active — using 600s timeout" >> "$LOG"
-        if timeout 600 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
-            exit 0  # Responded within grace period
-        fi
-    fi
-fi
-
-# Daemon is truly unresponsive. Kill ALL instances, clean sockets, restart.
-echo "[$(date '+%H:%M:%S')] Daemon unresponsive — killing all instances and restarting" >> "$LOG"
-# Kill all daemon processes matching this server name.
-# The --bg-daemon flag uses escaped args, so match broadly.
 pgrep -f "emacs.*daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
 pgrep -f "emacs.*--bg-daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
 pgrep -f "emacs.*--daemon=${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
