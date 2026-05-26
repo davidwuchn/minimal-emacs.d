@@ -1360,7 +1360,12 @@ row for the same experiment and target."
                          (or (plist-get ctx :source) "none")))
         (setq experiment
               (plist-put experiment :controller-decision
-                         (or (plist-get ctx :controller-decision) "unknown")))))
+                         (or (plist-get ctx :controller-decision) "unknown")))
+        ;; Track which nucleus persona was used for self-evolution feedback
+        (setq experiment
+              (plist-put experiment :persona-category
+                         (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+                           (gptel-auto-workflow--categorize-target target))))))
     (with-temp-buffer
       (insert-file-contents file)
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows

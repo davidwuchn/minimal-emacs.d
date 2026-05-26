@@ -1664,5 +1664,32 @@ SPECS is a list of (backend decision days-ago ...) triples."
             (should (= 0 (plist-get impact :strategies-audited)))))
       (delete-directory tmp-dir t))))
 
+;; ─── Nucleus Persona Impact Tests ───
+
+(ert-deftest tdd/persona-impact/persona-aware-better-than-unclassified ()
+  "Persona-aware experiments should show higher keep-rate than unclassified."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda ()
+               (append
+                (make-list 8 (list :target "lisp/modules/gptel-ext-retry.el" :decision "kept"))
+                (make-list 2 (list :target "lisp/modules/gptel-ext-retry.el" :decision "discarded"))
+                (make-list 2 (list :target "some-file" :decision "kept"))
+                (make-list 8 (list :target "some-file" :decision "discarded")))))
+            ((symbol-function 'gptel-auto-workflow--categorize-target)
+             (lambda (tgt)
+               (if (string-match-p "retry" tgt) :programming nil))))
+    (let ((impact (gptel-auto-workflow--nucleus-persona-impact)))
+      (should (> (plist-get impact :persona-keep-rate)
+                 (plist-get impact :unclassified-keep-rate)))
+      (should (> (plist-get impact :impact-delta) 0.0)))))
+
+(ert-deftest tdd/persona-impact/no-data-returns-nil-delta ()
+  "Without experiment data, impact delta should be nil."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda () nil)))
+    (let ((impact (gptel-auto-workflow--nucleus-persona-impact)))
+      (should (null (plist-get impact :impact-delta)))
+      (should (= 0 (plist-get impact :persona-experiments))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

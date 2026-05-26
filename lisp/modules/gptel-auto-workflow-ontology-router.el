@@ -1505,6 +1505,56 @@ Output: {:analysis _ :strategies [_] :risks [_] :recommendation _}")
 Human ⊗ AI
 Constrain: clarity → phi, essence → tao, concision → mu, completeness → pi"))))
 
+;; ─── Nucleus Persona Impact Measurement ───
+
+(defun gptel-auto-workflow--nucleus-persona-impact ()
+  "Measure whether nucleus persona selection improves experiment outcomes.
+Returns a plist with per-category keep-rates and an overall delta.
+Positive delta = persona-aware routing outperforms unclassified targets."
+  (let* ((results (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                    (gptel-auto-workflow--parse-all-results)))
+         (persona-kept 0) (persona-total 0)
+         (unclassified-kept 0) (unclassified-total 0)
+         (per-category nil))
+    (dolist (r results)
+      (let* ((target (plist-get r :target))
+             (decision (plist-get r :decision))
+             (category (when (and target
+                                  (fboundp 'gptel-auto-workflow--categorize-target))
+                         (gptel-auto-workflow--categorize-target target))))
+        (when target
+          (if category
+              (progn (cl-incf persona-total)
+                     (when (equal decision "kept") (cl-incf persona-kept))
+                     (let ((entry (assoc category per-category)))
+                       (if entry
+                           (progn (cl-incf (cadr entry))
+                                  (when (equal decision "kept")
+                                    (cl-incf (caddr entry))))
+                         (push (list category 1 (if (equal decision "kept") 1 0))
+                               per-category))))
+            (progn (cl-incf unclassified-total)
+                   (when (equal decision "kept")
+                     (cl-incf unclassified-kept)))))))
+    (list :persona-keep-rate (if (> persona-total 0)
+                                 (/ (float persona-kept) persona-total) nil)
+          :unclassified-keep-rate (if (> unclassified-total 0)
+                                      (/ (float unclassified-kept) unclassified-total) nil)
+          :persona-experiments persona-total
+          :unclassified-experiments unclassified-total
+          :per-category (mapcar (lambda (e)
+                                  (list :category (car e)
+                                        :total (cadr e)
+                                        :kept (caddr e)
+                                        :keep-rate (if (> (cadr e) 0)
+                                                       (/ (float (caddr e)) (cadr e))
+                                                     0.0)))
+                                per-category)
+          :impact-delta (if (and (> persona-total 0) (> unclassified-total 0))
+                            (- (/ (float persona-kept) persona-total)
+                               (/ (float unclassified-kept) unclassified-total))
+                          nil))))
+
 ;; ─── Routing Context for Prompt Injection ───
 
 (defun gptel-auto-workflow--routing-context (backend model)
