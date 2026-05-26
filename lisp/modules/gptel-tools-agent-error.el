@@ -695,10 +695,19 @@ RETRY-COUNT tracks current retry attempt."
               (setq prov-attempts 0)
               (message "[auto-exp] Executor hard timeout during experiment %d; advancing provider for retry"
                        experiment-id))
-           (when quota-exhausted
-             (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
-                      experiment-id))
-           (funcall callback result))))
+            (when quota-exhausted
+              (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
+                       experiment-id))
+            ;; Cross-backend exhaustion: when we've exhausted all retries
+            ;; (tried every backend) and the last attempt was a timeout,
+            ;; mark global quota-exhausted so subsequent experiments skip
+            ;; the retry loop and fail fast.
+            (when (and (>= retries gptel-auto-experiment-max-retries)
+                       (or hard-timeout (string-match-p "timed out" (or raw-error ""))))
+              (setq gptel-auto-experiment--quota-exhausted t)
+              (message "[auto-exp] All backends exhausted after %d retries; marking quota exhausted"
+                       (1+ retries)))
+            (funcall callback result))))
      (lambda (_logged-run-id exp-result)
        (push exp-result attempt-logs)))))
 
