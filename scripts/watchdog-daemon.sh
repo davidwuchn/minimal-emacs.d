@@ -83,7 +83,7 @@ if daemon_responds; then
     # daemon process RSS exceeds 1GB, restart it gracefully to prevent
     # OOM. Long-running Emacs accumulates memory from experiment data
     # and cached results that GC can't fully reclaim.
-    DAEMON_PID=$(pgrep -f "emacs.*daemon.*${SERVER_NAME}" 2>/dev/null | head -1)
+    DAEMON_PID=$(pgrep -f "emacs.*daemon.*${SERVER_NAME}" 2>/dev/null || true | head -1)
     if [ -n "$DAEMON_PID" ]; then
         RSS_KB=$(ps -p "$DAEMON_PID" -o rss= 2>/dev/null | tr -d ' ')
         if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 1048576 ]; then  # > 1GB
@@ -148,7 +148,7 @@ else
 fi
 
 # Check if daemon process exists
-DAEMON_PID=$(pgrep -f "emacs.*--daemon=${SERVER_NAME}" 2>/dev/null || true)
+DAEMON_PID=$(pgrep -f "emacs.*--daemon=${SERVER_NAME}" 2>/dev/null || true | head -1)
 if [ -n "$DAEMON_PID" ]; then
     # Check if daemon is actively running (not stuck on I/O)
     PROC_STATE=$(cat /proc/$DAEMON_PID/status 2>/dev/null | grep "^State:" | awk '{print $2}' || echo "?")
