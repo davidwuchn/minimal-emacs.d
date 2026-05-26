@@ -1470,6 +1470,66 @@ Positive delta = lambda compiler gate predicts better outcomes."
                                (/ (float degraded-kept) degraded-total))
                           nil))))
 
+;; ─── Allium Health Impact Measurement ───
+
+(defun gptel-auto-workflow--allium-health-impact ()
+  "Measure whether low Allium severity predicts higher experiment keep-rates.
+Returns a plist with :low-allium-keep-rate (strategies with low severity),
+:high-allium-keep-rate (strategies with high severity), counts, and :impact-delta.
+Positive delta = low Allium severity correlates with better outcomes."
+  (let* ((issues-dir (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+                       (expand-file-name "var/tmp/evolution/allium-issues"
+                                         (gptel-auto-workflow--worktree-base-root))))
+         (strategy-scores nil)
+         (results (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                    (gptel-auto-workflow--parse-all-results)))
+         (low-severity-kept 0) (low-severity-total 0)
+         (high-severity-kept 0) (high-severity-total 0))
+    ;; Collect Allium scores per strategy from issue files
+    (when (and issues-dir (file-directory-p issues-dir))
+      (dolist (file (directory-files issues-dir t "\\.md\\'"))
+        (let* ((filename (file-name-nondirectory file))
+               (strategy (replace-regexp-in-string "\\.md\\'" "" filename))
+               (content (condition-case nil
+                            (with-temp-buffer
+                              (insert-file-contents file)
+                              (buffer-string))
+                          (error nil))))
+          (when content
+            (let ((severity (when (string-match "Severity: \\([0-9.]+\\)" content)
+                              (string-to-number (match-string 1 content)))))
+              (when severity
+                (push (cons strategy severity) strategy-scores)))))))
+    ;; Cross-reference with experiment keep-rates
+    (dolist (pair strategy-scores)
+      (let* ((strategy (car pair))
+             (severity (cdr pair))
+             (s-kept 0) (s-total 0))
+        (dolist (r results)
+          (let ((r-strategy (plist-get r :research-strategy))
+                (r-decision (plist-get r :decision)))
+            (when (and r-strategy (string= r-strategy strategy))
+              (cl-incf s-total)
+              (when (equal r-decision "kept")
+                (cl-incf s-kept)))))
+        (when (> s-total 0)
+          (if (< severity 0.3)  ; low severity = better
+              (progn (cl-incf low-severity-total s-total)
+                     (cl-incf low-severity-kept s-kept))
+            (progn (cl-incf high-severity-total s-total)
+                   (cl-incf high-severity-kept s-kept))))))
+    (list :low-allium-keep-rate (if (> low-severity-total 0)
+                                    (/ (float low-severity-kept) low-severity-total) nil)
+          :high-allium-keep-rate (if (> high-severity-total 0)
+                                     (/ (float high-severity-kept) high-severity-total) nil)
+          :low-allium-experiments low-severity-total
+          :high-allium-experiments high-severity-total
+          :strategies-audited (length strategy-scores)
+          :impact-delta (if (and (> low-severity-total 0) (> high-severity-total 0))
+                            (- (/ (float low-severity-kept) low-severity-total)
+                               (/ (float high-severity-kept) high-severity-total))
+                          nil))))
+
 ;; ─── Audit Trail Analysis ───
 
 (defun gptel-auto-workflow--audit-trail-summary ()
