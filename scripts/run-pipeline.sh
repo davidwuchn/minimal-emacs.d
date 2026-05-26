@@ -251,8 +251,10 @@ find "$DIR/var/eln-cache" -name "*.eln" -delete -maxdepth 3 2>/dev/null || true
 log "Cleared stale .elc + .eln files from lisp/modules/"
 
 # ─── Force-kill all stale Emacs daemons ───
-# Matches: --daemon=ov5-*, --fg-daemon=ov5-*, --bg-daemon=ov5-*
-STALE_PIDS=$(pgrep -f "emacs.*(ov5|copilot)-(auto-workflow|researcher)" 2>/dev/null || true)
+# NOTE: macOS --bg-daemon embeds \012 (newline) in args, so pgrep patterns
+# like "emacs.*ov5" fail because . doesn't match the newline. Instead match
+# on the daemon name suffix which appears after the newline.
+STALE_PIDS=$(pgrep -f "ov5-(auto-workflow|researcher)" 2>/dev/null || true)
 if [ -n "$STALE_PIDS" ]; then
     STALE_COUNT=$(echo "$STALE_PIDS" | wc -l | tr -d ' ')
     log "Killing $STALE_COUNT stale daemon process(es)..."
@@ -260,23 +262,30 @@ if [ -n "$STALE_PIDS" ]; then
     sleep 3
 fi
 # Also clean any leftover --fg-daemon / --bg-daemon emacs processes
-STALE_BG=$(pgrep -f "emacs.*(fg-daemon|bg-daemon)" 2>/dev/null || true)
+# Match on the daemon flag which appears before the newline
+STALE_BG=$(pgrep -f "bg-daemon" 2>/dev/null || true)
 if [ -n "$STALE_BG" ]; then
     STALE_BG_COUNT=$(echo "$STALE_BG" | wc -l | tr -d ' ')
     log "Killing $STALE_BG_COUNT leftover fg/bg-daemon process(es)..."
     echo "$STALE_BG" | xargs kill -9 2>/dev/null || true
     sleep 2
 fi
-# Clean default server sockets (blocks --daemon startup)
-# Linux: /tmp/emacsUID/server; macOS: /var/folders/*/*/*/emacs*/server
-if [ -S /tmp/emacs"$(id -u)"/server ]; then
-    rm -f /tmp/emacs"$(id -u)"/server 2>/dev/null || true
-    log "Cleared stale default server socket (linux)"
-fi
-if [ -S /tmp/emacs"$(id -u)"/ov5-auto-workflow ]; then
-    rm -f /tmp/emacs"$(id -u)"/ov5-auto-workflow 2>/dev/null || true
-    log "Cleared stale ov5-auto-workflow socket"
-fi
+# Clean stale sockets from ALL candidate directories
+# Linux: /tmp/emacsUID/; macOS: $TMPDIR/emacsUID/ or /tmp/emacsUID/
+clean_stale_socket() {
+    local name="$1" sock=""
+    for base in "${TMPDIR:-}" /tmp "${XDG_RUNTIME_DIR:-}"; do
+        [ -n "$base" ] || continue
+        sock="$base/emacs$(id -u)/$name"
+        if [ -S "$sock" ] || [ -e "$sock" ]; then
+            rm -f "$sock" 2>/dev/null || true
+            log "Cleared stale socket: $sock"
+        fi
+    done
+}
+clean_stale_socket "server"
+clean_stale_socket "ov5-auto-workflow"
+clean_stale_socket "ov5-researcher"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
@@ -447,18 +456,20 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     # Restart daemon to pick up any evolved code changes
     log "Restarting daemon to load evolved code..."
     "$SCRIPT" stop >/dev/null 2>&1 || true
-    # Clean stale sockets (macOS: $TMPDIR, Linux: /tmp, XDG: $XDG_RUNTIME_DIR/emacs).
-    # After the daemon is killed, ensure_worker_daemon may find a stale socket
-    # and return without starting a new daemon — causing auto-workflow
-    # emacsclient to connect to a dead socket and time out.
-    for _base in "${TMPDIR:-/tmp}" "/tmp" "${XDG_RUNTIME_DIR:-}"; do
-        [ -n "$_base" ] || continue
-        for _sock in ov5-auto-workflow ov5-researcher; do
-            rm -f "$_base/emacs$(id -u)/$_sock" 2>/dev/null || true
-            [ "$_base" = "${XDG_RUNTIME_DIR:-}" ] && rm -f "$_base/emacs/$_sock" 2>/dev/null || true
+    # Clean stale sockets from ALL candidate directories (macOS: $TMPDIR, Linux: /tmp).
+    # After the daemon is killed, a stale socket prevents new daemon startup.
+    clean_ov5_sockets() {
+        for base in "${TMPDIR:-}" /tmp "${XDG_RUNTIME_DIR:-}"; do
+            [ -n "$base" ] || continue
+            for sock_name in ov5-auto-workflow ov5-researcher; do
+                local sock_path="$base/emacs$(id -u)/$sock_name"
+                rm -f "$sock_path" 2>/dev/null || true
+                [ "$base" = "${XDG_RUNTIME_DIR:-}" ] && rm -f "$base/emacs/$sock_name" 2>/dev/null || true
+            done
         done
-    done
-    unset _base _sock
+    }
+    clean_ov5_sockets
+    unset -f clean_ov5_sockets
     sleep 2
 else
     log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="

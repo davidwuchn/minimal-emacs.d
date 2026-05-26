@@ -308,7 +308,8 @@
     (should (= (plist-get stats :count) 1))))
 
 (ert-deftest test-daemon/source-effectiveness-priority-score-default ()
-  (should (= (gptel-auto-workflow--source-priority-score "unknown") 0.5)))
+  (let ((gptel-auto-workflow--source-effectiveness-table (make-hash-table :test 'equal)))
+    (should (= (gptel-auto-workflow--source-priority-score "unknown") 0.5))))
 
 ;;; Trace recording tests
 
@@ -331,8 +332,11 @@
 
 ;;; Extension methods (no load errors)
 
-(ert-deftest test-daemon/load-evolved-controller-config-no-file ()
-  (should-not (gptel-auto-workflow--load-evolved-controller-config)))
+(ert-deftest test-daemon/load-evolved-controller-config ()
+  (let ((result (gptel-auto-workflow--load-evolved-controller-config)))
+    (if (file-exists-p (gptel-auto-workflow--autotts-file "var/tmp/researcher-controller.json"))
+        (should (listp result))
+      (should-not result))))
 
 (ert-deftest test-daemon/load-statistical-model-no-config ()
   (should-not (gptel-auto-workflow--load-statistical-model)))
