@@ -226,12 +226,24 @@ Auto-applies LLM backend failover when current provider is rate-limited."
               (or (cdr chain-pick)
                   (when (plistp effective-preset)
                     (plist-get effective-preset :model)))))
-        (when log-backend
-          (message "[subagent] %s using fallback provider: %s (model: %s)"
-                   agent-type
-                   log-backend
-                   (or log-model "unknown")))
-        (if (fboundp 'my/gptel--agent-task-with-timeout)
+         (when log-backend
+           (message "[subagent] %s using fallback provider: %s (model: %s)"
+                    agent-type
+                    log-backend
+                    (or log-model "unknown")))
+         ;; Prepend accurate routing context at dispatch time when we know
+         ;; the actual selected backend/model (not the configured defaults).
+         (let* ((routing-note
+                 (when (and log-backend log-model
+                            (fboundp 'gptel-auto-workflow--routing-context))
+                   (condition-case nil
+                       (concat
+                        (gptel-auto-workflow--routing-context
+                         log-backend log-model)
+                        "\n\n---\n\n")
+                     (error ""))))
+                (prompt (concat routing-note prompt)))
+           (if (fboundp 'my/gptel--agent-task-with-timeout)
             (let ((my/gptel-agent-task-timeout
                    (gptel-benchmark--subagent-timeout timeout effective-preset))
                   (gptel-agent-preset effective-preset))
@@ -245,8 +257,8 @@ Auto-applies LLM backend failover when current provider is rate-limited."
             (gptel-agent--task
              callback
              agent-type
-             description
-             prompt))))
+              description
+              prompt)))))
     (funcall callback (format "[MOCK] %s: %s"
                               type
                               (truncate-string-to-width prompt 100 nil nil "...")))))

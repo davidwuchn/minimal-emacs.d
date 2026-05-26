@@ -209,22 +209,23 @@ Uses cached value from load time, or detects from current directory."
                              (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
                              (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
                              (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
-                           (push (list :target target
-                                       :hypothesis hypothesis
-                                       :score-before score-before
-                                       :score-after score-after
-                                       :code-quality quality
-                                       :delta delta-str
-                                       :decision decision
-                                       :grader-quality grader-q
-                                       :prompt-chars prompt-chars
-                                       :backend backend
-                                       :research-strategy research-strategy
-                                       :research-hash research-hash
-                                       :research-quality research-quality
-                                       :kibcm-axis kibcm-axis
-                                       :model model)
-                                records))))
+                            (push (list :target target
+                                        :hypothesis hypothesis
+                                        :score-before score-before
+                                        :score-after score-after
+                                        :code-quality quality
+                                        :delta delta-str
+                                        :decision decision
+                                        :grader-quality grader-q
+                                        :prompt-chars prompt-chars
+                                        :backend backend
+                                        :research-strategy research-strategy
+                                        :research-hash research-hash
+                                        :research-quality research-quality
+                                        :kibcm-axis kibcm-axis
+                                        :model model
+                                        :run-dir (file-name-nondirectory run-dir))
+                                 records))))
                 (forward-line 1)))))))
     (nreverse records)))
 
@@ -1937,7 +1938,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Step C.5: Head-to-head backend comparison (data-driven, no LLM calls)
   (gptel-auto-workflow--evolution-persist-backend-comparison)
   ;; Step C.6: Model-level comparison (backend/model granularity)
-  (gptel-auto-workflow--evolution-persist-model-comparison)
+  (condition-case err
+      (gptel-auto-workflow--evolution-persist-model-comparison)
+    (error
+     (message "[evolution] Step model-comparison: %s" err)))
   ;; Step C.7: Semantic relationship discovery (git-embed ontology enrichment)
   (when (fboundp 'gptel-auto-workflow--evolution-persist-semantic-relationships)
     (gptel-auto-workflow--evolution-persist-semantic-relationships))
@@ -5548,6 +5552,20 @@ markdown table, and writes to mementum/knowledge/semantic-relationships.md.
 
 ;; ─── Model-Level Head-to-Head Comparison ───
 
+(defun gptel-auto-workflow--model-combination-valid-p (model-key)
+  "Return non-nil when MODEL-KEY (\"Backend/Model\") is a valid combination.
+Checks that the model belongs to its backend when the per-task model
+map is available.  Without the map, passes all combinations through.
+Model names may contain / (e.g. CF-Gateway/@cf/openai/gpt-oss-120b)."
+  (when (stringp model-key)
+    (let* ((slash-pos (string-match-p "/" model-key))
+           (backend (if slash-pos (substring model-key 0 slash-pos) model-key))
+           (model (if slash-pos (substring model-key (1+ slash-pos)) "")))
+      (and (stringp backend) (stringp model)
+           (not (string-match-p "\\`\\(0\\|unknown\\|none\\)$" backend))
+           (or (not (boundp 'gptel-auto-workflow-per-task-model-map))
+               (gptel-auto-workflow--model-valid-for-backend-p model backend))))))
+
 (defun gptel-auto-workflow--evolution-model-stats ()
   "Analyze model (backend+model) performance from all experiment results.
 Returns alist of (\"Backend/model\" . keep-rate) sorted by performance descending.
@@ -5566,7 +5584,8 @@ Like promptfoo's model-specific comparison: which exact model performs best."
              (kept (equal (plist-get result :decision) "kept")))
         ;; Skip invalid backends
         (unless (or (member backend '("0" "unknown" ""))
-                    (string-match-p "\\`\\(0\\|unknown\\)/" key))
+                     (string-match-p "\\`\\(0\\|unknown\\)/" key)
+                     (not (gptel-auto-workflow--model-combination-valid-p key)))
           (let ((entry (or (gethash key by-model) (cons 0 0))))
             (setcar entry (1+ (car entry)))
             (when kept (setcdr entry (1+ (cdr entry))))

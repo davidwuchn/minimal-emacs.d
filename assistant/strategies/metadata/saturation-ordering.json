@@ -1,0 +1,1 @@
+{"name":"saturation-ordering","version":"1.0","hypothesis":"Reordering prompt sections based on saturation analysis delivers higher-value content earlier.","axis":"C","components":["saturation-computation","entropy-analysis","adaptive-ordering"]}

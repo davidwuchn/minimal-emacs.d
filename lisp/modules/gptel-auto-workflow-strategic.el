@@ -2129,17 +2129,30 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
               (if (gptel-auto-workflow--handle-analyzer-error-state targets safe-targets callback)
                   nil  ; Error already handled
                 (if (null targets)
-                    (progn
-                      (message "[auto-workflow] Analyzer returned no targets; using static targets")
-                      (let ((augmented (gptel-auto-workflow--semantic-target-augmentation safe-targets)))
-                       (funcall callback augmented)))
+                    (let* ((effective-static (or safe-targets
+                                                  (and (fboundp 'gptel-auto-workflow--discover-targets)
+                                                       (gptel-auto-workflow--discover-targets))))
+                           (augmented (gptel-auto-workflow--semantic-target-augmentation effective-static)))
+                      (message "[auto-workflow] Analyzer returned no targets; using %s targets"
+                               (if safe-targets "static" "auto-discovered"))
+                      (funcall callback augmented))
                   (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
                          (final-targets (if (and filtered-targets (listp filtered-targets))
                                             filtered-targets
                                           targets))
+                         ;; Pad with safe-targets when analyst returns fewer than max
+                         (padded (if (and safe-targets
+                                          (< (length final-targets) gptel-auto-workflow-max-targets-per-run))
+                                     (append final-targets
+                                             (seq-take (cl-remove-if (lambda (t2)
+                                                                       (member t2 final-targets))
+                                                                     safe-targets)
+                                                       (- gptel-auto-workflow-max-targets-per-run
+                                                          (length final-targets))))
+                                   final-targets))
                          (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
-                                               (gptel-auto-workflow--enforce-category-budget final-targets)
-                                             final-targets))
+                                                (gptel-auto-workflow--enforce-category-budget padded)
+                                              padded))
                          (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
                          (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
                    (unless (or (null filtered-targets) (listp filtered-targets))

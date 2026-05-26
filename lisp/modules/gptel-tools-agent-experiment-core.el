@@ -1036,5 +1036,73 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
           (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed)
           (member trimmed gptel-auto-experiment--placeholder-hypothesis-exact-patterns))))))
 
+;; ─── Staging Recovery Sweep ───
+
+(defconst gptel-auto-experiment--staging-recovery-max-age-hours 72
+  "Maximum age (hours) for staging-pending recovery. Older experiments have
+likely been merged or abandoned — skip to avoid noise.")
+
+(defun gptel-auto-experiment--recover-stale-staging-pending ()
+  "Retry staging flow for experiments stuck in `staging-pending`.
+Scans all TSV files for rows still in `staging-pending` between 1h
+and `gptel-auto-experiment--staging-recovery-max-age-hours` old.
+Older entries are skipped (branches likely deleted/merged).
+Safe to call multiple times: already-merged branches are skipped."
+  (interactive)
+  (when (and gptel-auto-workflow-use-staging
+             (fboundp 'gptel-auto-workflow--staging-flow)
+             (fboundp 'gptel-auto-workflow--parse-all-results))
+    (let ((recovered 0)
+          (skipped 0)
+          (now (float-time))
+          (results-dir (expand-file-name "var/tmp/experiments"
+                        (gptel-auto-workflow--worktree-base-root))))
+      (dolist (run-dir (directory-files results-dir t "^202[0-9]-"))
+        (let* ((tsv-file (expand-file-name "results.tsv" run-dir))
+               (run-id (file-name-nondirectory run-dir)))
+          (when (file-exists-p tsv-file)
+            (let ((gptel-auto-workflow--run-id run-id))
+              (with-temp-buffer
+                (insert-file-contents tsv-file)
+                (forward-line 1)
+                (while (not (eobp))
+                  (let ((line (buffer-substring-no-properties
+                               (line-beginning-position) (line-end-position))))
+                    (unless (string-empty-p line)
+                      (let* ((fields (split-string line "\t"))
+                             (decision (nth 7 fields))
+                             (experiment-id (nth 0 fields))
+                             (target (nth 1 fields))
+                             (exp-ts (and (string-match
+                                           "\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}[0-9]\\{2\\}[0-9]\\{2\\}\\)Z"
+                                           run-id)
+                                          (float-time
+                                           (date-to-time (match-string 1 run-id)))))
+                             (age (if exp-ts (/ (- now exp-ts) 3600.0) 0)))
+                        (when (and (string= decision "staging-pending")
+                                   (stringp experiment-id)
+                                   (> age 1.0))
+                          (if (>= age gptel-auto-experiment--staging-recovery-max-age-hours)
+                              (cl-incf skipped)
+                            (condition-case err
+                                (let* ((exp-id (string-to-number experiment-id))
+                                       (branch (gptel-auto-workflow--branch-name
+                                                target exp-id)))
+                                  (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
+                                           branch age)
+                                  (gptel-auto-workflow--staging-flow branch)
+                                  (cl-incf recovered))
+                              (error
+                               (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
+                                        target experiment-id
+                                        (error-message-string err)))))))))
+                  (forward-line 1)))))))
+      (when (> recovered 0)
+        (message "[staging-recovery] Recovered %d stale staging-pending experiments (skipped %d too old)"
+                 recovered skipped))
+      (when (> skipped 0)
+        (message "[staging-recovery] %d experiments are > %dh old — skipping (branches likely deleted)"
+                 skipped gptel-auto-experiment--staging-recovery-max-age-hours)))))
+
 (provide 'gptel-tools-agent-experiment-core)
 ;;; gptel-tools-agent-experiment-core.el ends here

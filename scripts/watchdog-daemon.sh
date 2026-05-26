@@ -1,45 +1,49 @@
 #!/usr/bin/env bash
 # Watchdog: restart auto-workflow daemon if unresponsive
-# Runs from cron every 2 hours. Checks daemon socket via emacsclient.
-# If daemon doesn't respond within 60s, kill and restart.
+# Runs from cron every 30min. Checks daemon socket via emacsclient.
+# If daemon doesn't respond within 60s (600s when workflow active), kill and restart.
 # Skips if daemon is CPU-busy (state R) — means it's executing code.
 
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_NAME="ov5-auto-workflow"
-SOCKET_PATH=""  # Resolved below from candidates
+MY_UID=$(id -u)
 LOG="$DIR/var/tmp/cron/watchdog.log"
 MAX_WAIT=60
 RESTART_COOLDOWN=300  # 5 min between restarts to avoid restart loops
 
-# Socket path resolution: try all candidate paths in priority order.
-# Emacs creates the daemon socket at the first available of:
-#   1. $XDG_RUNTIME_DIR/emacs/$name  (systemd Linux — /run/user/UID/emacs/$name)
-#   2. $TMPDIR/emacs$UID/$name        (macOS default)
-#   3. /tmp/emacs$UID/$name           (fallback for all platforms)
-resolve_socket_path() {
-    local name="$1"
-    local uid="$2"
-    # Check XDG_RUNTIME_DIR first (Debian/Ubuntu with systemd)
-    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "$XDG_RUNTIME_DIR/emacs/$name" ]; then
-        echo "$XDG_RUNTIME_DIR/emacs/$name"
-        return
-    fi
-    # Check TMPDIR (macOS)
-    if [ -n "${TMPDIR:-}" ] && [ -S "$TMPDIR/emacs$uid/$name" ]; then
-        echo "$TMPDIR/emacs$uid/$name"
-        return
-    fi
-    # Fallback: /tmp/emacs$uid/$name
-    if [ -S "/tmp/emacs$uid/$name" ]; then
-        echo "/tmp/emacs$uid/$name"
-        return
-    fi
-    echo "/tmp/emacs$uid/$name"  # Last resort: assume this path
+# Clean all candidate socket paths for this server/UID.
+# Stale sockets from crashed daemons block emacsclient from connecting
+# because Emacs skips socket directories that already exist.
+clean_all_sockets() {
+    local name="$1" uid="$2"
+    for base in "${XDG_RUNTIME_DIR:-}" "${TMPDIR:-}" /tmp; do
+        [ -n "$base" ] || continue
+        local socket="$base/emacs$uid/$name"
+        if [ -e "$socket" ] || [ -L "$socket" ]; then
+            if ! lsof -t "$socket" >/dev/null 2>&1; then
+                rm -f "$socket" 2>/dev/null || true
+                echo "[$(date '+%H:%M:%S')] Cleaned stale socket: $socket" >> "$LOG"
+            fi
+        fi
+    done
 }
 
-SOCKET_PATH=$(resolve_socket_path "$SERVER_NAME" "$(id -u)")
+# Resolve the live socket path (same logic as emacsclient internal resolution).
+# Returns the first socket that exists AND has a listener.
+resolve_live_socket() {
+    local name="$1" uid="$2"
+    for base in "${XDG_RUNTIME_DIR:-}" "${TMPDIR:-}" /tmp; do
+        [ -n "$base" ] || continue
+        local socket="$base/emacs$uid/$name"
+        if [ -S "$socket" ] && lsof -t "$socket" >/dev/null 2>&1; then
+            echo "$socket"
+            return 0
+        fi
+    done
+    return 1
+}
 
 mkdir -p "$(dirname "$LOG")"
 
@@ -53,13 +57,34 @@ if [ -f "$LAST_RESTART_FILE" ]; then
     fi
 fi
 
-# Check if socket exists
-if [ ! -S "$SOCKET_PATH" ]; then
-    echo "[$(date '+%H:%M:%S')] Socket missing, restarting daemon" >> "$LOG"
+# Try to reach the daemon via emacsclient first (uses its own socket resolution)
+if timeout 5 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
+    # Daemon is responsive. Check if workflow is active for logging only.
+    if timeout 5 emacsclient -s "$SERVER_NAME" --eval \
+        '(and (boundp (quote gptel-auto-workflow--running)) gptel-auto-workflow--running)' >/dev/null 2>&1; then
+        # Workflow active — daemon is busy, everything is fine
+        exit 0
+    fi
+    # Idle daemon, responsive — all good
+    exit 0
+fi
+
+# Daemon not responding to emacsclient. Find out why.
+
+# Resolve the live socket (with listener check, not just file existence)
+SOCKET_PATH=""
+if SOCKET_PATH=$(resolve_live_socket "$SERVER_NAME" "$MY_UID"); then
+    :  # Live socket found — daemon has a socket but not responding
+else
+    # No live socket. Check if there's a socket file without listener (stale).
+    # Clean ALL candidate paths so the next daemon starts clean.
+    echo "[$(date '+%H:%M:%S')] No live socket — cleaning stale sockets and restarting" >> "$LOG"
+    clean_all_sockets "$SERVER_NAME" "$MY_UID"
     echo "$(date +%s)" > "$LAST_RESTART_FILE"
     MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
         bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
         "$DIR" "$SERVER_NAME" &
+        echo "[$(date '+%H:%M:%S')] Daemon restarted after socket cleanup" >> "$LOG"
     exit 0
 fi
 
@@ -72,42 +97,32 @@ if [ -n "$DAEMON_PID" ]; then
         # Actively executing — don't kill, it's busy
         exit 0
     fi
-    # Skip pipe-I/O kill when a workflow is active.  The daemon
-    # legitimately waits on pipe I/O during LLM API calls (curl via
-    # url-retrieve) and during blocking subprocesses (byte-compile,
-    # git).  Killing mid-workflow loses progress and orphaned state.
-    # Let the socket-response test below handle truly stuck daemons.
-    if ! timeout 10 emacsclient -s "$SERVER_NAME" --eval \
-         '(and (boundp (quote gptel-auto-workflow--running))
-               gptel-auto-workflow--running)' >/dev/null 2>&1; then
-        PROC_WCHAN=$(cat /proc/$DAEMON_PID/wchan 2>/dev/null || echo "")
-        if echo "$PROC_WCHAN" | grep -q "anon_pipe_read\|pipe_wait\|pipe_read"; then
-            echo "[$(date '+%H:%M:%S')] Daemon stuck on pipe I/O (wchan=$PROC_WCHAN), restarting" >> "$LOG"
-            kill -9 "$DAEMON_PID" 2>/dev/null || true
-            sleep 2
-            rm -f "$SOCKET_PATH" 2>/dev/null || true
-            echo "$(date +%s)" > "$LAST_RESTART_FILE"
-            MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-                bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
-                "$DIR" "$SERVER_NAME" &
-            echo "[$(date '+%H:%M:%S')] Daemon restarted after pipe stuck" >> "$LOG"
-            exit 0
+    # Check if workflow is active - if so, use generous timeout
+    WORKFLOW_ACTIVE=0
+    if timeout 5 emacsclient -s "$SERVER_NAME" --eval \
+        '(and (boundp (quote gptel-auto-workflow--running)) gptel-auto-workflow--running)' >/dev/null 2>&1; then
+        WORKFLOW_ACTIVE=1
+    fi
+    if [ "$WORKFLOW_ACTIVE" -eq 1 ]; then
+        echo "[$(date '+%H:%M:%S')] Workflow active — using 600s timeout" >> "$LOG"
+        if timeout 600 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
+            exit 0  # Responded within grace period
         fi
     fi
 fi
 
-# Check if daemon responds
-if ! timeout "$MAX_WAIT" emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
-    echo "[$(date '+%H:%M:%S')] Daemon unresponsive (${MAX_WAIT}s timeout), killing" >> "$LOG"
-    # Kill all processes with this server name
-    pgrep -f "emacs.*--\(daemon\|fg-daemon\)=${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
-    sleep 2
-    # Clean stale socket
-    rm -f "$SOCKET_PATH" 2>/dev/null || true
-    # Restart
-    echo "$(date +%s)" > "$LAST_RESTART_FILE"
-    MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-        bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
-        "$DIR" "$SERVER_NAME" &
-    echo "[$(date '+%H:%M:%S')] Daemon restarted" >> "$LOG"
-fi
+# Daemon is truly unresponsive. Kill ALL instances, clean sockets, restart.
+echo "[$(date '+%H:%M:%S')] Daemon unresponsive — killing all instances and restarting" >> "$LOG"
+# Kill all daemon processes matching this server name.
+# The --bg-daemon flag uses escaped args, so match broadly.
+pgrep -f "emacs.*daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+pgrep -f "emacs.*--bg-daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+pgrep -f "emacs.*--daemon=${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+sleep 3
+clean_all_sockets "$SERVER_NAME" "$MY_UID"
+echo "$(date +%s)" > "$LAST_RESTART_FILE"
+MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+    bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
+    "$DIR" "$SERVER_NAME" &
+echo "[$(date '+%H:%M:%S')] Daemon restarted" >> "$LOG"
+exit 0
