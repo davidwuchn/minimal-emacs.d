@@ -1882,7 +1882,11 @@ Fields: :total-decisions, :backend-counts (alist of backend→count),
           :avg-health backend-health-sum
           :avg-keep-rate backend-rate-sum
           :vsm-adjustments (list :s1 vsm-s1 :s2 vsm-s2
-                                 :s3 vsm-s3 :s4 vsm-s4 :s5 vsm-s5))))
+                                 :s3 vsm-s3 :s4 vsm-s4 :s5 vsm-s5)
+          ;; Persona impact snapshot at query time
+          :persona-impact (condition-case nil
+                              (gptel-auto-workflow--nucleus-persona-impact)
+                            (error nil)))))
 
 ;; ─── Per-Target Model Preference ───
 
