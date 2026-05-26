@@ -1094,6 +1094,16 @@ Implements section-level A/B testing to identify effective prompt components."
                                           (fboundp 'gptel-auto-workflow--experiment-nucleus-persona))
                                      (gptel-auto-workflow--experiment-nucleus-persona target)
                                    ""))
+              ;; Moderator drift lens (DIALECTIC.md): detect stuck targets
+              (moderator-lens . ,(if (and (fboundp 'gptel-auto-workflow--moderator-drift-lens))
+                                     (let ((lens (gptel-auto-workflow--moderator-drift-lens target)))
+                                       (if lens
+                                           (format "## Moderator Intervention (DIALECTIC.md)\n%s: %s (%d consecutive failures)\nTry a different approach: change strategy, switch backend, or explore a different part of the file.\n"
+                                                   (plist-get lens :lens)
+                                                   (plist-get lens :reason)
+                                                   (plist-get lens :consecutive-failures))
+                                         ""))
+                                   ""))
               (allium-issues . ,(if (funcall section-included-p 'self-evolution)
                                     (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-target)
                                         (gptel-auto-workflow--allium-load-issues-for-target target)

@@ -1387,6 +1387,52 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
         (concat persona "\n\n---\n\n")
       "")))
 
+;; ─── Moderator Drift Detection (DIALECTIC.md pattern) ───
+
+(defun gptel-auto-workflow--moderator-drift-lens (target)
+  "Check TARGET for experiment drift and return an intervention lens.
+Inspired by DIALECTIC.md moderator pattern: detect when experiments
+are stuck and apply a lens to shift the approach.
+Returns a plist with :lens (keyword), :reason (string), :consecutive-failures (int),
+or nil if no drift detected."
+  (when (fboundp 'gptel-auto-workflow--parse-all-results)
+    (let* ((results (gptel-auto-workflow--parse-all-results))
+           (target-results
+            (seq-take
+             (seq-filter (lambda (r) (equal (plist-get r :target) target))
+                         (nreverse results))
+             5))  ; last 5 experiments for this target
+           (consecutive 0)
+           (last-backend nil)
+           (backends (make-hash-table :test 'equal)))
+      ;; Count consecutive failures and backend diversity
+      (dolist (r target-results)
+        (let ((decision (plist-get r :decision))
+              (backend (plist-get r :backend)))
+          (if (and decision (not (equal decision "kept")))
+              (cl-incf consecutive)
+            (cl-incf consecutive 0)  ; reset on success
+            (setq consecutive 0))
+          (when backend
+            (puthash backend t backends))))
+      (cond
+       ((>= consecutive 3)
+        (list :lens :consequence_check
+              :reason (format "%d consecutive failures — moderate(consequence_check)"
+                              consecutive)
+              :consecutive-failures consecutive))
+       ((>= consecutive 2)
+        (list :lens :evidence_nudge
+              :reason (format "%d consecutive failures — moderate(evidence_nudge)"
+                              consecutive)
+              :consecutive-failures consecutive))
+       ((and (= consecutive 1)
+             (< (hash-table-count backends) 2))
+        (list :lens :assumption_probe
+              :reason "Single backend used repeatedly — moderate(assumption_probe)"
+              :consecutive-failures 1))
+       (t nil)))))
+
 ;; ─── Experiment Persona by Target Category ───
 
 (defun gptel-auto-workflow--experiment-nucleus-persona (target)

@@ -30,6 +30,8 @@ You are running experiment {{experiment-id}} of {{max-experiments}} to optimize 
 ## Nucleus Guidance (Category-Aware Attention)
 {{nucleus-persona}}
 
+{{moderator-lens}}
+
 ## Research Quality (Allium Audit)
 {{allium-issues}}
 
