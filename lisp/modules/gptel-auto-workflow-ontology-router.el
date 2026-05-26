@@ -1436,6 +1436,40 @@ Keeps the last 100 decisions."
         (setq gptel-auto-workflow--routing-audit-log
               (seq-take gptel-auto-workflow--routing-audit-log 100))))))
 
+;; ─── Lambda Health Impact Measurement ───
+
+(defun gptel-auto-workflow--lambda-health-impact ()
+  "Measure whether lambda-healthy backends produce better experiment outcomes.
+Returns a plist with :healthy-keep-rate, :degraded-keep-rate, :healthy-experiments,
+:degraded-experiments, and :impact-delta (healthy - degraded).
+Positive delta = lambda compiler gate predicts better outcomes."
+  (let ((healthy-kept 0) (healthy-total 0)
+        (degraded-kept 0) (degraded-total 0)
+        (results (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                   (gptel-auto-workflow--parse-all-results))))
+    (dolist (r results)
+      (let* ((backend (plist-get r :backend))
+            (decision (plist-get r :decision))
+            (status (when (and backend
+                               (boundp 'gptel-auto-workflow--lambda-verification-results))
+                      (gethash backend gptel-auto-workflow--lambda-verification-results))))
+        (when (and backend (not (string= backend "unknown")))
+          (cond
+           ((eq status :healthy)
+            (cl-incf healthy-total)
+            (when (equal decision "kept") (cl-incf healthy-kept)))
+           ((eq status :degraded)
+            (cl-incf degraded-total)
+            (when (equal decision "kept") (cl-incf degraded-kept)))))))
+    (list :healthy-keep-rate (if (> healthy-total 0) (/ (float healthy-kept) healthy-total) nil)
+          :degraded-keep-rate (if (> degraded-total 0) (/ (float degraded-kept) degraded-total) nil)
+          :healthy-experiments healthy-total
+          :degraded-experiments degraded-total
+          :impact-delta (if (and (> healthy-total 0) (> degraded-total 0))
+                            (- (/ (float healthy-kept) healthy-total)
+                               (/ (float degraded-kept) degraded-total))
+                          nil))))
+
 ;; ─── Audit Trail Analysis ───
 
 (defun gptel-auto-workflow--audit-trail-summary ()

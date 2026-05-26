@@ -1592,5 +1592,36 @@ SPECS is a list of (backend decision days-ago ...) triples."
       (should (= 2 (plist-get vsm :s2)))
       (should (= 1 (plist-get vsm :s4))))))
 
+;; ─── Lambda Health Impact Tests ───
+
+(ert-deftest tdd/lambda-impact/healthy-outperforms-degraded ()
+  "Lambda-healthy backends should show higher keep-rate than degraded."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "DeepSeek" :healthy gptel-auto-workflow--lambda-verification-results)
+    (puthash "MiniMax" :degraded gptel-auto-workflow--lambda-verification-results)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (append
+                  ;; DeepSeek (healthy): 8 kept, 2 discarded
+                  (make-list 8 (list :backend "DeepSeek" :decision "kept"))
+                  (make-list 2 (list :backend "DeepSeek" :decision "discarded"))
+                  ;; MiniMax (degraded): 3 kept, 7 discarded
+                  (make-list 3 (list :backend "MiniMax" :decision "kept"))
+                  (make-list 7 (list :backend "MiniMax" :decision "discarded"))))))
+      (let ((impact (gptel-auto-workflow--lambda-health-impact)))
+        (should (> (plist-get impact :healthy-keep-rate)
+                   (plist-get impact :degraded-keep-rate)))
+        (should (= 10 (plist-get impact :healthy-experiments)))
+        (should (= 10 (plist-get impact :degraded-experiments)))
+        (should (> (plist-get impact :impact-delta) 0.0))))))
+
+(ert-deftest tdd/lambda-impact/no-data-returns-nil ()
+  "Without verification data, impact delta should be nil."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () nil)))
+      (let ((impact (gptel-auto-workflow--lambda-health-impact)))
+        (should (null (plist-get impact :impact-delta)))))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
