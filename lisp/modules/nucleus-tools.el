@@ -47,27 +47,27 @@ When enabled, validates:
 
 (defconst nucleus-tool-markers
   '((:can-edit . ("ApplyPatch" "Edit" "Insert" "Mkdir" "Move" "Write"
-                    "Code_Replace" "create_skill" "write_memory"))
-     (:can-read . ("Bash" "Eval" "Glob" "Grep" "Read" "Programmatic"
-                    "WebFetch" "WebSearch" "YouTube"
-                    "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                    "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"
-                    "Skill" "TodoWrite" "RunAgent" "Preview"
-                    "read_memory" "list_memories"))
-     (:symbolic . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
-                    "find_buffers_and_recent" "describe_symbol" "get_symbol_source"))
-     (:web . ("WebFetch" "WebSearch" "YouTube"))
-     (:memory . ("read_memory" "write_memory" "list_memories"))
-     (:delegates . ("RunAgent"))
-     (:requires-project . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
-                            "Diagnostics" "find_buffers_and_recent"
-                            "describe_symbol" "get_symbol_source"
-                            "read_memory" "write_memory" "list_memories"))
-     (:plan-excluded . ("YouTube" "Preview" "write_memory"))
-     (:sandbox-excluded . ("Programmatic" "Bash" "Eval" "Skill" "TodoWrite"))
-     (:file-inspector . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
-                          "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                          "Read" "Grep" "Glob" "Preview" "Diagnostics")))
+                  "Code_Replace" "create_skill" "write_memory"))
+    (:can-read . ("Bash" "Eval" "Glob" "Grep" "Read" "Programmatic"
+                  "WebFetch" "WebSearch" "YouTube"
+                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                  "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"
+                  "Skill" "TodoWrite" "RunAgent" "Preview"
+                  "read_memory" "list_memories"))
+    (:symbolic . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
+                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"))
+    (:web . ("WebFetch" "WebSearch" "YouTube"))
+    (:memory . ("read_memory" "write_memory" "list_memories"))
+    (:delegates . ("RunAgent"))
+    (:requires-project . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
+                          "Diagnostics" "find_buffers_and_recent"
+                          "describe_symbol" "get_symbol_source"
+                          "read_memory" "write_memory" "list_memories"))
+    (:plan-excluded . ("YouTube" "Preview" "write_memory"))
+    (:sandbox-excluded . ("Programmatic" "Bash" "Eval" "Skill" "TodoWrite"))
+    (:file-inspector . ("Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages"
+                        "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                        "Read" "Grep" "Glob" "Preview" "Diagnostics")))
   "Marker traits for each registered tool.
 
 :can-edit      — Tool modifies files or system state (requires confirmation)
@@ -120,7 +120,7 @@ Returns a list of tool name strings."
                        (apply #'nucleus-tools-with-any-marker :can-read :can-edit)))
          (excluded (when exclude
                      (apply #'nucleus-tools-with-any-marker exclude))))
-     (seq-difference candidates excluded #'equal)))
+    (seq-difference candidates excluded #'equal)))
 
 ;;; Progressive Tool Shortening
 
@@ -224,7 +224,7 @@ For use in prompt templates to conditionally include instructions."
 (defconst nucleus-toolset-definitions
   '((:readonly   . (:derived (:can-read) (:can-edit :plan-excluded)))
     (:nucleus    . (:derived (:can-read :can-edit) nil
-                              "read_memory" "list_memories" "write_memory"))
+                             "read_memory" "list_memories" "write_memory"))
     (:executor   . (:derived (:can-read :can-edit) (:delegates)))
     (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill" "Programmatic"
                     "WebFetch" "WebSearch" "YouTube"
@@ -308,19 +308,39 @@ SET-NAME can be a symbol from `nucleus-toolsets' or a list of tool names.
     (_ (user-error "Invalid toolset specifier: %S" set-name))))
 
 (defvar nucleus--tool-availability-cache (make-hash-table :test 'equal)
-  "Cache for tool availability checks to avoid repeated gptel-get-tool calls.")
+  "Cache for tool availability checks to avoid repeated gptel-get-tool calls.
+
+ASSUMPTION: Tools are registered before first availability check.
+EDGE CASE: Tools registered after initial load will show as unavailable
+  until cache is cleared. Call `nucleus-tools-invalidate-cache' to refresh.")
+
+(defun nucleus-tools-invalidate-cache ()
+  "Clear the tool availability cache.
+
+Call this when new tools are registered after initial load,
+or when debugging tool availability issues.
+
+BEHAVIOR: Removes all cached availability results so subsequent
+  calls to `nucleus--tool-available-p' will re-check registration.
+TEST: After calling, `nucleus--tool-available-p' should return
+  updated results for newly registered tools."
+  (clrhash nucleus--tool-availability-cache)
+  (when nucleus-tools-verbose
+    (message "[nucleus-tools] Tool availability cache cleared")))
 
 (defun nucleus--tool-available-p (tool-name)
   "Return non-nil if TOOL-NAME is registered, with caching."
-  (or (gethash tool-name nucleus--tool-availability-cache 'unset)
+  (let ((cached (gethash tool-name nucleus--tool-availability-cache 'unset)))
+    (if (not (eq cached 'unset))
+        cached
       (let* ((boundp (fboundp 'gptel-get-tool))
              (available (if boundp
-                           (ignore-errors (gptel-get-tool tool-name))
-                         t)))
+                            (ignore-errors (gptel-get-tool tool-name))
+                          t)))
         (puthash tool-name available nucleus--tool-availability-cache)
         (unless available
           (message "[nucleus] WARNING: Tool '%s' not registered" tool-name))
-        available)))
+        available))))
 
 (defun nucleus-get-tools (set-name)
   "Return tool list for SET-NAME, filtering out unregistered tools.
@@ -373,46 +393,46 @@ Returns non-nil if tools match, nil if mismatch or unavailable."
   (cl-block nucleus-tool-sanity-check
     (unless nucleus-tools-sanity-check
       (cl-return-from nucleus-tool-sanity-check nil))
-  (unless (and (boundp 'gptel-tools) (listp gptel-tools))
-    (when nucleus-tools-verbose
-      (message "[nucleus-tools] gptel-tools not available"))
-    (cl-return-from nucleus-tool-sanity-check nil))
-
-  (let* ((preset (or preset (and (boundp 'gptel--preset) gptel--preset)))
-         (expected (nucleus--expected-tools-for-preset preset))
-         (actual (nucleus--tool-names-from-tools gptel-tools)))
-
-    (unless (and expected actual)
+    (unless (and (boundp 'gptel-tools) (listp gptel-tools))
       (when nucleus-tools-verbose
-        (message "[nucleus-tools] Cannot check: preset=%S expected=%S actual=%S"
-                 preset expected actual))
+        (message "[nucleus-tools] gptel-tools not available"))
       (cl-return-from nucleus-tool-sanity-check nil))
 
-    (let* ((missing (seq-filter (lambda (n) (not (member n actual))) expected))
-           (extra (seq-filter (lambda (n) (not (member n expected))) actual))
-           (report (list preset missing extra)))
+    (let* ((preset (or preset (and (boundp 'gptel--preset) gptel--preset)))
+           (expected (nucleus--expected-tools-for-preset preset))
+           (actual (nucleus--tool-names-from-tools gptel-tools)))
 
-      (cond
-       ((and (not missing) (not extra))
-        ;; All good - clear last report
-        (setq-local nucleus--tool-sanity-last-report nil)
+      (unless (and expected actual)
         (when nucleus-tools-verbose
-          (message "[nucleus-tools] OK: preset=%S tools=%d" preset (length actual)))
-        t)
+          (message "[nucleus-tools] Cannot check: preset=%S expected=%S actual=%S"
+                   preset expected actual))
+        (cl-return-from nucleus-tool-sanity-check nil))
 
-       ((not (equal report nucleus--tool-sanity-last-report))
-        ;; New mismatch - log it
-        (setq-local nucleus--tool-sanity-last-report report)
-        (message "[nucleus-tools] MISMATCH%s preset=%S missing=[%s] extra=[%s]"
-                 (if context (format " %s" context) "")
-                 preset
-                 (if missing (string-join missing ", ") "none")
-                 (if extra (string-join extra ", ") "none"))
-        nil)
+      (let* ((missing (seq-filter (lambda (n) (not (member n actual))) expected))
+             (extra (seq-filter (lambda (n) (not (member n expected))) actual))
+             (report (list preset missing extra)))
 
-       (t
-        ;; Same mismatch as before - don't spam
-        nil))))))
+        (cond
+         ((and (not missing) (not extra))
+          ;; All good - clear last report
+          (setq-local nucleus--tool-sanity-last-report nil)
+          (when nucleus-tools-verbose
+            (message "[nucleus-tools] OK: preset=%S tools=%d" preset (length actual)))
+          t)
+
+         ((not (equal report nucleus--tool-sanity-last-report))
+          ;; New mismatch - log it
+          (setq-local nucleus--tool-sanity-last-report report)
+          (message "[nucleus-tools] MISMATCH%s preset=%S missing=[%s] extra=[%s]"
+                   (if context (format " %s" context) "")
+                   preset
+                   (if missing (string-join missing ", ") "none")
+                   (if extra (string-join extra ", ") "none"))
+          nil)
+
+         (t
+          ;; Same mismatch as before - don't spam
+          nil))))))
 
 ;;; Tool Profile Syncing
 
@@ -436,19 +456,19 @@ defers sync via idle timer to allow tool registration to complete."
           (when nucleus-tools-verbose
             (message "[nucleus-tools] No nucleus preset active, skipping tool sync"))
         (let ((toolset-key (pcase active-preset
-                              ('gptel-plan :readonly)
-                              ('gptel-agent :nucleus))))
-           (if (nucleus--tools-ready-p toolset-key)
-               (progn
-                  (setq-local gptel-tools (nucleus--apply-project-exclusions
-                                           (if (and (eq toolset-key :readonly)
-                                                    nucleus-project-readonly-override)
-                                               nucleus-project-readonly-override
-                                             (nucleus-get-tools toolset-key))))
-                 (when nucleus-tools-verbose
-                   (message "[nucleus-tools] Tool profile synced to %s (%d tools, %d excluded by project)"
-                            active-preset (length gptel-tools)
-                            (- (length (nucleus-get-tools toolset-key)) (length gptel-tools)))))
+                             ('gptel-plan :readonly)
+                             ('gptel-agent :nucleus))))
+          (if (nucleus--tools-ready-p toolset-key)
+              (progn
+                (setq-local gptel-tools (nucleus--apply-project-exclusions
+                                         (if (and (eq toolset-key :readonly)
+                                                  nucleus-project-readonly-override)
+                                             nucleus-project-readonly-override
+                                           (nucleus-get-tools toolset-key))))
+                (when nucleus-tools-verbose
+                  (message "[nucleus-tools] Tool profile synced to %s (%d tools, %d excluded by project)"
+                           active-preset (length gptel-tools)
+                           (- (length (nucleus-get-tools toolset-key)) (length gptel-tools)))))
             (progn
               (when nucleus-tools-verbose
                 (message "[nucleus-tools] Tools not ready, deferring sync for %s" active-preset))
@@ -525,11 +545,11 @@ Expected toolsets:
                                        actual-count
                                        (if missing (length missing) 0)
                                        (if extra (length extra) 0))))
-                  (length (nucleus--declared-tools :executor))
-                  (length (nucleus--declared-tools :researcher))
-                  (length (nucleus--declared-tools :readonly))
-                  (length (nucleus--declared-tools :explorer))
-                  (length (nucleus--declared-tools :reviewer))))))))
+                 (length (nucleus--declared-tools :executor))
+                 (length (nucleus--declared-tools :researcher))
+                 (length (nucleus--declared-tools :readonly))
+                 (length (nucleus--declared-tools :explorer))
+                 (length (nucleus--declared-tools :reviewer))))))))
 
 (defun nucleus-test-tool-validation ()
   "Test tool contract validation with sample inputs.
@@ -845,6 +865,8 @@ Wraps the provided :function with argument type validation."
   "Setup nucleus-tools module.
 
 Call this after gptel loads to register hooks and tools."
+  ;; Clear stale cache entries from before gptel was loaded
+  (nucleus-tools-invalidate-cache)
   ;; Register mode hook for tool profile syncing
   (when (boundp 'gptel-mode-hook)
     (add-hook 'gptel-mode-hook #'nucleus-sync-tool-profile)
