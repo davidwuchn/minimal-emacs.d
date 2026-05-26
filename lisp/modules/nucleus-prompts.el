@@ -96,7 +96,6 @@ Agent prompts (code_agent.md, plan_agent.md) are loaded separately from `nucleus
     (Grep                . "grep.md")
     (Glob                . "glob.md")
     (find_buffers_and_recent . "find_buffers_and_recent.md")
-    (describe_symbol     . "describe_symbol.md")
     (WebSearch           . "web_search.md")
     (WebFetch            . "web_fetch.md")
     (compact_chat        . "compact_chat.md")
