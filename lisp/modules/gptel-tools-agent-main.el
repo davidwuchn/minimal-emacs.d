@@ -279,21 +279,23 @@ Safe for external tools - contains only [auto-] and [nucleus] messages."
 Works on Linux (/proc) and macOS (ps)."
   (let ((pid (emacs-pid)))
     (when pid
-      (with-temp-buffer
-        (condition-case nil
-            (progn
-              ;; Linux: read VmRSS from /proc/PID/status
-              (insert-file-contents (format "/proc/%d/status" pid) nil nil nil)
-              (goto-char (point-min))
-              (if (re-search-forward "VmRSS:\\s-+\\([0-9]+\\)" nil t)
-                  (string-to-number (match-string 1))
-                ;; macOS: use ps command
-                (erase-buffer)
-                (call-process "ps" nil t nil "-p" (format "%d" pid) "-o" "rss=")
-                (goto-char (point-min))
-                (when (re-search-forward "\\([0-9]+\\)" nil t)
-                  (string-to-number (match-string 1)))))
-          (error nil))))))
+      (or
+       ;; Linux: read VmRSS from /proc/PID/status
+       (condition-case nil
+           (with-temp-buffer
+             (insert-file-contents (format "/proc/%d/status" pid) nil nil nil)
+             (goto-char (point-min))
+             (when (re-search-forward "VmRSS:\\s-+\\([0-9]+\\)" nil t)
+               (string-to-number (match-string 1))))
+         (error nil))
+       ;; macOS: use ps command (different platforms have different ps output)
+       (condition-case nil
+           (with-temp-buffer
+             (call-process "ps" nil t nil "-o" "rss=" "-p" (format "%d" pid))
+             (goto-char (point-min))
+             (when (re-search-forward "\\([0-9]+\\)" nil t)
+               (string-to-number (match-string 1))))
+         (error nil))))))
 
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
   "Run auto-workflow asynchronously with TARGETS.
