@@ -1038,24 +1038,37 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 
 ;; ─── Staging Recovery Sweep ───
 
+(defconst gptel-auto-experiment--staging-recovery-max-age-hours 72
+  "Maximum age (hours) for staging-pending recovery. Older experiments have
+likely been merged or abandoned — skip to avoid noise.")
+
 (defun gptel-auto-experiment--recover-stale-staging-pending ()
   "Retry staging flow for experiments stuck in `staging-pending`.
-Scans all run results TSV files for rows still in `staging-pending`
-that are older than 1 hour. For each, re-constructs the optimize branch
-name and re-triggers `gptel-auto-workflow--staging-flow`.
+Scans all TSV files for rows still in `staging-pending` between 1h
+and `gptel-auto-experiment--staging-recovery-max-age-hours` old.
+Older entries are skipped (branches likely deleted/merged).
 Safe to call multiple times: already-merged branches are skipped."
   (interactive)
   (when (and gptel-auto-workflow-use-staging
              (fboundp 'gptel-auto-workflow--staging-flow)
              (fboundp 'gptel-auto-workflow--parse-all-results))
     (let ((recovered 0)
+          (skipped 0)
+          (now (float-time))
+          (abandoned-file (expand-file-name
+                           "var/tmp/staging-recovery-abandoned.sexp"
+                           (gptel-auto-workflow--worktree-base-root)))
+          (abandoned (condition-case nil
+                         (with-temp-buffer
+                           (insert-file-contents abandoned-file)
+                           (read (current-buffer)))
+                       (error nil)))
           (results-dir (expand-file-name "var/tmp/experiments"
                         (gptel-auto-workflow--worktree-base-root))))
       (dolist (run-dir (directory-files results-dir t "^202[0-9]-"))
         (let* ((tsv-file (expand-file-name "results.tsv" run-dir))
                (run-id (file-name-nondirectory run-dir)))
           (when (file-exists-p tsv-file)
-            ;; Bind run-id so branch-name can construct the correct token
             (let ((gptel-auto-workflow--run-id run-id))
               (with-temp-buffer
                 (insert-file-contents tsv-file)
@@ -1073,26 +1086,32 @@ Safe to call multiple times: already-merged branches are skipped."
                                            run-id)
                                           (float-time
                                            (date-to-time (match-string 1 run-id)))))
-                             (age (if exp-ts (/ (- (float-time) exp-ts) 3600.0) 0)))
+                             (age (if exp-ts (/ (- now exp-ts) 3600.0) 0)))
                         (when (and (string= decision "staging-pending")
                                    (stringp experiment-id)
                                    (> age 1.0))
-                          (condition-case err
-                              (let* ((exp-id (string-to-number experiment-id))
-                                     (branch (gptel-auto-workflow--branch-name
-                                              target exp-id)))
-                                (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
-                                         branch age)
-                                (gptel-auto-workflow--staging-flow branch)
-                                (cl-incf recovered))
-                            (error
-                             (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
-                                      target experiment-id
-                                      (error-message-string err))))))))
+                          (if (>= age gptel-auto-experiment--staging-recovery-max-age-hours)
+                              (cl-incf skipped)
+                            (condition-case err
+                                (let* ((exp-id (string-to-number experiment-id))
+                                       (branch (gptel-auto-workflow--branch-name
+                                                target exp-id)))
+                                  (unless (member branch abandoned)
+                                    (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
+                                             branch age)
+                                    (gptel-auto-workflow--staging-flow branch)
+                                    (cl-incf recovered)))
+                              (error
+                               (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
+                                        target experiment-id
+                                        (error-message-string err)))))))))
                   (forward-line 1)))))))
       (when (> recovered 0)
-        (message "[staging-recovery] Recovered %d stale staging-pending experiments"
-                 recovered)))))
+        (message "[staging-recovery] Recovered %d stale staging-pending experiments (skipped %d too old)"
+                 recovered skipped))
+      (when (> skipped 0)
+        (message "[staging-recovery] %d experiments are > %dh old — skipping (branches likely deleted)"
+                 skipped gptel-auto-experiment--staging-recovery-max-age-hours)))))
 
 (provide 'gptel-tools-agent-experiment-core)
 ;;; gptel-tools-agent-experiment-core.el ends here
