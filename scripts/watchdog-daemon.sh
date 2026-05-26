@@ -107,9 +107,10 @@ if daemon_responds; then
     # daemon process RSS exceeds 1GB, restart it gracefully to prevent
     # OOM. Long-running Emacs accumulates memory from experiment data
     # and cached results that GC can't fully reclaim.
-    DAEMON_PID=$(pgrep -f "emacs.*daemon.*${SERVER_NAME}" 2>/dev/null || true | head -1)
-    if [ -n "$DAEMON_PID" ]; then
-        RSS_KB=$(ps -p "$DAEMON_PID" -o rss= 2>/dev/null | tr -d ' ')
+    # Get daemon PID via emacsclient (pgrep fails due to --bg-daemon escape chars)
+    DAEMON_RSS_PID=$(timeout 5 emacsclient -s "$SERVER_NAME" --eval '(emacs-pid)' 2>/dev/null | tr -d '"' | tr -d '\n')
+    if [ -n "$DAEMON_RSS_PID" ] && [ "$DAEMON_RSS_PID" -gt 0 ] 2>/dev/null; then
+        RSS_KB=$(ps -p "$DAEMON_RSS_PID" -o rss= 2>/dev/null | tr -d ' ')
         if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 1048576 ]; then  # > 1GB
             echo "[$(date '+%H:%M:%S')] High memory (${RSS_KB}KB) — graceful restart" >> "$LOG"
             timeout 30 emacsclient -s "$SERVER_NAME" --eval '(kill-emacs)' >/dev/null 2>&1 || true
@@ -136,9 +137,7 @@ fi
 
 # Daemon is truly gone. Kill all processes, clean sockets, restart.
 echo "[$(date '+%H:%M:%S')] Daemon unresponsive — restarting" >> "$LOG"
-pgrep -f "emacs.*daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
-pgrep -f "emacs.*--bg-daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
-pgrep -f "emacs.*--daemon=${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+ps aux | grep '[e]macs.*ov5-auto' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
 sleep 3
 clean_all_sockets "$SERVER_NAME" "$MY_UID"
 echo "$(date +%s)" > "$LAST_RESTART_FILE"
