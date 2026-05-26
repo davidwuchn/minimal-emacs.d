@@ -394,6 +394,15 @@ Usage:
             (setq-default gptel-auto-workflow-targets discovered)
             (message "[auto-workflow] Auto-discovered %d targets"
                      (length discovered))))))
+    ;; Pre-warm baseline cache so first experiment doesn't fail
+    ;; while the full test suite runs (~21 min) to create it.
+    (when (and (fboundp 'gptel-auto-workflow--main-baseline-test-results)
+               (or (null gptel-auto-workflow--cached-baseline-results)
+                   (not (eq (plist-get gptel-auto-workflow--cached-baseline-results :exit-code) 0))))
+      (message "[auto-workflow] Warming baseline cache (first run may take ~2min)...")
+      (condition-case nil
+          (gptel-auto-workflow--main-baseline-test-results)
+        (error (message "[auto-workflow] Baseline warm failed (will retry on first experiment)"))))
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
