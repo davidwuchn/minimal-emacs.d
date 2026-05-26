@@ -30,8 +30,8 @@ It automates the entire cycle. Market intelligence feeds an experimentation engi
 
 | Metric | Value |
 |--------|-------|
-| Experiments run | 1,200+ across 90+ targets |
-| Keep rate | ~25% (experiments that improve the product) |
+| Experiments run | 1,159 across 257 runs |
+| Keep rate | 20.4% (experiments that improve the product) |
 | Test suite | 2,013 tests pass before any merge |
 | Backends | 6 providers, auto-routed by measured keep-rate |
 | Uptime | Self-healing watchdog, in-process memory management, crash-recovery |
@@ -45,7 +45,7 @@ Any organization that ships software faces the same challenge: **how fast can we
 | Layer | Advantage |
 |-------|-----------|
 | **Self-knowledge** | The system builds an ontology of its own experiments — patterns, anti-patterns, what works per category |
-| **Routing intelligence** | 5 years of keep-rate data across 6 providers; Bayesian Thompson sampling for optimal routing |
+| **Routing intelligence** | 7 weeks of keep-rate data across 6 providers (1,200+ experiments, 257 runs); Bayesian Thompson sampling for optimal routing |
 | **Lambda compiler** | Proprietary technique for verifying LLM output quality (P(λ)=90.7%) |
 | **Verbum pipeline** | Model distillation pipeline achieving 280× compression with 87% accuracy retention — enables local deterministic execution |
 
