@@ -261,6 +261,28 @@ Safe for external tools - contains only [auto-] and [nucleus] messages."
       (seq-take (nreverse result) 20))))
 
 (declare-function gptel-auto-workflow-select-targets "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--git-cmd "gptel-tools-agent-base")
+
+(defun gptel-auto-workflow--process-rss-kb ()
+  "Return current Emacs process RSS in kilobytes, or nil.
+Works on Linux (/proc) and macOS (ps)."
+  (let ((pid (emacs-pid)))
+    (when pid
+      (with-temp-buffer
+        (condition-case nil
+            (progn
+              ;; Linux: read VmRSS from /proc/PID/status
+              (insert-file-contents (format "/proc/%d/status" pid) nil nil nil)
+              (goto-char (point-min))
+              (if (re-search-forward "VmRSS:\\s-+\\([0-9]+\\)" nil t)
+                  (string-to-number (match-string 1))
+                ;; macOS: use ps command
+                (erase-buffer)
+                (call-process "ps" nil t nil "-p" (format "%d" pid) "-o" "rss=")
+                (goto-char (point-min))
+                (when (re-search-forward "\\([0-9]+\\)" nil t)
+                  (string-to-number (match-string 1)))))
+          (error nil))))))
 
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
   "Run auto-workflow asynchronously with TARGETS.
@@ -359,12 +381,26 @@ Usage:
     (gptel-auto-workflow--persist-status)
     ;; Start watchdog timer
     (gptel-auto-workflow--restart-watchdog-timer)
-    (if targets
-        (gptel-auto-workflow--run-with-targets targets completion-callback)
-      (require 'gptel-auto-workflow-strategic)
-      (gptel-auto-workflow-select-targets
-       (lambda (selected-targets)
-         (gptel-auto-workflow--run-with-targets selected-targets completion-callback))))
+    ;; Wrap completion-callback with memory/disk cleanup for 24/7 operation
+    (let ((cleanup-callback
+           (lambda (results)
+             ;; Garbage collect to reclaim memory from LLM API calls
+             (garbage-collect)
+             ;; Prune stale git worktrees to prevent disk accumulation
+             (ignore-errors
+               (gptel-auto-workflow--git-cmd "git worktree prune" 30))
+             ;; Report memory after cleanup
+             (let ((rss (gptel-auto-workflow--process-rss-kb)))
+               (when rss
+                 (message "[mem] Post-run RSS: %.0fMB" (/ rss 1024.0))))
+             (when completion-callback
+               (funcall completion-callback results)))))
+      (if targets
+          (gptel-auto-workflow--run-with-targets targets cleanup-callback)
+        (require 'gptel-auto-workflow-strategic)
+        (gptel-auto-workflow-select-targets
+         (lambda (selected-targets)
+           (gptel-auto-workflow--run-with-targets selected-targets cleanup-callback)))))
     'started))
 
 (defun gptel-auto-workflow-run-async--guarded (&optional targets completion-callback)

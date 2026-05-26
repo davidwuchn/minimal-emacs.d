@@ -79,8 +79,11 @@
         result)
     (cl-letf (((symbol-function 'my/gptel--agent-task-with-timeout)
                (lambda (callback agent-type description prompt &optional files include-history include-diff)
+                 ;; This branch is used when my/gptel--agent-task-with-timeout is available
                  (setq captured-preset gptel-agent-preset)
                  (funcall callback "ok")))
+              ;; Also mock fboundp so the code uses gptel-agent--task directly
+              ;; (the simpler path that our second mock handles)
               ((symbol-function 'gptel-agent--task)
                (lambda (callback _agent-type _description _prompt)
                  (setq captured-preset gptel-agent-preset)
