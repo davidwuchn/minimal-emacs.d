@@ -37,9 +37,9 @@ AutoTTS: research sessions emit structured trace blocks for token-optimal stoppi
                   (let ((trace (json-read-from-string (substring output brace-pos))))
                     (when (plist-get trace :phase)
                       (push trace traces)))
-                (error nil)))
-            ;; Use saved result-end, not clobbered match-end
-            (setq pos result-end))))
+                (error nil))))
+          ;; Always advance pos to prevent infinite loop on malformed input
+          (setq pos result-end)))
       (nreverse traces))))
 
 (defun gptel-auto-workflow--research-autotts-stop-early-p (traces)
