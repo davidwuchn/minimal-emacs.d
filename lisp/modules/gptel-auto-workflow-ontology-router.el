@@ -1436,6 +1436,34 @@ Keeps the last 100 decisions."
         (setq gptel-auto-workflow--routing-audit-log
               (seq-take gptel-auto-workflow--routing-audit-log 100))))))
 
+;; ─── Impact-Driven Auto-Tuning ───
+
+(defun gptel-auto-workflow--lambda-adjusted-penalty ()
+  "Return the verification penalty for degraded backends, auto-tuned from measured impact.
+If healthy backends consistently outperform degraded ones (delta > 10%), increase
+penalty to -35. If degraded somehow equals or beats healthy (delta <= 0), reduce
+penalty to -5. Otherwise use default -20."
+  (let* ((impact (condition-case nil
+                     (gptel-auto-workflow--lambda-health-impact)
+                   (error nil)))
+         (delta (plist-get impact :impact-delta)))
+    (cond ((and delta (> delta 0.10)) -35.0)   ; strong evidence → penalize more
+          ((and delta (<= delta 0.0)) -5.0)     ; weak/no evidence → light penalty
+          (t -20.0))))                            ; default
+
+(defun gptel-auto-workflow--allium-adjusted-threshold ()
+  "Return the Allium severity threshold, auto-tuned from measured impact.
+If low-severity strategies consistently outperform high-severity ones (delta > 15%),
+lower the threshold to 0.20 (stricter gating). If delta is small (<= 5%), raise
+it to 0.40 (more lenient). Default is 0.30."
+  (let* ((impact (condition-case nil
+                     (gptel-auto-workflow--allium-health-impact)
+                   (error nil)))
+         (delta (plist-get impact :impact-delta)))
+    (cond ((and delta (> delta 0.15)) 0.20)   ; strong evidence → stricter
+          ((and delta (<= delta 0.05)) 0.40)  ; weak/no evidence → more lenient
+          (t 0.30))))                           ; default
+
 ;; ─── Lambda Health Impact Measurement ───
 
 (defun gptel-auto-workflow--lambda-health-impact ()
@@ -1484,7 +1512,9 @@ Positive delta = low Allium severity correlates with better outcomes."
          (results (when (fboundp 'gptel-auto-workflow--parse-all-results)
                     (gptel-auto-workflow--parse-all-results)))
          (low-severity-kept 0) (low-severity-total 0)
-         (high-severity-kept 0) (high-severity-total 0))
+         (high-severity-kept 0) (high-severity-total 0)
+         ;; Auto-tuned severity threshold from measured impact
+         (allium-threshold (gptel-auto-workflow--allium-adjusted-threshold)))
     ;; Collect Allium scores per strategy from issue files
     (when (and issues-dir (file-directory-p issues-dir))
       (dolist (file (directory-files issues-dir t "\\.md\\'"))
@@ -1513,7 +1543,7 @@ Positive delta = low Allium severity correlates with better outcomes."
               (when (equal r-decision "kept")
                 (cl-incf s-kept)))))
         (when (> s-total 0)
-          (if (< severity 0.3)  ; low severity = better
+          (if (< severity allium-threshold)  ; low severity = better
               (progn (cl-incf low-severity-total s-total)
                      (cl-incf low-severity-kept s-kept))
             (progn (cl-incf high-severity-total s-total)
@@ -1911,17 +1941,17 @@ Returns plist with :total :healthy :degraded :unknown :backends."
 
 (defun gptel-auto-workflow--apply-verification-penalty (scored)
   "Apply lambda verification penalty to SCORED backends.
-Degraded backends (-20 points) and unknown backends (-5 points).
-Healthy backends get no penalty.
-Returns modified scored list."
-  (let ((result nil))
+Penalty auto-tuned from measured lambda-health-impact:
+default -20 for degraded, -35 when delta>10%, -5 when delta<=0."
+  (let* ((degraded-penalty (gptel-auto-workflow--lambda-adjusted-penalty))
+         (result nil))
     (dolist (entry scored)
       (let* ((backend (plist-get entry :backend))
              (status (or (gethash backend gptel-auto-workflow--lambda-verification-results)
                          :unknown))
              (score (plist-get entry :score))
               (penalty (pcase status
-                         (:degraded -20.0)
+                         (:degraded degraded-penalty)
                          (:unknown 0.0)
                          (:healthy 0.0)
                          (_ -5.0)))
