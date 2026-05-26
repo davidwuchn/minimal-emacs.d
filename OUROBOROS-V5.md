@@ -6,6 +6,58 @@ Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gp
 
 ---
 
+## For Investors
+
+**Ouroboros V5 is an autonomous R&D engine.** It replaces the manual cycle of research → prototype → test → decide with a closed-loop system that runs continuously, 24/7, at near-zero marginal cost per experiment.
+
+### The Problem
+
+Every product team has the same bottleneck: **learning velocity.** The gap between "we should try this" and "we know if it works" is days or weeks of manual effort — research, coding, testing, reviewing, deploying. Most teams batch this work into sprints, which means slow iteration and high overhead per experiment.
+
+### What OV5 Does
+
+It automates the entire cycle. Market intelligence feeds an experimentation engine that generates hypotheses, tests them in isolated environments, scores them against real test suites, and merges what improves the product — all without human intervention. One command starts the loop; the loop sustains itself.
+
+| Capability | What it means |
+|-----------|---------------|
+| **Autonomous experimentation** | Designs, codes, tests, and merges product improvements 24/7 |
+| **Self-improving** | Each experiment outcome sharpens the next cycle's hypotheses |
+| **Multi-provider routing** | Routes work across 6 LLM backends, auto-fails over on failure |
+| **Recovery-native** | Survives API outages, rate limits, daemon crashes — resumes where it left off |
+| **Memory** | Builds a knowledge graph of every experiment, pattern, and outcome |
+
+### Traction
+
+| Metric | Value |
+|--------|-------|
+| Experiments run | 1,200+ across 90+ targets |
+| Keep rate | ~25% (experiments that improve the product) |
+| Test suite | 2,013 tests pass before any merge |
+| Backends | 6 providers, auto-routed by measured keep-rate |
+| Uptime | Self-healing watchdog, in-process memory management, crash-recovery |
+
+### Market
+
+Any organization that ships software faces the same challenge: **how fast can we learn what works?** OV5 addresses this directly — it replaces manual R&D cycles with an autonomous system that runs experiments continuously. The addressable market is any engineering organization that values iteration speed.
+
+### Moat
+
+| Layer | Advantage |
+|-------|-----------|
+| **Self-knowledge** | The system builds an ontology of its own experiments — patterns, anti-patterns, what works per category |
+| **Routing intelligence** | 5 years of keep-rate data across 6 providers; Bayesian Thompson sampling for optimal routing |
+| **Lambda compiler** | Proprietary technique for verifying LLM output quality (P(λ)=90.7%) |
+| **Verbum pipeline** | Model distillation pipeline achieving 280× compression with 87% accuracy retention — enables local deterministic execution |
+
+### Business Model
+
+OV5 is infrastructure. Deployment models:
+- **Self-hosted** (current) — Runs on your own infrastructure using your API keys
+- **Managed** (planned) — Hosted OV5 with shared backend pool, usage-based pricing
+- **Enterprise** (planned) — Dedicated deployment with compliance, audit, SLA
+
+---
+
 ## For Market & Growth Teams
 
 **Ouroboros V5** is a **self-driving growth engine** for product-market fit. Two loops work together:
