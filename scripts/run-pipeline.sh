@@ -464,7 +464,9 @@ sleep 2
 # Queue the workflow job (daemon will be started if not running)
 # Retry if evolution is still running (returns "already-running")
 for retry in 0 1 2 3 4; do
-    auto_workflow_output="$(MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+    auto_workflow_output="$(AUTO_WORKFLOW_ACTION_TIMEOUT="$MAX_WAIT_WORKFLOW" \
+        MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+        timeout "$MAX_WAIT_WORKFLOW" \
         "$SCRIPT" auto-workflow 2>&1)"
     printf '%s\n' "$auto_workflow_output" >> "$PIPELINE_LOG"
     if printf '%s' "$auto_workflow_output" | grep -q "already-running"; then
