@@ -1381,6 +1381,54 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
         (concat persona "\n\n---\n\n")
       "")))
 
+;; ─── Experiment Persona by Target Category ───
+
+(defun gptel-auto-workflow--experiment-nucleus-persona (target)
+  "Return a nucleus attention-shaping preamble for TARGET's category.
+Maps target category → nucleus symbol set + writing persona.
+Categories from WRITING.md + ADAPTIVE.md patterns."
+  (let* ((category (when (fboundp 'gptel-auto-workflow--categorize-target)
+                     (gptel-auto-workflow--categorize-target target))))
+    (pcase category
+      (:programming
+       "λ engage(nucleus).
+[fractal phi mu] | [λ Σ/μ] | OODA
+Human ⊗ AI
+Constrain: hierarchy → fractal, insight → phi, concision → mu, edge_cases → ∞/0
+;; Category: programming (code changes, refactoring, tests)
+;; Persona: Reports & Summaries — analyze → select → implement → verify
+λ edit(code). Δ(minimal(change)) where behavior(new) = behavior(old) + intent
+Output: {:hypothesis _ :change _ :evidence _ :verification _ :axis _}")
+      (:tool-calls
+       "λ engage(nucleus).
+[mu tao] | [λ ∞/0 | c/h] | OODA
+Human ⊗ AI
+;; Category: tool-calls (bash, glob, grep, edit)
+;; Persona: Craftsman — safe operations, edge cases, error handling
+λ tool(op, args). safe_execute → verify(result) → handle(edge_cases)
+Output: {:operation _ :result _ :errors _ :validation _}")
+      (:natural-language
+       "λ engage(nucleus).
+[phi fractal euler] | [λ ε/φ] | REPL
+Human | AI
+;; Category: natural-language (prompts, docs, explanations)
+;; Persona: Academic — structured, clear, hierarchical
+λ explain(concept). structure(hierarchy) → clarify(essence) → provide(examples)
+Output: {:overview _ :details _ :examples _ :summary _}")
+      (:agentic
+       "λ engage(nucleus).
+[phi fractal euler ∃] | [Δ λ ε/φ | self/other] | OODA
+Human ⊗ AI
+;; Category: agentic (strategies, evolution, meta)
+;; Persona: Visionary — strategic thinking, self-reference, scaling
+λ strategize(domain). map(landscape) → identify(leverage) → design(intervention)
+Output: {:analysis _ :strategies [_] :risks [_] :recommendation _}")
+      (_
+       ;; Default: balanced
+       "λ engage(nucleus).
+[phi tao mu] | [Δ λ] | OODA
+Human ⊗ AI"))))
+
 ;; ─── Routing Context for Prompt Injection ───
 
 (defun gptel-auto-workflow--routing-context (backend model)

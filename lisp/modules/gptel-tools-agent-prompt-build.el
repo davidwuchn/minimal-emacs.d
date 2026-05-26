@@ -892,7 +892,10 @@ Returns template string or fallback hardcoded template."
 ## Suggestions
 {{suggestions}}
 
-## Skills (Context from Learned Patterns)
+## Nucleus Guidance (Category-Aware)
+{{nucleus-persona}}
+
+      ## Skills (Context from Learned Patterns)
 {{self-evolution}}
 
 ## Research Quality (Allium Audit)
@@ -1082,8 +1085,14 @@ Implements section-level A/B testing to identify effective prompt components."
                                 ""))
               (self-evolution . ,(if (funcall section-included-p 'self-evolution)
                                      (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
-                                         (gptel-auto-workflow--evolution-get-knowledge)
+                                         (concat "Constrain: patterns → Δ, anti_patterns → ∞/0, improvements → euler, essence → tao\n\n"
+                                                 (gptel-auto-workflow--evolution-get-knowledge))
                                        "")
+                                   ""))
+              ;; Nucleus attention-shaping preamble per target category
+              (nucleus-persona . ,(if (and (funcall section-included-p 'self-evolution)
+                                          (fboundp 'gptel-auto-workflow--experiment-nucleus-persona))
+                                     (gptel-auto-workflow--experiment-nucleus-persona target)
                                    ""))
               (allium-issues . ,(if (funcall section-included-p 'self-evolution)
                                     (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-target)

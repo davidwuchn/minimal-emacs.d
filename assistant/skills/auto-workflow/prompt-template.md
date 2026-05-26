@@ -27,6 +27,15 @@ You are running experiment {{experiment-id}} of {{max-experiments}} to optimize 
 ## Skills (Context from Learned Patterns)
 {{self-evolution}}
 
+## Nucleus Guidance (Category-Aware Attention)
+{{nucleus-persona}}
+
+## Research Quality (Allium Audit)
+{{allium-issues}}
+
+## Auto-Repair Guidance
+{{allium-repair}}
+
 ## Previous Experiments
 {{topic-knowledge}}
 
