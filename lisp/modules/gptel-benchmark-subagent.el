@@ -253,7 +253,12 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                          log-backend log-model)
                         "\n\n---\n\n")
                      (error ""))))
-                (prompt (concat routing-note prompt)))
+                ;; Inject nucleus persona based on agent type for
+                ;; attention-shaping. Different subagents benefit from
+                ;; different cognitive modes (from nucleus/ADAPTIVE.md).
+                (persona-note
+                 (gptel-auto-workflow--subagent-persona agent-type))
+                (prompt (concat persona-note routing-note prompt)))
            (if (fboundp 'my/gptel--agent-task-with-timeout)
             (let ((my/gptel-agent-task-timeout
                    (gptel-benchmark--subagent-timeout timeout effective-preset))
