@@ -1872,7 +1872,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (dolist (w (plist-get v :warnings))
           (message "[pipeline] WARN: %s" w)))
     (error nil))
-  (let ((new-experiments (gptel-auto-workflow--evolution-count-new))
+  (let ((new-experiments (or (gptel-auto-workflow--evolution-count-new) 0))
         (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                            (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
     (when (and (< new-experiments 3) (not has-research))
@@ -5841,7 +5841,7 @@ Saves to var/tmp/evolution-scores.json."
                                          :last-total)))
                         (error 0)))
          (results (gptel-auto-workflow--parse-all-results))
-         (current (length results)))
+         (current (if (listp results) (length results) 0)))
     (- current (or (ignore-errors (float last-total)) 0))))
 
 ;; ─── Allium BDD: Behavior-Driven Development via spec checking ───
