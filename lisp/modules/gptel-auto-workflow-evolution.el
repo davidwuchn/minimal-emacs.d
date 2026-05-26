@@ -4591,10 +4591,12 @@ effective +0.10, promising +0.05, underperforming -0.05."
                     (* 100 gptel-auto-workflow--baseline-keep-rate)))
            ('increase-research
            (message "[vsm-repair] Research priority increased (Water→Wood generating)"))
-           ('rebalance-backends
-           (when (fboundp 'gptel-auto-workflow--evolution-optimize-backend-order)
-             (gptel-auto-workflow--evolution-optimize-backend-order)
-             (message "[vsm-repair] Backend fallback chain rebalanced (Metal→Wood pruning)")))
+            ('rebalance-backends
+            (condition-case err
+                (when (fboundp 'gptel-auto-workflow--evolution-optimize-backend-order)
+                  (gptel-auto-workflow--evolution-optimize-backend-order)
+                  (message "[vsm-repair] Backend fallback chain rebalanced (Metal→Wood pruning)"))
+              (error (message "[vsm-repair] Backend rebalance error: %s" err))))
            ('increase-exploration
            (when (boundp 'gptel-auto-workflow--exploration-rate)
              (setq gptel-auto-workflow--exploration-rate 0.30))
@@ -5434,7 +5436,8 @@ Moves better-performing backends to the front of the fallback chain."
       (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
         (let ((new-chain
                (seq-filter (lambda (entry)
-                             (member (car entry) ordered))
+                             (and (consp entry)
+                                  (member (car entry) ordered)))
                            (mapcar (lambda (name)
                                      (cons name
                                            (cdr (assoc name
@@ -5444,12 +5447,15 @@ Moves better-performing backends to the front of the fallback chain."
           (when (> (length new-chain) 2)
             ;; Keep backends not in stats at the end
             (dolist (entry gptel-auto-workflow-executor-rate-limit-fallbacks)
-              (unless (assoc (car entry) new-chain #'string=)
-                (setq new-chain (append new-chain (list entry)))))
+              (when (consp entry)
+                (unless (assoc (car entry) new-chain #'string=)
+                  (setq new-chain (append new-chain (list entry))))))
             (when (not (equal new-chain gptel-auto-workflow-executor-rate-limit-fallbacks))
-              (message "[evolution] Reordering fallback chain by performance: %s → %s"
-                       (mapconcat #'car gptel-auto-workflow-executor-rate-limit-fallbacks "→")
-                       (mapconcat #'car new-chain "→"))
+               (message "[evolution] Reordering fallback chain by performance: %s → %s"
+                        (mapconcat (lambda (e) (if (consp e) (car e) (format "%s" e)))
+                                   gptel-auto-workflow-executor-rate-limit-fallbacks "→")
+                        (mapconcat (lambda (e) (if (consp e) (car e) (format "%s" e)))
+                                   new-chain "→"))
               (setq gptel-auto-workflow-executor-rate-limit-fallbacks new-chain)
               (gptel-auto-workflow--evolution-persist-backend-order
                gptel-auto-workflow-executor-rate-limit-fallbacks))))))))

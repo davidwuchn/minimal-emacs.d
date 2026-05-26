@@ -1524,18 +1524,18 @@ experiment that had previously looked keep-worthy."
 
 (defun gptel-auto-workflow--make-idempotent-staging-completion (callback)
   "Return idempotent staging completion wrapper preserving CALLBACK arity."
-  (let ((called nil)
-        (arity (ignore-errors (func-arity callback))))
+  (let* ((called (list :pending))
+         (arity (ignore-errors (func-arity callback))))
     (if (or (eq (cdr-safe arity) 'many)
             (and (integerp (cdr-safe arity))
                  (>= (cdr-safe arity) 2)))
         (lambda (success &optional reason)
-          (unless called
-            (setq called t)
+          (unless (eq (car called) :done)
+            (setcar called :done)
             (funcall callback success reason)))
       (lambda (success)
-        (unless called
-          (setq called t)
+        (unless (eq (car called) :done)
+          (setcar called :done)
           (funcall callback success))))))
 
 ;;; Error Analysis and Adaptive Workflow

@@ -688,7 +688,8 @@ the original fallback list — preventing mutation side effects."
     (when (and reordered (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks))
       (setq gptel-auto-workflow-executor-rate-limit-fallbacks reordered)
       (message "[onto-router] Applied ontology-ordered fallback chain: %s"
-               (mapconcat (lambda (e) (format "%s/%s" (car e) (cdr e))) reordered " → ")))))
+               (mapconcat (lambda (e) (if (consp e) (format "%s/%s" (car e) (cdr e)) (format "%s" e)))
+                          reordered " → ")))))
 
 ;; ─── Reset to Static Order ───
 
@@ -1037,8 +1038,8 @@ Returns plist with :overall status and per-backend results."
         (unknown-count 0))
     (message "[verbum] Verifying lambda compiler on %d backends..." (length fallbacks))
     (dolist (entry fallbacks)
-      (let* ((backend (car entry))
-             (model (cdr entry))
+      (let* ((backend (if (consp entry) (car entry) (format "%s" entry)))
+             (model (if (consp entry) (cdr entry) nil))
              (status (gptel-auto-workflow--verify-backend-lambda-impl backend model)))
         (push (cons backend status) results)
         (pcase status
