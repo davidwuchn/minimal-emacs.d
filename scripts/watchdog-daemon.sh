@@ -10,8 +10,29 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_NAME="ov5-auto-workflow"
 MY_UID=$(id -u)
 LOG="$DIR/var/tmp/cron/watchdog.log"
+LOCK_FILE="$DIR/var/tmp/cron/watchdog.lock"
 MAX_WAIT=60
 RESTART_COOLDOWN=300  # 5 min between restarts to avoid restart loops
+
+mkdir -p "$(dirname "$LOG")"
+
+# Prevent concurrent watchdog runs. If the previous instance is still
+# running after 120s, force-clear the lock (stale lock from crash).
+if [ -f "$LOCK_FILE" ]; then
+    lock_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
+    if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
+        lock_age=$(($(date +%s) - $(stat -f %m "$LOCK_FILE" 2>/dev/null || date +%s)))
+        if [ "$lock_age" -lt 120 ]; then
+            exit 0  # Another watchdog is already running
+        fi
+        # Stale lock — clean up
+        rm -f "$LOCK_FILE"
+    else
+        rm -f "$LOCK_FILE"
+    fi
+fi
+echo $$ > "$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"' EXIT
 
 # Clean all candidate socket paths for this server/UID.
 # Stale sockets from crashed daemons block emacsclient from connecting

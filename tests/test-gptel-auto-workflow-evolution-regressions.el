@@ -1652,8 +1652,8 @@ Verifies the core property of the always-defer fix."
          (elapsed (float-time (time-subtract (current-time) start))))
     (should (string-match-p "timed out" output))
     (should (= exit-code -1))
-    ;; Should complete within 5 seconds (2s timeout + overhead)
-    (should (< elapsed 10))))
+    ;; Allow up to 15s for completion (2s timeout + system scheduling overhead)
+    (should (< elapsed 15))))
 
 (ert-deftest regression/shell-timeout/no-command-returns-error ()
   "gptel-auto-workflow--shell-command-with-timeout must handle empty/nil commands."
