@@ -2,7 +2,7 @@
 ;; Generated: 2026-05-25 14:20
 ;; Git-tracked — shared across machines. Commit after evolution.
 (setq gptel-auto-workflow--task-backend-preference
-      '(("analyzer" "DashScope" . 0.15)
+      '(        ("analyzer" "DashScope" . 0.25)
         ("analyzer" "DeepSeek" . 0.10)
         ("grader" "moonshot" . 0.15)
         ("grader" "DeepSeek" . 0.10)

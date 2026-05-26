@@ -261,6 +261,28 @@ Safe for external tools - contains only [auto-] and [nucleus] messages."
       (seq-take (nreverse result) 20))))
 
 (declare-function gptel-auto-workflow-select-targets "gptel-auto-workflow-strategic")
+(declare-function gptel-auto-workflow--git-cmd "gptel-tools-agent-base")
+
+(defun gptel-auto-workflow--process-rss-kb ()
+  "Return current Emacs process RSS in kilobytes, or nil.
+Works on Linux (/proc) and macOS (ps)."
+  (let ((pid (emacs-pid)))
+    (when pid
+      (with-temp-buffer
+        (condition-case nil
+            (progn
+              ;; Linux: read VmRSS from /proc/PID/status
+              (insert-file-contents (format "/proc/%d/status" pid) nil nil nil)
+              (goto-char (point-min))
+              (if (re-search-forward "VmRSS:\\s-+\\([0-9]+\\)" nil t)
+                  (string-to-number (match-string 1))
+                ;; macOS: use ps command
+                (erase-buffer)
+                (call-process "ps" nil t nil "-p" (format "%d" pid) "-o" "rss=")
+                (goto-char (point-min))
+                (when (re-search-forward "\\([0-9]+\\)" nil t)
+                  (string-to-number (match-string 1)))))
+          (error nil))))))
 
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
   "Run auto-workflow asynchronously with TARGETS.
@@ -359,12 +381,26 @@ Usage:
     (gptel-auto-workflow--persist-status)
     ;; Start watchdog timer
     (gptel-auto-workflow--restart-watchdog-timer)
-    (if targets
-        (gptel-auto-workflow--run-with-targets targets completion-callback)
-      (require 'gptel-auto-workflow-strategic)
-      (gptel-auto-workflow-select-targets
-       (lambda (selected-targets)
-         (gptel-auto-workflow--run-with-targets selected-targets completion-callback))))
+    ;; Wrap completion-callback with memory/disk cleanup for 24/7 operation
+    (let ((cleanup-callback
+           (lambda (results)
+             ;; Garbage collect to reclaim memory from LLM API calls
+             (garbage-collect)
+             ;; Prune stale git worktrees to prevent disk accumulation
+             (ignore-errors
+               (gptel-auto-workflow--git-cmd "git worktree prune" 30))
+             ;; Report memory after cleanup
+             (let ((rss (gptel-auto-workflow--process-rss-kb)))
+               (when rss
+                 (message "[mem] Post-run RSS: %.0fMB" (/ rss 1024.0))))
+             (when completion-callback
+               (funcall completion-callback results)))))
+      (if targets
+          (gptel-auto-workflow--run-with-targets targets cleanup-callback)
+        (require 'gptel-auto-workflow-strategic)
+        (gptel-auto-workflow-select-targets
+         (lambda (selected-targets)
+           (gptel-auto-workflow--run-with-targets selected-targets cleanup-callback)))))
     'started))
 
 (defun gptel-auto-workflow-run-async--guarded (&optional targets completion-callback)
@@ -400,14 +436,32 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
     (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)) (error (message "[reload] strategic.el skipped (load error: %s)" (error-message-string err))))
     ;; Populate targets if empty (daemon mode doesn't load .dir-locals.el)
+    ;; NOTE: defcustom in gptel-tools-agent-subagent.el resets the global
+    ;; gptel-auto-workflow-targets to '() when loaded.  Re-read dir-locals
+    ;; after module loading so the 5 configured targets win over discover.
     (when (and (boundp 'gptel-auto-workflow-targets)
                (or (null gptel-auto-workflow-targets)
                    (equal gptel-auto-workflow-targets '())))
-      (when (fboundp 'gptel-auto-workflow--discover-targets)
-        (let ((discovered (gptel-auto-workflow--discover-targets)))
-          (when discovered
-            (setq gptel-auto-workflow-targets discovered)
-            (message "[init] Populated %d auto-workflow targets" (length discovered))))))
+      (let ((dir (and (boundp 'gptel-auto-workflow--current-project)
+                      gptel-auto-workflow--current-project)))
+        (when dir
+          (condition-case nil
+              (with-temp-buffer
+                (setq-local default-directory dir)
+                (hack-dir-local-variables-non-file-buffer)
+                (when (local-variable-p 'gptel-auto-workflow-targets)
+                  (setq gptel-auto-workflow-targets
+                        (buffer-local-value 'gptel-auto-workflow-targets
+                                            (current-buffer)))))
+            (error nil))))
+      (when (and (boundp 'gptel-auto-workflow-targets)
+                 (or (null gptel-auto-workflow-targets)
+                     (equal gptel-auto-workflow-targets '())))
+        (when (fboundp 'gptel-auto-workflow--discover-targets)
+          (let ((discovered (gptel-auto-workflow--discover-targets)))
+            (when discovered
+              (setq gptel-auto-workflow-targets discovered)
+              (message "[init] Populated %d auto-workflow targets" (length discovered)))))))
     (condition-case err (load-file (expand-file-name "lisp/modules/strategic-daemon-functions.el" root)) (error (message "[reload] daemon-functions.el skipped (load error: %s)" (error-message-string err))))
     ;; strategic.el requires gptel-auto-workflow-research-cache via (require '... nil t).
     ;; If that require succeeded, featurep will be t and we skip the re-load.

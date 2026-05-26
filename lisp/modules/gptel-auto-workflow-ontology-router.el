@@ -1133,7 +1133,7 @@ Probation threshold auto-tunes from VSM health when available
   (>= (gptel-auto-workflow--backend-health-level backend) 3))
 
 (defvar gptel-auto-workflow--task-backend-preference
-  '(("analyzer"   "DashScope" . 0.15)
+  '(("analyzer"   "DashScope" . 0.25)
     ("analyzer"   "DeepSeek"  . 0.10)
     ("grader"     "moonshot"  . 0.15)
     ("grader"     "DeepSeek"  . 0.10)
