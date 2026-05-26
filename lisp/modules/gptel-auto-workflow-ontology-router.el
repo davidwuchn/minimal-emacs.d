@@ -862,9 +862,18 @@ MAX-SUGGESTIONS limits results (default 5)."
   "Advice around experiment runner to apply ontology fallback ordering.
 Reorders fallback chain before each experiment based on historical performance.
 After each experiment, copies any new rate-limited backends into the per-run
-cooldown list so subsequent experiments hard-exclude failed backends."
+cooldown list so subsequent experiments hard-exclude failed backends.
+SAFETY: Saves and restores all globals this advice touches, so OLTP tests
+in unrelated test files are not affected by side effects."
   (let* ((target (car args))
          (strategy nil)
+         ;; Save ALL globals this advice might modify
+         (saved-rate-limit-fallbacks (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                                         (copy-sequence gptel-auto-workflow-executor-rate-limit-fallbacks)))
+         (saved-rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                                  (copy-sequence gptel-auto-workflow--rate-limited-backends)))
+         (saved-run-failed (and (boundp 'gptel-auto-workflow--run-failed-backends)
+                                (copy-sequence gptel-auto-workflow--run-failed-backends)))
          (prior-rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
                                   (copy-sequence gptel-auto-workflow--rate-limited-backends))))
     ;; Apply ontology-ordered fallbacks
@@ -881,8 +890,13 @@ cooldown list so subsequent experiments hard-exclude failed backends."
           (unless (member b gptel-auto-workflow--run-failed-backends)
             (push b gptel-auto-workflow--run-failed-backends)
             (message "[cooldown] %s added to per-run exclusion list" b))))
-      ;; Reset to static order (ontology re-evaluates fresh each time)
-      (gptel-auto-workflow--reset-fallback-order))))
+      ;; Restore ALL saved globals to prevent side-effect leakage across tests
+      (when saved-rate-limit-fallbacks
+        (setq gptel-auto-workflow-executor-rate-limit-fallbacks saved-rate-limit-fallbacks))
+      (when saved-rate-limited
+        (setq gptel-auto-workflow--rate-limited-backends saved-rate-limited))
+      (when saved-run-failed
+        (setq gptel-auto-workflow--run-failed-backends saved-run-failed)))))
 
 ;; Enabled: ontology-aware fallback reordering on every experiment
 (advice-add 'gptel-auto-experiment-run
