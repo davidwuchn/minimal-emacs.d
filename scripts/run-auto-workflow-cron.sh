@@ -1096,7 +1096,12 @@ ensure_worker_daemon() {
     fi
     if [ "$rc" -eq 2 ]; then
         if [ "$STALE_DAEMON_RECOVERED" -eq 0 ]; then
-            return 0
+            # Stale socket with no daemon — clean it and start fresh.
+            # Without this, emacsclient connects to the dead socket
+            # and times out, and the auto-workflow never runs.
+            discard_stale_worker_daemon 2>/dev/null || true
+            clean_orphaned_sockets 2>/dev/null || true
+            sleep 1
         fi
         rc=1
     fi

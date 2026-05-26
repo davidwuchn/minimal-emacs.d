@@ -447,6 +447,18 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     # Restart daemon to pick up any evolved code changes
     log "Restarting daemon to load evolved code..."
     "$SCRIPT" stop >/dev/null 2>&1 || true
+    # Clean stale sockets (macOS: $TMPDIR, Linux: /tmp).  After the
+    # daemon is killed, ensure_worker_daemon may find a stale socket
+    # and return without starting a new daemon — causing auto-workflow
+    # emacsclient to connect to a dead socket and time out.
+    for _base in "${TMPDIR:-/tmp}" "/tmp" "${XDG_RUNTIME_DIR:-}"; do
+        [ -n "$_base" ] || continue
+        for _sock in ov5-auto-workflow ov5-researcher; do
+            rm -f "$_base/emacs$(id -u)/$_sock" 2>/dev/null || true
+            rm -f "$_base/emacs/$_sock" 2>/dev/null || true
+        done
+    done
+    unset _base _sock
     sleep 2
 else
     log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="
