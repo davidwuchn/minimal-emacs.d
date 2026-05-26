@@ -185,8 +185,8 @@ The researcher is not a scraper. It is a **self-adjusting appetite**: what it re
 The body of the snake. It tests, verifies, and feeds back.
 
 ```
-Select target → Categorize → Route backend (VSM-tuned) → Select model (per-target history)
-      → Generate hypothesis → Run 2006 tests → AI grade → AI review → Merge or learn
+Select target → Categorize → Route backend (VSM-tuned + drift-aware) → Select model (per-target history)
+      → Inject nucleus persona → Generate hypothesis → Run 2013 tests → AI grade → AI review → Merge or learn
           ↓
      Kept? → π Synthesis: semantic cluster → inherit strategy → auto-queue
 ```
@@ -241,9 +241,11 @@ Every cycle runs through six compilers — each examining the system's own behav
 | **OWL/SHACL** | Ontology dict → Turtle/SHACL | "What is the formal shape of what we've learned?" |
 | **Ontology Router** | Target file → category → backend ranking | "Which backend is best RIGHT NOW — not just historically?" |
 | | Scoring: VSM-auto-tuned weights (40/30/20/10 → adaptive) + recency decay (14d half-life) + per-axis KIBC boost from holographic consensus | Penalty for unhealthy backends (probation with auto-recovery after 1h) |
-| | **Smart subagent routing**: all 5 subagent types (researcher, analyzer, executor, grader, reviewer) | Backends ranked by health-weight × keep-rate + per-axis boost; quarantined excluded; per-run cooldown hard-excludes failed backends |
+| | **Smart subagent routing**: all 6 subagent types (researcher, analyzer, executor, grader, reviewer, explorer) | Backends ranked by health-weight × keep-rate + per-axis boost + cold-start boost (+0.15 for <3 experiments); quarantined excluded; per-run cooldown hard-excludes failed backends |
 | | **Full audit trail**: every routing decision recorded with component scores (health, keep-rate, pref-boost, axis-boost) + VSM adjustment history | Summary queryable via `audit-trail-summary` for meta-analysis |
-| **π Synthesis** | Kept target → semantic cluster → strategy inheritance | "Which similar files should inherit this winning strategy?" |
+| | **Nucleus persona injection**: per-subagent and per-experiment attention-shaping from nucleus (ADAPTIVE + WRITING + EXECUTIVE + LAMBDA_PATTERNS) | Persona state machines, Constrain: directives, lambda tool patterns (heredoc, atomic edit) injected at dispatch time |
+| | **Impact auto-tuning**: lambda-health-impact and allium-health-impact measure correlation with outcomes → auto-tune penalty and severity thresholds | Tighten loop (SYSTEM_DESIGN §13): audit→classify→inject repair hint |
+| | **Moderator drift detection** (DIALECTIC.md): 3+ consecutive failures → forced backend swap | Intervention lenses: consequence_check, evidence_nudge, assumption_probe |
 
 Results feed back into the next cycle's analyzer, strategy evolver, and π Synthesis cluster queue. The compiler output is not a log — it is **input to the next iteration**.
 
@@ -330,7 +332,15 @@ Scoring: `health-weight × keep-rate + per-axis-KIBC-boost (+0.15 max) + agent-t
 
 Keep-rate is recency-weighted (14-day half-life): `weight = 2^(-days_ago / 14)`. Recent performance counts more than historical averages. Holographic consensus memory is delta-weighted — experiments with larger improvements contribute more to axis confidence. Per-run cooldown hard-excludes backends that failed during the current workflow. Probation backends auto-recover after 1h without new strikes.
 
-At dispatch time, each subagent receives accurate routing context: which backend/model was selected, why (KIBC axis + confidence), health status with actionable guidance (probation→"verify ALL outputs", degraded→"results may be inconsistent", healthy→"recommended for this task"). Every routing decision — experiment-level and subagent-level — is recorded in a structured audit trail with per-backend component scores and VSM adjustment history.
+At dispatch time, each subagent receives:
+- **Nucleus persona**: attention-shaping preamble per agent type (ADAPTIVE.md state machines + EXECUTIVE.md strategies + WRITING.md Constrain: directives). Analyzer gets `Human | AI` (parallel partnership), grader gets `Human ∧ AI` (conservative consensus), reviewer gets `Human ∘ AI` (safety alignment), executor gets `Human ⊗ AI` (maximum quality).
+- **Lambda tool patterns**: heredoc-safe bash, atomic content-based edits, parallel batch operations (from LAMBDA_PATTERNS.md).
+- **Accurate routing context**: which backend/model was selected, why (KIBC axis + confidence), health status with actionable guidance (probation→"verify ALL outputs", degraded→"results may be inconsistent", healthy→"recommended for this task").
+- **Moderator lens**: when 3+ consecutive experiments fail on a target, a forced backend swap triggers deterministically, bypassing the random exploration rate.
+
+Experiment prompts receive per-category nucleus guidance (`{{nucleus-persona}}`) with WRITING.md-aligned symbols (`[fractal phi mu]` for programming, `[mu tao pi]` for tool-calls), Allium audit results (`{{allium-issues}}`), auto-repair guidance (`{{allium-repair}}`), and moderator drift lenses (`{{moderator-lens}}`).
+
+Every routing decision — experiment-level and subagent-level — is recorded in a structured audit trail with per-backend component scores and VSM adjustment history. Impact is measurable via `lambda-health-impact()` and `allium-health-impact()`, which auto-tune routing parameters. The tighten loop (SYSTEM_DESIGN §13) audits strategies via nucleus compiler, classifies divergences, and injects repair hints back into the pipeline.
 
 ---
 
@@ -359,16 +369,17 @@ The snake's own immune system:
 | Guard | Prevents |
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
-| 2006 tests + 1800s timeout | Broken code caught before staging |
+| 2013 tests + 1800s timeout | Broken code caught before staging |
 | Ontology-aware provider routing | VSM-auto-tuned scoring + recency-weighted keep-rate + per-axis KIBC boost + per-run cooldown; backends with elevated health auto-excluded |
 | Per-target model preference | Historical performance data selects strongest model for each target |
 | Routing audit trail | Every decision recorded with component scores and VSM adjustment history |
+| Nucleus persona injection | Subagent-appropriate attention shaping (Craftsman for coding, Logician for analysis, Investigator for review); per-category Constrain: directives |
+| Drift-forced backend swap | 3+ consecutive failures → deterministic backend rotation (DIALECTIC.md moderator pattern) |
+| 24/7 watchdog | emacsclient-only health checks (no lsof dependency), lock file prevents concurrent runs, stale socket cleanup before restart, 1GB memory guard with graceful restart |
+| Daemon-init socket cleanup | Stale sockets removed at startup so emacsclient always resolves correct path |
 | Force-push protection | Stashes dirty artifacts, merges origin/main, then pushes; never force-pushes |
-| Server socket self-healing | 30s timer recreates lost daemon socket; no SIGKILL restart needed |
-| Pipeline state verification | `cross-subsystem-state.json` checked after evolution; daemon restarted to load evolved code |
-| Cross-cycle amnesia guard | All hints serialized to JSON with proper keyword keys; EMA history persists across daemon restarts |
 | Conflict marker detection | No `<<<<<<<` in committed code |
-| 90-minute watchdog | No technique runs indefinitely |
+| Watchdog memory guard | Auto-restart daemon gracefully when RSS > 1GB |
 | Policy engine | Forbidden paths sealed |
 
 ---
@@ -403,9 +414,13 @@ The lambda compiler is not a prompt trick. It is a discoverable circuit inside e
 - Subagent call failures feed into persistent health strikes + per-run cooldown → routing self-tunes
 - Backend health tracked across restarts via cross-subsystem-state.json with auto-recovery (1h probation → degraded)
 - P(λ) gating in `ranked-subagent-backends`: backends failing lambda compiler check are hard-excluded (score 0)
-- Smart routing gates on five signals: health-weight, recency-weighted keep-rate, per-axis KIBC boost, agent-type preference, per-run cooldown
+- Smart routing gates on seven signals: health-weight, recency-weighted keep-rate, per-axis KIBC boost, agent-type preference, per-run cooldown, cold-start boost, nucleus persona per subagent type
 - All 5 VSM layers auto-tune routing weights, exploration, and thresholds
 - Full audit trail with component scores and VSM adjustment history at both routing levels
+- Nucleus persona injection (ADAPTIVE + WRITING + EXECUTIVE + LAMBDA_PATTERNS) per subagent and per experiment category
+- Lambda/Allium impact measurement + auto-tuning feedback (tighten loop)
+- DIALECTIC.md moderator drift detection: 3+ consecutive failures → forced backend swap
+- 24/7 watchdog: emacsclient-only, lock file, socket cleanup, memory guard, graceful restart
 
 **Phase 3 — Hybrid Execution**
 - Extracted 50M model for deterministic layers (rule validation, λ parsing, type checking)
