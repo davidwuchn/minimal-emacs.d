@@ -267,7 +267,6 @@ rejected solely because nil guards or validation checks increase complexity."
          (correctness-bypass-p
           (and (listp decision)
                (not (plist-get decision :keep))
-               tests-passed
                correctness-fix-p
                (not speculative-hypothesis-p)
                strong-grade-p
