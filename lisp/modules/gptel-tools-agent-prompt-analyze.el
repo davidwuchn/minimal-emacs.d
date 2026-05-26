@@ -182,38 +182,40 @@ Speculative or purely defensive hardening language does not count."
          (gptel-auto-experiment--grade-explanation-text grade-details)))
     (when (stringp grade-signals)
       (let ((case-fold-search t))
-        (and
-         (string-match-p
-          (rx (or (seq (or "fixes"
-                           "fixed"
-                           "resolves"
-                           "resolved"
-                           "corrects"
-                           "corrected"
-                           "eliminates"
-                           "eliminated"
-                           "addresses"
-                           "addressed")
-                       (* (not (any ".\n")))
-                       (or "bug"
-                           "bugs"
-                           "runtime error"
-                           "runtime errors"
-                           "crash"
-                           "crashes"
-                           "security hole"
-                           "security issue"
-                           "state corruption"
-                           "logic failure"
-                           "correctness bug"
-                           "correctness bugs"
-                           "functional regression"
-                           "functional regressions"))
-                  "genuine bug"
-                  "genuine bugs"
-                  "actual functional bug"
-                  "actual functional bugs"
-                  "demonstrably buggy"))
+         (and
+          (string-match-p
+           (rx (or (seq (or "fixes"
+                            "fixed"
+                            "resolves"
+                            "resolved"
+                            "corrects"
+                            "corrected"
+                            "eliminates"
+                            "eliminated"
+                            "addresses"
+                            "addressed"
+                            "prevents"
+                            "prevented")
+                        (* (not (any ".\n")))
+                        (or "bug"
+                            "bugs"
+                            "runtime error"
+                            "runtime errors"
+                            "crash"
+                            "crashes"
+                            "security hole"
+                            "security issue"
+                            "state corruption"
+                            "logic failure"
+                            "correctness bug"
+                            "correctness bugs"
+                            "functional regression"
+                            "functional regressions"))
+                   "genuine bug"
+                   "genuine bugs"
+                   "actual functional bug"
+                   "actual functional bugs"
+                   "demonstrably buggy"))
           grade-signals)
          (not
           (gptel-auto-experiment--speculative-correctness-language-p
