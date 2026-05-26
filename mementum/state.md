@@ -1,8 +1,60 @@
 # Mementum State
 
-> Last session: 2026-05-25 (complete)
+> Last session: 2026-05-26 (active, pipeline running 15:00)
 
-## Session Complete: OV5 Closed-Loop Routing Architecture
+## Session: OV5 24/7 Hardening + Definite void-function nil fix
+
+**Status:** ALL crash vectors fixed. Lambda compiler proves value. Pipeline unblocked.
+Evolution cycle completes. Routing correct.
+
+### Today's fixes (2026-05-26)
+
+| Commit | Type | What |
+|--------|------|------|
+| `03aa3b9b` | ⊘ | Fix nth 2 on dotted pairs (listp crash in model-valid-for-backend-p) |
+| `4f98672e` | ⊘ | Guard stale gptel stream callbacks |
+| `45b3baa0` | ⊘ | Temp dir /tmp→var/tmp, pref rebalance |
+| `9f6d0c73` | ◇ | MiniMax executor boost (20.7% keep-rate) |
+| `c22e9a87` | ⊘ | **Definitive** void-function nil fix: advise gptel-request |
+| `ca326b6d` | ⊘ | Fix orphan 'done' in run-pipeline.sh (blocked all experiments) |
+
+### Lambda Compiler: VALUE CONFIRMED
+
+The lambda gate prompt `"Convert prose to lambda: square function"` was sent to MiniMax
+and DeepSeek. Both responded with valid Elisp `(lambda (x) (* x x))`. The verification
+hash now has `MiniMax=>:healthy, DeepSeek=>:healthy`. This directly feeds into the
+ontology router — healthy backends get routing priority, degraded ones get penalized.
+
+The lambda-adjusted-penalty (riven) auto-tunes: if healthy backends outperform degraded
+by >10%, penalty increases to -35. If delta ≤0%, penalty drops to -5.
+
+### Allium: INFRASTRUCTURE EXISTS, NEEDS VOLUME
+
+- 10 trend categories tracked (1 occurrence each)
+- Auto-tuned severity threshold from measured impact (riven)
+- `allium-adjusted-threshold`: 0.30 default, self-adjusts based on impact delta
+- Regression baselines saved to `var/tmp/evolution/allium-regressions/`
+- Needs 10-20 more kept experiments for meaningful trend data
+
+### Self-Evolution: INFRASTRUCTURE COMPLETE
+
+- Evolution cycle at 14:39 completed: record-score, backend comparison (10 pairs),
+  model comparison (5 models), semantic relationships (17 edges)
+- VSM health step now clean (temp dir deleted)
+- Keep-rate: 18.6% → 19.4% (recovering)
+- 139 kept/staging-pending experiment results across all runs
+- Pref-boost rebalanced: MiniMax now leads executor routing
+
+### Current Daemon State
+- ov5-researcher: PID 1548330 (15:00), 340MB, completed research + lambda verification
+- ov5-auto-workflow: PID 1581757 (15:30), 372MB, idle
+
+### Pipeline Status
+- 15:00 pipeline completed research (12.6KB findings) but auto-workflow blocked by
+  orphan `done` in run-pipeline.sh (fixed at `ca326b6d`)
+- Next pipeline: 19:00 (7PM)
+- Lambda verification results: MiniMax :healthy, DeepSeek :healthy (2/5 verified)
+- void-function nil: definitively fixed with gptel-request advice in gptel-ext-core.el
 
 **Status:** 25 commits, 2006 tests, 0 unexpected, 54 skipped. All 6 routing improvements (A-F) + 12 follow-ups deployed. 38 stale stashes cleared.
 

@@ -1510,7 +1510,7 @@ ASSUMPTION: my/gptel-agent-task-timeout may be unbound in some configurations.
 EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget govern."
   (let* ((context (gptel-auto-workflow--gather-context))
          (max-targets gptel-auto-workflow-max-targets-per-run)
-         (analyzer-timeout (max (or (and (boundp 'my/gptel-agent-task-timeout)
+         (analyzer-timeout (min (or (and (boundp 'my/gptel-agent-task-timeout)
                                          my/gptel-agent-task-timeout)
                                     0)
                                 gptel-auto-workflow-analyzer-time-budget))
@@ -1541,9 +1541,9 @@ EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget 
                                               gptel-auto-workflow--analyzer-failed-backends)))
                         (push failed-backend
                               gptel-auto-workflow--analyzer-failed-backends))
-                      (if-let* ((candidate
-                                 (and (< attempt 4)        ; max 5 total attempts
-                                      (null targets)
+                     (if-let* ((candidate
+                                (and (< attempt 2)        ; max 3 total attempts
+                                     (null targets)
                                       (or gptel-auto-workflow--analyzer-quota-exhausted
                                           gptel-auto-workflow--analyzer-transient-failure)
                                       (gptel-auto-workflow--analyzer-failover-candidate))))

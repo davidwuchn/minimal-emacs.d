@@ -7,630 +7,974 @@ Synthesis verification:
 --->
 
 ---
-title: AI Agent Research Patterns
+title: Research Persistence Patterns for AI Agent Systems
 status: active
 category: knowledge
-tags: [agent-architecture, research, patterns, self-evolution, circuit-breaker, checkpoint-restore, memory-systems]
+tags: [research, persistence, self-evolution, agent-architecture, circuit-breaker, checkpoint]
 ---
 
-# AI Agent Research Patterns
+# Research Persistence Patterns for AI Agent Systems
 
-## Executive Summary
+## Overview
 
-This knowledge page synthesizes research findings from 8 internal repositories and 4 external sources on AI agent architecture, error recovery, and self-evolution patterns. The research targets improving the gptel-auto-workflow system with production-grade resilience patterns.
+This knowledge page synthesizes research findings on persisting agent research and memory across sessions, with focus on patterns that enable self-evolution, failure recovery, and knowledge continuity. The findings come from multiple research sessions targeting Emacs AI agent modules with varying retention rates (0%–33%), indicating the importance of quality filtering and structured output formats.
 
-**Key insight**: Research quality is measured by downstream experiment success, not by finding count. Each pattern includes an Emacs application section for immediate implementation.
+## Core Principles
+
+### Research-Experiment Feedback Loop
+
+The most critical pattern discovered: every experiment row must include a non-none research hash so AutoTTS can link outcomes back to the research trace.
+
+```elisp
+;; Research hash tracking structure
+(defvar gptel-research-hash nil
+  "Hash of the research findings used for current experiment run.")
+
+(defvar gptel-research-trace '()
+  "Trace of research sessions leading to current state.")
+
+(defun gptel-research--persist-hash (hash targets outcome)
+  "Persist research hash with metadata for future linking."
+  (push `(,hash ,targets ,outcome ,(current-time)) gptel-research-trace))
+```
+
+### Structured Machine-Parseable Output
+
+Research outputs must be structured with source, technique, apply-to-us, and verification fields:
+
+```elisp
+(defstruct gptel-research-finding
+  (source nil :read-only)
+  (technique nil :read-only)
+  (apply-to-us nil :read-only)
+  (difficulty nil :read-only)  ; HARD/MEDIUM/EASY
+  (impact nil :read-only)     ; HIGH/MEDIUM/LOW
+  (verification nil :read-only))
+```
 
 ---
 
-## 1. Resilience Patterns
+## Tier 1: Directly Applicable Patterns (Emacs Lisp + AI Agents)
 
-### 1.1 Circuit Breaker Pattern
+### 1. Circuit Breaker + Checkpoint/Restore Pattern
 
 **Source**: efrit (davidwuchn/efrit)
-**Impact**: HIGH | **Difficulty**: MEDIUM
 
-Circuit breakers monitor failure rates per provider and transition through states to prevent cascading failures:
+Circuit breaker monitors failure rates per provider, transitions through CLOSED→OPEN→HALF-OPEN states to prevent cascading failures. Checkpoint/restore stores state snapshots before risky operations.
 
-```
-┌─────────┐    5 failures     ┌─────────┐    half-open    ┌───────────┐
-│ CLOSED  │ ───────────────► │  OPEN   │ ─────────────► │ HALF-OPEN │
-│ Normal  │                  │ Block   │                  │ 1 test    │
-└─────────┘                  └─────────┘                  └───────────┘
-     ▲                           │                              │
-     │         success           │         success              │
-     └───────────────────────────┴──────────────────────────────┘
-```
-
-**Emacs Application**: Implement `gptel-circuit-breaker` defcustom:
+**Implementation**:
 
 ```elisp
-(defcustom gptel-circuit-breaker
-  '((openai . (failures 0 successes 0 last-failure nil))
-    (anthropic . (failures 0 successes 0 last-failure nil)))
-  "Circuit breaker state per provider."
-  :type '(alist :key-type symbol
-                :value-type (plist :key-type symbol :value-type t)))
-```
+(defvar gptel-circuit-breaker-state
+  '((openai . (:failures 0 :successes 0 :last-failure nil :state closed))
+    (anthropic . (:failures 0 :successes 0 :last-failure nil :state closed))))
 
-**Graduated Degradation** (from Hannecke Medium):
-- **L1 (3 failures)**: Disable risky tools, add human review flag
-- **L2 (5 failures)**: Switch to conservative mode, use simpler agents
-- **L3 (8 failures)**: Hard stop, escalate to human review queue
+(defcustom gptel-circuit-breaker-threshold 5
+  "Consecutive failures before opening circuit."
+  :type 'integer)
 
-### 1.2 Checkpoint/Restore Pattern
+(defcustom gptel-checkpoint-dir
+  (expand-file-name ".gptel/checkpoints/" user-emacs-directory)
+  "Directory for state checkpoint snapshots.")
 
-**Source**: efrit, genesis-agent
-**Impact**: HIGH | **Difficulty**: MEDIUM
+(defun gptel-circuit-breaker--record (provider success)
+  "Record outcome and transition circuit state if needed."
+  (let* ((state (assoc provider gptel-circuit-breaker-state))
+         (data (cdr state))
+         (current-state (plist-get data :state)))
+    (cond
+     ((eq current-state 'open)
+      ;; After timeout, transition to half-open
+      (when (> (float-time (time-since (plist-get data :last-failure))) 60)
+        (setf (plist-get data :state) 'half-open)))
+     ((eq current-state 'half-open)
+      (if success
+          (setf (plist-get data :state) 'closed
+                (plist-get data :failures) 0)
+        (setf (plist-get data :state) 'open
+              (plist-get data :last-failure) (current-time))))
+     (t ;; CLOSED state
+      (if success
+          (setf (plist-get data :successes) (1+ (plist-get data :successes))
+                (plist-get data :failures) 0)
+        (setf (plist-get data :failures) (1+ (plist-get data :failures))
+              (plist-get data :last-failure) (current-time))
+        (when (>= (plist-get data :failures) gptel-circuit-breaker-threshold)
+          (setf (plist-get data :state) 'open)))))))
 
-Store state snapshots before risky operations. Auto-restore from checkpoints on crash.
+(defun gptel-circuit-breaker--can-proceed (provider)
+  "Check if circuit allows requests to proceed."
+  (let* ((state (assoc provider gptel-circuit-breaker-state))
+         (data (cdr state)))
+    (not (eq (plist-get data :state) 'open))))
 
-**Emacs Implementation**:
+(defun gptel-checkpoint-save (experiment-id data)
+  "Save checkpoint before risky operation."
+  (let* ((checkpoint-file (expand-file-name
+                           (format "%s-%s.el" experiment-id (format-time-string "%Y%m%d-%H%M%S"))
+                           gptel-checkpoint-dir)))
+    (make-directory gptel-checkpoint-dir t)
+    (with-temp-file checkpoint-file
+      (prin1 `(defvar ,(intern experiment-id) ',data) (current-buffer)))
+    checkpoint-file))
 
-```elisp
-(defvar gptel-checkpoint-dir
-  (expand-file-name ".gptel/checkpoints/" user-emacs-directory))
-
-(defun gptel-checkpoint-save (experiment-id state)
-  "Save STATE for EXPERIMENT-ID to checkpoint directory."
-  (let ((file (expand-file-name experiment-id gptel-checkpoint-dir)))
-    (with-temp-buffer
-      (insert (prin1-to-string state))
-      (make-directory gptel-checkpoint-dir 'parents)
-      (write-file file))))
-
-(defun gptel-checkpoint-load (experiment-id)
-  "Load checkpoint state for EXPERIMENT-ID."
-  (let ((file (expand-file-name experiment-id gptel-checkpoint-dir)))
-    (when (file-exists-p file)
+(defun gptel-checkpoint-restore (experiment-id)
+  "Restore from most recent checkpoint."
+  (let* ((checkpoints (directory-files gptel-checkpoint-dir t
+                                       (format "^%s-" (regexp-quote experiment-id))))
+         (latest (car (sort checkpoints #'file-newer-than-file-p))))
+    (when latest
       (with-temp-buffer
-        (insert-file-contents file)
-        (goto-char (point-min))
+        (insert-file-contents latest)
         (read (current-buffer))))))
 ```
 
-### 1.3 Five Error Categories + Recovery Strategies
+### 2. Tool Receipts for Audit Trail
 
-| Category | Example | Recovery Strategy |
-|----------|---------|-------------------|
-| **Hard** | Network unreachable | Fallback to cached response |
-| **Structural** | Malformed tool schema | Skip tool, log error |
-| **Semantic** | LLM hallucinated tool name | Fuzzy match to nearest valid |
-| **Behavioral** | Infinite loop detected | Circuit breaker opens |
-| **Resource** | Memory exhausted | GC, reduce context window |
+**Source**: efrit (35+ tools with security controls)
 
----
+Every tool execution generates structured metadata: `(input-hash output-hash timestamp duration tool-name)`. Shell commands have allowed/forbidden pattern matching.
 
-## 2. Context Reduction Patterns
-
-### 2.1 Think-in-Code Paradigm
-
-**Source**: context-mode (davidwuchn/context-mode)
-**Impact**: HIGH | **Difficulty**: HARD
-
-Instead of dumping 700KB via 47 Read() calls, execute analysis scripts that return only the result.
-
-```
-Before (700KB raw dump):
-  Read("file1.el") → 45KB
-  Read("file2.el") → 120KB
-  ...
-  Total: 700KB context bloat
-
-After (3.6KB result):
-  gptel-sandbox-execute analysis-script.el → "defun foo... used 3 times, lines 10,45,89"
-```
-
-**Emacs Implementation**:
+**Implementation**:
 
 ```elisp
-(defun gptel-sandbox-execute (script-path &optional params)
-  "Execute SCRIPT-PATH in isolated subprocess, return structured result.
-PARAMS is an alist passed as JSON to stdin."
-  (let* ((input-json (json-encode params))
-         (output (shell-command-to-string
-                  (format "cat %s | python3 - %s"
-                          script-path
-                          (shell-quote-argument input-json)))))
-    (json-parse-string output :object-type 'alist)))
+(require 'sqlite)
+(require 'secure-hash)
+
+(defvar gptel-tool-log-db
+  (expand-file-name ".gptel/tool-log.db" user-emacs-directory))
+
+(defun gptel-tool-log--init ()
+  "Initialize tool log database."
+  (make-directory (file-name-directory gptel-tool-log-db) t)
+  (sqlite-execute gptel-tool-log-db
+    "CREATE TABLE IF NOT EXISTS tool_receipts (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       tool_name TEXT NOT NULL,
+       input_hash TEXT NOT NULL,
+       output_hash TEXT,
+       timestamp REAL NOT NULL,
+       duration_ms INTEGER,
+       success INTEGER,
+       session_id TEXT
+     )")
+  (sqlite-execute gptel-tool-log-db
+    "CREATE INDEX IF NOT EXISTS idx_tool_name ON tool_receipts(tool_name)")
+  (sqlite-execute gptel-tool-log-db
+    "CREATE INDEX IF NOT EXISTS idx_session ON tool_receipts(session_id)"))
+
+(defun gptel-tool-log--record (tool-name input output start-time success)
+  "Record tool execution with structured metadata."
+  (let* ((input-hash (secure-hash 'sha256 (prin1-to-string input)))
+         (output-hash (and output (secure-hash 'sha256 (prin1-to-string output))))
+         (duration-ms (floor (* 1000 (float-time (time-since start-time)))))
+         (timestamp (float-time)))
+    (sqlite-execute gptel-tool-log-db
+      (format "INSERT INTO tool_receipts (tool_name, input_hash, output_hash, timestamp, duration_ms, success, session_id)
+              VALUES ('%s', '%s', %s, %f, %d, %d, '%s')"
+              tool-name input-hash
+              (if output-hash (format "'%s'" output-hash) "NULL")
+              timestamp duration-ms
+              (if success 1 0)
+              gptel-session-id))))
+
+;; Shell command security patterns
+(defcustom gptel-shell-allowed-patterns
+  '("^git " "^find " "^rg " "^fd " "^emacsclient ")
+  "Allowed shell command patterns.")
+
+(defcustom gptel-shell-forbidden-patterns
+  '("rm -rf /" "dd if=" ":(){ :|:& };:" "mkfs" "cryptsetup")
+  "Forbidden shell command patterns.")
+
+(defun gptel-shell--validate (command)
+  "Validate shell command against security patterns."
+  (or (seq-some (lambda (pat) (string-match pat command))
+                gptel-shell-allowed-patterns)
+      (seq-some (lambda (pat) (string-match pat command))
+                gptel-shell-forbidden-patterns)
+      (signal 'gptel-shell-command-blocked
+              (format "Command blocked: %s" command))))
 ```
 
-**Achievement**: 98% context reduction (315 KB → 5.4 KB)
+### 3. Lambda Notation + Mathematical Attention Magnets
 
-### 2.2 Session Continuity via FTS5
+**Source**: nucleus
+
+Greek letters and math symbols as compressed prompt preamble: `λ engage(nucleus). [phi fractal euler tao pi mu ∃ ∀]`. Primes formal reasoning patterns.
+
+**Implementation**:
+
+```elisp
+(defvar gptel-nucleus-preamble-map
+  '(("λ engage(nucleus)" . :mode-engage)
+    ("[φ ψ Δ λ]" . :mode-formal-reasoning)
+    ("[Δ λ Ω ∞/0]" . :mode-change-analysis)
+    ("[ε/φ Σ/μ c/h]" . :mode-error-analysis)
+    ("[∃ ∀]" . :mode-exists-forall)
+    ("OODA" . :mode-ooda-loop)
+    ("REPL" . :mode-repl-loop)))
+
+(defcustom gptel-system-prompt-nucleus-lambda
+  "λ engage(gptel). [φ ψ Δ λ] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA"
+  "Lambda notation preamble for system prompts.")
+
+(defun gptel-nucleus--build-preamble (&rest symbols)
+  "Build nucleus-style preamble from symbols."
+  (mapconcat (lambda (sym)
+               (or (car (rassoc sym gptel-nucleus-preamble-map))
+                   (format "[%s]" sym)))
+             symbols " "))
+
+;; EDN statecharts for workflow states
+(defvar gptel-workflow-state-example
+  "{:phase :planning
+    :actions [research analyze synthesize]
+    :confidence 0.75
+    :constraints {:max-tokens 4000
+                  :timeout-seconds 120}}")
+```
+
+### 4. Think-in-Code Context Reduction
 
 **Source**: context-mode
-**Impact**: MEDIUM | **Difficulty**: MEDIUM
 
-Every edit, git op, task, error tracked in SQLite with FTS5. When context compacts, retrieve only relevant events via BM25 search.
+Instead of dumping raw file reads (700KB), execute analysis script that returns only result (3.6KB). 98% context reduction via sandbox tools.
 
-```sql
-CREATE VIRTUAL TABLE session_events USING fts5(
-  session_id,
-  timestamp,
-  event_type,
-  data,
-  content='session_events_backup'
-);
+**Implementation**:
 
--- Query relevant events on context compaction
-SELECT * FROM session_events 
-WHERE session_events MATCH 'error AND recovery'
-ORDER BY rank;
+```elisp
+(defcustom gptel-sandbox-max-context-kb 50
+  "Maximum context size in KB before triggering analysis script.")
+
+(defvar gptel-sandbox-analysis-scripts
+  '(("git-diff" . gptel-sandbox--analyze-git-diff)
+    ("file-stats" . gptel-sandbox--analyze-file-stats)
+    ("module-complexity" . gptel-sandbox--analyze-module-complexity)))
+
+(defun gptel-sandbox-execute (script-name input-data)
+  "Execute analysis script in isolated context, return structured result."
+  (let* ((script-fn (cdr (assoc script-name gptel-sandbox-analysis-scripts))))
+    (if script-fn
+        (funcall script-fn input-data)
+      (error "Unknown analysis script: %s" script-name))))
+
+(defun gptel-sandbox--analyze-git-diff (repo-path)
+  "Return compressed git diff analysis."
+  (let* ((diff-output (shell-command-to-string
+                       (format "git -C %s diff --stat HEAD~10..HEAD" repo-path)))
+         (lines (split-string diff-output "\n" t))
+         (stats (seq-take-while (lambda (l) (string-match "^ " l)) lines)))
+    `(:files-changed ,(length stats)
+      :additions ,(seq-reduce (lambda (acc l)
+                                (let ((added (when (string-match "\\+[0-9]+" l)
+                                               (string-to-number (match-string 0 l)))))
+                                  (+ acc (or added 0))))
+                              stats 0)
+      :deletions ,(seq-reduce (lambda (acc l)
+                                (let ((deleted (when (string-match "\\-[0-9]+" l)
+                                                  (string-to-number (match-string 0 l)))))
+                                  (+ acc (or deleted 0))))
+                              stats 0))))
+
+(defun gptel-sandbox--analyze-module-complexity (modules-list)
+  "Return module complexity analysis without full file contents."
+  (mapcar (lambda (module-path)
+            (let* ((lines (when (file-exists-p module-path)
+                           (with-temp-buffer
+                             (insert-file-contents module-path nil 0 10000)
+                             (split-string (buffer-string) "\n" t))))
+                   (defuns (seq-count (lambda (l) (string-match "^;;;" l)) lines)))
+              `(:path ,module-path
+                :estimated-lines ,(or (car (last lines)) 0)
+                :defun-markers ,defuns)))
+          modules-list))
 ```
 
-**Emacs Integration**:
+### 5. Session Continuity via FTS5
+
+**Source**: context-mode
+
+Every edit, git op, task, error tracked in SQLite with FTS5. When context compacts, retrieves only relevant events via BM25 search—not dumps raw data.
+
+**Implementation**:
 
 ```elisp
 (require 'sqlite)
 
-(defun gptel-session-db-log (event-type data)
-  "Log EVENT-TYPE with DATA to session database."
+(defvar gptel-session-db
+  (expand-file-name ".gptel/session.db" user-emacs-directory))
+
+(defun gptel-session-db--init ()
+  "Initialize session continuity database with FTS5."
+  (make-directory (file-name-directory gptel-session-db) t)
   (sqlite-execute gptel-session-db
-    "INSERT INTO session_events (session_id, timestamp, event_type, data)
-     VALUES (?, ?, ?, ?)"
-    gptel-current-session-id
-    (format-time-string "%Y-%m-%d %H:%M:%S")
-    event-type
-    (json-encode data)))
+    "CREATE TABLE IF NOT EXISTS session_events (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       session_id TEXT NOT NULL,
+       timestamp REAL NOT NULL,
+       event_type TEXT NOT NULL,
+       data TEXT NOT NULL
+     )")
+  (sqlite-execute gptel-session-db
+    "CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(
+       event_type, data, content='session_events', content_rowid='id')")
+  (sqlite-execute gptel-session-db
+    "CREATE TRIGGER IF NOT EXISTS session_ai AFTER INSERT ON session_events BEGIN
+       INSERT INTO session_fts(rowid, event_type, data) VALUES (new.id, new.event_type, new.data);
+     END"))
 
-(defun gptel-session-retrieve (query)
-  "Retrieve events matching QUERY for session continuity."
-  (sqlite-select gptel-session-db
-    "SELECT * FROM session_events WHERE session_events MATCH ?"
-    (list query)))
+(defun gptel-session--track-event (event-type data)
+  "Track session event for continuity across compactions."
+  (sqlite-execute gptel-session-db
+    (format "INSERT INTO session_events (session_id, timestamp, event_type, data)
+             VALUES ('%s', %f, '%s', '%s')"
+            gptel-session-id (float-time) event-type
+            (json-encode data))))
+
+(defun gptel-session--retrieve-relevant (query &optional limit)
+  "Retrieve relevant events via FTS5 BM25 search."
+  (let* ((results (sqlite-select gptel-session-db
+                   (format "SELECT session_events.*, bm25(session_fts) as rank
+                            FROM session_fts
+                            JOIN session_events ON session_fts.rowid = session_events.id
+                            WHERE session_fts MATCH '%s'
+                            ORDER BY rank
+                            LIMIT %d"
+                           query (or limit 10))
+                   :columns '("id" "session_id" "timestamp" "event_type" "data" "rank"))))
+    (mapcar (lambda (row)
+              (cons (oref (cl-loop for col in '("id" "session_id" "timestamp" "event_type" "data" "rank")
+                                   for val in (append row nil)
+                                   collect (cons col val))
+                          'data)
+                    (json-read-from-string (elt row 4))))
+            results)))
+```
+
+### 6. Feed-Forward Memory Protocol
+
+**Source**: mementum
+
+Three storage types (working memory/state.md, memories <200 words, synthesized knowledge). Human governance: AI proposes, human approves, AI commits.
+
+**Implementation**:
+
+```elisp
+(defvar gptel-memory-types
+  '(:working  ; state.md - current context
+    :memory   ; <200 words - short-term facts
+    :knowledge)) ; synthesized - long-term patterns
+
+(defcustom gptel-memory-synthesize-threshold 10
+  "Number of similar outcomes before synthesizing knowledge.")
+
+(defun gptel-memory--synthesize (pattern-data)
+  "Synthesize new knowledge from repeated patterns."
+  (when (>= (length pattern-data) gptel-memory-synthesize-threshold)
+    (let* ((outcomes (mapcar #'car pattern-data))
+           (success-rate (/ (seq-count #'identity outcomes)
+                           (float (length outcomes))))
+           (common-patterns (gptel-memory--extract-common pattern-data)))
+      `(:pattern ,common-patterns
+        :success-rate ,success-rate
+        :sample-size ,(length pattern-data)
+        :synthesized ,(format "When %s, success rate is %.0f%%"
+                              common-patterns
+                              (* 100 success-rate))))))
+
+(defun gptel-memory--human-approval-workflow (proposed-knowledge)
+  "Human governance workflow for memory synthesis."
+  (let* ((proposal-file (expand-file-name "memory-proposal.org"
+                                           gptel-checkpoint-dir)))
+    (with-temp-file proposal-file
+      (princ "* Proposed Memory Synthesis\n\n")
+      (princ (format "%s\n\n" proposed-knowledge))
+      (princ "* Action: Approve, Reject, or Modify\n"))
+    ;; Return nil to signal human review needed
+    ;; In production, hook into notification system
+    (message "Memory proposal written to %s - awaiting approval" proposal-file)
+    nil))
 ```
 
 ---
 
-## 3. Memory & Knowledge Patterns
+## Tier 2: Agent Architecture Patterns
 
-### 3.1 Feed-Forward Memory Protocol
+### 7. Three-Tier Watchdog Architecture
 
-**Source**: mementum (davidwuchn/mementum)
-**Impact**: HIGH | **Difficulty**: MEDIUM
+**Source**: gastown
 
-Three storage tiers with human governance:
+Systematized lifecycle management via three tiers: Witness (session lifecycle), Deacon (continuous background patrol), Dogs (dispatched workers). Convoy system bundles work items with autonomous stall detection.
 
-| Tier | Content | Size Limit | Governance |
-|------|---------|------------|------------|
-| **Working Memory** | state.md | Unlimited | Auto-save |
-| **Memories** | Short insights | <200 words | AI proposes, human approves |
-| **Knowledge** | Synthesized patterns | Any | Human review workflow |
-
-**Emacs Implementation**:
+**Implementation**:
 
 ```elisp
-(defvar gptel-memory-synthesize t
-  "Whether to synthesize memories from experiment outcomes.")
+;; Three-tier watchdog system
+(defstruct gptel-watchdog
+  (type nil)   ; :witness :deacon :dog
+  (name nil)
+  (interval nil)
+  (handler nil))
 
-(defun gptel-memory-propose (insight)
-  "Propose INSIGHT for memory storage. Returns cons (approved . memory-key)."
-  (let ((proposed (format "*Memory Proposal*\n%s\n\n:PROPERTIES:\n:CREATED: %s\n:STATUS: pending-review\n:END:"
-                          insight
-                          (format-time-string "%Y-%m-%d"))))
-    (if gptel-memory-synthesize
+(defvar gptel-watchdogs '())
+
+(defun gptel-watchdog--register (type name interval handler)
+  "Register a watchdog in the system."
+  (push (make-gptel-watchdog
+         :type type
+         :name name
+         :interval interval
+         :handler handler)
+        gptel-watchdogs))
+
+(defun gptel-watchdog--witness ()
+  "Witness: monitors session lifecycle health."
+  (let* ((session-age (float-time (time-since gptel-session-start)))
+         (inactive-time (float-time (time-since gptel-last-activity)))
+         (stalled-p (> inactive-time 300))) ; 5 minutes
+    (when stalled-p
+      (gptel-watchdog--escalate :stalled-session session-age))))
+
+(defun gptel-watchdog--deacon ()
+  "Deacon: continuous background patrol."
+  (dolist (task gptel-active-tasks)
+    (when (gptel-task--stalled-p task)
+      (gptel-watchdog--dispatch-dog task))))
+
+(defun gptel-watchdog--dispatch-dog (stalled-task)
+  "Dispatch a dog to handle stalled task."
+  (push (list 'gptel-dog-rescue stalled-task (current-time))
+        gptel-watchdogs)
+  (gptel-watchdog--run-dog stuck-task))
+
+(defun gptel-watchdog--escalate (issue data)
+  "Escalate issue based on severity."
+  (pcase issue
+    (:stalled-session (message "Session stalled for %.0f seconds" data))
+    (:critical-failure (gptel-circuit-breaker--record gptel-current-provider nil))
+    (_ (message "Watchdog alert: %s - %s" issue data))))
+
+;; Convoy system for bundling work
+(defvar gptel-convoy-bundle-size 5
+  "Number of work items per convoy.")
+
+(defun gptel-convoy--create (tasks)
+  "Bundle tasks into a convoy with stall detection."
+  (let* ((bundled (seq-take tasks gptel-convoy-bundle-size)))
+    `(:convoy-id ,(format "convoy-%s" (format-time-string "%Y%m%d-%H%M%S"))
+      :tasks ,bundled
+      :created ,(current-time)
+      :stall-threshold 120)))
+```
+
+### 8. Genesis Agent Self-Verification Engine
+
+**Source**: genesis-agent
+
+Genesis uses 66 deterministic checks where "the LLM proposes — the machine verifies." AST parsing, exit codes, import resolution, file validation, module signatures.
+
+**Implementation**:
+
+```elisp
+(defvar gptel-verification-gates '()
+  "List of verification functions to run before trusting output.")
+
+(defmacro gptel-defverification (name arglist &rest body)
+  "Define a verification gate."
+  (declare (indent defun))
+  `(progn
+     (defun ,name ,arglist ,@body)
+     (push ',name gptel-verification-gates)))
+
+(gptel-defverification gptel-verify-elisp-syntax (code)
+  "Verify Emacs Lisp syntax before applying changes."
+  (condition-case err
+      (progn
+        (read code)
+        t)
+    (error
+     (message "Syntax verification failed: %s" err)
+     nil)))
+
+(gptel-defverification gptel-verify-byte-compile (file-path)
+  "Verify file compiles without errors."
+  (zerop (apply #'call-process "emacs" nil nil nil
+                "--batch" "--eval"
+                (format "(condition-case e (progn (byte-compile-file %S) t) (error (message \"Compile error: %s\" e) nil))"
+                        file-path))))
+
+(gptel-defverification gptel-verify-module-signature (module exports)
+  "Verify expected exports are present in module."
+  (let* ((actual-exports (gptel-module--extract-exports module)))
+    (seq-every-p (lambda (exp) (member exp actual-exports)) exports)))
+
+(defun gptel-verify-all (proposed-change)
+  "Run all verification gates on proposed change."
+  (let* ((results (mapcar (lambda (gate)
+                            (cons gate (funcall gate proposed-change)))
+                          gptel-verification-gates))
+         (failures (seq-filter (lambda (r) (not (cdr r))) results)))
+    (if failures
         (progn
-          (write-file gptel-memory-proposals-file 'confirm)
-          (cons 'pending proposed))
-        (cons 'human-review proposed))))
+          (message "Verification failed: %s" failures)
+          nil)
+      (progn
+        (message "All %d gates passed" (length results))
+        t))))
 ```
 
-### 3.2 Self-Wiring Knowledge Graph
+### 9. Worktree Isolation for Agent Runs
 
-**Source**: gbrain (davidwuchn/gbrain)
-**Impact**: MEDIUM | **Difficulty**: HARD
+**Source**: symphony
 
-Every page write extracts entity references and creates typed edges with **zero LLM calls**.
+Isolated workspaces per task, workflow policy in-repo. Per-issue git worktrees prevent cross-contamination.
 
-```
-Input: "Bob works at Acme Corp"
-Parsed: [[Bob]] --works_at--> [[Acme Corp]]
-
-Input: "Alice attended the meeting"
-Parsed: [[Alice]] --attended--> [[meeting]]
-```
-
-**Emacs Pattern**:
+**Implementation**:
 
 ```elisp
-(defun gptel-entity-extract (text)
-  "Extract [[entity]] references from TEXT. Returns list of (entity . type)."
-  (let ((entities '()))
-    (dolist (link (markdown-link-pairs text))
-      (push (cons (car link) (gptel-entity-type-infer (cdr link))) entities))
-    entities))
+(defcustom gptel-worktree-base-dir
+  (expand-file-name ".gptel/worktrees/" user-emacs-directory)
+  "Base directory for isolated experiment worktrees.")
 
-(defun gptel-entity-link (source target type)
-  "Create TYPE edge from SOURCE to TARGET in knowledge graph."
-  (sqlite-execute gptel-graph-db
-    "INSERT INTO entity_edges (source, target, type, created)
-     VALUES (?, ?, ?, datetime('now'))"
-    source target type))
+(defun gptel-worktree--create (experiment-id)
+  "Create isolated worktree for experiment."
+  (let* ((worktree-path (expand-file-name experiment-id gptel-worktree-base-dir))
+         (branch-name (format "experiment/%s" experiment-id)))
+    (make-directory worktree-path t)
+    ;; Link to main repo
+    (shell-command
+     (format "cd %s && git init && git remote add origin %s"
+             worktree-path
+             (expand-file-name user-emacs-directory)))
+    worktree-path))
 
-;; Achieves +31.4 P@5 lift over vector-only RAG
+(defun gptel-worktree--cleanup (experiment-id)
+  "Clean up worktree after experiment."
+  (let* ((worktree-path (expand-file-name experiment-id gptel-worktree-base-dir)))
+    (when (file-directory-p worktree-path)
+      (delete-directory worktree-path t))))
 ```
 
-### 3.3 Hybrid Search Fusion
+### 10. Multi-Agent Workspace Orchestration
 
-**Source**: gbrain
-**Impact**: MEDIUM | **Difficulty**: HARD
+**Source**: gastown
 
-Combine vector embeddings + BM25 keyword + reciprocal-rank fusion.
+Git-backed hooks for persistent work state. Polecats (worker agents), Hooks (persistent storage), Beads ledger. Scales to 20-30 agents with coordination.
 
-| Component | Tool | Result |
-|-----------|------|--------|
-| Vector similarity | ollama embeddings | Semantic match |
-| BM25 keyword | ripgrep | Exact terms |
-| Fusion | Reciprocal rank | Combined ranking |
-
-**P@5: 49.1%** (vs 37.3% vector-only, 35.8% keyword-only)
-
----
-
-## 4. Self-Evolution Patterns
-
-### 4.1 Three-Loop Meta-Learning Architecture
-
-**Source**: arXiv (HyperAgents)
-**Impact**: HIGH | **Difficulty**: MEDIUM
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    THREE-LOOP META-LEARNING                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐   │
-│   │    LOOP 1   │      │    LOOP 2   │      │    LOOP 3   │   │
-│   │   Task      │─────►│  Evaluation │─────►│    Self-    │   │
-│   │  Execution  │      │   (Tests)   │      │ Improvement │   │
-│   │  (ReAct)    │◄─────│  (Feedback) │◄─────│  (Modify)   │   │
-│   └─────────────┘      └─────────────┘      └─────────────┘   │
-│        │                    │                    │             │
-│   Tool calls,          Pass/fail,            Code changes,     │
-│   state updates        metrics               new strategies     │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Emacs Implementation**:
+**Implementation**:
 
 ```elisp
-(defvar gptel-self-evolution-loops
-  '(execution evaluation improvement))
+(defvar gptel-hooks-dir
+  (expand-file-name ".gptel/hooks/" user-emacs-directory))
 
-(defun gptel-loop-execute (task)
-  "Loop 1: Execute TASK with available tools."
-  (let ((result (gptel-execute-task task)))
-    (gptel-metrics-record :task task :outcome result)
-    result))
+(defstruct gptel-bead
+  (type nil)   ; :task :status :handoff
+  (agent-id nil)
+  (timestamp nil)
+  (data nil))
 
-(defun gptel-loop-evaluate (result)
-  "Loop 2: Evaluate RESULT against expected outcomes."
-  (let ((tests (gptel-get-verification-tests result)))
-    (seq-mapcat #'gptel-run-verification tests)))
+(defun gptel-bead--create (type agent-id data)
+  "Create immutable bead (work state) for ledger."
+  (let* ((bead (make-gptel-bead
+                :type type
+                :agent-id agent-id
+                :timestamp (current-time)
+                :data data))
+         (bead-id (format "bead-%s-%s" agent-id (format-time-string "%Y%m%d-%H%M%S")))
+         (bead-file (expand-file-name bead-id gptel-hooks-dir)))
+    (make-directory gptel-hooks-dir t)
+    (with-temp-file bead-file
+      (prin1 bead (current-buffer)))
+    bead-id))
 
-(defun gptel-loop-improve (failures)
-  "Loop 3: Generate improvements for FAILURES."
-  (when failures
-    (gptel-generate-patch (gptel-analyze-failures failures))))
-```
-
-### 4.2 Self-Verification Engine
-
-**Source**: genesis-agent (davidwuchn/genesis-agent)
-**Impact**: HIGH | **Difficulty**: MEDIUM
-
-66 deterministic checks where "LLM proposes — machine verifies."
-
-```elisp
-(defvar gptel-verification-functions
-  '(gptel-verify-elisp-syntax
-    gptel-verify-imports
-    gptel-verify-exit-codes
-    gptel-verify-file-structure
-    gptel-verify-module-signatures))
-
-(defun gptel-verify-and-commit (proposed-change)
-  "Run all verification functions on PROPOSED-CHANGE. Commit only if all pass."
-  (let ((results (mapcar #'funcall gptel-verification-functions)))
-    (if (seq-every-p #'car results)
-        (gptel-commit-change proposed-change)
-      (gptel-report-verification-failures results))))
-```
-
-### 4.3 P(Success) Confidence Scoring
-
-**Source**: arXiv (MetaAgent)
-**Impact**: MEDIUM | **Difficulty**: MEDIUM
-
-Track success probability based on outcome history:
-
-```elisp
-(defun gptel-p-success (task-type)
-  "Calculate P(success) for TASK-TYPE based on historical outcomes."
-  (let* ((history (gptel-outcome-history task-type))
-         (total (length history))
-         (successes (seq-count #'gptel-outcome-success-p history)))
-    (if (> total 5)
-        (/ successes (float total))
-      0.5)))  ; Unknown tasks default to 50%
-
-(defun gptel-task-routing (task)
-  "Route TASK based on P(success). High-risk tasks get extra verification."
-  (let ((p (gptel-p-success (gptel-task-type task))))
-    (cond
-     ((>= p 0.8) (gptel-execute-direct task))
-     ((>= p 0.5) (gptel-execute-with-checkpoints task))
-     (t (gptel-escalate-for-human-review task)))))
+(defun gptel-bead--ledger-query (agent-id &optional type limit)
+  "Query beads ledger for agent's work history."
+  (let* ((bead-files (directory-files gptel-hooks-dir t "^bead-"))
+         (agent-beads (seq-filter (lambda (f)
+                                    (let* ((bead (with-temp-buffer
+                                                  (insert-file-contents f)
+                                                  (read (current-buffer)))))
+                                      (and (string= (gptel-bead-agent-id bead) agent-id)
+                                           (or (null type)
+                                               (eq (gptel-bead-type bead) type)))))
+                                  bead-files)))
+    (seq-take (sort agent-beads (lambda (a b)
+                                 (file-newer-than-file-p a b)))
+              (or limit 50))))
 ```
 
 ---
 
-## 5. Error Recovery Patterns
+## Tier 3: External Research Patterns
 
-### 5.1 Exponential Backoff with Jitter
+### 11. Agent Design Pattern Catalogue
+
+**Source**: arXiv:2405.10467 — 18 Architectural Patterns
+
+| Pattern | Context | Forces | Trade-off |
+|---------|---------|--------|-----------|
+| ReAct | Dynamic tool use | Reasoning traces needed | Token overhead |
+| CoT | Multi-step reasoning | Explicit justification | Latency |
+| Toolformer | Tool synthesis | Unknown tool needs | Quality variance |
+| Reflexion | Self-reflection | Error recovery needed | Overfitting risk |
+
+**Implementation**:
 
 ```elisp
-(defun gptel-exponential-backoff (attempt)
-  "Calculate backoff delay for ATTEMPT with jitter."
-  (let* ((base-delay 1.0)
-         (max-delay 64.0)
-         (exponential (* base-delay (expt 2 (1- attempt))))
-         (jitter (* (random 1.0) 0.5))
-         (delay (+ exponential jitter)))
-    (min delay max-delay)))
+(defvar gptel-pattern-decision-matrix
+  '((:task-type . ((:single-step . :direct-call)
+                   (:multi-step . :react)
+                   (:reasoning-heavy . :cot)
+                   (:tool-synthesis . :toolformer)
+                   (:error-prone . :reflexion)))))
 
-(defun gptel-retry-with-backoff (fn &optional max-attempts)
-  "Retry FN with exponential backoff up to MAX-ATTEMPTS."
-  (let ((attempt 1))
-    (while (<= attempt (or max-attempts 6))
+(defun gptel-pattern-select (task-type)
+  "Select appropriate orchestration pattern based on task."
+  (or (cdr (assq task-type gptel-pattern-decision-matrix))
+      :react)) ; default
+```
+
+### 12. Azure AI Agent Orchestration Patterns
+
+**Source**: Azure Architecture Guide
+
+| Level | Use When | Implementation |
+|-------|----------|----------------|
+| 1: Direct call | Single-step, prompt engineering suffices | Simple function call |
+| 2: Agent + tools | Varied queries, dynamic tool use | gptel-agent with tool registry |
+| 3: Sequential | Linear dependencies, progressive refinement | Pipeline with checkpoints |
+| 4: Concurrent | Independent perspectives, fan-out/fan-in | Parallel task dispatch |
+| 5: Hierarchical | Master-slave coordination, complex delegation | Multi-level controller |
+
+### 13. AI Agent Error Recovery Patterns
+
+**Source**: AI Agents Blog
+
+| Pattern | Description | Emacs Implementation |
+|---------|-------------|---------------------|
+| Exponential Backoff | Retry delays increase exponentially with jitter | `gptel-retry--with-backoff` |
+| Circuit Breaker | Open circuit after N failures | `gptel-circuit-breaker-*` |
+| Checkpoint-and-Resume | Save state at each step | `gptel-checkpoint-*` |
+| Fallback Chains | Provider A → B → C | `gptel-provider-chain` |
+| Escalation Queues | Failed tasks to human review | `gptel-escalation-queue` |
+
+**Implementation**:
+
+```elisp
+(defcustom gptel-provider-chain '(openai anthropic ollama)
+  "Fallback chain of providers.")
+
+(defcustom gptel-retry-base-delay 1.0
+  "Base delay in seconds for exponential backoff.")
+
+(defcustom gptel-retry-max-delay 60.0
+  "Maximum delay cap for backoff.")
+
+(defcustom gptel-retry-jitter 0.5
+  "Jitter factor for randomization.")
+
+(defun gptel-retry--with-backoff (max-attempts fn &rest args)
+  "Retry function with exponential backoff and jitter."
+  (let* ((attempt 0)
+         (delay gptel-retry-base-delay))
+    (while (< attempt max-attempts)
       (condition-case err
-          (return (funcall fn))
+          (return (apply fn args))
         (error
-         (when (= attempt max-attempts)
-           (signal (car err) (cdr err)))
-         (sleep-for (gptel-exponential-backoff attempt))
-         (setq attempt (1+ attempt)))))))
-```
+         (setq attempt (1+ attempt))
+         (when (< attempt max-attempts)
+           (let* ((jitter (* delay gptel-retry-jitter (random 1.0)))
+                  (actual-delay (+ delay jitter)))
+             (message "Retry %d/%d after %.1fs: %s"
+                      attempt max-attempts actual-delay err)
+             (sleep-for actual-delay)
+             (setq delay (min (* delay 2) gptel-retry-max-delay)))))))
+    (signal 'gptel-retry-exhausted (list max-attempts))))
 
-### 5.2 Provider Fallback Chain
-
-```elisp
-(defvar gptel-provider-chain
-  '(openai anthropic ollama))
-
-(defvar gptel-current-provider 'openai)
-
-(defun gptel-fallback-call (prompt)
-  "Call PROVIDER chain until one succeeds."
+(defun gptel-provider-chain--call (prompt)
+  "Call providers in fallback chain until success."
   (dolist (provider gptel-provider-chain)
     (condition-case err
-        (progn
-          (setq gptel-current-provider provider)
-          (return (gptel-call-provider provider prompt)))
+        (let* ((fn (intern (format "gptel-call-%s" provider))))
+          (return (funcall fn prompt)))
       (error
-       (gptel-circuit-breaker-record provider 'failure)
-       (unless (gptel-circuit-breaker-closed-p provider)
-         (signal 'gptel-all-providers-failed
-                 (list provider err))))))))
+       (message "Provider %s failed: %s, trying next..." provider err)
+       (gptel-circuit-breaker--record provider nil)))))
 ```
 
-### 5.3 Escalation Queue
+### 14. DEGRADED State Circuit Breaker
+
+**Source**: Hannecke Medium article
+
+Five failure categories need different handling. DEGRADED state between CLOSED/OPEN allows graceful degradation.
+
+**Implementation**:
 
 ```elisp
-(defvar gptel-escalation-queue '())
+(defvar gptel-failure-categories
+  '(:hard           ; Hard failures (network, auth)
+    :structural     ; Module loading, dependencies
+    :semantic       ; Logic errors, wrong outputs
+    :behavioral     ; Side effects, timing issues
+    :resource))     ; Memory, CPU, tokens
 
-(defun gptel-escalate (task reason)
-  "Add TASK to escalation queue with REASON."
-  (push (list :task task
-              :reason reason
-              :timestamp (current-time)
-              :priority (gptel-escalation-priority reason))
-        gptel-escalation-queue)
-  (gptel-notify-human-review task reason))
+(defvar gptel-circuit-degraded-levels
+  '(:l1-disable-risky   ; Disable file write, shell exec
+    :l2-add-review      ; Add human review flag
+    :l3-conservative))  ; Conservative mode, minimal tools
 
-(defun gptel-escalation-priority (reason)
-  "Return priority for REASON."
-  (pcase reason
-    ('circuit-open 'high)
-    ('repeated-failure 'high)
-    ('security-concern 'critical)
-    (_ 'medium)))
+(defun gptel-circuit-breaker--degraded (provider failure-category)
+  "Transition to degraded state based on failure category."
+  (let* ((state (cdr (assoc provider gptel-circuit-breaker-state)))
+         (level (case failure-category
+                  (:hard :l3-conservative)
+                  (:structural :l2-add-review)
+                  (:semantic :l1-disable-risky)
+                  (:behavioral :l1-disable-risky)
+                  (:resource :l2-add-review))))
+    (setf (plist-get state :degraded-level) level)
+    (message "Degraded to %s for %s" level provider)))
+
+(defun gptel-circuit-breaker--re-enable (provider level)
+  "Gradually re-enable capabilities (5% → 20% → 50% → 100%)."
+  (let* ((state (cdr (assoc provider gptel-circuit-breaker-state)))
+         (traffic-percentage (pcase level
+                                (:l1 50)
+                                (:l2 20)
+                                (:l3 5))))
+    (when (> (random 100) traffic-percentage)
+      (signal 'gptel-circuit-throttled
+              (format "Traffic throttled at %d%%" traffic-percentage)))))
 ```
 
----
+### 15. Hybrid Search Fusion (Vector + BM25)
 
-## 6. Agent Architecture Patterns
+**Source**: gbrain
 
-### 6.1 Five-Level Orchestration Spectrum
+P@5 49.1% via hybrid search combining vector embeddings + BM25 keyword + reciprocal-rank fusion.
 
-**Source**: Azure AI Agent Orchestration Patterns
-
-| Level | Name | Use When | Example |
-|-------|------|----------|---------|
-| 0 | Direct model call | Single-step, prompt engineering suffices | Quick query |
-| 1 | Single agent + tools | Varied queries, dynamic tool use | Interactive session |
-| 2 | Sequential | Linear dependencies, progressive refinement | Research pipeline |
-| 3 | Concurrent | Independent perspectives, fan-out/fan-in | Parallel experiments |
-| 4 | Hierarchical | Master-slave coordination, complex delegation | Multi-agent swarm |
-
-**gptel-auto-workflow operates at Level 2-3** with explicit iteration limits.
-
-### 6.2 Three-Tier Watchdog Architecture
-
-**Source**: gastown (davidwuchn/gastown)
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    WATCHDOG HIERARCHY                        │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│   ┌─────────────┐                                           │
-│   │   WITNESS   │  Session lifecycle management              │
-│   │  (Primary)  │  - Start/stop daemon                      │
-│   └──────┬──────┘  - Health heartbeat                       │
-│          │                                                  │
-│   ┌──────▼──────┐                                           │
-│   │   DEACON    │  Continuous background patrol             │
-│   │ (Continuous)│  - Periodic health checks                 │
-│   └──────┬──────┘  - Automatic recovery attempts            │
-│          │                                                  │
-│   ┌──────▼──────┐                                           │
-│   │    DOGS     │  Dispatched cleanup/error recovery        │
-│   │  (Workers)  │  - Log rotation                           │
-│   └─────────────┘  - Checkpoint garbage collection          │
-│                     - Stale lock removal                     │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### 6.3 Lambda Notation as Attention Magnets
-
-**Source**: nucleus (davidwuchn/nucleus)
-
-Use Greek letters and math symbols as compressed prompt preamble:
-
-```
-λ engage(nucleus).
-  [phi fractal euler tao pi mu ∃ ∀]           ; Core symbols
-  | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h]                 ; Operations
-  | OODA                                       ; Control loop
-```
-
-**Symbol Meanings**:
-
-| Symbol | Meaning | Prompt Application |
-|--------|---------|---------------------|
-| λ | Lambda (function) | Apply function composition |
-| Δ | Delta (change) | Detect state transitions |
-| Ω | Omega (end) | Convergence criteria |
-| φ | Phi (golden ratio) | Optimal balance |
-| ε | Epsilon | Small perturbation handling |
-| ∞/0 | Infinity/zero | Edge case boundaries |
-| OODA | Observe-Orient-Decide-Act | Control loop |
-
----
-
-## 7. Trajectory-Aware Metrics
-
-**Source**: NVIDIA AI Agent Evaluation Guide
-
-Evaluate trajectories, not just final answers:
-
-| Metric | Formula | Target |
-|--------|---------|--------|
-| **Task Success Rate (TSR)** | successful / total | >85% |
-| **Tool Call Accuracy** | correct_tools / total_calls | >90% |
-| **Trajectory Efficiency** | steps_per_success / avg_steps | Minimize |
-| **Reasoning Soundness** | valid_reasons / total_reasons | >80% |
-
-**Emacs Instrumentation**:
+**Implementation**:
 
 ```elisp
-(defvar gptel-trajectory-log '())
+(defcustom gptel-hybrid-search-alpha 0.5
+  "Weight for vector search (1-alpha for BM25).")
 
-(defun gptel-trajectory-record (step data)
-  "Record STEP with DATA to trajectory log."
-  (push (cons step (cons (current-time) data)) gptel-trajectory-log))
+(defun gptel-hybrid-search (query &optional top-k)
+  "Combine vector and BM25 search with reciprocal rank fusion."
+  (let* ((vector-results (gptel-vector-search query top-k))
+         (bm25-results (gptel-bm25-search query top-k))
+         (fused (gptel-rrf-fuse vector-results bm25-results)))
+    (seq-take fused (or top-k 10))))
 
-(defun gptel-trajectory-metrics ()
-  "Compute trajectory metrics from log."
-  (let* ((steps (length gptel-trajectory-log))
-         (successes (seq-count #'gptel-outcome-success-p gptel-trajectory-log)))
-    (list :tsr (/ successes (float steps))
-          :avg-steps (/ steps (float successes))
-          :total-steps steps)))
+(defun gptel-rrf-fuse (list-a list-b &optional k)
+  "Reciprocal Rank Fusion: RRF(d) = 1 / (k + rank(d))."
+  (let* ((k (or k 60))
+         (scores (make-hash-table :test 'equal)))
+    (cl-loop for item in list-a
+             for rank from 1
+             do (incf (gethash item scores 0)
+                      (/ 1.0 (+ k rank))))
+    (cl-loop for item in list-b
+             for rank from 1
+             do (incf (gethash item scores 0)
+                      (/ 1.0 (+ k rank))))
+    (sort (cl-loop for (item . score) in (hash-table->alist scores)
+                   collect (cons score item))
+          (lambda (a b) (> (car a) (car b))))))
+
+(defun gptel-bm25-search (query &optional top-k)
+  "BM25 keyword search using ripgrep."
+  (let* ((terms (split-string query))
+         (rg-command (format "rg -l '%s' %s"
+                             (mapconcat #'identity terms "\\|")
+                             gptel-modules-dir)))
+    (seq-take (split-string (shell-command-to-string rg-command) "\n" t)
+              (or top-k 10))))
+```
+
+### 16. Self-Wiring Knowledge Graph
+
+**Source**: gbrain
+
+Every page write extracts entity references and creates typed links with zero LLM calls. +31.4 P@5 lift over vector-only RAG.
+
+**Implementation**:
+
+```elisp
+(defvar gptel-entity-types
+  '(person location organization project module function concept))
+
+(defvar gptel-entity-link-pattern
+  "\\[\\[\\([^]]+\\)\\]\\]")
+
+(defstruct gptel-entity-edge
+  (from nil)
+  (to nil)
+  (type nil)    ; attended, works_at, uses, calls, etc.
+  (weight 1.0))
+
+(defvar gptel-knowledge-graph (make-hash-table :test 'equal))
+
+(defun gptel-entity--extract (content)
+  "Extract entity references with zero LLM calls."
+  (let* ((matches (s-matched-positions-all gptel-entity-link-pattern content))
+         (entities (mapcar (lambda (pos)
+                            (substring content (car pos) (cdr pos)))
+                          matches)))
+    entities))
+
+(defun gptel-entity--auto-link (from-page content)
+  "Auto-create typed edges when page is written."
+  (let* ((entities (gptel-entity--extract content))
+         (edges (mapcar (lambda (entity)
+                        (let* ((type (gptel-entity--infer-type entity)))
+                          (make-gptel-entity-edge
+                           :from from-page
+                           :to entity
+                           :type type)))
+                      entities)))
+    (dolist (edge edges)
+      (let* ((key (format "%s->%s"
+                          (gptel-entity-edge-from edge)
+                          (gptel-entity-edge-to edge))))
+        (puthash key edge gptel-knowledge-graph)))))
 ```
 
 ---
 
-## 8. Module Complexity Analysis
+## Daemon Orchestration Patterns
 
-**Source**: Local codebase scan (2026-05-25)
+### Research Daemon Failure Handling
 
-| Module | Lines | Risk Level | Priority |
-|--------|-------|------------|----------|
-| `gptel-auto-workflow-evolution.el` | 5822 | **HIGH** | Apply nil-safety patterns |
-| `gptel-auto-workflow-strategic.el` | 2698 | MEDIUM | Validation guards |
-| `gptel-tools-agent-prompt-build.el` | 2431 | MEDIUM | Error handling |
-| `gptel-auto-workflow-research-benchmark.el` | 1742 | MEDIUM | Monitoring |
-| `gptel-tools-agent-runtime.el` | ~1600 | MEDIUM | Checkpoint/restore |
+**Critical Pattern**: Guard daemon orchestration boundaries; if researcher daemon disappears after being observed, fail fast and fall back instead of waiting until global timeout.
 
-**Git Activity (last 30 commits)**: 8 bug fixes, 0 feature commits. Focus on stabilization.
+**Implementation**:
+
+```elisp
+(defvar gptel-research-daemon-timeout 300
+  "Seconds before research daemon is considered unresponsive.")
+
+(defvar gptel-research-daemon-pid nil)
+
+(defun gptel-research-daemon--start ()
+  "Start research daemon with watchdog."
+  (let* ((pid (start-process "gptel-research-daemon" "*gptel-research*"
+                             "emacs" "--batch" "-l" "gptel-auto-workflow-research.el"))
+         (start-time (current-time)))
+    (setq gptel-research-daemon-pid pid)
+    (set-process-sentinel pid (lambda (p s)
+                                (message "Research daemon terminated: %s" s)
+                                (gptel-research-daemon--handle-exit)))
+    (gptel-watchdog--register :deacon "research-daemon-health"
+                              60
+                              (lambda ()
+                                (when (> (float-time (time-since start-time))
+                                       gptel-research-daemon-timeout)
+                                  (gptel-research-daemon--fail-fast))))))
+
+(defun gptel-research-daemon--fail-fast ()
+  "Fail fast when daemon disappears instead of waiting for global timeout."
+  (message "Research daemon unresponsive - triggering local fallback")
+  (gptel-research--local-fallback))
+```
+
+### Missing Research File as Pipeline Defect
+
+Research files must exist with valid hash — treat missing files as pipeline defect, not successful empty run.
+
+```elisp
+(defun gptel-research--validate-findings-file (hash)
+  "Validate research findings file exists and is parseable."
+  (let* ((file (expand-file-name (format "research-%s.org" hash)
+                                gptel-checkpoint-dir)))
+    (if (and (file-exists-p file)
+             (> (file-attribute-size (file-attributes file)) 100))
+        (progn
+          (message "Research findings validated: %s" hash)
+          t)
+      (progn
+        (message "ERROR: Research file missing or empty for hash %s" hash)
+        nil)))
+
+(defun gptel-research--local-fallback ()
+  "Fallback when no fresh external findings available."
+  (list :source "local-fallback"
+        :reason "external-research-unavailable"
+        :directives
+        (list "Preserve feedback loop with research hash in experiment rows"
+              "Treat missing research files as pipeline defect"
+              "Prefer structured machine-parseable outputs"
+              "Prioritize observable self-evolution via results.tsv")))
+```
 
 ---
 
-## 9. Implementation Checklist
+## Module Complexity Reference
 
-### Critical (Do First)
+Top modules by lines requiring special attention for nil-safety patterns:
 
-- [ ] Implement circuit breaker with graduated degradation (L1/L2/L3)
-- [ ] Add checkpoint/restore to experiment execution
-- [ ] Instrument trajectory logging with TSR metrics
-- [ ] Add P(success) confidence scoring to task routing
-
-### High Value (Do Second)
-
-- [ ] Implement Think-in-Code context reduction for analysis passes
-- [ ] Add FTS5 session continuity database
-- [ ] Implement self-verification engine for code changes
-- [ ] Add provider fallback chain (OpenAI → Anthropic → Ollama)
-
-### Medium Value (Do Third)
-
-- [ ] Add three-tier watchdog (Witness/Deacon/Dogs)
-- [ ] Implement hybrid search (vector + BM25)
-- [ ] Add self-wiring knowledge graph for memories
-- [ ] Implement Lambda notation preamble library
+```
+58031 total lines in lisp/modules/
+├── 5822 gptel-auto-workflow-evolution.el    (HIGH COMPLEXITY - needs guards)
+├── 2698 gptel-auto-workflow-strategic.el     (MEDIUM - needs nil-safety)
+├── 2431 gptel-tools-agent-prompt-build.el    (MEDIUM - needs validation)
+├── 1742 gptel-auto-workflow-research-benchmark.el
+```
 
 ---
 
-## 10. Anti-Patterns to Avoid
+## Actionable Patterns Checklist
 
-| Anti-Pattern | Problem | Solution |
-|--------------|---------|----------|
-| Research without downstream testing | 0% keep rate (2026-05-25) | Link every research to experiment |
-| Missing research files treated as success | Pipeline defect hidden | Fail fast, require research hash |
-| Dumping raw file reads to context | 700KB bloat | Use sandbox-execute pattern |
-| Trusting LLM output without verification | Silent failures | Implement verification gates |
-| Hard fail on any error | No graceful degradation | Use DEGRADED state circuit breaker |
+### High Priority (Do First)
+
+- [ ] Implement `gptel-circuit-breaker-*` with CLOSED→DEGRADED→OPEN→HALF-OPEN states
+- [ ] Add `gptel-checkpoint-save/restore` for experiment state persistence
+- [ ] Implement structured research output with source/technique/apply-to-us fields
+- [ ] Add research hash tracking to every experiment row
+- [ ] Implement `gptel-tool-log--record` with SQLite audit trail
+
+### Medium Priority
+
+- [ ] Implement `gptel-sandbox-execute` for 98% context reduction
+- [ ] Add `gptel-session-db--init` with FTS5 for session continuity
+- [ ] Implement `gptel-verify-*` gates before trusting LLM output
+- [ ] Add hybrid search fusion (vector + BM25 + RRF)
+- [ ] Implement three-tier watchdog (Witness/Deacon/Dogs)
+
+### Lower Priority
+
+- [ ] Lambda notation preamble library for prompts
+- [ ] Worktree isolation for experiment runs
+- [ ] Self-wiring knowledge graph with typed edges
+- [ ] Provider fallback chain (OpenAI → Anthropic → Ollama)
+- [ ] Human governance workflow for memory synthesis
 
 ---
 
 ## Related
 
-- [[agent-runtime]] — Agent execution runtime patterns
-- [[agent-error]] — Error handling and recovery
-- [[memory-systems]] — Memory and knowledge management
-- [[workflow-daemon]] — Daemon lifecycle management
-- [[self-evolution]] — Self-modification and improvement
-- [[research-benchmark]] — Experiment benchmarking system
-- [[prompt-engineering]] — Prompt construction patterns
-- [[tool-permits]] — Security and tool access control
+- [[agent-architecture]] — Agent design patterns and orchestration
+- [[circuit-breaker]] — Failure handling and recovery patterns
+- [[checkpoint-restore]] — State persistence and recovery
+- [[context-reduction]] — Context window optimization techniques
+- [[knowledge-synthesis]] — Feed-forward knowledge protocols
+- [[evaluation-metrics]] — Trajectory-aware evaluation
+- [[self-evolution]] — Self-modifying verification and meta-learning
 
 ---
 
-## References
+## Meta-learning
 
-| Source | Type | Key Patterns |
-|--------|------|--------------|
-| efrit | Internal | Circuit breaker, tool receipts, checkpoint/restore |
-| nucleus | Internal | Lambda notation, attention magnets |
-| context-mode | Internal | Think-in-code, FTS5 continuity |
-| mementum | Internal | Feed-forward memory, human governance |
-| gbrain | Internal | Self-wiring graph, hybrid search |
-| genesis-agent | Internal | Self-verification, P(success) |
-| gastown | Internal | Watchdog architecture, beads ledger |
-| zeroclaw | Internal | Security-first runtime, SOP engine |
-| arXiv:2405.10467 | External | 18 agent design patterns |
-| arXiv:2508.00271 | External | MetaAgent self-evolution |
-| Azure Architecture Guide | External | Orchestration spectrum |
-| NVIDIA Evaluation Guide | External | Trajectory-aware metrics |
-| Hannecke Medium | External | DEGRADED circuit breaker state |
+Research quality is measured by downstream experiment success. Prioritize patterns with:
+1. Concrete implementation sketches
+2. Measurable success criteria
+3. Observable feedback loops
+4. Integration with existing modules
+
+Retention rates from research sessions (0%–33%) indicate the need for stricter quality filtering and structured output formats.
 
 ---
-
-*Synthesized: 2026-05-25*
-*Source memories: 5 research sessions (2026-05-20 to 2026-05-25)*
-*Total patterns: 14 techniques, 8 anti-patterns, 30+ implementation examples*
+*Generated from synthesized research sessions 2026-05-20 to 2026-05-25*
+*Research hash: synthesized-e438c226-9bbb457e-9af4a35c*
+*Next action: Apply nil-safety patterns to highest-failure modules*

@@ -4,12 +4,15 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-26T11:04
+Generated: 2026-05-26T20:04
 
 | lisp/modules/gptel-tools-agent-base.el | lisp/modules/gptel-tools-agent.el | 1.333 |
-| lisp/modules/gptel-auto-workflow-evolution.el | lisp/modules/gptel-tools-agent.el | 0.364 |
-| lisp/modules/gptel-benchmark-subagent.el | lisp/modules/gptel-tools-agent-error.el | 0.333 |
-| lisp/modules/gptel-auto-workflow-strategic.el | lisp/modules/gptel-tools-agent-error.el | 0.286 |
+| lisp/modules/gptel-auto-workflow-production.el | lisp/modules/gptel-tools-agent-git.el | 1.000 |
+| lisp/modules/gptel-auto-workflow-strategic.el | lisp/modules/gptel-tools-agent-error.el | 1.000 |
+| lisp/modules/gptel-ext-backends.el | lisp/modules/gptel-ext-retry.el | 0.667 |
+| lisp/modules/gptel-ext-retry.el | lisp/modules/gptel-ext-tool-confirm.el | 0.667 |
+| lisp/modules/gptel-ext-retry.el | lisp/modules/nucleus-header-line.el | 0.667 |
+| lisp/modules/gptel-benchmark-subagent.el | lisp/modules/gptel-tools-agent-error.el | 0.667 |
 
 ## Ontology Implications
 
