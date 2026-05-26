@@ -176,6 +176,13 @@
 ;; suppressed from *Messages* (message-log-max 0 blocks message_dolog).
 (setq message-log-max 0)
 
+;; Prefer .el source over .elc when both exist.  The daemon's (load ...)
+;; call byte-compiles source to .elc as a side effect, and stale .elc
+;; from a prior Emacs version can cause "Wrong number of arguments" or
+;; "void-function nil" errors when the byte-compiled lambda signature
+;; differs from the .el source.  With load-prefer-newer, .el always wins.
+(setq load-prefer-newer t)
+
 (defvar mw--message-log-file nil
   "Path to OS-atomic message log file. Computed lazily on first use.")
 

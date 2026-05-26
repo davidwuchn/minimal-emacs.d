@@ -2081,18 +2081,20 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (message "[policy] WARNING: %s" w))))
     (ignore))
   ;; Run audits and feed results back into evolution
-  (let ((flagged (gptel-auto-workflow--audit-signal)))
-    (when flagged
-      (dolist (strategy flagged)
-        (when (fboundp 'gptel-auto-workflow--evolve-strategy)
-          (message "[audit] Triggering strategy evolution for low-scoring: %s" strategy)
-          (condition-case nil
-              (gptel-auto-workflow--evolve-strategy
-               strategy
-               (format "Strategy '%s' has low structure score. Evolve it." strategy)
-               "self-correction")
-            (error
-             (message "[audit] Strategy '%s' evolution triggered but not yet available" strategy)))))))
+  (condition-case err
+      (let ((flagged (gptel-auto-workflow--audit-signal)))
+        (when flagged
+          (dolist (strategy flagged)
+            (when (fboundp 'gptel-auto-workflow--evolve-strategy)
+              (message "[audit] Triggering strategy evolution for low-scoring: %s" strategy)
+              (condition-case nil
+                  (gptel-auto-workflow--evolve-strategy
+                   strategy
+                   (format "Strategy '%s' has low structure score. Evolve it." strategy)
+                   "self-correction")
+                (error
+                 (message "[audit] Strategy '%s' evolution triggered but not yet available" strategy)))))))
+    (error (message "[evolution] Step audit-signal: %s" err)))
   (condition-case nil
       (let ((now (float-time (current-time))))
         (when (or (not (boundp 'gptel-auto-workflow--allium-audit-last-run))
