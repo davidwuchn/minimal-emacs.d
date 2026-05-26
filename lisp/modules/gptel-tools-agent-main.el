@@ -358,13 +358,29 @@ Usage:
                 (error-message-string err))))
     ;; Auto-discover targets when .dir-locals.el didn't set them (daemon restart).
     (unless gptel-auto-workflow-targets
-      (let ((discovered (and (fboundp 'gptel-auto-workflow--discover-targets)
-                             (gptel-auto-workflow--discover-targets))))
-        (when discovered
-          (setq gptel-auto-workflow-targets discovered)
-          (setq-default gptel-auto-workflow-targets discovered)
-          (message "[auto-workflow] Auto-discovered %d targets"
-                   (length discovered)))))
+      ;; Try re-loading .dir-locals.el first — defcustom in
+      ;; gptel-tools-agent-subagent.el resets the global to '() when
+      ;; modules are loaded, silently overriding dir-locals.  Re-read
+      ;; here so the configured targets win over auto-discover.
+      (condition-case nil
+          (let ((buf (get-buffer-create " *dir-locals-cron*")))
+            (with-current-buffer buf
+              (setq-local default-directory (gptel-auto-workflow--default-dir))
+              (hack-dir-local-variables-non-file-buffer)
+              (when (local-variable-p 'gptel-auto-workflow-targets)
+                (setq gptel-auto-workflow-targets
+                      (buffer-local-value 'gptel-auto-workflow-targets buf))
+                (setq-default gptel-auto-workflow-targets gptel-auto-workflow-targets))
+              (kill-buffer buf)))
+        (error nil))
+      (unless gptel-auto-workflow-targets
+        (let ((discovered (and (fboundp 'gptel-auto-workflow--discover-targets)
+                               (gptel-auto-workflow--discover-targets))))
+          (when discovered
+            (setq gptel-auto-workflow-targets discovered)
+            (setq-default gptel-auto-workflow-targets discovered)
+            (message "[auto-workflow] Auto-discovered %d targets"
+                     (length discovered))))))
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
@@ -442,18 +458,15 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (when (and (boundp 'gptel-auto-workflow-targets)
                (or (null gptel-auto-workflow-targets)
                    (equal gptel-auto-workflow-targets '())))
-      (let ((dir (and (boundp 'gptel-auto-workflow--current-project)
-                      gptel-auto-workflow--current-project)))
-        (when dir
-          (condition-case nil
-              (with-temp-buffer
-                (setq-local default-directory dir)
-                (hack-dir-local-variables-non-file-buffer)
-                (when (local-variable-p 'gptel-auto-workflow-targets)
-                  (setq gptel-auto-workflow-targets
-                        (buffer-local-value 'gptel-auto-workflow-targets
-                                            (current-buffer)))))
-            (error nil))))
+      (condition-case nil
+          (with-temp-buffer
+            (setq-local default-directory root)
+            (hack-dir-local-variables-non-file-buffer)
+            (when (local-variable-p 'gptel-auto-workflow-targets)
+              (setq gptel-auto-workflow-targets
+                    (buffer-local-value 'gptel-auto-workflow-targets
+                                        (current-buffer)))))
+        (error nil))
       (when (and (boundp 'gptel-auto-workflow-targets)
                  (or (null gptel-auto-workflow-targets)
                      (equal gptel-auto-workflow-targets '())))
