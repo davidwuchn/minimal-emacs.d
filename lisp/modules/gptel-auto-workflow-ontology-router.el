@@ -496,7 +496,7 @@ STRATEGY and TARGET filter the performance data.
               (message "[verbum] ⚠ SKIPPING %s backend %s (level=%d)"
                        (gptel-auto-workflow--backend-health-label backend) backend level)))
            (t (push entry filtered)))))
-      (setq static-fallbacks (nreverse filtered)))
+      (setq static-fallbacks (reverse filtered)))
     
      ;; Score each backend from static list
     (dolist (entry static-fallbacks)
@@ -672,8 +672,10 @@ STRATEGY and TARGET filter the performance data.
 (defun gptel-auto-workflow--apply-ontology-fallback-order (&optional strategy target)
   "Apply ontology-reordered fallback chain to the active system.
 Temporarily overrides `gptel-auto-workflow-executor-rate-limit-fallbacks'.
-Call this before experiment runs."
-  (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology strategy target)))
+Call this before experiment runs.
+SAFETY: Uses copy-tree so the returned list shares no structure with
+the original fallback list — preventing mutation side effects."
+  (let ((reordered (copy-tree (gptel-auto-workflow--reorder-fallbacks-by-ontology strategy target))))
     (when (and reordered (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks))
       (setq gptel-auto-workflow-executor-rate-limit-fallbacks reordered)
       (message "[onto-router] Applied ontology-ordered fallback chain: %s"
