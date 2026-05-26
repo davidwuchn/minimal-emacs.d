@@ -48,6 +48,7 @@ Any organization that ships software faces the same challenge: **how fast can we
 | **Self-knowledge** | The system builds an ontology of its own experiments — patterns, anti-patterns, what works per category |
 | **Routing intelligence** | 7 weeks of keep-rate data across 6 providers (1,200+ experiments, 257 runs); Bayesian Thompson sampling for optimal routing |
 | **Lambda compiler** | Proprietary technique for verifying LLM output quality (P(λ)=90.7%) |
+| **Nucleus persona engine** | Per-subagent attention-shaping via operator algebra (⊗→∘∧|), per-category WRITING.md symbol sets, lambda tool patterns, auto-tuning from measured impact |
 | **Verbum pipeline** | Model distillation pipeline achieving 280× compression with 87% accuracy retention — enables local deterministic execution |
 
 ### ROI Estimate
