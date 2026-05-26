@@ -342,7 +342,11 @@
   (should-not (gptel-auto-workflow--load-statistical-model)))
 
 (ert-deftest test-daemon/load-researcher-feedback-no-file ()
-  (should-not (gptel-auto-workflow--load-researcher-feedback)))
+  ;; Mock file-exists-p to return nil so the test doesn't depend on
+  ;; whether the researcher-feedback.sexp file was created by a prior
+  ;; evolution cycle run.
+  (cl-letf (((symbol-function 'file-exists-p) (lambda (_) nil)))
+    (should-not (gptel-auto-workflow--load-researcher-feedback))))
 
 (ert-deftest test-daemon/active-count-zero-for-empty ()
   (gptel-auto-workflow--branch-pool-init)
