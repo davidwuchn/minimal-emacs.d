@@ -323,7 +323,7 @@ if [ -f "$FINDINGS_FILE" ]; then
     if grep -q "https\?://" "$FINDINGS_FILE" 2>/dev/null || \
         grep -q "## .*Technique" "$FINDINGS_FILE" 2>/dev/null; then
         has_external=1
-    elif grep -q "webfetch\|WebFetch\|WebSearch\|Hunting external" "$DIR/var/tmp/cron/researcher.log" 2>/dev/null; then
+    elif grep -q "webfetch\|WebFetch\|WebSearch\|Hunting external" "$DIR/var/tmp/cron/ov5-researcher.log" 2>/dev/null; then
         has_external=1
     fi
     if [ "$has_external" = "1" ]; then
@@ -474,7 +474,7 @@ for retry in 0 1 2 3 4; do
         break
     fi
 done
-wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "ov5-auto-workflow" || true
+wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "ov5-auto-workflow" || :
 
 # Verify auto-workflow actually completed (not timed out)
 workflow_status="$($SCRIPT status 2>/dev/null || true)"

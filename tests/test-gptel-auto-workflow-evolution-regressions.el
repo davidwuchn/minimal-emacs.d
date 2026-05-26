@@ -2734,7 +2734,16 @@ must not override it to MiniMax via setq-local in subagent buffers."
   (let ((root (make-temp-file "aw-cross-state" t))
         (strike-count (make-hash-table :test 'equal))
         (dead-until (make-hash-table :test 'equal))
-        (verification-results (make-hash-table :test 'equal)))
+        (verification-results (make-hash-table :test 'equal))
+        (old-strikes (when (boundp 'gptel-auto-workflow--lambda-strike-count)
+                       gptel-auto-workflow--lambda-strike-count))
+        (old-dead (when (boundp 'gptel-auto-workflow--lambda-dead-until)
+                    gptel-auto-workflow--lambda-dead-until))
+        (old-verify (when (boundp 'gptel-auto-workflow--lambda-verification-results)
+                      gptel-auto-workflow--lambda-verification-results))
+        (was-strikes (boundp 'gptel-auto-workflow--lambda-strike-count))
+        (was-dead (boundp 'gptel-auto-workflow--lambda-dead-until))
+        (was-verify (boundp 'gptel-auto-workflow--lambda-verification-results)))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
                    (lambda () root)))
@@ -2748,7 +2757,16 @@ must not override it to MiniMax via setq-local in subagent buffers."
           (should (= 1 (gethash "DashScope" strike-count)))
           (should (= 123.0 (gethash "MiniMax" dead-until)))
           (should (eq 'alive (gethash "DeepSeek" verification-results))))
-      (delete-directory root t))))
+      (delete-directory root t)
+      (if was-strikes
+          (setq gptel-auto-workflow--lambda-strike-count old-strikes)
+        (makunbound 'gptel-auto-workflow--lambda-strike-count))
+      (if was-dead
+          (setq gptel-auto-workflow--lambda-dead-until old-dead)
+        (makunbound 'gptel-auto-workflow--lambda-dead-until))
+      (if was-verify
+          (setq gptel-auto-workflow--lambda-verification-results old-verify)
+        (makunbound 'gptel-auto-workflow--lambda-verification-results)))))
 
 (ert-deftest tdd/evolution/loads-without-parse-error ()
   "gptel-auto-workflow-evolution.el must load without 'End of file during parsing'."
@@ -2787,6 +2805,63 @@ when a gptel backend and agent config are available."
       (should (plist-get preset :backend))
       (should (stringp (gptel-auto-workflow--preset-backend-name
                         (plist-get preset :backend)))))))
+
+(ert-deftest tdd/evolution/per-task-model-map-covers-all-backends ()
+  "Every agent type in per-task-model-map must have entries for all 5 backends."
+  (let ((backends '("MiniMax" "moonshot" "DashScope" "DeepSeek" "CF-Gateway"))
+        (agent-types '("analyzer" "grader" "executor" "researcher" "reviewer" "comparator"))
+        (map (and (boundp 'gptel-auto-workflow-per-task-model-map)
+                  gptel-auto-workflow-per-task-model-map))
+        (failures nil))
+    (when map
+      (dolist (agent agent-types)
+        (dolist (backend backends)
+          (unless (cl-some (lambda (e)
+                            (and (equal (nth 0 e) agent)
+                                 (equal (nth 1 e) backend)))
+                          map)
+            (push (format "%s/%s" agent backend) failures))))
+      (should (null failures))
+      (when failures
+        (message "Missing per-task model entries: %s" (string-join failures ", "))))))
+
+(ert-deftest tdd/evolution/per-task-model-map-no-wrong-models ()
+  "No backend in per-task-model-map should have a model from a different provider."
+  (let ((map (and (boundp 'gptel-auto-workflow-per-task-model-map)
+                  gptel-auto-workflow-per-task-model-map))
+        (failures nil))
+    (when map
+      (dolist (entry map)
+        (let* ((backend (nth 1 entry))
+               (model (cddr entry))
+               (backend-prefix (cond
+                                ((string= backend "MiniMax") "minimax")
+                                ((string= backend "moonshot") "kimi")
+                                ((string= backend "DashScope") "qwen\\|glm")
+                                ((string= backend "DeepSeek") "deepseek")
+                                ((string= backend "CF-Gateway") "kimi\\|gpt-oss")
+                                (t nil))))
+          (when (and backend-prefix (not (string-match-p backend-prefix model)))
+            (push (format "%s → %s" backend model) failures)))))
+    (should (null failures))
+    (when failures
+      (message "Wrong model for backend:\n%s" (string-join failures "\n")))))
+
+(ert-deftest tdd/evolution/default-model-for-backend-returns-correct-model ()
+  "gptel-auto-workflow--default-model-for-backend must return the correct
+model string for each known backend."
+  (dolist (test '(("MiniMax" . "minimax-m2.7-highspeed")
+                  ("moonshot" . "kimi-k2.6")
+                  ("DashScope" . "qwen3.6-plus")
+                  ("DeepSeek" . "deepseek-v4-flash")
+                  ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))
+    (let* ((backend (car test))
+           (expected (cdr test))
+           (actual (gptel-auto-workflow--default-model-for-backend backend)))
+      (should (stringp actual))
+      (should (string= actual expected))
+      (unless (string= actual expected)
+        (message "%s: expected %s, got %s" backend expected actual)))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 

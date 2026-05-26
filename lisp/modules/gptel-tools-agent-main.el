@@ -294,8 +294,19 @@ Usage:
       (condition-case nil
           (gptel-auto-workflow--ensure-backend-preference-loaded)
         (error nil)))
+    ;; Recover experiments stuck in staging-pending before starting new work.
+    ;; Safe to call every run: already-merged branches are skipped.
+    (when (and gptel-auto-workflow-use-staging
+               (fboundp 'gptel-auto-experiment--recover-stale-staging-pending))
+      (condition-case err
+          (gptel-auto-experiment--recover-stale-staging-pending)
+        (error
+         (message "[staging-recovery] Recovery sweep skipped: %s"
+                  (error-message-string err)))))
     (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
     (gptel-auto-workflow--clear-rate-limited-backends)
+    (when (fboundp 'gptel-auto-workflow--clear-run-failed-backends)
+      (gptel-auto-workflow--clear-run-failed-backends))
     ;; Default to Moonshot for headless workflows instead of global MiniMax
     ;; (which is usually quota-exhausted).  The ontology router will
     ;; reorder backends once it has experiment data. Only set when
@@ -324,13 +335,14 @@ Usage:
        (message "[auto-workflow] Research context restore skipped: %s"
                 (error-message-string err))))
     ;; Auto-discover targets when .dir-locals.el didn't set them (daemon restart).
-    (unless (and (boundp 'gptel-auto-workflow-targets)
-                 gptel-auto-workflow-targets)
-      (when (fboundp 'gptel-auto-workflow--discover-targets)
-        (setq-default gptel-auto-workflow-targets
-                     (gptel-auto-workflow--discover-targets))
-        (message "[auto-workflow] Auto-discovered %d targets"
-                 (length gptel-auto-workflow-targets))))
+    (unless gptel-auto-workflow-targets
+      (let ((discovered (and (fboundp 'gptel-auto-workflow--discover-targets)
+                             (gptel-auto-workflow--discover-targets))))
+        (when discovered
+          (setq gptel-auto-workflow-targets discovered)
+          (setq-default gptel-auto-workflow-targets discovered)
+          (message "[auto-workflow] Auto-discovered %d targets"
+                   (length discovered)))))
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id

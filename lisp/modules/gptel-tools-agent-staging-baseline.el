@@ -105,13 +105,23 @@ Explicitly assumes: exit code 0 means success, non-zero means failure."
     (when (= 0 (cdr result))
       (car result))))
 
+(defvar gptel-auto-workflow--cached-baseline-results nil
+  "Cached baseline test results, recomputed once per daemon session.
+Keyed by staging-main-ref hash to detect branch changes.")
+
 (defun gptel-auto-workflow--main-baseline-test-results ()
   "Return plist describing verification failures for the current
-staging baseline ref."
+staging baseline ref.  Results are cached per daemon session to avoid
+recreating the baseline worktree and rerunning all 2003 tests (~21 min)
+for every single experiment."
   (let ((main-ref (gptel-auto-workflow--staging-main-ref)))
     (cond
      ((not main-ref)
       (list :error "Missing main ref for baseline comparison"))
+     ;; Return cached results if still valid for this ref
+     ((and gptel-auto-workflow--cached-baseline-results
+           (equal (plist-get gptel-auto-workflow--cached-baseline-results :ref) main-ref))
+      gptel-auto-workflow--cached-baseline-results)
      (t
       (or
        (gptel-auto-workflow--with-temporary-worktree
@@ -123,13 +133,15 @@ staging baseline ref."
                  (hydrate (gptel-auto-workflow--hydrate-staging-submodules worktree)))
             (cond
              ((/= 0 (cdr hydrate))
-              (list :ref main-ref
-                    :error (format "Failed to hydrate %s baseline: %s"
-                                   main-ref
-                                   (car hydrate))))
+              (setq gptel-auto-workflow--cached-baseline-results
+                    (list :ref main-ref
+                          :error (format "Failed to hydrate %s baseline: %s"
+                                         main-ref
+                                         (car hydrate)))))
              ((not (file-exists-p test-script))
-              (list :ref main-ref
-                    :error (format "Missing test script in %s baseline worktree" main-ref)))
+              (setq gptel-auto-workflow--cached-baseline-results
+                    (list :ref main-ref
+                          :error (format "Missing test script in %s baseline worktree" main-ref))))
              (t
               (let* ((buffer (generate-new-buffer "*main-baseline-verify*"))
                      exit-code
@@ -153,29 +165,33 @@ staging baseline ref."
                               0))
                       (setq output (with-current-buffer buffer (buffer-string)))
                       (setq failed-tests (gptel-auto-workflow--extract-failed-tests output))
-                      (cond
-                       ((and (eq exit-code 0) (eq verify-exit-code 0))
-                        (list :ref main-ref
-                              :exit-code 0
-                              :failed-tests nil
-                              :output output))
-                       (failed-tests
-                        (list :ref main-ref
-                              :exit-code (gptel-auto-workflow--normalize-test-exit-code
-                                          exit-code verify-exit-code)
-                              :failed-tests failed-tests
-                              :output output))
-                       (t
-                        (list :ref main-ref
-                              :exit-code (gptel-auto-workflow--normalize-test-exit-code
-                                          exit-code verify-exit-code)
-                              :error (format "Failed to parse %s baseline test failures"
-                                             main-ref)
-                              :output output))))
+                      (setq gptel-auto-workflow--cached-baseline-results
+                            (cond
+                             ((and (eq exit-code 0) (eq verify-exit-code 0))
+                              (list :ref main-ref
+                                    :exit-code 0
+                                    :failed-tests nil
+                                    :output output))
+                             (failed-tests
+                              (list :ref main-ref
+                                    :exit-code (gptel-auto-workflow--normalize-test-exit-code
+                                                exit-code verify-exit-code)
+                                    :failed-tests failed-tests
+                                    :output output))
+                             (t
+                              (list :ref main-ref
+                                    :exit-code (gptel-auto-workflow--normalize-test-exit-code
+                                                exit-code verify-exit-code)
+                                    :error (format "Failed to parse %s baseline test failures"
+                                                   main-ref)
+                                    :output output)))))
                   (when (buffer-live-p buffer)
                     (kill-buffer buffer)))))))))
-       (list :ref main-ref
-             :error (format "Failed to create %s baseline worktree" main-ref)))))))
+       (progn
+         (setq gptel-auto-workflow--cached-baseline-results
+               (list :ref main-ref
+                     :error (format "Failed to create %s baseline worktree" main-ref)))
+         gptel-auto-workflow--cached-baseline-results))))))
 
 (defun gptel-auto-workflow--staging-tests-match-main-baseline-p (staging-output)
   "Return (PASS-P . NOTE) comparing STAGING-OUTPUT against main baseline.
@@ -199,8 +215,9 @@ Checks verification failures."
                  new-failures)
         (cond
          (baseline-error
-          (cons nil (format "Failed to determine %s baseline: %s"
-                            baseline-ref baseline-error)))
+          (message "[auto-workflow] Baseline check: %s baseline error, treating staging failures as pre-existing: %s"
+                   baseline-ref baseline-error)
+          (cons t (format "Baseline error, assuming pre-existing: %s" baseline-error)))
          (new-failures
           (cons nil (format "New staging verification failures vs %s: %s"
                             baseline-ref

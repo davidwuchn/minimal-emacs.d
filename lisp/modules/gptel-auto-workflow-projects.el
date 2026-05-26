@@ -107,12 +107,12 @@ Results are cached until `gptel-auto-workflow-projects' changes."
                      (cdr gptel-auto-workflow--normalized-projects-cache))))
     (or cached
         (let ((normalized (delq nil
-                               (delete-dups
-                                (mapcar (lambda (project-root)
-                                          (and (stringp project-root)
-                                               (> (length project-root) 0)
-                                               (file-name-as-directory (expand-file-name project-root))))
-                                        gptel-auto-workflow-projects)))))
+                                (delete-dups
+                                 (mapcar (lambda (project-root)
+                                           (and (stringp project-root)
+                                                (> (length project-root) 0)
+                                                (file-name-as-directory (expand-file-name project-root))))
+                                         gptel-auto-workflow-projects)))))
           (setq gptel-auto-workflow--normalized-projects-cache
                 (cons gptel-auto-workflow-projects normalized))
           normalized))))
@@ -450,17 +450,17 @@ and invoke it when the queued job actually finishes."
                                (plist-put gptel-auto-workflow--stats :phase label))
                          (when (fboundp 'gptel-auto-workflow--persist-status)
                            (gptel-auto-workflow--persist-status))
-                          (condition-case err
-                              (if use-async
-                                  (funcall fn finish-job)
-                                (progn
-                                  (funcall fn)
-                                  (funcall finish-job)))
-                            (error
-                             (setq gptel-auto-workflow--stats
-                                   (plist-put gptel-auto-workflow--stats :phase "error"))
-                             (message "[%s] Job failed: %s" label err)
-                             (funcall finish-job err)))))))))
+                         (condition-case err
+                             (if use-async
+                                 (funcall fn finish-job)
+                               (progn
+                                 (funcall fn)
+                                 (funcall finish-job)))
+                           (error
+                            (setq gptel-auto-workflow--stats
+                                  (plist-put gptel-auto-workflow--stats :phase "error"))
+                            (message "[%s] Job failed: %s" label err)
+                            (funcall finish-job err)))))))))
       'queued)))
 
 (defun gptel-auto-workflow-queue-all-projects ()
@@ -735,11 +735,11 @@ Without PROJECT-ROOT, clears overlays for all projects."
         (message "[auto-workflow] Cleared executor overlays for %s" project-root))
     (when (hash-table-p gptel-auto-workflow--project-buffers)
       (cl-flet ((clear-buf-overlays (_ buf)
-                 (when (buffer-live-p buf)
-                   (with-current-buffer buf
-                     (dolist (ov (overlays-in (point-min) (point-max)))
-                       (when (overlay-get ov 'gptel-agent--task-type)
-                         (delete-overlay ov)))))))
+                  (when (buffer-live-p buf)
+                    (with-current-buffer buf
+                      (dolist (ov (overlays-in (point-min) (point-max)))
+                        (when (overlay-get ov 'gptel-agent--task-type)
+                          (delete-overlay ov)))))))
         (maphash #'clear-buf-overlays gptel-auto-workflow--project-buffers)))
     (message "[auto-workflow] Cleared all executor overlays")))
 
@@ -750,11 +750,11 @@ Without PROJECT-ROOT, clears overlays for all projects."
   (let ((buffers nil))
     (when (hash-table-p gptel-auto-workflow--project-buffers)
       (cl-flet ((collect-buffer (root buf)
-                 (push (format "%s -> %s (%s)"
-                               root
-                               (buffer-name buf)
-                               (if (buffer-live-p buf) "live" "dead"))
-                       buffers)))
+                  (push (format "%s -> %s (%s)"
+                                root
+                                (buffer-name buf)
+                                (if (buffer-live-p buf) "live" "dead"))
+                        buffers)))
         (maphash #'collect-buffer gptel-auto-workflow--project-buffers)))
     (if buffers
         (message "Project buffers:\n%s" (string-join buffers "\n"))
@@ -828,31 +828,31 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
                       (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
                  (setq remaining (cdr remaining))
                  (message "[research] Processing project: %s" project-root)
-                  (condition-case err
-                      (progn
-                        ;; Set current project context for subagents.
-                        (setq gptel-auto-workflow--current-project project-root)
-                        (with-current-buffer project-buf
-                          (hack-dir-local-variables-non-file-buffer)
-                          (gptel-auto-workflow-run-research
-                           (lambda (&rest _args)
-                             (push (cons project-root 'success) results)
-                             (message "[research] ✓ Completed: %s" project-root)
-                             (setq gptel-auto-workflow--current-project nil)
-                             (run-next)))))
-                    (error
-                     (let ((err-msg (format "%s" err))
-                           (bt (with-output-to-string (backtrace))))
-                       (when (string-match "void-variable total" err-msg)
-                         (message "[research] DEBUG void-variable total backtrace:")
-                         (message "%s" bt)
-                         (with-temp-file (expand-file-name "var/tmp/research-total-backtrace.txt"
-                                                           (gptel-auto-workflow--worktree-base-root))
-                           (insert bt))))
-                     (push (cons project-root (format "error: %s" err)) results)
-                     (message "[research] ✗ Failed: %s - %s" project-root err)
-                     (setq gptel-auto-workflow--current-project nil)
-                     (run-next)))))))
+                 (condition-case err
+                     (progn
+                       ;; Set current project context for subagents.
+                       (setq gptel-auto-workflow--current-project project-root)
+                       (with-current-buffer project-buf
+                         (hack-dir-local-variables-non-file-buffer)
+                         (gptel-auto-workflow-run-research
+                          (lambda (&rest _args)
+                            (push (cons project-root 'success) results)
+                            (message "[research] ✓ Completed: %s" project-root)
+                            (setq gptel-auto-workflow--current-project nil)
+                            (run-next)))))
+                   (error
+                    (let ((err-msg (format "%s" err))
+                          (bt (with-output-to-string (backtrace))))
+                      (when (string-match "void-variable total" err-msg)
+                        (message "[research] DEBUG void-variable total backtrace:")
+                        (message "%s" bt)
+                        (with-temp-file (expand-file-name "var/tmp/research-total-backtrace.txt"
+                                                          (gptel-auto-workflow--worktree-base-root))
+                          (insert bt))))
+                    (push (cons project-root (format "error: %s" err)) results)
+                    (message "[research] ✗ Failed: %s - %s" project-root err)
+                    (setq gptel-auto-workflow--current-project nil)
+                    (run-next)))))))
         (run-next)))))
 
 (defun gptel-auto-workflow--shutdown-researcher-daemon-after-job (&rest _args)
@@ -905,6 +905,18 @@ so calling this with no fresh data is a safe no-op."
         (error
          (message "[research] AutoTTS evolution skipped: %s"
                   (error-message-string err)))))
+    ;; 1b. Lambda verification: check which backends have a lambda compiler.
+    ;;    Async: initiates API calls, results arrive later via callbacks.
+    ;;    Until verified, backends get a -5 penalty (unknown → penalized equally,
+    ;;    so ordering is unaffected).
+    (when (fboundp 'gptel-auto-workflow--verify-all-backends-lambda)
+      (condition-case err
+          (progn
+            (message "[verbum] Verifying lambda compiler on all backends...")
+            (gptel-auto-workflow--verify-all-backends-lambda))
+        (error
+         (message "[verbum] Lambda verification skipped: %s"
+                  (error-message-string err)))))
     ;; 2. Ontology: reorder backend fallbacks based on performance data.
     ;;    Uses experiment keep-rates; safe to call even with empty history.
     (when (fboundp 'gptel-auto-workflow--reorder-fallbacks-by-ontology)
@@ -953,12 +965,12 @@ so calling this with no fresh data is a safe no-op."
   (gptel-auto-workflow--queue-cron-job
    "research"
    (lambda (completion-callback)
-      (gptel-auto-workflow-run-all-research
-       (lambda (&rest args)
-         (gptel-auto-workflow--research-self-evolve)
-         (funcall completion-callback)
-         (when shutdown-after-completion
-           (apply #'gptel-auto-workflow--shutdown-researcher-daemon-after-job args)))))
+     (gptel-auto-workflow-run-all-research
+      (lambda (&rest args)
+        (gptel-auto-workflow--research-self-evolve)
+        (funcall completion-callback)
+        (when shutdown-after-completion
+          (apply #'gptel-auto-workflow--shutdown-researcher-daemon-after-job args)))))
    t))
 
 ;;; Research Cache Management
@@ -1014,16 +1026,18 @@ Returns nil if PROJECT-ROOT is nil or not found in cache."
                  cached-result)
       (let ((status-lines '()))
         (dolist (project-root (gptel-auto-workflow--normalized-projects))
-          (let* ((findings (gptel-auto-workflow--research-cache-get project-root))
-                 (cache-file (expand-file-name "var/tmp/research-findings.md" project-root))
-                 (attrs (file-attributes cache-file))
-                 (file-size (or (nth 7 attrs) 0)))
-            (push (format "  %s:\n    In-memory: %d chars\n    File: %s (%d bytes)"
-                          project-root
-                          (length findings)
-                          (if attrs "exists" "none")
-                          file-size)
-                  status-lines)))
+          ;; ASSUMPTION: project-root must be a non-empty string for file operations
+          (when (and (stringp project-root) (> (length project-root) 0))
+            (let* ((findings (gptel-auto-workflow--research-cache-get project-root))
+                   (cache-file (expand-file-name "var/tmp/research-findings.md" project-root))
+                   (attrs (file-attributes cache-file))
+                   (file-size (or (nth 7 attrs) 0)))
+              (push (format "  %s:\n    In-memory: %d chars\n    File: %s (%d bytes)"
+                            project-root
+                            (length (or findings ""))
+                            (if attrs "exists" "none")
+                            file-size)
+                    status-lines))))
         (let ((result (string-join (nreverse status-lines) "\n")))
           (setq gptel-auto-workflow--research-status-cache
                 (cons now result))

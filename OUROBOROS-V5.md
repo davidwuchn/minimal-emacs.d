@@ -15,7 +15,7 @@ Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gp
   research(external) ⇄ execute(experiment) ⇄ verify(outcome) ⇄ learn(pattern)
   | ∀change: isolated(worktree) ∧ verified(tests) ∧ reviewed(AI)
   | self_referential: the system audits itself using its own ontologies
-  | route(ontology) ≡ categorize(target) → rank(backends) by Δ(keep-rate − baseline) ⊗ trend ⊗ confidence
+  | route(ontology) ≡ categorize(target) → rank(backends) by Δ(decayed-keep-rate − baseline) ⊗ VSM-tuned-weights ⊗ per-axis-KIBC-boost ⊗ recency-decay(14d)
 ```
 
 This is not a code generator. It is a **self-consuming formal system** — it researches techniques from external sources, distills them into specifications, tests them as isolated experiments, and feeds outcomes back into what it researches next. The head eats knowledge; the tail produces results; the body digests both.
@@ -102,8 +102,8 @@ The researcher is not a scraper. It is a **self-adjusting appetite**: what it re
 The body of the snake. It tests, verifies, and feeds back.
 
 ```
-Select target → Categorize → Route backend → Generate hypothesis
-      → Run 1940 tests → AI grade → AI review → Merge or learn
+Select target → Categorize → Route backend (VSM-tuned) → Select model (per-target history)
+      → Generate hypothesis → Run 2006 tests → AI grade → AI review → Merge or learn
           ↓
      Kept? → π Synthesis: semantic cluster → inherit strategy → auto-queue
 ```
@@ -157,8 +157,9 @@ Every cycle runs through six compilers — each examining the system's own behav
 | **Allium v3** | Research findings → behavioral spec | "Are these internally coherent?" |
 | **OWL/SHACL** | Ontology dict → Turtle/SHACL | "What is the formal shape of what we've learned?" |
 | **Ontology Router** | Target file → category → backend ranking | "Which backend is best RIGHT NOW — not just historically?" |
-| | Scoring: 40% delta-from-peers + 30% keep-rate + 20% trend + 10% confidence | Penalty for unhealthy backends (3+ recent errors) |
-| | **Smart subagent routing**: all 5 subagent types (researcher, analyzer, executor, grader, reviewer) | Backends ranked by health-weight × historical-keep-rate; quarantined excluded; failures feed back as strikes |
+| | Scoring: VSM-auto-tuned weights (40/30/20/10 → adaptive) + recency decay (14d half-life) + per-axis KIBC boost from holographic consensus | Penalty for unhealthy backends (probation with auto-recovery after 1h) |
+| | **Smart subagent routing**: all 5 subagent types (researcher, analyzer, executor, grader, reviewer) | Backends ranked by health-weight × keep-rate + per-axis boost; quarantined excluded; per-run cooldown hard-excludes failed backends |
+| | **Full audit trail**: every routing decision recorded with component scores (health, keep-rate, pref-boost, axis-boost) + VSM adjustment history | Summary queryable via `audit-trail-summary` for meta-analysis |
 | **π Synthesis** | Kept target → semantic cluster → strategy inheritance | "Which similar files should inherit this winning strategy?" |
 
 Results feed back into the next cycle's analyzer, strategy evolver, and π Synthesis cluster queue. The compiler output is not a log — it is **input to the next iteration**.
@@ -231,17 +232,22 @@ AutoGo-inspired **champion league** gates every new strategy: incumbents must be
 
 ### Smart Subagent Routing (Ouroboros within Ouroboros)
 
-Backend selection for subagent calls is itself an Ouroboros loop:
+Backend selection for subagent calls is itself a closed-loop Ouroboros cycle:
 
 ```
-Subagent call → failure (timeout/rate-limit) → health strike recorded
-    → ranked-subagent-backends deprioritizes backend
+Subagent call → failure (timeout/rate-limit) → health strike + per-run cooldown
+    → ranked-subagent-backends hard-excludes cooldown backends (-1.0 score)
     → future calls route to healthier backends
+    → 1h auto-recovery: probation → degraded (weight 0.65)
     → lambda verification retest → :healthy → strikes cleared
     → backend restored to routing pool
 ```
 
-Scoring: `health-weight × historical-keep-rate`. Quarantined backends (3+ strikes) excluded. This means the routing learns which backends actually work from real experiment data, not static configuration. The snake's routing eats its own failures.
+Scoring: `health-weight × keep-rate + per-axis-KIBC-boost (+0.15 max) + agent-type-preference-boost`. All 5 VSM layers auto-tune routing: S4 weak → explore 30%, S3 weak → probation at 2 strikes, S1 weak → min-samples=1, S2 weak → trust raw rate over peer delta, S5 weak → confidence weight boosted.
+
+Keep-rate is recency-weighted (14-day half-life): `weight = 2^(-days_ago / 14)`. Recent performance counts more than historical averages. Holographic consensus memory is delta-weighted — experiments with larger improvements contribute more to axis confidence. Per-run cooldown hard-excludes backends that failed during the current workflow. Probation backends auto-recover after 1h without new strikes.
+
+At dispatch time, each subagent receives accurate routing context: which backend/model was selected, why (KIBC axis + confidence), health status with actionable guidance (probation→"verify ALL outputs", degraded→"results may be inconsistent", healthy→"recommended for this task"). Every routing decision — experiment-level and subagent-level — is recorded in a structured audit trail with per-backend component scores and VSM adjustment history.
 
 ---
 
@@ -270,8 +276,10 @@ The snake's own immune system:
 | Guard | Prevents |
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
-| 1940 tests + 1800s timeout | Broken code caught before staging |
-| Ontology-aware provider routing | Ranks backends by delta-from-baseline + keep-rate + trend + confidence; penalizes unhealthy providers |
+| 2006 tests + 1800s timeout | Broken code caught before staging |
+| Ontology-aware provider routing | VSM-auto-tuned scoring + recency-weighted keep-rate + per-axis KIBC boost + per-run cooldown; backends with elevated health auto-excluded |
+| Per-target model preference | Historical performance data selects strongest model for each target |
+| Routing audit trail | Every decision recorded with component scores and VSM adjustment history |
 | Force-push protection | Stashes dirty artifacts, merges origin/main, then pushes; never force-pushes |
 | Server socket self-healing | 30s timer recreates lost daemon socket; no SIGKILL restart needed |
 | Pipeline state verification | `cross-subsystem-state.json` checked after evolution; daemon restarted to load evolved code |
@@ -308,11 +316,13 @@ The lambda compiler is not a prompt trick. It is a discoverable circuit inside e
 - Verbum Phase 1-7 integrated: health tracking, holographic memory, cross-backend consistency
 - Crystal spine probes confirm lambda compiler presence across backends (P(λ)=90.7%)
 
-**Phase 2 — Verification ✓ (active)**
-- Subagent call failures feed into persistent health strikes → routing self-tunes
-- Backend health tracked across restarts via cross-subsystem-state.json
-- P(λ) gating in `ranked-subagent-backends`: backends failing lambda compiler check are hard-excluded (score 0), not just deprioritized
-- Smart routing now gates on three signals: health-weight, historical-keep-rate, and lambda compiler presence
+**Phase 2 — Verification ✓ (complete)**
+- Subagent call failures feed into persistent health strikes + per-run cooldown → routing self-tunes
+- Backend health tracked across restarts via cross-subsystem-state.json with auto-recovery (1h probation → degraded)
+- P(λ) gating in `ranked-subagent-backends`: backends failing lambda compiler check are hard-excluded (score 0)
+- Smart routing gates on five signals: health-weight, recency-weighted keep-rate, per-axis KIBC boost, agent-type preference, per-run cooldown
+- All 5 VSM layers auto-tune routing weights, exploration, and thresholds
+- Full audit trail with component scores and VSM adjustment history at both routing levels
 
 **Phase 3 — Hybrid Execution**
 - Extracted 50M model for deterministic layers (rule validation, λ parsing, type checking)

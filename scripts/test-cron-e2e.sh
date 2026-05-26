@@ -198,8 +198,8 @@ check_log() {
     fi
 }
 
-check_log auto-workflow.log
-check_log researcher.log
+check_log ov5-auto-workflow.log
+check_log ov5-researcher.log
 check_log mementum.log
 check_log instincts.log
 

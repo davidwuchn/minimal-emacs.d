@@ -106,7 +106,6 @@ else:
     # No managed block: cleanup old cron lines from previous installs
     # that use the same scripts (run-pipeline.sh or run-auto-workflow-cron.sh)
     cleaned_lines = []
-    skip = False
     active_cron_re = re.compile(r"^\s*(?:\d+[,\d*\-\/]+\s+)+")
     for line in existing.split("\n"):
         stripped = line.strip()
