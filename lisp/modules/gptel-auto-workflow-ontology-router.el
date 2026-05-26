@@ -1134,13 +1134,13 @@ Probation threshold auto-tunes from VSM health when available
 
 (defvar gptel-auto-workflow--task-backend-preference
   '(("analyzer"   "DeepSeek"  . 0.15)
-    ("analyzer"   "DashScope" . 0.05)
+    ("analyzer"   "DashScope" . 0.15)
     ("grader"     "moonshot"  . 0.15)
-    ("grader"     "DeepSeek"  . 0.05)
+    ("grader"     "DeepSeek"  . 0.10)
     ("executor"   "DashScope" . 0.15)
     ("executor"   "DeepSeek"  . 0.05)
-    ("researcher" "DeepSeek"  . 0.10)
-    ("researcher" "DashScope" . 0.05)
+    ("researcher" "DeepSeek"  . 0.15)
+    ("researcher" "DashScope" . 0.10)
     ("reviewer"   "DeepSeek"  . 0.10)
     ("comparator" "DashScope" . 0.10))
   "Per-task-type backend preference boost added to ranking score.
