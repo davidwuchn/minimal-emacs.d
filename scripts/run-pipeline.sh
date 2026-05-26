@@ -274,6 +274,9 @@ log_rotate "$PIPELINE_LOG"
 log_rotate "$LOG_DIR/ov5-researcher.log"
 log_rotate "$LOG_DIR/ov5-auto-workflow.log"
 
+# ─── Clean stale PID/lock files older than 24h ───
+find "$DIR/var/tmp" -type f \( -name "*.pid" -o -name "*.lock" \) -mtime +1 -delete 2>/dev/null || true
+
 # ─── Clear stale byte-compiled files to force source reload ───
 find "$DIR/lisp/modules" -name "*.elc" -delete 2>/dev/null || true
 find "$DIR/var/eln-cache" -name "*.eln" -delete -maxdepth 3 2>/dev/null || true

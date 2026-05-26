@@ -508,6 +508,13 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
       (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-research-cache.el" root)) (error (message "[reload] research-cache.el skipped (load error: %s)" (error-message-string err)))))
     (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-research-benchmark.el" root)) (error (message "[reload] research-benchmark.el skipped (load error: %s)" (error-message-string err))))
     (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root)) (error (message "[reload] projects.el skipped (load error: %s)" (error-message-string err))))
+    ;; Ensure gptel-agent is loaded before setting up agent dirs and
+    ;; registering custom agents (analyzer, grader, comparator, etc.).
+    ;; nucleus-presets-setup-agents checks (featurep 'gptel-agent) and
+    ;; silently skips agent registration if it's nil.  Without this,
+    ;; the auto-workflow fails with "Unknown agent type: analyzer".
+    (when (fboundp 'require)
+      (condition-case nil (require 'gptel-agent) (error nil)))
     (if (fboundp 'nucleus-presets-setup-agents)
         (progn
           (nucleus-presets-setup-agents)
