@@ -193,26 +193,37 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                     (plist-get override-preset :backend))
                   (when (plistp gptel-agent-preset)
                     (plist-get gptel-agent-preset :backend))))
-             (selected-model
-              (or (cdr chain-pick)
-                  (when (plistp override-preset)
-                    (plist-get override-preset :model))
-                  (when (plistp gptel-agent-preset)
-                    (plist-get gptel-agent-preset :model))))
-             (effective-preset
-              (if selected-backend
-                  ;; Include both backend and model so gptel-with-preset
-                  ;; shadows gptel-model (blocking the MiniMax advice in
-                  ;; gptel-config.el from hijacking the model).
-                  (let ((preset (copy-sequence
-                                 (cond
-                                  ((plistp override-preset) override-preset)
+              (selected-model
+               (or (cdr chain-pick)
+                   (when (plistp override-preset)
+                     (plist-get override-preset :model))
+                   (when (plistp gptel-agent-preset)
+                     (plist-get gptel-agent-preset :model))))
+              (selected-model-sym
+               (and selected-model
+                    selected-model
+                    (or (and (fboundp 'gptel-auto-workflow--backend-object)
+                             (fboundp 'gptel-auto-workflow--backend-model-symbol)
+                             (let ((backend-obj (gptel-auto-workflow--backend-object
+                                                 selected-backend)))
+                               (when backend-obj
+                                 (gptel-auto-workflow--backend-model-symbol
+                                  backend-obj selected-model))))
+                        selected-model)))
+              (effective-preset
+               (if selected-backend
+                   ;; Include both backend and model so gptel-with-preset
+                   ;; shadows gptel-model (blocking the MiniMax advice in
+                   ;; gptel-config.el from hijacking the model).
+                   (let ((preset (copy-sequence
+                                  (cond
+                                   ((plistp override-preset) override-preset)
                                   ((plistp gptel-agent-preset) gptel-agent-preset)
                                   (t nil)))))
-                    (setq preset (plist-put preset :backend selected-backend))
-                    (if selected-model
-                        (plist-put preset :model selected-model)
-                      preset))
+                     (setq preset (plist-put preset :backend selected-backend))
+                     (if selected-model-sym
+                         (plist-put preset :model selected-model-sym)
+                       preset))
                 (or override-preset gptel-agent-preset)))
              (log-backend
               (or (car chain-pick)
