@@ -79,7 +79,25 @@ fi
 # it matches what users and other scripts use, and handles socket resolution
 # (TMPDIR vs /tmp) automatically.
 if daemon_responds; then
-    # Daemon is alive and responsive.
+    # Daemon is alive and responsive. Check memory usage — if the
+    # daemon process RSS exceeds 1GB, restart it gracefully to prevent
+    # OOM. Long-running Emacs accumulates memory from experiment data
+    # and cached results that GC can't fully reclaim.
+    DAEMON_PID=$(pgrep -f "emacs.*daemon.*${SERVER_NAME}" 2>/dev/null | head -1)
+    if [ -n "$DAEMON_PID" ]; then
+        RSS_KB=$(ps -p "$DAEMON_PID" -o rss= 2>/dev/null | tr -d ' ')
+        if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 1048576 ]; then  # > 1GB
+            echo "[$(date '+%H:%M:%S')] High memory (${RSS_KB}KB) — graceful restart" >> "$LOG"
+            timeout 30 emacsclient -s "$SERVER_NAME" --eval '(kill-emacs)' >/dev/null 2>&1 || true
+            sleep 5
+            clean_all_sockets "$SERVER_NAME" "$MY_UID"
+            echo "$(date +%s)" > "$LAST_RESTART_FILE"
+            MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+                bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
+                "$DIR" "$SERVER_NAME" &
+            exit 0
+        fi
+    fi
     exit 0
 fi
 
