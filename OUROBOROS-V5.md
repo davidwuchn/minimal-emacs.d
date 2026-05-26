@@ -33,6 +33,7 @@ It automates the entire cycle. Market intelligence feeds an experimentation engi
 | Experiments run | 1,159 across 257 runs |
 | Keep rate | 20.4% (experiments that improve the product) |
 | Test suite | 2,013 tests pass before any merge |
+| Throughput | ~166 experiments/week, 24/7 autonomous |
 | Backends | 6 providers, auto-routed by measured keep-rate |
 | Uptime | Self-healing watchdog, in-process memory management, crash-recovery |
 
@@ -48,6 +49,21 @@ Any organization that ships software faces the same challenge: **how fast can we
 | **Routing intelligence** | 7 weeks of keep-rate data across 6 providers (1,200+ experiments, 257 runs); Bayesian Thompson sampling for optimal routing |
 | **Lambda compiler** | Proprietary technique for verifying LLM output quality (P(λ)=90.7%) |
 | **Verbum pipeline** | Model distillation pipeline achieving 280× compression with 87% accuracy retention — enables local deterministic execution |
+
+### ROI Estimate
+
+| | Manual (1 engineer) | OV5 |
+|---|---|---|
+| **Experiments/week** | ~5 (one per day) | ~166 (24/7 autonomous) |
+| **Cost/week** | ~$4,000 (senior engineer) | ~$17–83 (API fees) |
+| **Cost per experiment** | ~$800 | ~$0.10–0.50 |
+| **Scaling** | Linear (hire more engineers) | Near-zero marginal (more API calls) |
+| **Coverage** | 1 focus area at a time | 5 targets per run, cross-domain |
+| **Memory** | What one engineer remembers | Persistent knowledge graph of all outcomes |
+
+**At 20% keep rate**: OV5 delivers ~33 product-improving experiments per week — equivalent to a team of ~6 engineers working full-time on R&D, at ~1% of the cost.
+
+ROI improves further as the knowledge graph grows: kept experiments propagate strategies to similar targets (π Synthesis), and discarded experiments train the system to avoid repeating mistakes.
 
 ### Business Model
 
