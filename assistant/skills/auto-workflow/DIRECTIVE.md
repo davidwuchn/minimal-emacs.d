@@ -2,7 +2,7 @@
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.26
-total-experiments: 1361
+total-experiments: 1363
 total-kept: 254
 ---
 
@@ -22,9 +22,9 @@ total-kept: 254
 | `lisp/modules/gptel-agent-loop.el` | 28% | 72 | 20 | 🟡 Active |
 | `lisp/modules/gptel-benchmark-principles.el` | 28% | 18 | 5 | 🟡 Active |
 | `lisp/modules/gptel-ext-context.el` | 27% | 26 | 7 | 🟡 Active |
-| `lisp/modules/nucleus-tools.el` | 25% | 24 | 6 | 🟡 Active |
 | `lisp/modules/gptel-ext-abort.el` | 25% | 8 | 2 | 🟡 Active |
 | `lisp/modules/gptel-ext-tool-permits.el` | 25% | 12 | 3 | 🟡 Active |
+| `lisp/modules/nucleus-tools.el` | 24% | 25 | 6 | 🟡 Active |
 | `lisp/modules/gptel-ext-retry.el` | 23% | 53 | 12 | 🟡 Active |
 | `lisp/modules/gptel-tools-memory.el` | 23% | 53 | 12 | 🟡 Active |
 
@@ -36,7 +36,7 @@ total-kept: 254
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
-- **Application** (20× from mementum)
+- **Application** (21× from mementum)
 - **Implementation sketch** (20× from mementum)
 - **How it works** (18× from mementum)
 - **Apply to us** (16× from mementum)
@@ -57,7 +57,7 @@ total-kept: 254
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (1180×): Investigate root cause
+- **other** (1182×): Investigate root cause
 - **validation-failed** (101×): Improve pre-grade validation prompts
 - **timeout** (39×): Add smaller batch sizes or chunked processing
 - **api-limit** (23×): Implement provider fallback or rate limit handling
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 1361 experiments (254 kept locally across 1361 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 1363 experiments (254 kept locally across 1363 local records). It evolves every self-evolution cycle.*
