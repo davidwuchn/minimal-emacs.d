@@ -609,6 +609,7 @@ on the current provider."
                                  (>= (1+ prov-attempts)
                                      gptel-auto-experiment-max-per-provider-attempts))))
        (if (and category
+                (not (bound-and-true-p gptel-auto-experiment--quota-exhausted))
                 (< attempt gptel-auto-experiment-max-aux-subagent-retries))
            (progn
              (when should-advance

@@ -1570,11 +1570,10 @@ These retries reuse the successful executor output instead of rerunning the
 entire experiment. Two retries let the grader advance past one failing
 fallback backend before giving up on otherwise-good executor output.")
 
-(defvar gptel-auto-experiment-max-aux-subagent-retries 10
+(defvar gptel-auto-experiment-max-aux-subagent-retries 5
   "Maximum local retries for transient analyzer/comparator failures.
-Set to 10 to allow 2 attempts per provider across the 5-provider fallback
-chain.  Fewer retries reduce quota exhaustion when providers are
-rate-limited.")
+Set to 5 to allow 1 attempt per provider across the 5-provider fallback
+chain.  Retries stop early when cross-backend quota exhaustion is detected.")
 
 (defvar gptel-auto-experiment-max-per-provider-attempts 3
   "Consecutive retries on the same provider before advancing to next
