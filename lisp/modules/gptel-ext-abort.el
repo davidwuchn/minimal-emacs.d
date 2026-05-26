@@ -64,6 +64,72 @@ Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running ca
 (with-eval-after-load 'gptel-request
   (my/gptel--install-fast-curl-timeouts))
 
+(defun my/gptel--ensure-fsm-callback (fsm callback)
+  "Ensure FSM info has a functional gptel CALLBACK."
+  (when (and fsm (fboundp 'gptel-fsm-info))
+    (let ((info (ignore-errors (gptel-fsm-info fsm))))
+      (when (listp info)
+        (let ((current (plist-get info :callback)))
+          (unless (functionp current)
+            (setf (gptel-fsm-info fsm)
+                  (plist-put info :callback (or callback #'ignore)))))))))
+
+(defun my/gptel--ensure-process-callback (process callback)
+  "Ensure PROCESS' gptel FSM has a functional CALLBACK."
+  (when (and process (boundp 'gptel--request-alist))
+    (when-let* ((entry (assq process gptel--request-alist))
+                (value (cdr entry))
+                ((consp value)))
+      (my/gptel--ensure-fsm-callback (car value) callback))))
+
+(defun my/gptel--repair-active-stream-callbacks ()
+  "Install no-op callbacks on active streaming gptel requests that lost theirs."
+  (let ((repaired 0))
+    (when (boundp 'gptel--request-alist)
+      (dolist (entry gptel--request-alist)
+        (let ((process (car entry)))
+          (when (and (processp process)
+                     (eq (process-sentinel process) #'gptel-curl--stream-cleanup))
+            (let* ((value (cdr entry))
+                   (fsm (and (consp value) (car value)))
+                   (info (and fsm (ignore-errors (gptel-fsm-info fsm))))
+                   (callback (and (listp info) (plist-get info :callback))))
+              (unless (functionp callback)
+                (my/gptel--ensure-fsm-callback fsm #'ignore)
+                (cl-incf repaired)))))))
+    repaired))
+
+(defun my/gptel--stream-cleanup-callback-guard (orig-fn process status)
+  "Prevent stale streaming gptel requests from funcalling nil callbacks."
+  (my/gptel--ensure-process-callback process #'ignore)
+  (funcall orig-fn process status))
+
+(defun my/gptel--default-callback-for-fsm (fsm)
+  "Return gptel's default callback for FSM."
+  (let* ((info (and fsm (ignore-errors (gptel-fsm-info fsm))))
+         (stream (and (listp info) (plist-get info :stream))))
+    (cond
+     ((and stream (fboundp 'gptel-curl--stream-insert-response))
+      #'gptel-curl--stream-insert-response)
+     ((fboundp 'gptel--insert-response) #'gptel--insert-response)
+     (t #'ignore))))
+
+(defun my/gptel--curl-get-response-callback-guard (orig-fn fsm)
+  "Prevent gptel curl dispatch from preserving a nil callback on retries."
+  (my/gptel--ensure-fsm-callback fsm (my/gptel--default-callback-for-fsm fsm))
+  (funcall orig-fn fsm))
+
+(with-eval-after-load 'gptel-request
+  (advice-remove 'gptel-curl-get-response
+                 #'my/gptel--curl-get-response-callback-guard)
+  (advice-add 'gptel-curl-get-response :around
+              #'my/gptel--curl-get-response-callback-guard)
+  (advice-remove 'gptel-curl--stream-cleanup
+                 #'my/gptel--stream-cleanup-callback-guard)
+  (advice-add 'gptel-curl--stream-cleanup :around
+              #'my/gptel--stream-cleanup-callback-guard)
+  (my/gptel--repair-active-stream-callbacks))
+
 
 
 ;; Used to cancel async tool callbacks after abort.
