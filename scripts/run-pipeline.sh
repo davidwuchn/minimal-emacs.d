@@ -45,11 +45,6 @@ if [ -f "$LOCK_FILE" ]; then
     fi
 fi
 
-# ─── Rotate oversized logs to prevent unbounded growth ───
-log_rotate "$PIPELINE_LOG"
-log_rotate "$LOG_DIR/ov5-researcher.log"
-log_rotate "$LOG_DIR/ov5-auto-workflow.log"
-
 wait_for_idle() {
     local action="$1"
     local max_wait="${2:-900}"
@@ -273,6 +268,11 @@ verify_research_feedback_loop() {
 
     log "Research feedback loop: ${linked_rows}/${data_rows} experiment rows linked to research"
 }
+
+# ─── Rotate oversized logs to prevent unbounded growth ───
+log_rotate "$PIPELINE_LOG"
+log_rotate "$LOG_DIR/ov5-researcher.log"
+log_rotate "$LOG_DIR/ov5-auto-workflow.log"
 
 # ─── Clear stale byte-compiled files to force source reload ───
 find "$DIR/lisp/modules" -name "*.elc" -delete 2>/dev/null || true
