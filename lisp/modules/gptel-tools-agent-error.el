@@ -70,7 +70,7 @@ the configured fallback chain is exhausted.")
 
 (defconst gptel-auto-experiment--shared-retryable-error-patterns
   (list :general
-        (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON") t)
+        (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON") t)
         :transient
         (regexp-opt '("WebClientRequestException" "server_error" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "Malformed JSON") t))
   "Pre-compiled shared retryable error patterns as a plist.
