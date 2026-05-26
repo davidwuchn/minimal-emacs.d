@@ -820,6 +820,15 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
   (let ((grade-id (cl-incf gptel-auto-experiment--grade-counter))
         (grade-buffer (current-buffer)))
     (cl-block gptel-auto-experiment-grade
+      ;; Nil or empty output: fail immediately, don't waste an API call
+      (when (or (null output)
+                (and (stringp output) (string-empty-p (string-trim output))))
+        (message "[auto-exp] Skipping grader: nil or empty executor output")
+        (my/gptel--invoke-callback-safely
+         callback (list :score 0 :passed nil
+                        :details "no-executor-output"
+                        :grader-only-failure t))
+        (cl-return-from gptel-auto-experiment-grade))
       (when (gptel-auto-experiment--agent-error-p output)
         (let* ((error-snippet (if (stringp output)
                                   (my/gptel--sanitize-for-logging output 200)
