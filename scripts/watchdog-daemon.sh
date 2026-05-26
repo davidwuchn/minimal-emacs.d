@@ -111,10 +111,14 @@ if [ -n "$DAEMON_PID" ]; then
     fi
 fi
 
-# Daemon is truly unresponsive. Kill, clean all sockets, restart.
-echo "[$(date '+%H:%M:%S')] Daemon unresponsive — killing and restarting" >> "$LOG"
-pgrep -f "emacs.*--\(daemon\|fg-daemon\)=${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
-sleep 2
+# Daemon is truly unresponsive. Kill ALL instances, clean sockets, restart.
+echo "[$(date '+%H:%M:%S')] Daemon unresponsive — killing all instances and restarting" >> "$LOG"
+# Kill all daemon processes matching this server name.
+# The --bg-daemon flag uses escaped args, so match broadly.
+pgrep -f "emacs.*daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+pgrep -f "emacs.*--bg-daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+pgrep -f "emacs.*--daemon=${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+sleep 3
 clean_all_sockets "$SERVER_NAME" "$MY_UID"
 echo "$(date +%s)" > "$LAST_RESTART_FILE"
 MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
