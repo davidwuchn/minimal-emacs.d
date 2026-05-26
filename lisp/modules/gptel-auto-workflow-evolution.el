@@ -1938,7 +1938,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Step C.5: Head-to-head backend comparison (data-driven, no LLM calls)
   (gptel-auto-workflow--evolution-persist-backend-comparison)
   ;; Step C.6: Model-level comparison (backend/model granularity)
-  (gptel-auto-workflow--evolution-persist-model-comparison)
+  (condition-case err
+      (gptel-auto-workflow--evolution-persist-model-comparison)
+    (error
+     (message "[evolution] Step model-comparison: %s" err)))
   ;; Step C.7: Semantic relationship discovery (git-embed ontology enrichment)
   (when (fboundp 'gptel-auto-workflow--evolution-persist-semantic-relationships)
     (gptel-auto-workflow--evolution-persist-semantic-relationships))
@@ -5552,11 +5555,12 @@ markdown table, and writes to mementum/knowledge/semantic-relationships.md.
 (defun gptel-auto-workflow--model-combination-valid-p (model-key)
   "Return non-nil when MODEL-KEY (\"Backend/Model\") is a valid combination.
 Checks that the model belongs to its backend when the per-task model
-map is available.  Without the map, passes all combinations through."
+map is available.  Without the map, passes all combinations through.
+Model names may contain / (e.g. CF-Gateway/@cf/openai/gpt-oss-120b)."
   (when (stringp model-key)
-    (let* ((parts (split-string model-key "/"))
-           (backend (car parts))
-           (model (cadr parts)))
+    (let* ((slash-pos (string-match-p "/" model-key))
+           (backend (if slash-pos (substring model-key 0 slash-pos) model-key))
+           (model (if slash-pos (substring model-key (1+ slash-pos)) "")))
       (and (stringp backend) (stringp model)
            (not (string-match-p "\\`\\(0\\|unknown\\|none\\)$" backend))
            (or (not (boundp 'gptel-auto-workflow-per-task-model-map))

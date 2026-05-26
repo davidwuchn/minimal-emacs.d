@@ -1,15 +1,55 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 2072 experiments across 3 backends
+> Auto-generated from 1359 experiments across 5 backends
 
-## DashScope vs MiniMax (winner: **tie**)
-- DashScope: 21.9% keep-rate
-- MiniMax: 19.3% keep-rate
-- Shared targets: 7 | DashScope won 3, MiniMax won 3, ties 1
+## MiniMax vs CF-Gateway (winner: **MiniMax**)
+- MiniMax: 22.8% keep-rate
+- CF-Gateway: 12.8% keep-rate
+- Shared targets: 10 | MiniMax won 4, CF-Gateway won 0, ties 6
 
-## MiniMax vs ChatGPT (winner: **MiniMax**)
-- MiniMax: 5.9% keep-rate
-- ChatGPT: 0.0% keep-rate
-- Shared targets: 1 | MiniMax won 1, ChatGPT won 0, ties 0
+## MiniMax vs DeepSeek (winner: **tie**)
+- MiniMax: 18.5% keep-rate
+- DeepSeek: 19.6% keep-rate
+- Shared targets: 9 | MiniMax won 3, DeepSeek won 4, ties 2
+
+## MiniMax vs DashScope (winner: **MiniMax**)
+- MiniMax: 19.1% keep-rate
+- DashScope: 15.4% keep-rate
+- Shared targets: 7 | MiniMax won 5, DashScope won 2, ties 0
+
+## MiniMax vs moonshot (winner: **MiniMax**)
+- MiniMax: 24.6% keep-rate
+- moonshot: 11.5% keep-rate
+- Shared targets: 6 | MiniMax won 4, moonshot won 0, ties 2
+
+## CF-Gateway vs moonshot (winner: **tie**)
+- CF-Gateway: 6.2% keep-rate
+- moonshot: 9.1% keep-rate
+- Shared targets: 3 | CF-Gateway won 1, moonshot won 1, ties 1
+
+## DashScope vs CF-Gateway (winner: **CF-Gateway**)
+- DashScope: 11.1% keep-rate
+- CF-Gateway: 14.3% keep-rate
+- Shared targets: 2 | DashScope won 1, CF-Gateway won 1, ties 0
+
+## DeepSeek vs DashScope (winner: **DeepSeek**)
+- DeepSeek: 12.5% keep-rate
+- DashScope: 0.0% keep-rate
+- Shared targets: 2 | DeepSeek won 1, DashScope won 0, ties 1
+
+## DashScope vs moonshot (winner: **tie**)
+- DashScope: 0.0% keep-rate
+- moonshot: 0.0% keep-rate
+- Shared targets: 1 | DashScope won 0, moonshot won 0, ties 1
+
+## DeepSeek vs moonshot (winner: **DeepSeek**)
+- DeepSeek: 25.0% keep-rate
+- moonshot: 0.0% keep-rate
+- Shared targets: 1 | DeepSeek won 1, moonshot won 0, ties 0
+
+## DeepSeek vs CF-Gateway (winner: **DeepSeek**)
+- DeepSeek: 25.0% keep-rate
+- CF-Gateway: 0.0% keep-rate
+- Shared targets: 1 | DeepSeek won 1, CF-Gateway won 0, ties 0
 
 
-*Generated: 2026-05-25 09:14*
+*Generated: 2026-05-26 08:02*
