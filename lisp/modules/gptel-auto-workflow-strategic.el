@@ -1542,18 +1542,20 @@ EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget 
                         (push failed-backend
                               gptel-auto-workflow--analyzer-failed-backends))
                       (if-let* ((candidate
-                                 (and (zerop attempt)
+                                 (and (< attempt 4)        ; max 5 total attempts
                                       (null targets)
                                       (or gptel-auto-workflow--analyzer-quota-exhausted
                                           gptel-auto-workflow--analyzer-transient-failure)
                                       (gptel-auto-workflow--analyzer-failover-candidate))))
                           (progn
-                            (message "[auto-workflow] Retrying analyzer target selection with %s/%s"
+                            (message "[auto-workflow] Retrying analyzer target selection with %s/%s (attempt %d, delay %ds)"
                                      (car candidate)
-                                     (cdr candidate))
+                                     (cdr candidate)
+                                     (1+ attempt)
+                                     (* 5 (expt 2 attempt)))
                             (gptel-auto-workflow--clear-analyzer-error-state)
                             (let ((att (1+ attempt)))
-                              (run-with-timer 0 nil
+                              (run-with-timer (* 5 (expt 2 (1- att))) nil
                                               (lambda () (request-analyzer att)))))
                         (funcall callback targets))))
                   analyzer-timeout))))
