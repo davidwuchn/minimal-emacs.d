@@ -74,15 +74,26 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
   (setq gptel-auto-workflow--status-refresh-timer nil))
 
 (defun gptel-auto-workflow--refresh-status-if-running ()
-  "Refresh the persisted workflow snapshot while the workflow is active."
+  "Refresh the persisted workflow snapshot while the workflow is active.
+Also monitors memory and triggers GC when RSS exceeds threshold."
   (if (or gptel-auto-workflow--running
           gptel-auto-workflow--cron-job-running)
-      (condition-case err
-          (gptel-auto-workflow--persist-status)
-        (error
-         (message "[auto-workflow] Status refresh failed: %s"
-                  (error-message-string err))
-         (gptel-auto-workflow--stop-status-refresh-timer)))
+      (progn
+        (condition-case err
+            (gptel-auto-workflow--persist-status)
+          (error
+           (message "[auto-workflow] Status refresh failed: %s"
+                    (error-message-string err))
+           (gptel-auto-workflow--stop-status-refresh-timer)))
+        ;; Memory management: trigger GC when RSS > 800MB to prevent OOM
+        (let ((rss (gptel-auto-workflow--process-rss-kb)))
+          (when (and rss (> rss 800000))
+            (message "[mem] RSS %.0fMB, triggering GC" (/ rss 1024.0))
+            (garbage-collect)
+            (let ((after-rss (gptel-auto-workflow--process-rss-kb)))
+              (when (and after-rss (> after-rss 900000))
+                (message "[mem] RSS still %.0fMB after GC — will restart at end of experiment"
+                         (/ after-rss 1024.0)))))))
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--maybe-start-status-refresh-timer ()
