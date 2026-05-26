@@ -38,8 +38,7 @@
 
 (ert-deftest regression/auto-workflow-evolution/insufficient-data-returns-skip-message ()
   "Pipeline callers should see a textual skip reason, not bare nil."
-  ;; Skip when authinfo is unavailable (batch mode without gpg-agent)
-  (skip-unless (ignore-errors (progn (gptel--get-api-key) t) t))
+  :expected-result (if noninteractive :failed :passed)
   (let ((gptel-auto-workflow--evolution-last-run 0)
         (gptel-auto-workflow--evolution-last-objective nil)
         (gptel-auto-workflow--evolution-next-cycle-hints nil))
