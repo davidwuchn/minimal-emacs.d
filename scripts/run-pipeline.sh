@@ -447,6 +447,11 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     # Restart daemon to pick up any evolved code changes
     log "Restarting daemon to load evolved code..."
     "$SCRIPT" stop >/dev/null 2>&1 || true
+    # Clean stale socket: ensure_worker_daemon treats stale sockets as
+    # "recovered" and returns without starting a new daemon, causing
+    # the auto-workflow eval to connect to a dead socket and time out.
+    rm -f /tmp/emacs"$(id -u)"/ov5-auto-workflow 2>/dev/null || true
+    rm -f /tmp/emacs"$(id -u)"/ov5-researcher 2>/dev/null || true
     sleep 2
 else
     log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="
