@@ -347,9 +347,19 @@ finish."
                        (setq gptel-auto-workflow--run-project-root project-root)
                        (when (hash-table-p gptel-auto-workflow--worktree-state)
                          (clrhash gptel-auto-workflow--worktree-state))
-                       (with-current-buffer project-buf
-                         (hack-dir-local-variables-non-file-buffer)
-                         (let ((mark-project
+                        (with-current-buffer project-buf
+                          (hack-dir-local-variables-non-file-buffer)
+                          ;; Re-propagate dir-local after hack so the global
+                          ;; value is used by cron-safe (which checks
+                          ;; gptel-auto-workflow-targets in this buffer).
+                          (dolist (sym '(gptel-auto-workflow-targets
+                                         gptel-auto-experiment-max-per-target
+                                         gptel-auto-experiment-time-budget
+                                         gptel-auto-experiment-no-improvement-threshold
+                                         gptel-model))
+                            (when (local-variable-p sym)
+                              (set sym (buffer-local-value sym (current-buffer)))))
+                          (let ((mark-project
                                 (gptel-auto-workflow--make-idempotent-callback
                                  (lambda (status log-line)
                                    (push (cons project-root status) results)
