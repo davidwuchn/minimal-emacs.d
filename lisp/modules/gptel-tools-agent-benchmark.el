@@ -679,11 +679,11 @@ Values are plist: (:done :timer).")
 (defvar gptel-auto-experiment--grading-worktree nil
   "Dynamically bound experiment worktree for the current grade request.")
 
-(defvar gptel-auto-experiment-grade-timeout 180
+(defvar gptel-auto-experiment-grade-timeout 60
   "Timeout in seconds for grading subagent.
-Default 180s (3 min) allows grader to process complex outputs with
-CF-Gateway.  Increased from 120s because CF-Gateway grader needs more
-time for detailed analysis.")
+Default 60s — grading normally takes 8-10s.  If no response in 60s,
+the backend is unresponsive (quota exhausted) and further waiting
+adds no value.")
 
 (defun gptel-auto-experiment--reset-grade-state ()
   "Cancel and clear all pending grade callbacks."
@@ -831,6 +831,14 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                           :details (format "Agent error: %s" error-snippet)
                           :error-category error-category))
           (cl-return-from gptel-auto-experiment-grade)))
+      ;; Quota exhausted: skip grading, no backend can respond
+      (when (bound-and-true-p gptel-auto-experiment--quota-exhausted)
+        (message "[auto-exp] Quota exhausted, skipping grader")
+        (my/gptel--invoke-callback-safely
+         callback (list :score 0 :passed nil
+                        :details "quota-exhausted"
+                        :quota-exhausted t))
+        (cl-return-from gptel-auto-experiment-grade))
       (puthash grade-id (list :done nil :timer nil)
                gptel-auto-experiment--grade-state)
       (let ((timeout-timer

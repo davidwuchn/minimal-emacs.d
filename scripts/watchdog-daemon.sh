@@ -123,6 +123,16 @@ if daemon_responds; then
             exit 0
         fi
     fi
+    # Also check researcher daemon memory (persists between pipeline runs)
+    RESEARCHER_PID=$(ps aux | grep '[e]macs.*ov5-researcher' | awk '{print $2}' | head -1)
+    if [ -n "$RESEARCHER_PID" ]; then
+        RSS_KB=$(ps -p "$RESEARCHER_PID" -o rss= 2>/dev/null | tr -d ' ')
+        if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 1048576 ]; then
+            echo "[$(date '+%H:%M:%S')] High researcher memory (${RSS_KB}KB) — killing" >> "$LOG"
+            kill -9 "$RESEARCHER_PID" 2>/dev/null || true
+            echo "$(date +%s)" > "$LAST_RESTART_FILE"
+        fi
+    fi
     exit 0
 fi
 
