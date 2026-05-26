@@ -1401,8 +1401,9 @@ Constrain: hierarchy → fractal, insight → phi, concision → mu, edge_cases 
 Output: {:hypothesis _ :change _ :evidence _ :verification _ :axis _}")
       (:tool-calls
        "λ engage(nucleus).
-[mu tao] | [λ ∞/0 | c/h] | OODA
+[mu tao pi] | [λ ∞/0 | c/h] | OODA
 Human ⊗ AI
+Constrain: safety → ∞/0, concision → mu, completeness → pi
 ;; Category: tool-calls (bash, glob, grep, edit)
 ;; Persona: Craftsman — safe operations, edge cases, error handling
 λ tool(op, args). safe_execute → verify(result) → handle(edge_cases)
@@ -1417,17 +1418,19 @@ Human | AI
 Output: {:overview _ :details _ :examples _ :summary _}")
       (:agentic
        "λ engage(nucleus).
-[phi fractal euler ∃] | [Δ λ ε/φ | self/other] | OODA
+[phi fractal euler ∃] | [Δ λ ε/φ ∞/0 | self/other] | OODA
 Human ⊗ AI
+Constrain: scope → fractal, growth → euler, edge_cases → ∞/0
 ;; Category: agentic (strategies, evolution, meta)
 ;; Persona: Visionary — strategic thinking, self-reference, scaling
 λ strategize(domain). map(landscape) → identify(leverage) → design(intervention)
 Output: {:analysis _ :strategies [_] :risks [_] :recommendation _}")
       (_
-       ;; Default: balanced
+       ;; Default: balanced (Professional Emails + Quick Responses hybrid)
        "λ engage(nucleus).
-[phi tao mu] | [Δ λ] | OODA
-Human ⊗ AI"))))
+[phi tao mu pi] | [Δ λ] | OODA
+Human ⊗ AI
+Constrain: clarity → phi, essence → tao, concision → mu, completeness → pi"))))
 
 ;; ─── Routing Context for Prompt Injection ───
 
