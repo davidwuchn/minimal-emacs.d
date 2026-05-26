@@ -723,8 +723,22 @@ and the semantic-relationships knowledge page."
                               (expand-file-name "bin/git-embed" root)))
            (kept-targets nil)
            (edges nil)
-           (seen (make-hash-table :test 'equal)))
-      (when (and (file-executable-p git-embed-bin)
+           (seen (make-hash-table :test 'equal))
+           ;; Pi5 has 8GB shared with GPU; git-embed's ONNX model (~2GB)
+           ;; exhausts available memory. Skip vector search on low-memory hosts.
+           (low-memory-p
+            (or (let ((host (system-name)))
+                  (and (stringp host)
+                       (string-match-p "pi5\\|raspberrypi\\|onepi" host)))
+                (condition-case nil
+                    (let* ((meminfo (shell-command-to-string
+                                    "sysctl -n hw.memsize 2>/dev/null || grep MemTotal /proc/meminfo 2>/dev/null || echo 0"))
+                           (mem-bytes (if (string-match "[0-9]+" meminfo)
+                                          (string-to-number (match-string 0 meminfo))
+                                        0)))
+                      (< mem-bytes (* 4 1024 1024 1024)))  ; < 4GB
+                  (error nil)))))
+      (when (and (or low-memory-p (file-executable-p git-embed-bin))
                  (fboundp 'gptel-auto-workflow--parse-all-results))
         (dolist (r (gptel-auto-workflow--parse-all-results))
           (when (equal (plist-get r :decision) "kept")
@@ -733,7 +747,7 @@ and the semantic-relationships knowledge page."
                 (puthash target t seen)
                 (push target kept-targets))))))
       (when kept-targets
-        (if (file-executable-p git-embed-bin)
+        (if (and (not low-memory-p) (file-executable-p git-embed-bin))
             ;; Primary: git-embed vector similarity (nomic-embed-text-v1.5)
             (dolist (source kept-targets)
               (condition-case nil
@@ -753,7 +767,8 @@ and the semantic-relationships knowledge page."
                                 edges)))))
                 (error nil)))
           ;; Fallback: git co-commit Jaccard similarity (no embedding model needed)
-          (message "[semantic] git-embed not available — using co-commit fallback")
+          (message "[semantic] %s — using co-commit fallback"
+                   (if low-memory-p "git-embed skipped (low memory)" "git-embed not available"))
           (let ((fallback-threshold (max 0.10 (/ threshold 3.0))))  ; co-commit scores are lower
             (condition-case nil
                 (let ((co-occur (make-hash-table :test 'equal))
