@@ -44,19 +44,11 @@ if [ -f "$LOCK_FILE" ]; then
         exit 0
     fi
 fi
-echo $$ > "$LOCK_FILE"
-trap 'rm -f "$LOCK_FILE"' EXIT
 
-# Check if we should skip due to quota exhaustion
-if [ "$SKIP_IF_QUOTA_EXHAUSTED" = "yes" ] && [ -f "$QUOTA_RESET_FILE" ]; then
-    reset_ts=$(cat "$QUOTA_RESET_FILE")
-    now_ts=$(date +%s)
-    if [ "$now_ts" -lt "$reset_ts" ]; then
-        hours_left=$(( (reset_ts - now_ts) / 3600 ))
-        log "Quota exhausted, ${hours_left}h until reset. Skipping pipeline run."
-        exit 0
-    fi
-fi
+# ─── Rotate oversized logs to prevent unbounded growth ───
+log_rotate "$PIPELINE_LOG"
+log_rotate "$LOG_DIR/ov5-researcher.log"
+log_rotate "$LOG_DIR/ov5-auto-workflow.log"
 
 wait_for_idle() {
     local action="$1"
@@ -221,6 +213,22 @@ EOF
 
 # Kill all ov5- daemon processes by PID (not socket — socket may be orphaned).
 # Uses pgrep on daemon name suffix (appears after \012 newline in macOS --bg-daemon).
+# Rotate a log file if it exceeds max size (default 100KB).
+# Keeps at most 3 rotated copies: .1 (newest), .2, .3 (oldest).
+log_rotate() {
+    local f="$1" max="${2:-102400}"
+    [ -f "$f" ] || return
+    local size
+    size=$(wc -c < "$f")
+    [ "$size" -lt "$max" ] && return
+    [ -f "${f}.3" ] && rm -f "${f}.3"
+    [ -f "${f}.2" ] && mv "${f}.2" "${f}.3" 2>/dev/null || true
+    [ -f "${f}.1" ] && mv "${f}.1" "${f}.2" 2>/dev/null || true
+    mv "$f" "${f}.1"
+    : > "$f"
+    echo "[pipeline $(date '+%H:%M:%S')] Rotated $(basename "$f") (${size}B → .1)"
+}
+
 kill_ov5_daemons() {
     local pids label="$1"
     pids=$(pgrep -f "ov5-(auto-workflow|researcher)" 2>/dev/null || true)
