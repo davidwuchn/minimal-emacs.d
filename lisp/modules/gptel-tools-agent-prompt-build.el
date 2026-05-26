@@ -1717,7 +1717,9 @@ if no per-task mapping exists for this backend."
                         (and (equal (nth 0 e) agent-type)
                              (equal (nth 1 e) backend)))
                       gptel-auto-workflow-per-task-model-map)))
-          (when (consp entry) (cddr entry))))
+          (when (consp entry)
+            (let ((m (cddr entry)))
+              (if (consp m) (car m) m)))))
     (gptel-auto-workflow--default-model-for-backend backend)))
 
 (defun gptel-auto-workflow--model-valid-for-backend-p (model backend &optional _agent-type)
@@ -1729,10 +1731,13 @@ Returns t for unknown backends to avoid false rejections."
         (not (stringp backend))
         (string= model expected)
         ;; Check per-task model map for alternative valid models
+        ;; Entries are dotted pairs (AGENT BACKEND . MODEL) so use
+        ;; cddr for safe access (nth 2 crashes on dotted tails).
         (and (boundp 'gptel-auto-workflow-per-task-model-map)
              (cl-some (lambda (e)
                         (and (string= (nth 1 e) backend)
-                             (string= (nth 2 e) model)))
+                             (let ((m (cddr e)))
+                               (string= (if (consp m) (car m) m) model))))
                       gptel-auto-workflow-per-task-model-map)))))
 
 (defun gptel-auto-workflow--default-model-for-backend (backend)
