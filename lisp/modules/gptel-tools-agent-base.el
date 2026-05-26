@@ -117,10 +117,10 @@ Reduces duplication of common state plist guards."
 
 (defun gptel-auto-workflow--make-idempotent-callback (callback)
   "Return a wrapper that invokes CALLBACK at most once."
-  (let ((called nil))
+  (let* ((called (list :pending)))
     (lambda (&rest args)
-      (unless called
-        (setq called t)
+      (unless (eq (car called) :done)
+        (setcar called :done)
         (apply callback args)))))
 
 (defun gptel-auto-workflow--truncate-hash (hash &optional length)
