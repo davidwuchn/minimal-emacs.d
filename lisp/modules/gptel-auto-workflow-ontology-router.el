@@ -629,15 +629,24 @@ STRATEGY and TARGET filter the performance data.
                       (* 100 (plist-get vsm-params :exploration-rate)))
              ;; Exploration: swap top 2 backends for learning
              ;; Rate auto-tuned by VSM health (default 15%, up to 30% when S4 weak)
-             ;; Skip exploration if either top backend is rejected (ternary -1)
-             (when (and (> (length scored) 1)
-                        (/= (or (plist-get (car scored) :ternary) 0) -1)
-                        (/= (or (plist-get (cadr scored) :ternary) 0) -1)
-                        (< (random 100) (* (plist-get vsm-params :exploration-rate) 100)))
-               (let ((tmp (car scored)))
-                 (setcar scored (cadr scored))
-                 (setcar (cdr scored) tmp))
-              (message "[onto-router] EXPLORATION: swapped top 2 backends for learning"))
+             ;; Drift-forced: if 3+ consecutive failures on this target,
+             ;; force a backend swap regardless of exploration rate.
+             (let* ((drift (and target
+                                (fboundp 'gptel-auto-workflow--moderator-drift-lens)
+                                (gptel-auto-workflow--moderator-drift-lens target)))
+                    (forced-swap (and drift (>= (plist-get drift :consecutive-failures) 3))))
+               (when (and (> (length scored) 1)
+                          (/= (or (plist-get (car scored) :ternary) 0) -1)
+                          (/= (or (plist-get (cadr scored) :ternary) 0) -1)
+                          (or forced-swap
+                              (< (random 100) (* (plist-get vsm-params :exploration-rate) 100))))
+                 (let ((tmp (car scored)))
+                   (setcar scored (cadr scored))
+                   (setcar (cdr scored) tmp))
+                 (if forced-swap
+                     (message "[onto-router] DRIFT-FORCED SWAP: %d consecutive failures on %s"
+                              (plist-get drift :consecutive-failures) target)
+                   (message "[onto-router] EXPLORATION: swapped top 2 backends for learning"))))
               ;; Record experiment-level routing decision for audit
               (let ((top-5 (seq-take scored 5)))
                 (push (list :timestamp (float-time)
