@@ -760,11 +760,12 @@ Without PROJECT-ROOT, clears overlays for all projects."
   (let ((buffers nil))
     (when (hash-table-p gptel-auto-workflow--project-buffers)
       (cl-flet ((collect-buffer (root buf)
-                  (push (format "%s -> %s (%s)"
-                                root
-                                (buffer-name buf)
-                                (if (buffer-live-p buf) "live" "dead"))
-                        buffers)))
+                  (when (bufferp buf)
+                    (push (format "%s -> %s (%s)"
+                                  root
+                                  (buffer-name buf)
+                                  (if (buffer-live-p buf) "live" "dead"))
+                          buffers))))
         (maphash #'collect-buffer gptel-auto-workflow--project-buffers)))
     (if buffers
         (message "Project buffers:\n%s" (string-join buffers "\n"))
