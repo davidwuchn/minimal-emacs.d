@@ -1054,6 +1054,7 @@ Safe to call multiple times: already-merged branches are skipped."
              (fboundp 'gptel-auto-workflow--parse-all-results))
     (let ((recovered 0)
           (skipped 0)
+          (gptel-auto-workflow--recovering-stale-staging t)
           (now (float-time))
           (results-dir (expand-file-name "var/tmp/experiments"
                         (gptel-auto-workflow--worktree-base-root))))

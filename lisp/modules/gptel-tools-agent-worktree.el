@@ -275,12 +275,20 @@ Uses git CLI directly to avoid magit issues."
 ;;   - Merge staging → main manually
 ;; ═══════════════════════════════════════════════════════════════════════════
 
+(defvar gptel-auto-workflow--recovering-stale-staging nil
+  "Non-nil during stale staging-pending recovery sweep.
+When set, assert-main-untouched is a no-op because recovery
+operates from the main worktree to cherry-pick experiment
+branches into the staging branch.")
+
 (defun gptel-auto-workflow--assert-main-untouched ()
   "Assert that current branch is NOT main.
-Call this before any git operation that might modify branches."
-  (let ((current (magit-get-current-branch)))
-    (when (string= current "main")
-      (error "[SAFETY] Auto-workflow attempted to operate on main branch!"))))
+Call this before any git operation that might modify branches.
+Suppressed during staging-pending recovery (cherry-picks to staging, not main)."
+  (unless gptel-auto-workflow--recovering-stale-staging
+    (let ((current (magit-get-current-branch)))
+      (when (string= current "main")
+        (error "[SAFETY] Auto-workflow attempted to operate on main branch!")))))
 
 (defun gptel-auto-workflow--configured-staging-branch ()
   "Return the configured staging branch when it is a non-empty string."
