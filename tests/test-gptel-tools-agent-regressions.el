@@ -3956,6 +3956,98 @@ experiment phases do not trip the real pre-grade target validator."
     (should (equal (gptel-auto-workflow--best-model-for-task "analyzer" "DashScope")
                    "qwen3.6-plus"))))
 
+(ert-deftest regression/auto-workflow/model-valid-for-backend-blocks-cross-backend-leak ()
+  "model-valid-for-backend-p must reject wrong models for a backend.
+kimi-k2.6 belongs to moonshot, not DashScope.  minimax-m2.7-highspeed belongs
+to MiniMax.  Neither should validate for DashScope backend."
+  (let ((gptel-auto-workflow-per-task-model-map
+         '(("executor" "DashScope" . "qwen3.6-plus")
+           ("executor" "moonshot" . "kimi-k2.6")
+           ("executor" "MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("moonshot" . "kimi-k2.6")
+           ("MiniMax" . "minimax-m2.7-highspeed"))))
+    ;; Wrong model for DashScope: must be rejected
+    (should-not (gptel-auto-workflow--model-valid-for-backend-p
+                 "kimi-k2.6" "DashScope"))
+    (should-not (gptel-auto-workflow--model-valid-for-backend-p
+                 "minimax-m2.7-highspeed" "DashScope"))
+    ;; Wrong model for moonshot: must be rejected
+    (should-not (gptel-auto-workflow--model-valid-for-backend-p
+                 "qwen3.6-plus" "moonshot"))
+    (should-not (gptel-auto-workflow--model-valid-for-backend-p
+                 "minimax-m2.7-highspeed" "moonshot"))
+    ;; Wrong model for MiniMax: must be rejected
+    (should-not (gptel-auto-workflow--model-valid-for-backend-p
+                 "qwen3.6-plus" "MiniMax"))
+    (should-not (gptel-auto-workflow--model-valid-for-backend-p
+                 "kimi-k2.6" "MiniMax"))
+    ;; Correct models: must be accepted
+    (should (gptel-auto-workflow--model-valid-for-backend-p
+             "qwen3.6-plus" "DashScope"))
+    (should (gptel-auto-workflow--model-valid-for-backend-p
+             "kimi-k2.6" "moonshot"))
+    (should (gptel-auto-workflow--model-valid-for-backend-p
+             "minimax-m2.7-highspeed" "MiniMax"))))
+
+(ert-deftest regression/auto-workflow/best-model-for-task-returns-correct-per-backend-model ()
+  "best-model-for-task must return the correct model for each backend,
+regardless of Phase π historical data for other backends."
+  (let ((gptel-auto-workflow-per-task-model-map
+         '(("executor" "DashScope" . "qwen3.6-plus")
+           ("executor" "moonshot" . "kimi-k2.6")
+           ("executor" "MiniMax" . "minimax-m2.7-highspeed")
+           ("executor" "DeepSeek" . "deepseek-v4-pro")))
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("moonshot" . "kimi-k2.6")
+           ("MiniMax" . "minimax-m2.7-highspeed")
+           ("DeepSeek" . "deepseek-v4-flash"))))
+    ;; Simulate a target that had historical success with kimi-k2.6
+    ;; (e.g. from a past moonshot experiment).  Phase π should NOT leak
+    ;; this model to DashScope or MiniMax dispatches.
+    (let ((gptel-auto-workflow--current-target "lisp/modules/nucleus-prompts.el"))
+      ;; Mock best-model-for-target: make it return kimi-k2.6 for all backends
+      ;; (simulating the cross-backend leak scenario).
+      (cl-letf (((symbol-function 'gptel-auto-workflow--best-model-for-target)
+                 (lambda (_target _backend) "kimi-k2.6")))
+        ;; DashScope: must return qwen3.6-plus, NOT kimi-k2.6
+        (should (equal (gptel-auto-workflow--best-model-for-task "executor" "DashScope")
+                       "qwen3.6-plus"))
+        ;; MiniMax: must return minimax-m2.7-highspeed, NOT kimi-k2.6
+        (should (equal (gptel-auto-workflow--best-model-for-task "executor" "MiniMax")
+                       "minimax-m2.7-highspeed"))
+        ;; DeepSeek: must return deepseek-v4-pro, NOT kimi-k2.6
+        (should (equal (gptel-auto-workflow--best-model-for-task "executor" "DeepSeek")
+                       "deepseek-v4-pro"))
+        ;; moonshot: kimi-k2.6 IS valid for moonshot, so Phase π can return it
+        (should (equal (gptel-auto-workflow--best-model-for-task "executor" "moonshot")
+                       "kimi-k2.6"))))))
+
+(ert-deftest regression/auto-workflow/dashscope-executor-always-gets-qwen3.6-plus ()
+  "DashScope executor must always be dispatched with qwen3.6-plus model.
+Regression test for the Phase π cross-backend leak that caused all 31
+DashScope experiments to use kimi-k2.6 or minimax-m2.7-highspeed instead
+of DashScope's own model."
+  (let ((gptel-auto-workflow-per-task-model-map
+         '(("executor" "DashScope" . "qwen3.6-plus")
+           ("executor" "moonshot" . "kimi-k2.6")
+           ("executor" "MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         '(("DashScope" . "qwen3.6-plus")
+           ("moonshot" . "kimi-k2.6")
+           ("MiniMax" . "minimax-m2.7-highspeed"))))
+    (dolist (target '("lisp/modules/nucleus-prompts.el"
+                      "lisp/modules/gptel-tools-agent-prompt-build.el"
+                      "lisp/modules/gptel-auto-workflow-evolution.el"
+                      "unknown-target-that-has-no-history.el"))
+      (let ((gptel-auto-workflow--current-target target)
+            (model (gptel-auto-workflow--best-model-for-task "executor" "DashScope")))
+        (should (equal model "qwen3.6-plus"))
+        (should-not (equal model "kimi-k2.6"))
+        (should-not (equal model "minimax-m2.7-highspeed"))))))
+
 (ert-deftest regression/auto-workflow/provider-rate-limit-failover-applies-across-headless-subagents ()
   "A backend rate limit should fail over all headless subagents using it."
   (let* ((dashscope-backend
