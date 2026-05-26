@@ -1055,14 +1055,6 @@ Safe to call multiple times: already-merged branches are skipped."
     (let ((recovered 0)
           (skipped 0)
           (now (float-time))
-          (abandoned-file (expand-file-name
-                           "var/tmp/staging-recovery-abandoned.sexp"
-                           (gptel-auto-workflow--worktree-base-root)))
-          (abandoned (condition-case nil
-                         (with-temp-buffer
-                           (insert-file-contents abandoned-file)
-                           (read (current-buffer)))
-                       (error nil)))
           (results-dir (expand-file-name "var/tmp/experiments"
                         (gptel-auto-workflow--worktree-base-root))))
       (dolist (run-dir (directory-files results-dir t "^202[0-9]-"))
@@ -1096,11 +1088,10 @@ Safe to call multiple times: already-merged branches are skipped."
                                 (let* ((exp-id (string-to-number experiment-id))
                                        (branch (gptel-auto-workflow--branch-name
                                                 target exp-id)))
-                                  (unless (member branch abandoned)
-                                    (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
-                                             branch age)
-                                    (gptel-auto-workflow--staging-flow branch)
-                                    (cl-incf recovered)))
+                                  (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
+                                           branch age)
+                                  (gptel-auto-workflow--staging-flow branch)
+                                  (cl-incf recovered))
                               (error
                                (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
                                         target experiment-id
