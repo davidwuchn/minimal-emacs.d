@@ -1611,16 +1611,18 @@ CF-Gateway, then MiniMax."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-v4-pro")
-    ("moonshot" . "kimi-k2.6")
+  '(("DeepSeek" . "deepseek-v4-pro")
     ("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6")
+    ("DashScope" . "qwen3.6-plus")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
 
-DashScope first (independent quota, won't cascade MiniMax/moonshot
-rate limits).  Moonshot/MiniMax share a KIMI quota bucket — when one
-is exhausted, the other is too — so DeepSeek gets priority over both."
+DeepSeek first (best keep-rate for executor tasks at 25%).
+MiniMax second (16.3% keep-rate, proven on executor).
+Moonshot third (backup).  DashScope last — too slow for executor
+tasks (consistently times out at 1080s with nil output).
+CF-Gateway as emergency fallback."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
