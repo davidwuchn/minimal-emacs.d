@@ -1592,5 +1592,77 @@ SPECS is a list of (backend decision days-ago ...) triples."
       (should (= 2 (plist-get vsm :s2)))
       (should (= 1 (plist-get vsm :s4))))))
 
+;; ─── Lambda Health Impact Tests ───
+
+(ert-deftest tdd/lambda-impact/healthy-outperforms-degraded ()
+  "Lambda-healthy backends should show higher keep-rate than degraded."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (puthash "DeepSeek" :healthy gptel-auto-workflow--lambda-verification-results)
+    (puthash "MiniMax" :degraded gptel-auto-workflow--lambda-verification-results)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda ()
+                 (append
+                  ;; DeepSeek (healthy): 8 kept, 2 discarded
+                  (make-list 8 (list :backend "DeepSeek" :decision "kept"))
+                  (make-list 2 (list :backend "DeepSeek" :decision "discarded"))
+                  ;; MiniMax (degraded): 3 kept, 7 discarded
+                  (make-list 3 (list :backend "MiniMax" :decision "kept"))
+                  (make-list 7 (list :backend "MiniMax" :decision "discarded"))))))
+      (let ((impact (gptel-auto-workflow--lambda-health-impact)))
+        (should (> (plist-get impact :healthy-keep-rate)
+                   (plist-get impact :degraded-keep-rate)))
+        (should (= 10 (plist-get impact :healthy-experiments)))
+        (should (= 10 (plist-get impact :degraded-experiments)))
+        (should (> (plist-get impact :impact-delta) 0.0))))))
+
+(ert-deftest tdd/lambda-impact/no-data-returns-nil ()
+  "Without verification data, impact delta should be nil."
+  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () nil)))
+      (let ((impact (gptel-auto-workflow--lambda-health-impact)))
+        (should (null (plist-get impact :impact-delta)))))))
+
+;; ─── Allium Health Impact Tests ───
+
+(ert-deftest tdd/allium-impact/low-severity-outperforms-high ()
+  "Strategies with low Allium severity should have higher keep-rates."
+  (let* ((tmp-dir (make-temp-file "allium-test" t))
+         (issues-dir (expand-file-name "var/tmp/evolution/allium-issues" tmp-dir)))
+    (make-directory issues-dir t)
+    (with-temp-file (expand-file-name "own-repos.md" issues-dir)
+      (insert "Issues: 2\nSeverity: 0.15\nStatus: ok"))
+    (with-temp-file (expand-file-name "deep-external.md" issues-dir)
+      (insert "Issues: 8\nSeverity: 0.72\nStatus: incoherent"))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () tmp-dir))
+                  ((symbol-function 'gptel-auto-workflow--parse-all-results)
+                   (lambda ()
+                     (append
+                      (make-list 8 (list :research-strategy "own-repos" :decision "kept"))
+                      (make-list 2 (list :research-strategy "own-repos" :decision "discarded"))
+                      (make-list 3 (list :research-strategy "deep-external" :decision "kept"))
+                      (make-list 7 (list :research-strategy "deep-external" :decision "discarded"))))))
+          (let ((impact (gptel-auto-workflow--allium-health-impact)))
+            (should (> (plist-get impact :low-allium-keep-rate)
+                       (plist-get impact :high-allium-keep-rate)))
+            (should (= 2 (plist-get impact :strategies-audited)))
+            (should (> (plist-get impact :impact-delta) 0.0))))
+      (delete-directory tmp-dir t))))
+
+(ert-deftest tdd/allium-impact/no-allium-files-returns-nil-delta ()
+  "Without Allium issue files, impact delta should be nil."
+  (let* ((tmp-dir (make-temp-file "allium-empty" t)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () tmp-dir))
+                  ((symbol-function 'gptel-auto-workflow--parse-all-results)
+                   (lambda () nil)))
+          (let ((impact (gptel-auto-workflow--allium-health-impact)))
+            (should (null (plist-get impact :impact-delta)))
+            (should (= 0 (plist-get impact :strategies-audited)))))
+      (delete-directory tmp-dir t))))
+
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here

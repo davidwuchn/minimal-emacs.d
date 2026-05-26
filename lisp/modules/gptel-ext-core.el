@@ -368,8 +368,43 @@ Handles both symbol :type 'text and string :type \"text\"."
              (let* ((text (plist-get part :text))
                     (sanitized (my/gptel--sanitize-string-for-json text)))
                (unless (string= sanitized text)
-                 (aset content-vec i (plist-put part :text sanitized)))))))
+          (aset content-vec i (plist-put part :text sanitized)))))))
 
+;; ═══════════════════════════════════════════════════════════════════
+;; HARDEN: Ensure gptel callbacks are never nil — void-function nil guard
+;; ═══════════════════════════════════════════════════════════════════
+;; gptel-request stores callback in FSM info only when non-nil (line 2208).
+;; When nil, gptel-curl--stream-cleanup calls (plist-get info :callback)
+;; directly without fallback → (void-function nil) flood every daemon start.
+;; Also covers gptel-curl--sentinel and gptel--handle-tool-call via same FSM.
+
+(with-eval-after-load 'gptel-request
+  (defun my/gptel--gptel-request-callback-guard (orig-fn &optional prompt &rest args)
+    "Ensure `gptel-request' always has a function callback.
+Prevents the (void-function nil) flood when FSM info callback is missing."
+    (let* ((keys (cl-loop for (k v) on args by #'cddr collect k))
+           (has-callback (memq :callback keys)))
+      (if has-callback
+          (apply orig-fn prompt args)
+        (apply orig-fn prompt :callback #'ignore args))))
+  (advice-add 'gptel-request :around #'my/gptel--gptel-request-callback-guard)
+
+  ;; Also guard stream-cleanup directly — the FSM may be stale
+  (defun my/gptel--stream-cleanup-process-guard (orig-fn process status)
+    "Ensure stream cleanup never funcalls a nil callback."
+    (when (and process (boundp 'gptel--request-alist))
+      (when-let* ((entry (assq process gptel--request-alist))
+                  (value (cdr entry))
+                  ((consp value))
+                  (fsm (car value))
+                  (info (ignore-errors (gptel-fsm-info fsm)))
+                  ((listp info))
+                  ((not (functionp (plist-get info :callback)))))
+        (setf (gptel-fsm-info fsm)
+              (plist-put info :callback #'ignore))))
+    (funcall orig-fn process status))
+  (advice-add 'gptel-curl--stream-cleanup :around
+              #'my/gptel--stream-cleanup-process-guard))
 
 (provide 'gptel-ext-core)
 ;;; gptel-ext-core.el ends here

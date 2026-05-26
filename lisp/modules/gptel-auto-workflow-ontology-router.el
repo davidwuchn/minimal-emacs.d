@@ -1436,6 +1436,130 @@ Keeps the last 100 decisions."
         (setq gptel-auto-workflow--routing-audit-log
               (seq-take gptel-auto-workflow--routing-audit-log 100))))))
 
+;; ─── Impact-Driven Auto-Tuning ───
+
+(defun gptel-auto-workflow--lambda-adjusted-penalty ()
+  "Return the verification penalty for degraded backends, auto-tuned from measured impact.
+If healthy backends consistently outperform degraded ones (delta > 10%), increase
+penalty to -35. If degraded somehow equals or beats healthy (delta <= 0), reduce
+penalty to -5. Otherwise use default -20."
+  (let* ((impact (condition-case nil
+                     (gptel-auto-workflow--lambda-health-impact)
+                   (error nil)))
+         (delta (plist-get impact :impact-delta)))
+    (cond ((and delta (> delta 0.10)) -35.0)   ; strong evidence → penalize more
+          ((and delta (<= delta 0.0)) -5.0)     ; weak/no evidence → light penalty
+          (t -20.0))))                            ; default
+
+(defun gptel-auto-workflow--allium-adjusted-threshold ()
+  "Return the Allium severity threshold, auto-tuned from measured impact.
+If low-severity strategies consistently outperform high-severity ones (delta > 15%),
+lower the threshold to 0.20 (stricter gating). If delta is small (<= 5%), raise
+it to 0.40 (more lenient). Default is 0.30."
+  (let* ((impact (condition-case nil
+                     (gptel-auto-workflow--allium-health-impact)
+                   (error nil)))
+         (delta (plist-get impact :impact-delta)))
+    (cond ((and delta (> delta 0.15)) 0.20)   ; strong evidence → stricter
+          ((and delta (<= delta 0.05)) 0.40)  ; weak/no evidence → more lenient
+          (t 0.30))))                           ; default
+
+;; ─── Lambda Health Impact Measurement ───
+
+(defun gptel-auto-workflow--lambda-health-impact ()
+  "Measure whether lambda-healthy backends produce better experiment outcomes.
+Returns a plist with :healthy-keep-rate, :degraded-keep-rate, :healthy-experiments,
+:degraded-experiments, and :impact-delta (healthy - degraded).
+Positive delta = lambda compiler gate predicts better outcomes."
+  (let ((healthy-kept 0) (healthy-total 0)
+        (degraded-kept 0) (degraded-total 0)
+        (results (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                   (gptel-auto-workflow--parse-all-results))))
+    (dolist (r results)
+      (let* ((backend (plist-get r :backend))
+            (decision (plist-get r :decision))
+            (status (when (and backend
+                               (boundp 'gptel-auto-workflow--lambda-verification-results))
+                      (gethash backend gptel-auto-workflow--lambda-verification-results))))
+        (when (and backend (not (string= backend "unknown")))
+          (cond
+           ((eq status :healthy)
+            (cl-incf healthy-total)
+            (when (equal decision "kept") (cl-incf healthy-kept)))
+           ((eq status :degraded)
+            (cl-incf degraded-total)
+            (when (equal decision "kept") (cl-incf degraded-kept)))))))
+    (list :healthy-keep-rate (if (> healthy-total 0) (/ (float healthy-kept) healthy-total) nil)
+          :degraded-keep-rate (if (> degraded-total 0) (/ (float degraded-kept) degraded-total) nil)
+          :healthy-experiments healthy-total
+          :degraded-experiments degraded-total
+          :impact-delta (if (and (> healthy-total 0) (> degraded-total 0))
+                            (- (/ (float healthy-kept) healthy-total)
+                               (/ (float degraded-kept) degraded-total))
+                          nil))))
+
+;; ─── Allium Health Impact Measurement ───
+
+(defun gptel-auto-workflow--allium-health-impact ()
+  "Measure whether low Allium severity predicts higher experiment keep-rates.
+Returns a plist with :low-allium-keep-rate (strategies with low severity),
+:high-allium-keep-rate (strategies with high severity), counts, and :impact-delta.
+Positive delta = low Allium severity correlates with better outcomes."
+  (let* ((issues-dir (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+                       (expand-file-name "var/tmp/evolution/allium-issues"
+                                         (gptel-auto-workflow--worktree-base-root))))
+         (strategy-scores nil)
+         (results (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                    (gptel-auto-workflow--parse-all-results)))
+         (low-severity-kept 0) (low-severity-total 0)
+         (high-severity-kept 0) (high-severity-total 0)
+         ;; Auto-tuned severity threshold from measured impact
+         (allium-threshold (gptel-auto-workflow--allium-adjusted-threshold)))
+    ;; Collect Allium scores per strategy from issue files
+    (when (and issues-dir (file-directory-p issues-dir))
+      (dolist (file (directory-files issues-dir t "\\.md\\'"))
+        (let* ((filename (file-name-nondirectory file))
+               (strategy (replace-regexp-in-string "\\.md\\'" "" filename))
+               (content (condition-case nil
+                            (with-temp-buffer
+                              (insert-file-contents file)
+                              (buffer-string))
+                          (error nil))))
+          (when content
+            (let ((severity (when (string-match "Severity: \\([0-9.]+\\)" content)
+                              (string-to-number (match-string 1 content)))))
+              (when severity
+                (push (cons strategy severity) strategy-scores)))))))
+    ;; Cross-reference with experiment keep-rates
+    (dolist (pair strategy-scores)
+      (let* ((strategy (car pair))
+             (severity (cdr pair))
+             (s-kept 0) (s-total 0))
+        (dolist (r results)
+          (let ((r-strategy (plist-get r :research-strategy))
+                (r-decision (plist-get r :decision)))
+            (when (and r-strategy (string= r-strategy strategy))
+              (cl-incf s-total)
+              (when (equal r-decision "kept")
+                (cl-incf s-kept)))))
+        (when (> s-total 0)
+          (if (< severity allium-threshold)  ; low severity = better
+              (progn (cl-incf low-severity-total s-total)
+                     (cl-incf low-severity-kept s-kept))
+            (progn (cl-incf high-severity-total s-total)
+                   (cl-incf high-severity-kept s-kept))))))
+    (list :low-allium-keep-rate (if (> low-severity-total 0)
+                                    (/ (float low-severity-kept) low-severity-total) nil)
+          :high-allium-keep-rate (if (> high-severity-total 0)
+                                     (/ (float high-severity-kept) high-severity-total) nil)
+          :low-allium-experiments low-severity-total
+          :high-allium-experiments high-severity-total
+          :strategies-audited (length strategy-scores)
+          :impact-delta (if (and (> low-severity-total 0) (> high-severity-total 0))
+                            (- (/ (float low-severity-kept) low-severity-total)
+                               (/ (float high-severity-kept) high-severity-total))
+                          nil))))
+
 ;; ─── Audit Trail Analysis ───
 
 (defun gptel-auto-workflow--audit-trail-summary ()
@@ -1817,17 +1941,17 @@ Returns plist with :total :healthy :degraded :unknown :backends."
 
 (defun gptel-auto-workflow--apply-verification-penalty (scored)
   "Apply lambda verification penalty to SCORED backends.
-Degraded backends (-20 points) and unknown backends (-5 points).
-Healthy backends get no penalty.
-Returns modified scored list."
-  (let ((result nil))
+Penalty auto-tuned from measured lambda-health-impact:
+default -20 for degraded, -35 when delta>10%, -5 when delta<=0."
+  (let* ((degraded-penalty (gptel-auto-workflow--lambda-adjusted-penalty))
+         (result nil))
     (dolist (entry scored)
       (let* ((backend (plist-get entry :backend))
              (status (or (gethash backend gptel-auto-workflow--lambda-verification-results)
                          :unknown))
              (score (plist-get entry :score))
               (penalty (pcase status
-                         (:degraded -20.0)
+                         (:degraded degraded-penalty)
                          (:unknown 0.0)
                          (:healthy 0.0)
                          (_ -5.0)))

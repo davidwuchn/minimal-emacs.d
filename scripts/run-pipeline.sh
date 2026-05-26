@@ -458,7 +458,6 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
             [ "$_base" = "${XDG_RUNTIME_DIR:-}" ] && rm -f "$_base/emacs/$_sock" 2>/dev/null || true
         done
     done
-    done
     unset _base _sock
     sleep 2
 else

@@ -74,15 +74,26 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
   (setq gptel-auto-workflow--status-refresh-timer nil))
 
 (defun gptel-auto-workflow--refresh-status-if-running ()
-  "Refresh the persisted workflow snapshot while the workflow is active."
+  "Refresh the persisted workflow snapshot while the workflow is active.
+Also monitors memory and triggers GC when RSS exceeds threshold."
   (if (or gptel-auto-workflow--running
           gptel-auto-workflow--cron-job-running)
-      (condition-case err
-          (gptel-auto-workflow--persist-status)
-        (error
-         (message "[auto-workflow] Status refresh failed: %s"
-                  (error-message-string err))
-         (gptel-auto-workflow--stop-status-refresh-timer)))
+      (progn
+        (condition-case err
+            (gptel-auto-workflow--persist-status)
+          (error
+           (message "[auto-workflow] Status refresh failed: %s"
+                    (error-message-string err))
+           (gptel-auto-workflow--stop-status-refresh-timer)))
+        ;; Memory management: trigger GC when RSS > 800MB to prevent OOM
+        (let ((rss (gptel-auto-workflow--process-rss-kb)))
+          (when (and rss (> rss 800000))
+            (message "[mem] RSS %.0fMB, triggering GC" (/ rss 1024.0))
+            (garbage-collect)
+            (let ((after-rss (gptel-auto-workflow--process-rss-kb)))
+              (when (and after-rss (> after-rss 900000))
+                (message "[mem] RSS still %.0fMB after GC — will restart at end of experiment"
+                         (/ after-rss 1024.0)))))))
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--maybe-start-status-refresh-timer ()
@@ -268,21 +279,23 @@ Safe for external tools - contains only [auto-] and [nucleus] messages."
 Works on Linux (/proc) and macOS (ps)."
   (let ((pid (emacs-pid)))
     (when pid
-      (with-temp-buffer
-        (condition-case nil
-            (progn
-              ;; Linux: read VmRSS from /proc/PID/status
-              (insert-file-contents (format "/proc/%d/status" pid) nil nil nil)
-              (goto-char (point-min))
-              (if (re-search-forward "VmRSS:\\s-+\\([0-9]+\\)" nil t)
-                  (string-to-number (match-string 1))
-                ;; macOS: use ps command
-                (erase-buffer)
-                (call-process "ps" nil t nil "-p" (format "%d" pid) "-o" "rss=")
-                (goto-char (point-min))
-                (when (re-search-forward "\\([0-9]+\\)" nil t)
-                  (string-to-number (match-string 1)))))
-          (error nil))))))
+      (or
+       ;; Linux: read VmRSS from /proc/PID/status
+       (condition-case nil
+           (with-temp-buffer
+             (insert-file-contents (format "/proc/%d/status" pid) nil nil nil)
+             (goto-char (point-min))
+             (when (re-search-forward "VmRSS:\\s-+\\([0-9]+\\)" nil t)
+               (string-to-number (match-string 1))))
+         (error nil))
+       ;; macOS: use ps command (different platforms have different ps output)
+       (condition-case nil
+           (with-temp-buffer
+             (call-process "ps" nil t nil "-o" "rss=" "-p" (format "%d" pid))
+             (goto-char (point-min))
+             (when (re-search-forward "\\([0-9]+\\)" nil t)
+               (string-to-number (match-string 1))))
+         (error nil))))))
 
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
   "Run auto-workflow asynchronously with TARGETS.
@@ -358,13 +371,38 @@ Usage:
                 (error-message-string err))))
     ;; Auto-discover targets when .dir-locals.el didn't set them (daemon restart).
     (unless gptel-auto-workflow-targets
-      (let ((discovered (and (fboundp 'gptel-auto-workflow--discover-targets)
-                             (gptel-auto-workflow--discover-targets))))
-        (when discovered
-          (setq gptel-auto-workflow-targets discovered)
-          (setq-default gptel-auto-workflow-targets discovered)
-          (message "[auto-workflow] Auto-discovered %d targets"
-                   (length discovered)))))
+      ;; Try re-loading .dir-locals.el first — defcustom in
+      ;; gptel-tools-agent-subagent.el resets the global to '() when
+      ;; modules are loaded, silently overriding dir-locals.  Re-read
+      ;; here so the configured targets win over auto-discover.
+      (condition-case nil
+          (let ((buf (get-buffer-create " *dir-locals-cron*")))
+            (with-current-buffer buf
+              (setq-local default-directory (gptel-auto-workflow--default-dir))
+              (hack-dir-local-variables-non-file-buffer)
+              (when (local-variable-p 'gptel-auto-workflow-targets)
+                (setq gptel-auto-workflow-targets
+                      (buffer-local-value 'gptel-auto-workflow-targets buf))
+                (setq-default gptel-auto-workflow-targets gptel-auto-workflow-targets))
+              (kill-buffer buf)))
+        (error nil))
+      (unless gptel-auto-workflow-targets
+        (let ((discovered (and (fboundp 'gptel-auto-workflow--discover-targets)
+                               (gptel-auto-workflow--discover-targets))))
+          (when discovered
+            (setq gptel-auto-workflow-targets discovered)
+            (setq-default gptel-auto-workflow-targets discovered)
+            (message "[auto-workflow] Auto-discovered %d targets"
+                     (length discovered))))))
+    ;; Pre-warm baseline cache so first experiment doesn't fail
+    ;; while the full test suite runs (~21 min) to create it.
+    (when (and (fboundp 'gptel-auto-workflow--main-baseline-test-results)
+               (or (null gptel-auto-workflow--cached-baseline-results)
+                   (not (eq (plist-get gptel-auto-workflow--cached-baseline-results :exit-code) 0))))
+      (message "[auto-workflow] Warming baseline cache (first run may take ~2min)...")
+      (condition-case nil
+          (gptel-auto-workflow--main-baseline-test-results)
+        (error (message "[auto-workflow] Baseline warm failed (will retry on first experiment)"))))
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
