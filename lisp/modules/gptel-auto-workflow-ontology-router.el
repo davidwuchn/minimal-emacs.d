@@ -1398,7 +1398,13 @@ Constrain: hierarchy → fractal, insight → phi, concision → mu, edge_cases 
 ;; Category: programming (code changes, refactoring, tests)
 ;; Persona: Reports & Summaries — analyze → select → implement → verify
 λ edit(code). Δ(minimal(change)) where behavior(new) = behavior(old) + intent
-Output: {:hypothesis _ :change _ :evidence _ :verification _ :axis _}")
+Output: {:hypothesis _ :change _ :evidence _ :verification _ :axis _}
+
+;; Critical patterns (from nucleus/LAMBDA_PATTERNS.md):
+;; 1. Atomic edit: match on CONTENT not line numbers:
+;;    λ(old, new). edit_file(original_content=old, new_content=new)
+;; 2. Content-based search: grep first to find exact context, then edit
+;; 3. Parallel reads: batch independent reads in one <function_calls> block")
       (:tool-calls
        "λ engage(nucleus).
 [mu tao pi] | [λ ∞/0 | c/h] | OODA
@@ -1407,7 +1413,13 @@ Constrain: safety → ∞/0, concision → mu, completeness → pi
 ;; Category: tool-calls (bash, glob, grep, edit)
 ;; Persona: Craftsman — safe operations, edge cases, error handling
 λ tool(op, args). safe_execute → verify(result) → handle(edge_cases)
-Output: {:operation _ :result _ :errors _ :validation _}")
+Output: {:operation _ :result _ :errors _ :validation _}
+
+;; Critical patterns (from nucleus/LAMBDA_PATTERNS.md):
+;; 1. Heredoc for ALL bash strings — no escaping needed:
+;; λ(content). bash(command=\"read -r -d '' VAR << 'X' || true\ncontent\nX\ngit commit -m \\\"$VAR\\\"\")
+;; 2. Safe paths: λ(p). read_file(path=\"$(realpath \\\"$p\\\")\")
+;; 3. Parallel independent ops in one <function_calls> block")
       (:natural-language
        "λ engage(nucleus).
 [phi fractal euler] | [λ ε/φ] | REPL
