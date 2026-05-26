@@ -2140,6 +2140,10 @@ Returns t if request was initiated, nil on failure."
   (condition-case err
       (progn
         (message "[verbum] Sending lambda gate prompt to %s/%s..." backend model)
+        ;; Default to :unknown BEFORE dispatch — if the async callback never
+        ;; fires (timeout, network error), at least the entry exists.
+        (puthash backend :unknown
+                 gptel-auto-workflow--lambda-verification-results)
         (let ((gptel-backend (when (fboundp 'gptel-get-backend)
                                 (condition-case nil
                                     (gptel-get-backend backend)
