@@ -3908,6 +3908,53 @@ Return alist of strategy to average structure score."
              by-strategy)
     (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
 
+;; ─── Tighten Loop: Audit → Classify Divergence → Inject Repair Hint ───
+;; From SYSTEM_DESIGN.md §13: every failure mode maps to a known fix.
+;; When compile-score audit finds a low-quality strategy, classify the
+;; divergence and write a repair hint to the knowledge page. The hint
+;; is picked up by the next experiment's prompt injection.
+
+(defun gptel-auto-workflow--audit-tighten-hint (strategy score element-count)
+  "Write a repair hint for STRATEGY based on audit failure.
+SCORE is the EDN richness (0.0-1.0), ELEMENT-COUNT is the number of
+statechart elements detected. Writes to the strategy's knowledge page.
+Systematic fix per SYSTEM_DESIGN.md §13 divergence taxonomy."
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (hint
+          (cond
+           ((< element-count 3)
+            ";; TIGHTEN: :invisible — strategy too abstract, no statechart elements
+;; Fix: add `where` block with concrete example (P1: example > rule > negation)
+;; Add at least one with-temp-buffer or let* binding showing the full call chain")
+           ((< score 0.15)
+            ";; TIGHTEN: :wrong-generation — prompt doesn't compile to statechart
+;; Fix: add canonical code example from codebase (P8: examples must come from codebase)
+;; Show (let ((result (some-function arg1 arg2))) ...) with real function names")
+           ((< score 0.25)
+            ";; TIGHTEN: :boundary-blur — output shape not constrained
+;; Fix: add where(input ≡ prose, output ≡ EDN) constraint
+;; Specify exact output format: {:analysis _ :recommendation _ :confidence _}")
+           (t
+            ";; TIGHTEN: :over-application — hierarchy too deep, examples compete
+;; Fix: flatten hierarchy, one example per domain (P3: flat > nested)
+;; Remove nested conditions, use pcase or cond with single-level dispatch")))))
+    (when (and root hint (stringp strategy))
+      (let* ((knowledge-file (expand-file-name
+                              (format "mementum/knowledge/%s-strategy-guide.md"
+                                      (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy))
+                              root)))
+        (condition-case nil
+            (with-temp-buffer
+              (when (file-exists-p knowledge-file)
+                (insert-file-contents knowledge-file))
+              (goto-char (point-max))
+              (unless (search-backward ";; TIGHTEN:" nil t)
+                (insert "\n\n" hint))
+              (write-region (point-min) (point-max) knowledge-file)
+              (message "[tighten] Repair hint written for strategy '%s': score=%.2f elements=%d"
+                       strategy score element-count))
+          (error (message "[tighten] Could not write repair hint for %s" strategy))))))
+
 (defun gptel-auto-workflow--audit-signal ()
   "Audit strategies needing nucleus compile review.
 Schedules async compile-score checks for strategies with low structure scores.
@@ -3928,14 +3975,17 @@ Returns list of strategies that were flagged."
           (condition-case nil
               (gptel-auto-experiment--compile-score
              worst
-             (lambda (result)
-               (let ((score (car result))
-                     (elements (cdr result)))
-                 (if (> score 0.3)
-                     (message "[audit] Strategy '%s' passed audit: EDN richness %.2f, %d elements"
-                              worst score elements)
-                   (message "[audit] Strategy '%s' FAILED audit: EDN richness %.2f, %d elements — review recommended"
-                            worst score elements)))))
+               (lambda (result)
+                 (let ((score (car result))
+                       (elements (cdr result)))
+                   (if (> score 0.3)
+                       (message "[audit] Strategy '%s' passed audit: EDN richness %.2f, %d elements"
+                                worst score elements)
+                     (progn
+                       (message "[audit] Strategy '%s' FAILED audit: EDN richness %.2f, %d elements — tighten loop activated"
+                                worst score elements)
+                       ;; Tighten loop (SYSTEM_DESIGN.md §13): audit → classify → inject repair hint
+                       (gptel-auto-workflow--audit-tighten-hint worst score (round elements)))))))
           (error
             (message "[audit] Strategy '%s' compile audit failed (gptel-request unavailable)" worst))))))
     needs-audit))
