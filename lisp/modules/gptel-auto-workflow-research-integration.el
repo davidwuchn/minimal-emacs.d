@@ -115,7 +115,7 @@ Ontology classes with <3 instances or missing properties become research priorit
                 (push (format "Class '%s' lacks properties (%d found) — research structure" name (length props))
                       gaps)
                 (push (cons name 0.3) priorities))))))
-    (list :gaps gaps :priorities (cl-remove-duplicates priorities :key #'car :test #'equal))))
+    (list :gaps gaps :priorities (cl-remove-duplicates priorities :key #'car :test #'equal)))))
 
 (defun gptel-auto-workflow--top-research-priority ()
   "Return highest-priority research topic from ontology gaps, or nil.
@@ -154,7 +154,7 @@ Returns alist of (source-name . keep-rate) sorted by performance.
                    (when (> (car counts) 3)
                      (push (cons source (/ (float (cdr counts)) (car counts))) stats)))
                  by-source)
-        (sort stats (lambda (a b) (> (cdr a) (cdr b)))))))))
+        (sort stats (lambda (a b) (> (cdr a) (cdr b))))))))
 
 (defun gptel-auto-workflow--research-source-effectiveness-report ()
   "Generate markdown report of research source effectiveness.

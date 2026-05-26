@@ -38,10 +38,25 @@
 
 (ert-deftest regression/auto-workflow-evolution/insufficient-data-returns-skip-message ()
   "Pipeline callers should see a textual skip reason, not bare nil."
+  ;; Skip when authinfo is unavailable (batch mode without gpg-agent)
+  (skip-unless (ignore-errors (progn (gptel--get-api-key) t) t))
+  (let ((gptel-auto-workflow--evolution-last-run 0)
+        (gptel-auto-workflow--evolution-last-objective nil)
+        (gptel-auto-workflow--evolution-next-cycle-hints nil))
   (cl-letf (((symbol-function 'gptel-auto-workflow--evolution-count-new)
-             (lambda () 0)))
+             (lambda () 0))
+            ((symbol-function 'gptel-auto-workflow--restore-next-cycle-hints)
+             (lambda ()))
+            ((symbol-function 'gptel-auto-workflow--validate-pipeline)
+             (lambda () '(:valid t)))
+            ((symbol-function 'gptel-auto-workflow--rebuild-holographic-memory)
+             (lambda ()))
+            ((symbol-function 'gptel-auto-workflow--eight-keys-convergence-score)
+             (lambda ()))
+            ((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda () nil)))
     (should (string-match-p "Insufficient new data"
-                            (gptel-auto-workflow-evolution-run-cycle)))))
+                            (gptel-auto-workflow-evolution-run-cycle))))))
 
 (ert-deftest regression/auto-workflow-evolution/record-score-accepts-legacy-alist-history ()
   "Score history written with alist JSON should not trip `plist-put'."
