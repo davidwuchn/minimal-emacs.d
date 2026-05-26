@@ -119,6 +119,148 @@ Ensures all backends get samples for fair comparison."
   :type 'float
   :group 'gptel-auto-workflow)
 
+;; ─── VSM Health → Routing Auto-Tuning ───
+
+(defun gptel-auto-workflow--vsm-health-scores ()
+  "Extract VSM layer health scores from evolution-next-cycle-hints.
+Returns the prioritize-targets plist with :s1-ops ... :s5-identity,
+or nil if no VSM health data exists."
+  (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+    (let* ((hints gptel-auto-workflow--evolution-next-cycle-hints)
+           (actions (plist-get hints :vsm-actions))
+           (target-entry (and (consp actions)
+                              (assoc 'prioritize-targets actions))))
+      (cdr target-entry))))
+
+(defun gptel-auto-workflow--vsm-adjusted-routing-params ()
+  "Return routing parameters adjusted by VSM layer health.
+Returns a plist with:
+  :delta-weight, :rate-weight, :trend-weight, :confidence-weight
+  :exploration-rate, :min-samples, :health-probation-threshold
+
+When VSM health data is absent, returns the default hardcoded values.
+When a layer is weak, the corresponding parameter is adjusted:
+
+  S4 (Intelligence/Fire) weak (< 0.5) → exploration 0.15→0.30
+       (try more backends to gather data faster)
+   S3 (Control/Earth) weak (< 0.5) → probation threshold 3→2
+       (exclude bad backends faster to prevent waste)
+   S1 (Operations/Wood) weak (< 0.4) → min-samples 3→1
+       (accept routing with less data to keep the pipeline moving)
+   S2 (Coordination/Metal) weak (< 0.5) → delta weight 0.40→0.20
+       rate weight 0.30→0.40
+       (trust raw keep-rate more when backends disagree on classification)
+   S5 (Identity/Water) weak (< 0.4) → confidence weight 0.10→0.20
+       (trust historical data more when values are unclear)"
+  (let* ((vsm (gptel-auto-workflow--vsm-health-scores))
+         (s1 (or (plist-get vsm :s1-ops) 1.0))
+         (s2 (or (plist-get vsm :s2-coord) 1.0))
+         (s3 (or (plist-get vsm :s3-control) 1.0))
+         (s4 (or (plist-get vsm :s4-intel) 1.0))
+         (s5 (or (plist-get vsm :s5-identity) 1.0))
+         (delta-w 0.40)
+         (rate-w 0.30)
+         (trend-w 0.20)
+         (confidence-w 0.10)
+          (exploration 0.15)
+          (min-samples 3)
+          (probation 3)
+          (adjustments nil))
+    (when (< s1 0.4)
+      (setq min-samples 1)
+      (push "S1:min-samples→1" adjustments))
+    (when (< s2 0.5)
+      (setq delta-w 0.20)
+      (setq rate-w 0.40)
+      (push "S2:delta→20%+rate→40%" adjustments))
+    (when (< s3 0.5)
+      (setq probation 2)
+      (push "S3:probation→2" adjustments))
+    (when (< s4 0.5)
+      (setq exploration 0.30)
+      (push "S4:explore→30%" adjustments))
+    (when (< s5 0.4)
+      (setq confidence-w 0.20)
+      (setq delta-w (max delta-w 0.30))
+      (setq rate-w (max rate-w 0.30))
+      (setq trend-w 0.20)
+      (push "S5:confidence→20%" adjustments))
+    (list :delta-weight delta-w
+          :rate-weight rate-w
+          :trend-weight trend-w
+          :confidence-weight confidence-w
+           :exploration-rate exploration
+           :min-samples min-samples
+           :health-probation-threshold probation
+           :adjustments (nreverse adjustments))))
+
+;; ─── Recency-Weighted Keep-Rate ───
+
+(defcustom gptel-auto-workflow--keep-rate-half-life-days 14.0
+  "Half-life in days for recency-weighted keep-rate.
+Each experiment's weight halves every N days.
+Recent performance matters more than historical averages.
+Set to 0 to disable (use simple keep-rate)."
+  :type 'float
+  :group 'gptel-auto-workflow)
+
+(defun gptel-auto-workflow--run-dir-days-ago (run-dir)
+  "Return days since the experiment in RUN-DIR was executed.
+RUN-DIR is the directory name like 2026-05-21T140000Z-abc123.
+Returns a float, or nil if the date cannot be parsed."
+  (let* ((date-str (substring run-dir 0 10))
+         (time (condition-case nil
+                   (date-to-time date-str)
+                 (error nil))))
+    (when time
+      (/ (float-time (time-since time)) 86400.0))))
+
+(defun gptel-auto-workflow--decayed-keep-rate (results backend &optional half-life filter-category filter-strategy)
+  "Compute recency-weighted keep-rate for BACKEND from RESULTS.
+Each experiment gets weight 2^(-days_ago / HALF-LIFE), default 14 days.
+When HALF-LIFE is nil, uses `gptel-auto-workflow--keep-rate-half-life-days'.
+When HALF-LIFE is 0.0, all weights are 1.0 (simple keep-rate, no decay).
+Optional FILTER-CATEGORY and FILTER-STRATEGY restrict which rows count.
+Returns a plist with :kept :total :keep-rate :raw-kept :raw-total :raw-rate."
+  (let* ((hl (if half-life half-life
+               gptel-auto-workflow--keep-rate-half-life-days))
+         (decay-enabled (and (> hl 0.0) hl))
+        (weighted-kept 0.0)
+        (weighted-total 0.0)
+        (raw-kept 0)
+        (raw-total 0))
+    (dolist (r results)
+      (let ((r-backend (plist-get r :backend))
+            (r-decision (plist-get r :decision))
+            (r-target (plist-get r :target))
+            (r-strategy (plist-get r :research-strategy)))
+        (when (and (string= (or r-backend "") backend)
+                   (or (null filter-category)
+                       (eq (gptel-auto-workflow--categorize-target r-target) filter-category))
+                   (or (null filter-strategy)
+                       (string= (or r-strategy "") filter-strategy)))
+          (let* ((run-dir (plist-get r :run-dir))
+                 (days-ago (and run-dir (gptel-auto-workflow--run-dir-days-ago run-dir)))
+                 (weight (cond ((not decay-enabled) 1.0)
+                               ((not days-ago) 1.0)
+                               (t (expt 0.5 (/ days-ago decay-enabled)))))
+                 (kept (equal r-decision "kept")))
+            (cl-incf raw-total)
+            (cl-incf weighted-total weight)
+            (when kept
+              (cl-incf raw-kept)
+              (cl-incf weighted-kept weight))))))
+    (list :kept (round weighted-kept)
+          :total (round weighted-total)
+          :keep-rate (if (> weighted-total 0)
+                         (/ weighted-kept weighted-total)
+                       nil)
+          :raw-kept raw-kept
+          :raw-total raw-total
+          :raw-rate (if (> raw-total 0)
+                        (/ (float raw-kept) raw-total)
+                      nil))))
+
 ;; ─── Performance Lookup ───
 
 (defun gptel-auto-workflow--get-backend-performance-stats (backend &optional strategy target)
@@ -315,12 +457,13 @@ Agentic → nil (use default ontology ordering, MiniMax is baseline).")
 Returns new ordered list of (backend . model) cons cells.
 STRATEGY and TARGET filter the performance data.
 
-Scoring incorporates four dimensions (not just raw keep-rate):
-  1. DELTA from category baseline — how much better/worse vs peers?      (40%)
-  2. RAW keep-rate — historical performance on this category               (30%)
-  3. TREND — is performance improving or declining recently?               (20%)
-  4. CONFIDENCE — how much data backs this score?                          (10%)
-  Penalty: unhealthy backends (3+ recent errors) drop to bottom."
+   Scoring incorporates four dimensions (not just raw keep-rate):
+   1. DELTA from category baseline — how much better/worse vs peers?
+   2. RAW keep-rate — historical performance on this category
+   3. TREND — is performance improving or declining recently?
+   4. CONFIDENCE — how much data backs this score?
+   Weights auto-tune from VSM health when available (defaults 40/30/20/10).
+   Penalty: unhealthy backends (3+ recent errors) drop to bottom."
   (let* ((static-fallbacks (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
                                 gptel-auto-workflow-headless-subagent-fallbacks
                               '(("MiniMax" . "minimax-m2.7-highspeed")
@@ -328,11 +471,17 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                                 ("DashScope" . "qwen3.6-plus")
                                 ("DeepSeek" . "deepseek-v4-flash")
                                 ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
-          (category (when target (gptel-auto-workflow--categorize-target target)))
-          (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
-          ;; Compute baseline once per category
-          (baseline (when category (gptel-auto-workflow--category-baseline-keep-rate category strategy)))
-          (scored nil))
+           (category (when target (gptel-auto-workflow--categorize-target target)))
+           (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
+           ;; Compute baseline once per category
+           (baseline (when category (gptel-auto-workflow--category-baseline-keep-rate category strategy)))
+           ;; VSM health → routing auto-tuning
+           (vsm-params (gptel-auto-workflow--vsm-adjusted-routing-params))
+           (delta-weight (plist-get vsm-params :delta-weight))
+           (rate-weight (plist-get vsm-params :rate-weight))
+           (trend-weight (plist-get vsm-params :trend-weight))
+           (confidence-weight (plist-get vsm-params :confidence-weight))
+           (scored nil))
     
     ;; Health ladder: filter probation/dead backends, apply weight reduction
     (let ((filtered nil))
@@ -341,7 +490,7 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                (level (gptel-auto-workflow--backend-health-level backend))
                (override (and category-override (string= backend category-override))))
           (cond
-           ((>= level 3)
+           ((>= level (plist-get vsm-params :health-probation-threshold))
             (if override
                 (push entry filtered)  ; category override bypasses probation
               (message "[verbum] ⚠ SKIPPING %s backend %s (level=%d)"
@@ -349,16 +498,25 @@ Scoring incorporates four dimensions (not just raw keep-rate):
            (t (push entry filtered)))))
       (setq static-fallbacks (nreverse filtered)))
     
-    ;; Score each backend from static list
+     ;; Score each backend from static list
     (dolist (entry static-fallbacks)
       (let* ((backend (car entry))
              (model (cdr entry))
-             ;; All-time category stats
+             ;; All-time category stats (raw, for confidence/totals)
              (all-stats (if category
                             (gptel-auto-workflow--get-category-performance-stats backend category strategy)
                           (gptel-auto-workflow--get-backend-performance-stats backend strategy target)))
-             (all-rate (plist-get all-stats :keep-rate))
+             (all-raw-rate (plist-get all-stats :keep-rate))
              (all-total (plist-get all-stats :total))
+             ;; Recency-weighted keep-rate (recent experiments count more)
+             (decayed-stats (gptel-auto-workflow--decayed-keep-rate
+                             (gptel-auto-workflow--parse-all-results) backend nil category strategy))
+             (decayed-rate (plist-get decayed-stats :keep-rate))
+             ;; Bayesian floor: backends with < 3 experiments get 0.25
+             ;; to avoid cold-start bias. Applied after decay weighting.
+             (all-rate (cond (decayed-rate decayed-rate)
+                             ((or (null all-raw-rate) (< all-total 3)) 0.25)
+                             (t all-raw-rate)))
              ;; Recent stats for trend
              (recent-stats (when category
                              (gptel-auto-workflow--get-recent-performance-stats backend category strategy)))
@@ -384,12 +542,12 @@ Scoring incorporates four dimensions (not just raw keep-rate):
                     :delta delta :trend trend :confidence confidence
                     :healthy healthy
                     :score (if all-rate
-                               (+ (* delta 40.0)        ; Delta from peers (40%)
-                                  (* all-rate 30.0)      ; Raw keep-rate (30%)
-                                  (* trend 20.0)         ; Direction of change (20%)
-                                  (* confidence 10.0)    ; Data trust (10%)
-                                  (if healthy 0 -50.0))  ; Quota penalty
-                             -1.0))  ; No data = bottom
+                                (+ (* delta (* delta-weight 100.0))
+                                   (* all-rate (* rate-weight 100.0))
+                                   (* trend (* trend-weight 100.0))
+                                   (* confidence (* confidence-weight 100.0))
+                                   (if healthy 0 -50.0))  ; Quota penalty
+                              -1.0))  ; No data = bottom
               scored)))
     
     ;; Apply category override if available
@@ -461,27 +619,53 @@ Scoring incorporates four dimensions (not just raw keep-rate):
     (let ((total-samples (cl-reduce #'+ scored
                                      :key (lambda (s) (or (plist-get s :total) 0))
                                      :initial-value 0)))
-      (if (>= total-samples gptel-auto-workflow--ontology-reorder-min-samples)
-          (progn
-            (message "[onto-router] Reordered %d backends by performance (≥%d samples)"
-                     (length scored) total-samples)
-            ;; Exploration: 15% chance to swap first two for learning
-            ;; Skip exploration if either top backend is rejected (ternary -1)
-            (when (and (> (length scored) 1)
-                       (/= (or (plist-get (car scored) :ternary) 0) -1)
-                       (/= (or (plist-get (cadr scored) :ternary) 0) -1)
-                       (< (random 100) (* gptel-auto-workflow--ontology-reorder-exploration-rate 100)))
-              (let ((tmp (car scored)))
-                (setcar scored (cadr scored))
-                (setcar (cdr scored) tmp))
+       (if (>= total-samples (plist-get vsm-params :min-samples))
+            (progn
+              (let ((adj (plist-get vsm-params :adjustments)))
+                (when adj
+                  (message "[vsm-routing] %s" (mapconcat #'identity adj ", "))))
+              (message "[onto-router] Reordered %d backends by performance (≥%d samples, explore=%.0f%%)"
+                      (length scored) total-samples
+                      (* 100 (plist-get vsm-params :exploration-rate)))
+             ;; Exploration: swap top 2 backends for learning
+             ;; Rate auto-tuned by VSM health (default 15%, up to 30% when S4 weak)
+             ;; Skip exploration if either top backend is rejected (ternary -1)
+             (when (and (> (length scored) 1)
+                        (/= (or (plist-get (car scored) :ternary) 0) -1)
+                        (/= (or (plist-get (cadr scored) :ternary) 0) -1)
+                        (< (random 100) (* (plist-get vsm-params :exploration-rate) 100)))
+               (let ((tmp (car scored)))
+                 (setcar scored (cadr scored))
+                 (setcar (cdr scored) tmp))
               (message "[onto-router] EXPLORATION: swapped top 2 backends for learning"))
-            ;; Return as (backend . model) cons cells
-            (mapcar (lambda (s) (cons (plist-get s :backend) (plist-get s :model))) scored))
-        ;; Not enough data - return static order
-        (progn
-          (message "[onto-router] Using static order (%d samples < %d threshold)"
-                   total-samples gptel-auto-workflow--ontology-reorder-min-samples)
-          static-fallbacks)))))
+              ;; Record experiment-level routing decision for audit
+              (let ((top-5 (seq-take scored 5)))
+                (push (list :timestamp (float-time)
+                            :level 'experiment
+                            :target (or target "global")
+                            :strategy (or strategy "none")
+                            :weights (list :delta delta-weight :rate rate-weight
+                                           :trend trend-weight :confidence confidence-weight)
+                            :vsm-adjustments (plist-get vsm-params :adjustments)
+                            :top-backends (mapcar (lambda (s)
+                                                    (list :backend (plist-get s :backend)
+                                                          :model (plist-get s :model)
+                                                          :score (plist-get s :score)
+                                                          :delta (plist-get s :delta)
+                                                          :trend (plist-get s :trend)
+                                                          :confidence (plist-get s :confidence)))
+                                                  top-5))
+                      gptel-auto-workflow--routing-audit-log)
+                (when (> (length gptel-auto-workflow--routing-audit-log) 100)
+                  (setq gptel-auto-workflow--routing-audit-log
+                        (seq-take gptel-auto-workflow--routing-audit-log 100))))
+              ;; Return as (backend . model) cons cells
+             (mapcar (lambda (s) (cons (plist-get s :backend) (plist-get s :model))) scored))
+         ;; Not enough data - return static order
+         (progn
+           (message "[onto-router] Using static order (%d samples < %d threshold)"
+                    total-samples (plist-get vsm-params :min-samples))
+           static-fallbacks)))))
 
 ;; ─── Integration with Existing Fallback System ───
 
@@ -659,15 +843,28 @@ MAX-SUGGESTIONS limits results (default 5)."
 
 (defun gptel-auto-workflow--ontology-fallback-advice (orig-fun &rest args)
   "Advice around experiment runner to apply ontology fallback ordering.
-Reorders fallback chain before each experiment based on historical performance."
+Reorders fallback chain before each experiment based on historical performance.
+After each experiment, copies any new rate-limited backends into the per-run
+cooldown list so subsequent experiments hard-exclude failed backends."
   (let* ((target (car args))
-         (strategy nil))
+         (strategy nil)
+         (prior-rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                                  (copy-sequence gptel-auto-workflow--rate-limited-backends))))
     ;; Apply ontology-ordered fallbacks
     (gptel-auto-workflow--apply-ontology-fallback-order strategy target)
     ;; Run the experiment
     (unwind-protect
         (apply orig-fun args)
-      ;; Reset to static order after experiment
+      ;; After experiment: any NEW rate-limited backends → per-run cooldown
+      (let ((new-failures (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                               (cl-set-difference gptel-auto-workflow--rate-limited-backends
+                                                  prior-rate-limited
+                                                  :test #'string=))))
+        (dolist (b new-failures)
+          (unless (member b gptel-auto-workflow--run-failed-backends)
+            (push b gptel-auto-workflow--run-failed-backends)
+            (message "[cooldown] %s added to per-run exclusion list" b))))
+      ;; Reset to static order (ontology re-evaluates fresh each time)
       (gptel-auto-workflow--reset-fallback-order))))
 
 ;; Enabled: ontology-aware fallback reordering on every experiment
@@ -828,20 +1025,42 @@ Keys are backend names, values are :healthy/:degraded/:unknown.")
   "Consecutive degraded lambda checks per backend.
 Reset to 0 when :healthy. Quarantine at >= 3 strikes.")
 
-(defvar gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal)
-  "Consecutive degraded lambda checks per backend.
-Reset to 0 when :healthy.")
-
 (defvar gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal)
   "Timestamp when DEAD backends can be retried (exponential backoff).
 Key: backend name, value: float-time when retest is allowed.")
 
+(defvar gptel-auto-workflow--lambda-last-strike-time (make-hash-table :test 'equal)
+  "Timestamp of the most recent lambda degradation per backend.
+Used for auto-recovery: if no new strikes for > 1 hour, probation
+backends auto-demote to degraded level 2.")
+
+(defvar gptel-auto-workflow--cached-probation-threshold nil
+  "Cached probation threshold to avoid recomputing VSM params per backend.
+Cons cell: (timestamp . threshold). Invalidated after 5 seconds.")
+
+(defconst gptel-auto-workflow--probation-recovery-seconds 3600
+  "Seconds before a probation backend auto-recovers to degraded.
+After this period without new strikes, level 3 → level 2.")
+
 (defun gptel-auto-workflow--backend-health-level (backend)
   "Return health level for BACKEND: 0-4.
 0=HEALTHY (full trust), 1=WARNING (-15%%), 2=DEGRADED (-35%%),
-3=PROBATION (canary only), 4=DEAD (waiting for backoff)."
-  (let ((strikes (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
-        (dead-until (gethash backend gptel-auto-workflow--lambda-dead-until)))
+3=PROBATION (canary only), 4=DEAD (waiting for backoff).
+Probation threshold auto-tunes from VSM health when available
+(default 3 strikes; tightens to 2 when S3 Control is weak)."
+  (let* ((probation-threshold
+          (or (when (and gptel-auto-workflow--cached-probation-threshold
+                         (< (float-time) (+ (car gptel-auto-workflow--cached-probation-threshold) 5)))
+                (cdr gptel-auto-workflow--cached-probation-threshold))
+              (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+                (let ((threshold (plist-get (gptel-auto-workflow--vsm-adjusted-routing-params)
+                                            :health-probation-threshold)))
+                  (setq gptel-auto-workflow--cached-probation-threshold
+                        (cons (float-time) threshold))
+                  threshold))
+              3))
+         (strikes (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
+         (dead-until (gethash backend gptel-auto-workflow--lambda-dead-until)))
     (cond
      ;; DEAD: waiting for backoff timer
      ((and dead-until (> dead-until (float-time))) 4)
@@ -849,8 +1068,14 @@ Key: backend name, value: float-time when retest is allowed.")
      (dead-until 3)
      ;; 5+ strikes → DEAD with exponential backoff
      ((>= strikes 5) 4)
-     ;; 3-4 strikes → PROBATION (canary tasks only)
-     ((>= strikes 3) 3)
+      ;; probation-threshold..4 strikes → PROBATION (canary tasks only)
+      ;; Auto-recovery: if last strike was > 1h ago, degrade to level 2
+      ((>= strikes probation-threshold)
+       (let ((last-strike (gethash backend gptel-auto-workflow--lambda-last-strike-time)))
+         (if (and last-strike
+                  (> (float-time) (+ last-strike gptel-auto-workflow--probation-recovery-seconds)))
+             2    ; auto-recovered: probation → degraded
+           3)))
      ;; 2 strikes → DEGRADED (reduced weight)
      ((>= strikes 2) 2)
      ;; 1 strike → WARNING (slight penalty)
@@ -926,60 +1151,87 @@ Returns alist of ((backend axis) . keep-rate). Pairs with < 5 samples are exclud
              pairs)
     rates))
 
+(defun gptel-auto-workflow--beta-mean (alpha beta)
+  "Return mean of Beta(ALPHA, BETA) distribution."
+  (/ (float alpha) (+ alpha beta)))
+
+(defun gptel-auto-workflow--beta-sample (alpha beta)
+  "Approximate sample from Beta(ALPHA, BETA) -- uses posterior mean.
+Deterministic: returns expected value for preference boost calculation."
+  (gptel-auto-workflow--beta-mean alpha beta))
+
 (defun gptel-auto-workflow--evolve-backend-preference ()
-  "Auto-evolve per-axis backend preference boosts from historical keep-rates.
-For each (backend, kibcm-axis) pair with >=5 samples, compare the per-axis
-keep-rate against the global backend keep-rate. If significantly better,
-increase the preference boost. If worse, decrease it. Results are bounded
-[0.0, 0.25] and persisted to `gptel-auto-workflow--preference-persist-file'."
+  "Evolve backend preference via Beta-Bernoulli Thompson Sampling.
+
+For each (backend, kibcm-axis) pair, maintains Beta(kept+1, discarded+1)
+posterior. Boost = expected lift over global, bounded [0.0, 0.25].
+Beta(1,1) prior = uniform: few samples = conservative boost.
+Persisted to `gptel-auto-workflow--preference-persist-file'."
   (interactive)
-  (let* ((per-axis (gptel-auto-workflow--backend-per-axis-keep-rates))
-         (global-cache (make-hash-table :test 'equal))
+  (let* ((all-results (gptel-auto-workflow--parse-all-results))
+         (alpha-pair (make-hash-table :test 'equal))
+         (beta-pair (make-hash-table :test 'equal))
+         (alpha-global (make-hash-table :test 'equal))
+         (beta-global (make-hash-table :test 'equal))
          (changed nil))
-    (dolist (r (gptel-auto-workflow--parse-all-results))
+    (dolist (r all-results)
       (let ((backend (or (plist-get r :backend) "unknown"))
+            (axis (or (plist-get r :kibcm-axis) "?"))
             (kept (equal (plist-get r :decision) "kept")))
         (unless (member backend '("0" "unknown" ""))
-          (let ((entry (or (gethash backend global-cache) (cons 0 0))))
-            (setcar entry (1+ (car entry)))
-            (when kept (setcdr entry (1+ (cdr entry))))
-            (puthash backend entry global-cache)))))
-    (dolist (pair per-axis)
-      (let* ((backend (car (car pair)))
-             (axis (cdr (car pair)))
-             (axis-keep (cdr pair))
-             (global-entry (gethash backend global-cache))
-             (global-total (car global-entry))
-             (global-kept (cdr global-entry))
-             (global-keep (if (> global-total 0) (/ (float global-kept) global-total) 0.5))
-             (delta (- axis-keep global-keep))
-             (agent-type (pcase axis
-                           ("A" "analyzer")
-                           ("B" "executor")
-                           ("C" "reviewer")
-                           ("D" "executor")
-                           ("E" "grader")
-                           ("F" "executor")
-                           ("G" "reviewer")
-                           ("H" "analyzer")
-                           ("I" "comparator")
-                           (_ nil))))
-        (when (and agent-type (>= (abs delta) 0.05))
-          (let* ((existing (cl-find-if
-                            (lambda (e)
-                              (and (string= (nth 0 e) agent-type)
-                                   (string= (nth 1 e) backend)))
-                            gptel-auto-workflow--task-backend-preference))
-                 (current-boost (if (consp existing) (cddr existing) 0.0))
-                 (new-boost (max 0.0 (min 0.25 (+ current-boost delta)))))
-            (when (> (abs (- current-boost new-boost)) 0.001)
-              (if existing
-                  (setcdr (cdr existing) new-boost)
-                (nconc gptel-auto-workflow--task-backend-preference
-                       (list (list agent-type backend new-boost))))
-              (setq changed t)
-              (message "[preference] %s/%s on axis %s: boost %.3f -> %.3f (delta=%.3f)"
-                       agent-type backend axis current-boost new-boost delta))))))
+          (unless (gethash backend alpha-global)
+            (puthash backend 1 alpha-global)
+            (puthash backend 1 beta-global))
+          (if kept
+              (cl-incf (gethash backend alpha-global))
+            (cl-incf (gethash backend beta-global)))
+          (let ((key (cons backend axis)))
+            (unless (gethash key alpha-pair)
+              (puthash key 1 alpha-pair)
+              (puthash key 1 beta-pair))
+            (if kept
+                (cl-incf (gethash key alpha-pair))
+              (cl-incf (gethash key beta-pair)))))))
+    (maphash
+     (lambda (key a-pair)
+       (let* ((backend (car key))
+              (axis (cdr key))
+              (b-pair (gethash key beta-pair))
+              (total-pair (+ a-pair b-pair -2))
+              (a-glob (gethash backend alpha-global))
+              (b-glob (gethash backend beta-global))
+              (pair-mean (gptel-auto-workflow--beta-mean a-pair b-pair))
+              (global-mean (gptel-auto-workflow--beta-mean a-glob b-glob))
+              (agent-type (pcase axis
+                            ("A" "analyzer")
+                            ("B" "executor")
+                            ("C" "reviewer")
+                            ("D" "executor")
+                            ("E" "grader")
+                            ("F" "executor")
+                            ("G" "reviewer")
+                            ("H" "analyzer")
+                            ("I" "comparator")
+                            (_ nil))))
+         (when (and agent-type (>= total-pair 5)
+                    (>= (abs (- pair-mean global-mean)) 0.03))
+           (let* ((existing (cl-find-if
+                             (lambda (e)
+                               (and (string= (nth 0 e) agent-type)
+                                    (string= (nth 1 e) backend)))
+                             gptel-auto-workflow--task-backend-preference))
+                  (current (if (consp existing) (cddr existing) 0.0))
+                  (new (min 0.25 (max 0.0 (- pair-mean global-mean)))))
+             (when (> (abs (- current new)) 0.005)
+               (if existing
+                   (setcdr (cdr existing) new)
+                 (nconc gptel-auto-workflow--task-backend-preference
+                        (list (list agent-type backend new))))
+               (setq changed t)
+               (message
+                "[preference] %s/%s on axis %s: boost %.3f -> %.3f (Bayesian lift=%.3f n=%d)"
+                agent-type backend axis current new (- pair-mean global-mean) total-pair))))))
+     alpha-pair)
     (when changed
       (gptel-auto-workflow--persist-backend-preference)
       (gptel-auto-workflow--commit-backend-preference)
@@ -1035,6 +1287,223 @@ increase the preference boost. If worse, decrease it. Results are bounded
              (fboundp 'gptel-auto-workflow--worktree-base-root))
     (gptel-auto-workflow--load-backend-preference)))
 
+;; ─── Routing Context for Prompt Injection ───
+
+(defun gptel-auto-workflow--routing-context (backend model)
+  "Generate a concise routing rationale string for BACKEND/MODEL.
+Injected at subagent dispatch time so the LLM knows exactly which backend
+it runs on, why that backend was selected, and any relevant caveats."
+  (let* ((bn (or (and (fboundp 'gptel-auto-workflow--safe-backend-name)
+                      (gptel-auto-workflow--safe-backend-name backend))
+                 (and (fboundp 'gptel-backend-name)
+                      (gptel-backend-name backend))
+                 (format "%s" backend)))
+         (lambda-status (and (boundp 'gptel-auto-workflow--lambda-verification-results)
+                              (gethash backend gptel-auto-workflow--lambda-verification-results)))
+         (health-level (and (fboundp 'gptel-auto-workflow--backend-health-level)
+                            (gptel-auto-workflow--backend-health-level backend)))
+         (health-label (and (fboundp 'gptel-auto-workflow--backend-health-label)
+                            (gptel-auto-workflow--backend-health-label backend)))
+         (stats (when (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
+                  (condition-case nil
+                      (gptel-auto-workflow--get-backend-performance-stats backend)
+                    (error nil))))
+         (keep-rate (plist-get stats :keep-rate))
+         (total-exps (plist-get stats :total))
+         (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                            (member backend gptel-auto-workflow--rate-limited-backends)))
+         (in-cooldown (and (boundp 'gptel-auto-workflow--run-failed-backends)
+                           (member backend gptel-auto-workflow--run-failed-backends)))
+         ;; Per-axis selection rationale
+         (target (and (boundp 'gptel-auto-workflow--current-target)
+                      gptel-auto-workflow--current-target))
+         (consensus (when (and target
+                               (fboundp 'gptel-auto-workflow--get-holographic-consensus))
+                      (condition-case nil
+                          (gptel-auto-workflow--get-holographic-consensus target)
+                        (error nil))))
+         (axis (plist-get consensus :axis))
+         (axis-conf (plist-get consensus :confidence)))
+    (format
+     "You are running on %s/%s. Lambda compiler: %s. Health: %s (level %d, %d experiments, %.0f%% keep-rate).%s%s%s%s"
+     bn model
+     (or (and lambda-status (format "%s" lambda-status)) "unverified")
+     (or health-label "N/A")
+     (or health-level 0)
+     (or total-exps 0)
+     (if keep-rate (* 100 keep-rate) 0)
+     ;; Health guidance
+     (cond ((>= (or health-level 0) 3)
+            "\nCAUTION: This backend is on probation — verify ALL outputs carefully. ")
+           ((>= (or health-level 0) 2)
+            "\nNote: This backend has elevated health warnings — results may be inconsistent. ")
+           (t ""))
+     ;; Per-axis context
+     (if (and axis (> axis-conf 0.5))
+         (format "\nThis backend was selected for target %s (KIBC axis %s, confidence %.0f%%). "
+                 (file-name-nondirectory target) axis (* 100 axis-conf))
+       "")
+     ;; Rate-limit / cooldown context
+     (cond (in-cooldown
+            "\nWARNING: This backend failed earlier in this run — it is being used as a last resort. Expect potential issues. ")
+           (rate-limited
+            "\nNote: This backend has active rate limits — responses may be throttled. ")
+           (t
+            (if (= (or health-level 0) 0)
+                "\nThis backend is healthy and recommended for this task. "
+              "")))
+     (if (and keep-rate (>= keep-rate 0.7) (>= (or total-exps 0) 10))
+         "High confidence in this routing decision (strong historical track record)."
+       (if (>= (or total-exps 0) 5)
+           "Moderate confidence — sufficient data supports this routing choice."
+         "Low confidence — limited historical data for this backend/target combination.")))))
+
+;; ─── Routing Decision Audit Trail ───
+
+(defvar gptel-auto-workflow--routing-audit-log nil
+  "Audit trail of routing decisions for observability.
+Each entry is a plist: (:timestamp :target :agent-type :selected-backend
+:selected-model :candidates). Candidates is a list of plists with
+:backend :model :health :keep-rate :pref-boost :axis-boost :score.")
+
+(defun gptel-auto-workflow--record-routing-decision (agent-type scored &optional vsm-adjustments)
+  "Record a routing decision into the audit trail.
+SCORED is the scored list from `ranked-subagent-backends' (with scores attached).
+VSM-ADJUSTMENTS is an optional list of VSM layer adjustment strings.
+Keeps the last 100 decisions."
+  (let ((target (and (boundp 'gptel-auto-workflow--current-target)
+                     gptel-auto-workflow--current-target))
+        (top (car scored))
+        (candidates nil))
+    (when top
+      (dolist (entry (seq-take scored 5))
+        (let* ((pair (car entry))
+               (details (cdr entry))
+               (score (plist-get details :score))
+               (health (plist-get details :health))
+               (keep-rate (plist-get details :keep-rate))
+               (pref (plist-get details :pref-boost))
+               (axis (plist-get details :axis-boost)))
+          (push (list :backend (car pair)
+                      :model (cdr pair)
+                      :score score
+                      :health health
+                      :keep-rate keep-rate
+                      :pref-boost pref
+                      :axis-boost axis)
+                candidates)))
+      (push (list :timestamp (float-time)
+                  :target (or target "unknown")
+                  :agent-type (or agent-type "unknown")
+                  :selected-backend (caar top)
+                  :selected-model (cdar top)
+                  :vsm-adjustments vsm-adjustments
+                  :candidates (nreverse candidates))
+            gptel-auto-workflow--routing-audit-log)
+      ;; Keep last 100 entries
+      (when (> (length gptel-auto-workflow--routing-audit-log) 100)
+        (setq gptel-auto-workflow--routing-audit-log
+              (seq-take gptel-auto-workflow--routing-audit-log 100))))))
+
+;; ─── Audit Trail Analysis ───
+
+(defun gptel-auto-workflow--audit-trail-summary ()
+  "Return a plist summarizing the routing audit trail.
+Fields: :total-decisions, :backend-counts (alist of backend→count),
+:avg-health (hash of backend→avg health level),
+:avg-keep-rate (hash of backend→avg keep-rate),
+:vsm-adjustment-counts (plist of layer→times-active)."
+  (let ((total 0)
+        (backend-counts (make-hash-table :test 'equal))
+        (backend-health-sum (make-hash-table :test 'equal))
+        (backend-rate-sum (make-hash-table :test 'equal))
+        (vsm-s1 0) (vsm-s2 0) (vsm-s3 0) (vsm-s4 0) (vsm-s5 0))
+    (dolist (entry gptel-auto-workflow--routing-audit-log)
+      (cl-incf total)
+      ;; Per-backend counts
+      (let ((backend (plist-get entry :selected-backend))
+            (candidates (plist-get entry :candidates)))
+        (when backend
+          (let ((count (gethash backend backend-counts)))
+            (puthash backend (if count (1+ count) 1) backend-counts)))
+        ;; Per-candidate health/rate aggregation
+        (when candidates
+          (dolist (c (if (listp candidates) candidates (list candidates)))
+            (when (listp c)
+              (let* ((b (plist-get c :backend))
+                     (health (plist-get c :health))
+                     (rate (plist-get c :keep-rate)))
+                (when (and b health)
+                  (puthash b (+ (or (gethash b backend-health-sum) 0) health)
+                           backend-health-sum))
+                (when (and b rate)
+                  (puthash b (+ (or (gethash b backend-rate-sum) 0) rate)
+                           backend-rate-sum))))))
+        ;; VSM adjustment counts
+        (let ((adj (plist-get entry :vsm-adjustments)))
+          (when adj
+            (dolist (a adj)
+              (cond ((string-match-p "S1:" a) (cl-incf vsm-s1))
+                    ((string-match-p "S2:" a) (cl-incf vsm-s2))
+                    ((string-match-p "S3:" a) (cl-incf vsm-s3))
+                    ((string-match-p "S4:" a) (cl-incf vsm-s4))
+                    ((string-match-p "S5:" a) (cl-incf vsm-s5))))))))
+    (list :total-decisions total
+          :backend-counts backend-counts
+          :avg-health backend-health-sum
+          :avg-keep-rate backend-rate-sum
+          :vsm-adjustments (list :s1 vsm-s1 :s2 vsm-s2
+                                 :s3 vsm-s3 :s4 vsm-s4 :s5 vsm-s5))))
+
+;; ─── Per-Target Model Preference ───
+
+(defun gptel-auto-workflow--best-model-for-target (target backend)
+  "Return the best historical model for TARGET on BACKEND.
+Searches all kept experiments for this target+backend pair and returns
+the model with the highest keep-rate. Returns nil if no data."
+  (when (and target backend (fboundp 'gptel-auto-workflow--parse-all-results))
+    (let ((model-stats (make-hash-table :test 'equal))
+          (best-model nil)
+          (best-rate 0.0))
+      (dolist (r (gptel-auto-workflow--parse-all-results))
+        (let ((r-target (plist-get r :target))
+              (r-backend (plist-get r :backend))
+              (r-model (plist-get r :model))
+              (r-decision (plist-get r :decision)))
+          (when (and (string= (or r-target "") target)
+                     (string= (or r-backend "") backend)
+                     (stringp r-model))
+            (let ((stats (or (gethash r-model model-stats) (cons 0 0))))
+              (cl-incf (car stats))
+              (when (equal r-decision "kept")
+                (cl-incf (cdr stats)))
+              (puthash r-model stats model-stats)))))
+      (maphash (lambda (model stats)
+                 (let ((total (car stats))
+                       (kept (cdr stats)))
+                   (when (and (> total 0)
+                              (>= (/ (float kept) total) best-rate)
+                              ;; Validate backend/model combination
+                              (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
+                                  (gptel-auto-workflow--model-combination-valid-p
+                                   (concat backend "/" model))))
+                     (setq best-rate (/ (float kept) total))
+                     (setq best-model model))))
+               model-stats)
+      best-model)))
+
+;; ─── Per-Run Backend Cooldown ───
+
+(defvar gptel-auto-workflow--run-failed-backends nil
+  "List of backend names that failed during the current run.
+Backends in this list are excluded from routing for the remainder
+of the run. Cleared when a new run starts via `gptel-auto-workflow--clear-run-failed-backends'.")
+
+(defun gptel-auto-workflow--clear-run-failed-backends ()
+  "Clear the per-run backend cooldown list.
+Call at the start of a new workflow run."
+  (setq gptel-auto-workflow--run-failed-backends nil))
+
 (defun gptel-auto-workflow--ranked-subagent-backends (&optional agent-type)
   "Return ordered backend/model alist for subagent routing.
 Ranks backends by health-weight × historical-keep-rate, best first.
@@ -1044,17 +1513,32 @@ Falls back to the static headless-subagent-fallbacks if no data available.
 Phase 2 P(λ) gating: backends with :degraded lambda verification are
 excluded entirely (score 0), not just deprioritized. This implements the
 hard gate: if a backend fails the lambda compiler check, it's not used."
-  (let ((scored nil)
+  (let* ((scored nil)
         ;; Use the live fallback chain as default-models so any ontology
         ;; reordering (applied to executor-rate-limit-fallbacks by
         ;; reorder-fallbacks-by-ontology) is picked up here too.
         (default-models (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
                                 gptel-auto-workflow-executor-rate-limit-fallbacks)
-                            '(("MiniMax" . "minimax-m2.7-highspeed")
-                              ("DeepSeek" . "deepseek-v4-flash")
-                              ("DashScope" . "qwen3.6-plus")
-                              ("moonshot" . "kimi-k2.6")
-                              ("CF-Gateway" . "@cf/openai/gpt-oss-120b")))))
+            '(("MiniMax" . "minimax-m2.7-highspeed")
+              ("DeepSeek" . "deepseek-v4-flash")
+              ("DashScope" . "qwen3.6-plus")
+              ("moonshot" . "kimi-k2.6")
+              ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+        ;; Pre-compute once for all backends
+        (axis-rates-cache (when (fboundp 'gptel-auto-workflow--backend-per-axis-keep-rates)
+                            (condition-case nil
+                                (gptel-auto-workflow--backend-per-axis-keep-rates)
+                              (error nil))))
+        (target-axis-cache (when (and (boundp 'gptel-auto-workflow--current-target)
+                                      gptel-auto-workflow--current-target
+                                      (fboundp 'gptel-auto-workflow--get-holographic-consensus))
+                             (condition-case nil
+                                 (gptel-auto-workflow--get-holographic-consensus
+                                  gptel-auto-workflow--current-target)
+                               (error nil))))
+        ;; VSM routing params for audit trail
+        (vsm-params (gptel-auto-workflow--vsm-adjusted-routing-params))
+        (vsm-adjustments (plist-get vsm-params :adjustments)))
     (dolist (entry default-models)
       (let* ((backend (car entry))
              (model (cdr entry))
@@ -1080,6 +1564,9 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                                 (gptel-auto-workflow--backend-quarantined-p backend)))
               (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
                                  (member backend gptel-auto-workflow--rate-limited-backends)))
+              ;; Per-run cooldown: backends that failed this run are excluded
+              (cooldown (and (boundp 'gptel-auto-workflow--run-failed-backends)
+                             (member backend gptel-auto-workflow--run-failed-backends)))
               ;; Task-specific preference boost: shifts score for backends
               ;; known to excel at particular agent types.
               (pref-boost (if (and agent-type (stringp agent-type)
@@ -1092,17 +1579,26 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                                     (and (consp match) (cddr match)))
                                   0.0)
                             0.0))
+              ;; Phase ω: per-axis boost based on holographic consensus.
+              (axis-boost (gptel-auto-workflow--axis-preference-boost backend axis-rates-cache target-axis-cache))
               (score (cond
                       (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
                       (quarantined -1.0)       ; health gate: hard exclude
+                      (cooldown -1.0)           ; per-run: hard exclude
                       (rate-limited 0.01)      ; demoted but still available as last resort
-                      (t (+ (* health keep-rate) pref-boost)))))
+                       (t (+ (* health keep-rate) pref-boost axis-boost)))))
         (when (>= score 0.0)
-          (push (cons (cons backend model) score) scored))))
+          (push (cons (cons backend model)
+                      (list :score score :health health :keep-rate keep-rate
+                            :pref-boost pref-boost :axis-boost axis-boost))
+                scored))))
     (if scored
-        ;; nreverse: push reverses, restore original order so stable sort
-        ;; preserves the default-models order (DashScope first) as tiebreaker.
-        (mapcar #'car (sort (nreverse scored) (lambda (a b) (> (cdr a) (cdr b)))))
+        (let ((sorted (sort (nreverse scored)
+                            (lambda (a b) (> (plist-get (cdr a) :score)
+                                             (plist-get (cdr b) :score))))))
+          ;; Record routing decision for audit trail
+          (gptel-auto-workflow--record-routing-decision agent-type sorted vsm-adjustments)
+          (mapcar #'car sorted))
       default-models)))
 
 (defvar gptel-auto-workflow--conflicted-targets nil
@@ -1122,16 +1618,18 @@ DEGRADED → increments strikes, triggers actions at each level:
   (let ((count (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
         (old-level (gptel-auto-workflow--backend-health-level backend)))
     (pcase status
-      (:healthy
-       (puthash backend 0 gptel-auto-workflow--lambda-strike-count)
-       (remhash backend gptel-auto-workflow--lambda-dead-until)
-       (when (>= old-level 1)
-         (message "[verbum] ✓ %s recovered: %s→HEALTHY (strikes cleared)"
-                  backend (gptel-auto-workflow--backend-health-label backend))))
-      (:degraded
-       (let* ((new-count (1+ count))
-              (new-level (gptel-auto-workflow--backend-health-level backend)))
-         (puthash backend new-count gptel-auto-workflow--lambda-strike-count)
+       (:healthy
+        (puthash backend 0 gptel-auto-workflow--lambda-strike-count)
+        (remhash backend gptel-auto-workflow--lambda-dead-until)
+        (remhash backend gptel-auto-workflow--lambda-last-strike-time)
+        (when (>= old-level 1)
+          (message "[verbum] ✓ %s recovered: %s→HEALTHY (strikes cleared)"
+                   backend (gptel-auto-workflow--backend-health-label backend))))
+       (:degraded
+        (let* ((new-count (1+ count))
+               (new-level (gptel-auto-workflow--backend-health-level backend)))
+          (puthash backend new-count gptel-auto-workflow--lambda-strike-count)
+          (puthash backend (float-time) gptel-auto-workflow--lambda-last-strike-time)
          (pcase new-level
            (1 (message "[verbum] ⚠ WARNING %s: 1 strike (lambda degraded)" backend))
            (2 (message "[verbum] ⚠ DEGRADED %s: 2 strikes (routing weight -35%%)" backend))
@@ -1297,11 +1795,11 @@ Returns modified scored list."
              (status (or (gethash backend gptel-auto-workflow--lambda-verification-results)
                          :unknown))
              (score (plist-get entry :score))
-             (penalty (pcase status
-                        (:degraded -20.0)
-                        (:unknown -5.0)
-                        (:healthy 0.0)
-                        (_ -5.0)))
+              (penalty (pcase status
+                         (:degraded -20.0)
+                         (:unknown 0.0)
+                         (:healthy 0.0)
+                         (_ -5.0)))
              (new-score (+ score penalty)))
         (when (/= penalty 0)
           (message "[verbum] %s penalized %.0f for lambda status: %s"
@@ -1404,47 +1902,54 @@ Returns plist with :total :consistent :inconsistent :targets."
 
 (defvar gptel-auto-workflow--holographic-memory nil
   "Holographic memory of experiment consensus.
-Format: ((target . axis) . consensus-count) alist.
-Tracks how many operations (KIBC axes) agreed on each target.
+Format: ((target . axis) . weight) alist where weight is a delta-weighted
+float. Higher deltas contribute more to consensus confidence.
 Inspired by verbum cross-op consensus etching.")
 
 (defun gptel-auto-workflow--record-holographic-experiment (experiment)
-  "Record EXPERIMENT into holographic memory.
-Increments consensus count for target+axis combination.
-EXPERIMENT is a plist with :target, :kibcm-axis, :decision."
+  "Record EXPERIMENT into holographic memory with delta-weighted confidence.
+Increments consensus weight for target+axis combination, scaled by the
+experiment's code-quality delta so larger improvements count more.
+EXPERIMENT is a plist with :target, :kibcm-axis, :decision, :delta."
   (when (and experiment
              (equal (plist-get experiment :decision) "kept"))
     (let* ((target (plist-get experiment :target))
            (axis (or (plist-get experiment :kibcm-axis) "?"))
+           (delta-str (plist-get experiment :delta))
+           (delta (cond ((and (stringp delta-str) (string-match "\\`[+-]?[0-9.]+\\'" delta-str))
+                         (string-to-number delta-str))
+                        (t 0.0)))
+           (weight (+ 1.0 (max 0.0 delta)))  ; base 1.0 + improvement bonus
            (key (cons target axis))
            (existing (assoc key gptel-auto-workflow--holographic-memory)))
       (if existing
-          (setcdr existing (1+ (cdr existing)))
-        (push (cons key 1) gptel-auto-workflow--holographic-memory))
-      (message "[holographic] Recorded %s → %s (consensus: %d)"
-               target axis (or (cdr (assoc key gptel-auto-workflow--holographic-memory)) 0)))))
+          (setcdr existing (+ (cdr existing) weight))
+        (push (cons key weight) gptel-auto-workflow--holographic-memory))
+      (message "[holographic] Recorded %s → %s (Δ=%.3f weight=%.1f → total=%.1f)"
+               target axis delta weight
+               (or (cdr (assoc key gptel-auto-workflow--holographic-memory)) 0.0)))))
 
 (defun gptel-auto-workflow--get-holographic-consensus (target)
-  "Get holographic consensus for TARGET.
+  "Get holographic consensus for TARGET with delta-weighted confidence.
 Returns plist with :axis :count :total :confidence.
-Higher confidence = more operations agreed."
+Higher confidence = more experiments with larger deltas agreed."
   (let ((matches (cl-remove-if-not
                   (lambda (entry) (equal (car (car entry)) target))
                   gptel-auto-workflow--holographic-memory))
-        (total 0))
+        (total 0.0))
     (dolist (m matches)
-      (setq total (+ total (cdr m))))
+      (cl-incf total (cdr m)))
     (if (null matches)
-        (list :axis "?" :count 0 :total 0 :confidence 0.0)
+        (list :axis "?" :count 0 :total 0.0 :confidence 0.0)
       (let* ((best (cl-reduce (lambda (a b)
                                 (if (> (cdr a) (cdr b)) a b))
                               matches))
              (axis (cdr (car best)))
-             (count (cdr best)))
+             (count (round (cdr best))))
         (list :axis axis
               :count count
               :total total
-              :confidence (if (> total 0) (/ (float count) total) 0.0))))))
+              :confidence (if (> total 0.0) (/ (cdr best) total) 0.0))))))
 
 (defun gptel-auto-workflow--rebuild-holographic-memory ()
   "Rebuild holographic memory from all historical kept experiments.
@@ -1582,6 +2087,49 @@ Category overrides (score = 9999.0) are always ACCEPT regardless of rate."
                    (+1 "ACCEPT"))
                  (if has-override " [override]" ""))))
     (nreverse result)))
+
+;; ─── Per-Axis Backend Preference Boost ───
+
+(defun gptel-auto-workflow--axis-preference-boost (backend &optional axis-rates target-axis)
+  "Return per-axis boost for BACKEND based on current target's KIBC axis.
+Reads `gptel-auto-workflow--current-target', holographic consensus,
+and per-axis keep-rates. When AXIS-RATES and TARGET-AXIS are supplied,
+skips recomputation (caller pre-computes for efficiency).
+Returns 0.0 when no consensus data exists.
+Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
+  (let* ((target (and (boundp 'gptel-auto-workflow--current-target)
+                      gptel-auto-workflow--current-target))
+         (axis-rates (or axis-rates
+                         (when (fboundp 'gptel-auto-workflow--backend-per-axis-keep-rates)
+                           (condition-case nil
+                               (gptel-auto-workflow--backend-per-axis-keep-rates)
+                             (error nil)))))
+         (consensus (or target-axis
+                        (when (and target
+                                   (fboundp 'gptel-auto-workflow--get-holographic-consensus))
+                          (condition-case nil
+                              (gptel-auto-workflow--get-holographic-consensus target)
+                            (error nil)))))
+         (axis (plist-get consensus :axis))
+         (confidence (plist-get consensus :confidence))
+         (count (plist-get consensus :count)))
+    (if (and axis axis-rates (> confidence 0.5) (> count 1))
+        (let* ((axis-match (cl-find-if
+                            (lambda (a)
+                              (and (string= (cdar a) axis)
+                                   (string= (caar a) backend)))
+                            axis-rates))
+               (axis-rate (and axis-match (cdr axis-match)))
+               (avg-rate (let ((sum 0.0) (n 0))
+                           (dolist (a axis-rates)
+                             (when (string= (cdar a) axis)
+                               (cl-incf sum (cdr a))
+                               (cl-incf n)))
+                           (if (> n 0) (/ sum n) 0.0))))
+          (if (and axis-rate (> axis-rate avg-rate 0.0))
+              (* (- axis-rate avg-rate) confidence 0.15)
+            0.0))
+      0.0)))
 
 ;; ─── Verbum Experiment Tracker ───
 
