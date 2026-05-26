@@ -2034,30 +2034,31 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (condition-case err
             (let ((result (gptel-auto-workflow--check-all-targets-consistency)))
               (put 'gptel-auto-workflow--check-all-targets-consistency :last-run (float-time))
-              (when (> (plist-get result :inconsistent) 0)
-                (message "[verbum] ⚠ %d inconsistent targets detected"
-                         (plist-get result :inconsistent))
-                ;; Phase 9: detailed low-agreement alerts
-                 (let ((low-agreement nil))
-                   (dolist (target-report (plist-get result :targets))
-                     (when (< (plist-get target-report :ratio) 0.5)
-                       (push target-report low-agreement)))
-                   (when low-agreement
-                     ;; Populate conflicted-targets for gatekeeping
+              (let ((inconsistent (or (plist-get result :inconsistent) 0)))
+                (when (> inconsistent 0)
+                  (message "[verbum] ⚠ %d inconsistent targets detected" inconsistent)
+                  ;; Phase 9: detailed low-agreement alerts
+                  (let ((low-agreement nil))
+                    (dolist (target-report (plist-get result :targets))
+                      (let ((ratio (or (plist-get target-report :ratio) 0.0)))
+                        (when (< ratio 0.5)
+                          (push target-report low-agreement))))
+                    (when low-agreement
+                      ;; Populate conflicted-targets for gatekeeping
                       (when (boundp 'gptel-auto-workflow--conflicted-targets)
                         (setq gptel-auto-workflow--conflicted-targets
                               (mapcar (lambda (r) (cons (plist-get r :target)
-                                                        (plist-get r :ratio)))
+                                                        (or (plist-get r :ratio) 0.0)))
                                       low-agreement)))
                       ;; Generate human review file for conflicted targets
                       (when (fboundp 'gptel-auto-workflow--generate-conflicted-review)
                         (gptel-auto-workflow--generate-conflicted-review low-agreement))
                       (message "[verbum] ⚠ LOW AGREEMENT (%d targets < 50%%):" (length low-agreement))
-                    (dolist (report (seq-take low-agreement 5))
-                       (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
-                                (plist-get report :target)
-                                (* 100 (plist-get report :ratio))
-                                (length (plist-get report :conflicts))))))))
+                      (dolist (report (seq-take low-agreement 5))
+                        (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
+                                 (plist-get report :target)
+                                 (* 100 (or (plist-get report :ratio) 0.0))
+                                 (length (plist-get report :conflicts))))))))))
           (error (message "[verbum] ERROR: consistency check failed — %s" (error-message-string err)))))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
@@ -2239,7 +2240,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (list :metric "evolution-cycle" :value rate
                   :delta (- rate (or gptel-auto-workflow--champion-keep-rate 0))
                   :status (if (> rate 0) "keep" "skip")))))
-    (ignore))))
+    (ignore)))
 
  ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
 
@@ -4313,9 +4314,11 @@ Returns plist with :trends (deduplicated issue patterns with counts),
                 (when (file-readable-p prev-file)
                   (with-temp-buffer
                     (insert-file-contents prev-file)
-                    (let ((prev-count (string-to-number (or (car (split-string (buffer-string) ":")) "0"))))
-                      (when (> (car (gethash name strategy-issues)) prev-count)
-                        (push (list name prev-count (car (gethash name strategy-issues)))
+                    (let* ((prev-count (string-to-number (or (car (split-string (buffer-string) ":")) "0")))
+                           (current (gethash name strategy-issues))
+                           (current-count (if (consp current) (car current) 0)))
+                      (when (> current-count prev-count)
+                        (push (list name prev-count current-count)
                               regressions)))))))
           (ignore))))
     (list :trends (sort (mapcar (lambda (k) (cons k (gethash k pattern-counts)))
