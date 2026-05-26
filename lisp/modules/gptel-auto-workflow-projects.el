@@ -179,13 +179,13 @@ Each worktree gets its own isolated buffer for subagent overlays."
           (with-current-buffer existing
             (setq-local default-directory root)
             ;; Ensure dir-locals are propagated even for reused buffers
-            (dolist (sym '(gptel-auto-workflow-targets
-                           gptel-auto-experiment-max-per-target
-                           gptel-auto-experiment-time-budget
-                           gptel-auto-experiment-no-improvement-threshold
-                           gptel-model))
-              (when (local-variable-p sym)
-                (set sym (buffer-local-value sym (current-buffer))))))
+                          (dolist (sym '(gptel-auto-workflow-targets
+                                          gptel-auto-experiment-max-per-target
+                                          gptel-auto-experiment-time-budget
+                                          gptel-auto-experiment-no-improvement-threshold
+                                          gptel-model))
+                             (when (local-variable-p sym)
+                               (setq-default sym (buffer-local-value sym (current-buffer))))))
           (puthash root existing gptel-auto-workflow--worktree-buffers)
           existing)
       ;; Create new buffer (or recreate if previous was killed)
@@ -213,14 +213,14 @@ Each worktree gets its own isolated buffer for subagent overlays."
           (hack-dir-local-variables-non-file-buffer)
           ;; Propagate dir-local workflow config to global scope
           ;; so subagent buffers inherit project settings
-          (dolist (sym '(gptel-auto-workflow-targets
-                         gptel-auto-experiment-max-per-target
-                         gptel-auto-experiment-time-budget
-                         gptel-auto-experiment-no-improvement-threshold
-                         gptel-model))
-            (when (local-variable-p sym)
-              (set sym (buffer-local-value sym (current-buffer)))))
-          ;; Create initial FSM for agent tasks
+           (dolist (sym '(gptel-auto-workflow-targets
+                          gptel-auto-experiment-max-per-target
+                          gptel-auto-experiment-time-budget
+                          gptel-auto-experiment-no-improvement-threshold
+                          gptel-model))
+             (when (local-variable-p sym)
+               (setq-default sym (buffer-local-value sym (current-buffer)))))
+           ;; Create initial FSM for agent tasks
           ;; This prevents "Wrong type argument: gptel-fsm, nil" error
           ;; when gptel-agent--task tries to access gptel--fsm-last
           (when (fboundp 'gptel-make-fsm)
