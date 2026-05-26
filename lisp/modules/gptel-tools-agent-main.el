@@ -379,6 +379,7 @@ Usage:
           (let ((buf (get-buffer-create " *dir-locals-cron*")))
             (with-current-buffer buf
               (setq-local default-directory (gptel-auto-workflow--default-dir))
+              (setq-local enable-local-variables t)
               (hack-dir-local-variables-non-file-buffer)
               (when (local-variable-p 'gptel-auto-workflow-targets)
                 (setq gptel-auto-workflow-targets
@@ -477,17 +478,20 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     ;; NOTE: defcustom in gptel-tools-agent-subagent.el resets the global
     ;; gptel-auto-workflow-targets to '() when loaded.  Re-read dir-locals
     ;; after module loading so the 5 configured targets win over discover.
+    ;; Use setq-default because hack-dir-local-variables-non-file-buffer
+    ;; creates a buffer-local binding that shadows the global.
     (when (and (boundp 'gptel-auto-workflow-targets)
                (or (null gptel-auto-workflow-targets)
                    (equal gptel-auto-workflow-targets '())))
       (condition-case nil
           (with-temp-buffer
             (setq-local default-directory root)
+            (setq-local enable-local-variables t)
             (hack-dir-local-variables-non-file-buffer)
             (when (local-variable-p 'gptel-auto-workflow-targets)
-              (setq gptel-auto-workflow-targets
-                    (buffer-local-value 'gptel-auto-workflow-targets
-                                        (current-buffer)))))
+              (setq-default gptel-auto-workflow-targets
+                            (buffer-local-value 'gptel-auto-workflow-targets
+                                                (current-buffer)))))
         (error nil))
       (when (and (boundp 'gptel-auto-workflow-targets)
                  (or (null gptel-auto-workflow-targets)
