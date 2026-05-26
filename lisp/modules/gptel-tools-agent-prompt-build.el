@@ -1912,13 +1912,18 @@ chain so that subagent calls do not fall through to the mode-hook default
               (let ((pick (gptel-auto-workflow--first-available-provider-candidate
                            candidates excluded)))
                 (when pick
-                  (let ((task-model (and (fboundp 'gptel-auto-workflow--best-model-for-task)
-                                         (gptel-auto-workflow--best-model-for-task
-                                          agent-type (car pick)))))
+                  (let* ((model-str (or (and (fboundp 'gptel-auto-workflow--best-model-for-task)
+                                           (gptel-auto-workflow--best-model-for-task
+                                            agent-type (car pick)))
+                                       (cdr pick)))
+                         (backend-obj (gptel-auto-workflow--backend-object (car pick)))
+                         (model-sym (and backend-obj model-str
+                                         (gptel-auto-workflow--backend-model-symbol
+                                          backend-obj model-str))))
                     (message "[subagent] %s base-preset auto-selected %s/%s"
-                             agent-type (car pick) (or task-model (cdr pick)))
+                             agent-type (car pick) model-str)
                     (setq merged (plist-put merged :backend (car pick)))
-                    (setq merged (plist-put merged :model (or task-model (cdr pick)))))))
+                    (setq merged (plist-put merged :model (or model-sym model-str))))))
             ;; Headless active but no candidates: fall back to
             ;; gptel-backend so the call goes through.
             (when (and (null (plist-get merged :backend))
