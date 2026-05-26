@@ -1945,6 +1945,11 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Step C.7: Semantic relationship discovery (git-embed ontology enrichment)
   (when (fboundp 'gptel-auto-workflow--evolution-persist-semantic-relationships)
     (gptel-auto-workflow--evolution-persist-semantic-relationships))
+  ;; Step C.7b: Nucleus persona auto-tuning from measured impact
+  (when (fboundp 'gptel-auto-workflow--auto-tune-personas)
+    (condition-case err
+        (gptel-auto-workflow--auto-tune-personas)
+      (error (message "[evolution] Step persona-auto-tune: %s" err))))
   ;; Step C.8: Allium issue trend analysis + regression detection
   (let ((trends-report (gptel-auto-workflow--allium-trends-report)))
     (when (> (length trends-report) 30)

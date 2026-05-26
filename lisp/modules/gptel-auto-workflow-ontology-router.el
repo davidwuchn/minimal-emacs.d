@@ -1442,14 +1442,51 @@ or nil if no drift detected."
               :consecutive-failures 1))
        (t nil)))))
 
+;; ─── Persona Auto-Tuning from Measured Impact ───
+
+(defvar gptel-auto-workflow--persona-category-overrides nil
+  "Alist of (category . :override) mapping categories to use default persona.
+Populated by `gptel-auto-workflow--auto-tune-personas' when a category's
+per-persona keep-rate falls below the overall average.")
+
+(defun gptel-auto-workflow--auto-tune-personas ()
+  "Auto-tune persona selection based on measured impact data.
+When a category's persona-aware keep-rate is below the global average,
+switch it to use the default persona for the next cycle.
+Returns list of (category . old-rate . new-target) for changed categories."
+  (let* ((impact (condition-case nil
+                     (gptel-auto-workflow--nucleus-persona-impact)
+                   (error nil)))
+         (global-rate (plist-get impact :persona-keep-rate))
+         (per-cat (plist-get impact :per-category))
+         (changes nil))
+    (when (and global-rate per-cat)
+      (setq gptel-auto-workflow--persona-category-overrides nil)
+      (dolist (cat-entry per-cat)
+        (let* ((category (plist-get cat-entry :category))
+               (cat-rate (plist-get cat-entry :keep-rate)))
+          (when (and cat-rate (< cat-rate global-rate))
+            (push (cons category :default) gptel-auto-workflow--persona-category-overrides)
+            (push (list category cat-rate global-rate) changes))))
+      (when changes
+        (message "[persona-auto] Swapped %d categories to default persona (below global %.0f%%)"
+                 (length changes) (* 100 global-rate))))
+    changes))
+
 ;; ─── Experiment Persona by Target Category ───
 
 (defun gptel-auto-workflow--experiment-nucleus-persona (target)
   "Return a nucleus attention-shaping preamble for TARGET's category.
 Maps target category → nucleus symbol set + writing persona.
-Categories from WRITING.md + ADAPTIVE.md patterns."
+Categories from WRITING.md + ADAPTIVE.md patterns.
+Auto-tuned: underperforming categories switch to default via `auto-tune-personas'."
   (let* ((category (when (fboundp 'gptel-auto-workflow--categorize-target)
-                     (gptel-auto-workflow--categorize-target target))))
+                     (gptel-auto-workflow--categorize-target target)))
+         ;; Check for auto-tuned overrides
+         (override (assoc category gptel-auto-workflow--persona-category-overrides)))
+    (when override
+      (message "[persona] Category %s uses default (auto-tuned: below global keep-rate)" category)
+      (setq category nil))  ; nil → hits the default (_) clause
     (pcase category
       (:programming
        "λ engage(nucleus).
