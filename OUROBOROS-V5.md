@@ -6,6 +6,21 @@ Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gp
 
 ---
 
+## For Market & Growth Teams
+
+**Ouroboros V5** is a **self-driving growth engine** for product-market fit. Two loops work together:
+
+| Loop | Like | Job |
+|------|------|-----|
+| **market-sense** 🧭 | A tireless competitive intelligence analyst | Scans the landscape, finds what's working, flags what's changing. Every cycle it hunts 17+ sources for novel techniques, competitive moves, and market signals — then distills them into actionable experiments. |
+| **growth-loop** 🔄 | An automated experimentation platform | Takes those signals and runs them as real, tested experiments on your product — isolated, verified, measured. Keeps what improves PMF, discards what doesn't, and learns from every result. |
+
+No dashboards to watch. No manual pipeline to manage. The system closes its own feedback loop: **market-sense feeds growth-loop; growth-loop results sharpen market-sense.** Each cycle, the system gets smarter about what to sense and what to build.
+
+**You don't operate the loops. You define the direction.** The loops self-steer toward PMF — sensing the market, testing hypotheses, keeping what works, and feeding every outcome back into the next iteration.
+
+---
+
 ## The Principle
 
 **Ouroboros.** The snake eating its tail.
