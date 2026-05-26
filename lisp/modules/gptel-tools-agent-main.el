@@ -838,10 +838,24 @@ into staging or main."
                            (setq gptel-auto-workflow--stats
                                  (plist-put gptel-auto-workflow--stats :kept kept-count))
                            (gptel-auto-workflow--persist-status)
-                           (if gptel-auto-experiment--quota-exhausted
-                               (progn
-                                 (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
-                                 (finish-run))
+                            (if gptel-auto-experiment--quota-exhausted
+                                (progn
+                                  (message "[auto-workflow] Provider quota exhausted for %s; continuing with remaining targets"
+                                           target)
+                                  (setq gptel-auto-experiment--quota-exhausted nil)
+                                  (gptel-auto-workflow--clear-rate-limited-backends)
+                                  (if (buffer-live-p run-buffer)
+                                      (with-current-buffer run-buffer
+                                        (let ((default-directory proj-root)
+                                              (gptel-auto-workflow--project-root-override proj-root)
+                                              (gptel-auto-workflow--current-project proj-root)
+                                              (gptel-auto-workflow--run-project-root proj-root))
+                                          (run-next (cdr remaining-targets))))
+                                    (let ((default-directory proj-root)
+                                          (gptel-auto-workflow--project-root-override proj-root)
+                                          (gptel-auto-workflow--current-project proj-root)
+                                          (gptel-auto-workflow--run-project-root proj-root))
+                                      (run-next (cdr remaining-targets)))))
                              (if (buffer-live-p run-buffer)
                                  (with-current-buffer run-buffer
                                    (let ((default-directory proj-root)

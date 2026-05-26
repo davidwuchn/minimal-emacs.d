@@ -2140,9 +2140,19 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
                          (final-targets (if (and filtered-targets (listp filtered-targets))
                                             filtered-targets
                                           targets))
+                         ;; Pad with safe-targets when analyst returns fewer than max
+                         (padded (if (and safe-targets
+                                          (< (length final-targets) gptel-auto-workflow-max-targets-per-run))
+                                     (append final-targets
+                                             (seq-take (cl-remove-if (lambda (t2)
+                                                                       (member t2 final-targets))
+                                                                     safe-targets)
+                                                       (- gptel-auto-workflow-max-targets-per-run
+                                                          (length final-targets))))
+                                   final-targets))
                          (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
-                                               (gptel-auto-workflow--enforce-category-budget final-targets)
-                                             final-targets))
+                                                (gptel-auto-workflow--enforce-category-budget padded)
+                                              padded))
                          (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
                          (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
                    (unless (or (null filtered-targets) (listp filtered-targets))
