@@ -3,58 +3,52 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 2.1/10
-allium-issues: 4
+insight-quality: 1.9/10
+allium-issues: 0
 allium-severity: 0.00
-allium-status: ok
+allium-status: coherent
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 1142 experiments (21% keep rate).*
+*Consolidated from 1360 experiments (19% keep rate).*
 
-**Performance:** 236 kept / 588 discarded / 36 failed (EXTRACTED — from TSV)
+**Performance:** 254 kept / 692 discarded / 101 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/strategic-daemon-functions.el` (5 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-analysis.el` (1 kept / 2 discarded)
-- `lisp/modules/gptel-ext-abort.el` (3 kept / 3 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-mementum.el` (1 kept / 1 discarded)
-- `lisp/modules/gptel-benchmark-principles.el` (2 kept / 3 discarded / 1 failed)
-- `lisp/modules/standalone-research.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-tools-agent-experiment-loop.el` (5 kept / 6 discarded)
-- `lisp/modules/gptel-auto-workflow-research-benchmark.el` (2 kept / 2 discarded)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (15 kept / 35 discarded / 3 failed)
-- `lisp/modules/gptel-tools-memory.el` (2 kept / 6 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 3 discarded)
+- `lisp/modules/gptel-auto-workflow-projects.el` (12 kept / 22 discarded / 2 failed)
+- `lisp/modules/gptel-tools-agent-runtime.el` (2 kept / 4 discarded / 2 failed)
+- `lisp/modules/gptel-benchmark-core.el` (22 kept / 32 discarded / 7 failed)
+- `lisp/modules/gptel-ext-tool-permits.el` (3 kept / 2 discarded)
+- `lisp/modules/gptel-benchmark-comparator.el` (3 kept / 14 discarded / 1 failed)
+- `lisp/modules/gptel-tools-memory.el` (12 kept / 20 discarded)
+- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
+- `lisp/modules/gptel-benchmark-principles.el` (5 kept / 4 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-staging-baseline.el` (2 kept / 5 discarded)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-auto-workflow--autotts-root, gptel-auto-workflow--autotts-file, gptel-auto-workflow--load-evolved-controller-config, gptel-auto-workflow--branch-pool-init, gptel-auto-workflow--branch-pool-active-count, gptel-auto-workflow--branch-pool-add, gptel-auto-workflow--branch-pool-remove, gptel-auto-workflow--branch-pool-get-best, gptel-auto-workflow--branch-pool-get-deviant, gptel-auto-workflow--branch-pool-stagnation-p, gptel-auto-workflow--branch-pool-widen, gptel-auto-workflow--research-beta-schedule, gptel-auto-workflow--update-research-ema, gptel-auto-workflow--research-ema-delta, gptel-auto-workflow--record-research-trace, gptel-auto-workflow--reset-research-ema, gptel-auto-workflow--load-statistical-model, gptel-auto-workflow--load-researcher-feedback, gptel-auto-workflow--load-skill-topic-priors, gptel-auto-workflow--load-autotts-controller
-defvars: gptel-auto-workflow--research-accumulated-findings), gptel-auto-workflow--research-total-tokens), gptel-auto-workflow--research-current-turn), gptel-auto-workflow--research-prompt), gptel-auto-workflow--research-controller-config), gptel-auto-workflow--current-research-context), gptel-auto-workflow--research-beta, gptel-auto-workflow--research-ema-conf, gptel-auto-workflow--research-ema-history, gptel-auto-workflow--research-ema-alpha, gptel-auto-workflow--research-ema-window, gptel-auto-workflow--controller-decision-history, gptel-auto-workflow--controller-doom-loop-threshold, gptel-auto-workflow--research-trace-log, gptel-auto-workflow--branch-pool, gptel-auto-workflow--branch-pool-max, gptel-auto-workflow--branch-id-counter, gptel-auto-workflow--source-effectiveness-table, gptel-auto-workflow--research-params-file
-requires: cl-lib, json, subr-x
-provides: strategic-daemon-functions
-declares: gptel-sandbox--eval-expr, gptel-auto-workflow--normalize-response, gptel-auto-workflow--research-has-external-content-p, gptel-auto-workflow--research-error-p, gptel-auto-workflow--local-research-patterns, gptel-auto-workflow--estimate-confidence, gptel-auto-workflow--log-research-step, gptel-auto-workflow--format-research-strategy-prompt, gptel-auto-workflow--save-research-trace, gptel-auto-workflow--digest-research-findings, gptel-auto-workflow--statistical-prob-kept, gptel-benchmark-call-subagent
-errors: error, error, error, signal
-handlers: err, err, err, nil, err, err
+defuns: gptel-auto-workflow--knowledge-cache-get, gptel-auto-workflow--knowledge-cache-set, gptel-auto-workflow--knowledge-cache-invalidate, gptel-auto-workflow--knowledge-cache-stats, gptel-auto-workflow--load-token-efficiency-data, gptel-auto-workflow--adapt-prompt-compression, gptel-auto-experiment--prompt-structure-score, gptel-auto-experiment--kibcm-axis, gptel-auto-experiment--forge-fixed-point, gptel-auto-experiment--compile-score, gptel-auto-experiment--decompile-score, gptel-auto-experiment--nucleus-compiler-prompt, gptel-auto-experiment--forge-lambda-fixed-point, gptel-auto-experiment--edn-richness-score, gptel-auto-experiment--count-edn-elements, gptel-auto-experiment--allium-compiler-prompt, gptel-auto-experiment--allium-distill, gptel-auto-experiment--allium-check, gptel-auto-experiment--allium-decompile, gptel-auto-experiment--allium-issues-count
+defvars: gptel-auto-workflow--skills), gptel-auto-experiment-large-target-byte-threshold), gptel-auto-workflow--last-prompt-sections), gptel-auto-workflow--current-research-context), gptel-auto-experiment-time-budget), gptel-auto-workflow-use-staging), gptel-auto-workflow--running), gptel-auto-workflow--stats), gptel-auto-experiment-validation-retry-active-grace), gptel-auto-workflow--legacy-validation-retry-active-grace), gptel-auto-workflow--current-validation-retry-active-grace), my/gptel-subagent-stream), gptel-auto-workflow--knowledge-cache, gptel-auto-workflow--knowledge-cache-max-age, gptel-auto-workflow--topic-knowledge-max-chars, gptel-auto-workflow--ab-test-sections, gptel-auto-workflow--ab-test-omit-rate, gptel-auto-workflow--ab-test-min-samples, gptel-auto-workflow--selected-skill-variant, gptel-auto-workflow--current-experiment-axis
+requires: cl-lib, seq, subr-x
+provides: gptel-tools-agent-prompt-build
+declares: gptel-agent-read-file, gptel-auto-workflow--valid-strategy-name-p, gptel-auto-workflow-load-research-findings, gptel-benchmark--detect-task-type, my/gptel-get-model-metadata, gptel-auto-workflow--current-run-id, gptel-auto-workflow--ensure-results-file, gptel-auto-workflow--make-idempotent-callback, gptel-auto-workflow--non-empty-string-p, gptel-auto-workflow--plist-get, gptel-auto-workflow--results-file-path, gptel-auto-workflow--worktree-base-root, gptel-auto-experiment--eight-keys-scores, gptel-auto-workflow--project-root, gptel-auto-workflow--persist-status, my/gptel--sanitize-for-logging, gptel-auto-workflow--extract-mutation-templates, gptel-auto-workflow--format-weakest-keys, gptel-auto-workflow-skill-suggest-hypothesis, gptel-auto-experiment--inspection-thrash-result-p
+errors: Error, error, error, Error, error, error, error, error, error, error, error, Error, signal, signal, error, error
+handlers: nil, nil, err, err, err, err, err, err, nil
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-benchmark-principles.el` (2 kept / 3 discarded / 1 failed)
-- `lisp/modules/gptel-ext-core.el` (1 kept / 10 discarded / 1 failed)
-- `lisp/modules/gptel-tools-memory.el` (2 kept / 6 discarded / 1 failed)
-- `lisp/modules/gptel-ext-abort.el` (3 kept / 3 discarded / 1 failed)
-- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 7 discarded / 1 failed)
-
-## Allium Behavioral Coherence
-
-*4 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
-
-
+- `lisp/modules/gptel-auto-workflow-evolution.el` (1 failed)
+- `lisp/modules/gptel-tools-agent-runtime.el` (2 kept / 4 discarded / 2 failed)
+- `lisp/modules/gptel-benchmark-core.el` (22 kept / 32 discarded / 7 failed)
+- `lisp/modules/gptel-tools-agent-subagent.el` (1 failed)
+- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
