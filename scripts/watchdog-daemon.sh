@@ -37,33 +37,30 @@ trap 'rm -f "$LOCK_FILE"' EXIT
 # Clean all candidate socket paths for this server/UID.
 # Stale sockets from crashed daemons block emacsclient from connecting
 # because Emacs skips socket directories that already exist.
+# On macOS, lsof -t doesn't work for Unix domain sockets, so we clean
+# sockets only when we know the daemon is dead (after killing).
 clean_all_sockets() {
     local name="$1" uid="$2"
     for base in "${XDG_RUNTIME_DIR:-}" "${TMPDIR:-}" /tmp; do
         [ -n "$base" ] || continue
         local socket="$base/emacs$uid/$name"
         if [ -e "$socket" ] || [ -L "$socket" ]; then
-            if ! lsof -t "$socket" >/dev/null 2>&1; then
-                rm -f "$socket" 2>/dev/null || true
-                echo "[$(date '+%H:%M:%S')] Cleaned stale socket: $socket" >> "$LOG"
-            fi
+            rm -f "$socket" 2>/dev/null || true
+            echo "[$(date '+%H:%M:%S')] Cleaned socket: $socket" >> "$LOG"
         fi
     done
 }
 
-# Resolve the live socket path (same logic as emacsclient internal resolution).
-# Returns the first socket that exists AND has a listener.
-resolve_live_socket() {
-    local name="$1" uid="$2"
-    for base in "${XDG_RUNTIME_DIR:-}" "${TMPDIR:-}" /tmp; do
-        [ -n "$base" ] || continue
-        local socket="$base/emacs$uid/$name"
-        if [ -S "$socket" ] && lsof -t "$socket" >/dev/null 2>&1; then
-            echo "$socket"
-            return 0
-        fi
-    done
-    return 1
+# Check if daemon is reachable via emacsclient (the most reliable method).
+# Returns 0 if responsive, 1 otherwise.
+daemon_responds() {
+    timeout 5 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1
+}
+
+# Check if a workflow is currently active on the daemon.
+workflow_active() {
+    timeout 5 emacsclient -s "$SERVER_NAME" --eval \
+        '(and (boundp (quote gptel-auto-workflow--running)) gptel-auto-workflow--running)' >/dev/null 2>&1
 }
 
 mkdir -p "$(dirname "$LOG")"
@@ -78,13 +75,36 @@ if [ -f "$LAST_RESTART_FILE" ]; then
     fi
 fi
 
-# Try to reach the daemon via emacsclient first (uses its own socket resolution)
-if timeout 5 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
-    # Daemon is responsive. Check if workflow is active for logging only.
-    if timeout 5 emacsclient -s "$SERVER_NAME" --eval \
-        '(and (boundp (quote gptel-auto-workflow--running)) gptel-auto-workflow--running)' >/dev/null 2>&1; then
-        # Workflow active — daemon is busy, everything is fine
-        exit 0
+# Try to reach the daemon via emacsclient. This is the canonical check —
+# it matches what users and other scripts use, and handles socket resolution
+# (TMPDIR vs /tmp) automatically.
+if daemon_responds; then
+    # Daemon is alive and responsive.
+    exit 0
+fi
+
+# Daemon not responding. Check if a workflow is active — if so,
+# give it a generous grace period (API calls can take minutes).
+if workflow_active; then
+    echo "[$(date '+%H:%M:%S')] Workflow active — using 600s grace period" >> "$LOG"
+    if timeout 600 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
+        exit 0  # Daemon came back
+    fi
+fi
+
+# Daemon is truly gone. Kill all processes, clean sockets, restart.
+echo "[$(date '+%H:%M:%S')] Daemon unresponsive — restarting" >> "$LOG"
+pgrep -f "emacs.*daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+pgrep -f "emacs.*--bg-daemon.*${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+pgrep -f "emacs.*--daemon=${SERVER_NAME}" | xargs kill -9 2>/dev/null || true
+sleep 3
+clean_all_sockets "$SERVER_NAME" "$MY_UID"
+echo "$(date +%s)" > "$LAST_RESTART_FILE"
+MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+    bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
+    "$DIR" "$SERVER_NAME" &
+echo "[$(date '+%H:%M:%S')] Daemon restarted" >> "$LOG"
+exit 0
     fi
     # Idle daemon, responsive — all good
     exit 0
