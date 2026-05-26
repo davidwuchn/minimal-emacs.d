@@ -3490,7 +3490,7 @@ Source repos are extracted from prefetched content patterns."
             (when kept (setcdr entry (1+ (cdr entry))))
             (puthash strategy entry by-source)))))
     (maphash (lambda (source counts)
-               (when (> (car counts) 2)
+               (when (> (car counts) 0)
                  (push (cons source (/ (float (cdr counts)) (car counts))) stats)))
              by-source)
     (sort stats (lambda (a b) (> (cdr a) (cdr b))))))
