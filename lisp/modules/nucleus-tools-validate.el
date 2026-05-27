@@ -16,16 +16,19 @@
 
 (defun nucleus--get-cached-validation ()
   "Get cached validation results if fresh, else nil."
-  (when (and nucleus--validation-cache
-             (listp nucleus--validation-cache)
-             (= 2 (length nucleus--validation-cache)))
-    (pcase-let ((`(,timestamp . ,results) nucleus--validation-cache))
-      (when (numberp timestamp)
-        (let ((age (- (float-time) timestamp)))
-          (when (and (numberp age)
-                     (< age nucleus--validation-cache-ttl)
-                     (proper-list-p results))
-            results))))))
+  (when (consp nucleus--validation-cache)
+    (let ((cell nucleus--validation-cache))
+      ;; Guard against circular or dotted improper lists
+      (when (and (not (cddr cell))  ; Ensure exactly 2 elements (no cddr)
+                 (numberp (car cell)))
+        (let ((timestamp (car cell))
+              (results (cdr cell)))
+          (when (numberp timestamp)
+            (let ((age (- (float-time) timestamp)))
+              (when (and (numberp age)
+                         (< age nucleus--validation-cache-ttl)
+                         (proper-list-p results))
+                results))))))))
 
 (defun nucleus--extract-prompt-signature (tool-name prompt-text)
   "Extract lambda signature for TOOL-NAME from PROMPT-TEXT.
