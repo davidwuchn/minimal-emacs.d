@@ -1,8 +1,10 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 0 experiments across 0 models
+> Auto-generated from 2106 experiments across 2 models
 
 ## Model Rankings (by keep-rate)
 
+- **MiniMax/minimax-m2.7-highspeed**: 19.4%
+- **ChatGPT/unknown**: 13.3%
 
 
-*Generated: 2026-05-27 17:13*
+*Generated: 2026-05-27 05:40*
