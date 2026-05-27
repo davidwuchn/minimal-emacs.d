@@ -383,29 +383,23 @@ Handles both symbol :type 'text and string :type \"text\"."
 Prevents the (void-function nil) flood when FSM info callback is missing.
 Also guards against (gptel-request ... :callback nil) where the key is
 present but the value is nil — still triggers void-function nil.
-Also wraps custom callbacks to strip (reasoning . text) cons cells
-that crash non-pcase-aware callbacks.  gptel's own callbacks handle
-reasoning themselves, so they are NOT wrapped."
+Also wraps callbacks to strip (reasoning . text) cons cells
+that crash non-pcase-aware callbacks."
   (let* ((keys (cl-loop for (k v) on args by #'cddr collect k))
          (has-callback (memq :callback keys))
          (callback-val (and has-callback (plist-get args :callback)))
          (safe-cb (if (and has-callback (functionp callback-val))
                       callback-val
                     (or (and (functionp callback-val) callback-val) #'ignore)))
-         ;; gptel's own callbacks handle reasoning via pcase.  Only wrap
-         ;; custom callbacks that don't know about the reasoning protocol.
-         (gptel-own-cb-p (memq safe-cb '(gptel--insert-response
-                                         gptel-curl--stream-insert-response
-                                         gptel-curl--stream-cleanup)))
          (wrapped-cb
-          (if gptel-own-cb-p
-              safe-cb
-            (lambda (resp info)
-              (if (and (consp resp) (eq (car resp) 'reasoning))
-                  ;; Store reasoning in info for diagnostic access
-                  (when (cdr resp)
-                    (plist-put info :reasoning (cdr resp)))
-                (funcall safe-cb resp info))))))
+          (lambda (resp info)
+            (if (and (consp resp) (eq (car resp) 'reasoning))
+                ;; Store reasoning in info for diagnostic access, drop cons
+                ;; from callback chain; only the plain-text response reaches
+                ;; the original callback.
+                (when (cdr resp)
+                  (plist-put info :reasoning (cdr resp)))
+              (funcall safe-cb resp info)))))
     (apply orig-fn prompt
            :callback wrapped-cb
            (cl-loop for (k v) on args by #'cddr
