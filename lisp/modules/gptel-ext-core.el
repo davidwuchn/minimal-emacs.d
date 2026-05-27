@@ -382,18 +382,35 @@ Handles both symbol :type 'text and string :type \"text\"."
   "Ensure `gptel-request' always has a function callback.
 Prevents the (void-function nil) flood when FSM info callback is missing.
 Also guards against (gptel-request ... :callback nil) where the key is
-present but the value is nil — still triggers void-function nil."
+present but the value is nil — still triggers void-function nil.
+Also wraps custom callbacks to strip (reasoning . text) cons cells
+that crash non-pcase-aware callbacks.  gptel's own callbacks handle
+reasoning themselves, so they are NOT wrapped."
   (let* ((keys (cl-loop for (k v) on args by #'cddr collect k))
          (has-callback (memq :callback keys))
-         (callback-val (and has-callback (plist-get args :callback))))
-    (if (and has-callback (functionp callback-val))
-        (apply orig-fn prompt args)
-      (apply orig-fn prompt :callback (or (and (functionp callback-val) callback-val)
-                                          #'ignore)
-             ;; Pass remaining args minus any stale :callback key
-             (cl-loop for (k v) on args by #'cddr
-                      unless (eq k :callback)
-                      append (list k v))))))
+         (callback-val (and has-callback (plist-get args :callback)))
+         (safe-cb (if (and has-callback (functionp callback-val))
+                      callback-val
+                    (or (and (functionp callback-val) callback-val) #'ignore)))
+         ;; gptel's own callbacks handle reasoning via pcase.  Only wrap
+         ;; custom callbacks that don't know about the reasoning protocol.
+         (gptel-own-cb-p (memq safe-cb '(gptel--insert-response
+                                         gptel-curl--stream-insert-response
+                                         gptel-curl--stream-cleanup)))
+         (wrapped-cb
+          (if gptel-own-cb-p
+              safe-cb
+            (lambda (resp info)
+              (if (and (consp resp) (eq (car resp) 'reasoning))
+                  ;; Store reasoning in info for diagnostic access
+                  (when (cdr resp)
+                    (plist-put info :reasoning (cdr resp)))
+                (funcall safe-cb resp info))))))
+    (apply orig-fn prompt
+           :callback wrapped-cb
+           (cl-loop for (k v) on args by #'cddr
+                    unless (eq k :callback)
+                    append (list k v)))))
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-request :around #'my/gptel--gptel-request-callback-guard))
 
