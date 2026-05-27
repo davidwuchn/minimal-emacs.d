@@ -1898,13 +1898,39 @@ Call at the start of a new workflow run."
   "Return fallback provider candidates for AGENT-TYPE after rate limiting.
 When ontology health data is available, ranks backends by health × keep-rate
 using `gptel-auto-workflow--ranked-subagent-backends'.
-Returns the static fallback chain as a last resort."
+Returns the static fallback chain as a last resort.
+
+For executors, the static fallback chain takes priority because the dynamic
+router aggregates data across ALL task types — a backend that's fast for
+analysis/compare may still be too slow for code generation (DashScope:
+0% keep-rate on executor, consistently times out at 1080s)."
   (cond
    ((not (stringp agent-type)) nil)
    ((string= agent-type "executor")
-    (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
-             (gptel-auto-workflow--ranked-subagent-backends agent-type))
-        gptel-auto-workflow-executor-rate-limit-fallbacks))
+    ;; Executor: trust the hand-tuned static fallback chain as primary.
+    ;; The onto-router's aggregate ranking puts DashScope first (fast for
+    ;; non-generative tasks) but DashScope has 0% keep-rate on executor.
+    ;; DeepSeek has 25% keep-rate on :agentic tasks — it should be first.
+    (or (and gptel-auto-workflow-executor-rate-limit-fallbacks
+             (let ((ranked (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
+                                (gptel-auto-workflow--ranked-subagent-backends agent-type))))
+               ;; If the ranked list exists, reorder the static fallback so
+               ;; high-keep-rate backends from the ranked list float to the top
+               ;; within the static order, but the static order still controls.
+               (if ranked
+                   (let ((ranked-map (make-hash-table :test 'equal)))
+                     (cl-loop for (backend . model) in ranked
+                              for i from 0
+                              do (puthash backend (cons i model) ranked-map))
+                     ;; Sort static fallback by ranked position (lower = better),
+                     ;; keeping entries not in ranked data at the end.
+                     (sort (copy-sequence gptel-auto-workflow-executor-rate-limit-fallbacks)
+                           (lambda (a b)
+                             (let* ((ra (gethash (car a) ranked-map (cons 9999 (cdr a))))
+                                    (rb (gethash (car b) ranked-map (cons 9999 (cdr b)))))
+                               (< (car ra) (car rb))))))
+                 gptel-auto-workflow-executor-rate-limit-fallbacks)))
+         gptel-auto-workflow-executor-rate-limit-fallbacks))
    ((member agent-type gptel-auto-workflow-headless-fallback-agents)
     (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
              (gptel-auto-workflow--ranked-subagent-backends agent-type))
