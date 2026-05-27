@@ -2204,7 +2204,7 @@ Uses ALL experiments from parse-all-results, not just current run."
                     (setq dominated t)))))
             (unless dominated
               (push exp frontier))))
-        frontier))))
+        frontier)))
 
 (defun gptel-auto-experiment--frontier-stats (target)
   "Return frontier statistics for TARGET as formatted string.
