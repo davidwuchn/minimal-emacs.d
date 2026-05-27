@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.8/10
+insight-quality: 0.7/10
 allium-issues: 0
 allium-severity: 0.00
 allium-status: coherent
@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 66 experiments (8% keep rate).*
+*Consolidated from 70 experiments (7% keep rate).*
 
 **Performance:** 5 kept / 14 discarded / 4 failed (EXTRACTED — from TSV)
 
