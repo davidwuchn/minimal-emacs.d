@@ -201,7 +201,7 @@ Active tools = current `gptel-tools' in buffer."
           (mapcar (lambda (entry)
                     (let ((marker (car entry))
                           (tools (cdr entry)))
-                      (when (seq-some (lambda (t) (member t active-tool-names)) tools)
+                      (when (seq-some (lambda (tool) (member tool active-tool-names)) tools)
                         marker)))
                   nucleus-tool-markers))))
 
@@ -263,7 +263,7 @@ Supports (:derived INCLUDE EXCLUDE &rest EXTRA) to append extra tools."
         (when (and (listp include) (listp exclude))
           (let ((base (nucleus-toolset-from-markers include exclude)))
             (if extra
-                (append base (cl-remove-if (lambda (t) (member t base)) extra))
+                (append base (cl-remove-if (lambda (tool) (member tool base)) extra))
               base))))
     definition))
 
