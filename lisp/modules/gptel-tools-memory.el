@@ -72,8 +72,13 @@ SIGNALS an error if SLUG contains path traversal or invalid characters."
                         gptel-tools-memory-knowledge-dir
                       gptel-tools-memory-dir)
                     root))
-         (filename (if (string-suffix-p ".md" slug) slug (concat slug ".md"))))
-    (expand-file-name filename base-dir)))
+         (filename (if (string-suffix-p ".md" slug) slug (concat slug ".md")))
+         (resolved (expand-file-name filename base-dir)))
+    ;; DEFENSE: Verify resolved path is contained within base-dir
+    ;; EDGE CASE: Prevents traversal via symlinks or platform-specific separators
+    (unless (string-prefix-p (file-name-as-directory base-dir) resolved)
+      (error "Resolved path escapes base directory: %s" resolved))
+    resolved))
 
 (defun gptel-tools-memory--read (slug &optional knowledge-p)
   "Read a memory or knowledge file by SLUG.
