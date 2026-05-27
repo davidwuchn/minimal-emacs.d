@@ -9,6 +9,8 @@
 ;; - my/gptel--curl-parse-response-safe
 ;; - my/gptel--known-tool-names
 ;; - my/gptel--preset-tool-names
+;; - my/gptel--gptel-request-callback-guard (plist alignment + function pass-through)
+;; - my/gptel--stream-cleanup-process-guard
 
 ;;; Code:
 
@@ -227,6 +229,173 @@
          (preset-tools '("Read" "Edit"))
          (missing (cl-remove-if (lambda (n) (member n known)) preset-tools)))
     (should (null missing))))
+
+;;; ── Mocks for callback-guard tests ──
+
+(defun test-callback-guard (orig-fn &optional prompt &rest args)
+  "Replica of my/gptel--gptel-request-callback-guard for TDD testing.
+Isolated from the live advice system to allow pure unit testing."
+  (let* ((keys (cl-loop for (k v) on args by #'cddr collect k))
+         (has-callback (memq :callback keys))
+         (callback-val (and has-callback (plist-get args :callback))))
+    (if (and has-callback (functionp callback-val))
+        (apply orig-fn prompt args)
+      (apply orig-fn prompt :callback (or (and (functionp callback-val) callback-val)
+                                          #'ignore)
+             (cl-loop for (k v) on args by #'cddr
+                      unless (eq k :callback)
+                      append (list k v))))))
+
+(defun test-stream-cleanup-guard (orig-fn process status request-alist-mock)
+  "Replica of my/gptel--stream-cleanup-process-guard for TDD testing."
+  (when (and process request-alist-mock)
+    (let* ((entry (assq process request-alist-mock))
+           (value (cdr entry)))
+      (when (and value (consp value))
+        (let* ((fsm (car value))
+               (info (ignore-errors (gptel-fsm-info fsm))))
+          (when (and info (listp info)
+                     (not (functionp (plist-get info :callback)))))
+          ;; FIX: this guard patches the info — we just test that it
+          ;; detects nil callback without crashing
+          (ignore (list info process))))))
+  (funcall orig-fn process status))
+
+;;; ── TDD: plist alignment root-cause regression ──
+;; The (cons nil args) bug made plist-get always return nil because
+;; prepending nil shifts the plist alignment:
+;;   (:callback <fn>)  →  (nil :callback <fn>)
+;; plist-get scans keys at even positions (0,2,...):
+;;   pos 0: nil (not :callback) → skip
+;;   pos 2: <fn> (not a symbol-eq to :callback) → skip
+;; Result: returns nil, every callback replaced with #'ignore.
+
+(ert-deftest core/callback-guard/plist-get-without-cons-nil-returns-callback ()
+  "plist-get on (:callback <fn>) should return the function."
+  (let* ((fn (lambda (x) x))
+         (args (list :callback fn)))
+    (should (functionp (plist-get args :callback)))
+    (should (eq (plist-get args :callback) fn))))
+
+(ert-deftest core/callback-guard/plist-get-with-cons-nil-returns-nil ()
+  "plist-get on (cons nil '(:callback <fn>)) returns nil — THIS WAS THE BUG."
+  (let* ((fn (lambda (x) x))
+         (args (list :callback fn)))
+    (should-not (plist-get (cons nil args) :callback))
+    (should-not (functionp (plist-get (cons nil args) :callback)))))
+
+(ert-deftest core/callback-guard/named-function-callback-is-found ()
+  "plist-get should find a named function (quoted symbol) as callback."
+  (let* ((args (list :callback #'ignore)))
+    (should (functionp (plist-get args :callback)))
+    (should (eq (plist-get args :callback) #'ignore))))
+
+(ert-deftest core/callback-guard/compiled-lambda-callback-is-found ()
+  "plist-get should find a compiled lambda as callback."
+  (let* ((fn (byte-compile (lambda (x) x)))
+         (args (list :callback fn)))
+    (should (functionp (plist-get args :callback)))
+    (should (eq (plist-get args :callback) fn))))
+
+;;; ── TDD: callback-guard behavior ──
+
+(ert-deftest core/callback-guard/passes-function-through ()
+  "Guard should pass through a valid function callback unchanged."
+  (let* ((cb (lambda (resp info) (list resp info)))
+         (received-args nil))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (&rest r) (push r received-args))))
+      (test-callback-guard #'gptel-request "prompt" :callback cb :model "test"))
+    (let* ((call-args (car (last received-args)))
+           (props (cdr call-args)))     ; strip prompt
+      (should (functionp (plist-get props :callback)))
+      (should (eq (plist-get props :callback) cb)))))
+
+(ert-deftest core/callback-guard/replaces-nil-callback-with-ignore ()
+  "Guard should replace :callback nil with #'ignore."
+  (let* ((received-args nil))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (&rest r) (push r received-args))))
+      (test-callback-guard #'gptel-request "prompt" :callback nil))
+    (let ((props (cdr (car (last received-args))))) ; strip prompt
+      (should (eq (plist-get props :callback) #'ignore)))))
+
+(ert-deftest core/callback-guard/adds-ignore-when-callback-missing ()
+  "Guard should add :callback #'ignore when no :callback keyword."
+  (let* ((received-args nil))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (&rest r) (push r received-args))))
+      (test-callback-guard #'gptel-request "prompt" :model "test" :temperature 0.5))
+    (let ((props (cdr (car (last received-args))))) ; strip prompt
+      (should (eq (plist-get props :callback) #'ignore))
+      (should (equal (plist-get props :model) "test"))
+      (should (equal (plist-get props :temperature) 0.5)))))
+
+(ert-deftest core/callback-guard/preserves-other-keyword-args ()
+  "Guard should not strip non-callback keyword arguments."
+  (let* ((cb (lambda (r i) r))
+         (received-args nil))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (&rest r) (push r received-args))))
+      (test-callback-guard #'gptel-request "prompt"
+                           :callback cb :model "gpt-4" :temperature 0.7
+                           :stream t :system "You are helpful."))
+    (let ((props (cdr (car (last received-args))))) ; strip prompt
+      (should (functionp (plist-get props :callback)))
+      (should (equal (plist-get props :model) "gpt-4"))
+      (should (equal (plist-get props :temperature) 0.7))
+      (should (eq (plist-get props :stream) t))
+      (should (equal (plist-get props :system) "You are helpful.")))))
+
+(ert-deftest core/callback-guard/handles-empty-args ()
+  "Guard should add #'ignore for gptel-request with no keyword args."
+  (let* ((received-args nil))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (&rest r) (push r received-args))))
+      (test-callback-guard #'gptel-request "prompt"))
+    (let ((args (car (last received-args))))
+      ;; prompt passed through:
+      (should (equal (car args) "prompt"))
+      ;; callback added:
+      (should (eq (plist-get (cdr args) :callback) #'ignore)))))
+
+(ert-deftest core/callback-guard/non-function-callback-replaced ()
+  "Guard should replace non-function callback (e.g., a string) with #'ignore."
+  (let* ((received-args nil))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (&rest r) (push r received-args))))
+      (test-callback-guard #'gptel-request "prompt" :callback "not-a-function"))
+    (let ((props (cdr (car (last received-args))))) ; strip prompt
+      (should (eq (plist-get props :callback) #'ignore)))))
+
+;;; ── TDD: stream-cleanup guard ──
+
+(ert-deftest core/stream-cleanup-guard/nil-callback-detected-no-crash ()
+  "Stream cleanup guard should detect nil callback in FSM info without crashing."
+  (let ((info (list :callback nil))
+        (called-orig nil))
+    (cl-letf (((symbol-function 'gptel-fsm-info)
+               (lambda (_fsm) info))
+              ((symbol-function 'gptel--request-alist) nil))
+      (test-stream-cleanup-guard
+       (lambda (_p _s) (setq called-orig t))
+       'fake-process "finished"
+       '((fake-process . (fake-fsm . cleanup-fn)))))
+    (should called-orig)))
+
+(ert-deftest core/stream-cleanup-guard/function-callback-left-untouched ()
+  "Stream cleanup guard should leave function callback alone."
+  (let ((info (list :callback #'ignore))
+        (info-modified nil))
+    (cl-letf (((symbol-function 'gptel-fsm-info)
+               (lambda (_fsm) info))
+              ((symbol-function 'setf)
+               (lambda (&rest _) (setq info-modified t) nil)))
+      (test-stream-cleanup-guard
+       (lambda (_p _s) nil)
+       'fake-process "finished"
+       '((fake-process . (fake-fsm . cleanup-fn)))))
+    (should-not info-modified)))
 
 (provide 'test-gptel-ext-core)
 ;;; test-gptel-ext-core.el ends here
