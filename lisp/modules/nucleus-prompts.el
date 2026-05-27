@@ -108,9 +108,9 @@ Agent prompts (code_agent.md, plan_agent.md) are loaded separately from `nucleus
     (get_symbol_source   . "get_symbol_source.md")
     (Edit                . "edit_file.md")
     (Move                . "move.md")
-     (RunAgent            . "run_agent.md")
-     (Programmatic        . "programmatic.md")
-     (Eval                . "eval.md")
+    (RunAgent            . "run_agent.md")
+    (Programmatic        . "programmatic.md")
+    (Eval                . "eval.md")
     (Insert              . "insert.md")
     (Mkdir               . "mkdir.md")
     (TodoWrite           . "todo_write.md")
@@ -188,14 +188,16 @@ Agent prompts (code_agent.md, plan_agent.md) are loaded separately from `nucleus
           (nucleus--read-file-if-exists
            (expand-file-name "AGENTS.md" (nucleus--project-root))))
          (parts (seq-filter #'identity
-                           (list nucleus-text agents-text))))
+                            (list nucleus-text agents-text))))
     (when parts
       (string-join parts "\n\n"))))
 
 ;;; Prompt Loading
 
 (defun nucleus-load-prompts ()
-  "Load all prompt files into `nucleus-prompts'. Returns the alist."
+  "Load all prompt files into `nucleus-prompts'. Returns the alist.
+When a prompt file is missing or unreadable, logs a warning via
+`nucleus--log' so failures are not silently discarded."
   (let ((base (nucleus--resolve-prompts-dir)))
     (setq nucleus-prompts
           (seq-filter
@@ -207,14 +209,26 @@ Agent prompts (code_agent.md, plan_agent.md) are loaded separately from `nucleus
                      (path (and base (expand-file-name file base)))
                      (text (if (eq key 'init)
                                (nucleus--build-init-prompt)
-                             (and path (nucleus--read-file-if-exists path)))))
+                             (cond
+                              ((null base)
+                               (nucleus--log "WARN: prompts-dir not found, skipping %s" file)
+                               nil)
+                              ((null path)
+                               (nucleus--log "WARN: could not resolve path for %s" file)
+                               nil)
+                              ((not (file-readable-p path))
+                               (nucleus--log "WARN: prompt file not readable: %s" path)
+                               nil)
+                              (t (nucleus--read-file path))))))
                 (when text
                   (cons key text))))
             nucleus-prompt-files))))
   nucleus-prompts)
 
 (defun nucleus-load-tool-prompts ()
-  "Load all tool prompt files into `nucleus-tool-prompts'. Returns the alist."
+  "Load all tool prompt files into `nucleus-tool-prompts'. Returns the alist.
+When a tool prompt file is missing or unreadable, logs a warning via
+`nucleus--log' so failures are not silently discarded."
   (let ((base (nucleus--resolve-tool-prompts-dir)))
     (setq nucleus-tool-prompts
           (seq-filter
@@ -224,7 +238,17 @@ Agent prompts (code_agent.md, plan_agent.md) are loaded separately from `nucleus
               (let* ((key (car entry))
                      (file (cdr entry))
                      (path (and base (expand-file-name file base)))
-                     (text (and path (nucleus--read-file-if-exists path))))
+                     (text (cond
+                            ((null base)
+                             (nucleus--log "WARN: tool-prompts-dir not found, skipping %s" file)
+                             nil)
+                            ((null path)
+                             (nucleus--log "WARN: could not resolve path for %s" file)
+                             nil)
+                            ((not (file-readable-p path))
+                             (nucleus--log "WARN: tool prompt file not readable: %s" path)
+                             nil)
+                            (t (nucleus--read-file path)))))
                 (when text
                   (cons key text))))
             nucleus-tool-prompt-files))))
@@ -292,33 +316,33 @@ Idempotent: only registers and logs once per session."
                (agent-sys (nucleus--read-gptel-agent-system agent-file))
                (plan-sys (nucleus--read-gptel-agent-system plan-file))
                (agent-tools (nucleus-get-tools :snippets))
-                (agent-snips (tool-snippets-for agent-tools))
-                (marker-text (nucleus-marker-conditional-system-text))
-                (agent-sys (if agent-snips
-                               (concat agent-sys
-                                       "\n\n## Nucleus Tool Prompts (Supplemental)\n"
-                                       agent-snips)
-                             agent-sys))
-                (agent-sys (if marker-text
-                               (concat agent-sys
-                                       "\n\n" marker-text)
-                             agent-sys)))
+               (agent-snips (tool-snippets-for agent-tools))
+               (marker-text (nucleus-marker-conditional-system-text))
+               (agent-sys (if agent-snips
+                              (concat agent-sys
+                                      "\n\n## Nucleus Tool Prompts (Supplemental)\n"
+                                      agent-snips)
+                            agent-sys))
+               (agent-sys (if marker-text
+                              (concat agent-sys
+                                      "\n\n" marker-text)
+                            agent-sys)))
           (when (stringp agent-sys)
             (setf (alist-get 'nucleus-gptel-agent
-                            gptel-directives nil nil #'eq)
+                             gptel-directives nil nil #'eq)
                   agent-sys))
           (when (stringp plan-sys)
             (setf (alist-get 'nucleus-gptel-plan
-                            gptel-directives nil nil #'eq)
+                             gptel-directives nil nil #'eq)
                   plan-sys))
           ;; Add compact directive for auto-compaction
           (setf (alist-get 'compact
-                          gptel-directives nil nil #'eq)
+                           gptel-directives nil nil #'eq)
                 "Summarize this conversation history for LLM context continuity.
 Keep all key information: decisions made, files modified, commands run, errors encountered.
 Format as a structured brief with: [progress] [decisions] [next_steps] [tech_details]")
           (nucleus--log "Registered %d directives"
-                       (length gptel-directives))
+                        (length gptel-directives))
           (setq nucleus--directives-registered t))))))
 ;;; Marker-Conditional Prompt Sections
 
