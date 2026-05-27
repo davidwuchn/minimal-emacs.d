@@ -734,10 +734,26 @@ If `gptel-auto-workflow-research-before-fix' is nil, executor handles directly."
     (message "[auto-workflow] Fixing review issues (retry %d/%d)..."
              gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
     (if (not (and (stringp worktree) (file-directory-p worktree)))
-        (funcall callback
-                 (cons nil
-                       (format "Error: Missing review fix worktree for %s"
-                               optimize-branch)))
+        ;; Create temp worktree so review fix can proceed
+        (let ((tmp-worktree (expand-file-name
+                             (format "var/tmp/review-fix-%s-%d"
+                                     (file-name-nondirectory optimize-branch)
+                                     (random 999999))
+                             proj-root)))
+          (message "[auto-workflow] Creating temp worktree for review fix: %s" tmp-worktree)
+          (if (= 0 (call-process "git" nil nil nil "worktree" "add" tmp-worktree optimize-branch))
+              (unwind-protect
+                  (if (not gptel-auto-workflow-research-before-fix)
+                      (gptel-auto-workflow--fix-directly review-output callback tmp-worktree)
+                    (gptel-auto-workflow--research-then-fix review-output callback tmp-worktree))
+                (ignore-errors
+                  (call-process "git" nil nil nil "worktree" "remove" "-f" tmp-worktree)
+                  (when (file-exists-p tmp-worktree)
+                    (delete-directory tmp-worktree t))))
+            (funcall callback
+                     (cons nil
+                           (format "Error: Missing review fix worktree for %s (and git worktree add failed)"
+                                   optimize-branch)))))
       (if (not gptel-auto-workflow-research-before-fix)
           (gptel-auto-workflow--fix-directly review-output callback worktree)
         (gptel-auto-workflow--research-then-fix review-output callback worktree)))))
