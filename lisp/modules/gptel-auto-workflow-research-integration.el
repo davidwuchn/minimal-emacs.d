@@ -163,11 +163,10 @@ Feeds into researcher skill evolution — tells researcher which sources produce
         (lines (list "## Research Source Effectiveness\n")))
     (if stats
         (progn
-          (push "| Source | Keep Rate | N |\n|---:|---:|---:|\n" lines)
+          (push "| Source | Keep Rate |\n|---:|---:|\n" lines)
           (dolist (s stats)
-            (push (format "| %s | %.1f%% | %d |\n"
-                          (car s) (* 100 (cdr s))
-                          (car (gethash (car s) (make-hash-table)))) lines))
+            (push (format "| %s | %.1f%% |\n"
+                          (car s) (* 100 (cdr s))) lines))
           (push "\n**Insight:** Sources with keep-rate >20% are high-signal.\n" lines))
       (push "*No research-experiment correlation data yet.*\n" lines))
     (apply #'concat (nreverse lines))))
