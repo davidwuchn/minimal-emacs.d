@@ -213,9 +213,9 @@ Cache is invalidated after 5 minutes to avoid stale data.")
            (gptel-auto-workflow--rate-limit-failover-candidates "analyzer")))
       (and (listp candidates)
            (gptel-auto-workflow--first-available-provider-candidate
-             candidates
-             (append gptel-auto-workflow--analyzer-failed-backends
-                     gptel-auto-workflow--rate-limited-backends))))))
+            candidates
+            (append gptel-auto-workflow--analyzer-failed-backends
+                    gptel-auto-workflow--rate-limited-backends))))))
 
 (defun gptel-auto-workflow--normalized-cache-key (&optional proj-root)
   "Return normalized cache key for PROJ-ROOT.
@@ -574,10 +574,10 @@ daemon's evolve_researcher.py, restores template variables before substituting."
            "Overall research effectiveness: {{research-effectiveness}}.0% ({{kept-research}}/{{total-research}} research-correlated experiments kept)"
            skill-content t t))
     (setq skill-content
-           (replace-regexp-in-string
-            "\\*No topic data available yet\\.\\*"
-            "{{topic-performance}}\n\n{{research-champion}}\n\n{{ontology-gaps}}\n\n{{current-bottlenecks}}"
-            skill-content t t))
+          (replace-regexp-in-string
+           "\\*No topic data available yet\\.\\*"
+           "{{topic-performance}}\n\n{{research-champion}}\n\n{{ontology-gaps}}\n\n{{current-bottlenecks}}"
+           skill-content t t))
     ;; RESTORE: The daemon's evolution cycle rewrites {{priority-repos}}
     ;; back into the full hardcoded repo list.  Detect and restore it.
     (setq skill-content
@@ -702,9 +702,9 @@ and timeout-heavy targets for the researcher to investigate."
         (dolist (entry (seq-take over-experimented 5))
           (let ((detail (cdr entry)))
             (push (format "- **%s**: %d experiments (%.0f%% kept) — needs new approach\n"
-                         (car entry)
-                         (plist-get detail :total)
-                         (* 100 (plist-get detail :rate)))
+                          (car entry)
+                          (plist-get detail :total)
+                          (* 100 (plist-get detail :rate)))
                   lines)))
         (push "\n**Researcher task**: find novel techniques for these high-attempt targets. Current strategies are failing.\n" lines)))
     (if lines
@@ -1176,19 +1176,19 @@ usable and digestion would lose 80%+ of the content.  Only digest raw HTML dumps
              (length raw-findings))
     (funcall callback raw-findings))
    ;; Everything else: try to digest (raw HTML, unstructured text, etc.)
-    (t
-     (let* ((digest-variant (gptel-auto-workflow--select-best-digest-variant))
-            (variant-content (gptel-auto-workflow--load-digest-variant-content digest-variant))
-            (template (or variant-content
-                          (when (fboundp 'gptel-auto-workflow--load-skill-content)
-                            (gptel-auto-workflow--load-skill-content "research-digest"))))
-            (digest-prompt
-             (if template
-                 (gptel-auto-workflow--substitute-template
-                  template
-                  `((raw-findings . ,(truncate-string-to-width raw-findings 4000 nil nil "..."))))
-               ;; Fallback to hardcoded prompt
-               (format "You are a research digest specialist. Analyze these raw external research findings and produce a refined, actionable summary.
+   (t
+    (let* ((digest-variant (gptel-auto-workflow--select-best-digest-variant))
+           (variant-content (gptel-auto-workflow--load-digest-variant-content digest-variant))
+           (template (or variant-content
+                         (when (fboundp 'gptel-auto-workflow--load-skill-content)
+                           (gptel-auto-workflow--load-skill-content "research-digest"))))
+           (digest-prompt
+            (if template
+                (gptel-auto-workflow--substitute-template
+                 template
+                 `((raw-findings . ,(truncate-string-to-width raw-findings 4000 nil nil "..."))))
+              ;; Fallback to hardcoded prompt
+              (format "You are a research digest specialist. Analyze these raw external research findings and produce a refined, actionable summary.
 
 RAW FINDINGS:
 %s
@@ -1248,14 +1248,14 @@ RULES:
                      (message "[auto-workflow] Digestion complete: %d chars → %d chars"
                               (length raw-findings) (length digested))
                      ;; Update context with digested version
-                      (when (boundp 'gptel-auto-workflow--current-research-context)
-                        (setq gptel-auto-workflow--current-research-context
-                              (plist-put gptel-auto-workflow--current-research-context
-                                         :digested digested))
-                        (when digest-variant
-                          (setq gptel-auto-workflow--current-research-context
-                                (plist-put gptel-auto-workflow--current-research-context
-                                           :digest-variant digest-variant))))
+                     (when (boundp 'gptel-auto-workflow--current-research-context)
+                       (setq gptel-auto-workflow--current-research-context
+                             (plist-put gptel-auto-workflow--current-research-context
+                                        :digested digested))
+                       (when digest-variant
+                         (setq gptel-auto-workflow--current-research-context
+                               (plist-put gptel-auto-workflow--current-research-context
+                                          :digest-variant digest-variant))))
                      (funcall callback digested))))))
             (if (fboundp 'gptel-request)
                 (gptel-request
@@ -1366,14 +1366,14 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                                          (replace-regexp-in-string "^---$\\|^---\\n.*\\n---\\n" "" directive)
                                          1500 nil nil "..."))
                               ""))
-        (research-section (if (and research-skill (not (string-empty-p research-skill)))
-                              (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
-                                      (truncate-string-to-width research-skill 800 nil nil "..."))
-                            ""))
-        ;; Inject category budget + regressed targets from cross-subsystem feedback
-        (hints-section
-         (let* ((hints (and (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
-                            gptel-auto-workflow--evolution-next-cycle-hints))
+         (research-section (if (and research-skill (not (string-empty-p research-skill)))
+                               (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
+                                       (truncate-string-to-width research-skill 800 nil nil "..."))
+                             ""))
+         ;; Inject category budget + regressed targets from cross-subsystem feedback
+         (hints-section
+          (let* ((hints (and (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
+                             gptel-auto-workflow--evolution-next-cycle-hints))
                  (raw-budget (plist-get hints :category-budget))
                  (budget (cond
                           ((fboundp 'gptel-auto-workflow--normalize-category-budget)
@@ -1387,19 +1387,19 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                                    (push (cons category quota) entries))))
                              (nreverse entries)))
                           (t raw-budget)))
-                (champion-prev (plist-get hints :prev-champions))
-                (regressed (plist-get hints :regressed-targets))
-                (parts nil))
-           (when budget
-             (push (format "CATEGORY BUDGET (experiments allocated per category):\n%s"
-                           (mapconcat (lambda (b) (format "- %s: %d" (car b) (cdr b))) budget "\n"))
-                   parts))
-           (when champion-prev
-             (push (format "CHAMPION CHANGES (last cycle):\n%s"
-                           (mapconcat (lambda (c) (format "- %s: %s (%.1f%%)"
-                                                          (car c) (cadr c) (* 100 (or (cddr c) 0))))
-                                      champion-prev "\n"))
-                   parts))
+                 (champion-prev (plist-get hints :prev-champions))
+                 (regressed (plist-get hints :regressed-targets))
+                 (parts nil))
+            (when budget
+              (push (format "CATEGORY BUDGET (experiments allocated per category):\n%s"
+                            (mapconcat (lambda (b) (format "- %s: %d" (car b) (cdr b))) budget "\n"))
+                    parts))
+            (when champion-prev
+              (push (format "CHAMPION CHANGES (last cycle):\n%s"
+                            (mapconcat (lambda (c) (format "- %s: %s (%.1f%%)"
+                                                           (car c) (cadr c) (* 100 (or (cddr c) 0))))
+                                       champion-prev "\n"))
+                    parts))
             (when regressed
               (push (format "REGRESSED TARGETS (knowledge pages removed, prioritized):\n%s"
                             (mapconcat (lambda (tgt) (format "- %s" (truncate-string-to-width tgt 60 nil nil "..."))) regressed "\n"))
@@ -1423,8 +1423,8 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
             (when (and (boundp 'gptel-auto-workflow--conflicted-targets)
                        gptel-auto-workflow--conflicted-targets)
               (let ((deferred-str (mapconcat (lambda (c) (format "- %s (%.0f%% agreement)"
-                                                                   (car c) (* 100 (cdr c))))
-                                              (seq-take gptel-auto-workflow--conflicted-targets 5) "\n")))
+                                                                 (car c) (* 100 (cdr c))))
+                                             (seq-take gptel-auto-workflow--conflicted-targets 5) "\n")))
                 (push (format "⚠ DEFERRED TARGETS (backend disagreement — skip this cycle):\n%s" deferred-str)
                       parts)))
             (when (and (fboundp 'gptel-auto-workflow--query-experiments)
@@ -1486,18 +1486,18 @@ OUTPUT JSON ONLY:
             (or (plist-get context :git-history) "")
             (or (plist-get context :file-sizes) "")
             (or (plist-get context :todos) "")
-             (if (or (null research-findings) (string-empty-p research-findings))
-                 "Not available (research disabled)"
-               (let* ((lines (split-string research-findings "\n"))
-                      (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
-                      (apply-section
-                       (if apply-lines
-                           (concat "\n### Actionable Research Patterns (match to files below)\n"
-                                   (mapconcat #'identity apply-lines "\n")
-                                   "\n\n")
-                         "")))
-                 (concat apply-section
-                         (truncate-string-to-width research-findings 3000 nil nil "..."))))
+            (if (or (null research-findings) (string-empty-p research-findings))
+                "Not available (research disabled)"
+              (let* ((lines (split-string research-findings "\n"))
+                     (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
+                     (apply-section
+                      (if apply-lines
+                          (concat "\n### Actionable Research Patterns (match to files below)\n"
+                                  (mapconcat #'identity apply-lines "\n")
+                                  "\n\n")
+                        "")))
+                (concat apply-section
+                        (truncate-string-to-width research-findings 3000 nil nil "..."))))
             max-targets
             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
                 (gptel-auto-workflow--evolution-get-knowledge)
@@ -1515,9 +1515,9 @@ EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget 
                                     0)
                                 gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
-                   context research-findings max-targets)))
+                  context research-findings max-targets)))
     (if (and gptel-auto-experiment-use-subagents
-              (fboundp 'gptel-benchmark-call-subagent))
+             (fboundp 'gptel-benchmark-call-subagent))
         (cl-labels
             ((request-analyzer (attempt)
                (let ((attempt-candidate
@@ -1541,9 +1541,9 @@ EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget 
                                               gptel-auto-workflow--analyzer-failed-backends)))
                         (push failed-backend
                               gptel-auto-workflow--analyzer-failed-backends))
-                     (if-let* ((candidate
-                                (and (< attempt 2)        ; max 3 total attempts
-                                     (null targets)
+                      (if-let* ((candidate
+                                 (and (< attempt 2)        ; max 3 total attempts
+                                      (null targets)
                                       (or gptel-auto-workflow--analyzer-quota-exhausted
                                           gptel-auto-workflow--analyzer-transient-failure)
                                       (gptel-auto-workflow--analyzer-failover-candidate))))
@@ -1726,7 +1726,8 @@ EDGE CASE: nil returns nil, non-list atoms return nil."
   "Handle analyzer error states and invoke CALLBACK with appropriate targets.
 TARGETS is the analyzer result, STATIC-TARGETS is fallback list.
 CALLBACK must be a function; ASSUMPTION: caller validates this.
-BEHAVIOR: Returns non-nil if error state was handled."
+BEHAVIOR: Returns non-nil if error state was handled.
+EDGE CASE: Non-nil but malformed targets (improper list, atom) caught before downstream crash."
   (unless (functionp callback)
     (message "[auto-workflow] Error state handler: callback is not a function (%S)" callback)
     (setq callback (lambda (x) (message "[auto-workflow] Dropped result: %S" x))))
@@ -1743,6 +1744,10 @@ BEHAVIOR: Returns non-nil if error state was handled."
     t)
    ((not targets)
     (message "[auto-workflow] Analyzer returned no targets; using static targets")
+    (funcall callback static-targets)
+    t)
+   ((not (proper-list-p targets))
+    (message "[auto-workflow] Analyzer returned malformed targets (%S); using static targets" targets)
     (funcall callback static-targets)
     t)
    (t nil)))
@@ -2128,52 +2133,52 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
       (if gptel-auto-workflow-strategic-selection
           (gptel-auto-workflow--ask-analyzer-for-targets
            (lambda (targets)
-              (if (gptel-auto-workflow--handle-analyzer-error-state targets safe-targets callback)
-                  nil  ; Error already handled
-                (if (null targets)
-                    (let* ((effective-static (or safe-targets
-                                                  (and (fboundp 'gptel-auto-workflow--discover-targets)
-                                                       (gptel-auto-workflow--discover-targets))))
-                           (augmented (gptel-auto-workflow--semantic-target-augmentation effective-static)))
-                      (message "[auto-workflow] Analyzer returned no targets; using %s targets"
-                               (if safe-targets "static" "auto-discovered"))
-                      (funcall callback augmented))
-                  (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                         (final-targets (if (and filtered-targets (listp filtered-targets))
-                                            filtered-targets
-                                          targets))
-                         ;; Pad with safe-targets when analyst returns fewer than max
-                         (padded (if (and safe-targets
-                                          (< (length final-targets) gptel-auto-workflow-max-targets-per-run))
-                                     (append final-targets
-                                             (seq-take (cl-remove-if (lambda (t2)
-                                                                       (member t2 final-targets))
-                                                                     safe-targets)
-                                                       (- gptel-auto-workflow-max-targets-per-run
-                                                          (length final-targets))))
-                                   final-targets))
-                         (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
-                                                (gptel-auto-workflow--enforce-category-budget padded)
-                                              padded))
-                         (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
-                         (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
+             (if (gptel-auto-workflow--handle-analyzer-error-state targets safe-targets callback)
+                 nil  ; Error already handled
+               (if (null targets)
+                   (let* ((effective-static (or safe-targets
+                                                (and (fboundp 'gptel-auto-workflow--discover-targets)
+                                                     (gptel-auto-workflow--discover-targets))))
+                          (augmented (gptel-auto-workflow--semantic-target-augmentation effective-static)))
+                     (message "[auto-workflow] Analyzer returned no targets; using %s targets"
+                              (if safe-targets "static" "auto-discovered"))
+                     (funcall callback augmented))
+                 (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
+                        (final-targets (if (and filtered-targets (listp filtered-targets))
+                                           filtered-targets
+                                         targets))
+                        ;; Pad with safe-targets when analyst returns fewer than max
+                        (padded (if (and safe-targets
+                                         (< (length final-targets) gptel-auto-workflow-max-targets-per-run))
+                                    (append final-targets
+                                            (seq-take (cl-remove-if (lambda (t2)
+                                                                      (member t2 final-targets))
+                                                                    safe-targets)
+                                                      (- gptel-auto-workflow-max-targets-per-run
+                                                         (length final-targets))))
+                                  final-targets))
+                        (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                              (gptel-auto-workflow--enforce-category-budget padded)
+                                            padded))
+                        (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
+                        (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
                    (unless (or (null filtered-targets) (listp filtered-targets))
                      (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                               filtered-targets))
                    (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
                             (length targets) (length final-targets))
-                    (funcall callback with-queued))))))
-         (let* ((filtered-targets (if static-targets
-                                      (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
-                                    nil))
-                (final-targets (if (and filtered-targets (listp filtered-targets))
-                                   filtered-targets
-                                 static-targets))
-                (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
-                                      (gptel-auto-workflow--enforce-category-budget final-targets)
-                                    final-targets))
-                (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
-                (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
+                   (funcall callback with-queued))))))
+        (let* ((filtered-targets (if static-targets
+                                     (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
+                                   nil))
+               (final-targets (if (and filtered-targets (listp filtered-targets))
+                                  filtered-targets
+                                static-targets))
+               (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                     (gptel-auto-workflow--enforce-category-budget final-targets)
+                                   final-targets))
+               (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
+               (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
           (unless (or (null filtered-targets) (listp filtered-targets))
             (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                      filtered-targets))
@@ -2555,23 +2560,23 @@ When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
           (when completion-callback
             (let ((cached (or (gethash cache-key gptel-auto-workflow--research-findings-cache)
                               (gptel-auto-workflow-load-research-findings))))
-               (funcall completion-callback cached))))
+              (funcall completion-callback cached))))
       (progn
         (message "[research] Starting periodic research for %s..." proj-root)
         (gptel-auto-workflow--research-patterns
          (lambda (findings)
-         (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
-         (let ((file (gptel-auto-workflow--research-file)))
-           (make-directory (file-name-directory file) t)
-           (with-temp-file file
-             (insert (format "# Research Findings\n\n> Project: %s\n> Updated: %s\n\n%s"
-                             proj-root
-                             (format-time-string "%Y-%m-%d %H:%M")
-                             findings)))
-           (message "[research] Findings cached for %s (%d chars)"
-                    proj-root (length findings))
-           (when completion-callback
-             (funcall completion-callback findings)))))))))
+           (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
+           (let ((file (gptel-auto-workflow--research-file)))
+             (make-directory (file-name-directory file) t)
+             (with-temp-file file
+               (insert (format "# Research Findings\n\n> Project: %s\n> Updated: %s\n\n%s"
+                               proj-root
+                               (format-time-string "%Y-%m-%d %H:%M")
+                               findings)))
+             (message "[research] Findings cached for %s (%d chars)"
+                      proj-root (length findings))
+             (when completion-callback
+               (funcall completion-callback findings)))))))))
 
 (defun gptel-auto-workflow-load-research-findings ()
   "Load cached research findings for current project.
