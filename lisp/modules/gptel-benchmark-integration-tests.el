@@ -26,8 +26,17 @@
 (defvar gptel-benchmark-test--temp-dir nil
   "Temporary directory for integration tests.")
 
+(defvar gptel-benchmark-test--saved-memory-dir nil
+  "Saved value of `gptel-benchmark-memory-dir' for teardown restoration.")
+
+(defvar gptel-benchmark-test--saved-auto-commit nil
+  "Saved value of `gptel-benchmark-memory-auto-commit' for teardown restoration.")
+
 (defun gptel-benchmark-test--setup-temp-repo ()
   "Create a temporary git repo with mementum structure."
+  ;; Save original global state for restoration in teardown
+  (setq gptel-benchmark-test--saved-memory-dir gptel-benchmark-memory-dir
+        gptel-benchmark-test--saved-auto-commit gptel-benchmark-memory-auto-commit)
   (setq gptel-benchmark-test--temp-dir
         (make-temp-file "benchmark-integration-" t))
   (let ((default-directory gptel-benchmark-test--temp-dir))
@@ -50,8 +59,8 @@
              (file-exists-p gptel-benchmark-test--temp-dir))
     (delete-directory gptel-benchmark-test--temp-dir t))
   (setq gptel-benchmark-test--temp-dir nil
-        gptel-benchmark-memory-dir "./mementum/"
-        gptel-benchmark-memory-auto-commit t))
+        gptel-benchmark-memory-dir gptel-benchmark-test--saved-memory-dir
+        gptel-benchmark-memory-auto-commit gptel-benchmark-test--saved-auto-commit))
 
 (defmacro gptel-benchmark-test-with-temp-repo (&rest body)
   "Execute BODY with a temporary git repo."
@@ -70,34 +79,34 @@
 (ert-deftest gptel-benchmark-test-memory-orient-reads-state ()
   "Test that memory-orient reads state.md if it exists."
   (gptel-benchmark-test-with-temp-repo
-    (let ((state-content (gptel-benchmark-memory-read-state)))
-      (should (stringp state-content))
-      (should (string-match-p "Mementum State" state-content)))))
+   (let ((state-content (gptel-benchmark-memory-read-state)))
+     (should (stringp state-content))
+     (should (string-match-p "Mementum State" state-content)))))
 
 (ert-deftest gptel-benchmark-test-memory-update-state-writes ()
   "Test that update-state writes to state.md."
   (gptel-benchmark-test-with-temp-repo
-    (gptel-benchmark-memory-update-state "## New Section\n\nAdded by test.")
-    (let ((state-content (gptel-benchmark-memory-read-state)))
-      (should (string-match-p "New Section" state-content)))))
+   (gptel-benchmark-memory-update-state "## New Section\n\nAdded by test.")
+   (let ((state-content (gptel-benchmark-memory-read-state)))
+     (should (string-match-p "New Section" state-content)))))
 
 (ert-deftest gptel-benchmark-test-memory-create ()
   "Test creating a memory entry."
   (gptel-benchmark-test-with-temp-repo
-    (let ((memory-file (gptel-benchmark-memory-create
-                        "test-insight"
-                        'insight
-                        "This is a test insight for integration testing.")))
-      (should (file-exists-p memory-file))
-      (should (string-match-p "test-insight" memory-file)))))
+   (let ((memory-file (gptel-benchmark-memory-create
+                       "test-insight"
+                       'insight
+                       "This is a test insight for integration testing.")))
+     (should (file-exists-p memory-file))
+     (should (string-match-p "test-insight" memory-file)))))
 
 (ert-deftest gptel-benchmark-test-memory-list ()
   "Test listing memories."
   (gptel-benchmark-test-with-temp-repo
-    (gptel-benchmark-memory-create "memory-1" 'insight "First memory.")
-    (gptel-benchmark-memory-create "memory-2" 'win "Second memory.")
-    (let ((memories (gptel-benchmark-memory-list 'memories)))
-      (should (>= (length memories) 2)))))
+   (gptel-benchmark-memory-create "memory-1" 'insight "First memory.")
+   (gptel-benchmark-memory-create "memory-2" 'win "Second memory.")
+   (let ((memories (gptel-benchmark-memory-list 'memories)))
+     (should (>= (length memories) 2)))))
 
 ;;; ============================================================================
 ;;; Daily Cycle Tests
@@ -106,57 +115,57 @@
 (ert-deftest gptel-benchmark-test-daily-setup-orient ()
   "Test that daily-setup calls memory-orient."
   (gptel-benchmark-test-with-temp-repo
-    (let ((orient-called nil))
-      (advice-add 'gptel-benchmark-memory-orient :before
-                  (lambda () (setq orient-called t))
-                  '((name . test-orient)))
-      (unwind-protect
-          (progn
-            (gptel-benchmark-daily-setup)
-            (should orient-called))
-        (advice-remove 'gptel-benchmark-memory-orient
-                       '((name . test-orient)))
-        (gptel-benchmark-daily-teardown)))))
+   (let ((orient-called nil))
+     (advice-add 'gptel-benchmark-memory-orient :before
+                 (lambda () (setq orient-called t))
+                 '((name . test-orient)))
+     (unwind-protect
+         (progn
+           (gptel-benchmark-daily-setup)
+           (should orient-called))
+       (advice-remove 'gptel-benchmark-memory-orient
+                      '((name . test-orient)))
+       (gptel-benchmark-daily-teardown)))))
 
 (ert-deftest gptel-benchmark-test-wrap-skill-captures-results ()
   "Test that wrap-skill-run captures and stores results."
   (gptel-benchmark-test-with-temp-repo
-    (setq gptel-benchmark-daily-runs nil
-          gptel-benchmark-daily-run-count 0
-          gptel-benchmark-daily-auto-collect t)
-    (let ((mock-result '(:overall-score 0.85 :efficiency-score 0.9)))
-      (gptel-benchmark-daily--wrap-skill-run
-       (lambda (&rest _args) mock-result)
-       'test-skill 'test-001)
-      (should (consp gptel-benchmark-daily-runs))
-      (should (= (length gptel-benchmark-daily-runs) 1))
-      (should (eq (plist-get (car gptel-benchmark-daily-runs) :type) 'skill))
-      (should (equal (plist-get (car gptel-benchmark-daily-runs) :results)
-                     '(:overall-score 0.85 :efficiency-score 0.9))))))
+   (setq gptel-benchmark-daily-runs nil
+         gptel-benchmark-daily-run-count 0
+         gptel-benchmark-daily-auto-collect t)
+   (let ((mock-result '(:overall-score 0.85 :efficiency-score 0.9)))
+     (gptel-benchmark-daily--wrap-skill-run
+      (lambda (&rest _args) mock-result)
+      'test-skill 'test-001)
+     (should (consp gptel-benchmark-daily-runs))
+     (should (= (length gptel-benchmark-daily-runs) 1))
+     (should (eq (plist-get (car gptel-benchmark-daily-runs) :type) 'skill))
+     (should (equal (plist-get (car gptel-benchmark-daily-runs) :results)
+                    '(:overall-score 0.85 :efficiency-score 0.9))))))
 
 (ert-deftest gptel-benchmark-test-maybe-evolve-after-interval ()
   "Test that maybe-evolve triggers after interval runs."
   (gptel-benchmark-test-with-temp-repo
-    (setq gptel-benchmark-daily-runs nil
-          gptel-benchmark-daily-run-count 0
-          gptel-benchmark-daily-evolution-interval 3
-          gptel-benchmark-daily-auto-collect t
-          gptel-benchmark-evolution-triggered nil)
-    (let ((evolve-called nil))
-      (advice-add 'gptel-benchmark-evolution-cycle :before
-                  (lambda (&rest _) (setq evolve-called t))
-                  '((name . test-evolve)))
-      (unwind-protect
-          (progn
-            (dotimes (_ 2)
-              (gptel-benchmark-daily--wrap-skill-run
-               (lambda (&rest _) 'mock) 'test-skill 'test-001))
-            (should (not evolve-called))
-            (gptel-benchmark-daily--wrap-skill-run
-             (lambda (&rest _) 'mock) 'test-skill 'test-001)
-            (should evolve-called))
-        (advice-remove 'gptel-benchmark-evolution-cycle
-                       '((name . test-evolve)))))))
+   (setq gptel-benchmark-daily-runs nil
+         gptel-benchmark-daily-run-count 0
+         gptel-benchmark-daily-evolution-interval 3
+         gptel-benchmark-daily-auto-collect t
+         gptel-benchmark-evolution-triggered nil)
+   (let ((evolve-called nil))
+     (advice-add 'gptel-benchmark-evolution-cycle :before
+                 (lambda (&rest _) (setq evolve-called t))
+                 '((name . test-evolve)))
+     (unwind-protect
+         (progn
+           (dotimes (_ 2)
+             (gptel-benchmark-daily--wrap-skill-run
+              (lambda (&rest _) 'mock) 'test-skill 'test-001))
+           (should (not evolve-called))
+           (gptel-benchmark-daily--wrap-skill-run
+            (lambda (&rest _) 'mock) 'test-skill 'test-001)
+           (should evolve-called))
+       (advice-remove 'gptel-benchmark-evolution-cycle
+                      '((name . test-evolve)))))))
 
 ;;; ============================================================================
 ;;; Evolution + Improve Tests
@@ -182,14 +191,14 @@
 (ert-deftest gptel-benchmark-test-evolve-with-improvement-integration ()
   "Test full evolve-with-improvement integration."
   (gptel-benchmark-test-with-temp-repo
-    (let* ((results '(:overall-score 0.75
-                      :efficiency-score 0.6
-                      :completion-score 0.9)))
-      (condition-case err
-          (progn
-            (gptel-benchmark-evolve-with-improvement 'test-skill 'skill results)
-            (should t))
-        (error (should t))))))
+   (let* ((results '(:overall-score 0.75
+                                    :efficiency-score 0.6
+                                    :completion-score 0.9)))
+     (condition-case err
+         (progn
+           (gptel-benchmark-evolve-with-improvement 'test-skill 'skill results)
+           (should t))
+       (error (should t))))))
 
 (ert-deftest gptel-benchmark-test-evolution-report-json ()
   "Test evolution report generation for CI."
