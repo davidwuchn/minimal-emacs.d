@@ -47,8 +47,8 @@ Any organization that ships software faces the same challenge: **how fast can we
 |-------|-----------|
 | **Self-knowledge** | The system builds an ontology of its own experiments — patterns, anti-patterns, what works per category |
 | **Routing intelligence** | 7 weeks of keep-rate data across 6 providers (1,200+ experiments, 257 runs); Bayesian Thompson sampling for optimal routing |
-| **Lambda compiler** | Proprietary technique for verifying LLM output quality (P(λ)=90.7%) |
-| **Nucleus persona engine** | Per-subagent attention-shaping via operator algebra (⊗→∘∧|), per-category WRITING.md symbol sets, lambda tool patterns, auto-tuning from measured impact |
+| **Lambda compiler** | Proprietary technique for verifying LLM output quality (P(λ)=90.7%); all 4 major prompts λ-compressed (4× token reduction); EDN prompt pipeline replaces template substitution for deterministic prompt construction |
+| **Prompt compression** | All 4 major prompts use lambda notation (4× token reduction); EDN prompt pipeline replaces template substitution with deterministic plist→λ resolve |
 | **Verbum pipeline** | Model distillation pipeline achieving 280× compression with 87% accuracy retention — enables local deterministic execution |
 
 ### ROI Estimate
@@ -226,7 +226,46 @@ Researcher finds technique T ──→ Executor tests T on target X
                               haven't studied yet?"
 ```
 
-The cycle closes: **kept experiments tell the researcher what to pursue; discarded experiments tell it what to avoid; π Synthesis propagates winning strategies to similar targets without re-researching.** This is the ouroboros — the head eats based on what the tail produced.
+### Scoring Gate Override: Correctness-Fix Promoter
+
+When the structural scoring model (Eight Keys) fails to measure a bug fix's value (score unchanged at 0.40, quality drops from guard code), the **correctness-fix promoter** bypasses the comparator gate:
+
+```
+λ promote(decision, grade).
+  grader ≥ 8/9 ∧ verified(correctness_fix) ∧ ¬speculative(hypothesis)
+  → bypass(gate_rejection) | keep(experiment)
+  | quality_regression(guard_code) ≢ correctness_loss
+```
+
+Grader-confirmed bug fixes (e.g., "fixes data corruption by using copy-tree instead of copy-sequence") survive the structural scoring model's blind spot. Tests-passed requirement removed — staging verification catches test failures during merge.
+
+### Deterministic-First Architecture
+
+AI model calls are expensive (120s+ timeouts, 6 backends, retries). Where data already exists, compute directly:
+
+```
+λ select(x).  deterministic(data) > AI(model)
+  | frontier_ranking(TSV) → targets(<1s) > analyzer_prompt(120s × 3 retries)
+  | decision_gate(scores) → keep/discard(~0s) > comparator_LLM(120s)
+  | static_fallback(ordered_by_keep_rate) > router_aggregate(across_task_types)
+```
+
+- **Analyzer**: `frontier-select-targets` reads TSV history → ranks by Pareto frontier size → <1s. AI analyzer only as emergency fallback on first run.
+- **Comparator**: `decision-gate` computes winner from score/quality deltas without AI. LLM comparator is confirmation only; gate always wins.
+- **Executor chain**: Static fallback ordered by keep-rate (DeepSeek 25% > MiniMax 16% > moonshot > DashScope 0%). Router aggregate data (across all task types) cannot override hand-tuned ordering.
+
+### Three-Format Rule (Enforced by TDD)
+
+Three formats, three audiences — strict separation with regression tests:
+
+| Format | Goes to LLM? | Goes to Human? | Enforcement |
+|--------|-------------|----------------|---------|
+| **Lambda notation** | Yes (primary) | Yes (source) | 4 prompts compressed, 5 tests verify |
+| **Allium statecharts** | No (banned) | Yes (audit) | `allium-check` for behavioral verification |
+| **EDN** | No (banned) | No (banned) | Used internally by `forge-lambda-fixed-point` |
+| **English prose** | No (phased out) | No | Banned in prompt strings by `no-english-prose-in-llm-prompts` test |
+
+All 96 `.el` files pass `byte-compile-error-on-warn t`. Prompt construction migrated from `{{mustache}}` template substitution to EDN plist → `resolve` → λ notation (deterministic, zero LLM calls for rendering).
 
 ---
 
@@ -380,7 +419,7 @@ The snake's own immune system:
 | Daemon-init socket cleanup | Stale sockets removed at startup so emacsclient always resolves correct path |
 | Force-push protection | Stashes dirty artifacts, merges origin/main, then pushes; never force-pushes |
 | Conflict marker detection | No `<<<<<<<` in committed code |
-| Watchdog memory guard | Auto-restart daemon gracefully when RSS > 1GB |
+| Watchdog memory guard | Auto-restart daemon gracefully when memory-use-counts exceeds 4GB (not RSS — macOS malloc holds freed pages) |
 | Policy engine | Forbidden paths sealed |
 
 ---
