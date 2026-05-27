@@ -102,19 +102,29 @@ This combines:
 (defun gptel-benchmark--apply-with-verification (name type improvements before-results)
   "Apply IMPROVEMENTS to NAME of TYPE with verification against BEFORE-RESULTS.
 Returns plist with :applied count and :verified boolean."
-  ;; ASSUMPTION: improvements is a list, before-results is a plist
-  ;; EDGE CASE: nil after-results treated as verification failure
+  ;; CONTRACT: improvements is list, before-results is proper-list or nil
   (let ((checkpoints '())
         (applied 0)
         (verified t))
+    (when (not (proper-list-p improvements))
+      (message "[integrate] apply-with-verification: improvements not a proper list: %S"
+               (type-of improvements))
+      (setq improvements '()))
+    
     (dolist (impr improvements)
       (let ((cp-id (gptel-benchmark-apply-improvement name type impr)))
         (when cp-id (push cp-id checkpoints))
         (cl-incf applied)))
+    
     (when (and (> applied 0) gptel-benchmark-verify-enabled)
       (let* ((after-results (gptel-benchmark--run-quick-benchmark name type))
-             (before-score (gptel-benchmark--extract-score before-results))
-             (after-score (gptel-benchmark--extract-score after-results)))
+             ;; NIL GUARD: after-results may be nil if benchmark fails
+             (before-score (if (proper-list-p before-results)
+                               (gptel-benchmark--extract-score before-results)
+                             0.75))
+             (after-score (if (proper-list-p after-results)
+                              (gptel-benchmark--extract-score after-results)
+                            0.75)))
         (when (or (null after-results)
                   (<= after-score (+ before-score gptel-benchmark-verify-threshold)))
           (setq verified nil)
@@ -149,14 +159,19 @@ Try real benchmark if gptel-agent--task is available, else mock."
 (declare-function gptel-skill--average-score "gptel-skill-benchmark")
 
 (defun gptel-benchmark--extract-score (results)
-  "Extract overall score from RESULTS."
-  ;; ASSUMPTION: results is a proper plist or nil
-  ;; EDGE CASE: nil or improper list returns safe default
-  (if (and results (proper-list-p results))
-      (or (plist-get results :overall-score)
-          (/ (or (plist-get results :average-score) 75) 100.0)
-          0.75)
-    0.75))
+  "Extract overall score from RESULTS.
+RESULTS must be a proper list (plist). Returns 0.75 as safe default
+for nil or malformed input."
+  (cond
+   ((not (proper-list-p results))
+    (message "[integrate] extract-score: expected proper-list, got %S" (type-of results))
+    0.75)
+   ((null results) 0.75)
+   (t
+    (or (plist-get results :overall-score)
+        (let ((avg (or (plist-get results :average-score)
+                       (plist-get results :avg))))
+          (if (numberp avg) (/ avg 100.0) 0.75))))))
 
 (defun gptel-benchmark--get-target-file (name type)
   "Get target file path for NAME of TYPE."

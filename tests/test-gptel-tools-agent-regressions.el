@@ -19111,31 +19111,169 @@ OUTPUT: line1=\"A\"|\"B\"|\"tie\" line2=reason(1 sentence)"
     (should (string-match-p "∀f ∈ forbidden" prompt))
     (should-not (string-match-p "Grade the following output" prompt))))
 
-(ert-deftest regression/three-format/experiment-prompt-is-lambda ()
-  "The experiment prompt template must use lambda notation."
-  (skip-unless (fboundp 'gptel-auto-workflow--load-prompt-template))
-  (let ((template (gptel-auto-workflow--load-prompt-template)))
-    (should (string-match-p "λ experiment" template))
-    (should (string-match-p "RULES:" template))
-    (should (string-match-p "OUTPUT:" template))
-    (should (string-match-p "TYPE(pick_one):" template))
-    ;; These English prose markers must NOT appear
-    (should-not (string-match-p "## Objective" template))
-    (should-not (string-match-p "## Constraints" template))
-    (should-not (string-match-p "## Code Improvement Types" template))
-    (should-not (string-match-p "## Instructions" template))))
+;; ─── EDN Prompt Pipeline TDD ───
 
-(ert-deftest regression/three-format/research-for-prompt-extracts-apply ()
-  "Research findings must be lambda-compressed via Apply: extraction."
-  (skip-unless (fboundp 'gptel-auto-experiment--research-for-prompt))
-  (let* ((english "**Apply:** add nil guards to all public functions
-**Apply:** extract duplicate retry logic
-Some filler text here")
-         (result (gptel-auto-experiment--research-for-prompt english)))
-    (should (string-match-p "λ apply:" result))
-    (should (string-match-p "add nil guards" result))
-    (should (string-match-p "extract duplicate retry" result))
-    (should-not (string-match-p "filler text" result))))
+(ert-deftest regression/edn-pipeline/resolve-produces-lambda-notation ()
+  "prompt-edn-resolve must produce valid lambda notation."
+  (skip-unless (fboundp 'gptel-auto-experiment--prompt-edn-resolve))
+  (let* ((vars `(:target "test-file.el"
+                 :experiment-id 1
+                 :max-experiments 5
+                 :time-budget 15
+                 :worktree-path "/tmp/test"
+                 :target-full-path "/tmp/test/lisp/test-file.el"
+                 :baseline "0.50"
+                 :sexp-check-command "emacs --batch --eval '(byte-compile-file \"test.el\")'"))
+         (prompt (gptel-auto-experiment--prompt-edn-resolve vars)))
+    ;; Must start with λ experiment
+    (should (string-match-p "λ experiment(test-file\\.el)" prompt))
+    ;; Must contain experiment metadata
+    (should (string-match-p "id=1/5" prompt))
+    (should (string-match-p "budget=15min" prompt))
+    ;; Must contain RULES section
+    (should (string-match-p "RULES:" prompt))
+    (should (string-match-p "¬touch" prompt))
+    ;; Must contain OUTPUT spec
+    (should (string-match-p "OUTPUT:" prompt))
+    ;; Must contain TYPE pick directive
+    (should (string-match-p "TYPE(pick_one)" prompt))
+    ;; Must NOT contain English prose headers
+    (should-not (string-match-p "## Objective" prompt))
+    (should-not (string-match-p "## Constraints" prompt))
+    (should-not (string-match-p "## Instructions" prompt))
+    (should-not (string-match-p "## Code Improvement Types" prompt))
+    (should-not (string-match-p "CRITICAL:" prompt))
+    (should-not (string-match-p "IMPORTANT:" prompt))
+    ;; Must be compact (under 800 chars for minimal vars)
+    (should (< (length prompt) 800))))
+
+(ert-deftest regression/edn-pipeline/empty-sections-are-skipped ()
+  "Optional sections with nil/empty values must be omitted from output."
+  (skip-unless (fboundp 'gptel-auto-experiment--prompt-edn-resolve))
+  (let* ((minimal-vars `(:target "minimal.el"
+                         :experiment-id 1
+                         :max-experiments 3
+                         :time-budget 10
+                         :worktree-path "."
+                         :target-full-path "lisp/minimal.el"
+                         :baseline "0.40"
+                         :sexp-check-command "echo ok"))
+         (prompt (gptel-auto-experiment--prompt-edn-resolve minimal-vars)))
+    ;; None of the optional sections should appear
+    (should-not (string-match-p "CATEGORY:" prompt))
+    (should-not (string-match-p "SKILLS:" prompt))
+    (should-not (string-match-p "ALLIUM:" prompt))
+    (should-not (string-match-p "REPAIR:" prompt))
+    (should-not (string-match-p "SUGGEST:" prompt))
+    (should-not (string-match-p "RESEARCH:" prompt))
+    (should-not (string-match-p "AXIS:" prompt))
+    (should-not (string-match-p "GIT:" prompt))
+    ;; But the core sections must be present
+    (should (string-match-p "RULES:" prompt))
+    (should (string-match-p "OUTPUT:" prompt))
+    (should (string-match-p "TYPE(pick_one)" prompt))))
+
+(ert-deftest regression/edn-pipeline/optional-sections-render-when-non-nil ()
+  "Optional sections with non-empty values must be rendered."
+  (skip-unless (fboundp 'gptel-auto-experiment--prompt-edn-resolve))
+  (let* ((full-vars `(:target "full.el"
+                      :experiment-id 2
+                      :max-experiments 5
+                      :time-budget 20
+                      :worktree-path "/tmp"
+                      :target-full-path "/tmp/lisp/full.el"
+                      :baseline "0.70"
+                      :weakest-keys "Vitality(0.3) Clarity(0.4)"
+                      :nucleus-persona "[phi fractal]"
+                      :self-evolution "cache hit patterns"
+                      :allium-issues "no coherence issues"
+                      :allium-repair "add nil guards"
+                      :topic-knowledge "past success: safety"
+                      :previous-experiment-analysis "3 discarded"
+                      :suggestions "focus on error handling"
+                      :suggested-hypothesis "fix nil deref in validate-input"
+                      :mutation-templates "- safety guard\n- validation"
+                      :evolved-recommendations "prefer copy-tree"
+                      :research-findings "λ apply: add nil guards"
+                      :controller-focus "FOCUS: validate-input"
+                      :inspection-thrash-contract "λ ¬thrash"
+                      :large-target-guidance "target > 60KB"
+                      :moderator-lens "drift: 3 consecutive failures"
+                      :git-history "last 10 commits"
+                      :axis-guidance "K axis: knowledge"
+                      :axis-performance "K: 25% keep-rate"
+                      :frontier-guidance "frontier: 3"
+                      :saturation-status "unsaturated"
+                      :failure-patterns "inspection-thrash 5x"
+                      :task-type-diversity "3 types used"
+                      :cross-target-patterns "hash-table guard"
+                      :strategy-frontier "failure-frontloading"
+                      :agent-behavior "use Edit tool"
+                      :validation-pipeline "byte-compile, nucleus"
+                      :focus-line "FOCUS: validate-input"
+                      :sexp-check-command "emacs --batch --eval '(byte-compile-file \"full.el\")'"))
+         (prompt (gptel-auto-experiment--prompt-edn-resolve full-vars)))
+    ;; All optional sections should be present
+    (should (string-match-p "CATEGORY:" prompt))
+    (should (string-match-p "SKILLS:" prompt))
+    (should (string-match-p "ALLIUM:" prompt))
+    (should (string-match-p "REPAIR:" prompt))
+    (should (string-match-p "SUGGEST:" prompt))
+    (should (string-match-p "RESEARCH:" prompt))
+    (should (string-match-p "PAST:" prompt))
+    (should (string-match-p "GIT:" prompt))
+    (should (string-match-p "AXIS:" prompt))
+    (should (string-match-p "AXIS-PERF:" prompt))
+    (should (string-match-p "FRONTIER:" prompt))
+    (should (string-match-p "SATUR:" prompt))
+    (should (string-match-p "FAIL:" prompt))
+    (should (string-match-p "DIVERSITY:" prompt))
+    (should (string-match-p "CROSS:" prompt))
+    (should (string-match-p "STRATEGY:" prompt))
+    (should (string-match-p "AGENT:" prompt))
+    (should (string-match-p "VALIDATE:" prompt))
+    ;; Controller and inspection must appear near baseline
+    (should (string-match-p "FOCUS: validate-input" prompt))
+    (should (string-match-p "λ ¬thrash" prompt))
+    ;; Must still be lambda format
+    (should (string-match-p "λ experiment(full\\.el)" prompt))))
+
+(ert-deftest regression/edn-pipeline/no-template-substitution-residue ()
+  "EDN-resolved prompt must never contain {{var}} template markers."
+  (skip-unless (fboundp 'gptel-auto-experiment--prompt-edn-resolve))
+  (let* ((vars `(:target "x.el"
+                 :experiment-id 1
+                 :max-experiments 1
+                 :time-budget 5
+                 :worktree-path "."
+                 :target-full-path "x.el"
+                 :baseline "0.5"
+                 :focus-line "FOCUS: test"
+                 :sexp-check-command "true"))
+         (prompt (gptel-auto-experiment--prompt-edn-resolve vars)))
+    (should-not (string-match-p "{{[a-z-]+}}" prompt))
+    (should-not (string-match-p "{{experiment-id}}" prompt))
+    (should-not (string-match-p "{{target}}" prompt))))
+
+(ert-deftest regression/edn-pipeline/output-contains-verify-and-commit ()
+  "EDN-resolved prompt must include verify command and 'not committed'."
+  (skip-unless (fboundp 'gptel-auto-experiment--prompt-edn-resolve))
+  (let* ((vars `(:target "v.el"
+                 :experiment-id 1
+                 :max-experiments 2
+                 :time-budget 10
+                 :worktree-path "."
+                 :target-full-path "v.el"
+                 :baseline "0.60"
+                 :sexp-check-command "emacs --batch -f batch-byte-compile v.el"))
+         (prompt (gptel-auto-experiment--prompt-edn-resolve vars)))
+    (should (string-match-p "verify:" prompt))
+    (should (string-match-p "scripts/verify-nucleus.sh" prompt))
+    (should (string-match-p "scripts/run-tests.sh" prompt))
+    (should (string-match-p "COMMIT.*not committed" prompt))
+    (should (string-match-p "CHANGED" prompt))
+    (should (string-match-p "EVIDENCE" prompt))
+    (should (string-match-p "VERIFY" prompt))))
 
 (provide 'test-gptel-tools-agent-regressions)
 

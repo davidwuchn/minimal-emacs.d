@@ -960,6 +960,90 @@ Missing variables are replaced with empty string."
     ;; Remove any remaining unreplaced variables
     (replace-regexp-in-string "{{[a-z-]+}}" "" result)))
 
+;; ─── EDN Prompt Pipeline ───
+
+(defun gptel-auto-experiment--prompt-edn-resolve (vars)
+  "Resolve prompt EDN (plist) to lambda notation.  Deterministic, no LLM call.
+VARS is the plist from build-prompt with keys :target, :baseline, etc.
+Returns a compact lambda-notation string ready for the LLM."
+  (let* ((target (or (plist-get vars :target) "unknown"))
+         (exp-id (or (plist-get vars :experiment-id) 0))
+         (max-exp (or (plist-get vars :max-experiments) 1))
+         (budget (or (plist-get vars :time-budget) 15))
+         (baseline (or (plist-get vars :baseline) "0.50"))
+         (worktree (or (plist-get vars :worktree-path) "."))
+         (tgt-full (or (plist-get vars :target-full-path) target))
+         (controller (plist-get vars :controller-focus))
+         (inspection (plist-get vars :inspection-thrash-contract))
+         (large (plist-get vars :large-target-guidance))
+         (persona (plist-get vars :nucleus-persona))
+         (skills (plist-get vars :self-evolution))
+         (allium-i (plist-get vars :allium-issues))
+         (allium-r (plist-get vars :allium-repair))
+         (topic (plist-get vars :topic-knowledge))
+         (prev (plist-get vars :previous-experiment-analysis))
+         (sugg (plist-get vars :suggestions))
+         (hyp (plist-get vars :suggested-hypothesis))
+         (mut (plist-get vars :mutation-templates))
+         (evol (plist-get vars :evolved-recommendations))
+         (weakest (plist-get vars :weakest-keys))
+         (focus (plist-get vars :focus-line))
+         (sexp (plist-get vars :sexp-check-command))
+         (research (plist-get vars :research-findings))
+         (moderator (plist-get vars :moderator-lens))
+         (git-hist (plist-get vars :git-history))
+         (axis-g (plist-get vars :axis-guidance))
+         (axis-p (plist-get vars :axis-performance))
+         (frontier (plist-get vars :frontier-guidance))
+         (satur (plist-get vars :saturation-status))
+         (fail-p (plist-get vars :failure-patterns))
+         (div (plist-get vars :task-type-diversity))
+         (cross (plist-get vars :cross-target-patterns))
+         (strat-f (plist-get vars :strategy-frontier))
+         (agent-b (plist-get vars :agent-behavior))
+         (val-pipe (plist-get vars :validation-pipeline)))
+    (concat
+     (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
+             target exp-id max-exp budget worktree tgt-full baseline)
+     (if weakest (concat "\n  " weakest) "")
+     (if controller (concat "\n  " controller) "")
+     (if inspection (concat "\n  " inspection) "")
+     (if large (concat "\n  " large) "")
+     (if moderator (concat "\n  " moderator) "")
+     "\n\n"
+     (if persona (concat "CATEGORY: " persona "\n") "")
+     (if skills (concat "SKILLS: " skills "\n") "")
+     (if allium-i (concat "ALLIUM: " allium-i "\n") "")
+     (if allium-r (concat "REPAIR: " allium-r "\n") "")
+     (if (or topic prev) (concat "PAST: " (or topic "")
+                                 (if prev (concat " " prev) "") "\n") "")
+     (if (or sugg hyp mut evol) (concat "SUGGEST: " (or sugg "")
+                                        (if hyp (concat " " hyp) "")
+                                        (if mut (concat " " mut) "")
+                                        (if evol (concat " " evol) "") "\n") "")
+     (if research (concat "RESEARCH: " research "\n") "")
+     (if git-hist (concat "GIT: " git-hist "\n") "")
+     (if axis-g (concat "AXIS: " axis-g "\n") "")
+     (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
+     (if frontier (concat "FRONTIER: " frontier "\n") "")
+     (if satur (concat "SATUR: " satur "\n") "")
+     (if fail-p (concat "FAIL: " fail-p "\n") "")
+     (if div (concat "DIVERSITY: " div "\n") "")
+     (if cross (concat "CROSS: " cross "\n") "")
+     (if strat-f (concat "STRATEGY: " strat-f "\n") "")
+     (if agent-b (concat "AGENT: " agent-b "\n") "")
+     (if val-pipe (concat "VALIDATE: " val-pipe "\n") "")
+     "\nRULES:\n"
+     "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
+     "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
+     "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"\n"
+     (if focus (concat "  " focus "\n") "")
+     "| use(Edit) | minimal(change) | ¬git(add,commit,push) — workflow handles\n"
+     (concat "| verify: " (or sexp "emacs --batch --eval '...'")
+             " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n")
+     "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds) COMMIT(\"not committed\")\n"
+     "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage")))
+
 (defun gptel-auto-workflow--load-prompt-template ()
   "Load prompt template from skill file.
 Returns template string or fallback hardcoded template."
@@ -1091,9 +1175,8 @@ Implements section-level A/B testing to identify effective prompt components."
                     "6. Do not inspect a second subsystem before the first edit exists.\n\n"))))
     (setq gptel-auto-workflow--last-prompt-sections
           (mapconcat #'symbol-name included-sections ","))
-    ;; Build variables alist for template substitution
-    (let* ((template (gptel-auto-workflow--load-prompt-template))
-           (variables
+  ;; Build variables plist and resolve to lambda via EDN pipeline
+  (let* ((variables
             `((experiment-id . ,experiment-id)
               (max-experiments . ,max-experiments)
               (target . ,target)
@@ -1183,7 +1266,8 @@ Implements section-level A/B testing to identify effective prompt components."
               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
-      (gptel-auto-workflow--substitute-template template variables))))
+      ;; EDN resolve: deterministic, no template substitution, no escaping
+      (gptel-auto-experiment--prompt-edn-resolve variables))))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.

@@ -883,13 +883,13 @@ Returns plist with :patterns, :issues, and :recommendations."
                 (let ((tool (plist-get tc :tool)))
                   (when tool
                     (puthash tool (1+ (gethash tool tool-usage 0)) tool-usage)))))))))
-    (when (> low-completion 0)
+    (when (and (> low-completion 0) (> total 0))
       (push (list :type 'low-completion
                   :count low-completion
                   :percentage (/ (float low-completion) total))
             issues)
       (push "Review timeout settings and task complexity" recommendations))
-    (when (> low-efficiency 0)
+    (when (and (> low-efficiency 0) (> total 0))
       (push (list :type 'low-efficiency
                   :count low-efficiency
                   :percentage (/ (float low-efficiency) total))
