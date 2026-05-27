@@ -1180,9 +1180,8 @@ Implements section-level A/B testing to identify effective prompt components."
                     "6. Do not inspect a second subsystem before the first edit exists.\n\n"))))
     (setq gptel-auto-workflow--last-prompt-sections
           (mapconcat #'symbol-name included-sections ","))
-    ;; Build variables alist for template substitution
-    (let* ((template (gptel-auto-workflow--load-prompt-template))
-           (variables
+  ;; Build variables plist and resolve to lambda via EDN pipeline
+  (let* ((variables
             `((experiment-id . ,experiment-id)
               (max-experiments . ,max-experiments)
               (target . ,target)
