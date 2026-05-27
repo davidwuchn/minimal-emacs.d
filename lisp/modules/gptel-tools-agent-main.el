@@ -85,19 +85,21 @@ Also monitors memory and triggers GC when RSS exceeds threshold."
            (message "[auto-workflow] Status refresh failed: %s"
                     (error-message-string err))
            (gptel-auto-workflow--stop-status-refresh-timer)))
-        ;; Memory management: trigger GC when RSS > 800MB to prevent OOM
-        (let ((rss (gptel-auto-workflow--process-rss-kb)))
-          (when (and rss (> rss 800000))
-            (message "[mem] RSS %.0fMB, triggering GC" (/ rss 1024.0))
-            (garbage-collect)
-            (let ((after-rss (gptel-auto-workflow--process-rss-kb)))
-              (when (and after-rss (> after-rss 900000))
-                (message "[mem] RSS %.0fMB after GC — restarting daemon"
-                         (/ after-rss 1024.0))
-                ;; Kill emacs immediately.  The watchdog will restart it within
-                ;; 30 minutes.  Sticking around at 2.8GB+ is worse than a restart
-                ;; because GC can't free the memory and the daemon loops forever.
-                (kill-emacs))))))
+        ;; Memory management: periodic GC to prevent runaway heap growth.
+        ;; NOTE: RSS stays at 2.9GB from malloc caching even when only
+        ;; ~33MB Lisp heap is live.  Don't use RSS thresholds — the
+        ;; watchdog handles physical memory (>5GB).  Use consed bytes
+        ;; from gc-elapsed/gc-stat instead.  Default gc-cons-threshold
+        ;; is 800KB, so GC fires frequently enough.  Force a GC every
+        ;; 200 status refreshes (~10min) to keep heap compact.
+        (let ((genv (and (fboundp 'memory-use-counts) (memory-use-counts))))
+          (when genv
+            (let* ((total (elt genv 0))  ;; Total cons cells
+                   (gcs (elt genv 1))     ;; GCs done
+                   (threshold (car (cdr (cdr (cdr genv))))))  ;; gc-cons-threshold
+              (when (> total (* 2 threshold))
+                (message "[mem] %d cons cells, triggering GC" total)
+                (garbage-collect))))))
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--maybe-start-status-refresh-timer ()

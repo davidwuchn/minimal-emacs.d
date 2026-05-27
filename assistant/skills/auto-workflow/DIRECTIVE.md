@@ -3,7 +3,7 @@ name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.27
 total-experiments: 870
-total-kept: 41
+total-kept: 5
 ---
 
 # Auto-Workflow Program
@@ -17,16 +17,16 @@ total-kept: 41
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-benchmark-principles.el` | 50% | 4 | 2 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-evolution.el` | 33% | 3 | 1 | ✅ High yield |
-| `lisp/modules/gptel-ext-context.el` | 33% | 9 | 3 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-comparator.el` | 29% | 7 | 2 | 🟡 Active |
-| `lisp/modules/gptel-benchmark-core.el` | 26% | 19 | 5 | 🟡 Active |
-| `lisp/modules/gptel-ext-abort.el` | 25% | 4 | 1 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-staging-baseline.el` | 25% | 4 | 1 | 🟡 Active |
-| `lisp/modules/gptel-ext-tool-permits.el` | 25% | 12 | 3 | 🟡 Active |
-| `lisp/modules/gptel-tools-memory.el` | 22% | 54 | 12 | 🟡 Active |
-| `lisp/modules/nucleus-tools.el` | 21% | 19 | 4 | 🟡 Active |
+| `lisp/modules/gptel-ext-context.el` | 50% | 2 | 1 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-comparator.el` | 50% | 4 | 2 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent.el` | 14% | 7 | 1 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-error.el` | 11% | 9 | 1 | 🟡 Active |
+| `lisp/modules/gptel-ext-fsm-utils.el` | 0% | 7 | 0 | ❌ Plateaued |
+| `lisp/modules/gptel-ext-retry.el` | 0% | 3 | 0 | ⏳ Insufficient data |
+| `staging-review` | 0% | 5 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 7 | 0 | ❌ Plateaued |
+| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 3 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 3 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -57,16 +57,15 @@ total-kept: 41
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (221×): Investigate root cause
-- **timeout** (12×): Add smaller batch sizes or chunked processing
-- **api-limit** (12×): Implement provider fallback or rate limit handling
-- **validation-failed** (12×): Improve pre-grade validation prompts
-- **test-failure** (4×): Run tests before committing experiments
+- **other** (58×): Investigate root cause
+- **api-limit** (5×): Implement provider fallback or rate limit handling
+- **validation-failed** (4×): Improve pre-grade validation prompts
 
 ## Success Patterns
 
 <!-- AUTO-UPDATED: From mementum knowledge -->
 - Extract helper functions for repeated logic
+- Improve error handling and recovery mechanisms
 
 ## Failed Patterns
 
@@ -78,11 +77,11 @@ total-kept: 41
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-principles.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 50%)
-- **lisp/modules/gptel-benchmark-evolution.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
-- **lisp/modules/gptel-ext-context.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
-- **lisp/modules/gptel-workflow-benchmark.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 50%)
+- **lisp/modules/gptel-tools-agent.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-agent-error.el**: Try validation guards or error handling improvements (previous experiments discarded)
 - **lisp/modules/gptel-ext-fsm-utils.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -108,4 +107,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (41 kept locally across 261 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (5 kept locally across 66 local records). It evolves every self-evolution cycle.*
