@@ -1338,14 +1338,36 @@ META-LEARNING: Feeds findings to analyzer selection and the project research cac
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
 CALLBACK receives list of target files.
-When gptel-auto-workflow-research-targets is non-nil, researcher
-finds patterns first for better selection."
-  (if gptel-auto-workflow-research-targets
-      (gptel-auto-workflow--research-patterns
-       (lambda (research-findings)
-         (gptel-auto-workflow--ask-analyzer-with-findings research-findings callback)))
-    (gptel-auto-workflow--ask-analyzer-with-findings
-     (gptel-auto-workflow-load-research-findings) callback)))
+
+When frontier data is available (from prior experiments), skip the
+15,000-char AI prompt entirely and use data-driven ranking.  The
+frontier ranks targets by Pareto frontier size — smallest first =
+least explored = highest opportunity.  This is instant, requires
+no AI call, and never times out.
+
+Only calls the AI analyzer when frontier data is empty (first run
+or TSV history was cleared)."
+  (let* ((frontier-ranked
+          (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
+               (condition-case nil
+                   (gptel-auto-experiment--frontier-select-targets
+                    gptel-auto-workflow-max-targets-per-run)
+                 (error nil))))
+         (frontier-targets (mapcar #'car frontier-ranked)))
+    (if (and frontier-targets (> (length frontier-targets) 0))
+        ;; Fast path: frontier data available — skip the AI call entirely.
+        (let* ((targets (seq-take frontier-targets
+                                  gptel-auto-workflow-max-targets-per-run)))
+          (message "[auto-workflow] Frontier: %d ranked targets (skipping AI analyzer)"
+                   (length targets))
+          (funcall callback targets))
+      ;; Slow path: no frontier data — call AI analyzer with the full prompt.
+      (if gptel-auto-workflow-research-targets
+          (gptel-auto-workflow--research-patterns
+           (lambda (research-findings)
+             (gptel-auto-workflow--ask-analyzer-with-findings research-findings callback)))
+        (gptel-auto-workflow--ask-analyzer-with-findings
+         (gptel-auto-workflow-load-research-findings) callback)))))
 
 (defun gptel-auto-workflow--build-analyzer-prompt (context research-findings max-targets)
   "Build prompt for analyzer LLM target selection.
