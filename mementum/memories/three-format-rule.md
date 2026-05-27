@@ -30,18 +30,18 @@ TDD regression tests at `tests/test-gptel-tools-agent-regressions.el`:
 - `experiment-prompt-is-lambda` — verifies no English section headers
 - `research-for-prompt-extracts-apply` — verifies λ apply: extraction
 
-## Remaining Violations
+## Remaining Violations (10 tracked, TDD regression test active)
 
-10 English prose prompts still need compression (from audit):
-1. inspection-thrash contract (prompt-build.el)
-2. Retry instructions (experiment-core.el, 2 dup blocks)
-3. Experiment-loop repair prompt (experiment-loop.el)
-4. Agent-loop continuation (agent-loop.el)
-5. Agent-loop max-steps (agent-loop.el)
-6. Synthesis fallback (benchmark-llm.el)
-7. Synthesis fallback (agent-research.el)
-8. Digest analyst prompt (strategic.el)
-9. Research analyst system prompt (strategic.el)
-10. Strategy proposer template (strategy-evolver.el)
+1. inspection-thrash-contract (prompt-build.el:1077-1091) — 15 lines
+2. Retry instructions (experiment-core.el:338-362) — 2×13 lines
+3. Experiment-loop repair prompt (experiment-loop.el:162-207) — 46 lines
+4. Agent-loop continuation (agent-loop.el:106-116) — defcustom
+5. Agent-loop max-steps (agent-loop.el:123-134) — defcustom
+6. Synthesis fallback (benchmark-llm.el:207) — ~20 lines
+7. Synthesis fallback (agent-research.el:558-591) — ~30 lines
+8. Digest analyst prompt (strategic.el:1191-1224) — 34 lines
+9. Research analyst system prompt (strategic.el:1264) — 1 line
+10. Strategy proposer template (strategy-evolver.el:608-731) — 124 lines
 
-The lambda format ALREADY applied to experiment, comparator, grader, analyzer prompts.
+Violations tracked by `regression/three-format/no-english-prose-in-llm-prompts`.
+Compressing these is an incremental task — each can be fixed independently.
