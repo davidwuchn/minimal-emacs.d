@@ -76,7 +76,7 @@ daemon_responds() {
     # Daemon didn't respond via emacsclient — it might be busy with an API call.
     # Check if the process itself is still alive (R=Running, S=Sleeping).
     local pid
-    pid=$(ps aux | grep "[e]macs.*--bg-daemon=\\\\0123,4\\\\012$SERVER_NAME" | awk '{print $2}' | head -1)
+    pid=$(ps aux | grep '[e]macs' | grep "$SERVER_NAME" | awk '{print $2}' | head -1)
     if [ -n "$pid" ]; then
         local state
         state=$(ps -p "$pid" -o state= 2>/dev/null | tr -d ' ')
