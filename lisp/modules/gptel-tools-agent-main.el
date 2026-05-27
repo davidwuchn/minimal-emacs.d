@@ -92,8 +92,12 @@ Also monitors memory and triggers GC when RSS exceeds threshold."
             (garbage-collect)
             (let ((after-rss (gptel-auto-workflow--process-rss-kb)))
               (when (and after-rss (> after-rss 900000))
-                (message "[mem] RSS still %.0fMB after GC — will restart at end of experiment"
-                         (/ after-rss 1024.0)))))))
+                (message "[mem] RSS %.0fMB after GC — restarting daemon"
+                         (/ after-rss 1024.0))
+                ;; Kill emacs immediately.  The watchdog will restart it within
+                ;; 30 minutes.  Sticking around at 2.8GB+ is worse than a restart
+                ;; because GC can't free the memory and the daemon loops forever.
+                (kill-emacs))))))
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--maybe-start-status-refresh-timer ()

@@ -75,11 +75,11 @@ Then on a new line, briefly explain why (1 sentence)."
                 cb))
              (lambda (result)
                (let* ((response (if (stringp result) result (format "%S" result)))
-                      (reported-winner (or (gptel-auto-experiment--parse-comparator-winner response)
-                                           "unparsed"))
-                      (winner expected-winner)
-                      (override (not (string= reported-winner expected-winner)))
-                      (keep (string= winner "B")))
+                       (reported-winner (or (gptel-auto-experiment--parse-comparator-winner response)
+                                            "unparsed"))
+                       (override (not (string= reported-winner expected-winner)))
+                       (winner (if (and override (string= reported-winner "B")) "B" expected-winner))
+                       (keep (string= winner "B")))
                  (my/gptel--invoke-callback-safely
                   callback
                   (list :keep keep
