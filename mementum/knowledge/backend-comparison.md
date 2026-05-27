@@ -1,9 +1,9 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 2106 experiments across 4 backends
+> Auto-generated from 2110 experiments across 4 backends
 
 ## DashScope vs MiniMax (winner: **tie**)
 - DashScope: 17.4% keep-rate
-- MiniMax: 17.0% keep-rate
+- MiniMax: 16.9% keep-rate
 - Shared targets: 8 | DashScope won 4, MiniMax won 3, ties 1
 
 ## MiniMax vs DeepSeek (winner: **tie**)
@@ -22,4 +22,4 @@
 - Shared targets: 1 | DashScope won 1, DeepSeek won 0, ties 0
 
 
-*Generated: 2026-05-27 05:40*
+*Generated: 2026-05-27 06:01*
