@@ -43,11 +43,9 @@ A:  S=%.3f  Q=%.3f  C=%.3f
 B:  S=%.3f  Q=%.3f  C=%.3f
 | C(B) > C(A) + ε → B | C(A) > C(B) + ε → A | else → tie
 OUTPUT: line1=\"A\"|\"B\"|\"tie\" line2=reason(1 sentence)"
+                                      decision-threshold
                                       score-before quality-before combined-before
-                                      score-after quality-after combined-after
-                                      decision-threshold
-                                      decision-threshold
-                                      decision-threshold)))
+                                      score-after quality-after combined-after)))
           (with-current-buffer decide-buffer
             (gptel-auto-experiment--call-aux-subagent-with-retry
              "comparator"
