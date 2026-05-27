@@ -207,7 +207,7 @@ TEST: (my/gptel--fsm-p nil) => nil
 TEST: (my/gptel--fsm-p \"not-fsm\") => nil
 TEST: (my/gptel--fsm-p 42) => nil
 
-SIGNAL: explicit assumptions - Uses lazy predicate resolution."
+SIGNAL: Explicit assumptions - Uses lazy predicate resolution."
   (my/gptel--fsm-valid-p object))
 
 (defun my/gptel--fsm-valid-p (object)
@@ -435,7 +435,7 @@ ADAPTS TO: Provides quantitative measure of nesting for decision making.
 PROACTIVE MITIGATION: Enables detection of nested scenarios before
 wrong FSM selection occurs.
 
-SIGNAL: explicit assumptions - Uses dedicated counter instead of building list."
+SIGNAL: Explicit assumptions - Uses dedicated counter instead of building list."
   (my/gptel--fsm-count object))
 
 ;;; Registry Validation
@@ -455,7 +455,7 @@ computation at load time, improving Vitality (faster startup).")
 (defun my/gptel--fsm-id-valid-p (id)
   "Return t if ID matches expected FSM ID format.
 ASSUMPTION: Valid ID format is \"fsm-N-TIMESTAMP\" where N is integer.
-EDGE_CASE: Nil or non-string input returns nil."
+EDGE CASE: Nil or non-string input returns nil."
   (and (stringp id)
        (string-match-p my/gptel--fsm-id-regexp id)))
 
@@ -467,9 +467,9 @@ ASSUMPTION: All IDs match format \"fsm-N-TIMESTAMP\".
 BEHAVIOR: Returns t if registry is consistent.
 BEHAVIOR: Returns nil if any invariant is violated.
 BEHAVIOR: Signals error with details on first violation found.
-EDGE_CASE: Empty registry returns t (valid state).
-EDGE_CASE: Single entry validated for bidirectional consistency.
-EDGE_CASE: Multiple entries checked for unique IDs.
+EDGE CASE: Empty registry returns t (valid state).
+EDGE CASE: Single entry validated for bidirectional consistency.
+EDGE CASE: Multiple entries checked for unique IDs.
 TEST: Empty registry => t
 TEST: After register/unregister cycle => t
 TEST: Manual corruption => error with details

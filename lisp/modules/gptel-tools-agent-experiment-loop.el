@@ -948,12 +948,14 @@ typechanges."
                                      (shell-quote-argument commit)
                                      (shell-quote-argument path))
                              60)))
-               (result-output (and (consp result) (car result))))
+               (result-output (and (consp result)
+                                   (stringp (car result))
+                                   (string-trim (car result)))))
           (cond
            ((not commit)
             (setq failure
                   (format "Missing gitlink revision for submodule %s" path)))
-           ((/= 0 (cdr result))
+           ((or (null result) (/= 0 (cdr result)))
             (setq failure
                   (format "Failed to restage %s as gitlink: %s"
                           path

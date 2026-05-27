@@ -391,15 +391,19 @@ that crash non-pcase-aware callbacks."
          (safe-cb (if (and has-callback (functionp callback-val))
                       callback-val
                     (or (and (functionp callback-val) callback-val) #'ignore)))
-         (wrapped-cb
-          (lambda (resp info)
-            (if (and (consp resp) (eq (car resp) 'reasoning))
-                ;; Store reasoning in info for diagnostic access, drop cons
-                ;; from callback chain; only the plain-text response reaches
-                ;; the original callback.
-                (when (cdr resp)
-                  (plist-put info :reasoning (cdr resp)))
-              (funcall safe-cb resp info)))))
+          (wrapped-cb
+           (lambda (resp info)
+             (if (and (consp resp) (eq (car resp) 'reasoning))
+                 ;; Reasoning cons cells are normal LLM response chunks.
+                 ;; Store in info for diagnostic access but also forward
+                 ;; the reasoning text to the original callback as a
+                 ;; normal string — the callback needs to receive ALL
+                 ;; response chunks, not just the final answer.
+                 (progn
+                   (when (cdr resp)
+                     (plist-put info :reasoning (cdr resp)))
+                   (funcall safe-cb (cdr resp) info))
+               (funcall safe-cb resp info)))))
     (apply orig-fn prompt
            :callback wrapped-cb
            (cl-loop for (k v) on args by #'cddr

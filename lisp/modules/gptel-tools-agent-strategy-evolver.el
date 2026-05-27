@@ -265,11 +265,9 @@ Returns empty list if CODE is nil or empty."
 (defun gptel-auto-workflow--extract-constants (code)
   "Extract string and number constants from CODE.
 Returns empty list if CODE is nil or empty."
-  (if-let ((valid-code (gptel-auto-workflow--valid-code-string-p code)))
-      (append
-       (gptel-auto-workflow--extract-matches valid-code "\"[^\"]*\"" 0)
-       (gptel-auto-workflow--extract-matches valid-code "\\b[0-9]+\\b" 0))
-    '()))
+  (append
+   (gptel-auto-workflow--extract-matches code "\"[^\"]*\"" 0)
+   (gptel-auto-workflow--extract-matches code "\\b[0-9]+\\b" 0)))
 
 ;; ─── Prototype Error Tracking (Self-Evolution) ───
 

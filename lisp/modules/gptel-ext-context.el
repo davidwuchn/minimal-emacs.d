@@ -490,7 +490,7 @@ Returns plist with :strategy and :context keys."
     (let* ((lines (my/gptel--buffer-lines buffer-string))
            (total-lines (my/gptel--safe-list-length lines))
            (recent-lines (last lines (min 50 total-lines)))
-           (has-tool-results (when (and (proper-list-p recent-lines) recent-lines)
+           (has-tool-results (when recent-lines
                                (cl-some
                                 (lambda (line)
                                   (when (stringp line)
