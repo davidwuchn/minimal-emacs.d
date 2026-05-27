@@ -277,6 +277,14 @@ log_rotate "$LOG_DIR/ov5-auto-workflow.log"
 # ─── Clean stale PID/lock files older than 24h ───
 find "$DIR/var/tmp" -type f \( -name "*.pid" -o -name "*.lock" \) -mtime +1 -delete 2>/dev/null || true
 
+# ─── Clean old experiment directories (keep last 7 days) ───
+find "$DIR/var/tmp/experiments" -maxdepth 1 -type d -mtime +7 2>/dev/null | while read d; do
+    rm -rf "$d" 2>/dev/null || true
+done
+# Also clean stale git worktree metadata for removed experiment dirs
+git -C "$DIR" worktree prune 2>/dev/null || true
+log "Cleaned old experiment directories + stale worktree metadata"
+
 # ─── Clear stale byte-compiled files to force source reload ───
 find "$DIR/lisp/modules" -name "*.elc" -delete 2>/dev/null || true
 find "$DIR/var/eln-cache" -name "*.eln" -delete -maxdepth 3 2>/dev/null || true
@@ -318,6 +326,10 @@ clean_stale_socket() {
 clean_stale_socket "server"
 clean_stale_socket "ov5-auto-workflow"
 clean_stale_socket "ov5-researcher"
+
+# ─── Pull latest code so daemon restart picks up fixes ───
+log "Pulling latest code from origin..."
+git -C "$DIR" pull --ff-only origin main 2>&1 || log "WARNING: git pull failed, continuing with current code"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
@@ -510,6 +522,8 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     unset -f clean_ov5_sockets
     # Clear workflow status so auto-workflow can start a fresh daemon
     rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
+    # Pull any commits pushed by evolution cycle
+    git -C "$DIR" pull --ff-only origin main 2>&1 || log "WARNING: post-evolution git pull failed"
     sleep 2
 else
     log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="
