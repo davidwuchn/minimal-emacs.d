@@ -34,7 +34,7 @@
          (dir (expand-file-name "temp/" root)))
     dir))
 
-(defun test-make-temp-file (prefix &optional dir-flag suffix)
+(defun test-make-temp-file (prefix &optional _dir-flag suffix)
   "Create temp file with PREFIX."
   (let ((dir (test-temp-dir)))
     (concat dir prefix (or suffix ""))))
@@ -235,7 +235,7 @@
 (defun test-callback-guard (orig-fn &optional prompt &rest args)
   "Replica of my/gptel--gptel-request-callback-guard for TDD testing.
 Isolated from the live advice system to allow pure unit testing."
-  (let* ((keys (cl-loop for (k v) on args by #'cddr collect k))
+  (let* ((keys (cl-loop for (k _v) on args by #'cddr collect k))
          (has-callback (memq :callback keys))
          (callback-val (and has-callback (plist-get args :callback))))
     (if (and has-callback (functionp callback-val))
@@ -255,10 +255,8 @@ Isolated from the live advice system to allow pure unit testing."
         (let* ((fsm (car value))
                (info (ignore-errors (gptel-fsm-info fsm))))
           (when (and info (listp info)
-                     (not (functionp (plist-get info :callback)))))
-          ;; FIX: this guard patches the info — we just test that it
-          ;; detects nil callback without crashing
-          (ignore (list info process))))))
+                     (not (functionp (plist-get info :callback))))
+            (plist-get info :callback)))))) ; returns nil if callback nil — detected
   (funcall orig-fn process status))
 
 ;;; ── TDD: plist alignment root-cause regression ──
@@ -333,7 +331,7 @@ Isolated from the live advice system to allow pure unit testing."
 
 (ert-deftest core/callback-guard/preserves-other-keyword-args ()
   "Guard should not strip non-callback keyword arguments."
-  (let* ((cb (lambda (r i) r))
+  (let* ((cb (lambda (r _i) r))
          (received-args nil))
     (cl-letf (((symbol-function 'gptel-request)
                (lambda (&rest r) (push r received-args))))
