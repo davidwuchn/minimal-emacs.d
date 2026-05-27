@@ -1046,7 +1046,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                :agent-output review-output))
         (funcall finish nil)))
      (t
-      (let* ((scope-check (gptel-auto-experiment--check-scope))
+      (let* ((scope-check (gptel-auto-experiment--check-scope optimize-branch))
              (scope-ok (car scope-check))
              (changed-files (cdr scope-check)))
         (if (not scope-ok)

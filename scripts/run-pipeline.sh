@@ -329,6 +329,8 @@ clean_stale_socket "ov5-researcher"
 
 # ─── Pull latest code so daemon restart picks up fixes ───
 log "Pulling latest code from origin..."
+# Discard dirty auto-generated files so git pull doesn't fail
+git -C "$DIR" checkout -- mementum/knowledge/ assistant/skills/ mementum/memories/ mementum/state.md 2>/dev/null || true
 git -C "$DIR" pull --ff-only origin main 2>&1 || log "WARNING: git pull failed, continuing with current code"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
@@ -522,6 +524,8 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     unset -f clean_ov5_sockets
     # Clear workflow status so auto-workflow can start a fresh daemon
     rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
+    # Discard dirty auto-generated files so git pull doesn't fail
+    git -C "$DIR" checkout -- mementum/knowledge/ assistant/skills/ mementum/memories/ mementum/state.md 2>/dev/null || true
     # Pull any commits pushed by evolution cycle
     git -C "$DIR" pull --ff-only origin main 2>&1 || log "WARNING: post-evolution git pull failed"
     sleep 2
