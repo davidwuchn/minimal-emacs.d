@@ -1,5 +1,5 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 2110 experiments across 2 models
+> Auto-generated from 2113 experiments across 2 models
 
 ## Model Rankings (by keep-rate)
 
@@ -7,4 +7,4 @@
 - **ChatGPT/unknown**: 13.3%
 
 
-*Generated: 2026-05-27 06:01*
+*Generated: 2026-05-27 06:21*
