@@ -17,6 +17,33 @@
 (defvar gptel-auto-workflow--evolution-timer nil
   "Timer for periodic evolution cycles.")
 
+(defvar gptel-auto-workflow--gc-timer nil
+  "Timer for periodic garbage collection.")
+
+(defun gptel-auto-workflow--gc-trigger ()
+  "Force garbage collection to prevent memory growth.
+Emacs GC doesn't release memory to the OS, but periodic GC
+prevents further allocation growth by reusing freed pages.
+Runs every 300s (5min) to keep RSS from runaway growth."
+  (garbage-collect)
+  (message "[mem] GC triggered: %s"
+           (let ((stats (gptel-auto-workflow--memory-status)))
+             (mapconcat (lambda (m) (format "%s" (plist-get m :state)))
+                        stats "; "))))
+
+(defun gptel-auto-workflow-start-gc-timer ()
+  "Start periodic GC timer."
+  (gptel-auto-workflow-stop-gc-timer)
+  (setq gptel-auto-workflow--gc-timer
+        (run-with-timer 300 300 #'gptel-auto-workflow--gc-trigger))
+  (message "[auto-workflow] GC timer started (300 second intervals)"))
+
+(defun gptel-auto-workflow-stop-gc-timer ()
+  "Stop GC timer."
+  (when gptel-auto-workflow--gc-timer
+    (cancel-timer gptel-auto-workflow--gc-timer)
+    (setq gptel-auto-workflow--gc-timer nil)))
+
 ;; ─── Automatic Evolution ───
 
 (defun gptel-auto-workflow--maybe-run-evolution ()
@@ -256,9 +283,10 @@ Called when research context changes or run completes."
 ;; ─── Auto-start ───
 
 (defun gptel-auto-workflow-evolution-auto-start ()
-  "Auto-start evolution if enabled."
+  "Auto-start evolution and GC timers if enabled."
   (when gptel-auto-workflow-evolution-enabled
     (gptel-auto-workflow-start-evolution-timer)
+    (gptel-auto-workflow-start-gc-timer)
     ;; Run initial cycle
     (run-with-idle-timer 60 nil #'gptel-auto-workflow--maybe-run-evolution)))
 
