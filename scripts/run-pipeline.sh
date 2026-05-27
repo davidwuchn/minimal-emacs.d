@@ -325,6 +325,8 @@ kill_ov5_daemons "pre-cleanup"
 # Also try socket-based stop as fallback (handles edge cases)
 "$SCRIPT" stop >/dev/null 2>&1 || true
 AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
+# Clear stale status so auto-workflow starts fresh daemon
+rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
 # Force-remove stale staging worktree so auto-workflow recreates from latest main
 rm -rf "$DIR/var/tmp/experiments/staging-verify" 2>/dev/null || true
 rm -rf "$DIR/var/tmp/experiments/optimize" 2>/dev/null || true
@@ -506,6 +508,8 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     }
     clean_ov5_sockets
     unset -f clean_ov5_sockets
+    # Clear workflow status so auto-workflow can start a fresh daemon
+    rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
     sleep 2
 else
     log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="
