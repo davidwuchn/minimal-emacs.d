@@ -67,16 +67,37 @@ resolve_live_socket() {
     return 1
 }
 
-# Check if daemon is reachable via emacsclient (the most reliable method).
-# Returns 0 if responsive, 1 otherwise.
+# Check if daemon is reachable via emacsclient.
+# First verify the process exists — a busy Emacs blocked on API calls
+# still has its process running, just can't respond to emacsclient.
+# Returns 0 if responsive or process is alive (busy), 1 if truly gone.
 daemon_responds() {
-    timeout 5 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1
+    timeout 5 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1 && return 0
+    # Daemon didn't respond via emacsclient — it might be busy with an API call.
+    # Check if the process itself is still alive (R=Running, S=Sleeping).
+    local pid
+    pid=$(ps aux | grep "[e]macs.*--bg-daemon=\\\\0123,4\\\\012$SERVER_NAME" | awk '{print $2}' | head -1)
+    if [ -n "$pid" ]; then
+        local state
+        state=$(ps -p "$pid" -o state= 2>/dev/null | tr -d ' ')
+        if [ -n "$state" ] && echo "$state" | grep -qE '^[RSU]'; then
+            return 0  # Process is alive, just busy
+        fi
+    fi
+    return 1
 }
 
-# Check if a workflow is currently active on the daemon.
+# Check if a workflow is currently active by reading the status file.
+# Using the status file instead of emacsclient is critical: when the
+# daemon is busy with an API call (gptel-request), emacsclient blocks
+# and times out, making a healthy daemon look unresponsive.  The status
+# file is written to disk before any long-running operation.
 workflow_active() {
-    timeout 5 emacsclient -s "$SERVER_NAME" --eval \
-        '(and (boundp (quote gptel-auto-workflow--running)) gptel-auto-workflow--running)' >/dev/null 2>&1
+    local status_file="$DIR/var/tmp/cron/auto-workflow-status.sexp"
+    if [ -f "$status_file" ]; then
+        grep -q ':running t' "$status_file" 2>/dev/null && return 0
+    fi
+    return 1
 }
 
 # Check if a process is actively running (not stuck) without /proc.

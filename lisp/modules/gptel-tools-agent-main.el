@@ -85,21 +85,12 @@ Also monitors memory and triggers GC when RSS exceeds threshold."
            (message "[auto-workflow] Status refresh failed: %s"
                     (error-message-string err))
            (gptel-auto-workflow--stop-status-refresh-timer)))
-        ;; Memory management: periodic GC to prevent runaway heap growth.
-        ;; NOTE: RSS stays at 2.9GB from malloc caching even when only
-        ;; ~33MB Lisp heap is live.  Don't use RSS thresholds — the
-        ;; watchdog handles physical memory (>5GB).  Use consed bytes
-        ;; from gc-elapsed/gc-stat instead.  Default gc-cons-threshold
-        ;; is 800KB, so GC fires frequently enough.  Force a GC every
-        ;; 200 status refreshes (~10min) to keep heap compact.
-        (let ((genv (and (fboundp 'memory-use-counts) (memory-use-counts))))
-          (when genv
-            (let* ((total (elt genv 0))  ;; Total cons cells
-                   (gcs (elt genv 1))     ;; GCs done
-                   (threshold (car (cdr (cdr (cdr genv))))))  ;; gc-cons-threshold
-              (when (> total (* 2 threshold))
-                (message "[mem] %d cons cells, triggering GC" total)
-                (garbage-collect))))))
+        ;; Memory management: Emacs default GC (gc-cons-threshold = 800KB)
+        ;; handles heap compaction.  The periodic GC timer (300s, see
+        ;; gptel-auto-workflow-production.el) forces full GC every 5 min.
+        ;; RSS stays at 2.9GB from malloc caching — this is normal.
+        ;; Watchdog handles physical memory (>5GB → restart).
+        (ignore))
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--maybe-start-status-refresh-timer ()
