@@ -83,7 +83,11 @@ Ensures the module directory exists before constructing the path."
                    gptel-tools-agent-experiment-loop
                    gptel-tools-agent-main
                    gptel-tools-agent-research))
-  (gptel-tools-agent--load-module feature))
+  (condition-case err
+      (gptel-tools-agent--load-module feature)
+    (error
+     (message "Warning: Failed to load module %S: %s"
+              feature (error-message-string err)))))
 
 (provide 'gptel-tools-agent)
 ;;; gptel-tools-agent.el ends here
