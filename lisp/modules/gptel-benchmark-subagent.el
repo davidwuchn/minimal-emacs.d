@@ -501,28 +501,42 @@ Returns 0.0-1.0 where 1.0 = simple code (≤2 branches per function avg)."
 Returns 0.0-1.0 where higher scores indicate better practices.
 
 Positive patterns (weighted):
-- Error handling (40%): condition-case, user-error, error, signal
-- Naming conventions (30%): -- for internal, no my- prefix, proper predicates
-- Standard predicates (30%): null, stringp, listp, etc.
+- Error handling (40%): count-based occurrences of condition-case, error, etc.
+- Guard density (10% bonus): when, unless, condition-case per function
+- Naming conventions (25%): -- for internal, no my- prefix, proper predicates
+- Standard predicates (25%): null, stringp, listp, etc.
+
+Unlike the binary old design, error-handling and guard scores now SCALE so
+that adding more error handling / validation code actually increases the
+score rather than being capped at a flat ceiling.
 
 This rewards code that follows Emacs Lisp best practices.
 FUNC-DATA may be passed to avoid redundant extraction."
   (let* ((error-handling-terms '("condition-case" "user-error" "error" "signal"
-                                 "cl-assert" "cl-check-type" "assert"))
-         (bad-naming '("my-" "foo-" "bar-" "baz-"))
-         (good-predicates '("null" "stringp" "listp" "numberp" "integerp"
-                            "symbolp" "functionp" "boundp" "fboundp" "keywordp"
-                            "arrayp" "sequencep" "consp" "atom" "listp"))
-         (error-score 0.0)
-         (naming-score 1.0)
-         (predicate-score 0.0)
-         (func-count (max 1 (length (or func-data
-                                        (gptel-benchmark--extract-function-data code))))))
+                                  "cl-assert" "cl-check-type" "assert"))
+          (guard-terms '("when-let" "when" "unless" "condition-case"
+                         "with-demoted-errors" "ignore-errors"
+                         "save-match-data" "with-current-buffer"))
+          (bad-naming '("my-" "foo-" "bar-" "baz-"))
+          (good-predicates '("null" "stringp" "listp" "numberp" "integerp"
+                             "symbolp" "functionp" "boundp" "fboundp" "keywordp"
+                             "arrayp" "sequencep" "consp" "atom" "listp"))
+          (error-score 0.0)
+          (guard-count 0)
+          (naming-score 1.0)
+          (predicate-score 0.0)
+          (func-count (max 1 (length (or func-data
+                                         (gptel-benchmark--extract-function-data code))))))
     (with-temp-buffer
       (insert code)
       (goto-char (point-min))
-      (when (re-search-forward (regexp-opt error-handling-terms) nil t)
-        (setq error-score 1.0))
+      (let ((eh-count 0))
+        (while (re-search-forward (regexp-opt error-handling-terms) nil t)
+          (cl-incf eh-count))
+        (setq error-score (min 1.0 (/ (float eh-count) (max 1 func-count)))))
+      (goto-char (point-min))
+      (while (re-search-forward (regexp-opt guard-terms) nil t)
+        (cl-incf guard-count))
       (goto-char (point-min))
       (while (re-search-forward (regexp-opt bad-naming) nil t)
         (setq naming-score (max 0.0 (- naming-score 0.3))))
@@ -530,10 +544,11 @@ FUNC-DATA may be passed to avoid redundant extraction."
       (let ((pred-count 0))
         (while (re-search-forward (regexp-opt good-predicates) nil t)
           (cl-incf pred-count))
-        (setq predicate-score (min 1.0 (/ (float pred-count) func-count)))))
-    (+ (* 0.40 error-score)
-       (* 0.30 naming-score)
-       (* 0.30 predicate-score))))
+        (setq predicate-score (min 1.0 (/ (float pred-count) func-count))))
+      (+ (* 0.40 error-score)
+         (* 0.25 naming-score)
+         (* 0.25 predicate-score)
+         (* 0.10 (min 1.0 (/ (float guard-count) (max 1 func-count))))))))
 
 ;;; LLM Quality Detection
 
