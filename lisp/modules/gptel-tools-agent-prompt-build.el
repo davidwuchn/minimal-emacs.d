@@ -361,7 +361,9 @@ Backends in this table support compressed lambda-notation prompts.")
 
 (defun gptel-auto-experiment--use-lambda-prompts-p ()
   "Return non-nil when the active backend supports lambda-notation prompts.
-Checks gptel--lambda-health hashtable and our local verification cache."
+Defaults to t (optimistic) when lambda-health hasn't been populated yet —
+MiniMax and DeepSeek were verified in prior sessions.  Only returns nil
+when a backend is explicitly marked :degraded or has failed a local check."
   (and (boundp 'gptel-backend)
        gptel-backend
        (fboundp 'gptel-backend-name)
@@ -369,8 +371,11 @@ Checks gptel--lambda-health hashtable and our local verification cache."
               (lambda-healthy (and (boundp 'gptel--lambda-health)
                                    (hash-table-p gptel--lambda-health)
                                    (gethash name gptel--lambda-health)))
-              (locally-verified (gethash name gptel-auto-experiment--lambda-verified-backends)))
-         (or (eq lambda-healthy :healthy) locally-verified))))
+              (verified (gethash name gptel-auto-experiment--lambda-verified-backends)))
+         ;; Optimistic: lambda-capable unless explicitly degraded
+         (if lambda-healthy
+             (not (eq lambda-healthy :degraded))
+           (not (eq verified :failed))))))
 
 (defun gptel-auto-experiment--lambda-compress-prompt (english-text &optional notes)
   "Return ENGLISH-TEXT compressed to lambda notation.
