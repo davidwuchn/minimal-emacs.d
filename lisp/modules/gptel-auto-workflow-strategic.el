@@ -1466,41 +1466,21 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                                            similar "\n"))
                         parts))))
             (if parts (concat (mapconcat #'identity (nreverse parts) "\n") "\n\n") ""))))
-    (format "Select optimization targets for this Emacs Lisp project.
+            (format "λ select(project). max=%d path=lisp/modules/
+  | ∀f: size(f) ≤ 1000ℓ ∧ ¬nested_repo(f) ∧ file(f)
+  | priority ∝ 1 / (frontier_size(f) + 1)
+  | prefer(bug_fix) > style_change | prefer(TODO_match) > random
 
-%s%s%sFILES AVAILABLE:
-%s
+%s%s%sINPUT:
+  files: %s
+  git(30d): %s
+  sizes(top20): %s
+  todo/fixme(30): %s
+  research: %s
+  history: %s
 
-RECENT GIT HISTORY:
-%s
-
-FILES BY SIZE:
-%s
-
-KNOWN ISSUES (TODOs/FIXMEs):
-%s
-
-EXTERNAL RESEARCH FINDINGS (new ideas from internet):
-%s
-
-TASK: Select exactly %d files from lisp/modules/ to optimize.
-At LEAST 2 of these MUST match the **Apply:** patterns in EXTERNAL RESEARCH FINDINGS.
-The remaining targets should be standard improvement targets (recent failures, high-complexity modules).
-Do NOT choose files from packages/ or any nested git repo. Those are optimized separately and cannot be merged into the root staging branch by this workflow.
-
-SIZE CONSTRAINT: Skip files over 1000 lines. They are too large for focused experiments.
-Example: gptel-tools-agent.el (11,481 lines) is EXCLUDED. Focus on smaller files.
-
-%s
-
-For **Apply:** patterns: match each to the most relevant existing file.
-  Example: Apply: \"Add gptel-agent-mode\" → target lisp/modules/gptel-tools-agent.el
-  Example: Apply: \"Add stage-state to gptel-agent-loop\" → target lisp/modules/gptel-agent-loop.el
-  Example: Apply: \"Add gptel-agent-queue with file-notify\" → target lisp/modules/gptel-tools-agent-subagent.el
-If no file is a perfect match, choose the closest one — the executor will adapt.
-
-OUTPUT JSON ONLY:
-{\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
+OUTPUT: {\"targets\": [{\"file\": \"lisp/modules/X.el\", \"priority\": N, \"reason\": \"R\"}]}"
+            max-targets
             directive-section
             research-section
             (or hints-section "")
@@ -1520,7 +1500,6 @@ OUTPUT JSON ONLY:
                          "")))
                  (concat apply-section
                          (truncate-string-to-width research-findings 3000 nil nil "..."))))
-            max-targets
             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
                 (gptel-auto-workflow--evolution-get-knowledge)
               "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results"))))
