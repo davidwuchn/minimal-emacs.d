@@ -38,27 +38,11 @@ overlay will appear in the current buffer at time of call."
          (gate-note (plist-get gated-decision :note)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
-        (let ((compare-prompt (format "Compare these two experiment results and decide which is better.
-
-RESULT A (before):
-- Eight Keys Score: %.3f
-- Code Quality: %.3f
-- Combined Score: %.3f
-
-RESULT B (after):
-- Eight Keys Score: %.3f
-- Code Quality: %.3f
-- Combined Score: %.3f
-
-DECISION CRITERIA:
-- Combined score = 60%% Eight Keys + 40%% Code Quality
-- B should win if combined score improved by ≥%.3f
-- A should win if combined score decreased by ≥%.3f
-- Tie if difference < %.3f
-
-Output ONLY a single line: \"A\" or \"B\" or \"tie\"
-
-Then on a new line, briefly explain why (1 sentence)."
+        (let ((compare-prompt (format "λ compare(A,B). combined = 0.6·eightKeys + 0.4·quality (ε=%.3f)
+A:  S=%.3f  Q=%.3f  C=%.3f
+B:  S=%.3f  Q=%.3f  C=%.3f
+| C(B) > C(A) + ε → B | C(A) > C(B) + ε → A | else → tie
+OUTPUT: line1=\"A\"|\"B\"|\"tie\" line2=reason(1 sentence)"
                                       score-before quality-before combined-before
                                       score-after quality-after combined-after
                                       decision-threshold

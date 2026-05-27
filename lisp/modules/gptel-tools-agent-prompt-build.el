@@ -872,118 +872,46 @@ Returns template string or fallback hardcoded template."
     (if (> (length skill-content) 0)
         skill-content
       ;; Fallback: inline template (for bootstrapping)
-      "You are running experiment {{experiment-id}} of {{max-experiments}} to optimize {{target}}.
+      "λ experiment({{target}}). id={{experiment-id}}/{{max-experiments}} budget={{time-budget}}m
+        path: {{worktree-path}}/{{target-full-path}}
+        baseline(8keys): {{baseline}}  {{weakest-keys}}
+        {{controller-focus}}
+        {{inspection-thrash-contract}}
+        {{large-target-guidance}}
 
-## Working Directory
-{{worktree-path}}
+        CATEGORY: {{nucleus-persona}}
+        SKILLS: {{self-evolution}}
+        ALLIUM: {{allium-issues}}
+        REPAIR: {{allium-repair}}
+        PAST: {{topic-knowledge}} {{previous-experiment-analysis}}
 
-## Target File (full path)
-{{target-full-path}}
+        SUGGEST: {{suggestions}} {{suggested-hypothesis}} {{mutation-templates}} {{evolved-recommendations}}
 
-{{large-target-guidance}}
+        RULES:
+        | ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)
+        | ¬doc_only | ¬comment_only | Δ(code) ≡ required
+        | 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"
+        {{focus-line}}
+        | use(Edit) | minimal(change) | ¬git(add,commit,push) — workflow handles
+        | verify: {{sexp-check-command}} && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
 
-{{controller-focus}}
+        OUTPUT:
+        CHANGED: file(s) + functions touched
+        EVIDENCE: 1-2 concrete diffs
+        VERIFY: commands run + pass/fail
+        COMMIT: \"not committed\"
 
-{{inspection-thrash-contract}}
+        TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage
 
-## Previous Experiment Analysis
-{{previous-experiment-analysis}}
+        IMPROVE code quality for {{target}}.  Make minimal, targeted CODE changes.
+        ∇ quality(x).  docstring(20%) ∧ patterns(30%) ∧ fn_length(25%) ∧ complexity(25%)
+        | high_baseline(>0.85) → prefer(bug_fix, error_handling) > docstring
+        | grade(9/9) ≢ quality_improved — structural scores may be flat for well-written code.
 
-## Suggestions
-{{suggestions}}
-
-## Nucleus Guidance (Category-Aware)
-{{nucleus-persona}}
-
-      ## Skills (Context from Learned Patterns)
-{{self-evolution}}
-
-## Research Quality (Allium Audit)
-{{allium-issues}}
-
-## Auto-Repair Guidance (if Allium coherence issues found)
-{{allium-repair}}
-
-## Previous Experiments
-{{topic-knowledge}}
-
-## Current Baseline
-Overall Eight Keys score: {{baseline}}
-
-{{weakest-keys}}
-
-{{suggested-hypothesis}}
-
-{{mutation-templates}}
-
-{{evolved-recommendations}}
-
-## Objective
-Improve the CODE QUALITY for {{target}}.
-Focus on one improvement at a time.
-Make minimal, targeted changes to CODE, not documentation.
-
-## Code Quality Metrics (What the Scorer Measures)
-The automated scorer evaluates these metrics (weighted):
-- **Docstring coverage** (20%): % of functions with docstrings
-- **Positive patterns** (30%): error handling, naming conventions, predicates
-- **Function length** (25%): shorter functions score higher (ideal: <20 lines)
-- **Cyclomatic complexity** (25%): fewer conditionals score higher
-
-**IMPORTANT**: For targets with high baseline quality (>0.85), focus on:
-1. **Bug fixes** that correct actual behavior (these improve the Eight Keys score)
-2. **Error handling** that adds validation guards (improves safety patterns)
-3. **Refactoring** that reduces function length or complexity
-4. Avoid changes that only add comments or docstrings (forbidden anyway)
-
-A change can be excellent (graded 9/9) but still not improve quality metrics if the code was already well-structured. The system is aware of this and adjusts thresholds for high-baseline targets.
-
-## Constraints
-- Time budget: {{time-budget}} minutes
-- Immutable files: early-init.el, pre-early-init.el, lisp/eca-security.el
-- Must pass tests: ./scripts/verify-nucleus.sh
-- FORBIDDEN: Adding comments, docstrings, or documentation-only changes
-- REQUIRED: Actual code changes (bug fixes, performance, refactoring, error handling)
-
-## Code Improvement Types (PICK ONE)
-1. **Bug Fix**: Fix an actual bug or error handling gap
-2. **Performance**: Reduce complexity, add caching, optimize hot path
-3. **Refactoring**: Extract functions, remove duplication, improve naming
-4. **Safety**: Add validation, prevent edge cases, improve error messages
-5. **Test Coverage**: Add missing tests for existing functionality
-
-## Instructions
-1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
-2. If a Controller-Selected Starting Symbol is present, line 2 must be exactly `{{focus-line}}`
-3. If a Mandatory Focus Contract is present, obey it exactly; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
-4. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
-5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
-6. Implement the CODE change minimally using Edit tool
-7. BEFORE finishing, verify your changes have balanced parentheses:
-   - Run: {{sexp-check-command}}
-   - If you see an error, FIX IT before submitting
-8. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
-9. DO NOT run git add, git commit, git push, or stage changes yourself.
-   Leave edits uncommitted in the worktree; the auto-workflow controller
-   handles grading, commit creation, review, and staging.
-10. FINAL RESPONSE must include:
-    - CHANGED: exact file path(s) and function/variable names touched
-    - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
-    - VERIFY: exact command(s) run and whether they passed or failed
-    - COMMIT: always \"not committed\" (workflow controller handles commits)
-11. End the final response with: Task completed
-12. NEVER reply with only \"Done\", only a commit message, or a vague success claim
-
-CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
-DO NOT add comments, docstrings, or documentation.
-DO make actual code changes that improve functionality.
-DO include concrete evidence of what changed so the grader can inspect it.
-
-Example HYPOTHESES:
-- HYPOTHESIS: Adding validation for nil input in process-item will prevent runtime errors
-- HYPOTHESIS: Extracting duplicate retry logic into a helper will reduce code duplication
-- HYPOTHESIS: Adding a cache for expensive computation will improve performance
-- HYPOTHESIS: Fixing the off-by-one error in the loop will correct the boundary case")))
+        HYPOTHESES: \"Adding nil validation in X prevents runtime errors\"
+                   \"Extracting duplicate Y into helper reduces duplication\"
+                   \"Adding cache for Z improves performance\"
+                   \"Fixing off-by-one in loop corrects boundary case\"")))
 
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)

@@ -330,28 +330,20 @@ Uses grader subagent - no local fallback (fail if subagent unavailable)."
 
 (defun gptel-benchmark--make-grading-prompt (output expected forbidden)
   "Create grading prompt for OUTPUT against EXPECTED and FORBIDDEN."
-  (format "Grade the following output.
+  (format "λ grade(output, expected, forbidden).
+  ∀e ∈ expected: pass(e) ∨ fail(e) with reason
+  ∀f ∈ forbidden: absent(f) → pass | present(f) → fail with reason
+  → summary: SCORE: X/%d
 
 OUTPUT:
 %s
 
-EXPECTED BEHAVIORS (should be present):
+λ expected:
 %s
 
-FORBIDDEN BEHAVIORS (should NOT be present):
-%s
-
-For each behavior, respond with PASS or FAIL and a brief reason.
-End with a summary line: SCORE: X/Y where X is passed behaviors, Y is total behaviors.
-
-Format your response as:
-EXPECTED:
-1. [behavior]: PASS/FAIL - [reason]
-...
-FORBIDDEN:
-1. [behavior]: PASS/FAIL - [reason]
-...
-SUMMARY: SCORE: X/Y"
+λ forbidden:
+%s"
+          (+ (length expected) (length forbidden))
           output
           (mapconcat (lambda (b) (concat "- " b)) expected "\n")
           (mapconcat (lambda (b) (concat "- " b)) forbidden "\n")))
