@@ -1002,29 +1002,16 @@ Returns a compact lambda-notation string ready for the LLM."
          (strat-f (plist-get vars :strategy-frontier))
          (agent-b (plist-get vars :agent-behavior))
          (val-pipe (plist-get vars :validation-pipeline)))
-    (format
-     "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s
-baseline(8keys): %s%s%s%s%s%s
-
-%s%s%s%s%s%s%s%s%s%s%s%s
-
-RULES:
-| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)
-| ¬doc_only | ¬comment_only | Δ(code) ≡ required
-| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"%s
-| use(Edit) | minimal(change) | ¬git(add,commit,push) — workflow handles
-| verify: %s && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
-
-OUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds) COMMIT(\"not committed\")
-TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage"
-     target exp-id max-exp budget worktree tgt-full
-     baseline
+    (concat
+     (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
+             target exp-id max-exp budget worktree tgt-full baseline)
      (if weakest (format "\n  %s" weakest) "")
      (if controller (format "\n  %s" controller) "")
      (if inspection (format "\n  %s" inspection) "")
      (if large (format "\n  %s" large) "")
      (if moderator (format "\n  %s" moderator) "")
-     (if persona (format "\nCATEGORY: %s\n" persona) "")
+     "\n\n"
+     (if persona (format "CATEGORY: %s\n" persona) "")
      (if skills (format "SKILLS: %s\n" skills) "")
      (if allium-i (format "ALLIUM: %s\n" allium-i) "")
      (if allium-r (format "REPAIR: %s\n" allium-r) "")
@@ -1046,8 +1033,16 @@ TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage"
      (if strat-f (format "STRATEGY: %s\n" strat-f) "")
      (if agent-b (format "AGENT: %s\n" agent-b) "")
      (if val-pipe (format "VALIDATE: %s\n" val-pipe) "")
-     (if focus (format "\n  %s" focus) "")
-     (or sexp (format "emacs --batch --eval '(byte-compile-file \"%s\")'" tgt-full)))))
+     "\nRULES:\n"
+     "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
+     "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
+     "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"\n"
+     (if focus (format "  %s\n" focus) "")
+     "| use(Edit) | minimal(change) | ¬git(add,commit,push) — workflow handles\n"
+     (format "| verify: %s && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n"
+             (or sexp (format "emacs --batch --eval '(byte-compile-file \"%s\")'" tgt-full)))
+     "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds) COMMIT(\"not committed\")\n"
+     "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage")))
 
 (defun gptel-auto-workflow--load-prompt-template ()
   "Load prompt template from skill file.
