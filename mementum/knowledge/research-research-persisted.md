@@ -1,962 +1,759 @@
 <!--
 Synthesis verification:
 - Confidence: 24%
-- Sources: 6 memories
+- Sources: 8 memories
 - Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
 - Auto-approved: yes (flagged)
 --->
 
 ---
-title: Research Patterns & External Sources Knowledge Page
+title: Research Persistence & Pattern Synthesis
 status: active
 category: knowledge
-tags: [research, patterns, external-sources, agent-architecture, self-evolution]
+tags: [research, self-evolution, patterns, daemon, workflow]
 ---
 
-# Research Patterns & External Sources Knowledge Page
+# Research Persistence & Pattern Synthesis
 
-## Executive Summary
+## Overview
 
-This knowledge page synthesizes research findings from multiple research sessions across the auto-workflow system. It captures architectural patterns, resilience mechanisms, and evaluation frameworks derived from external repositories and academic sources. The primary goal is to establish actionable patterns for improving the Emacs AI agent system through systematic self-evolution.
+This knowledge page synthesizes research findings from multiple research sessions using the `persisted-findings` strategy. The research targets Emacs AI agent system development, focusing on self-evolution, resilience patterns, and agent architecture.
 
-**Key metrics tracked:**
-- Research retention rate: 4-33% across sessions
-- Module complexity baseline: 58,031 total lines in `lisp/modules/`
-- Focus shift: 8 bug fixes vs 0 feature commits (stabilization phase)
-- Self-evolution directive: Apply nil-safety patterns and validation guards to high-failure modules
+**Key Metrics from Research Sessions:**
+
+| Date | Targets | Outcome | Quality |
+|------|---------|---------|---------|
+| 2026-05-22 10:29 | 6 modules | 9/39 (23%) | Best |
+| 2026-05-20 23:27 | 5 modules | 4/24 (17%) | High |
+| 2026-05-22 04:11 | 7 modules | 2/56 (4%) | Medium |
+| 2026-05-22 12:10 | 2 modules | 3/9 (33%) | Best ratio |
+| 2026-05-25 09:26 | 4 targets | 1/24 (4%) | Low |
+| 2026-05-25 08:55 | 5 modules | 0/15 (0%) | Fallback |
+| 2026-05-27 06:17 | 3 targets | 0/7 (0%) | Fallback |
+
+**Meta-learning:** Research quality is measured by downstream experiment success, not raw findings count.
 
 ---
 
-## 1. Tier 1: Directly Applicable Patterns (Emacs Lisp + AI Agents)
+## Module Complexity Analysis
 
-### 1.1 Circuit Breaker + Checkpoint/Restore Pattern
+Understanding which modules drive the most complexity helps prioritize research targets:
 
-**Source:** [efrit](https://github.com/davidwuchn/efrit)  
-**Impact:** HIGH | **Difficulty:** MEDIUM
-
-**Pattern Description:**
-Circuit breaker monitors failure rates per provider, transitioning through CLOSED→OPEN→HALF-OPEN states to prevent cascading failures. Checkpoint/restore stores state snapshots before risky operations.
-
-**Implementation Sketch:**
-```elisp
-(defcustom gptel-circuit-breaker
-  '((provider . ((failure-count . 0)
-                 (success-count . 0)
-                 (last-failure . nil)
-                 (state . closed))))
-  "Circuit breaker state per provider.
-State transitions: closed → open (5 consecutive failures)
-                 open → half-open (timeout expired)
-                 half-open → closed (1 success)
-                 half-open → open (1 failure)")
-
-(defun gptel--check-circuit (provider)
-  "Check if circuit is open for PROVIDER."
-  (let ((state (alist-get 'state (alist-get provider gptel-circuit-breaker))))
-    (not (eq state 'open))))
-
-(defun gptel--record-failure (provider)
-  "Record failure for PROVIDER, potentially opening circuit."
-  (let ((pb (alist-get provider gptel-circuit-breaker)))
-    (setf (alist-get 'failure-count pb) (1+ (alist-get 'failure-count pb)))
-    (setf (alist-get 'last-failure pb) (current-time))
-    (when (>= (alist-get 'failure-count pb) 5)
-      (setf (alist-get 'state pb) 'open)
-      (message "Circuit OPEN for %s after %d failures" provider (alist-get 'failure-count pb)))))
-
-(defun gptel--record-success (provider)
-  "Record success for PROVIDER, potentially closing circuit."
-  (let ((pb (alist-get provider gptel-circuit-breaker)))
-    (setf (alist-get 'success-count pb) (1+ (alist-get 'success-count pb)))
-    (setf (alist-get 'failure-count pb) 0)
-    (setf (alist-get 'state pb) 'closed)))
+```
+58031 total lines in lisp/modules/
+├── 5822 gptel-auto-workflow-evolution.el     (largest - self-evolution core)
+├── 2698 gptel-auto-workflow-strategic.el      (orchestration logic)
+├── 2431 gptel-tools-agent-prompt-build.el     (prompt engineering)
+├── 1742 gptel-auto-workflow-research-benchmark.el
+└── [other modules...]
 ```
 
-**Checkpoint/Restore Implementation:**
-```elisp
-(defvar gptel-checkpoint-dir (expand-file-name ".gptel/checkpoints/" user-emacs-directory))
-
-(defun gptel--checkpoint-save (experiment-id data)
-  "Save checkpoint for EXPERIMENT-ID with DATA."
-  (let ((file (expand-file-name (format "%s.eld" experiment-id) gptel-checkpoint-dir)))
-    (make-directory gptel-checkpoint-dir t)
-    (with-temp-file file
-      (pp data (current-buffer)))))
-
-(defun gptel--checkpoint-restore (experiment-id)
-  "Restore checkpoint for EXPERIMENT-ID."
-  (let ((file (expand-file-name (format "%s.eld" experiment-id) gptel-checkpoint-dir)))
-    (when (file-exists-p file)
-      (with-temp-buffer
-        (insert-file-contents file)
-        (goto-char (point-min))
-        (read (current-buffer))))))
-```
+**Self-Evolution Directive:** Focus on the highest-failure modules above. Apply nil-safety patterns and validation guards to reduce failure rates.
 
 ---
 
-### 1.2 Tool Receipts for Audit Trail
+## Tier 1: Directly Applicable Patterns (Emacs Lisp + AI Agents)
 
-**Source:** [efrit](https://github.com/davidwuchn/efrit) (35+ tools with security controls)  
-**Impact:** HIGH | **Difficulty:** MEDIUM
+### 1. Circuit Breaker + Checkpoint/Restore Pattern
 
-**Pattern Description:**
-Every tool execution generates structured metadata: `(input-hash output-hash timestamp duration tool-name)`. Shell commands have allowed/forbidden pattern matching.
+**Source:** [efrit](https://github.com/davidwuchn/efrit)
+
+**Technique:** Circuit breaker monitors failure rates per provider, transitions through CLOSED→OPEN→HALF-OPEN states to prevent cascading failures. Checkpoint/restore stores state snapshots before risky operations.
 
 **Implementation:**
-```elisp
-(defvar gptel-tool-log-db (expand-file-name ".gptel/tool-log.db" user-emacs-directory))
 
-(defun gptel--tool-log-init ()
-  "Initialize SQLite tool log database."
+```elisp
+(defcustom gptel-circuit-breaker-config
+  '(("openai" 5 3 300)
+    ("anthropic" 5 3 300)
+    ("ollama" 3 2 60))
+  "Alist of (provider failure-threshold success-threshold reset-seconds)."
+  :type '(alist :key-type string :value-type (list integer integer integer)))
+
+(defvar gptel-circuit-breaker-state (make-hash-table :test 'equal))
+
+(defun gptel-circuit-breaker--get-state (provider)
+  "Get or initialize circuit breaker state for PROVIDER."
+  (or (gethash provider gptel-circuit-breaker-state)
+      (puthash provider
+               (list 0 0 nil)  ; (failure-count success-count last-failure)
+               gptel-circuit-breaker-state)))
+
+(defun gptel-circuit-breaker--record (provider success)
+  "Record SUCCESS for PROVIDER in circuit breaker state."
+  (pcase-let ((`(,failures ,successes ,last-fail)
+               (gptel-circuit-breaker--get-state provider)))
+    (puthash provider
+             (if success
+                 (list 0 (1+ successes) last-fail)
+               (list (1+ failures) 0 (current-time)))
+             gptel-circuit-breaker-state)))
+
+(defun gptel-circuit-breaker--open-p (provider)
+  "Check if circuit is open for PROVIDER."
+  (pcase-let ((`(,failures ,successes ,last-fail)
+               (gptel-circuit-breaker--get-state provider))
+              (`(,_threshold ,success-threshold ,reset-secs)
+               (alist-get provider gptel-circuit-breaker-config)))
+    (cond
+     ((>= failures 5) t)  ; Hard open after 5 consecutive failures
+     ((and last-fail
+           (> (float-time (time-since last-fail)) reset-secs)
+           (>= successes success-threshold))
+      (setq gptel-circuit-breaker-state
+            (puthash provider '(0 0 nil) gptel-circuit-breaker-state))
+      nil)  ; Reset after cooldown
+     (t nil))))
+```
+
+**Checkpoint/Restore Pattern:**
+
+```elisp
+(defvar gptel-checkpoint-dir
+  (expand-file-name ".gptel/checkpoints/" user-emacs-directory))
+
+(defun gptel-checkpoint-save (name data)
+  "Save DATA to checkpoint NAME for crash recovery."
+  (let ((file (expand-file-name name gptel-checkpoint-dir)))
+    (make-directory gptel-checkpoint-dir t)
+    (with-temp-file file
+      (let ((print-length nil) (print-level nil))
+        (prin1 data (current-buffer)))))
+  name)
+
+(defun gptel-checkpoint-restore (name &optional default)
+  "Restore checkpoint NAME or return DEFAULT if missing."
+  (let ((file (expand-file-name name gptel-checkpoint-dir)))
+    (if (file-exists-p file)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          (read (current-buffer)))
+      default)))
+```
+
+---
+
+### 2. Tool Receipts for Audit Trail
+
+**Source:** [efrit](https://github.com/davidwuchn/efrit) (35+ tools with security controls)
+
+**Technique:** Every tool execution generates structured metadata: `(input-hash output-hash timestamp duration tool-name)`. Shell commands have allowed/forbidden pattern matching.
+
+**Implementation:**
+
+```elisp
+(defcustom gptel-tool-log-db
+  (expand-file-name ".gptel/tool-log.db" user-emacs-directory)
+  "SQLite database for tool execution audit trail.")
+
+(defun gptel-tool-log--init ()
+  "Initialize tool log SQLite database."
   (require 'sqlite)
-  (make-directory (file-name-directory gptel-tool-log-db) t)
-  (sqlite-execute (sqlite-open gptel-tool-log-db)
-    "CREATE TABLE IF NOT EXISTS tool_receipts (
+  (sqlite-execute gptel-tool-log-db
+    "CREATE TABLE IF NOT EXISTS tool_executions (
        id INTEGER PRIMARY KEY AUTOINCREMENT,
        tool_name TEXT NOT NULL,
-       input_hash TEXT NOT NULL,
+       input_hash TEXT,
        output_hash TEXT,
        timestamp REAL NOT NULL,
        duration_ms INTEGER,
-       success INTEGER NOT NULL,
+       success INTEGER,
        error TEXT
-     )"))
+     )")
+  (sqlite-execute gptel-tool-log-db
+    "CREATE INDEX IF NOT EXISTS idx_tool_name ON tool_executions(tool_name)")
+  (sqlite-execute gptel-tool-log-db
+    "CREATE INDEX IF NOT EXISTS idx_timestamp ON tool_executions(timestamp)"))
 
-(defun gptel--tool-log-record (tool-name input output start-time success &optional error)
-  "Record tool execution TOOL-NAME with INPUT/OUTPUT hashes."
-  (let* ((end-time (current-time))
-         (duration (floor (* 1000 (float-time (time-subtract end-time start-time)))))
-         (input-hash (secure-hash 'sha256 (prin1-to-string input)))
-         (output-hash (when output (secure-hash 'sha256 (prin1-to-string output)))))
-    (sqlite-execute (sqlite-open gptel-tool-log-db)
-      (format "INSERT INTO tool_receipts 
+(defun gptel-tool-log-record (tool-name input output duration-ms success &optional error)
+  "Record tool execution with structured metadata."
+  (let ((input-hash (secure-hash 'sha256 (prin1-to-string input)))
+        (output-hash (and output (secure-hash 'sha256 (prin1-to-string output))))
+        (timestamp (float-time)))
+    (sqlite-execute gptel-tool-log-db
+      (format "INSERT INTO tool_executions 
                (tool_name, input_hash, output_hash, timestamp, duration_ms, success, error)
-               VALUES ('%s', '%s', '%s', %.3f, %d, %d, %s)"
-        tool-name input-hash (or output-hash "NULL")
-        (float-time start-time) duration (if success 1 0)
-        (if error (format "'%s'" error) "NULL")))))
+               VALUES ('%s', '%s', '%s', %f, %d, %d, %s)"
+        tool-name input-hash (or output-hash "NULL") timestamp duration-ms
+        (if success 1 0) (or (and error (format "'%s'" error)) "NULL")))))
 
-(defun gptel--tool-log-query (tool-name &optional limit)
-  "Query recent receipts for TOOL-NAME."
-  (sqlite-select (sqlite-open gptel-tool-log-db)
-    (format "SELECT * FROM tool_receipts WHERE tool_name = '%s' ORDER BY timestamp DESC LIMIT %d"
+(defun gptel-tool-log-query (tool-name &optional limit)
+  "Query recent executions for TOOL-NAME."
+  (sqlite-select gptel-tool-log-db
+    (format "SELECT * FROM tool_executions 
+             WHERE tool_name = '%s' ORDER BY timestamp DESC LIMIT %d"
       tool-name (or limit 10))))
 ```
 
 ---
 
-### 1.3 Lambda Notation + Mathematical Attention Magnets
+### 3. Think-in-Code Context Reduction
 
-**Source:** [nucleus](https://github.com/davidwuchn/nucleus)  
-**Impact:** MEDIUM | **Difficulty:** MEDIUM
+**Source:** [context-mode](https://github.com/davidwuchn/context-mode)
 
-**Pattern Description:**
-Greek letters and math symbols as compressed prompt preamble: `λ engage(nucleus). [phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA`. Primes formal reasoning patterns.
+**Technique:** Instead of dumping raw file reads (700KB), execute analysis script that returns only result (3.6KB). Achieves 98% context reduction via sandbox tools. Session continuity via SQLite/FTS5 indexed events.
 
 **Implementation:**
+
 ```elisp
-(defvar gptel-nucleus-preamble
-  "λ engage(workflow). [φ ψ Δ λ ε] | [OODA REPL] | [plan act eval reflect]")
+(defcustom gptel-sandbox-max-size 4096
+  "Maximum bytes to include from tool output in context."
+  :type 'integer)
 
-(defvar gptel-attention-magnets
-  '(("φ" . "formal rigor, precision, constraint satisfaction")
-    ("ψ" . "psychological state, intent alignment, user satisfaction")
-    ("Δ" . "change detection, delta analysis, diff focus")
-    ("λ" . "recursion, function composition, transformation")
-    ("ε" . "error tolerance, bounded rationality, approximation")
-    ("Ω" . "completion, finality, termination condition")
-    ("∞" . "infinite loops, unbounded search (avoid)")
-    ("Σ" . "aggregation, summation, cumulative metrics")
-    ("μ" . "mean, average, expected value")
-    ("∀" . "universality, all cases, generalization")
-    ("∃" . "existence, at least one, search goal")))
+(defvar gptel-sandbox-cache (make-hash-table :test 'equal))
 
-(defun gptel--build-nucleus-prompt (context)
-  "Build nucleus-inspired prompt with mathematical attention magnets."
-  (format "%s\n\n## Context\n%s\n\n## Constraints\n- Signal > Noise\n- Order > Entropy\n- Verify > Trust\n"
-    gptel-nucleus-preamble
-    context))
+(defun gptel-sandbox-execute (analysis-script)
+  "Execute ANALYSIS-SCRIPT in isolated subprocess, return structured result.
+This prevents the LLM from becoming a data processor by executing
+analysis code instead of dumping raw data."
+  (let* ((script-hash (secure-hash 'sha256 analysis-script))
+         (cached (gethash script-hash gptel-sandbox-cache)))
+    (if (and cached
+             (< (- (float-time) (cdr cached)) 300))
+        (car cached)  ; Return cached result within 5 minutes
+      (let ((result (condition-case err
+                        (eval (read analysis-script))
+                      (error (list 'error (error-message-string err))))))
+        (puthash script-hash (cons result (float-time)) gptel-sandbox-cache)
+        result))))
+
+(defun gptel-context-summarize (raw-output)
+  "Summarize RAW-OUTPUT to fit within context limit."
+  (if (< (string-bytes raw-output) gptel-sandbox-max-size)
+      raw-output
+    (format "[Output truncated: %d bytes → summary needed]
+First 1000 chars: %s
+...
+Total lines: %d
+(Tool output stored in SQLite, retrieve via gptel-tool-log-query)"
+      (string-bytes raw-output)
+      (substring raw-output 0 (min 1000 (length raw-output)))
+      (string-count ?\n raw-output))))
 ```
 
 ---
 
-### 1.4 Think-in-Code Context Reduction
+### 4. Session Continuity via FTS5
 
-**Source:** [context-mode](https://github.com/davidwuchn/context-mode)  
-**Impact:** HIGH | **Difficulty:** HARD
+**Source:** [context-mode](https://github.com/davidwuchn/context-mode)
 
-**Pattern Description:**
-Instead of dumping raw file reads (700KB), execute analysis script that returns only result (3.6KB). 98% context reduction via sandbox tools.
+**Technique:** Every edit, git op, task, error tracked in SQLite with FTS5. When context compacts, retrieves only relevant events via BM25 search—not dumps raw data.
 
 **Implementation:**
+
 ```elisp
-(defvar gptel-sandbox-dir (expand-file-name ".gptel/sandbox/" user-emacs-directory))
+(defvar gptel-session-db
+  (expand-file-name ".gptel/session.db" user-emacs-directory))
 
-(defun gptel--sandbox-execute (script content)
-  "Execute SCRIPT with CONTENT in isolated sandbox.
-Returns only structured result, not raw output.
-Achieves ~98% context reduction vs raw data dumps."
-  (make-directory gptel-sandbox-dir t)
-  (let* ((input-file (make-temp-file (expand-file-name "input-" gptel-sandbox-dir)))
-         (output-file (make-temp-file (expand-file-name "output-" gptel-sandbox-dir)))
-         (result nil))
-    (unwind-protect
-        (progn
-          (with-temp-file input-file
-            (insert content))
-          (let ((exit-code (call-process "bash" nil nil nil "-c"
-                           (format "cd %s && %s < %s > %s 2>&1 && echo DONE >> %s"
-                             gptel-sandbox-dir script input-file output-file output-file))))
-            (when (file-exists-p output-file)
-              (with-temp-buffer
-                (insert-file-contents output-file)
-                (goto-char (point-min))
-                (when (re-search-forward "^DONE$" nil t)
-                  (delete-region (match-beginning 0) (point-max)))
-                (setq result (buffer-string))))))
-      (ignore-errors (delete-file input-file))
-      (ignore-errors (delete-file output-file)))
-    result))
+(defun gptel-session-db--init ()
+  "Initialize session continuity database."
+  (sqlite-execute gptel-session-db
+    "CREATE TABLE IF NOT EXISTS session_events (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       session_id TEXT NOT NULL,
+       timestamp REAL NOT NULL,
+       event_type TEXT NOT NULL,
+       data TEXT
+     )")
+  (sqlite-execute gptel-session-db
+    "CREATE VIRTUAL TABLE IF NOT EXISTS session_fts 
+     USING fts5(event_type, data, content='session_events', content_rowid='id')")
+  (sqlite-execute gptel-session-db
+    "CREATE TRIGGER IF NOT EXISTS session_ai AFTER INSERT ON session_events BEGIN
+       INSERT INTO session_fts(rowid, event_type, data) VALUES (new.id, new.event_type, new.data);
+     END"))
 
-(defun gptel--compute-analysis (analysis-type data)
-  "Compute ANALYSIS-TYPE on DATA using sandbox.
-ANALYSIS-TYPE is a symbol like 'git-stats, 'module-complexity, 'error-pattern."
-  (let* ((script-file (expand-file-name (format "analyze-%s.sh" analysis-type) gptel-sandbox-dir))
-         (script (cond
-                   ((eq analysis-type 'git-stats)
-                    "jq '{commits: length, authors: [.[].author] | unique, types: group_by(.type)}'")
-                   ((eq analysis-type 'module-complexity)
-                    "awk 'FNR>1 {lines[$1]+=$2} END {for(m in lines) print m, lines[m]}' | sort -k2 -rn")
-                   (t "cat"))))
-    (gptel--sandbox-execute (format "echo '%s' | %s" data script) script)))
-```
-
----
-
-### 1.5 Session Continuity via FTS5
-
-**Source:** [context-mode](https://github.com/davidwuchn/context-mode)  
-**Impact:** MEDIUM | **Difficulty:** HARD
-
-**Pattern Description:**
-Every edit, git op, task, error tracked in SQLite with FTS5. When context compacts, retrieves only relevant events via BM25 search—not dumps raw data.
-
-**Implementation:**
-```elisp
-(defvar gptel-session-db (expand-file-name ".gptel/session.db" user-emacs-directory))
-
-(defun gptel--session-db-init ()
-  "Initialize session continuity database with FTS5."
-  (require 'sqlite)
-  (make-directory (file-name-directory gptel-session-db) t)
-  (let ((db (sqlite-open gptel-session-db)))
-    (sqlite-execute db "CREATE TABLE IF NOT EXISTS session_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT NOT NULL,
-      timestamp REAL NOT NULL,
-      event_type TEXT NOT NULL,
-      data TEXT
-    )")
-    (sqlite-execute db "CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(
-      event_type, data, content='session_events', content_rowid='id'
-    )")
-    (sqlite-execute db "CREATE TRIGGER IF NOT EXISTS session_ai AFTER INSERT ON session_events BEGIN
-      INSERT INTO session_fts(rowid, event_type, data) VALUES (new.id, new.event_type, new.data);
-    END")
-    db))
-
-(defun gptel--session-track (session-id event-type data)
-  "Track SESSION-ID EVENT-TYPE with DATA in session continuity DB."
-  (sqlite-execute (sqlite-open gptel-session-db)
+(defun gptel-session-track (session-id event-type data)
+  "Track SESSION-ID EVENT-TYPE with DATA for continuity."
+  (sqlite-execute gptel-session-db
     (format "INSERT INTO session_events (session_id, timestamp, event_type, data)
-             VALUES ('%s', %.3f, '%s', '%s')"
-      session-id (float-time (current-time)) event-type
-      (sqlite-escape-string (prin1-to-string data)))))
+             VALUES ('%s', %f, '%s', '%s')"
+      session-id (float-time) event-type data)))
 
-(defun gptel--session-retrieve (session-id query &optional limit)
-  "Retrieve relevant events from SESSION-ID matching QUERY using FTS5 BM25."
-  (sqlite-select (sqlite-open gptel-session-db)
-    (format "SELECT e.*, bm25(session_fts) as rank
-             FROM session_events e
-             JOIN session_fts f ON e.id = f.rowid
-             WHERE e.session_id = '%s' AND session_fts MATCH '%s'
+(defun gptel-session-retrieve (session-id query &optional limit)
+  "Retrieve relevant events from SESSION-ID matching QUERY via BM25."
+  (sqlite-select gptel-session-db
+    (format "SELECT session_events.*, bm25(session_fts) as rank
+             FROM session_events
+             JOIN session_fts ON session_events.id = session_fts.rowid
+             WHERE session_events.session_id = '%s'
+               AND session_fts MATCH '%s'
              ORDER BY rank
              LIMIT %d"
-      session-id (sqlite-escape-string query) (or limit 20))))
+      session-id query (or limit 20))))
 ```
 
 ---
 
-### 1.6 Feed-Forward Memory Protocol
+### 5. Feed-Forward Memory Protocol
 
-**Source:** [mementum](https://github.com/davidwuchn/mementum)  
-**Impact:** MEDIUM | **Difficulty:** MEDIUM
+**Source:** [mementum](https://github.com/davidwuchn/mementum)
 
-**Pattern Description:**
-Three storage types (working memory/state.md, memories <200 words, synthesized knowledge). Human governance: AI proposes, human approves, AI commits.
+**Technique:** Three storage types (working memory/state.md, memories <200 words, synthesized knowledge). Human governance: AI proposes, human approves, AI commits.
 
 **Implementation:**
+
 ```elisp
-(defvar gptel-memory-synthesize--state-file
-  (expand-file-name "mementum/state.md" user-emacs-directory))
-
-(defvar gptel-memory-synthesize--memory-dir
-  (expand-file-name "mementum/memories/" user-emacs-directory))
-
-(defvar gptel-memory-synthesize--knowledge-dir
-  (expand-file-name "mementum/knowledge/" user-emacs-directory))
+(defcustom gptel-memory-synthesize-file
+  (expand-file-name "mementum/state.md" user-emacs-directory)
+  "Path to mementum state file for session start.")
 
 (defun gptel-memory-synthesize ()
-  "Synthesize knowledge from state.md on session start.
-Three storage types:
-1. Working memory: mementum/state.md (< 500 lines)
-2. Memories: mementum/memories/*.md (< 200 words each)
-3. Knowledge: mementum/knowledge/*.md (synthesized patterns)"
-  (let ((state (when (file-exists-p gptel-memory-synthesize--state-file)
-                 (with-temp-buffer
-                   (insert-file-contents gptel-memory-synthesize--state-file)
-                   (buffer-string)))))
-    (list :state state
-          :memories (gptel--memory-load-recent)
-          :knowledge (gptel--knowledge-load-synthesized))))
+  "Read mementum state.md on session start for feed-forward."
+  (when (file-exists-p gptel-memory-synthesize-file)
+    (with-temp-buffer
+      (insert-file-contents gptel-memory-synthesize-file)
+      (buffer-string))))
 
-(defun gptel--memory-load-recent ()
-  "Load recent memories from mementum/memories/."
-  (when (file-directory-p gptel-memory-synthesize--memory-dir)
-    (mapcar (lambda (f)
-              (with-temp-buffer
-                (insert-file-contents f)
-                (list :file (file-name-nondirectory f)
-                      :content (gptel--memory-truncate (buffer-string) 200))))
-            (seq-take (sort (directory-files gptel-memory-synthesize--memory-dir t)
-                            (lambda (a b) (> (file-attribute-modification-time (file-attributes a))
-                                           (file-attribute-modification-time (file-attributes b)))))
-                      10))))
+(defcustom gptel-knowledge-approval-required t
+  "If non-nil, require human approval before committing to knowledge.")
 
-(defun gptel--memory-truncate (text max-words)
-  "Truncate TEXT to MAX-WORDS words."
-  (let ((words (split-string text)))
-    (if (<= (length words) max-words)
-        text
-      (concat (string-join (seq-take words max-words) " ") "..."))))
+(defun gptel-knowledge-propose (page-title content)
+  "Propose PAGE-TITLE with CONTENT for knowledge synthesis.
+Returns pending proposal ID for human review."
+  (let ((proposal-id (format "proposal-%d" (float-time))))
+    (puthash proposal-id
+             (list :title page-title :content content :status 'pending)
+             gptel-knowledge-pending)
+    proposal-id))
+
+(defun gptel-knowledge-approve (proposal-id)
+  "Approve and commit PROPOSAL-ID to knowledge base."
+  (pcase-let ((`(,_id ,proposal) (gethash proposal-id gptel-knowledge-pending)))
+    (setf (nth 2 proposal) 'approved)
+    (remhash proposal-id gptel-knowledge-pending)
+    proposal))  ; Caller should write to knowledge file
 ```
 
 ---
 
-## 2. Tier 2: Agent Architecture Patterns
+## Tier 2: Agent Architecture Patterns
 
-### 2.1 Three-Tier Watchdog Architecture
+### 6. Three-Tier Watchdog Architecture
 
-**Source:** [gastown](https://github.com/davidwuchn/gastown)  
-**Impact:** HIGH | **Difficulty:** MEDIUM
+**Source:** [gastown](https://github.com/davidwuchn/gastown)
 
-**Pattern Description:**
-Systematized lifecycle management via three tiers:
-- **Witness**: Session lifecycle management
-- **Deacon**: Continuous background patrol
-- **Dogs**: Dispatched workers for cleanup/error recovery
+**Technique:** Systematized lifecycle management via three tiers: Witness (session lifecycle), Deacon (continuous background patrol), Dogs (dispatched workers). Convoy system bundles work items with autonomous stall detection.
 
 **Implementation:**
+
 ```elisp
-(defvar gptel-watchdog-witness nil "Witness process timer")
-(defvar gptel-watchdog-deacon nil "Deacon process timer")
-(defvar gptel-watchdog-dogs '() "List of dispatched dog processes")
+(defvar gptel-workflow--witness nil "Session lifecycle watchdog.")
+(defvar gptel-workflow--deacon nil "Background patrol timer.")
+(defvar gptel-workflow--dogs (make-hash-table) "Dispatched cleanup/error recovery tasks.")
 
-(defun gptel-watchdog-start ()
-  "Start three-tier watchdog system."
-  (setq gptel-watchdog-witness
-        (run-at-time 0 60 #'gptel--witness-check))
-  (setq gptel-watchdog-deacon
-        (run-at-time 0 300 #'gptel--deacon-patrol)))
+(defun gptel-workflow-witness-start ()
+  "Start session lifecycle watchdog."
+  (setq gptel-workflow--witness
+        (run-with-timer 0 60  ; Check every 60 seconds
+          (lambda ()
+            (when (and gptel-workflow--session-active
+                       (time-less-p (seconds-to-time 300)
+                                    (time-since gptel-workflow--last-activity)))
+              (gptel-workflow--stall-warning))))))
 
-(defun gptel-watchdog-stop ()
-  "Stop all watchdog tiers."
-  (cancel-timer gptel-watchdog-witness)
-  (cancel-timer gptel-watchdog-deacon)
-  (dolist (dog gptel-watchdog-dogs)
-    (cancel-timer dog)))
+(defun gptel-workflow-deacon-start ()
+  "Start continuous background patrol."
+  (setq gptel-workflow--deacon
+        (run-with-idle-timer 30 t
+          (lambda ()
+            (dolist (task (hash-table-values gptel-workflow--dogs))
+              (when (gptel-workflow--dog-stale-p task)
+                (gptel-workflow--dog-recover task)))))))
 
-(defun gptel--witness-check ()
-  "Witness: Check session health and lifecycle."
-  (let ((session-age (gptel--session-age-seconds))
-        (last-activity (gptel--last-activity-seconds)))
-    (cond
-     ((> session-age 7200) ; 2 hours
-      (gptel--session-snapshot)
-      (gptel--session-pause))
-     ((> last-activity 600) ; 10 minutes
-      (gptel--dispatch-dog 'gptel--dog-wake-session)))))
-
-(defun gptel--deacon-patrol ()
-  "Deacon: Continuous background health patrol."
-  (gptel--patrol-memory-usage)
-  (gptel--patrol-disk-space)
-  (gptel--patrol-stale-checkpoints)
-  (gptel--patrol-pending-experiments))
-
-(defun gptel-dispatch-dog (dog-fn &optional delay)
-  "Dispatch DOG-FN as a dog worker with optional DELAY."
-  (let ((dog (run-at-time (or delay 0) nil
-                          (lambda ()
-                            (funcall dog-fn)
-                            (setq gptel-watchdog-dogs
-                                  (delq dog gptel-watchdog-dogs))))))
-    (push dog gptel-watchdog-dogs)
-    dog))
-
-(defun gptel--dog-cleanup-stale ()
-  "Dog: Clean up stale temporary files."
-  (let ((stale-threshold (* 24 3600))) ; 24 hours
-    (dolist (file (directory-files temporary-file-directory t))
-      (when (and (string-prefix-p "gptel-" (file-name-nondirectory file))
-                 (> (- (float-time) (file-attribute-modification-time (file-attributes file)))
-                    stale-threshold))
-        (delete-file file)))))
+(defun gptel-workflow-dog-dispatch (task-id cleanup-fn)
+  "Dispatch CLEANUP-FN as a 'dog' for TASK-ID with stall detection."
+  (puthash task-id
+           (list :cleanup-fn cleanup-fn
+                 :dispatched-at (float-time)
+                 :last-check (float-time))
+           gptel-workflow--dogs)
+  (run-with-timer 60 30
+    (lambda ()
+      (let ((task (gethash task-id gptel-workflow--dogs)))
+        (when task
+          (funcall (plist-get task :cleanup-fn))
+          (remhash task-id gptel-workflow--dogs))))))
 ```
 
 ---
 
-### 2.2 DEGRADED State Circuit Breaker
+### 7. Lambda Notation + Mathematical Attention Magnets
 
-**Source:** External (Hannecke Medium article)  
-**Impact:** MEDIUM | **Difficulty:** MEDIUM
+**Source:** [nucleus](https://github.com/davidwuchn/nucleus)
 
-**Pattern Description:**
-Five failure categories (Hard, Structural, Semantic, Behavioral, Resource) need different handling. DEGRADED state between CLOSED/OPEN allows graceful degradation instead of hard fail.
-
-**State Machine:**
-
-```
-CLOSED ──(3 failures)──► DEGRADED ──(2 more failures)──► OPEN
-   ▲                         │                                │
-   │                         │                                ▼
-   └──(3 successes)──────────┘                          HALF-OPEN
-```
+**Technique:** Greek letters and math symbols as compressed prompt preamble: `λ engage(nucleus). [phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA`. Primes formal reasoning patterns.
 
 **Implementation:**
+
 ```elisp
-(defvar gptel-failure-categories
-  '(hard structural semantic behavioral resource))
+(defconst gptel-nucleus-preamble-library
+  '((reasoning . "λ engage. [φ ψ Δ λ ε] | [∀ ∃ ∈ ⊂] | OODA loop")
+    (formal . "ℕ ℤ ℚ ℝ ℂ | ∀x∈S: P(x) | ∴ ∵ ∷ | ≔ ≝")
+    (entropy . "ΔS ≥ 0 | H(X) | Σp·log(p) | noise→signal")
+    (control . "feedback loop | OODA | thermostat | servo")
+    (creative . "∅→∃ | 0→1 | diverge→converge | expand→contract"))
+  "Mapping from semantic tags to mathematical preambles.")
 
-(defun gptel--classify-failure (error)
-  "Classify ERROR into failure category."
-  (cond
-   ((string-match-p "void-function\\|wrong-type-argument\\|invalid-syntax" error)
-    'hard)
-   ((string-match-p "file-missing\\|dir-missing\\|module-not-found" error)
-    'structural)
-   ((string-match-p "wrong-answer\\|misinterpretation\\|hallucination" error)
-    'semantic)
-   ((string-match-p "timeout\\|hang\\|no-response" error)
-    'behavioral)
-   ((string-match-p "memory\\|disk\\|quota" error)
-    'resource)
-   (t 'unknown)))
+(defun gptel-nucleus-build-preamble (&rest tags)
+  "Build nucleus-style preamble from TAGS."
+  (string-join
+   (delq nil (mapcar (lambda (tag)
+                       (alist-get tag gptel-nucleus-preamble-library))
+                     tags))
+   " "))
 
-(defun gptel--apply-degraded-mode (category)
-  "Apply degraded mode based on failure CATEGORY."
-  (pcase category
-    ('hard
-     (setq gptel-enable-mutation nil)
-     (setq gptel-require-human-approval t)
-     (message "DEGRADED: Hard failure - mutation disabled, approval required"))
-    ('semantic
-     (setq gptel-max-tool-calls (* gptel-max-tool-calls 2))
-     (setq gptel-verification-required t)
-     (message "DEGRADED: Semantic failure - extended verification"))
-    ('resource
-     (gptel--reduce-context-window)
-     (gptel--disable-heavy-tools)
-     (message "DEGRADED: Resource failure - context reduced"))
-    (_
-     (setq gptel-retry-delay (* gptel-retry-delay 2))
-     (message "DEGRADED: %s failure - retry delay doubled" category))))
-
-(defun gptel--recover-from-degraded ()
-  "Gradually recover from degraded mode."
-  (let ((current-ratio (/ (float gptel-success-count) (+ gptel-success-count gptel-failure-count))))
-    (cond
-     ((>= current-ratio 0.9) ; Full recovery at 90% success
-      (gptel--reset-to-nominal)
-      (message "RECOVERED: Full nominal mode restored"))
-     ((>= current-ratio 0.7) ; Level 3 at 70%
-      (gptel--enable-most-capabilities)
-      (message "RECOVERED: Level 3 - 50% traffic allowed"))
-     ((>= current-ratio 0.5) ; Level 2 at 50%
-      (gptel--enable-some-capabilities)
-      (message "RECOVERED: Level 2 - 20% traffic allowed")))))
+;; Example usage in system prompt:
+;; "λ engage(auto-workflow). [φ systematic] [Δ change ε small] | [∀ experiment ∈ corpus] | OODA"
 ```
 
 ---
 
-### 2.3 Self-Verification Engine
+### 8. DEGRADED State Circuit Breaker
 
-**Source:** [genesis-agent](https://github.com/davidwuchn/genesis-agent)  
-**Impact:** HIGH | **Difficulty:** MEDIUM
+**Source:** External (Hannecke patterns)
 
-**Pattern Description:**
-Genesis uses 66 deterministic checks where "the LLM proposes — the machine verifies." AST parsing, exit codes, import resolution, file validation, module signatures.
+**Technique:** Five failure categories (Hard, Structural, Semantic, Behavioral, Resource) need different handling. DEGRADED state between CLOSED/OPEN allows graceful degradation instead of hard fail. Graduated re-enablement: L1 (5% traffic), L2 (20%), L3 (50%).
 
 **Implementation:**
+
 ```elisp
-(defvar gptel-verification-checks
-  '(syntax-check byte-compile file-exists module-signature test-run output-valid))
+(defvar gptel-degraded-level nil "Current degradation level 0-3.")
+(defvar gptel-degraded-capabilities nil "Capabilities disabled in degraded mode.")
 
-(defun gptel--verify-llm-proposal (proposal)
-  "Verify LLM PROPOSAL before execution.
-Returns (success . details) or (failure . error-message)."
-  (let ((checks-to-run gptel-verification-checks)
-        (details '()))
-    (dolist (check checks-to-run)
-      (pcase check
-        ('syntax-check
-         (let ((syntax-errors (gptel--verify-elisp-syntax proposal)))
-           (push (list check syntax-errors) details)
-           (when syntax-errors
-             (return (cons nil (format "Syntax errors: %s" syntax-errors))))))
-        ('byte-compile
-         (let ((compile-result (gptel--verify-byte-compile proposal)))
-           (push (list check compile-result) details)
-           (unless (plist-get compile-result :success)
-             (return (cons nil (format "Compile failed: %s"
-                                       (plist-get compile-result :error)))))))
-        ('file-exists
-         (dolist (file (gptel--extract-file-refs proposal))
-           (unless (file-exists-p file)
-             (return (cons nil (format "File not found: %s" file))))))
-        ('module-signature
-         (let ((sig-issues (gptel--verify-module-signatures proposal)))
-           (push (list check sig-issues) details)
-           (when sig-issues
-             (return (cons nil (format "Signature issues: %s" sig-issues))))))))
-    (cons t details)))
+(defconst gptel-degraded-levels
+  '(("L0" :risky-tools nil :human-review nil :retry-limit 3)
+    ("L1" :risky-tools nil :human-review nil :retry-limit 2)
+    ("L2" :risky-tools '(edit delete shell) :human-review t :retry-limit 1)
+    ("L3" :risky-tools '(edit delete shell compile) :human-review t :retry-limit 0))
+  "Degradation levels with graduated capability reduction.")
 
-(defun gptel--verify-elisp-syntax (code)
-  "Check syntax validity of elisp CODE."
-  (with-temp-buffer
-    (insert code)
-    (let ((errors '()))
-      (condition-case err
-          (read (current-buffer))
-        (error (push (format "%s at position %d" (cadr err) (caddr err)) errors)))
-      (when (gptel--scan-syntax-errors)
-        (setq errors (append errors (gptel--scan-syntax-errors))))
-      errors)))
+(defun gptel-degraded-enter (level)
+  "Enter degraded mode at LEVEL (0-3)."
+  (setq gptel-degraded-level level
+        gptel-degraded-capabilities
+        (plist-get (alist-get (format "L%d" level) gptel-degraded-levels)
+                   :risky-tools))
+  (message "Entered DEGRADED mode L%d: %s"
+           level gptel-degraded-capabilities))
 
-(defun gptel--verify-byte-compile (code)
-  "Attempt to byte-compile CODE, return result."
-  (let ((temp-file (make-temp-file "gptel-verify-" nil ".el")))
-    (unwind-protect
+(defun gptel-degraded-recover (&optional level)
+  "Attempt recovery, optionally to specific LEVEL."
+  (let ((target (or level (1+ (or gptel-degraded-level 0)))))
+    (if (< target 3)
         (progn
-          (with-temp-file temp-file
-            (insert code))
-          (let ((compilation-finish-hook nil)
-                (output nil))
-            (condition-case err
-                (progn
-                  (byte-compile-file temp-file)
-                  (list :success t :file (concat temp-file "c")))
-              (error
-               (list :success nil :error (format "%s" err))))))
-      (ignore-errors (delete-file temp-file))
-      (ignore-errors (delete-file (concat temp-file "c"))))))
+          (gptel-degraded-enter target)
+          (message "Recovery attempt: L%d (5%% traffic)" target))
+      (setq gptel-degraded-level nil
+            gptel-degraded-capabilities nil
+            gptel-workflow--consecutive-failures 0)
+      (message "Full recovery achieved"))))
 ```
 
 ---
 
-### 2.4 P(Success) Confidence Scoring
+### 9. Self-Verification Engine
 
-**Source:** [genesis-agent](https://github.com/davidwuchn/genesis-agent) + [MetaAgent](https://arxiv.org/abs/2508.00271)  
-**Impact:** MEDIUM | **Difficulty:** MEDIUM
+**Source:** [genesis-agent](https://github.com/davidwuchn/genesis-agent)
 
-**Pattern Description:**
-Track P(success) confidence scoring based on prior outcomes. Generate help requests when task pattern unrecognized.
+**Technique:** 66 deterministic checks where "the LLM proposes — the machine verifies." AST parsing, exit codes, import resolution, file validation, module signatures.
 
 **Implementation:**
-```elisp
-(defvar gptel-p-success-history '() "List of (task-pattern . success-rate)")
-(defvar gptel-p-success-threshold 0.6 "Minimum confidence to proceed")
-
-(defun gptel--compute-p-success (task-context)
-  "Compute P(success) for TASK-CONTEXT based on history."
-  (let ((pattern (gptel--extract-task-pattern task-context))
-        (history (alist-get pattern gptel-p-success-history)))
-    (if history
-        (let* ((n (length history))
-               (successes (cl-count t history))
-               (raw-rate (/ (float successes) n)))
-          ;; Bayesian smoothing with prior of 0.5
-          (/ (+ successes 2.0) (+ n 4.0)))
-      0.5))) ; Default 0.5 for unseen patterns
-
-(defun gptel--record-outcome (task-context success)
-  "Record OUTCOME for TASK-CONTEXT."
-  (let ((pattern (gptel--extract-task-pattern task-context)))
-    (push success (alist-get pattern gptel-p-success-history t '()))
-    ;; Keep only last 100 observations per pattern
-    (setf (alist-get pattern gptel-p-success-history)
-          (seq-take (alist-get pattern gptel-p-success-history) 100))))
-
-(defun gptel--check-proceed (task-context)
-  "Check if should proceed with TASK-CONTEXT based on P(success)."
-  (let ((p (gptel--compute-p-success task-context)))
-    (cond
-     ((>= p gptel-p-success-threshold)
-      (cons 'proceed p))
-     ((>= p 0.3)
-      (cons 'caution p))
-     (t
-      (cons 'defer p)))))
-
-(defun gptel--generate-help-request (task-context unknown-aspects)
-  "Generate help request for UNKNOWN-ASPECTS in TASK-CONTEXT."
-  (format "## Help Request\n\nTask: %s\nUnknown aspects:\n%s\n\nP(success): %.2f\n\nPlease clarify:\n"
-    (gptel--summarize-task task-context)
-    (string-join (mapcar (lambda (a) (format "- %s" a)) unknown-aspects) "\n")
-    (gptel--compute-p-success task-context)))
-```
-
----
-
-## 3. Tier 3: Evaluation & Metrics Patterns
-
-### 3.1 Trajectory-Aware Metrics
-
-**Source:** [NVIDIA AI Agent Evaluation Guide](https://developer.nvidia.com/blog/mastering-agentic-techniques-ai-agent-evaluation/)  
-**Impact:** HIGH | **Difficulty:** MEDIUM
-
-**Metrics Table:**
-
-| Metric | What It Measures | Formula |
-|--------|-------------------|---------|
-| **Task Success Rate (TSR)** | Intent resolution within constraints | successes / total_tasks |
-| **Tool Call Accuracy** | Precision in function calling | correct_calls / total_calls |
-| **Trajectory Efficiency** | Steps/tokens per success | (steps × 10 + tokens) / successes |
-| **Reasoning Soundness** | Trace quality, evidence usage | valid_traces / total_traces |
-
-**Implementation:**
-```elisp
-(defvar gptel-metrics-db (expand-file-name ".gptel/metrics.db" user-emacs-directory))
-
-(defun gptel--metrics-init ()
-  "Initialize metrics database."
-  (require 'sqlite)
-  (make-directory (file-name-directory gptel-metrics-db) t)
-  (sqlite-execute (sqlite-open gptel-metrics-db)
-    "CREATE TABLE IF NOT EXISTS trajectories (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       experiment_id TEXT NOT NULL,
-       task TEXT NOT NULL,
-       success INTEGER NOT NULL,
-       steps INTEGER NOT NULL,
-       tokens INTEGER NOT NULL,
-       duration_ms INTEGER NOT NULL,
-       tool_calls TEXT NOT NULL,
-       timestamp REAL NOT NULL
-     )"))
-
-(defun gptel--log-trajectory (experiment-id task steps tokens duration-ms tool-calls success)
-  "Log complete trajectory for metrics analysis."
-  (sqlite-execute (sqlite-open gptel-metrics-db)
-    (format "INSERT INTO trajectories 
-             (experiment_id, task, success, steps, tokens, duration_ms, tool_calls, timestamp)
-             VALUES ('%s', '%s', %d, %d, %d, %d, '%s', %.3f)"
-      experiment-id (sqlite-escape-string task) (if success 1 0)
-      steps tokens duration-ms
-      (sqlite-escape-string (prin1-to-string tool-calls))
-      (float-time (current-time)))))
-
-(defun gptel--compute-metrics (&optional experiment-id)
-  "Compute trajectory-aware metrics for EXPERIMENT-ID or all experiments."
-  (let ((query (if experiment-id
-                   (format "WHERE experiment_id = '%s'" experiment-id)
-                 "")))
-    (sqlite-select (sqlite-open gptel-metrics-db)
-      (format "SELECT 
-                COUNT(*) as total_tasks,
-                SUM(success) as successes,
-                SUM(steps) as total_steps,
-                SUM(tokens) as total_tokens,
-                AVG(steps) as avg_steps,
-                AVG(tokens) as avg_tokens
-               FROM trajectories %s" query)
-      :columns-as 'alist)))
-
-(defun gptel--compute-tsr (&optional experiment-id)
-  "Compute Task Success Rate for EXPERIMENT-ID."
-  (let ((metrics (gptel--compute-metrics experiment-id)))
-    (when metrics
-      (let ((total (alist-get 'total_tasks (car metrics)))
-            (successes (alist-get 'successes (car metrics))))
-        (when (and total (> total 0))
-          (/ (float successes) total))))))
-
-(defun gptel--compute-trajectory-efficiency (&optional experiment-id)
-  "Compute Trajectory Efficiency = (steps × 10 + tokens) / successes."
-  (let ((metrics (gptel--compute-metrics experiment-id)))
-    (when metrics
-      (let ((total-steps (alist-get 'total_steps (car metrics)))
-            (total-tokens (alist-get 'total_tokens (car metrics)))
-            (successes (alist-get 'successes (car metrics))))
-        (when (and successes (> successes 0))
-          (/ (+ (* total-steps 10) total-tokens) (float successes)))))))
-
-(defun gptel--compute-tool-call-accuracy ()
-  "Compute Tool Call Accuracy from logged trajectories."
-  (sqlite-select (sqlite-open gptel-metrics-db)
-    "SELECT 
-       SUM(json_each.value->>'correct') as correct_calls,
-       COUNT(*) as total_calls
-     FROM trajectories,
-     json_each(tool_calls)"
-    :columns-as 'alist))
-```
-
----
-
-### 3.2 Error Recovery Patterns
-
-**Source:** [AI Agent Error Recovery Patterns](https://aiagentsblog.com/blog/agent-error-recovery-patterns/)  
-**Impact:** MEDIUM | **Difficulty:** LOW
-
-**Five Production Patterns:**
 
 ```elisp
-;; Pattern 1: Exponential Backoff with Jitter
-(defvar gptel-retry-delays '(1 2 4 8 16 32) "Base delays in seconds")
+(defvar gptel-verify-functions (make-hash-table))
 
-(defun gptel--retry-with-backoff (fn max-retries &optional jitter)
-  "Retry FN with exponential backoff, optionally adding JITTER."
-  (let ((attempt 0)
-        (delays gptel-retry-delays))
-    (while (< attempt max-retries)
-      (condition-case err
-          (return (funcall fn))
-        (error
-         (when (< attempt (1- max-retries))
-           (let* ((base-delay (nth (min attempt (1- (length delays))) delays))
-                  (jitter-ms (if jitter (random jitter) 0))
-                  (total-delay (+ base-delay (/ jitter-ms 1000.0))))
-             (message "Retry %d/%d after %.1fs: %s" 
-                      (1+ attempt) max-retries total-delay (cadr err))
-             (sleep-for total-delay))))
-         (setq attempt (1+ attempt))))
-    (signal 'gptel-max-retries-exceeded (list max-retries))))
+(defun gptel-verify-register (check-type fn)
+  "Register verification function FN for CHECK-TYPE."
+  (puthash check-type fn gptel-verify-functions))
 
-;; Pattern 4: Fallback Chains
-(defvar gptel-provider-chain '(openai anthropic ollama) "Provider fallback chain")
-
-(defun gptel--execute-with-fallback (prompt)
-  "Execute PROMPT with provider fallback chain."
-  (let ((errors '())
-        (providers gptel-provider-chain))
-    (while providers
-      (let ((provider (pop providers)))
+(defun gptel-verify (check-type data)
+  "Run CHECK-TYPE verification on DATA."
+  (let ((fn (gethash check-type gptel-verify-functions)))
+    (if fn
         (condition-case err
+            (funcall fn data)
+          (error (list 'verification-error check-type (error-message-string err))))
+      (list 'unknown-check-type check-type))))
+
+;; Register standard verification checks:
+(gptel-verify-register 'elisp-syntax
+  (lambda (code)
+    (with-temp-buffer
+      (insert code)
+      (let ((syntax-errors nil))
+        (condition-case ()
             (progn
-              (gptel--ensure-circuit-closed provider)
-              (let ((result (gptel--call-provider provider prompt)))
-                (gptel--record-success provider)
-                (return result)))
-          (error
-           (push (cons provider (cadr err)) errors)
-           (gptel--record-failure provider)
-           (gptel--open-circuit provider)))))
-    (signal 'gptel-all-providers-failed errors)))
+              (goto-char (point-min))
+              (while (forward-sexp))
+              t)
+          (invalid-syntax (setq syntax-errors t)))
+        (not syntax-errors)))))
 
-;; Pattern 5: Escalation Queues
-(defvar gptel-escalation-queue (expand-file-name ".gptel/escalations/" user-emacs-directory))
+(gptel-verify-register 'file-exists
+  (lambda (path)
+    (if (listp path)
+        (mapcar #'file-exists-p path)
+      (file-exists-p path))))
 
-(defun gptel--escalate-to-human (task context error)
-  "Escalate failed TASK to human review."
-  (make-directory gptel-escalation-queue t)
-  (let ((esc-id (format-time-string "%Y%m%d-%H%M%S"))
-        (esc-file (expand-file-name (format "esc-%s.eld" esc-id) gptel-escalation-queue)))
-    (with-temp-file esc-file
-      (pp `(,esc-id ,task ,context ,error ,(current-time)) (current-buffer)))
-    (message "ESCALATED: Task queued for human review at %s" esc-file)
-    esc-id))
+(gptel-verify-register 'shell-exit
+  (lambda (exit-code)
+    (zerop exit-code)))
 ```
 
 ---
 
-## 4. Orchestration Spectrum
+## Tier 3: External Academic Patterns
 
-**Source:** [Azure AI Agent Orchestration Patterns](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns)
+### 10. Agent Design Pattern Catalogue
 
-**Complexity Levels:**
+**Source:** arXiv:2405.10467
 
-| Level | Pattern | Use When | gptel Status |
-|-------|---------|----------|--------------|
-| 1 | Direct model call | Single-step tasks | ✓ Implemented |
-| 2 | Single agent + tools | Varied queries, dynamic tool use | ✓ Implemented |
-| 3 | Sequential | Linear dependencies, progressive refinement | 🔄 In Progress |
-| 4 | Concurrent | Independent perspectives, fan-out/fan-in | 🔜 Planned |
-| 5 | Hierarchical | Master-slave coordination, complex delegation | 🔜 Planned |
+**Technique:** Systematic pattern catalogue for foundation model-based agents addressing goal-seeking and plan generation. Decision model for selecting appropriate orchestration patterns based on task requirements.
 
-**Implementation for Level 3 (Sequential):**
-```elisp
-(defun gptel--sequential-workflow (stages task)
-  "Execute TASK through sequential STAGES.
-STAGES is a list of (name . fn) where fn receives previous stage output."
-  (let ((context task)
-        (stage-results '()))
-    (while stages
-      (let* ((stage (pop stages))
-             (name (car stage))
-             (fn (cdr stage))
-             (start-time (current-time)))
-        (message "Stage: %s" name)
-        (condition-case err
-            (let ((result (funcall fn context)))
-              (push (list name result :duration (float-time (time-subtract (current-time) start-time)))
-                    stage-results)
-              (setq context result))
-          (error
-           (push (list name nil :error (cadr err) :duration (float-time (time-subtract (current-time) start-time)))
-                 stage-results)
-           (return (cons nil stage-results))))))
-    (cons t (nreverse stage-results))))
+**Orchestration Spectrum:**
 
-;; Example sequential workflow
-(defun gptel-research-workflow (query)
-  "Research QUERY through sequential stages."
-  (gptel--sequential-workflow
-   '((research . gptel--stage-research)
-     (analyze . gptel--stage-analyze)
-     (synthesize . gptel--stage-synthesize)
-     (verify . gptel--stage-verify)
-     (format . gptel--stage-format))
-   query))
-```
+| Level | Pattern | Use When | Implementation |
+|-------|---------|----------|----------------|
+| 1 | Direct model call | Single-step tasks, prompt engineering suffices | Simple `gptel-request` |
+| 2 | Single agent + tools | Varied queries, dynamic tool use | `gptel-agent` with tool registry |
+| 3 | Sequential | Linear dependencies, progressive refinement | Workflow pipeline |
+| 4 | Concurrent | Independent perspectives, fan-out/fan-in | `threading--` macros |
+| 5 | Hierarchical | Master-slave coordination, complex delegation | Daemon + subagents |
 
----
-
-## 5. Self-Evolution Directive Implementation
-
-**From:** 2026-05-25 research (0% retention rate indicates critical focus needed)
-
-**Directive:** Focus on highest-failure modules. Apply nil-safety patterns and validation guards.
-
-### 5.1 Target Modules by Failure Risk
-
-| Module | Lines | Priority | Focus |
-|--------|-------|----------|-------|
-| `gptel-auto-workflow-evolution.el` | 5822 | CRITICAL | Nil-safety, validation guards |
-| `gptel-auto-workflow-strategic.el` | 2698 | HIGH | Nil-safety, validation guards |
-| `gptel-tools-agent-prompt-build.el` | 2431 | HIGH | Nil-safety, validation guards |
-| `gptel-auto-workflow-research-benchmark.el` | 1742 | MEDIUM | Nil-safety |
-
-### 5.2 Nil-Safety Pattern Library
+**Implementation:**
 
 ```elisp
-;; Macro for safe access with defaults
-(defmacro gptel-safely (expr &optional default)
-  "Safely evaluate EXPR, returning DEFAULT (or nil) on error."
-  (declare (debug t))
-  `(condition-case-unless-debug nil
-       ,expr
-     (error ,default)))
+(defcustom gptel-orchestration-level 2
+  "Current orchestration complexity level (1-5)."
+  :type '(radio :tag "Orchestration Level"
+                (const :doc "Direct model call" 1)
+                (const :doc "Single agent + tools" 2)
+                (const :doc "Sequential workflow" 3)
+                (const :doc "Concurrent fan-out" 4)
+                (const :doc "Hierarchical delegation" 5)))
 
-;; Safe alist access
-(defun gptel-alist-get-safe (key alist &optional default)
-  "Safe version of alist-get with DEFAULT for missing keys."
-  (gptel-safely (alist-get key alist) default))
-
-;; Safe plist access
-(defun gptel-plist-get-safe (key plist &optional default)
-  "Safe version of plist-get with DEFAULT for missing keys."
-  (gptel-safely (plist-get plist key) default))
-
-;; Safe function call with arity checking
-(defun gptel-call-safe (fn &rest args)
-  "Call FN with ARGS, returning nil on any error or wrong arity."
-  (condition-case-unless-debug nil
-      (apply fn args)
-    (wrong-number-of-arguments nil)
-    (wrong-number-of-args nil)
-    (error nil)))
-
-;; Validation guards macro
-(defmacro gptel-guard (condition message &rest body)
-  "Guard BODY execution with CONDITION, raise error with MESSAGE if violated."
-  (declare (debug t))
-  `(if ,condition
-       (progn ,@body)
-     (error "Guard failed: %s" ,message)))
-
-;; Guard examples for module authors
-(defun gptel-validate-experiment-row (row)
-  "Validate experiment ROW has required fields."
-  (gptel-guard (listp row) "Experiment row must be a list"
-    (gptel-guard (stringp (car row)) "First field must be experiment-id string"
-      (gptel-guard (plistp (cdr row)) "Remaining fields must be plist"
-        (gptel-guard (gptel-safely (plist-get (cdr row) :timestamp))
-                     "Missing required :timestamp field"
-          t)))))
+(defun gptel-orchestrate (task &optional context)
+  "Orchestrate TASK at current gptel-orchestration-level with CONTEXT."
+  (pcase gptel-orchestration-level
+    (1 (gptel-request task))
+    (2 (gptel-agent task context))
+    (3 (gptel-workflow-sequence task))
+    (4 (gptel-workflow-concurrent task))
+    (5 (gptel-workflow-hierarchical task))))
 ```
 
 ---
 
-## 6. Git Activity Analysis
+### 11. MetaAgent Self-Evolving Paradigm
 
-**Last 30 commits to lisp/modules/:**
+**Source:** arXiv:2508.00271
 
-| Metric | Value | Interpretation |
-|--------|-------|----------------|
-| Bug fixes | 8 | Active stabilization |
-| Feature commits | 0 | Feature freeze mode |
-| Ratio | 100% stabilization | Current phase = polish & harden |
+**Technique:** Self-improving agent via tool meta-learning without parameter changes. Starts minimal, generates help requests on knowledge gaps, routes to tools via dedicated router.
 
-**Implication:** Research should focus on resilience patterns, not feature discovery. Apply existing patterns more robustly.
+**Implementation:**
 
----
+```elisp
+(defvar gptel-p-success-history (make-hash-table :test 'equal))
 
-## 7. Cross-References
+(defun gptel-p-success (task-pattern)
+  "Calculate P(success) for TASK-PATTERN based on outcome history."
+  (let ((history (gethash task-pattern gptel-p-success-history)))
+    (if (< (length history) 3)
+        0.5  ; Unknown: default to 50%
+      (let ((successes (cl-count-if #'identity history)))
+        (/ (float successes) (length history))))))
 
-- **Circuit Breaker**: See [[research-error-recovery]] for provider fallback implementation
-- **Checkpoint/Restore**: See [[research-persistence]] for experiment state persistence
-- **FTS5 Search**: See [[research-memory]] for session continuity implementation
-- **Nil-Safety**: See [[elisp-patterns-nil-safety]] for defensive programming
-- **Metrics**: See [[benchmark-trajectory-metrics]] for TSR tracking
-- **Verification**: See [[agent-verification-gates]] for self-check implementation
+(defun gptel-p-success-record (task-pattern success)
+  "Record SUCCESS for TASK-PATTERN in outcome history."
+  (let* ((history (gethash task-pattern gptel-p-success-history '()))
+         (new-history (cons success (cl-subseq history 0 19))))  ; Keep last 20
+    (puthash task-pattern new-history gptel-p-success-history)))
 
----
-
-## 8. Related Topics
-
-- [[agent-architecture-patterns]]
-- [[self-evolution-system]]
-- [[benchmark-metrics]]
-- [[memory-systems]]
-- [[error-recovery-patterns]]
-- [[context-compression]]
-- [[provider-fallback-chains]]
-- [[validation-guard-patterns]]
-- [[sqlite-tool-logging]]
-- [[hybrid-search-rag]]
+(defun gptel-help-request-p (task)
+  "Generate help request if TASK pattern is unrecognized."
+  (when (< (gptel-p-success (gptel-task-pattern task)) 0.3)
+    (format "Help needed: task type '%s' has low success history.
+Consider additional context or alternative approach."
+      (gptel-task-pattern task))))
+```
 
 ---
 
-## 9. Meta-Learning
+### 12. Trajectory-Aware Metrics
 
-**Research quality measured by downstream experiment success.**
+**Source:** [NVIDIA AI Agent Evaluation Guide](https://developer.nvidia.com/blog/mastering-agentic-techniques-ai-agent-evaluation/)
 
-Key learnings from research sessions:
+**Technique:** Evaluate trajectories, not just final answers. Log complete trajectories (plans, tool calls, outcomes).
 
-1. **Preserve the feedback loop**: Every experiment row must include a non-None research hash so AutoTTS can link outcomes back to the research trace.
+**Metrics:**
 
-2. **Treat missing research as pipeline defect**: Missing research files are not successful empty research runs—they indicate daemon orchestration issues.
+| Metric | Formula | Target |
+|--------|---------|--------|
+| Task Success Rate (TSR) | successes / total | >80% |
+| Tool Call Accuracy | correct_calls / total_calls | >90% |
+| Trajectory Efficiency | steps_per_success (lower=better) | <10 |
+| Reasoning Soundness | valid_traces / total_traces | >85% |
 
-3. **Prefer structured outputs**: Machine-parseable research with source, technique, apply-to-us, and verification fields has higher retention than prose.
+**Implementation:**
 
-4. **Guard daemon boundaries**: If a researcher daemon disappears after being observed, fail fast and fall back instead of waiting until global timeout.
+```elisp
+(defvar gptel-trajectory-log (make-hash-table :test 'equal))
 
-5. **Prioritize observability**: Changes that make self-evolution observable through results.tsv metadata, research traces, and controller decisions have higher impact.
+(defun gptel-trajectory-log-step (experiment-id step-type data)
+  "Log STEP-TYPE with DATA for EXPERIMENT-ID trajectory."
+  (let ((log (gethash experiment-id gptel-trajectory-log '())))
+    (push (list :step (length log)
+                :type step-type
+                :timestamp (float-time)
+                :data data)
+          (puthash experiment-id (puthash experiment-id log gptel-trajectory-log)))))
+
+(defun gptel-metrics-calculate (experiment-id)
+  "Calculate trajectory metrics for EXPERIMENT-ID."
+  (let ((trajectory (gethash experiment-id gptel-trajectory-log)))
+    (list :tsr (gptel-metrics--tsr trajectory)
+          :tool-accuracy (gptel-metrics--tool-accuracy trajectory)
+          :trajectory-efficiency (gptel-metrics--efficiency trajectory)
+          :reasoning-soundness (gptel-metrics--soundness trajectory))))
+```
 
 ---
 
-*Generated: 2026-05-25*  
-*Source: Research sessions 2026-05-20 through 2026-05-25*  
-*Hash: e438c2269d429af9e2c655b676710024094299f6*
+### 13. Error Recovery Patterns
+
+**Source:** [AI Agent Error Recovery Patterns](https://aiagentsblog.com/blog/agent-error-recovery-patterns/)
+
+**Key Patterns:**
+
+1. **Exponential Backoff with Jitter** — Retry delays increase exponentially with random jitter
+2. **Circuit Breakers** — Open circuit after N failures
+3. **Checkpoint-and-Resume** — Save state at each step
+4. **Fallback Chains** — Provider A → Provider B → Provider C
+5. **Escalation Queues** — Failed tasks to human review
+
+**Implementation:**
+
+```elisp
+(defun gptel-exponential-backoff (attempt base max)
+  "Calculate exponential backoff with jitter for ATTEMPT.
+BASE defaults to 1 second, MAX to 60 seconds."
+  (let* ((delay (min (* base (expt 2 attempt)) max))
+         (jitter (* delay (random 0.3))))  ; 0-30% jitter
+    (+ delay jitter)))
+
+(defun gptel-fallback-chain (&rest providers)
+  "Try PROVIDERS in sequence until one succeeds."
+  (catch 'success
+    (dolist (provider providers)
+      (condition-case err
+          (if (gptel-provider-available-p provider)
+              (let ((result (funcall provider)))
+                (throw 'success result))
+            (message "Provider %s unavailable, trying next..." provider))
+        (error
+         (message "Provider %s failed: %s" provider err)
+         (gptel-circuit-breaker--record provider nil))))
+    (gptel-escalation-queue '("All providers failed"))))
+
+(defvar gptel-escalation-queue '())
+
+(defun gptel-escalation-queue (items)
+  "Add ITEMS to human review queue."
+  (dolist (item items)
+    (push (list :timestamp (float-time) :item item)
+          gptel-escalation-queue)))
+```
+
+---
+
+## Research Pipeline Guidelines
+
+### Structured Research Output Format
+
+Every research run should produce machine-parseable output:
+
+```yaml
+source: github.com/davidwuchn/efrit
+technique: circuit-breaker
+apply-to-us: |
+  Implement in gptel-auto-workflow-daemon.el
+  - Track failure/success counts per provider
+  - Auto-open circuit after 5 consecutive failures
+verification: |
+  Test by triggering 5 consecutive failures,
+  verify circuit opens and requests fail fast
+```
+
+### Preserving Feedback Loop
+
+```elisp
+(defcustom gptel-research-hash-required t
+  "If non-nil, every experiment row must include a non-none research hash.")
+
+(defun gptel-research-validate (experiment-row)
+  "Validate EXPERIMENT-ROW includes research hash."
+  (when (and gptel-research-hash-required
+             (null (alist-get 'research-hash experiment-row)))
+    (error "Experiment row missing research hash: %s" experiment-row)))
+```
+
+### Research Quality Metrics
+
+| Metric | Formula | Minimum |
+|--------|---------|---------|
+| Retention Rate | kept / total findings | >15% |
+| Downstream Impact | experiments using findings / total | >10% |
+| Pattern Novelty | new patterns / total patterns | >20% |
+
+---
+
+## Common Patterns Summary
+
+| Pattern | Source | Difficulty | Impact | Action |
+|---------|--------|------------|--------|--------|
+| Circuit Breaker | efrit | MEDIUM | HIGH | Implement per-provider failure tracking |
+| Tool Audit Trail | efrit | MEDIUM | MEDIUM | SQLite logging with hash verification |
+| Think-in-Code | context-mode | HARD | HIGH | Sandboxed analysis scripts |
+| FTS5 Session DB | context-mode | HARD | MEDIUM | SQLite with full-text search |
+| Feed-Forward Memory | mementum | MEDIUM | HIGH | Read state.md on session start |
+| Three-Tier Watchdog | gastown | MEDIUM | HIGH | Witness/Deacon/Dogs separation |
+| Mathematical Preamble | nucleus | MEDIUM | MEDIUM | Lambda notation attention anchors |
+| Degraded Mode | External | MEDIUM | MEDIUM | Graduated capability reduction |
+| Self-Verification | genesis | MEDIUM | HIGH | Deterministic AST/exit code checks |
+| Trajectory Metrics | NVIDIA | MEDIUM | HIGH | Log plans, calls, outcomes |
+| Exponential Backoff | External | LOW | MEDIUM | Retry with jitter |
+| Fallback Chains | External | LOW | HIGH | Multi-provider resilience |
+
+---
+
+## Implementation Priority
+
+1. **Circuit Breaker + Checkpoint** — Prevents cascade failures
+2. **Self-Verification** — Reduces bad code commits
+3. **Exponential Backoff** — Handles transient failures
+4. **Trajectory Logging** — Enables metrics and debugging
+5. **Tool Audit Trail** — Compliance and replay
+6. **Fallback Chains** — Multi-provider resilience
+7. **Three-Tier Watchdog** — Separates lifecycle concerns
+8. **Think-in-Code** — Context efficiency at scale
+9. **FTS5 Session Continuity** — Memory persistence
+10. **Degraded Mode** — Graceful failure handling
+
+---
+
+## Related
+
+- [[research-pipeline]] — Research workflow orchestration
+- [[self-evolution]] — Self-modifying agent patterns
+- [[daemon-resilience]] — Daemon watchdog and recovery
+- [[tool-audit]] — Tool execution logging
+- [[context-efficiency]] — Context window management
+- [[mementum-protocol]] — Feed-forward memory system
+
+---
+
+*Synthesized from research sessions 2026-05-20 through 2026-05-27*
+*Generated by auto-workflow research synthesis*
+```
