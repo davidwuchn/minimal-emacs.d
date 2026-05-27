@@ -464,6 +464,58 @@ CALLBACK receives the prose string via async LLM call."
     (when callback (funcall callback nil))
     nil))
 
+;; ─── Allium Research Caching ───
+
+(defvar gptel-auto-experiment--allium-research-cache (make-hash-table :test 'equal)
+  "Hash table caching Allium-distilled research findings per project.
+Key is the research hash, value is the Allium spec string.
+Allium specs are 5-10x smaller than English prose findings.")
+
+(defun gptel-auto-experiment--allium-research-findings (english-findings &optional async)
+  "Return ENGLISH-FINDINGS distilled to Allium v3 format if cached.
+When no cache exists and ASYNC is non-nil, kick off async distillation.
+Returns the Allium spec string or nil when unavailable.
+The Allium format is a compact statechart — much smaller than English prose."
+  (when (and (stringp english-findings)
+             (not (string-empty-p english-findings)))
+    (let* ((hash (sha1 english-findings))
+           (cached (gethash hash gptel-auto-experiment--allium-research-cache)))
+      (if cached
+          cached
+        (when async
+          (gptel-auto-experiment--allium-distill
+           english-findings
+           (lambda (allium-spec)
+             (when allium-spec
+               (puthash hash allium-spec gptel-auto-experiment--allium-research-cache)
+               (message "[allium] Distilled research findings: %d → %d chars (%.0f%%)"
+                        (length english-findings) (length allium-spec)
+                        (* 100.0 (/ (float (length allium-spec)) (length english-findings))))))))
+        nil))))
+
+(defun gptel-auto-experiment--research-for-prompt (english-findings)
+  "Return research findings optimized for LLM prompts.
+Uses lambda-compressed version when backend supports it,
+falls back to English prose otherwise.  Allium version is for human audit only."
+  (let ((allium (gptel-auto-experiment--allium-research-findings english-findings nil)))
+    ;; Allium: human audit trail only — never sent to LLM directly
+    ;; Lambda compression: strip English filler, convert to compact notation
+    (if (gptel-auto-experiment--use-lambda-prompts-p)
+        ;; Lambda-compressed: key patterns, no prose filler
+        (let* ((lines (split-string english-findings "\n"))
+               (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
+               (compact (if apply-lines
+                            (mapconcat (lambda (l)
+                                         (replace-regexp-in-string
+                                          "\\*\\*Apply:\\*\\*:?\\s-*" "λ apply: "
+                                          (string-trim l)))
+                                       apply-lines "\n")
+                          "")))
+          (if (string-empty-p compact)
+              (truncate-string-to-width english-findings 500 nil nil "...")
+            compact))
+      english-findings)))
+
 (defun gptel-auto-experiment--allium-issues-count (check-output)
   "Count distinct issues from Allium check output (deterministic).
 Returns (count . severity) where severity is 0.0-1.0 weighted by issue type."
@@ -1120,10 +1172,9 @@ Implements section-level A/B testing to identify effective prompt components."
               (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
               (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
               (research-findings . ,(let ((findings (gptel-auto-workflow-load-research-findings)))
-                                      (if (and findings (not (string-empty-p findings)))
-                                          (format "Recent external research insights (apply these when relevant):\n%s\n"
-                                                  (truncate-string-to-width findings 2000 nil nil "..."))
-                                        "No recent external research available.")))
+                                       (if (and findings (not (string-empty-p findings)))
+                                           (gptel-auto-experiment--research-for-prompt findings)
+                                         "No recent external research available.")))
               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
