@@ -237,7 +237,13 @@ correctness fix.
 Additionally, when the gate rejects a confirmed bug fix because code quality
 drops slightly (guard code adds necessary complexity), the correctness bypass
 overrides the rejection.  A bug fix that the grader scores 8+/9 should not be
-rejected solely because nil guards or validation checks increase complexity."
+rejected solely because nil guards or validation checks increase complexity.
+
+Grade bypass: when the grader strongly confirms (8+/9) that a change is a
+genuine improvement but the structural scoring formula rejects it (because
+guard code penalizes length/complexity metrics), trust the grader over the
+formula.  This handles guard additions, validation, error handling, and
+documentation improvements that the structural model can't evaluate."
   (let* ((improvement (and (listp decision) (plist-get decision :improvement)))
          (decision-threshold 0.005)
          (score-delta (if (listp improvement)
@@ -264,6 +270,22 @@ rejected solely because nil guards or validation checks increase complexity."
            grade-score grade-total))
          (score-acceptable-p
           (> score-delta (- decision-threshold)))
+         ;; Grader bypass: when the grader strongly confirms a genuine quality
+         ;; improvement (8+/9) but the structural formula rejects it, trust the
+         ;; grader.  Guard code, validation, error handling, and documentation
+         ;; additions all penalize the length/complexity quality metrics but are
+         ;; genuine improvements.  The quality-delta floor prevents bypassing
+         ;; for changes that actively damage the codebase.
+         (grade-confirms-quality-p
+          (and strong-grade-p
+               (not speculative-hypothesis-p)
+               (>= quality-delta -0.12)
+               (>= score-delta -0.01)
+               (>= combined-delta -0.05)))
+         (grade-bypass-p
+          (and (listp decision)
+               (not (plist-get decision :keep))
+               grade-confirms-quality-p))
          (correctness-bypass-p
           (and (listp decision)
                (not (plist-get decision :keep))
@@ -272,12 +294,17 @@ rejected solely because nil guards or validation checks increase complexity."
                strong-grade-p
                score-acceptable-p))
          (override-note
-          (if correctness-bypass-p
-              (format "Correctness fix: grader %d/%d confirms real bug fix keeping despite quality delta %.3f"
-                      grade-score (or grade-total 9) quality-delta)
-            "Override: keep non-regressing high-confidence tie with passing tests")))
-    ;; Correctness bypass: promote genuine bug fixes that the grader strongly confirms.
-    (if correctness-bypass-p
+          (cond
+           (grade-bypass-p
+            (format "Grader-confirmed quality: %d/%d bypasses structural regression (quality Δ%.3f combined Δ%.3f)"
+                    grade-score (or grade-total 9) quality-delta combined-delta))
+           (correctness-bypass-p
+            (format "Correctness fix: grader %d/%d confirms real bug fix keeping despite quality delta %.3f"
+                    grade-score (or grade-total 9) quality-delta))
+           (t
+            "Override: keep non-regressing high-confidence tie with passing tests"))))
+    ;; Grade bypass: grader strongly confirms improvement, trust it.
+    (if grade-bypass-p
         (let ((promoted (copy-sequence decision)))
           (setq promoted (plist-put promoted :keep t))
           (plist-put
@@ -287,27 +314,38 @@ rejected solely because nil guards or validation checks increase complexity."
                     (not (string-match-p (regexp-quote override-note) reasoning)))
                (format "%s | %s" override-note reasoning)
              override-note)))
-      ;; Standard promotion: only for non-rejecting score-ties with positive quality.
-      (if (or (not (listp decision))
-              (plist-get decision :keep)
-              (not tests-passed)
-              (<= score-delta (- decision-threshold))
-              (<= quality-delta 0)
-              (<= combined-delta 0)
-              gate-rejected-p
-              (not correctness-fix-p)
-              speculative-hypothesis-p
-              (not strong-grade-p))
-          decision
-        (let ((promoted (copy-sequence decision)))
-          (setq promoted (plist-put promoted :keep t))
-          (plist-put
-           promoted
-           :reasoning
-           (if (and (stringp reasoning)
-                    (not (string-match-p (regexp-quote override-note) reasoning)))
-               (format "%s | %s" override-note reasoning)
-             override-note)))))))
+      ;; Correctness bypass: promote genuine bug fixes that the grader strongly confirms.
+      (if correctness-bypass-p
+          (let ((promoted (copy-sequence decision)))
+            (setq promoted (plist-put promoted :keep t))
+            (plist-put
+             promoted
+             :reasoning
+             (if (and (stringp reasoning)
+                      (not (string-match-p (regexp-quote override-note) reasoning)))
+                 (format "%s | %s" override-note reasoning)
+               override-note)))
+        ;; Standard promotion: only for non-rejecting score-ties with positive quality.
+        (if (or (not (listp decision))
+                (plist-get decision :keep)
+                (not tests-passed)
+                (<= score-delta (- decision-threshold))
+                (<= quality-delta 0)
+                (<= combined-delta 0)
+                gate-rejected-p
+                (not correctness-fix-p)
+                speculative-hypothesis-p
+                (not strong-grade-p))
+            decision
+          (let ((promoted (copy-sequence decision)))
+            (setq promoted (plist-put promoted :keep t))
+            (plist-put
+             promoted
+             :reasoning
+             (if (and (stringp reasoning)
+                      (not (string-match-p (regexp-quote override-note) reasoning)))
+                 (format "%s | %s" override-note reasoning)
+               override-note))))))))
 
 ;;; Prompt Building
 
