@@ -1911,24 +1911,22 @@ analysis/compare may still be too slow for code generation (DashScope:
     ;; The onto-router's aggregate ranking puts DashScope first (fast for
     ;; non-generative tasks) but DashScope has 0% keep-rate on executor.
     ;; DeepSeek has 25% keep-rate on :agentic tasks — it should be first.
+    ;; Do NOT sort by router position: if DashScope is at position 0 in the
+    ;; aggregate ranking, sorting by it would put DashScope first again.
+    ;; Only remove backends the router explicitly deprioritizes.
     (or (and gptel-auto-workflow-executor-rate-limit-fallbacks
              (let ((ranked (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
                                 (gptel-auto-workflow--ranked-subagent-backends agent-type))))
-               ;; If the ranked list exists, reorder the static fallback so
-               ;; high-keep-rate backends from the ranked list float to the top
-               ;; within the static order, but the static order still controls.
                (if ranked
-                   (let ((ranked-map (make-hash-table :test 'equal)))
-                     (cl-loop for (backend . model) in ranked
-                              for i from 0
-                              do (puthash backend (cons i model) ranked-map))
-                     ;; Sort static fallback by ranked position (lower = better),
-                     ;; keeping entries not in ranked data at the end.
-                     (sort (copy-sequence gptel-auto-workflow-executor-rate-limit-fallbacks)
-                           (lambda (a b)
-                             (let* ((ra (gethash (car a) ranked-map (cons 9999 (cdr a))))
-                                    (rb (gethash (car b) ranked-map (cons 9999 (cdr b)))))
-                               (< (car ra) (car rb))))))
+                   (let ((ranked-set (make-hash-table :test 'equal)))
+                     ;; Only keep ranked backends that appear in the static chain
+                     (cl-loop for (backend . _model) in ranked
+                              do (puthash backend t ranked-set))
+                     ;; Filter static fallback: keep only non-excluded backends
+                     ;; from the static order (which has DeepSeek first)
+                     (cl-remove-if-not
+                      (lambda (entry) (gethash (car entry) ranked-set))
+                      gptel-auto-workflow-executor-rate-limit-fallbacks))
                  gptel-auto-workflow-executor-rate-limit-fallbacks)))
          gptel-auto-workflow-executor-rate-limit-fallbacks))
    ((member agent-type gptel-auto-workflow-headless-fallback-agents)
