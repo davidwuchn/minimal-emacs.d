@@ -63,7 +63,11 @@ every cycle when there are candidate memories to process."
           (gptel-auto-workflow-evolution-run-cycle)
           (message "[auto-workflow] Evolution cycle complete."))
       (error
-       (message "[auto-workflow] Evolution cycle error: %s" err)))
+       (message "[auto-workflow] Evolution cycle error: %s" err)
+       (let ((bt (mapconcat (lambda (f) (format "  %s" f))
+                            (backtrace-frame-frames) "\n")))
+         (when (> (length bt) 0)
+           (message "[auto-workflow] Evolution cycle backtrace:\n%s" bt)))))
     ;; Mementum maintenance: rebuild index + synthesize candidates.
     ;; Runs every cycle (hourly) but is cheap when no new memories exist.
     ;; Enable auto-approve in headless so synthesis actually writes files.

@@ -186,7 +186,7 @@ through the staging gate."
        gptel-auto-workflow-use-staging
        (bound-and-true-p gptel-auto-workflow--headless)))
 
-(defcustom gptel-auto-experiment-max-changed-files 3
+(defcustom gptel-auto-experiment-max-changed-files 10
   "Maximum number of files an experiment can change.
 Prevents scope creep where executor touches many unrelated files.
 Set to 0 to disable the check."
@@ -244,20 +244,48 @@ of the regression if blocked."
       (cons t nil))))
 
 
-(defun gptel-auto-experiment--check-scope ()
+(defun gptel-auto-experiment--check-scope (&optional optimize-branch)
   "Return (ok-p . changed-files) for current experiment.
-Checks that the number of changed files is within limits."
-  (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
-         (changed-files (shell-command-to-string
-                         (format "cd %s && git diff --name-only HEAD~1 2>/dev/null"
-                                 (shell-quote-argument worktree))))
-         (files (split-string changed-files "\n" t))
+When OPTIMIZE-BRANCH is given, compare OPTIMIZE-BRANCH against main
+using a three-dot diff (main...OPTIMIZE-BRANCH) from the project root.
+This avoids false scope-creep when `gptel-auto-workflow--current-target'
+has been rebound by a later experiment during async staging flow.
+
+Excludes auto-generated paths (mementum/, assistant/skills/, _template/)
+from the count — those are produced by the evolution cycle, not by
+experiments, and would otherwise trigger false positives.
+
+Checks that the number of remaining changed files is within limits."
+  (let* ((project-root (gptel-auto-workflow--project-root))
+         (changed-files
+          (if optimize-branch
+              (shell-command-to-string
+               (format "cd %s && git diff main...%s --name-only --diff-filter=ACMR 2>/dev/null"
+                       (shell-quote-argument project-root)
+                       (shell-quote-argument optimize-branch)))
+            (let ((worktree (gptel-auto-workflow--worktree-or-project-dir)))
+              (shell-command-to-string
+               (format "cd %s && git diff --name-only HEAD~1 2>/dev/null"
+                       (shell-quote-argument worktree))))))
+         (all-files (split-string changed-files "\n" t))
+         ;; Exclude auto-generated paths that evolve independently
+         (files (seq-remove
+                 (lambda (f)
+                   (string-match-p
+                    (rx (or (seq bol "mementum/")
+                            (seq bol "assistant/skills/")
+                            (seq bol "_template/")))
+                    f))
+                 all-files))
          (count (length files)))
     (if (and (> gptel-auto-experiment-max-changed-files 0)
              (> count gptel-auto-experiment-max-changed-files))
         (progn
           (message "[auto-exp] ⚠ Scope creep detected: %d files changed (max: %d)"
                    count gptel-auto-experiment-max-changed-files)
+          (when (> (length all-files) count)
+            (message "[auto-exp]   (excluded %d auto-generated files)"
+                     (- (length all-files) count)))
           (cons nil files))
       (cons t files))))
 

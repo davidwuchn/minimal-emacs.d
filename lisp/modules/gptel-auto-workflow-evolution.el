@@ -1826,7 +1826,6 @@ Extract → Verify → Controller Evolution → Skill Evolution.
 Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (interactive)
   (cl-block gptel-auto-workflow-evolution-run-cycle
-  ;; DEBUG: wrap early portion to isolate MiniMax error
   (condition-case early-err
       (progn
   ;; Throttle: don't run more than once per 300s (5min) unless forced
@@ -1861,7 +1860,10 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (message "[auto-workflow] Running self-evolution cycle...")
     )
     (error
-     (message "[evolution] EARLY error (pre-steps): %s" (error-message-string early-err))
+     (message "[evolution] EARLY error (pre-steps): %s — %s"
+              (error-message-string early-err)
+              (mapconcat (lambda (f) (format "  %s" f))
+                         (backtrace-frame-frames) "\n"))
      (cl-return-from gptel-auto-workflow-evolution-run-cycle (format "early-error: %s" early-err))))
   ;; Pipeline validation (Semantica PipelineValidator)
   (condition-case nil

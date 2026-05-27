@@ -329,6 +329,8 @@ clean_stale_socket "ov5-researcher"
 
 # ─── Pull latest code so daemon restart picks up fixes ───
 log "Pulling latest code from origin..."
+# Discard dirty auto-generated files so git pull doesn't fail
+git -C "$DIR" checkout -- mementum/knowledge/ assistant/skills/ mementum/memories/ mementum/state.md 2>/dev/null || true
 git -C "$DIR" pull --ff-only origin main 2>&1 || log "WARNING: git pull failed, continuing with current code"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
@@ -342,6 +344,8 @@ rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
 # Force-remove stale staging worktree so auto-workflow recreates from latest main
 rm -rf "$DIR/var/tmp/experiments/staging-verify" 2>/dev/null || true
 rm -rf "$DIR/var/tmp/experiments/optimize" 2>/dev/null || true
+# Keep only the 3 most recent baseline worktrees; delete older ones
+ls -dt "$DIR/var/tmp/experiments/main-baseline-"* 2>/dev/null | tail -n +4 | xargs -r rm -rf 2>/dev/null || true
 log "Cleaned stale staging + experiment worktrees"
 sleep 2
 
@@ -522,6 +526,8 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     unset -f clean_ov5_sockets
     # Clear workflow status so auto-workflow can start a fresh daemon
     rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
+    # Discard dirty auto-generated files so git pull doesn't fail
+    git -C "$DIR" checkout -- mementum/knowledge/ assistant/skills/ mementum/memories/ mementum/state.md 2>/dev/null || true
     # Pull any commits pushed by evolution cycle
     git -C "$DIR" pull --ff-only origin main 2>&1 || log "WARNING: post-evolution git pull failed"
     sleep 2
