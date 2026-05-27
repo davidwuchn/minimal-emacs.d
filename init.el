@@ -53,12 +53,6 @@
     (setq use-short-answers t)
   (advice-add 'yes-or-no-p :override #'y-or-n-p))
 
-;;; Undo/redo
-
-(setq undo-limit (* 13 160000)
-      undo-strong-limit (* 13 240000)
-      undo-outer-limit (* 13 24000000))
-
 ;;; package.el
 
 (when (and (bound-and-true-p minimal-emacs-package-initialize-and-refresh)
@@ -71,6 +65,35 @@
              (not (package-installed-p 'use-package)))
     (package-install 'use-package))
   (require 'use-package))
+
+;;; Misc
+
+(setq undo-limit (* 13 160000)
+      undo-strong-limit (* 13 240000)
+      undo-outer-limit (* 13 24000000))
+
+(setq whitespace-line-column nil)  ; Use the value of `fill-column'.
+
+;; Disable ellipsis when printing s-expressions in the message buffer
+(setq eval-expression-print-length nil
+      eval-expression-print-level nil)
+
+;; This directs gpg-agent to use the minibuffer for passphrase entry
+(setq epg-pinentry-mode 'loopback)
+
+;; By default, Emacs stores sensitive authinfo credentials as unencrypted text
+;; in your home directory. Use GPG to encrypt the authinfo file for enhanced
+;; security.
+(setq auth-sources (list "~/.authinfo.gpg"))
+
+;; Speed up 'find-library' and reduce completion clutter by excluding internal
+;; helper files. This provides a library-focused list.
+(setq find-library-include-other-files nil)
+
+;; Protect the system from code injection vulnerabilities when browsing files.
+;; Disabling local 'eval' expressions ensures that opening a malicious project
+;; or third-party script cannot execute arbitrary Lisp code on your machine.
+(setq enable-local-eval nil)
 
 ;;; Minibuffer
 
@@ -314,6 +337,7 @@
 ;;; Frames and windows
 
 (setq resize-mini-windows 'grow-only)
+(setq max-mini-window-height 0.33)
 
 ;; The native border "uses" a pixel of the fringe on the rightmost
 ;; splits, whereas `window-divider-mode' does not.
@@ -487,15 +511,7 @@
 
 ;; Configure Ediff to use a single frame and split windows horizontally
 (setq ediff-window-setup-function 'ediff-setup-windows-plain
-      ediff-split-window-function 'split-window-horizontally
-
-      ;; Ignore all whitespace differences (-w) to reduce visual noise from
-      ;; indentation changes or auto-formatters, keeping the focus on logic.
-      ediff-diff-options "-w"
-
-      ;; Skip over regions where the only differences are whitespace (or other
-      ;; ignored options) when navigating with 'n' and 'p'.
-      ediff-ignore-similar-regions t)
+      ediff-split-window-function 'split-window-horizontally)
 
 ;;; Diff
 
