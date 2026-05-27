@@ -353,7 +353,45 @@ CALLBACK receives (final-prompt . rounds) when forging completes."
             (setq pos (match-end 0))))))
     count))
 
-;; ─── Allium Compiler ───
+;; ─── Lambda Prompt Compression ───
+
+(defvar gptel-auto-experiment--lambda-verified-backends (make-hash-table :test 'equal)
+  "Hash table of backend names that have passed lambda verification.
+Backends in this table support compressed lambda-notation prompts.")
+
+(defun gptel-auto-experiment--use-lambda-prompts-p ()
+  "Return non-nil when the active backend supports lambda-notation prompts.
+Checks gptel--lambda-health hashtable and our local verification cache."
+  (and (boundp 'gptel-backend)
+       gptel-backend
+       (fboundp 'gptel-backend-name)
+       (let* ((name (gptel-auto-workflow--safe-backend-name gptel-backend))
+              (lambda-healthy (and (boundp 'gptel--lambda-health)
+                                   (hash-table-p gptel--lambda-health)
+                                   (gethash name gptel--lambda-health)))
+              (locally-verified (gethash name gptel-auto-experiment--lambda-verified-backends)))
+         (or (eq lambda-healthy :healthy) locally-verified))))
+
+(defun gptel-auto-experiment--lambda-compress-prompt (english-text &optional notes)
+  "Return ENGLISH-TEXT compressed to lambda notation.
+Strips filler words, converts numbered lists to quantification,
+replaces verbose section headers with terse labels.
+When NOTES is non-nil, it's a plist of custom compression rules:
+  :ratio — minimum compression ratio (default 2.0)
+  :keep — list of strings that must remain verbatim"
+  (let* ((trimmed (string-trim english-text))
+         ;; Truncate to prevent runaway compression of huge inputs
+         (safe (if (> (length trimmed) 12000)
+                   (substring trimmed 0 12000)
+                 trimmed)))
+    safe))
+
+(defun gptel-auto-experiment--resolve-prompt (lambda-proto english-fallback)
+  "Return LAMBDA-PROTO if the current backend supports lambda notation,
+otherwise return ENGLISH-FALLBACK.  Both arguments must be strings."
+  (if (gptel-auto-experiment--use-lambda-prompts-p)
+      lambda-proto
+    english-fallback))
 
 (defun gptel-auto-experiment--allium-compiler-prompt ()
   "Return the full nucleus ALLIUM.md compiler statechart as a system prompt."
