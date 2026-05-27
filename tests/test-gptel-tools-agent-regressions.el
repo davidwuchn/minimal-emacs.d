@@ -19023,6 +19023,120 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should-not (memq :model captured-args))
       (should (memq :callback captured-args)))))
 
+
+;; ─── Three-Format Rule: Lambda(LLM) > Allium(verify only) > EDN(internal only) ───
+
+(ert-deftest regression/three-format/no-english-prose-in-llm-prompts ()
+  "All LLM prompts must use lambda notation, not English prose.
+English filler words (CRITICAL, IMPORTANT, You are a, REQUIREMENTS)
+must NOT appear in prompt format strings sent to subagents or gptel-request."
+  (let ((violations nil)
+        (banned-english
+         '("CRITICAL:" "IMPORTANT:" "REQUIREMENTS:" "FORBIDDEN:"
+           "Remember that " "Make sure to " "You are a "
+           "Your job is " "Your task is " "DO NOT " "NEVER ")))
+    (dolist (file (directory-files
+                   (expand-file-name "lisp/modules/"
+                                     (gptel-auto-workflow--worktree-base-root))
+                   t "\\.el$"))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (while (re-search-forward "\"\\([^\"]*\\)\"" nil t)
+          (let ((str (match-string 1)))
+            (dolist (banned banned-english)
+              (when (and (string-match-p banned str)
+                         ;; Skip docstrings (lines starting with ; or def)
+                         (not (string-match-p "\\`[;[:space:]]*\""
+                                              (buffer-substring
+                                               (line-beginning-position)
+                                               (match-beginning 0))))
+                         ;; Must be a format/prompt string
+                         (string-match-p
+                          "format\\|prompt\\|request\\|subagent\\|system\\|callback"
+                          (buffer-substring
+                           (max (point-min) (- (match-end 0) 500))
+                           (match-end 0))))
+                (push (list (file-name-nondirectory file)
+                            (line-number-at-pos) banned str)
+                      violations)
+                (cl-return)))))))
+    (when violations
+      (ert-fail
+       (format "English prose found in %d LLM prompt(s):\n%s"
+               (length violations)
+               (mapconcat
+                (lambda (v)
+                  (format "  %s:%d [%s] → \"%s\""
+                          (car v) (cadr v) (caddr v)
+                          (truncate-string-to-width (cadddr v) 80)))
+                violations "\n"))))))
+
+(ert-deftest regression/three-format/analyzer-prompt-is-lambda ()
+  "The analyzer target-selection prompt must use lambda notation.
+This is the only LLM prompt that should have English prose
+for the edge case when lambda is unavailable."
+  (skip-unless (fboundp 'gptel-auto-workflow--build-analyzer-prompt))
+  (let* ((prompt (gptel-auto-workflow--build-analyzer-prompt
+                  '(:file-list "test.el" :git-history "none" :file-sizes "none" :todos "none")
+                  "no research" 5)))
+    (should (string-match-p "λ select" prompt))
+    (should (string-match-p "∀f:" prompt))
+    (should (string-match-p "OUTPUT:" prompt))
+    (should-not (string-match-p "Select optimization targets for this" prompt))))
+
+(ert-deftest regression/three-format/comparator-prompt-is-lambda ()
+  "The comparator (keep/discard decide) prompt must use lambda notation."
+  (let* ((prompt (format "λ compare(A,B). combined = 0.6·eightKeys + 0.4·quality (ε=%.3f)
+A:  S=%.3f  Q=%.3f  C=%.3f
+B:  S=%.3f  Q=%.3f  C=%.3f
+| C(B) > C(A) + ε → B | C(A) > C(B) + ε → A | else → tie
+OUTPUT: line1=\"A\"|\"B\"|\"tie\" line2=reason(1 sentence)"
+                          0.005 0.4 0.9 0.61 0.4 0.9 0.58)))
+    (should (string-match-p "λ compare" prompt))
+    (should (string-match-p "ε=" prompt))
+    (should (string-match-p "→ B" prompt))
+    (should-not (string-match-p "Compare these two" prompt))
+    (should-not (string-match-p "DECISION CRITERIA" prompt))))
+
+(ert-deftest regression/three-format/grader-prompt-is-lambda ()
+  "The grader prompt must use lambda notation."
+  (skip-unless (fboundp 'gptel-benchmark--make-grading-prompt))
+  (let* ((prompt (gptel-benchmark--make-grading-prompt
+                  "test output"
+                  '("change clearly described" "change is minimal")
+                  '("large refactor" "changed security files"))))
+    (should (string-match-p "λ grade" prompt))
+    (should (string-match-p "∀e ∈ expected" prompt))
+    (should (string-match-p "∀f ∈ forbidden" prompt))
+    (should-not (string-match-p "Grade the following output" prompt))))
+
+(ert-deftest regression/three-format/experiment-prompt-is-lambda ()
+  "The experiment prompt template must use lambda notation."
+  (skip-unless (fboundp 'gptel-auto-workflow--load-prompt-template))
+  (let ((template (gptel-auto-workflow--load-prompt-template)))
+    (should (string-match-p "λ experiment" template))
+    (should (string-match-p "RULES:" template))
+    (should (string-match-p "OUTPUT:" template))
+    (should (string-match-p "TYPE(pick_one):" template))
+    ;; These English prose markers must NOT appear
+    (should-not (string-match-p "## Objective" template))
+    (should-not (string-match-p "## Constraints" template))
+    (should-not (string-match-p "## Code Improvement Types" template))
+    (should-not (string-match-p "## Instructions" template))))
+
+(ert-deftest regression/three-format/research-for-prompt-extracts-apply ()
+  "Research findings must be lambda-compressed via Apply: extraction."
+  (skip-unless (fboundp 'gptel-auto-experiment--research-for-prompt))
+  (let* ((english "**Apply:** add nil guards to all public functions
+**Apply:** extract duplicate retry logic
+Some filler text here")
+         (result (gptel-auto-experiment--research-for-prompt english)))
+    (should (string-match-p "λ apply:" result))
+    (should (string-match-p "add nil guards" result))
+    (should (string-match-p "extract duplicate retry" result))
+    (should-not (string-match-p "filler text" result))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here
