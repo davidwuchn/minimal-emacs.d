@@ -2152,6 +2152,8 @@ Catches type errors and falls back to format \"%s\"."
 
 ;;; Frontier Tracking (Meta-Harness style)
 
+(declare-function gptel-auto-workflow--parse-all-results "gptel-auto-workflow-evolution")
+
 (defun gptel-auto-experiment--compute-frontier (target)
   "Compute Pareto frontier for TARGET from TSV history.
 Returns list of non-dominated experiments, each a plist with:
@@ -2246,39 +2248,30 @@ Returns empty string if no frontier data."
 (defun gptel-auto-experiment--frontier-select-targets (&optional n)
   "Select N targets with smallest Pareto frontiers for next experiments.
 Returns list of (target . frontier-size) sorted ascending by frontier size.
-Targets with no frontier experiments are prioritized."
-  (let* ((results-file (gptel-auto-workflow--results-file-path))
+Targets with no frontier experiments are prioritized.
+Reads from ALL historical TSV files (parse-all-results), not just current run."
+  (let* ((all-results (and (fboundp 'gptel-auto-workflow--parse-all-results)
+                           (gptel-auto-workflow--parse-all-results)))
          (target-frontiers (make-hash-table :test 'equal))
          (all-targets '()))
-    ;; Collect all targets from TSV
-    (when (file-exists-p results-file)
-      (with-temp-buffer
-        (insert-file-contents results-file)
-        (forward-line 1) ; skip header
-        (while (not (eobp))
-          (let* ((fields (split-string
-                          (buffer-substring (line-beginning-position)
-                                            (line-end-position))
-                          "\t"))
-                 (target (nth 1 fields)))
-            (when (and (stringp target)
-                       (not (string-empty-p target))
-                       (not (member target all-targets)))
-              (push target all-targets)))
-          (forward-line 1))))
+    ;; Collect all targets from aggregate history
+    (dolist (result all-results)
+      (let ((target (cdr (assoc :target result))))
+        (when (and (stringp target)
+                   (not (string-empty-p target))
+                   (not (member target all-targets)))
+          (push target all-targets))))
     ;; Compute frontier size for each target
     (dolist (target all-targets)
       (let ((frontier (gptel-auto-experiment--compute-frontier target)))
         (puthash target (length frontier) target-frontiers)))
-    ;; Sort by frontier size (ascending)
+    ;; Sort by frontier size (ascending) — smaller = less explored
     (let ((sorted '()))
       (cl-flet ((collect-frontier (target size)
                   (push (cons target size) sorted)))
         (maphash #'collect-frontier target-frontiers))
       (setq sorted (sort sorted (lambda (a b) (< (cdr a) (cdr b)))))
-      (if n
-          (seq-take sorted n)
-        sorted))))
+      (if n (seq-take sorted n) sorted))))
 
 (defun gptel-auto-experiment--frontier-selection-guidance ()
   "Format guidance for target selection based on frontier analysis.
