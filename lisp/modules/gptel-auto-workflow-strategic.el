@@ -2131,12 +2131,26 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
               (if (gptel-auto-workflow--handle-analyzer-error-state targets safe-targets callback)
                   nil  ; Error already handled
                 (if (null targets)
-                    (let* ((effective-static (or safe-targets
+                    (let* ((frontier-ranked
+                            (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
+                                 (gptel-auto-experiment--frontier-select-targets
+                                  gptel-auto-workflow-max-targets-per-run)))
+                           (frontier-targets (mapcar #'car frontier-ranked))
+                           (effective-static (or safe-targets
                                                   (and (fboundp 'gptel-auto-workflow--discover-targets)
                                                        (gptel-auto-workflow--discover-targets))))
-                           (augmented (gptel-auto-workflow--semantic-target-augmentation effective-static)))
-                      (message "[auto-workflow] Analyzer returned no targets; using %s targets"
-                               (if safe-targets "static" "auto-discovered"))
+                           ;; Frontier ranking first, static targets as padding
+                           (merged (if frontier-targets
+                                       (let ((remaining (- gptel-auto-workflow-max-targets-per-run
+                                                           (length frontier-targets))))
+                                         (append frontier-targets
+                                                 (seq-take (cl-remove-if (lambda (t2) (member t2 frontier-targets))
+                                                                         effective-static)
+                                                           (max 0 remaining))))
+                                     effective-static))
+                           (augmented (gptel-auto-workflow--semantic-target-augmentation merged)))
+                      (message "[auto-workflow] Analyzer returned no targets; using frontier-ranked (%d) + static (%d) = %d targets"
+                               (length frontier-targets) (length effective-static) (length augmented))
                       (funcall callback augmented))
                   (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
                          (final-targets (if (and filtered-targets (listp filtered-targets))
@@ -2163,12 +2177,19 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
                    (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
                             (length targets) (length final-targets))
                     (funcall callback with-queued))))))
-         (let* ((filtered-targets (if static-targets
-                                      (gptel-auto-workflow--filter-frontier-saturated-targets static-targets)
-                                    nil))
-                (final-targets (if (and filtered-targets (listp filtered-targets))
-                                   filtered-targets
-                                 static-targets))
+          (let* ((fallback-targets
+                  (or static-targets
+                      (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
+                           (mapcar #'car (gptel-auto-experiment--frontier-select-targets
+                                          gptel-auto-workflow-max-targets-per-run)))
+                      (and (fboundp 'gptel-auto-workflow--discover-targets)
+                           (gptel-auto-workflow--discover-targets))))
+                 (filtered-targets (if fallback-targets
+                                       (gptel-auto-workflow--filter-frontier-saturated-targets fallback-targets)
+                                     nil))
+                 (final-targets (if (and filtered-targets (listp filtered-targets))
+                                    filtered-targets
+                                  fallback-targets))
                 (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
                                       (gptel-auto-workflow--enforce-category-budget final-targets)
                                     final-targets))
@@ -2177,8 +2198,8 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
           (unless (or (null filtered-targets) (listp filtered-targets))
             (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                      filtered-targets))
-          (message "[auto-workflow] Static: %d targets, %d after frontier filtering"
-                   (length static-targets) (length final-targets))
+           (message "[auto-workflow] Static/fallback: %d targets, %d after frontier filtering"
+                    (length fallback-targets) (length final-targets))
           (funcall callback with-queued))))))
 
 ;;; ─── AutoTTS Trace Collection & Controller ───
