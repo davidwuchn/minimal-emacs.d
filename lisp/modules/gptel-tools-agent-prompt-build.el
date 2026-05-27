@@ -2154,40 +2154,34 @@ Catches type errors and falls back to format \"%s\"."
 
 (declare-function gptel-auto-workflow--parse-all-results "gptel-auto-workflow-evolution")
 
-(defun gptel-auto-experiment--compute-frontier (target)
+(defun gptel-auto-experiment--compute-frontier (target &optional all-experiments)
   "Compute Pareto frontier for TARGET from TSV history.
 Returns list of non-dominated experiments, each a plist with:
   :experiment-id :code-quality :delta :axis :decision.
 An experiment dominates another if it is >= on all metrics and
-> on at least one."
-  (let ((results-file (gptel-auto-workflow--results-file-path))
+> on at least one.
+Uses ALL experiments from parse-all-results, not just current run."
+  (let ((all-exp (or all-experiments
+                      (and (or (fboundp 'gptel-auto-workflow--parse-all-results)
+                               (ignore-errors
+                                 (require 'gptel-auto-workflow-evolution nil t)))
+                           (fboundp 'gptel-auto-workflow--parse-all-results)
+                           (gptel-auto-workflow--parse-all-results))))
         (experiments '()))
-    (when (file-exists-p results-file)
-      (with-temp-buffer
-        (insert-file-contents results-file)
-        (forward-line 1) ; skip header
-        (while (not (eobp))
-          (let* ((fields (split-string
-                          (buffer-substring (line-beginning-position)
-                                            (line-end-position))
-                          "\t"))
-                 (field-count (length fields))
-                 ;; 20/24-col: axis at index 17; 27-col: axis at index 18
-                 (axis-idx (if (<= field-count 24) 17 18))
-                 ;; 20/24-col: prompt-chars at index 15; 27-col: at index 16
-                 (prompt-idx (if (<= field-count 24) 15 16))
-                 (line-target (nth 1 fields))
-                 (decision (nth 7 fields)))
-            (when (and (equal line-target target)
-                       (equal decision "kept"))
-              (push (list :experiment-id (nth 0 fields)
-                          :code-quality (string-to-number (or (nth 5 fields) "0"))
-                          :delta (string-to-number (or (nth 6 fields) "0"))
-                          :axis (or (nth axis-idx fields) "unknown")
-                          :prompt-chars (string-to-number (or (nth prompt-idx fields) "0"))
-                          :decision decision)
-                    experiments))
-            (forward-line 1))))
+    (dolist (exp all-exp)
+      (let ((exp-target (plist-get exp :target))
+            (decision (plist-get exp :decision)))
+        (when (and (equal exp-target target)
+                   (stringp decision)
+                   (string= decision "kept"))
+          (push (list :experiment-id (plist-get exp :experiment-id)
+                      :code-quality (or (plist-get exp :code-quality) 0.0)
+                      :delta (or (plist-get exp :delta) 0.0)
+                      :axis (or (plist-get exp :kibcm-axis)
+                                (plist-get exp :axis) "unknown")
+                      :prompt-chars (or (plist-get exp :prompt-chars) 0)
+                      :decision decision)
+                experiments))))
       ;; Compute Pareto frontier: not dominated by any other
       (let ((frontier '()))
         (dolist (exp experiments)
@@ -2250,7 +2244,11 @@ Returns empty string if no frontier data."
 Returns list of (target . frontier-size) sorted ascending by frontier size.
 Targets with no frontier experiments are prioritized.
 Reads from ALL historical TSV files (parse-all-results), not just current run."
-  (let* ((all-results (and (fboundp 'gptel-auto-workflow--parse-all-results)
+  (let* ((all-results (and (or (fboundp 'gptel-auto-workflow--parse-all-results)
+                               ;; Evolution module may not be loaded yet
+                               (ignore-errors
+                                 (require 'gptel-auto-workflow-evolution nil t)))
+                           (fboundp 'gptel-auto-workflow--parse-all-results)
                            (gptel-auto-workflow--parse-all-results)))
          (target-frontiers (make-hash-table :test 'equal))
          (all-targets '()))
@@ -2261,9 +2259,9 @@ Reads from ALL historical TSV files (parse-all-results), not just current run."
                    (not (string-empty-p target))
                    (not (member target all-targets)))
           (push target all-targets))))
-    ;; Compute frontier size for each target
+    ;; Compute frontier size for each target using pre-fetched results
     (dolist (target all-targets)
-      (let ((frontier (gptel-auto-experiment--compute-frontier target)))
+      (let ((frontier (gptel-auto-experiment--compute-frontier target all-results)))
         (puthash target (length frontier) target-frontiers)))
     ;; Sort by frontier size (ascending) — smaller = less explored
     (let ((sorted '()))
@@ -2441,26 +2439,19 @@ Returns plist with :counts (axis->count), :successes (axis->kept-count),
       (with-temp-buffer
         (insert-file-contents results-file)
         (goto-char (point-min))
-        (forward-line 1) ; skip header
-        (while (not (eobp))
-          (let* ((fields (split-string
-                          (buffer-substring (line-beginning-position)
-                                            (line-end-position))
-                          "\t"))
-                 (field-count (length fields))
-                 ;; 20/24-col: axis at index 17; 27-col: axis at index 18
-                 (axis-idx (if (<= field-count 24) 17 18))
-                 (line-target (nth 1 fields))
-                 (decision (nth 7 fields))
-                 (axis (or (nth axis-idx fields) "?")))
-            (when (and (equal line-target target)
-                       (not (equal axis "?"))
-                       (not (string-empty-p axis)))
-              (setq total (1+ total))
-              (puthash axis (1+ (gethash axis counts 0)) counts)
-              (when (equal decision "kept")
-                (puthash axis (1+ (gethash axis successes 0)) successes))))
-          (forward-line 1))))
+    (dolist (exp all-exp)
+      (let ((exp-target (plist-get exp :target))
+            (decision (plist-get exp :decision)))
+        (when (and (equal exp-target target)
+                   (stringp decision)
+                   (string= decision "kept"))
+          (push (list :experiment-id (plist-get exp :experiment-id)
+                      :code-quality (or (plist-get exp :code-quality) 0.0)
+                      :delta (or (plist-get exp :delta) 0.0)
+                      :axis (or (plist-get exp :kibcm-axis) (plist-get exp :axis) "unknown")
+                      :prompt-chars (or (plist-get exp :prompt-chars) 0)
+                      :decision decision)
+                experiments))))
     (let ((rates (make-hash-table :test 'equal)))
       (cl-flet ((compute-rate (axis count)
                   (let ((success-count (gethash axis successes 0)))
