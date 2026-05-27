@@ -1,6 +1,60 @@
 # Mementum State
 
-> Last session: 2026-05-26 (active, pipeline running 15:00)
+> Last session: 2026-05-26 (complete — 12 crash vectors fixed)
+> Next pipeline: 23:00 (11 min)
+
+## Session: OV5 24/7 Hardening — Complete
+
+**12 crash vectors fixed.** System stable. All backends have fair routing.
+
+### All Fixes Today (neopi5)
+
+| # | Commit | Problem | Fix |
+|---|--------|---------|-----|
+| 1 | `89fd2124` | void-function nil flood (160+/cycle) | fdefs at top-level in gptel-ext-core.el |
+| 2 | `5500ab1c` | callback guard missed :callback nil | functionp check + strip stale key |
+| 3 | `cf61d5d1` | stale .elc overrides .el source | load-prefer-newer t globally |
+| 4 | `593c2616` | analyzer ∞ retry (0s delay, no max) | exponential backoff 5/10/20/40s, max 3 |
+| 5 | `6aefb3a5` | analyzer max→min timeout (300s vs 120s) | min(task-timeout, budget) |
+| 6 | `ca326b6d` | pipeline syntax error blocked all exps | removed orphan 'done' |
+| 7 | `03aa3b9b` | listp dotted pair crash | cddr + consp guard |
+| 8 | `45b3baa0` | /tmp/gptel-agent-temp file-error | moved to var/tmp/ |
+| 9 | `00e894a4` | curl 35 SSL not retryable + 1 retry | added to :general + retries 1→3 |
+| 10 | `b2030c48` | cross-backend exhaustion undetected | set quota-exhausted after max retries |
+| 11 | `b561c7a2` | aux subagent 10 retries, no quota guard | 10→5 + quota-exhausted check |
+| 12 | `17e8dd36` | grader 180s timeout + no quota skip | 180→60s + quota-fast-skip |
+
+### Routing (committed)
+
+| # | Backend | Keep | Boost | Score | Notes |
+|---|---------|------|-------|-------|-------|
+| 1 | MiniMax | 20.5% | +0.05 | 0.255 | Proven leader |
+| 2 | DeepSeek | 19.0% | +0.05 | 0.240 | Thinking tasks |
+| 3 | moonshot | 8.8% | +0.15 | 0.238 | Second chance (bugs fixed) |
+| 4 | DashScope | 0.0% | +0.18 | 0.180 | First real chance (model leak fixed) |
+| 5 | CF-Gateway | 12.8% | 0 | 0.128 | Last resort |
+
+### TDD (3 tests)
+
+- `model-valid-for-backend-blocks-cross-backend-leak` — 9 assertions
+- `best-model-for-task-returns-correct-per-backend-model` — 4 assertions
+- `dashscope-executor-always-gets-qwen3.6-plus` — 12 assertions
+
+### What the 23:00 Pipeline Will Prove
+
+- void-function nil: 0 errors expected (fdefs at top level + load-prefer-newer)
+- Analyzer: 3 attempts with exponential backoff, 120s timeout
+- Executor: correct model per backend (DashScope→qwen3.6-plus, moonshot→kimi-k2.6)
+- DashScope: first real traffic with its own model
+- moonshot: second chance with retryable errors + fair boost
+- Grader: 60s timeout, skips when quota exhausted
+- Cross-backend exhaustion: detected after first experiment, stops cascade
+
+### Daemon State
+
+- ov5-auto-workflow: PID 1964630, 376MB, 6.3% CPU
+- Hot-loaded: all 12 fixes active
+- Status: idle, ready for 23:00 dispatch
 
 ## Session: OV5 24/7 Hardening + Definite void-function nil fix
 

@@ -4,12 +4,19 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-26T22:09
+Generated: 2026-05-27T07:11
 
 | lisp/modules/gptel-tools-agent-base.el | lisp/modules/gptel-tools-agent.el | 1.000 |
-| lisp/modules/gptel-benchmark-subagent.el | lisp/modules/gptel-tools-agent-error.el | 0.500 |
-| lisp/modules/gptel-auto-workflow-strategic.el | lisp/modules/gptel-tools-agent-error.el | 0.400 |
-| lisp/modules/gptel-auto-workflow-evolution.el | lisp/modules/gptel-tools-agent.el | 0.222 |
+| lisp/modules/gptel-tools-agent-benchmark.el | lisp/modules/gptel-tools-agent-prompt-analyze.el | 0.667 |
+| lisp/modules/gptel-tools-agent-experiment-core.el | lisp/modules/gptel-tools-agent-prompt-analyze.el | 0.500 |
+| lisp/modules/gptel-benchmark-subagent.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.462 |
+| lisp/modules/gptel-benchmark-subagent.el | lisp/modules/gptel-tools-agent-error.el | 0.333 |
+| lisp/modules/gptel-auto-workflow-strategic.el | lisp/modules/gptel-benchmark-subagent.el | 0.286 |
+| lisp/modules/gptel-auto-workflow-strategic.el | lisp/modules/gptel-tools-agent-error.el | 0.286 |
+| lisp/modules/gptel-tools-agent-benchmark.el | lisp/modules/gptel-tools-agent-experiment-core.el | 0.286 |
+| lisp/modules/gptel-auto-workflow-evolution.el | lisp/modules/gptel-tools-agent.el | 0.250 |
+| lisp/modules/gptel-auto-workflow-strategic.el | lisp/modules/gptel-tools-agent-main.el | 0.235 |
+| lisp/modules/gptel-auto-workflow-ontology-router.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.235 |
 
 ## Ontology Implications
 

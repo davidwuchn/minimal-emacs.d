@@ -385,7 +385,7 @@ Also guards against (gptel-request ... :callback nil) where the key is
 present but the value is nil — still triggers void-function nil."
   (let* ((keys (cl-loop for (k v) on args by #'cddr collect k))
          (has-callback (memq :callback keys))
-         (callback-val (and has-callback (plist-get (cons nil args) :callback))))
+         (callback-val (and has-callback (plist-get args :callback))))
     (if (and has-callback (functionp callback-val))
         (apply orig-fn prompt args)
       (apply orig-fn prompt :callback (or (and (functionp callback-val) callback-val)

@@ -11,9 +11,9 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 1373 experiments (18% keep rate).*
+*Consolidated from 1380 experiments (18% keep rate).*
 
-**Performance:** 254 kept / 697 discarded / 101 failed (EXTRACTED — from TSV)
+**Performance:** 254 kept / 698 discarded / 102 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
@@ -44,11 +44,11 @@ handlers: nil, nil, err, err, err, err, err, err, nil
 
 These targets may need different research patterns or the research findings were misleading.
 
+- `lisp/modules/gptel-auto-workflow-strategic.el` (14 kept / 35 discarded / 8 failed)
 - `lisp/modules/gptel-auto-workflow-evolution.el` (1 failed)
 - `lisp/modules/gptel-tools-agent-runtime.el` (2 kept / 4 discarded / 2 failed)
 - `lisp/modules/gptel-benchmark-core.el` (22 kept / 32 discarded / 7 failed)
 - `lisp/modules/gptel-tools-agent-subagent.el` (1 failed)
-- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 6 discarded / 6 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
