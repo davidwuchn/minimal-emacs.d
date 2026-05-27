@@ -198,9 +198,9 @@ DashScope uses lower threshold due to server-side timeout limits."
 Returns (tokens window threshold-fraction percentage-threshold)."
   (let* ((tokens (my/gptel--current-tokens))
          (window (let ((value (my/gptel--context-window)))
-                     (if (and (integerp value) (> value 0))
-                         value
-                       my/gptel-default-context-window)))
+                   (if (and (integerp value) (> value 0))
+                       value
+                     my/gptel-default-context-window)))
          (threshold-fraction (my/gptel--effective-threshold))
          (percentage-threshold (* window threshold-fraction)))
     (list tokens window threshold-fraction percentage-threshold)))
@@ -459,11 +459,9 @@ Returns a short description of what the user was asking for."
       (cl-return-from my/gptel--extract-last-task-from-lines "Continue the task"))
     (unless (proper-list-p lines)
       (cl-return-from my/gptel--extract-last-task-from-lines "Continue the task"))
-    (let* ((lines-list lines)
-           (user-lines (and (listp lines-list)
-                            (cl-remove-if-not #'my/gptel--user-line-prefix-p lines-list)))
-           (user-list user-lines)
-           (last-user (and (proper-list-p user-list) user-list (car (last user-list))))
+    ;; BEHAVIOR: After guards, LINES is a non-null proper list
+    (let* ((user-lines (cl-remove-if-not #'my/gptel--user-line-prefix-p lines))
+           (last-user (car (last user-lines)))
            (task (if (and last-user (not (string-empty-p last-user)))
                      (my/gptel--strip-user-prefix last-user)
                    "Continue the task")))
