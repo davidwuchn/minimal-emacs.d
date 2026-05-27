@@ -960,6 +960,95 @@ Missing variables are replaced with empty string."
     ;; Remove any remaining unreplaced variables
     (replace-regexp-in-string "{{[a-z-]+}}" "" result)))
 
+;; ─── EDN Prompt Pipeline ───
+
+(defun gptel-auto-experiment--prompt-edn-resolve (vars)
+  "Resolve prompt EDN (plist) to lambda notation.  Deterministic, no LLM call.
+VARS is the plist from build-prompt with keys :target, :baseline, etc.
+Returns a compact lambda-notation string ready for the LLM."
+  (let* ((target (or (plist-get vars :target) "unknown"))
+         (exp-id (or (plist-get vars :experiment-id) 0))
+         (max-exp (or (plist-get vars :max-experiments) 1))
+         (budget (or (plist-get vars :time-budget) 15))
+         (baseline (or (plist-get vars :baseline) "0.50"))
+         (worktree (or (plist-get vars :worktree-path) "."))
+         (tgt-full (or (plist-get vars :target-full-path) target))
+         (controller (plist-get vars :controller-focus))
+         (inspection (plist-get vars :inspection-thrash-contract))
+         (large (plist-get vars :large-target-guidance))
+         (persona (plist-get vars :nucleus-persona))
+         (skills (plist-get vars :self-evolution))
+         (allium-i (plist-get vars :allium-issues))
+         (allium-r (plist-get vars :allium-repair))
+         (topic (plist-get vars :topic-knowledge))
+         (prev (plist-get vars :previous-experiment-analysis))
+         (sugg (plist-get vars :suggestions))
+         (hyp (plist-get vars :suggested-hypothesis))
+         (mut (plist-get vars :mutation-templates))
+         (evol (plist-get vars :evolved-recommendations))
+         (weakest (plist-get vars :weakest-keys))
+         (focus (plist-get vars :focus-line))
+         (sexp (plist-get vars :sexp-check-command))
+         (research (plist-get vars :research-findings))
+         (moderator (plist-get vars :moderator-lens))
+         (git-hist (plist-get vars :git-history))
+         (axis-g (plist-get vars :axis-guidance))
+         (axis-p (plist-get vars :axis-performance))
+         (frontier (plist-get vars :frontier-guidance))
+         (satur (plist-get vars :saturation-status))
+         (fail-p (plist-get vars :failure-patterns))
+         (div (plist-get vars :task-type-diversity))
+         (cross (plist-get vars :cross-target-patterns))
+         (strat-f (plist-get vars :strategy-frontier))
+         (agent-b (plist-get vars :agent-behavior))
+         (val-pipe (plist-get vars :validation-pipeline)))
+    (format
+     "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s
+baseline(8keys): %s%s%s%s%s%s
+
+%s%s%s%s%s%s%s%s%s%s%s%s
+
+RULES:
+| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)
+| ¬doc_only | ¬comment_only | Δ(code) ≡ required
+| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"%s
+| use(Edit) | minimal(change) | ¬git(add,commit,push) — workflow handles
+| verify: %s && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
+
+OUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds) COMMIT(\"not committed\")
+TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage"
+     target exp-id max-exp budget worktree tgt-full
+     baseline
+     (if weakest (format "\n  %s" weakest) "")
+     (if controller (format "\n  %s" controller) "")
+     (if inspection (format "\n  %s" inspection) "")
+     (if large (format "\n  %s" large) "")
+     (if moderator (format "\n  %s" moderator) "")
+     (if persona (format "\nCATEGORY: %s\n" persona) "")
+     (if skills (format "SKILLS: %s\n" skills) "")
+     (if allium-i (format "ALLIUM: %s\n" allium-i) "")
+     (if allium-r (format "REPAIR: %s\n" allium-r) "")
+     (if (or topic prev) (format "PAST: %s%s\n" (or topic "") (if prev (format " %s" prev) "")) "")
+     (if (or sugg hyp mut evol) (format "SUGGEST: %s%s%s%s\n"
+                                        (or sugg "")
+                                        (if hyp (format " %s" hyp) "")
+                                        (if mut (format " %s" mut) "")
+                                        (if evol (format " %s" evol) "")) "")
+     (if research (format "RESEARCH: %s\n" research) "")
+     (if git-hist (format "GIT: %s\n" git-hist) "")
+     (if axis-g (format "AXIS: %s\n" axis-g) "")
+     (if axis-p (format "AXIS-PERF: %s\n" axis-p) "")
+     (if frontier (format "FRONTIER: %s\n" frontier) "")
+     (if satur (format "SATUR: %s\n" satur) "")
+     (if fail-p (format "FAIL: %s\n" fail-p) "")
+     (if div (format "DIVERSITY: %s\n" div) "")
+     (if cross (format "CROSS: %s\n" cross) "")
+     (if strat-f (format "STRATEGY: %s\n" strat-f) "")
+     (if agent-b (format "AGENT: %s\n" agent-b) "")
+     (if val-pipe (format "VALIDATE: %s\n" val-pipe) "")
+     (if focus (format "\n  %s" focus) "")
+     (or sexp (format "emacs --batch --eval '(byte-compile-file \"%s\")'" tgt-full)))))
+
 (defun gptel-auto-workflow--load-prompt-template ()
   "Load prompt template from skill file.
 Returns template string or fallback hardcoded template."
@@ -1183,7 +1272,8 @@ Implements section-level A/B testing to identify effective prompt components."
               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
-      (gptel-auto-workflow--substitute-template template variables))))
+      ;; EDN resolve: deterministic, no template substitution, no escaping
+      (gptel-auto-experiment--prompt-edn-resolve variables))))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.
