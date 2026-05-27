@@ -344,6 +344,8 @@ rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
 # Force-remove stale staging worktree so auto-workflow recreates from latest main
 rm -rf "$DIR/var/tmp/experiments/staging-verify" 2>/dev/null || true
 rm -rf "$DIR/var/tmp/experiments/optimize" 2>/dev/null || true
+# Keep only the 3 most recent baseline worktrees; delete older ones
+ls -dt "$DIR/var/tmp/experiments/main-baseline-"* 2>/dev/null | tail -n +4 | xargs -r rm -rf 2>/dev/null || true
 log "Cleaned stale staging + experiment worktrees"
 sleep 2
 
