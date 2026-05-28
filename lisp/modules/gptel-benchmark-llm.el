@@ -37,7 +37,15 @@
 (defcustom gptel-benchmark-llm-model nil
   "Model to use for LLM suggestions. nil means default."
   :type '(choice (const :tag "Default" nil)
-                 (string :tag "Model name"))
+                  (string :tag "Model name"))
+  :group 'gptel-benchmark-llm)
+
+(defcustom gptel-benchmark-llm-synthesis-timeout 300
+  "Timeout in seconds for LLM synthesis requests.
+When non-nil, the synthesis callback is forced with a timeout error
+after this many seconds, preventing hangs from nil-callback bugs."
+  :type '(choice (const :tag "No timeout" nil)
+                 (integer :tag "Timeout seconds"))
   :group 'gptel-benchmark-llm)
 
 ;;; Main Entry Points
@@ -70,11 +78,26 @@ CALLBACK receives synthesized content."
 (defun gptel-benchmark--call-llm-request (prompt callback)
   "Call `gptel-request' with PROMPT and CALLBACK.
 When `gptel-benchmark-llm-model' is non-nil, bind `gptel-model' dynamically
-instead of passing an unsupported `:model' keyword."
-  (let ((gptel-model (or gptel-benchmark-llm-model
-                         (and (boundp 'gptel-model) gptel-model))))
+instead of passing an unsupported `:model' keyword.
+Wraps CALLBACK with a timeout guard to prevent hangs when the gptel
+callback never fires (e.g., void-function nil bug in sentinel)."
+  (let* ((gptel-model (or gptel-benchmark-llm-model
+                          (and (boundp 'gptel-model) gptel-model)))
+         (done nil)
+         (timeout gptel-benchmark-llm-synthesis-timeout)
+         (guard-cb
+          (lambda (&rest args)
+            (unless done
+              (setq done t)
+              (apply callback args)))))
+    (when timeout
+      (run-with-timer timeout nil
+        (lambda ()
+          (unless done
+            (setq done t)
+            (funcall callback (format "LLM request timed out after %ds" timeout))))))
     (gptel-request prompt
-      :callback callback)))
+      :callback guard-cb)))
 
 (defun gptel-benchmark--llm-request-suggestions (name type anti-patterns callback)
   "Send LLM request for improvement suggestions."
