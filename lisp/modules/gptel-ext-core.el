@@ -448,14 +448,15 @@ points to the same plist object) sees the patched value."
             (plist-put info :callback #'ignore)))))))
 
 (defun my/gptel--sentinel-safety-wrapper (orig-fn process status)
-  "Wrap sentinel: skip if FSM missing, else catch errors."
+  "Wrap sentinel: skip if FSM missing or excessive recursion, else catch errors."
   (let ((entry (and (boundp 'gptel--request-alist)
                     (assq process gptel--request-alist))))
     (if (not entry)
         (message "[gptel-ext-core] Skipping sentinel for %s (not in alist)"
                  (ignore-errors (process-name process)))
       (condition-case err
-          (funcall orig-fn process status)
+          (let ((max-lisp-eval-depth (max max-lisp-eval-depth 20000)))
+            (funcall orig-fn process status))
         (error
          (message "[gptel-ext-core] Sentinel error for %s: %S"
                   (ignore-errors (process-name process)) err))))))
