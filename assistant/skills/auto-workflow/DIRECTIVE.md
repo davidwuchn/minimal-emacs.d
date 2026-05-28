@@ -3,7 +3,7 @@ name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.28
 total-experiments: 870
-total-kept: 41
+total-kept: 32
 ---
 
 # Auto-Workflow Program
@@ -17,16 +17,16 @@ total-kept: 41
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-benchmark-principles.el` | 50% | 4 | 2 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-evolution.el` | 33% | 3 | 1 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-principles.el` | 67% | 3 | 2 | ✅ High yield |
 | `lisp/modules/gptel-ext-context.el` | 33% | 9 | 3 | ✅ High yield |
 | `lisp/modules/gptel-benchmark-comparator.el` | 29% | 7 | 2 | 🟡 Active |
 | `lisp/modules/gptel-benchmark-core.el` | 26% | 19 | 5 | 🟡 Active |
 | `lisp/modules/gptel-ext-abort.el` | 25% | 4 | 1 | 🟡 Active |
 | `lisp/modules/gptel-tools-agent-staging-baseline.el` | 25% | 4 | 1 | 🟡 Active |
 | `lisp/modules/gptel-ext-tool-permits.el` | 25% | 12 | 3 | 🟡 Active |
-| `lisp/modules/gptel-tools-memory.el` | 22% | 54 | 12 | 🟡 Active |
-| `lisp/modules/nucleus-tools.el` | 21% | 19 | 4 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-runtime.el` | 20% | 10 | 2 | 🟡 Active |
+| `lisp/modules/gptel-tools-memory.el` | 18% | 49 | 9 | 🟡 Active |
+| `lisp/modules/gptel-workflow-benchmark.el` | 12% | 8 | 1 | 🟡 Active |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -57,7 +57,7 @@ total-kept: 41
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (234×): Investigate root cause
+- **other** (207×): Investigate root cause
 - **api-limit** (14×): Implement provider fallback or rate limit handling
 - **timeout** (13×): Add smaller batch sizes or chunked processing
 - **validation-failed** (12×): Improve pre-grade validation prompts
@@ -78,11 +78,11 @@ total-kept: 41
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-principles.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 50%)
-- **lisp/modules/gptel-benchmark-evolution.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
+- **lisp/modules/gptel-benchmark-principles.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 67%)
 - **lisp/modules/gptel-ext-context.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
+- **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 29%)
+- **lisp/modules/gptel-tools-memory.el**: Try validation guards or error handling improvements (previous experiments discarded)
 - **lisp/modules/gptel-workflow-benchmark.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-fsm-utils.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (41 kept locally across 277 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (32 kept locally across 250 local records). It evolves every self-evolution cycle.*

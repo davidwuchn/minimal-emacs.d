@@ -1860,10 +1860,12 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (message "[auto-workflow] Running self-evolution cycle...")
     )
     (error
-     (message "[evolution] EARLY error (pre-steps): %s — %s"
-              (error-message-string early-err)
-              (mapconcat (lambda (f) (format "  %s" f))
-                         (backtrace-frame-frames) "\n"))
+     (let* ((frames (backtrace-frames))
+            (bt (mapconcat (lambda (f) (format "  %S" f))
+                           (seq-take frames 20) "\n")))
+       (message "[evolution] EARLY error (pre-steps): %s\nBacktrace:\n%s"
+                (error-message-string early-err)
+                bt))
      (cl-return-from gptel-auto-workflow-evolution-run-cycle (format "early-error: %s" early-err))))
   ;; Pipeline validation (Semantica PipelineValidator)
   (condition-case nil
