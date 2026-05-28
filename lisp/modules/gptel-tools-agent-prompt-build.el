@@ -2438,26 +2438,33 @@ Returns plist with :counts (axis->count), :successes (axis->kept-count),
     (when (file-exists-p results-file)
       (with-temp-buffer
         (insert-file-contents results-file)
-        (goto-char (point-min)))
-    (dolist (exp all-exp)
-      (let ((exp-target (plist-get exp :target))
-            (decision (plist-get exp :decision)))
-        (when (and (equal exp-target target)
-                   (stringp decision)
-                   (string= decision "kept"))
-          (push (list :experiment-id (plist-get exp :experiment-id)
-                      :code-quality (or (plist-get exp :code-quality) 0.0)
-                      :delta (or (plist-get exp :delta) 0.0)
-                      :axis (or (plist-get exp :kibcm-axis) (plist-get exp :axis) "unknown")
-                      :prompt-chars (or (plist-get exp :prompt-chars) 0)
-                      :decision decision)
-                experiments))))
-    (let ((rates (make-hash-table :test 'equal)))
-      (cl-flet ((compute-rate (axis count)
-                  (let ((success-count (gethash axis successes 0)))
-                    (puthash axis (/ (float success-count) count) rates))))
-        (maphash #'compute-rate counts))
-      (list :counts counts
+        (goto-char (point-min))
+        (forward-line 1) ; skip header
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position)
+                                            (line-end-position))
+                          "\t"))
+                 (field-count (length fields))
+                 ;; 20/24-col: axis at index 17; 27-col: axis at index 18
+                 (axis-idx (if (<= field-count 24) 17 18))
+                 ;; 20/24-col: prompt-chars at index 15; 27-col: at index 16
+                 (prompt-idx (if (<= field-count 24) 15 16))
+                 (line-target (nth 1 fields))
+                 (decision (nth 7 fields))
+                 (axis (or (nth axis-idx fields) "?")))
+            (when (equal line-target target)
+              (setq total (1+ total))
+              (when (equal decision "kept")
+                (puthash axis (1+ (gethash axis successes 0)) successes))
+              (puthash axis (1+ (gethash axis counts 0)) counts))
+            (forward-line 1))))
+      (let ((rates (make-hash-table :test 'equal)))
+        (cl-flet ((compute-rate (axis count)
+                    (let ((success-count (gethash axis successes 0)))
+                      (puthash axis (/ (float success-count) count) rates))))
+          (maphash #'compute-rate counts))
+        (list :counts counts
             :successes successes
             :rates rates
             :total-experiments total)))))
