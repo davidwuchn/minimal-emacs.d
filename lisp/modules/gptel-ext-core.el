@@ -442,18 +442,12 @@ uses the return value, not a re-read of the struct slot."
                   (ignore-errors (process-name process)) err))))))
 
 (with-eval-after-load 'gptel-request
-  ;; Remove the compiler macro for gptel-fsm-info so it can't be inlined.
-  ;; cl-defstruct generates an inline accessor whose compiler macro
-  ;; expands (gptel-fsm-info fsm) to (aref fsm 4) at compile time,
-  ;; BYPASSING our :around advice.  Removing the compiler-macro
-  ;; property forces all callers through the actual function.
-  (dolist (sym '(gptel-fsm-info gptel-fsm-state gptel-fsm-table gptel-fsm-handlers))
-    (when (get sym 'compiler-macro)
-      (put sym 'compiler-macro nil)))
   (advice-add 'gptel-curl--stream-cleanup :around
-              #'my/gptel--sentinel-safety-wrapper)
+              #'my/gptel--sentinel-safety-wrapper))
+(with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--sentinel :around
-              #'my/gptel--sentinel-safety-wrapper)
+              #'my/gptel--sentinel-safety-wrapper))
+(with-eval-after-load 'gptel-request
   (advice-add 'gptel-fsm-info :around
               #'my/gptel--fsm-info-ensure-callback))
 
