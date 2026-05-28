@@ -2438,7 +2438,7 @@ Returns plist with :counts (axis->count), :successes (axis->kept-count),
     (when (file-exists-p results-file)
       (with-temp-buffer
         (insert-file-contents results-file)
-        (goto-char (point-min))
+        (goto-char (point-min)))
     (dolist (exp all-exp)
       (let ((exp-target (plist-get exp :target))
             (decision (plist-get exp :decision)))
@@ -2460,7 +2460,7 @@ Returns plist with :counts (axis->count), :successes (axis->kept-count),
       (list :counts counts
             :successes successes
             :rates rates
-            :total-experiments total))))
+            :total-experiments total)))))
 
 (defun gptel-auto-experiment--get-underexplored-axis (target)
   "Find least-explored axis for TARGET.

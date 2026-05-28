@@ -1,7 +1,7 @@
 ---
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
-version: 2026.05.27
+version: 2026.05.28
 total-experiments: 870
 total-kept: 41
 ---
@@ -57,9 +57,9 @@ total-kept: 41
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (225×): Investigate root cause
-- **api-limit** (13×): Implement provider fallback or rate limit handling
-- **timeout** (12×): Add smaller batch sizes or chunked processing
+- **other** (229×): Investigate root cause
+- **api-limit** (14×): Implement provider fallback or rate limit handling
+- **timeout** (13×): Add smaller batch sizes or chunked processing
 - **validation-failed** (12×): Improve pre-grade validation prompts
 - **test-failure** (4×): Run tests before committing experiments
 
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (41 kept locally across 266 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (41 kept locally across 272 local records). It evolves every self-evolution cycle.*
