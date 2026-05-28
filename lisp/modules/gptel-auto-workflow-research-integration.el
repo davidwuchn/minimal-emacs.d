@@ -134,10 +134,12 @@ Uses ontology gap analysis to drive what the researcher should explore next."
 (defun gptel-auto-workflow--correlate-research-to-outcomes ()
   "Wire self-evolve: compute per-research-source keep-rate from TSV.
 Returns alist of (source-name . keep-rate) sorted by performance.
-ε Purpose: research scored on downstream experiment success, not volume."
+ε Purpose: research scored on downstream experiment success, not volume.
+∀ Vigilance: pipeline-defect hashes indicate missing research traces — treat as defect signal."
   (when (fboundp 'gptel-auto-workflow--parse-all-results)
     (let ((by-source (make-hash-table :test 'equal))
           (stats nil)
+          (pipeline-defect-count 0)
           (all-results (gptel-auto-workflow--parse-all-results)))
       (when (listp all-results)
         (dolist (r all-results)
@@ -145,11 +147,20 @@ Returns alist of (source-name . keep-rate) sorted by performance.
             (let ((source (or (plist-get r :research-strategy) "none"))
                   (hash (or (plist-get r :research-hash) "none"))
                   (kept (equal (plist-get r :decision) "kept")))
-              (unless (or (equal source "none") (equal hash "none"))
+              ;; Detect pipeline defects: experiments with no research trace
+              (when (and (stringp hash) (string-match-p "\\`pipeline-defect-" hash))
+                (setq pipeline-defect-count (1+ pipeline-defect-count)))
+              (unless (or (equal source "none")
+                          (equal hash "none")
+                          ;; Pipeline-defect hashes are tracked but excluded from
+                          ;; strategy performance scoring (no real research to score)
+                          (and (stringp hash) (string-match-p "\\`pipeline-defect-" hash)))
                 (let ((entry (or (gethash source by-source) (cons 0 0))))
                   (setcar entry (1+ (car entry)))
                   (when kept (setcdr entry (1+ (cdr entry))))
                   (puthash source entry by-source))))))
+        (when (> pipeline-defect-count 0)
+          (message "[auto-workflow] WARNING: %d experiments with pipeline-defect research hash (missing research traces)" pipeline-defect-count))
         (maphash (lambda (source counts)
                    (when (> (car counts) 3)
                      (push (cons source (/ (float (cdr counts)) (car counts))) stats)))

@@ -552,12 +552,18 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                            :research-strategy (or (and (boundp 'gptel-auto-workflow--current-research-context)
                                                        (plist-get gptel-auto-workflow--current-research-context :strategy))
                                                   "none")
-                            :research-hash (or (and (boundp 'gptel-auto-workflow--current-research-context)
-                                                    (plist-get gptel-auto-workflow--current-research-context :hash))
-                                               "none")
+                            :research-hash (let ((ctx-hash (and (boundp 'gptel-auto-workflow--current-research-context)
+                                                                 (plist-get gptel-auto-workflow--current-research-context :hash))))
+                                             (if (and ctx-hash (not (equal ctx-hash "none")))
+                                                 ctx-hash
+                                               ;; ASSUMPTION: missing research context is a pipeline defect
+                                               ;; BEHAVIOR: generate traceable fallback hash so AutoTTS can link
+                                               ;; EDGE CASE: hash is always non-empty so feedback loop is preserved
+                                               (prog1 (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s")))
+                                                 (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using fallback hash" (or target "unknown")))))
                             :research-quality (or (and (boundp 'gptel-auto-workflow--current-research-context)
                                                       (plist-get gptel-auto-workflow--current-research-context :source))
-                                                 "none"))))
+                                                 "none")))))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format
@@ -995,9 +1001,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                 (format "Experiment %d: optimize %s" experiment-id target)
                 executor-prompt
                 nil "false" nil))))))
-             workflow-root)))
-       workflow-root)
-  )
+              workflow-root)))
+        workflow-root)
 
 
 

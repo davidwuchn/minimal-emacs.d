@@ -1452,26 +1452,34 @@ row for the same experiment and target."
     ;; Inject research metadata from global context into experiment record.
     ;; This closes the feedback loop: experiments carry the research run that
     ;; influenced the prompt so trace outcomes can be linked after logging.
-    (when (and (boundp 'gptel-auto-workflow--current-research-context)
-               gptel-auto-workflow--current-research-context)
-      (let ((ctx gptel-auto-workflow--current-research-context))
-        (setq experiment
-              (plist-put experiment :research-strategy
-                         (or (plist-get ctx :strategy) "none")))
-        (setq experiment
-              (plist-put experiment :research-hash
-                         (or (plist-get ctx :hash) "none")))
-        (setq experiment
-              (plist-put experiment :research-quality
-                         (or (plist-get ctx :source) "none")))
-        (setq experiment
-              (plist-put experiment :controller-decision
-                         (or (plist-get ctx :controller-decision) "unknown")))
-        ;; Track which nucleus persona was used for self-evolution feedback
-        (setq experiment
-              (plist-put experiment :persona-category
-                         (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
-                           (gptel-auto-workflow--categorize-target target))))))
+    ;; ASSUMPTION: missing research context is a pipeline defect — generate a
+    ;; traceable fallback hash so AutoTTS can link outcomes.
+    ;; BEHAVIOR: always set research-hash; use ctx when available, fallback otherwise.
+    ;; EDGE CASE: pipeline-defect hash lets downstream detect missing research traces.
+    (let* ((ctx-available (and (boundp 'gptel-auto-workflow--current-research-context)
+                               gptel-auto-workflow--current-research-context))
+           (ctx (and ctx-available gptel-auto-workflow--current-research-context))
+           (ctx-hash (and ctx (plist-get ctx :hash)))
+           (hash-valid (and ctx-hash (not (equal ctx-hash "none")))))
+      (unless hash-valid
+        (setq ctx-hash (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s"))))
+        (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using fallback hash" (or target "unknown")))
+      (setq experiment
+            (plist-put experiment :research-strategy
+                       (or (and ctx (plist-get ctx :strategy)) "none")))
+      (setq experiment
+            (plist-put experiment :research-hash ctx-hash))
+      (setq experiment
+            (plist-put experiment :research-quality
+                       (or (and ctx (plist-get ctx :source)) "none")))
+      (setq experiment
+            (plist-put experiment :controller-decision
+                       (or (and ctx (plist-get ctx :controller-decision)) "unknown")))
+      ;; Track which nucleus persona was used for self-evolution feedback
+      (setq experiment
+            (plist-put experiment :persona-category
+                       (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+                         (gptel-auto-workflow--categorize-target target)))))
     (with-temp-buffer
       (insert-file-contents file)
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
@@ -1520,9 +1528,13 @@ row for the same experiment and target."
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :research-strategy "none"))
                             "none")
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :research-hash "none"))
-                            "none")
+                        (let ((hash (gptel-auto-workflow--plist-get experiment :research-hash "none")))
+                          ;; DEFENSE-IN-DEPTH: if upstream failed to set hash, generate fallback
+                          ;; so feedback loop is always preserved.
+                          (when (equal hash "none")
+                            (setq hash (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s"))))
+                            (message "[auto-workflow] WARNING: TSV-level fallback hash for %s (upstream should have set it)" (or target "unknown")))
+                          (gptel-auto-experiment--tsv-escape hash))
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :research-quality "none"))
                             "none")
