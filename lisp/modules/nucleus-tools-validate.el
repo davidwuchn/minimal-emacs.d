@@ -15,20 +15,23 @@
   "Time-to-live in seconds for validation cache.")
 
 (defun nucleus--get-cached-validation ()
-  "Get cached validation results if fresh, else nil."
+  "Get cached validation results if fresh, else nil.
+
+Returns the cached results alist or nil if cache is stale/invalid."
   (when (consp nucleus--validation-cache)
-    (let ((cell nucleus--validation-cache))
-      ;; Guard against circular or dotted improper lists
-      (when (and (not (cddr cell))  ; Ensure exactly 2 elements (no cddr)
-                 (numberp (car cell)))
-        (let ((timestamp (car cell))
-              (results (cdr cell)))
-          (when (numberp timestamp)
-            (let ((age (- (float-time) timestamp)))
-              (when (and (numberp age)
-                         (< age nucleus--validation-cache-ttl)
-                         (proper-list-p results))
-                results))))))))
+    (let ((timestamp (car nucleus--validation-cache))
+          (results (cdr nucleus--validation-cache)))
+      ;; ASSUMPTION: Cache is always stored as (timestamp . results-list)
+      ;; by nucleus--validate-all-tools. Only check that timestamp is a
+      ;; number and results is a proper list.
+      ;; BEHAVIOR: Returns cached results if timestamp is recent and results
+      ;; is a proper list.
+      ;; EDGE CASE: nil car or non-number car => nil (cache invalid)
+      ;; TEST: See test-nucleus-tools-validate.el cache tests
+      (when (and (numberp timestamp)
+                 (< (- (float-time) timestamp) nucleus--validation-cache-ttl)
+                 (proper-list-p results))
+        results))))
 
 (defun nucleus--extract-prompt-signature (tool-name prompt-text)
   "Extract lambda signature for TOOL-NAME from PROMPT-TEXT.

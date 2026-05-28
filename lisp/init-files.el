@@ -201,7 +201,9 @@ package.  Otherwise, only recreate missing `*-autoloads.el' files.  Refresh
 (setq tramp-persistency-file-name
       (expand-file-name "tramp" user-emacs-directory))
 
-;;; init-files.el ends here
-
 ;; Auto-workflow: push experiment branches to origin only (not upstream/public)
+;; ASSUMPTION: gptel-auto-workflow-shared-remote defcustom in gptel-tools-agent-subagent.el
+;;   is loaded after init-files.el; setq establishes the desired default before defcustom.
 (setq gptel-auto-workflow-shared-remote "origin")
+
+;;; init-files.el ends here
