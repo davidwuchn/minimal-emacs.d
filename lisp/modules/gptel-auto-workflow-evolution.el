@@ -1846,7 +1846,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (message "[verbum] Holographic memory rebuilt"))
       (error (message "[verbum] ERROR: holographic rebuild failed — %s" (error-message-string err)))))
   ;; Eight Keys convergence: skip evolution if scores haven't improved
-  (when (and gptel-auto-workflow--evolution-last-objective
+  (when (and (numberp gptel-auto-workflow--evolution-last-objective)
              (> gptel-auto-workflow--evolution-last-objective 0))
     (let ((current-obj (gptel-auto-workflow--eight-keys-convergence-score)))
       (when (and current-obj (> current-obj 0)
@@ -4989,7 +4989,11 @@ Also persists EMA confidence history for cross-session trend analysis."
     (when (and (boundp 'gptel-auto-workflow--lambda-verification-results)
                (> (hash-table-count gptel-auto-workflow--lambda-verification-results) 0))
       (let ((results nil))
-        (maphash (lambda (k v) (push (cons (symbol-name k) (symbol-name v)) results)) gptel-auto-workflow--lambda-verification-results)
+        (maphash (lambda (k v)
+                   (push (cons (if (stringp k) k (symbol-name k))
+                               (if (stringp v) v (symbol-name v)))
+                         results))
+                 gptel-auto-workflow--lambda-verification-results)
         (setq hints (plist-put hints :lambda-results results))))
     (when file
       (make-directory (file-name-directory file) t)
