@@ -412,38 +412,37 @@ that crash non-pcase-aware callbacks."
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-request :around #'my/gptel--gptel-request-callback-guard))
 
-(defun my/gptel--ensure-callback-function (process)
-  "Ensure PROCESS's FSM info has a function callback, replacing nil with `ignore'.
-Returns non-nil if a replacement was made."
-  (when (and process (boundp 'gptel--request-alist))
-    (when-let* ((entry (assq process gptel--request-alist))
-                (value (cdr entry))
-                ((consp value))
-                (fsm (car value))
-                (info (ignore-errors (gptel-fsm-info fsm)))
-                ((listp info)))
-      (let ((cb (plist-get info :callback)))
-        (unless (functionp cb)
-          (setf (gptel-fsm-info fsm)
-                (plist-put info :callback #'ignore))
-          t)))))
+(defun my/gptel--ensure-all-callbacks ()
+  "Ensure ALL processes in `gptel--request-alist' have function callbacks.
+Processes whose FSM info has a nil callback get it replaced with `ignore'.
+This is called defensively before any sentinel runs."
+  (when (boundp 'gptel--request-alist)
+    (dolist (entry gptel--request-alist)
+      (when-let* ((value (cdr entry))
+                  ((consp value))
+                  (fsm (car value))
+                  (info (ignore-errors (gptel-fsm-info fsm)))
+                  ((listp info)))
+        (let ((cb (plist-get info :callback)))
+          (unless (functionp cb)
+            (setf (gptel-fsm-info fsm)
+                  (plist-put info :callback #'ignore))))))))
 
-(defun my/gptel--stream-cleanup-process-guard (orig-fn process status)
-  "Ensure stream cleanup never funcalls a nil callback."
-  (my/gptel--ensure-callback-function process)
-  (funcall orig-fn process status))
-
-(defun my/gptel--sentinel-process-guard (orig-fn process status)
-  "Ensure sentinel never funcalls a nil callback."
-  (my/gptel--ensure-callback-function process)
-  (funcall orig-fn process status))
+(defun my/gptel--sentinel-safety-wrapper (orig-fn process status)
+  "Wrap sentinel to catch all errors and ensure callback is never nil."
+  (my/gptel--ensure-all-callbacks)
+  (condition-case err
+      (funcall orig-fn process status)
+    (error
+     (message "[gptel-ext-core] Sentinel error for %s: %S"
+              (ignore-errors (process-name process)) err))))
 
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--stream-cleanup :around
-              #'my/gptel--stream-cleanup-process-guard))
+              #'my/gptel--sentinel-safety-wrapper))
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--sentinel :around
-              #'my/gptel--sentinel-process-guard))
+              #'my/gptel--sentinel-safety-wrapper))
 
 (provide 'gptel-ext-core)
 ;;; gptel-ext-core.el ends here
