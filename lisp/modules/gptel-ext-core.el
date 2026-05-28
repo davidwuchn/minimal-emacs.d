@@ -412,24 +412,18 @@ that crash non-pcase-aware callbacks."
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-request :around #'my/gptel--gptel-request-callback-guard))
 
-(defun my/gptel--ensure-all-callbacks ()
-  "Ensure ALL processes in `gptel--request-alist' have function callbacks.
-Processes whose FSM info has a nil callback get it replaced with `ignore'."
-  (when (boundp 'gptel--request-alist)
-    (dolist (entry gptel--request-alist)
-      (when-let* ((value (cdr entry))
-                  ((consp value))
-                  (fsm (car value))
-                  (info (ignore-errors (gptel-fsm-info fsm)))
-                  ((listp info)))
-        (let ((cb (plist-get info :callback)))
-          (unless (functionp cb)
-            (setf (gptel-fsm-info fsm)
-                  (plist-put info :callback #'ignore))))))))
+(defun my/gptel--fsm-info-ensure-callback (orig-fn fsm)
+  "Ensure FSM info always has a function callback.
+Advices `gptel-fsm-info' to patch the returned info so `:callback' is
+never nil. This is the lowest-level defense against void-function nil
+in the sentinel's `funcall (plist-get info :callback)' call."
+  (let ((info (funcall orig-fn fsm)))
+    (when (and (listp info) (not (functionp (plist-get info :callback))))
+      (setf (gptel-fsm-info fsm) (plist-put info :callback #'ignore)))
+    info))
 
 (defun my/gptel--sentinel-safety-wrapper (orig-fn process status)
   "Wrap sentinel: skip if FSM missing, else catch errors."
-  (my/gptel--ensure-all-callbacks)
   (let ((entry (and (boundp 'gptel--request-alist)
                     (assq process gptel--request-alist))))
     (if (not entry)
@@ -447,6 +441,9 @@ Processes whose FSM info has a nil callback get it replaced with `ignore'."
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--sentinel :around
               #'my/gptel--sentinel-safety-wrapper))
+(with-eval-after-load 'gptel-request
+  (advice-add 'gptel-fsm-info :around
+              #'my/gptel--fsm-info-ensure-callback))
 
 (provide 'gptel-ext-core)
 ;;; gptel-ext-core.el ends here
