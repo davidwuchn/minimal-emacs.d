@@ -414,8 +414,7 @@ that crash non-pcase-aware callbacks."
 
 (defun my/gptel--ensure-all-callbacks ()
   "Ensure ALL processes in `gptel--request-alist' have function callbacks.
-Processes whose FSM info has a nil callback get it replaced with `ignore'.
-This is called defensively before any sentinel runs."
+Processes whose FSM info has a nil callback get it replaced with `ignore'."
   (when (boundp 'gptel--request-alist)
     (dolist (entry gptel--request-alist)
       (when-let* ((value (cdr entry))
@@ -425,19 +424,28 @@ This is called defensively before any sentinel runs."
                   ((listp info)))
         (let ((cb (plist-get info :callback)))
           (unless (functionp cb)
-            (message "[gptel-ext-core] Patching nil callback for process %s (fsm=%s)"
-                     (ignore-errors (process-name (car entry))) (prin1-to-string fsm))
+            (message "[gptel-ext-core] Patching nil callback for process %s"
+                     (ignore-errors (process-name (car entry))))
             (setf (gptel-fsm-info fsm)
                   (plist-put info :callback #'ignore))))))))
 
 (defun my/gptel--sentinel-safety-wrapper (orig-fn process status)
-  "Wrap sentinel to catch all errors and ensure callback is never nil."
+  "Wrap sentinel: skip if FSM missing (ravc), else catch errors."
   (my/gptel--ensure-all-callbacks)
-  (condition-case err
-      (funcall orig-fn process status)
-    (error
-     (message "[gptel-ext-core] Sentinel error for %s: %S"
-              (ignore-errors (process-name process)) err))))
+  (let ((entry (and (boundp 'gptel--request-alist)
+                    (assq process gptel--request-alist))))
+    (if (not entry)
+        ;; Process not in alist yet — sentinel fired before alist entry was
+        ;; created (set-process-sentinel on dead process runs synchronously at
+        ;; line 2850, but alist entry is created at line 2853).  Skip the
+        ;; original sentinel entirely — it would crash on nil FSM.
+        (message "[gptel-ext-core] Skipping sentinel for %s (not in alist, likely fast-exit curl)"
+                 (ignore-errors (process-name process)))
+      (condition-case err
+          (funcall orig-fn process status)
+        (error
+         (message "[gptel-ext-core] Sentinel error for %s: %S"
+                  (ignore-errors (process-name process)) err))))))
 
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--stream-cleanup :around
