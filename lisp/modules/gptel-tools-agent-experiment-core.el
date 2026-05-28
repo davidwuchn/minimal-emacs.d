@@ -1070,10 +1070,16 @@ Safe to call multiple times: already-merged branches are skipped."
                                 (let* ((exp-id (string-to-number experiment-id))
                                        (branch (gptel-auto-workflow--branch-name
                                                 target exp-id)))
-                                  (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
-                                           branch age)
-                                  (gptel-auto-workflow--staging-flow branch)
-                                  (cl-incf recovered))
+                                  (if (zerop (call-process "git" nil nil nil
+                                                           "rev-parse" "--verify" branch))
+                                      (progn
+                                        (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
+                                                 branch age)
+                                        (gptel-auto-workflow--staging-flow branch)
+                                        (cl-incf recovered))
+                                    (message "[staging-recovery] Branch %s does not exist, skipping"
+                                             branch)
+                                    (cl-incf skipped)))
                               (error
                                (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
                                         target experiment-id
