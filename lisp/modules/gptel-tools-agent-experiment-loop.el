@@ -1081,9 +1081,9 @@ Force-stops when:
                                   (hash-table-p my/gptel--agent-task-state)
                                   (hash-table-count my/gptel--agent-task-state))))
           (cond
-           ((and (numberp stuck-minutes)
-                 (> stuck-minutes 2)
-                 (not (and (numberp active-tasks) (> active-tasks 0))))
+            ((and (numberp stuck-minutes)
+                  (> stuck-minutes 5)  ; 5 min grace for grader retry delays
+                  (not (and (numberp active-tasks) (> active-tasks 0))))
             (message "[auto-workflow] WATCHDOG: No active subagent tasks for %.1f min, force-stopping"
                      stuck-minutes)
             (gptel-auto-workflow--force-stop))
