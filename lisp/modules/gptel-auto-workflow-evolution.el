@@ -766,7 +766,7 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
                                 (format "experiment-insights-%s.md" target-key)
                                 knowledge-dir)))
           ;; VALUE GATE: Only create knowledge page if insights have sufficient value
-          (when (and (> count 2) (>= avg-value 5.0))
+          (when (and (numberp count) (> count 2) (numberp avg-value) (>= avg-value 5.0))
             (make-directory knowledge-dir t)
             (with-temp-file knowledge-file
               (insert "---\n")
@@ -833,7 +833,7 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
             (message "[evolution] Consolidated %d insights for %s → %s (quality: %.1f/10)"
                      count target-key knowledge-file avg-value))
           ;; If quality too low, just archive without creating knowledge page
-          (when (and (> count 2) (< avg-value 5.0))
+          (when (and (numberp count) (> count 2) (numberp avg-value) (< avg-value 5.0))
             (make-directory archive-dir t)
             (dolist (file (plist-get group :files))
               (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir) t))
