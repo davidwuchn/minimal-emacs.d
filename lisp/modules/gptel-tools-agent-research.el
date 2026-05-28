@@ -363,7 +363,13 @@ Note: Call `gptel-mementum-ensure-agents' first for batch processing."
          (files (plist-get candidate :files))
          (project-root (gptel-auto-workflow--project-root))
          (headless (bound-and-true-p gptel-auto-workflow--headless))
+         (auto-approve (and headless gptel-mementum-headless-auto-approve))
          (memories-content '()))
+    ;; Skip LLM request entirely in headless mode without auto-approval
+    ;; to avoid void-function nil cascade from nil callbacks
+    (when (and headless (not auto-approve))
+      (message "[mementum] Skip '%s': headless mode without auto-approval" topic)
+      (cl-return-from gptel-mementum-synthesize-candidate nil))
     (dolist (file files)
       (let ((content (gptel-auto-workflow--read-file-contents file)))
         (when content
