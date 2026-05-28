@@ -1246,8 +1246,7 @@ Implements section-level A/B testing to identify effective prompt components."
                                          (format "## Hypothesis Templates\n%s"
                                                  (mapconcat (lambda (tmpl) (format "- %s" tmpl)) mutation-templates "\n"))
                                        ""))
-              (axis-guidance . ,(or (gptel-auto-experiment--format-axis-guidance
-                                     (gptel-auto-experiment--get-underexplored-axis target)) ""))
+              (axis-guidance . ,(or (gptel-auto-experiment--format-axis-guidance nil) ""))
               (axis-performance . ,(gptel-auto-experiment--format-axis-performance target))
               (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
               (saturation-status . ,(gptel-auto-experiment--frontier-saturation-guidance target))
@@ -2424,49 +2423,6 @@ Saturated means: >=3 Pareto experiments, >=4 axes, quality>=0.8."
           (message "[frontier-filter] WARNING: All %d targets saturated!" (length targets))
           nil)
       (nreverse filtered))))
-
-;;; Axis Analysis and Adaptive Weighting
-
-(defun gptel-auto-experiment--get-axis-stats (target)
-  "Calculate exploration statistics for TARGET from TSV history.
-Returns plist with :counts (axis->count), :successes (axis->kept-count),
-:rates (axis->success-rate), :total-experiments."
-  (let ((results-file (gptel-auto-workflow--results-file-path))
-        (counts (make-hash-table :test 'equal))
-        (successes (make-hash-table :test 'equal))
-        (total 0))
-    (when (file-exists-p results-file)
-      (with-temp-buffer
-        (insert-file-contents results-file)
-        (goto-char (point-min))
-        (forward-line 1) ; skip header
-        (while (not (eobp))
-          (let* ((fields (split-string
-                          (buffer-substring (line-beginning-position)
-                                            (line-end-position))
-                          "\t"))
-                 (field-count (length fields))
-                 (axis-idx (if (<= field-count 24) 17 18))
-                 (line-target (nth 1 fields))
-                 (decision (nth 7 fields))
-                 (axis (or (nth axis-idx fields) "?")))
-            (when (and (equal line-target target)
-                       (not (equal axis "?"))
-                       (not (string-empty-p axis)))
-              (setq total (1+ total))
-              (puthash axis (1+ (gethash axis counts 0)) counts)
-              (when (equal decision "kept")
-                (puthash axis (1+ (gethash axis successes 0)) successes))))
-          (forward-line 1))))
-    (let ((rates (make-hash-table :test 'equal)))
-      (cl-flet ((compute-rate (axis count)
-                  (let ((success-count (gethash axis successes 0)))
-                    (puthash axis (/ (float success-count) count) rates))))
-        (maphash #'compute-rate counts))
-      (list :counts counts
-            :successes successes
-            :rates rates
-            :total-experiments total)))))
 
 (defun gptel-auto-experiment--get-underexplored-axis (target)
   "Find least-explored axis for TARGET.
