@@ -5,11 +5,14 @@
 # Semantic File Relationships
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 Generated: 2026-05-28T19:18
 
 | lisp/modules/gptel-tools-agent-experiment-loop.el | lisp/modules/gptel-workflow-benchmark.el | 2.000 |
 | lisp/modules/gptel-ext-context.el | lisp/modules/gptel-workflow-benchmark.el | 1.000 |
 =======
+=======
+>>>>>>> Stashed changes
 Generated: 2026-05-28T19:32
 
 | lisp/modules/gptel-auto-workflow-behavioral-tests.el | lisp/modules/gptel-ext-context.el | 1.000 |
@@ -18,6 +21,9 @@ Generated: 2026-05-28T19:32
 | lisp/modules/gptel-ext-context.el | lisp/modules/gptel-tools-agent-strategy-evolver.el | 1.000 |
 | lisp/modules/gptel-ext-context.el | lisp/modules/gptel-workflow-benchmark.el | 1.000 |
 | lisp/modules/gptel-ext-context.el | lisp/modules/gptel-tools-agent-experiment-loop.el | 0.667 |
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 ## Ontology Implications
