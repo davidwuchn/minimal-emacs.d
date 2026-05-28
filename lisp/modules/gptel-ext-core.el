@@ -431,31 +431,29 @@ Processes whose FSM info has a nil callback get it replaced with `ignore'."
 
 (defun my/gptel--sentinel-safety-wrapper (orig-fn process status)
   "Wrap sentinel: skip if FSM missing, else catch errors.
-Also logs callback value when it's nil before funcall for debugging."
+Logs callback value when nil for debugging the persistent void-function nil."
   (my/gptel--ensure-all-callbacks)
-  (let ((entry (and (boundp 'gptel--request-alist)
-                    (assq process gptel--request-alist))))
+  (let* ((pname (ignore-errors (process-name process)))
+         (entry (and (boundp 'gptel--request-alist)
+                     (assq process gptel--request-alist)))
+         (value (and entry (cdr entry)))
+         (fsm (and (consp value) (car value)))
+         (info (and fsm (ignore-errors (gptel-fsm-info fsm))))
+         (cb (and (listp info) (plist-get info :callback))))
+    (message "[gptel-ext-core] sentinel for %s: entry=%s fsm=%s cb=%s"
+             pname (if entry "yes" "no") (if fsm "yes" "no")
+             (cond ((functionp cb) "function")
+                   ((null cb) "NIL!")
+                   (t (format "%S" cb))))
     (if (not entry)
-        (message "[gptel-ext-core] Skipping sentinel for %s (not in alist)"
-                 (ignore-errors (process-name process)))
-      (let* ((value (cdr entry))
-             (fsm (and (consp value) (car value)))
-             (info (and fsm (ignore-errors (gptel-fsm-info fsm))))
-             (cb (and (listp info) (plist-get info :callback))))
-        (when (and (not (functionp cb)) (not (null cb)))
-          (message "[gptel-ext-core] Callback is not a function in alist entry for %s: %S"
-                   (ignore-errors (process-name process)) cb))
-        (when (null cb)
-          (message "[gptel-ext-core] Callback is nil for %s (fsm=%s info=%s): patching"
-                   (ignore-errors (process-name process))
-                   (prin1-to-string fsm) (prin1-to-string info))
-          (setf (gptel-fsm-info fsm)
-                (plist-put info :callback #'ignore))))
+        (message "[gptel-ext-core] Skipping sentinel for %s (not in alist)" pname)
+      (when (null cb)
+        (message "[gptel-ext-core] Patching nil cb for %s" pname)
+        (setf (gptel-fsm-info fsm) (plist-put info :callback #'ignore)))
       (condition-case err
           (funcall orig-fn process status)
         (error
-         (message "[gptel-ext-core] Sentinel error for %s: %S"
-                  (ignore-errors (process-name process)) err))))))
+         (message "[gptel-ext-core] Sentinel error for %s: %S" pname err))))))
 
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--stream-cleanup :around
