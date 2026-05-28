@@ -2466,7 +2466,7 @@ Returns plist with :counts (axis->count), :successes (axis->kept-count),
       (list :counts counts
             :successes successes
             :rates rates
-            :total-experiments total)))))
+            :total-experiments total))))
 
 (defun gptel-auto-experiment--get-underexplored-axis (target)
   "Find least-explored axis for TARGET.
