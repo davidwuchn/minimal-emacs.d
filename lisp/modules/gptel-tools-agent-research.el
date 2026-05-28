@@ -530,8 +530,8 @@ In headless mode, respects `gptel-mementum-headless-auto-approve'."
              (headless (bound-and-true-p gptel-auto-workflow--headless))
              (auto-approve (and headless gptel-mementum-headless-auto-approve)))
         (cond
-         ((< line-count 50)
-          (message "[mementum] Skip '%s': only %d lines (need ≥50)" topic line-count))
+         ((< line-count 20)
+          (message "[mementum] Skip '%s': only %d lines (need ≥20)" topic line-count))
          ((and headless (not auto-approve))
           (message "[mementum] Skip '%s': human approval required before saving in headless mode (%d lines)"
                    topic line-count))

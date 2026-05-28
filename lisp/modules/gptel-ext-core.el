@@ -428,6 +428,25 @@ uses the return value, not a re-read of the struct slot."
           info)
       info)))
 
+(defun my/gptel--ensure-callback-before-funcall (&rest _args)
+  "Ensure FSM info has a function callback before the sentinel calls funcall.
+This advice is on `gptel--fsm-transition', which runs RIGHT BEFORE the
+sentinel's (funcall (plist-get info :callback) ...).  By patching the
+callback in place here, the sentinel's local `info' variable (which
+points to the same plist object) sees the patched value."
+  (when (boundp 'gptel--request-alist)
+    (dolist (entry gptel--request-alist)
+      (when-let* ((value (cdr entry))
+                  ((consp value))
+                  (fsm (car value))
+                  (info (ignore-errors (gptel-fsm-info fsm)))
+                  ((listp info)))
+        (let ((cb (plist-get info :callback)))
+          (unless (functionp cb)
+            ;; Modify the plist IN PLACE so the sentinel's local `info'
+            ;; variable sees the change (it shares the same plist object).
+            (plist-put info :callback #'ignore)))))))
+
 (defun my/gptel--sentinel-safety-wrapper (orig-fn process status)
   "Wrap sentinel: skip if FSM missing, else catch errors."
   (let ((entry (and (boundp 'gptel--request-alist)
@@ -443,7 +462,15 @@ uses the return value, not a re-read of the struct slot."
 
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--stream-cleanup :around
+              #'my/gptel--sentinel-safety-wrapper)
+  (advice-add 'gptel-curl--sentinel :around
               #'my/gptel--sentinel-safety-wrapper))
+;; Advice gptel--fsm-transition which runs right before the sentinel's
+;; funcall.  Patches nil callback in place so the sentinel's local
+;; `info' variable (sharing the same plist) sees a valid callback.
+(with-eval-after-load 'gptel-request
+  (advice-add 'gptel--fsm-transition :before
+              #'my/gptel--ensure-callback-before-funcall))
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--sentinel :around
               #'my/gptel--sentinel-safety-wrapper))
