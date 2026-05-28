@@ -1816,6 +1816,9 @@ state machine and driven by it."
   (table gptel-request--transitions)
   (handlers gptel-request--handlers) info)
 
+;; Disable compiler macro for accessor so our :around advice works.
+(put 'gptel-fsm-info 'compiler-macro nil)
+
 (defun gptel--fsm-transition (machine &optional new-state)
   "Move MACHINE to its next state.
 
