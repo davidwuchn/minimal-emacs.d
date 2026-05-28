@@ -57,7 +57,7 @@ total-kept: 41
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (229×): Investigate root cause
+- **other** (234×): Investigate root cause
 - **api-limit** (14×): Implement provider fallback or rate limit handling
 - **timeout** (13×): Add smaller batch sizes or chunked processing
 - **validation-failed** (12×): Improve pre-grade validation prompts
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (41 kept locally across 272 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (41 kept locally across 277 local records). It evolves every self-evolution cycle.*

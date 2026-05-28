@@ -2446,28 +2446,27 @@ Returns plist with :counts (axis->count), :successes (axis->kept-count),
                                             (line-end-position))
                           "\t"))
                  (field-count (length fields))
-                 ;; 20/24-col: axis at index 17; 27-col: axis at index 18
                  (axis-idx (if (<= field-count 24) 17 18))
-                 ;; 20/24-col: prompt-chars at index 15; 27-col: at index 16
-                 (prompt-idx (if (<= field-count 24) 15 16))
                  (line-target (nth 1 fields))
                  (decision (nth 7 fields))
                  (axis (or (nth axis-idx fields) "?")))
-            (when (equal line-target target)
+            (when (and (equal line-target target)
+                       (not (equal axis "?"))
+                       (not (string-empty-p axis)))
               (setq total (1+ total))
+              (puthash axis (1+ (gethash axis counts 0)) counts)
               (when (equal decision "kept")
-                (puthash axis (1+ (gethash axis successes 0)) successes))
-              (puthash axis (1+ (gethash axis counts 0)) counts))
-            (forward-line 1))))
-      (let ((rates (make-hash-table :test 'equal)))
-        (cl-flet ((compute-rate (axis count)
-                    (let ((success-count (gethash axis successes 0)))
-                      (puthash axis (/ (float success-count) count) rates))))
-          (maphash #'compute-rate counts))
-        (list :counts counts
+                (puthash axis (1+ (gethash axis successes 0)) successes))))
+          (forward-line 1))))
+    (let ((rates (make-hash-table :test 'equal)))
+      (cl-flet ((compute-rate (axis count)
+                  (let ((success-count (gethash axis successes 0)))
+                    (puthash axis (/ (float success-count) count) rates))))
+        (maphash #'compute-rate counts))
+      (list :counts counts
             :successes successes
             :rates rates
-            :total-experiments total)))))
+            :total-experiments total))))
 
 (defun gptel-auto-experiment--get-underexplored-axis (target)
   "Find least-explored axis for TARGET.
