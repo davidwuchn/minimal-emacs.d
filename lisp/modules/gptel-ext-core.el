@@ -425,6 +425,8 @@ This is called defensively before any sentinel runs."
                   ((listp info)))
         (let ((cb (plist-get info :callback)))
           (unless (functionp cb)
+            (message "[gptel-ext-core] Patching nil callback for process %s (fsm=%s)"
+                     (ignore-errors (process-name (car entry))) (prin1-to-string fsm))
             (setf (gptel-fsm-info fsm)
                   (plist-put info :callback #'ignore))))))))
 
