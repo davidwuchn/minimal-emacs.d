@@ -424,43 +424,22 @@ Processes whose FSM info has a nil callback get it replaced with `ignore'."
                   ((listp info)))
         (let ((cb (plist-get info :callback)))
           (unless (functionp cb)
-            (message "[gptel-ext-core] Patching nil callback for process %s"
-                     (ignore-errors (process-name (car entry))))
             (setf (gptel-fsm-info fsm)
                   (plist-put info :callback #'ignore))))))))
 
 (defun my/gptel--sentinel-safety-wrapper (orig-fn process status)
-  "Wrap sentinel: skip if FSM missing, else catch errors.
-Logs callback value when nil for debugging the persistent void-function nil."
+  "Wrap sentinel: skip if FSM missing, else catch errors."
   (my/gptel--ensure-all-callbacks)
-  (let* ((pname (ignore-errors (process-name process)))
-         (entry (and (boundp 'gptel--request-alist)
-                     (assq process gptel--request-alist)))
-         (value (and entry (cdr entry)))
-         (fsm (and (consp value) (car value)))
-         (info (and fsm (ignore-errors (gptel-fsm-info fsm))))
-         (cb (and (listp info) (plist-get info :callback))))
-    (message "[gptel-ext-core] sentinel for %s: entry=%s fsm=%s cb=%s"
-             pname (if entry "yes" "no") (if fsm "yes" "no")
-             (cond ((functionp cb) "function")
-                   ((null cb) "NIL!")
-                   (t (format "%S" cb))))
+  (let ((entry (and (boundp 'gptel--request-alist)
+                    (assq process gptel--request-alist))))
     (if (not entry)
-        (message "[gptel-ext-core] Skipping sentinel for %s (not in alist)" pname)
-      (when (null cb)
-        (message "[gptel-ext-core] Patching nil cb for %s" pname)
-        (setf (gptel-fsm-info fsm) (plist-put info :callback #'ignore)))
+        (message "[gptel-ext-core] Skipping sentinel for %s (not in alist)"
+                 (ignore-errors (process-name process)))
       (condition-case err
           (funcall orig-fn process status)
         (error
-         (message "[gptel-ext-core] Sentinel error for %s: %S" pname err)))
-      ;; Check if callback changed after sentinel ran
-      (let ((cb-after (and fsm (ignore-errors (plist-get (gptel-fsm-info fsm) :callback)))))
-        (unless (eq cb cb-after)
-          (message "[gptel-ext-core] Callback CHANGED during sentinel for %s: before=%s after=%s"
-                   pname
-                   (cond ((functionp cb) "function") ((null cb) "NIL!") (t (format "%S" cb)))
-                   (cond ((functionp cb-after) "function") ((null cb-after) "NIL!") (t (format "%S" cb-after)))))))))
+         (message "[gptel-ext-core] Sentinel error for %s: %S"
+                  (ignore-errors (process-name process)) err))))))
 
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--stream-cleanup :around
