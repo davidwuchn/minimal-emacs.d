@@ -453,7 +453,14 @@ Logs callback value when nil for debugging the persistent void-function nil."
       (condition-case err
           (funcall orig-fn process status)
         (error
-         (message "[gptel-ext-core] Sentinel error for %s: %S" pname err))))))
+         (message "[gptel-ext-core] Sentinel error for %s: %S" pname err)))
+      ;; Check if callback changed after sentinel ran
+      (let ((cb-after (and fsm (ignore-errors (plist-get (gptel-fsm-info fsm) :callback)))))
+        (unless (eq cb cb-after)
+          (message "[gptel-ext-core] Callback CHANGED during sentinel for %s: before=%s after=%s"
+                   pname
+                   (cond ((functionp cb) "function") ((null cb) "NIL!") (t (format "%S" cb)))
+                   (cond ((functionp cb-after) "function") ((null cb-after) "NIL!") (t (format "%S" cb-after)))))))))
 
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--stream-cleanup :around
