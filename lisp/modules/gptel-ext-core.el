@@ -416,11 +416,17 @@ that crash non-pcase-aware callbacks."
   "Ensure FSM info always has a function callback.
 Advices `gptel-fsm-info' to patch the returned info so `:callback' is
 never nil. This is the lowest-level defense against void-function nil
-in the sentinel's `funcall (plist-get info :callback)' call."
+in the sentinel's `funcall (plist-get info :callback)' call.
+
+CRITICAL: Must return the PATCHED info, not the original — the caller
+uses the return value, not a re-read of the struct slot."
   (let ((info (funcall orig-fn fsm)))
-    (when (and (listp info) (not (functionp (plist-get info :callback))))
-      (setf (gptel-fsm-info fsm) (plist-put info :callback #'ignore)))
-    info))
+    (if (and (listp info) (not (functionp (plist-get info :callback))))
+        (progn
+          (setq info (plist-put info :callback #'ignore))
+          (setf (gptel-fsm-info fsm) info)
+          info)
+      info)))
 
 (defun my/gptel--sentinel-safety-wrapper (orig-fn process status)
   "Wrap sentinel: skip if FSM missing, else catch errors."
