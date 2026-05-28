@@ -339,11 +339,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                     "Validation failed. Use remaining candidate or fix error.\n\n"
                                                                     "λ ¬thrash: reads ≤ 2 → write_next | fix(specific) > re-read(all)"
                                                                     " | ∀cl-return-from: ∃cl-block ∧ name_match\n")
-                                                           (concat executor-prompt
-                                                                  "\n\nλ ¬thrash: reads ≤ 2 → write_next | fix(specific) > re-read(all)"
-                                                                  " | ∀cl-return-from: ∃cl-block ∧ name_match\n")))
-                                                 gptel-auto-experiment-validation-retry-time-budget
-                                                 (lambda (retry-output)
+                                                            (concat executor-prompt
+                                                                   "\n\nλ ¬thrash: reads ≤ 2 → write_next | fix(specific) > re-read(all)"
+                                                                   " | ∀cl-return-from: ∃cl-block ∧ name_match\n")))
+                                                  (my/gptel--run-agent-tool-with-timeout
+                                                  gptel-auto-experiment-validation-retry-time-budget
+                                                  (lambda (retry-output)
                                                    (if (and (stringp retry-output)
                                                             (string-match-p "\\`Error:" retry-output))
                                                        ;; Retry failed: fail experiment immediately, skip grading/staging
@@ -380,7 +381,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                  "Validation retry"
                                                  retry-prompt
                                                  nil nil nil
-                                                 gptel-auto-experiment-validation-retry-active-grace)))
+                                                  gptel-auto-experiment-validation-retry-active-grace))))
                                          ;; Non-teachable or already retrying: fail fast
                                          (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
                                                              effective-agent-output))
