@@ -195,7 +195,7 @@ Uses cached value from load time, or detects from current directory."
                              (score-before (string-to-number (or (nth 3 fields) "0")))
                              (score-after (string-to-number (or (nth 4 fields) "0")))
                              (quality (string-to-number (or (nth 5 fields) "0")))
-                             (delta-str (or (nth 6 fields) "+0.00"))
+                              (delta (string-to-number (or (nth 6 fields) "+0.00")))
                              (decision (nth 7 fields))
                              (grader-q (string-to-number (or (nth 9 fields) "0")))
                              (backend (cond ((<= format-version 14) "unknown")
@@ -214,7 +214,7 @@ Uses cached value from load time, or detects from current directory."
                                         :score-before score-before
                                         :score-after score-after
                                         :code-quality quality
-                                        :delta delta-str
+                                         :delta delta
                                         :decision decision
                                         :grader-quality grader-q
                                         :prompt-chars prompt-chars
