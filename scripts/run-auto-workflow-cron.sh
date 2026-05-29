@@ -344,9 +344,9 @@ worker_daemon_pid() {
 clean_orphaned_sockets() {
     local uid
     uid="$(id -u)"
-    # Never clean sockets if a daemon process is still alive for this server.
-    # The daemon owns its socket; removing it from underneath breaks connectivity.
-    if [ -n "$(worker_daemon_pids)" ]; then
+    # If we just recovered a stale daemon, force-remove sockets even if
+    # a zombie process is still visible in the process table.
+    if [ "$STALE_DAEMON_RECOVERED" -eq 0 ] && [ -n "$(worker_daemon_pids)" ]; then
         return 0
     fi
     for base in "${TMPDIR:-/tmp}" "/tmp"; do
@@ -1125,6 +1125,23 @@ ensure_worker_daemon() {
     # Always clean up orphaned sockets even if no stale PIDs found.
     # Daemons can crash without cleaning up their socket files.
     clean_orphaned_sockets
+    
+    # Verify socket is actually gone before starting new daemon
+    local _socket_gone=0
+    for _ in $(seq 1 20); do
+        if ! daemon_socket_has_owner 2>/dev/null; then
+            _socket_gone=1
+            break
+        fi
+        sleep 0.2
+    done
+    if [ "$_socket_gone" -eq 0 ]; then
+        echo "WARNING: Socket for $SERVER_NAME still present after cleanup. Force-removing..." >&2
+        local uid="$(id -u)"
+        rm -f "${TMPDIR:-/tmp}/emacs$uid/$SERVER_NAME" 2>/dev/null || true
+        rm -f "/tmp/emacs$uid/$SERVER_NAME" 2>/dev/null || true
+        rm -f "${XDG_RUNTIME_DIR:-}/emacs/$SERVER_NAME" 2>/dev/null || true
+    fi
     
     # Clear stale native-compile cache to avoid "End of file during parsing"
     # errors when .el sources changed but .eln cache is stale.

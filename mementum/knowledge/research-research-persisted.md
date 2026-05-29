@@ -7,45 +7,49 @@ Synthesis verification:
 --->
 
 <think>
-The user wants me to synthesize memories about "research-research-persisted" into a comprehensive knowledge page. Let me analyze the memories:
+The user wants me to synthesize multiple research memories into a knowledge page about "research-research-persisted". Let me analyze the memories to extract the key patterns, techniques, and actionable insights.
 
-1. Multiple research sessions from 2026-05-25 to 2026-05-27
-2. Topics include:
-   - Module complexity analysis (evolution.el is largest at 5822 lines)
-   - Git activity shows 8 bug fixes, 0 feature commits
-   - Self-evolution directives about nil-safety patterns
-   - Research fallback procedures
-   - External research from various sources (efrit, nucleus, context-mode, mementum, gastown, gbrain, zeroclaw, genesis-agent, etc.)
-   - Various patterns like circuit breakers, tool receipts, lambda notation, think-in-code, session continuity, feed-forward memory
-   - Agent architecture patterns from external sources (Azure, NVIDIA, arXiv papers)
-   - Error recovery patterns
-   - Three-tier watchdog architecture
-   - Hybrid search fusion
-   - Self-wiring knowledge graphs
-   - Three-loop meta-learning
+From the memories, I can identify several major themes:
 
-Key themes to synthesize:
-1. Research Pipeline Patterns
-2. Error Handling & Resilience (Circuit Breaker, Checkpoint/Restore)
-3. Context Reduction Techniques (Think-in-Code, Sandbox Tools)
-4. Memory & Knowledge Management (Feed-Forward, Knowledge Graphs)
-5. Agent Architecture Patterns
-6. Meta-Learning & Self-Evolution
+1. **Research Pipeline Patterns**
+   - Local fallback strategies when external research is unavailable
+   - Feedback loop preservation (research hash in experiment rows)
+   - Daemon orchestration boundaries and fail-fast strategies
+   - Research quality measured by downstream experiment success
 
-Let me create a comprehensive knowledge page that:
-- Has at least 50 lines
-- Includes concrete examples (code, tables, commands)
-- Has actionable patterns
-- Cross-references related topics
-- Starts with frontmatter
+2. **External Patterns from Repos**
+   - Circuit Breaker + Checkpoint/Restore (efrit)
+   - Tool Receipts for Audit Trail (efrit)
+   - Lambda Notation + Mathematical Attention Magnets (nucleus)
+   - Think-in-Code Context Reduction (context-mode)
+   - Session Continuity via FTS5 (context-mode)
+   - Feed-Forward Memory Protocol (mementum)
+   - Beads Ledger for Work Tracking (gastown)
+   - Self-Wiring Knowledge Graph (gbrain)
+   - Security-First Agent Runtime (zeroclaw)
+   - Self-Verification Engine (genesis-agent)
+   - Three-Tier Watchdog Architecture (gastown)
+   - Hybrid Search Fusion (gbrain)
+   - DEGRADED State Circuit Breaker
+   - Three-Loop Meta-Learning Architecture
 
-I'll structure it as:
-1. Overview/Introduction
-2. Research Pipeline Patterns
-3. Error Handling & Resilience
-4. Context Reduction Techniques
-5. Memory & Knowledge Management
-6. Agent Architecture
-7. Implementation Examples
-8. Related Topics
+3. **External Research Sources**
+   - arXiv:2405.10467 - 18 Architectural Patterns
+   - arXiv:2508.00271 - MetaAgent Self-Evolving
+   - Azure AI Agent Orchestration Patterns
+   - NVIDIA AI Agent Evaluation Guide
+   - AI Agent Error Recovery Patterns
+   - Awesome Agents Repository
+
+4. **Codebase Metrics**
+   - 58031 total lines
+   - gptel-auto-workflow-evolution.el: 5822 lines
+   - gptel-auto-workflow-strategic.el: 2698 lines
+   - gptel-tools-agent-prompt-build.el: 2431 lines
+   - gptel-auto-workflow-research-benchmark.el: 1742 lines
+
+5. **Self-Evolution Directives**
+   - Focus on highest-failure modules
+   - Apply nil-safety patterns and validation guards
+   - Track research quality by downstream experiment success
 </think>

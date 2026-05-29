@@ -33,7 +33,7 @@ total-kept: 22
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **manual-fix** (34× from git)
+- **manual-fix** (36× from git)
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
