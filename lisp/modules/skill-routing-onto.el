@@ -133,6 +133,61 @@ Measures breadth of coverage."
      (if (zerop (length task-words)) 0.0
        (/ (float matched) (length task-words)))))
 
+;; ─── Health Ladder (ported from ontology-router:421-436) ───
+
+(defvar sr--skill-strikes (make-hash-table :test 'equal)
+  "Hash table: skill-dir → (consecutive-failures . last-failure-timestamp).
+Skills with 3+ consecutive failures are quarantined (score reduced by 50%).")
+
+(defconst sr-skill-stale-days 90
+  "Days since last SKILL.md edit beyond which a skill is considered stale.
+Stale skills receive a health penalty.")
+
+(defun sr--skill-health (skill-dir skill-content)
+  "Check SKILL-DIR health. Returns (healthy-p . penalty 0.0-0.5).
+Penalty is subtracted from score. Ported from ontology-router `backend-quota-health`."
+  (let* ((strikes (gethash skill-dir sr--skill-strikes '(0 . 0)))
+         (consecutive-failures (car strikes))
+         (stale-p (sr--skill-stale-p skill-dir))
+         (penalty 0.0))
+    ;; Consecutive-failure penalty
+    (when (>= consecutive-failures 3)
+      (setq penalty 0.5))
+    ;; Stale-content penalty
+    (when stale-p
+      (setq penalty (+ penalty 0.2)))
+    (cons (and (< penalty 0.5) (not stale-p)) penalty)))
+
+(defun sr--skill-stale-p (skill-dir)
+  "Check if SKILL-DIR's content files are stale (not modified in 90 days)."
+  (let* ((skills-dir (expand-file-name "assistant/skills"
+                      (or (bound-and-true-p user-emacs-directory)
+                          default-directory)))
+         (full-dir (expand-file-name skill-dir skills-dir))
+         (latest-mtime 0))
+    (dolist (f '("SKILL.md" "DIRECTIVE.md" "agent-behavior.md"))
+      (let ((file (expand-file-name f full-dir)))
+        (when (file-exists-p file)
+          (setq latest-mtime (max latest-mtime
+                                  (float-time (file-attribute-modification-time
+                                               (file-attributes file))))))))
+    (if (> latest-mtime 0)
+        (> (/ (- (float-time) latest-mtime) 86400) sr-skill-stale-days)
+      nil)))
+
+(defun sr--record-skill-failure (skill-dir)
+  "Record a consecutive failure for SKILL-DIR.
+Resets when any other skill succeeds. Used by health ladder."
+  (let ((current (gethash skill-dir sr--skill-strikes '(0 . 0))))
+    (puthash skill-dir (cons (1+ (car current)) (float-time))
+             sr--skill-strikes)))
+
+(defun sr--record-skill-success (skill-dir)
+  "Reset consecutive failure count on success."
+  (let ((current (gethash skill-dir sr--skill-strikes '(0 . 0))))
+    (puthash skill-dir (cons 0 (cdr current))
+             sr--skill-strikes)))
+
 ;; ─── Exclusive-Keyword Bonus ───
 
 (defun sr--exclusive-keyword-bonus (task-text skill-dir)
@@ -289,6 +344,9 @@ Returns score 0.0-1.6 (1.0 base + 0.6 adaptive)."
          (skill-data (cdr skill-entry))
          (skill-category (car skill-data))
          (skill-content (cdr skill-data))
+         (health (sr--skill-health skill-dir skill-content))
+         (healthy (car health))
+         (health-penalty (cdr health))
          (base-score
           (+ (* (sr--score-task-overlap task-text skill-content)
                 (cdr (assq :task-overlap sr-dim-weights)))
@@ -300,7 +358,12 @@ Returns score 0.0-1.6 (1.0 base + 0.6 adaptive)."
                 (cdr (assq :exclusive-match sr-dim-weights)))))
          (identity-boost (sr--identity-keyword-boost task-text skill-dir))
          (adaptive-score (sr--score-adaptive skill-dir task-text)))
-    (+ base-score adaptive-score identity-boost)))
+    ;; Apply health penalty: quarantined skills drop by 50%, stale by 20%
+    (let ((raw-score (+ base-score adaptive-score identity-boost)))
+      (if healthy
+          raw-score
+        (* raw-score (- 1.0 health-penalty))))))
+
 
 ;; ─── Selection with Exploration ───
 
