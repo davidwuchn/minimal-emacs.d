@@ -2,6 +2,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'gptel-auto-workflow-strategic)
 
 (defconst gptel-auto-experiment--axis-names
   '(("A" . "Error Handling")
