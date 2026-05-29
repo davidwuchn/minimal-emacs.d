@@ -32,6 +32,7 @@
 
 ;; Ensure tools agent is loaded for workflow functions
 (require 'gptel-tools-agent nil t)
+(require 'gptel-auto-workflow-ontology-router nil t)
 
 (declare-function gptel-benchmark-summarize-results "gptel-benchmark-core")
 (declare-function gptel-benchmark-load-history "gptel-benchmark-core")
