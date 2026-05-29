@@ -391,9 +391,9 @@ Uses 3-grams (trigrams). Returns 0.0-1.0. Simple embedding approximation."
   (let* ((a-grams (sr--ngrams text-a 3))
          (b-grams (sr--ngrams text-b 3))
          (intersection 0) (union 0))
-    (maphash (lambda (k _) (when (gethash k b-grams) (cl-incf intersection))) a-grams)
-    (maphash (lambda (k v) (cl-incf union v)) a-grams)
-    (maphash (lambda (k v) (cl-incf union v)) b-grams)
+    (maphash (lambda (k _) (when (gethash k b-grams) (setq intersection (1+ intersection)))) a-grams)
+    (maphash (lambda (k v) (setq union (+ union v))) a-grams)
+    (maphash (lambda (k v) (setq union (+ union v))) b-grams)
     (if (> union 0) (/ (float (* 2 intersection)) union) 0.0)))
 
 (defun sr--embedding-fallback (task-text top-n)
@@ -431,9 +431,10 @@ Returns (skill-dir . score) or nil if no skills available."
         (let* ((top-n (seq-take sorted (min 5 (length sorted))))
                (reranked (sr--embedding-fallback task-text top-n))
                (fallback-best (car reranked)))
-          (message "[embed-fallback] margin=%.3f <%s, n-gram fallback: %s→%s"
-                   margin (format "%.2f" sr--embedding-fallback-threshold)
-                   (car best) (car fallback-best))
+          (when (bound-and-true-p gptel-log-level)
+            (message "[embed-fallback] margin=%.3f < %.2f, n-gram fallback: %s→%s"
+                     margin sr--embedding-fallback-threshold
+                     (car best) (car fallback-best)))
           fallback-best)
       ;; High enough confidence — use 8-dim score directly
       (if (and best (< (random 100) (* sr--exploration-rate 100))
