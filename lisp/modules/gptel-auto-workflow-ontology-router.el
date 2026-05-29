@@ -2296,6 +2296,7 @@ When backends disagree on KIBC axis, flags as conflict."
       ;; Check consistency
       (if (< (length backend-axes) 2)
           (list :consistent t :agreement-ratio 1.0 :conflicts nil
+                :backend-count (length backend-axes)
                 :message "Only one backend sampled")
         (let* ((axes (mapcar #'cdr backend-axes))
                (unique-axes (cl-remove-duplicates axes :test #'string=))

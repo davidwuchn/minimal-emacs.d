@@ -67,9 +67,13 @@ every cycle when there are candidate memories to process."
        (let* ((frames (backtrace-frames))
               (bt (mapconcat (lambda (f) (format "  %S" f))
                              (seq-take frames 50) "\n"))
-              (log-file (expand-file-name "var/tmp/cron/evolution-backtrace.log")))
+               (log-file (expand-file-name "var/tmp/cron/evolution-backtrace.log"
+                                          (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                                   (gptel-auto-workflow--worktree-base-root))
+                                              user-emacs-directory))))
          (when (> (length bt) 0)
            (message "[auto-workflow] Evolution cycle backtrace:\n%s" bt)
+           (make-directory (file-name-directory log-file) t)
            (with-temp-file log-file
              (insert (format-time-string "%Y-%m-%d %H:%M:%S\n"))
              (insert (format "Error: %s\n" err))

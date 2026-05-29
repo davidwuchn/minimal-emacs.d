@@ -5898,10 +5898,8 @@ prompt, and category champions should gate new strategies with keep-rate evidenc
                  (let* ((root (gptel-auto-workflow--worktree-base-root))
                         (file (and root (expand-file-name "var/tmp/evolution/allium-bdd-report.md" root))))
                    (when file
-                     (make-directory (file-name-directory file) t)
-                     (with-temp-file file (insert report)))))))))
-       ;; Non-blocking: don't wait for callback
-       nil))))
+                      (make-directory (file-name-directory file) t)
+                      (with-temp-file file (insert report)))))))))))))
 
 
 
