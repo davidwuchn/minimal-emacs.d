@@ -85,7 +85,61 @@
     ("Configure a restricted execution environment"
      "sandbox-profiles" "agent-prompts")
     ("Audit skill permissions for least-privilege"
-     "sandbox-profiles" "agent-prompts"))
+     "sandbox-profiles" "agent-prompts")
+
+    ;; ── New: Eight Keys Grader (single-skill) ──
+    ("Grade an experiment output against expected results"
+     "eight-keys-grader" "benchmark-llm-prompts")
+    ("Score code quality on multiple dimensions"
+     "eight-keys-grader" "benchmark-llm-prompts" "skill-eval")
+
+    ;; ── New: Elisp Expert (single-skill) ──
+    ("Write an advanced elisp macro with best practices"
+     "elisp-expert" "elisp-refactor")
+    ("Implement a complex elisp function with error handling"
+     "elisp-expert" "elisp-validator" "elisp-debug")
+
+    ;; ── New: Meta-Harness Proposer (single-skill) ──
+    ("Generate novel experiment strategies from outcome data"
+     "meta-harness-proposer" "evolution-patterns" "strategy-proposer")
+    ("Propose new research directions based on gap analysis"
+     "meta-harness-proposer" "strategy-proposer")
+
+    ;; ── New: Provider Error Analyzer (single-skill) ──
+    ("Diagnose an LLM provider API error"
+     "provider-error-analyzer" "benchmark-llm-prompts")
+    ("Analyze rate-limit patterns and suggest retry strategy"
+     "provider-error-analyzer" "benchmark-llm-prompts")
+
+    ;; ── New: Requesthunt (single-skill) ──
+    ("Find feature requests across GitHub issues"
+     "requesthunt" "reddit" "research-digest")
+    ("Aggregate user feedback from multiple channels"
+     "requesthunt" "reddit" "research-digest")
+
+    ;; ── New: Researcher Prompt (single-skill) ──
+    ("Design a research skill for investigating a new topic"
+     "researcher-prompt" "research-digest" "strategy-proposer")
+    ("Write a prompt template for external source analysis"
+     "researcher-prompt" "research-digest")
+
+    ;; ── New: SEO-Geo (single-skill) ──
+    ("Analyze geographic SEO ranking patterns"
+     "seo-geo" "research-digest" "reddit")
+    ("Generate a geo-targeted content strategy"
+     "seo-geo" "research-digest")
+
+    ;; ── New: Skill Eval (single-skill) ──
+    ("Evaluate a skill implementation for correctness"
+     "skill-eval" "benchmark-llm-prompts" "eight-keys-grader")
+    ("Benchmark a skill's output quality metrics"
+     "skill-eval" "benchmark-llm-prompts")
+
+    ;; ── New: Tool Prompts (single-skill) ──
+    ("Write a secure sandbox configuration prompt"
+     "tool-prompts" "sandbox-profiles")
+    ("Create a tool specification for bash execution"
+     "tool-prompts" "sandbox-profiles" "agent-prompts"))
   "OV5 Skill Routing Benchmark: (task expected degraded...).
 Graded relevance: 3 = expected, 1 = degraded/near-miss (SkillRouter-style).")
 
