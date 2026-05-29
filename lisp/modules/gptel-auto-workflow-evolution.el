@@ -1855,7 +1855,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (message "[evolution] ∃ Truth: convergence — Eight Keys score %.3f ≤ %.3f, skipping"
                  current-obj gptel-auto-workflow--evolution-last-objective)
         (cl-return-from gptel-auto-workflow-evolution-run-cycle "converged"))
-      (when (> current-obj 0)
+      (when (and current-obj (> current-obj 0))
         (setq gptel-auto-workflow--evolution-last-objective current-obj)
         (message "[evolution] Eight Keys score: %.3f" current-obj))))
   (message "[auto-workflow] Running self-evolution cycle...")
