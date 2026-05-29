@@ -2420,13 +2420,17 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
               (when (string-match "[0-9]+" pid)
                 (signal-process (string-to-number pid) 'sigterm)
                 (message "[cleanup] Killed stale fg-daemon pid %s" pid))))
-          ;; 4. Clean /tmp/gptel-* files older than 2 hours
-          (dolist (f (directory-files "/tmp" t "gptel-"))
+          ;; 4. Clean gptel-* temp files/directories older than 2 hours
+          (dolist (f (directory-files temporary-file-directory t "gptel-"))
             (let ((attrs (and f (file-attributes f))))
               (when (and attrs
                          (> (- now (float-time (file-attribute-modification-time attrs)))
                             (* 2 3600)))
-                (delete-file f t)
+                (condition-case nil
+                    (if (file-directory-p f)
+                        (delete-directory f t)
+                      (delete-file f t))
+                  (error nil))
                 (setq cleaned-temp (1+ cleaned-temp)))))
           ;; 5. Truncate daemon log if >10MB
           (let ((log-file (expand-file-name "var/tmp/cron/ov5-auto-workflow.log" root)))
