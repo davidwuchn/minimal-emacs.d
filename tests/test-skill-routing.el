@@ -170,6 +170,7 @@ Excludes skeleton/template dirs that defer to external content."
 ;; ─── Ontology-Driven Router (from skill-routing-onto.el) ───
 
 (require 'skill-routing-onto nil t)
+(require 'gptel-tools-agent-base nil t)
 (require 'gptel-auto-workflow-ontology-router nil t)
 
 (ert-deftest routing/ontology-accuracy ()
