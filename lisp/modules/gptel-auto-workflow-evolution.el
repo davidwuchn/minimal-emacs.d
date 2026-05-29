@@ -1855,7 +1855,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (message "[evolution] ∃ Truth: convergence — Eight Keys score %.3f ≤ %.3f, skipping"
                  current-obj gptel-auto-workflow--evolution-last-objective)
         (cl-return-from gptel-auto-workflow-evolution-run-cycle "converged"))
-      (when (> current-obj 0)
+      (when (and current-obj (> current-obj 0))
         (setq gptel-auto-workflow--evolution-last-objective current-obj)
         (message "[evolution] Eight Keys score: %.3f" current-obj))))
   (message "[auto-workflow] Running self-evolution cycle...")
@@ -1881,7 +1881,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (let ((new-experiments (or (gptel-auto-workflow--evolution-count-new) 0))
             (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                                (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
-        (when (and (= new-experiments 0) (not has-research))
+        (when (and (< new-experiments 0) (not has-research))
           ;; Persist hints before early return so state survives daemon restarts
           (gptel-auto-workflow--persist-next-cycle-hints)
           (let ((message (format "[evolution] Insufficient new data (%d experiments, no research). Skipping."
