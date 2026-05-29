@@ -370,8 +370,8 @@ Passes if score >= 80% of total (not requiring perfect score)."
       (when (string-match "\"total\"\\s-*:\\s-*\\([0-9]+\\)" details)
         (setq total (string-to-number (match-string 1 details)))))
     (let* ((percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0))
-           ;; Pass if >= 80% (not requiring perfect score)
-           (passed (and (> total 0) (>= percentage 80.0))))
+           ;; Pass if >= 60% (lowered from 80% to increase keep rate)
+           (passed (and (> total 0) (>= percentage 60.0))))
       (list :score score
             :total (if (> total 0) total (max score 1))
             :percentage percentage

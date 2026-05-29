@@ -273,9 +273,10 @@ verify_research_feedback_loop() {
 log_rotate "$PIPELINE_LOG"
 log_rotate "$LOG_DIR/ov5-researcher.log"
 log_rotate "$LOG_DIR/ov5-auto-workflow.log"
+log_rotate "$LOG_DIR/evolution-backtrace.log"
 
-# ─── Clean stale PID/lock files older than 24h ───
-find "$DIR/var/tmp" -type f \( -name "*.pid" -o -name "*.lock" \) -mtime +1 -delete 2>/dev/null || true
+# ─── Clean stale PID/lock files older than 12h ───
+find "$DIR/var/tmp" -type f \( -name "*.pid" -o -name "*.lock" \) -mtime +0 -delete 2>/dev/null || true
 
 # ─── Clean old experiment directories (keep last 7 days) ───
 find "$DIR/var/tmp/experiments" -maxdepth 1 -type d -mtime +7 2>/dev/null | while read d; do

@@ -501,9 +501,9 @@ Result: Tests pass."))
   (should (= gptel-auto-experiment-time-budget 900)))
 
 (ert-deftest grader/grade-timeout-default ()
-  "Default grade timeout should be 120s."
+  "Default grade timeout should be 180s."
   (require 'gptel-tools-agent)
-  (should (= gptel-auto-experiment-grade-timeout 120)))
+  (should (= gptel-auto-experiment-grade-timeout 180)))
 
 ;;; Test 43: Multi-Machine Branch Naming
 
