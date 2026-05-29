@@ -963,45 +963,45 @@ Missing variables are replaced with empty string."
 ;; ─── EDN Prompt Pipeline ───
 
 (defun gptel-auto-experiment--prompt-edn-resolve (vars)
-  "Resolve prompt EDN (plist) to lambda notation.  Deterministic, no LLM call.
-VARS is the plist from build-prompt with keys :target, :baseline, etc.
+  "Resolve prompt EDN to lambda notation.  Deterministic, no LLM call.
+VARS is an alist from build-prompt with keys like 'target, 'baseline, etc.
 Returns a compact lambda-notation string ready for the LLM."
-  (let* ((target (or (plist-get vars :target) "unknown"))
-         (exp-id (or (plist-get vars :experiment-id) 0))
-         (max-exp (or (plist-get vars :max-experiments) 1))
-         (budget (or (plist-get vars :time-budget) 15))
-         (baseline (or (plist-get vars :baseline) "0.50"))
-         (worktree (or (plist-get vars :worktree-path) "."))
-         (tgt-full (or (plist-get vars :target-full-path) target))
-         (controller (plist-get vars :controller-focus))
-         (inspection (plist-get vars :inspection-thrash-contract))
-         (large (plist-get vars :large-target-guidance))
-         (persona (plist-get vars :nucleus-persona))
-         (skills (plist-get vars :self-evolution))
-         (allium-i (plist-get vars :allium-issues))
-         (allium-r (plist-get vars :allium-repair))
-         (topic (plist-get vars :topic-knowledge))
-         (prev (plist-get vars :previous-experiment-analysis))
-         (sugg (plist-get vars :suggestions))
-         (hyp (plist-get vars :suggested-hypothesis))
-         (mut (plist-get vars :mutation-templates))
-         (evol (plist-get vars :evolved-recommendations))
-         (weakest (plist-get vars :weakest-keys))
-         (focus (plist-get vars :focus-line))
-         (sexp (plist-get vars :sexp-check-command))
-         (research (plist-get vars :research-findings))
-         (moderator (plist-get vars :moderator-lens))
-         (git-hist (plist-get vars :git-history))
-         (axis-g (plist-get vars :axis-guidance))
-         (axis-p (plist-get vars :axis-performance))
-         (frontier (plist-get vars :frontier-guidance))
-         (satur (plist-get vars :saturation-status))
-         (fail-p (plist-get vars :failure-patterns))
-         (div (plist-get vars :task-type-diversity))
-         (cross (plist-get vars :cross-target-patterns))
-         (strat-f (plist-get vars :strategy-frontier))
-         (agent-b (plist-get vars :agent-behavior))
-         (val-pipe (plist-get vars :validation-pipeline)))
+  (let* ((target (or (cdr (assoc 'target vars)) "unknown"))
+         (exp-id (or (cdr (assoc 'experiment-id vars)) 0))
+         (max-exp (or (cdr (assoc 'max-experiments vars)) 1))
+         (budget (or (cdr (assoc 'time-budget vars)) 15))
+         (baseline (or (cdr (assoc 'baseline vars)) "0.50"))
+         (worktree (or (cdr (assoc 'worktree-path vars)) "."))
+         (tgt-full (or (cdr (assoc 'target-full-path vars)) target))
+         (controller (cdr (assoc 'controller-focus vars)))
+         (inspection (cdr (assoc 'inspection-thrash-contract vars)))
+         (large (cdr (assoc 'large-target-guidance vars)))
+         (persona (cdr (assoc 'nucleus-persona vars)))
+         (skills (cdr (assoc 'self-evolution vars)))
+         (allium-i (cdr (assoc 'allium-issues vars)))
+         (allium-r (cdr (assoc 'allium-repair vars)))
+         (topic (cdr (assoc 'topic-knowledge vars)))
+         (prev (cdr (assoc 'previous-experiment-analysis vars)))
+         (sugg (cdr (assoc 'suggestions vars)))
+         (hyp (cdr (assoc 'suggested-hypothesis vars)))
+         (mut (cdr (assoc 'mutation-templates vars)))
+         (evol (cdr (assoc 'evolved-recommendations vars)))
+         (weakest (cdr (assoc 'weakest-keys vars)))
+         (focus (cdr (assoc 'focus-line vars)))
+         (sexp (cdr (assoc 'sexp-check-command vars)))
+         (research (cdr (assoc 'research-findings vars)))
+         (moderator (cdr (assoc 'moderator-lens vars)))
+         (git-hist (cdr (assoc 'git-history vars)))
+         (axis-g (cdr (assoc 'axis-guidance vars)))
+         (axis-p (cdr (assoc 'axis-performance vars)))
+         (frontier (cdr (assoc 'frontier-guidance vars)))
+         (satur (cdr (assoc 'saturation-status vars)))
+         (fail-p (cdr (assoc 'failure-patterns vars)))
+         (div (cdr (assoc 'task-type-diversity vars)))
+         (cross (cdr (assoc 'cross-target-patterns vars)))
+         (strat-f (cdr (assoc 'strategy-frontier vars)))
+         (agent-b (cdr (assoc 'agent-behavior vars)))
+         (val-pipe (cdr (assoc 'validation-pipeline vars))))
     (concat
      (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
              target exp-id max-exp budget worktree tgt-full baseline)
@@ -1017,10 +1017,14 @@ Returns a compact lambda-notation string ready for the LLM."
      (if allium-r (concat "REPAIR: " allium-r "\n") "")
      (if (or topic prev) (concat "PAST: " (or topic "")
                                  (if prev (concat " " prev) "") "\n") "")
-     (if (or sugg hyp mut evol) (concat "SUGGEST: " (or sugg "")
-                                        (if hyp (concat " " hyp) "")
-                                        (if mut (concat " " mut) "")
-                                        (if evol (concat " " evol) "") "\n") "")
+      (if (or sugg hyp mut evol)
+          (let ((sugg-str (if (listp sugg) (mapconcat #'identity sugg " | ") (or sugg "")))
+                (mut-str (if (listp mut) (mapconcat (lambda (x) (format "- %s" x)) mut "\n") (or mut ""))))
+            (concat "SUGGEST: " sugg-str
+                    (if hyp (concat " " hyp) "")
+                    (if mut-str (concat "\n" mut-str) "")
+                    (if evol (concat " " evol) "") "\n"))
+        "")
      (if research (concat "RESEARCH: " research "\n") "")
      (if git-hist (concat "GIT: " git-hist "\n") "")
      (if axis-g (concat "AXIS: " axis-g "\n") "")
@@ -1452,26 +1456,34 @@ row for the same experiment and target."
     ;; Inject research metadata from global context into experiment record.
     ;; This closes the feedback loop: experiments carry the research run that
     ;; influenced the prompt so trace outcomes can be linked after logging.
-    (when (and (boundp 'gptel-auto-workflow--current-research-context)
-               gptel-auto-workflow--current-research-context)
-      (let ((ctx gptel-auto-workflow--current-research-context))
-        (setq experiment
-              (plist-put experiment :research-strategy
-                         (or (plist-get ctx :strategy) "none")))
-        (setq experiment
-              (plist-put experiment :research-hash
-                         (or (plist-get ctx :hash) "none")))
-        (setq experiment
-              (plist-put experiment :research-quality
-                         (or (plist-get ctx :source) "none")))
-        (setq experiment
-              (plist-put experiment :controller-decision
-                         (or (plist-get ctx :controller-decision) "unknown")))
-        ;; Track which nucleus persona was used for self-evolution feedback
-        (setq experiment
-              (plist-put experiment :persona-category
-                         (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
-                           (gptel-auto-workflow--categorize-target target))))))
+    ;; ASSUMPTION: missing research context is a pipeline defect — generate a
+    ;; traceable fallback hash so AutoTTS can link outcomes.
+    ;; BEHAVIOR: always set research-hash; use ctx when available, fallback otherwise.
+    ;; EDGE CASE: pipeline-defect hash lets downstream detect missing research traces.
+    (let* ((ctx-available (and (boundp 'gptel-auto-workflow--current-research-context)
+                               gptel-auto-workflow--current-research-context))
+           (ctx (and ctx-available gptel-auto-workflow--current-research-context))
+           (ctx-hash (and ctx (plist-get ctx :hash)))
+           (hash-valid (and ctx-hash (not (equal ctx-hash "none")))))
+      (unless hash-valid
+        (setq ctx-hash (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s"))))
+        (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using fallback hash" (or target "unknown")))
+      (setq experiment
+            (plist-put experiment :research-strategy
+                       (or (and ctx (plist-get ctx :strategy)) "none")))
+      (setq experiment
+            (plist-put experiment :research-hash ctx-hash))
+      (setq experiment
+            (plist-put experiment :research-quality
+                       (or (and ctx (plist-get ctx :source)) "none")))
+      (setq experiment
+            (plist-put experiment :controller-decision
+                       (or (and ctx (plist-get ctx :controller-decision)) "unknown")))
+      ;; Track which nucleus persona was used for self-evolution feedback
+      (setq experiment
+            (plist-put experiment :persona-category
+                       (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+                         (gptel-auto-workflow--categorize-target target)))))
     (with-temp-buffer
       (insert-file-contents file)
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
@@ -1520,9 +1532,13 @@ row for the same experiment and target."
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :research-strategy "none"))
                             "none")
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :research-hash "none"))
-                            "none")
+                        (let ((hash (gptel-auto-workflow--plist-get experiment :research-hash "none")))
+                          ;; DEFENSE-IN-DEPTH: if upstream failed to set hash, generate fallback
+                          ;; so feedback loop is always preserved.
+                          (when (equal hash "none")
+                            (setq hash (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s"))))
+                            (message "[auto-workflow] WARNING: TSV-level fallback hash for %s (upstream should have set it)" (or target "unknown")))
+                          (gptel-auto-experiment--tsv-escape hash))
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :research-quality "none"))
                             "none")

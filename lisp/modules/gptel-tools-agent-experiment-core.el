@@ -339,11 +339,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                     "Validation failed. Use remaining candidate or fix error.\n\n"
                                                                     "λ ¬thrash: reads ≤ 2 → write_next | fix(specific) > re-read(all)"
                                                                     " | ∀cl-return-from: ∃cl-block ∧ name_match\n")
-                                                           (concat executor-prompt
-                                                                  "\n\nλ ¬thrash: reads ≤ 2 → write_next | fix(specific) > re-read(all)"
-                                                                  " | ∀cl-return-from: ∃cl-block ∧ name_match\n")))
-                                                 gptel-auto-experiment-validation-retry-time-budget
-                                                 (lambda (retry-output)
+                                                            (concat executor-prompt
+                                                                   "\n\nλ ¬thrash: reads ≤ 2 → write_next | fix(specific) > re-read(all)"
+                                                                   " | ∀cl-return-from: ∃cl-block ∧ name_match\n")))
+                                                  (my/gptel--run-agent-tool-with-timeout
+                                                  gptel-auto-experiment-validation-retry-time-budget
+                                                  (lambda (retry-output)
                                                    (if (and (stringp retry-output)
                                                             (string-match-p "\\`Error:" retry-output))
                                                        ;; Retry failed: fail experiment immediately, skip grading/staging
@@ -380,7 +381,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                  "Validation retry"
                                                  retry-prompt
                                                  nil nil nil
-                                                 gptel-auto-experiment-validation-retry-active-grace)))
+                                                  gptel-auto-experiment-validation-retry-active-grace))))
                                          ;; Non-teachable or already retrying: fail fast
                                          (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
                                                              effective-agent-output))
@@ -551,12 +552,18 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                            :research-strategy (or (and (boundp 'gptel-auto-workflow--current-research-context)
                                                        (plist-get gptel-auto-workflow--current-research-context :strategy))
                                                   "none")
-                            :research-hash (or (and (boundp 'gptel-auto-workflow--current-research-context)
-                                                    (plist-get gptel-auto-workflow--current-research-context :hash))
-                                               "none")
+                            :research-hash (let ((ctx-hash (and (boundp 'gptel-auto-workflow--current-research-context)
+                                                                 (plist-get gptel-auto-workflow--current-research-context :hash))))
+                                             (if (and ctx-hash (not (equal ctx-hash "none")))
+                                                 ctx-hash
+                                               ;; ASSUMPTION: missing research context is a pipeline defect
+                                               ;; BEHAVIOR: generate traceable fallback hash so AutoTTS can link
+                                               ;; EDGE CASE: hash is always non-empty so feedback loop is preserved
+                                               (prog1 (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s")))
+                                                 (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using fallback hash" (or target "unknown")))))
                             :research-quality (or (and (boundp 'gptel-auto-workflow--current-research-context)
                                                       (plist-get gptel-auto-workflow--current-research-context :source))
-                                                 "none"))))
+                                                 "none")))))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format
@@ -994,9 +1001,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                 (format "Experiment %d: optimize %s" experiment-id target)
                 executor-prompt
                 nil "false" nil))))))
-             workflow-root)))
-       workflow-root)
-  )
+              workflow-root)))
+        workflow-root)
 
 
 
@@ -1070,10 +1076,16 @@ Safe to call multiple times: already-merged branches are skipped."
                                 (let* ((exp-id (string-to-number experiment-id))
                                        (branch (gptel-auto-workflow--branch-name
                                                 target exp-id)))
-                                  (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
-                                           branch age)
-                                  (gptel-auto-workflow--staging-flow branch)
-                                  (cl-incf recovered))
+                                  (if (zerop (call-process "git" nil nil nil
+                                                           "rev-parse" "--verify" branch))
+                                      (progn
+                                        (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
+                                                 branch age)
+                                        (gptel-auto-workflow--staging-flow branch)
+                                        (cl-incf recovered))
+                                    (message "[staging-recovery] Branch %s does not exist, skipping"
+                                             branch)
+                                    (cl-incf skipped)))
                               (error
                                (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
                                         target experiment-id

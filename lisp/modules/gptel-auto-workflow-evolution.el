@@ -195,7 +195,7 @@ Uses cached value from load time, or detects from current directory."
                              (score-before (string-to-number (or (nth 3 fields) "0")))
                              (score-after (string-to-number (or (nth 4 fields) "0")))
                              (quality (string-to-number (or (nth 5 fields) "0")))
-                             (delta-str (or (nth 6 fields) "+0.00"))
+                              (delta (string-to-number (or (nth 6 fields) "+0.00")))
                              (decision (nth 7 fields))
                              (grader-q (string-to-number (or (nth 9 fields) "0")))
                              (backend (cond ((<= format-version 14) "unknown")
@@ -214,7 +214,7 @@ Uses cached value from load time, or detects from current directory."
                                         :score-before score-before
                                         :score-after score-after
                                         :code-quality quality
-                                        :delta delta-str
+                                         :delta delta
                                         :decision decision
                                         :grader-quality grader-q
                                         :prompt-chars prompt-chars
@@ -448,7 +448,8 @@ Writes runtime evolution data under var/tmp/evolution/."
         (insert "## Token Efficiency Analysis\n\n")
         (insert "Correlation between prompt size and experiment success:\n\n")
         (let* ((all-results (gptel-auto-workflow--parse-all-results))
-               (with-prompt-data (cl-remove-if (lambda (r) (= 0 (plist-get r :prompt-chars))) all-results))
+               (with-prompt-data (cl-remove-if (lambda (r) (or (null (plist-get r :prompt-chars))
+                                                           (= 0 (plist-get r :prompt-chars)))) all-results))
                (kept-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "kept")) with-prompt-data))
                (discarded-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "discarded")) with-prompt-data)))
           (if (or (null with-prompt-data) (null kept-results))
@@ -766,7 +767,7 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
                                 (format "experiment-insights-%s.md" target-key)
                                 knowledge-dir)))
           ;; VALUE GATE: Only create knowledge page if insights have sufficient value
-          (when (and (> count 2) (>= avg-value 5.0))
+          (when (and (numberp count) (> count 2) (numberp avg-value) (>= avg-value 5.0))
             (make-directory knowledge-dir t)
             (with-temp-file knowledge-file
               (insert "---\n")
@@ -833,7 +834,7 @@ Prevents the linear growth of one-insight-per-file over hundreds of experiments.
             (message "[evolution] Consolidated %d insights for %s → %s (quality: %.1f/10)"
                      count target-key knowledge-file avg-value))
           ;; If quality too low, just archive without creating knowledge page
-          (when (and (> count 2) (< avg-value 5.0))
+          (when (and (numberp count) (> count 2) (numberp avg-value) (< avg-value 5.0))
             (make-directory archive-dir t)
             (dolist (file (plist-get group :files))
               (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir) t))
@@ -1846,7 +1847,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (message "[verbum] Holographic memory rebuilt"))
       (error (message "[verbum] ERROR: holographic rebuild failed — %s" (error-message-string err)))))
   ;; Eight Keys convergence: skip evolution if scores haven't improved
-  (when (and gptel-auto-workflow--evolution-last-objective
+  (when (and (numberp gptel-auto-workflow--evolution-last-objective)
              (> gptel-auto-workflow--evolution-last-objective 0))
     (let ((current-obj (gptel-auto-workflow--eight-keys-convergence-score)))
       (when (and current-obj (> current-obj 0)
@@ -1860,10 +1861,12 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (message "[auto-workflow] Running self-evolution cycle...")
     )
     (error
-     (message "[evolution] EARLY error (pre-steps): %s — %s"
-              (error-message-string early-err)
-              (mapconcat (lambda (f) (format "  %s" f))
-                         (backtrace-frame-frames) "\n"))
+     (let* ((frames (backtrace-frames))
+            (bt (mapconcat (lambda (f) (format "  %S" f))
+                           (seq-take frames 20) "\n")))
+       (message "[evolution] EARLY error (pre-steps): %s\nBacktrace:\n%s"
+                (error-message-string early-err)
+                bt))
      (cl-return-from gptel-auto-workflow-evolution-run-cycle (format "early-error: %s" early-err))))
   ;; Pipeline validation (Semantica PipelineValidator)
   (condition-case nil
@@ -4987,7 +4990,11 @@ Also persists EMA confidence history for cross-session trend analysis."
     (when (and (boundp 'gptel-auto-workflow--lambda-verification-results)
                (> (hash-table-count gptel-auto-workflow--lambda-verification-results) 0))
       (let ((results nil))
-        (maphash (lambda (k v) (push (cons (symbol-name k) (symbol-name v)) results)) gptel-auto-workflow--lambda-verification-results)
+        (maphash (lambda (k v)
+                   (push (cons (if (stringp k) k (symbol-name k))
+                               (if (stringp v) v (symbol-name v)))
+                         results))
+                 gptel-auto-workflow--lambda-verification-results)
         (setq hints (plist-put hints :lambda-results results))))
     (when file
       (make-directory (file-name-directory file) t)

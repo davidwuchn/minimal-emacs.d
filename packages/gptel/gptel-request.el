@@ -751,7 +751,8 @@ binary-encoded.")
 ;; Since we want this known at compile time, when markdown-mode is not
 ;; guaranteed to be available, we have to hardcode it.
 (defconst gptel-markdown--link-regex
-  "\\(?:\\(?1:!\\)?\\(?2:\\[\\)\\(?3:\\^?\\(?:\\\\\\]\\|[^]]\\)*\\|\\)\\(?4:\\]\\)\\(?5:(\\)\\s-*\\(?6:[^)]*?\\)\\(?:\\s-+\\(?7:\"[^\"]*\"\\)\\)?\\s-*\\(?8:)\\)\\|\\(<\\)\\([a-z][a-z0-9.+-]\\{1,31\\}:[^]	\n<>,;()]+\\)\\(>\\)\\)"
+  "\\(?:\\(?1:!\\)?\\(?2:\\[\\)\\(?3:\\^?\\(?:\\\\\\]\\|[^]]\\)*\\|\\)\\(?4:\\]\\)\\(?5:(\\)\\s-*\\(?6:[^)]*?\\)\\(?:\\s-+\\(?7:\"[^\"]*\"\\)\\)?\\s-*\\(?8:)\\)\\|\\(<\\)\\([a-z][a-z0-9.+-]\\{1,31\\}:[^]	\n
+<>,;()]+\\)\\(>\\)\\)"
   "Link regex for `gptel-mode' in Markdown mode.")
 
 (defvar gptel--mode-description-alist
@@ -2648,10 +2649,11 @@ the response is inserted into the current buffer after point."
                                (if (string-match-p "^\\s-*<think>" response)
                                    (when-let* ((idx (string-search "</think>" response)))
                                      (with-demoted-errors "gptel callback error: %S"
-                                       (funcall callback
-                                                (cons 'reasoning
-                                                      (substring response nil (+ idx 8)))
-                                                info))
+                                       (and (functionp callback)
+           (funcall callback
+                    (cons 'reasoning
+                          (substring response nil (+ idx 8)))
+                    info)))
                                      (setq response (string-trim-left
                                                      (substring response (+ idx 8)))))
                                  (when-let* ((reasoning (plist-get info :reasoning))
@@ -2659,7 +2661,7 @@ the response is inserted into the current buffer after point."
                                    (funcall callback (cons 'reasoning reasoning) info))))
                              (when (or response (not (member http-status '("200" "100"))))
                                (with-demoted-errors "gptel callback error: %S"
-                                 (funcall callback response info)))
+                                 (and (functionp callback) (funcall callback response info))))
                              (gptel--fsm-transition fsm) ;TYPE -> next
                              (setf (alist-get buf gptel--request-alist nil 'remove) nil)
                              (kill-buffer buf)))
@@ -2883,7 +2885,9 @@ PROC-INFO is the plist containing process metadata."
   (with-current-buffer proc-buf
     (save-excursion
       (goto-char (point-min))
-      (when (re-search-forward "?\n?\n" nil t)
+      (when (re-search-forward "
+?\n
+?\n" nil t)
         (when (eq gptel-log-level 'debug)
           (gptel--log (gptel--json-encode
                        (buffer-substring-no-properties
@@ -2928,12 +2932,16 @@ PROCESS and _STATUS are process parameters."
                    (format "Curl failed with exit code %d. See Curl manpage for details."
                            exit-status))
         (plist-put info :status "Curl failure")
-        (with-demoted-errors "gptel callback error: %S"
-          (funcall (plist-get info :callback) nil info)))
+        (let ((cb_ (plist-get info :callback)))
+          (when (functionp cb_)
+            (with-demoted-errors "gptel callback error: %S"
+              (funcall cb_ nil info))))
        ;; Finish handling a successful streaming response
        ((member http-status '("200" "100"))
-        (with-demoted-errors "gptel callback error: %S"
-          (funcall (plist-get info :callback) t info)))
+        (let ((cb_ (plist-get info :callback)))
+          (when (functionp cb_)
+            (with-demoted-errors "gptel callback error: %S"
+              (funcall cb_ t info))))))
        ;; Capture error message from HTTP error response
        (t
         (with-current-buffer proc-buf
@@ -2962,8 +2970,10 @@ PROCESS and _STATUS are process parameters."
                ((eq response 'json-read-error)
                 (plist-put info :error "Malformed JSON in response."))
                (t (plist-put info :error "Could not parse HTTP response."))))))
-        (with-demoted-errors "gptel callback error: %S"
-          (funcall (plist-get info :callback) nil info))))
+        (let ((cb_ (plist-get info :callback)))
+          (when (functionp cb_)
+            (with-demoted-errors "gptel callback error: %S"
+              (funcall cb_ nil info))))))
       (gptel--fsm-transition fsm))      ; Move to next state
     (setf (alist-get process gptel--request-alist nil 'remove) nil)
     (delete-process process)
@@ -3104,9 +3114,10 @@ PROCESS and _STATUS are process parameters."
               (if (and (stringp response) (string-match-p "^\\s-*<think>" response))
                   (when-let* ((idx (string-search "</think>" response)))
                     (with-demoted-errors "gptel callback error: %S"
-                      (funcall proc-callback
-                               (cons 'reasoning (substring response nil (+ idx 8)))
-                               proc-info))
+                      (and (functionp proc-callback)
+              (funcall proc-callback
+                       (cons 'reasoning (substring response nil (+ idx 8)))
+                       proc-info)))
                     (setq response
                           (string-trim-left (substring response (+ idx 8)))))
                 (when-let* ((reasoning (plist-get proc-info :reasoning))
@@ -3115,7 +3126,7 @@ PROCESS and _STATUS are process parameters."
               ;; Call callback with response text
               (when (or response (not (member http-status '("200" "100"))))
                 (with-demoted-errors "gptel callback error: %S"
-                  (funcall proc-callback response proc-info))))
+                  (and (functionp proc-callback) (funcall proc-callback response proc-info)))))
           ;; Curl exited with a non-zero status: connection-level failure
           (plist-put proc-info :error
                      (format "Curl failed with exit code %d. See Curl manpage for details."
@@ -3123,7 +3134,7 @@ PROCESS and _STATUS are process parameters."
           (plist-put proc-info :status "Curl failure")
           (gptel--fsm-transition fsm)   ;WAIT -> TYPE
           (with-demoted-errors "gptel callback error: %S"
-            (funcall proc-callback nil proc-info))))
+            (and (functionp proc-callback) (funcall proc-callback nil proc-info)))))
       (gptel--fsm-transition fsm))      ;TYPE -> next
     (setf (alist-get process gptel--request-alist nil 'remove) nil)
     (delete-process process)

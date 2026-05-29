@@ -1,9 +1,9 @@
 ---
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
-version: 2026.05.28
+version: 2026.05.29
 total-experiments: 870
-total-kept: 41
+total-kept: 22
 ---
 
 # Auto-Workflow Program
@@ -17,22 +17,23 @@ total-kept: 41
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-benchmark-principles.el` | 50% | 4 | 2 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-evolution.el` | 33% | 3 | 1 | ✅ High yield |
-| `lisp/modules/gptel-ext-context.el` | 33% | 9 | 3 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-comparator.el` | 29% | 7 | 2 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-principles.el` | 67% | 3 | 2 | ✅ High yield |
+| `lisp/modules/gptel-benchmark-comparator.el` | 33% | 3 | 1 | ✅ High yield |
 | `lisp/modules/gptel-benchmark-core.el` | 26% | 19 | 5 | 🟡 Active |
-| `lisp/modules/gptel-ext-abort.el` | 25% | 4 | 1 | 🟡 Active |
 | `lisp/modules/gptel-tools-agent-staging-baseline.el` | 25% | 4 | 1 | 🟡 Active |
 | `lisp/modules/gptel-ext-tool-permits.el` | 25% | 12 | 3 | 🟡 Active |
-| `lisp/modules/gptel-tools-memory.el` | 22% | 54 | 12 | 🟡 Active |
-| `lisp/modules/nucleus-tools.el` | 21% | 19 | 4 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-runtime.el` | 25% | 4 | 1 | 🟡 Active |
+| `lisp/modules/gptel-tools-memory.el` | 17% | 36 | 6 | 🟡 Active |
+| `lisp/modules/gptel-workflow-benchmark.el` | 12% | 8 | 1 | 🟡 Active |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 8% | 12 | 1 | ❌ Plateaued |
+| `lisp/modules/gptel-tools-agent-prompt-build.el` | 7% | 14 | 1 | ❌ Plateaued |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
+- **manual-fix** (36× from git)
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
@@ -40,7 +41,6 @@ total-kept: 41
 - **Implementation sketch** (20× from mementum)
 - **How it works** (18× from mementum)
 - **Apply to us** (16× from mementum)
-- **Emacs application** (14× from mementum)
 
 ## 🛠️ Effective Techniques
 
@@ -57,11 +57,11 @@ total-kept: 41
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (234×): Investigate root cause
+- **other** (165×): Investigate root cause
 - **api-limit** (14×): Implement provider fallback or rate limit handling
 - **timeout** (13×): Add smaller batch sizes or chunked processing
 - **validation-failed** (12×): Improve pre-grade validation prompts
-- **test-failure** (4×): Run tests before committing experiments
+- **test-failure** (2×): Run tests before committing experiments
 
 ## Success Patterns
 
@@ -78,11 +78,11 @@ total-kept: 41
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-principles.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 50%)
-- **lisp/modules/gptel-benchmark-evolution.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
-- **lisp/modules/gptel-ext-context.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
+- **lisp/modules/gptel-benchmark-principles.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 67%)
+- **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
+- **lisp/modules/gptel-benchmark-core.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 26%)
+- **lisp/modules/gptel-tools-memory.el**: Try validation guards or error handling improvements (previous experiments discarded)
 - **lisp/modules/gptel-workflow-benchmark.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-fsm-utils.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (41 kept locally across 277 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (22 kept locally across 206 local records). It evolves every self-evolution cycle.*

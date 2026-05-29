@@ -392,18 +392,18 @@ that crash non-pcase-aware callbacks."
                       callback-val
                     (or (and (functionp callback-val) callback-val) #'ignore)))
           (wrapped-cb
-           (lambda (resp info)
-             (if (and (consp resp) (eq (car resp) 'reasoning))
-                 ;; Reasoning cons cells are normal LLM response chunks.
-                 ;; Store in info for diagnostic access but also forward
-                 ;; the reasoning text to the original callback as a
-                 ;; normal string — the callback needs to receive ALL
-                 ;; response chunks, not just the final answer.
-                 (progn
-                   (when (cdr resp)
-                     (plist-put info :reasoning (cdr resp)))
-                   (funcall safe-cb (cdr resp) info))
-               (funcall safe-cb resp info)))))
+            (lambda (resp &optional info)
+              (if (and (consp resp) (eq (car resp) 'reasoning))
+                  ;; Reasoning cons cells are normal LLM response chunks.
+                  ;; Store in info for diagnostic access but also forward
+                  ;; the reasoning text to the original callback as a
+                  ;; normal string — the callback needs to receive ALL
+                  ;; response chunks, not just the final answer.
+                  (progn
+                    (when (and info (cdr resp))
+                      (plist-put info :reasoning (cdr resp)))
+                    (funcall safe-cb (cdr resp) info))
+                (funcall safe-cb resp info)))))
     (apply orig-fn prompt
            :callback wrapped-cb
            (cl-loop for (k v) on args by #'cddr
@@ -412,38 +412,72 @@ that crash non-pcase-aware callbacks."
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-request :around #'my/gptel--gptel-request-callback-guard))
 
-(defun my/gptel--ensure-callback-function (process)
-  "Ensure PROCESS's FSM info has a function callback, replacing nil with `ignore'.
-Returns non-nil if a replacement was made."
-  (when (and process (boundp 'gptel--request-alist))
-    (when-let* ((entry (assq process gptel--request-alist))
-                (value (cdr entry))
-                ((consp value))
-                (fsm (car value))
-                (info (ignore-errors (gptel-fsm-info fsm)))
-                ((listp info)))
-      (let ((cb (plist-get info :callback)))
-        (unless (functionp cb)
-          (setf (gptel-fsm-info fsm)
-                (plist-put info :callback #'ignore))
-          t)))))
+(defun my/gptel--fsm-info-ensure-callback (orig-fn fsm)
+  "Ensure FSM info always has a function callback.
+Advices `gptel-fsm-info' to patch the returned info so `:callback' is
+never nil. This is the lowest-level defense against void-function nil
+in the sentinel's `funcall (plist-get info :callback)' call.
 
-(defun my/gptel--stream-cleanup-process-guard (orig-fn process status)
-  "Ensure stream cleanup never funcalls a nil callback."
-  (my/gptel--ensure-callback-function process)
-  (funcall orig-fn process status))
+CRITICAL: Must return the PATCHED info, not the original — the caller
+uses the return value, not a re-read of the struct slot."
+  (let ((info (funcall orig-fn fsm)))
+    (if (and (listp info) (not (functionp (plist-get info :callback))))
+        (progn
+          (setq info (plist-put info :callback #'ignore))
+          (setf (gptel-fsm-info fsm) info)
+          info)
+      info)))
 
-(defun my/gptel--sentinel-process-guard (orig-fn process status)
-  "Ensure sentinel never funcalls a nil callback."
-  (my/gptel--ensure-callback-function process)
-  (funcall orig-fn process status))
+(defun my/gptel--ensure-callback-before-funcall (&rest _args)
+  "Ensure FSM info has a function callback before the sentinel calls funcall.
+This advice is on `gptel--fsm-transition', which runs RIGHT BEFORE the
+sentinel's (funcall (plist-get info :callback) ...).  By patching the
+callback in place here, the sentinel's local `info' variable (which
+points to the same plist object) sees the patched value."
+  (when (boundp 'gptel--request-alist)
+    (dolist (entry gptel--request-alist)
+      (when-let* ((value (cdr entry))
+                  ((consp value))
+                  (fsm (car value))
+                  (info (ignore-errors (gptel-fsm-info fsm)))
+                  ((listp info)))
+        (let ((cb (plist-get info :callback)))
+          (unless (functionp cb)
+            ;; Modify the plist IN PLACE so the sentinel's local `info'
+            ;; variable sees the change (it shares the same plist object).
+            (plist-put info :callback #'ignore)))))))
+
+(defun my/gptel--sentinel-safety-wrapper (orig-fn process status)
+  "Wrap sentinel: skip if FSM missing or excessive recursion, else catch errors."
+  (let ((entry (and (boundp 'gptel--request-alist)
+                    (assq process gptel--request-alist))))
+    (if (not entry)
+        (message "[gptel-ext-core] Skipping sentinel for %s (not in alist)"
+                 (ignore-errors (process-name process)))
+      (condition-case err
+          (let ((max-lisp-eval-depth (max max-lisp-eval-depth 20000)))
+            (funcall orig-fn process status))
+        (error
+         (message "[gptel-ext-core] Sentinel error for %s: %S"
+                  (ignore-errors (process-name process)) err))))))
 
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--stream-cleanup :around
-              #'my/gptel--stream-cleanup-process-guard))
+              #'my/gptel--sentinel-safety-wrapper)
+  (advice-add 'gptel-curl--sentinel :around
+              #'my/gptel--sentinel-safety-wrapper))
+;; Advice gptel--fsm-transition which runs right before the sentinel's
+;; funcall.  Patches nil callback in place so the sentinel's local
+;; `info' variable (sharing the same plist) sees a valid callback.
+(with-eval-after-load 'gptel-request
+  (advice-add 'gptel--fsm-transition :before
+              #'my/gptel--ensure-callback-before-funcall))
 (with-eval-after-load 'gptel-request
   (advice-add 'gptel-curl--sentinel :around
-              #'my/gptel--sentinel-process-guard))
+              #'my/gptel--sentinel-safety-wrapper))
+(with-eval-after-load 'gptel-request
+  (advice-add 'gptel-fsm-info :around
+              #'my/gptel--fsm-info-ensure-callback))
 
 (provide 'gptel-ext-core)
 ;;; gptel-ext-core.el ends here

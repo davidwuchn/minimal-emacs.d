@@ -64,10 +64,16 @@ every cycle when there are candidate memories to process."
           (message "[auto-workflow] Evolution cycle complete."))
       (error
        (message "[auto-workflow] Evolution cycle error: %s" err)
-       (let ((bt (mapconcat (lambda (f) (format "  %s" f))
-                            (backtrace-frame-frames) "\n")))
+       (let* ((frames (backtrace-frames))
+              (bt (mapconcat (lambda (f) (format "  %S" f))
+                             (seq-take frames 50) "\n"))
+              (log-file (expand-file-name "var/tmp/cron/evolution-backtrace.log")))
          (when (> (length bt) 0)
-           (message "[auto-workflow] Evolution cycle backtrace:\n%s" bt)))))
+           (message "[auto-workflow] Evolution cycle backtrace:\n%s" bt)
+           (with-temp-file log-file
+             (insert (format-time-string "%Y-%m-%d %H:%M:%S\n"))
+             (insert (format "Error: %s\n" err))
+             (insert "Backtrace (50 frames):\n" bt "\n"))))))
     ;; Mementum maintenance: rebuild index + synthesize candidates.
     ;; Runs every cycle (hourly) but is cheap when no new memories exist.
     ;; Enable auto-approve in headless so synthesis actually writes files.
