@@ -939,7 +939,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                             run-id exp-result)
                                                    (funcall callback exp-result))))))
                                           ))))))))))))))))
-                                    workflow-root))
+                                     ))
                 ;; Capture the backend and model that will actually be used by the
                 ;; executor, including any subagent provider override.
                 ;; Note: gptel-auto-workflow--get-active-agent-preset does not exist.
