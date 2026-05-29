@@ -317,22 +317,19 @@ Returns suggestions directly, blocking until complete."
 Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to 300."
   (let ((result nil)
          (done nil)
-         (timeout-count 0)
-         (limit 3000)
          (request-buffer (current-buffer)))
     (gptel-benchmark-llm-synthesize-knowledge
      topic memories
       (lambda (content &rest _)
         (setq result content
               done t)))
-    (let ((delay (or timeout-seconds 300)))
-      (run-with-timer delay nil
+    (let ((deadline (float-time (time-add nil (or timeout-seconds 300)))))
+      (run-with-timer (or timeout-seconds 300) nil
         (lambda ()
           (unless done
             (setq done t)))))
-    (while (and (not done) (< timeout-count limit))
-      (sit-for 0.1)
-      (setq timeout-count (1+ timeout-count)))
+    (while (and (not done) (< (float-time) deadline))
+      (read-event nil nil 1))
     (unless done
       (message "[llm] Timeout waiting for synthesis after %ss" (or timeout-seconds 300))
       (when (and (buffer-live-p request-buffer)
