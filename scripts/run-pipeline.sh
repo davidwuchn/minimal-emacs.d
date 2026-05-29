@@ -269,10 +269,6 @@ verify_research_feedback_loop() {
     log "Research feedback loop: ${linked_rows}/${data_rows} experiment rows linked to research"
 }
 
-# ─── Ensure yaml-1.2.3 symlink exists (package-initialize references old path) ───
-[ -L "$DIR/var/elpa/yaml-1.2.3" ] || \
-  ln -sf yaml-20260113.653 "$DIR/var/elpa/yaml-1.2.3" 2>/dev/null || true
-
 # ─── Rotate oversized logs to prevent unbounded growth ───
 log_rotate "$PIPELINE_LOG"
 log_rotate "$LOG_DIR/ov5-researcher.log"

@@ -12991,7 +12991,7 @@ failure."
   (let* ((root "/tmp/bootstrap-root")
          (elpa-dir (expand-file-name "var/elpa" root))
          (gnupg-dir (expand-file-name "var/elpa/gnupg" root))
-         (yaml-dir (expand-file-name "var/elpa/yaml-1.2.3" root))
+         (yaml-dir (expand-file-name "var/elpa/yaml-20260113.653" root))
          (magit-dir (expand-file-name "var/elpa/magit-4.5.0" root))
          (expected-dirs
            (list (expand-file-name "lisp" root)
@@ -13179,9 +13179,9 @@ failure."
     (unwind-protect
         (progn
            (dolist (dir '("lisp" "lisp/modules" "packages/gptel" "packages/gptel-agent"
-                          "packages/ai-code" "var/elpa/yaml-1.2.3" "var/elpa/magit-4.5.0"))
+                          "packages/ai-code" "var/elpa/yaml-20260113.653" "var/elpa/magit-4.5.0"))
              (make-directory (expand-file-name dir root) t))
-           (with-temp-file (expand-file-name "var/elpa/yaml-1.2.3/yaml.el" root)
+           (with-temp-file (expand-file-name "var/elpa/yaml-20260113.653/yaml.el" root)
              (insert ";;; yaml.el\n"))
            (with-temp-file (expand-file-name "var/elpa/magit-4.5.0/magit.el" root)
              (insert ";;; magit.el\n"))

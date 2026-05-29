@@ -93,7 +93,7 @@
   "Workflow worktrees should see ignored package/runtime assets from the stable root."
   (let* ((proj-root (make-temp-file "workflow-root" t))
          (worktree (expand-file-name "var/tmp/experiments/staging-verify" proj-root))
-         (yaml-dir (expand-file-name "var/elpa/yaml-1.2.3" proj-root))
+         (yaml-dir (expand-file-name "var/elpa/yaml-20260113.653" proj-root))
          (quickstart (expand-file-name "var/package-quickstart.el" proj-root))
          (treesit (expand-file-name "var/tree-sitter" proj-root)))
     (unwind-protect
@@ -112,7 +112,7 @@
                     ((symbol-function 'message)
                      (lambda (&rest _) nil)))
             (should (gptel-auto-workflow--seed-worktree-runtime-var worktree)))
-          (let ((linked-yaml (expand-file-name "var/elpa/yaml-1.2.3" worktree))
+          (let ((linked-yaml (expand-file-name "var/elpa/yaml-20260113.653" worktree))
                 (linked-quickstart (expand-file-name "var/package-quickstart.el" worktree))
                 (linked-treesit (expand-file-name "var/tree-sitter" worktree)))
             (should (file-symlink-p linked-yaml))
