@@ -2065,8 +2065,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                         (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
                                  (plist-get report :target)
                                  (* 100 (or (plist-get report :ratio) 0.0))
-                                 (length (plist-get report :conflicts))))))))))
-          (error (message "[verbum] ERROR: consistency check failed — %s" (error-message-string err)))))))
+                                  (length (plist-get report :conflicts)))))))))
+          (error (message "[verbum] ERROR: consistency check failed — %s" (error-message-string err))))))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))

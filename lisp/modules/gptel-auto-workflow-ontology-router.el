@@ -1161,16 +1161,24 @@ Probation threshold auto-tunes from VSM health when available
   (>= (gptel-auto-workflow--backend-health-level backend) 3))
 
 (defvar gptel-auto-workflow--task-backend-preference
-  '(("analyzer"   "DashScope" . 0.25)
-    ("analyzer"   "DeepSeek"  . 0.10)
-    ("grader"     "moonshot"  . 0.15)
-    ("grader"     "DeepSeek"  . 0.10)
-    ("executor"   "DashScope" . 0.15)
+  '(("analyzer"   "DashScope" . 0.50)
+    ("analyzer"   "MiniMax"   . 0.40)
+    ("analyzer"   "DeepSeek"  . 0.05)
+    ("grader"     "DashScope" . 0.50)
+    ("grader"     "MiniMax"   . 0.40)
+    ("grader"     "DeepSeek"  . 0.05)
+    ("executor"   "DashScope" . 0.50)
+    ("executor"   "MiniMax"   . 0.40)
     ("executor"   "DeepSeek"  . 0.05)
-    ("researcher" "DeepSeek"  . 0.15)
-    ("researcher" "DashScope" . 0.10)
-    ("reviewer"   "DeepSeek"  . 0.10)
-    ("comparator" "DashScope" . 0.10))
+    ("researcher" "DashScope" . 0.50)
+    ("researcher" "MiniMax"   . 0.40)
+    ("researcher" "DeepSeek"  . 0.05)
+    ("reviewer"   "DashScope" . 0.50)
+    ("reviewer"   "MiniMax"   . 0.40)
+    ("reviewer"   "DeepSeek"  . 0.05)
+    ("comparator" "DashScope" . 0.50)
+    ("comparator" "MiniMax"   . 0.40)
+    ("comparator" "DeepSeek"  . 0.05))
   "Per-task-type backend preference boost added to ranking score.
 Larger values shift routing toward backends best suited for each task:
 - DeepSeek V4 thinks → analyzer, researcher
