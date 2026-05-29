@@ -27,7 +27,7 @@
                         (goto-char (point-min))
                         (let ((count 0))
                           (while (re-search-forward pattern nil t)
-                            (cl-incf count))
+                            (setq count (1+ count)))
                           count))))
         (when (> matches 0)
           (push (cons cat matches) scores))))
@@ -77,8 +77,8 @@
     (:exclusive-match . 0.50)) ;; identity word bonus — strongest signal
   "Weight for each scoring dimension. Sums to 1.0.")
 
-(defun sr--score-task-overlap (task-text skill-content skill-category)
-  "How many task-relevant keywords appear in skill content.
+(defun sr--score-task-overlap (task-text skill-content)
+   "How many task-relevant keywords appear in skill content.
 Normalized to 0.0-1.0. Higher = better match.
 Uses exclusive-word bonus: keywords unique to <3 skills get 2x weight,
 reducing false positives from common words like 'code' or 'function'."
@@ -95,9 +95,9 @@ reducing false positives from common words like 'code' or 'function'."
         (let* ((is-common (member word common-words))
                (weight (if is-common 0.3 1.0))
                (present (string-match-p (regexp-quote word) content-lower)))
-          (cl-incf total-weight weight)
-          (when present
-            (cl-incf score weight)))))
+           (setq total-weight (+ total-weight weight))
+           (when present
+             (setq score (+ score weight))))))
     (if (zerop total-weight) 0.0
       (/ score total-weight))))
 
@@ -129,15 +129,9 @@ Measures breadth of coverage."
     (dolist (word task-words)
       (when (and (> (length word) 3)
                  (string-match-p (regexp-quote word) content-lower))
-        (cl-incf matched)))
-    (if (zerop (length task-words)) 0.0
-      (/ (float matched) (length task-words)))))
-
-(defun sr--score-content-richness (skill-content)
-  "Score content quality: more is better, capped at 5000 chars.
-Normalized to 0.0-1.0."
-  (let ((len (length (or skill-content ""))))
-    (/ (min len 5000) 5000.0)))
+         (setq matched (1+ matched))))
+     (if (zerop (length task-words)) 0.0
+       (/ (float matched) (length task-words)))))
 
 (defun sr--score-skill (task-text task-category skill-entry)
   "Compute multi-dimensional score for SKILL-ENTRY against TASK-TEXT.
@@ -146,7 +140,7 @@ Returns score 0.0-1.0."
          (skill-data (cdr skill-entry))
          (skill-category (car skill-data))
          (skill-content (cdr skill-data))
-         (task-overlap (sr--score-task-overlap task-text skill-content skill-category))
+         (task-overlap (sr--score-task-overlap task-text skill-content))
          (category-fit (sr--score-category-fit task-category skill-category))
          (keyword-depth (sr--score-keyword-depth task-text skill-content))
          (exclusive-match (sr--exclusive-keyword-bonus task-text skill-dir)))
@@ -176,7 +170,7 @@ Returns 0.0-0.5 bonus."
             (let ((other-dir (downcase (car entry))))
               (when (and (not (string= other-dir dir-name))
                          (string-match-p (regexp-quote word) other-dir))
-                (cl-incf others))))
+                 (setq others (1+ others)))))
           ;; Bonus inversely proportional to how many other skills share this word
           ;; +0.4 if exclusive, +0.2 if shared with 1 other, +0.1 if shared with 2+
           (setq bonus (+ bonus (cond ((= others 0) 0.4)
@@ -200,8 +194,8 @@ Returns (skill-dir . score) or nil if no skills available."
          (sorted (sort scored (lambda (a b) (> (cdr a) (cdr b)))))
          (best (car sorted)))
     ;; Exploration: with probability sr--exploration-rate, try #2 or #3
-    (if (and best (< (random) (* sr--exploration-rate 1.0))
-             (nth 1 sorted))
+     (if (and best (< (random 100) (* sr--exploration-rate 100))
+              (nth 1 sorted))
         (let ((pick (nth (1+ (random (min 2 (1- (length sorted))))) sorted)))
           (cons (car pick) (cdr pick)))
       (cons (car best) (cdr best)))))

@@ -98,7 +98,7 @@ Uses keyword overlap: counts words from task that appear in skill content."
     (dolist (word task-words)
       (when (and (> (length word) 3)        ; skip short words
                  (string-match-p (regexp-quote word) content-lower))
-        (cl-incf matches)))
+         (setq matches (1+ matches))))
     matches))
 
 (defun ov5-routing--select-skill (task-text skill-index)
@@ -138,9 +138,9 @@ TARGET: >50% — requires SkillRouter-style full-text retrieval."
              (selected-dir (car selected))
              (score (cdr selected)))
         (if (string= selected-dir expected)
-            (progn (cl-incf correct)
+            (progn (setq correct (1+ correct))
                    (message "  ✓ %s → %s" task expected))
-          (progn (cl-incf incorrect)
+          (progn (setq incorrect (1+ incorrect))
                  (message "  ✗ %s → got %s (expected %s, score=%d)"
                           task (or selected-dir "NIL") expected score)))))
     (let ((accuracy (/ (float correct) total 0.01)))
@@ -188,9 +188,9 @@ Current: 41.7% (improved from 29.2% via exclusive-word bonus + category fit)."
              (selected (car result))
              (score (cdr result)))
         (if (string= selected expected)
-            (progn (cl-incf correct)
+            (progn (setq correct (1+ correct))
                    (message "  ✓ %s → %s (score=%.3f)" task expected score))
-          (progn (cl-incf incorrect)
+          (progn (setq incorrect (1+ incorrect))
                  (message "  ✗ %s → got %s (expected %s, score=%.3f)"
                           task (or selected "NIL") expected score)))))
     (let ((accuracy (/ (float correct) total 0.01)))
