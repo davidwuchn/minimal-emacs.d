@@ -311,17 +311,18 @@ Categories based on module purpose from historical experiment analysis."
                               "gptel-ext-context-cache.el" "gptel-ext-streaming.el"
                               "gptel-ext-transient.el")))
         :natural-language)
-       ;; Programming: code, benchmarks, FSM, tests, reasoning, compilation
-       ((or (string-match-p "benchmark" basename)
-            (string-match-p "fsm" basename)
-            (string-match-p "retry" basename)
-            (string-match-p "reasoning" basename)
-            (string-match-p "introspection" basename)
-            (string-match-p "test" basename)
-            (string-match-p "code" basename)
-            (string-match-p "compile" basename)
-            (string-match-p "\\`gptel-ext-" basename))
-        :programming)
+        ;; Programming: code, functions, benchmarks, FSM, tests, reasoning, compilation
+        ((or (string-match-p "benchmark" basename)
+             (string-match-p "fsm" basename)
+             (string-match-p "retry" basename)
+             (string-match-p "reasoning" basename)
+             (string-match-p "introspection" basename)
+             (string-match-p "test" basename)
+             (string-match-p "code" basename)
+             (string-match-p "function" basename)
+             (string-match-p "compile" basename)
+             (string-match-p "\\`gptel-ext-" basename))
+         :programming)
        ;; Tool-calls: sandbox, tool execution, bash, grep, glob
        ((or (string-match-p "sandbox" basename)
             (string-match-p "\\`gptel-tools-[^a]" basename)  ; tools-* but not tools-agent*
@@ -670,11 +671,24 @@ STRATEGY and TARGET filter the performance data.
                         (seq-take gptel-auto-workflow--routing-audit-log 100))))
               ;; Return as (backend . model) cons cells
              (mapcar (lambda (s) (cons (plist-get s :backend) (plist-get s :model))) scored))
-         ;; Not enough data - return static order
+         ;; Not enough data - return static order with category override applied
          (progn
            (message "[onto-router] Using static order (%d samples < %d threshold)"
                     total-samples (plist-get vsm-params :min-samples))
-           static-fallbacks)))))
+           ;; Apply category override even without experiment data so
+           ;; documented overrides (e.g. :programming → DeepSeek) work
+           ;; from the very first run, not just after data accumulates.
+           (if category-override
+               (let* ((override-entry (assoc category-override static-fallbacks))
+                      (rest (cl-remove category-override static-fallbacks
+                                       :key #'car :test #'string=)))
+                 (if override-entry
+                     (progn
+                       (message "[onto-router] Static override: %s → %s"
+                                category category-override)
+                       (cons override-entry rest))
+                   static-fallbacks))
+             static-fallbacks))))))
 
 ;; ─── Integration with Existing Fallback System ───
 

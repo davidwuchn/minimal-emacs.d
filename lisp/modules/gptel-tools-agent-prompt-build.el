@@ -273,7 +273,7 @@ Returns nil if called synchronously without CALLBACK (use callback pattern)."
 CALLBACK receives the decompiled prose string.
 Use for fixed-point forging: compile→decompile→compile→decompile until stable."
   (unless (and (fboundp 'gptel-request))
-    (funcall callback edn-text)
+    (when (functionp callback) (funcall callback edn-text))
     (throw 'compile-early-return nil))
   (let* ((decompile-prompt (format "decompile:\n\n%s" edn-text))
          (system-prompt (gptel-auto-experiment--nucleus-compiler-prompt)))
@@ -281,7 +281,7 @@ Use for fixed-point forging: compile→decompile→compile→decompile until sta
         decompile-prompt
       :callback (lambda (response _info)
                   (let ((text (if (stringp response) response (format "%s" response))))
-                    (funcall callback text)))
+                    (when (functionp callback) (funcall callback text))))
       :system system-prompt
       :timeout 30
       )))
@@ -418,42 +418,42 @@ otherwise return ENGLISH-FALLBACK.  Both arguments must be strings."
 (defun gptel-auto-experiment--allium-distill (text &optional callback)
   "Distill TEXT (prose/research findings) to Allium v3 behavioral spec.
 CALLBACK receives the Allium spec string via async LLM call."
-  (if (and (fboundp 'gptel-request) callback)
+  (if (and (fboundp 'gptel-request) (functionp callback))
       (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
              (prompt (format "distill:\n\n%s" text)))
         (gptel-request
             prompt
           :callback (lambda (response _info)
                       (let ((text (if (stringp response) response (format "%s" response))))
-                        (funcall callback text)))
+                        (when (functionp callback) (funcall callback text))))
           :system system-prompt
           :timeout 30
           ))
-    (when callback (funcall callback nil))
+    (when (functionp callback) (funcall callback nil))
     nil))
 
 (defun gptel-auto-experiment--allium-check (allium-spec &optional callback)
   "Check ALLIUM-SPEC for issues (missing preconditions, contradictions, etc.).
 CALLBACK receives the issues list as a string via async LLM call."
-  (if (and (fboundp 'gptel-request) callback)
+  (if (and (fboundp 'gptel-request) (functionp callback))
       (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
              (prompt (format "check:\n\n%s" allium-spec)))
         (gptel-request
             prompt
           :callback (lambda (response _info)
                       (let ((text (if (stringp response) response (format "%s" response))))
-                        (funcall callback text)))
+                        (when (functionp callback) (funcall callback text))))
           :system system-prompt
           :timeout 30
           ))
-    (when callback (funcall callback nil))
+    (when (functionp callback) (funcall callback nil))
     nil))
 
 (defun gptel-auto-experiment--allium-decompile (allium-spec &optional callback audience)
   "Decompile ALLIUM-SPEC to natural language prose.
 AUDIENCE when non-nil targets output for a specific role (e.g. \"for a product manager\").
 CALLBACK receives the prose string via async LLM call."
-  (if (and (fboundp 'gptel-request) callback)
+  (if (and (fboundp 'gptel-request) (functionp callback))
       (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
              (audience-str (if (and audience (stringp audience))
                                (format " %s" audience) ""))
@@ -462,11 +462,11 @@ CALLBACK receives the prose string via async LLM call."
             prompt
           :callback (lambda (response _info)
                       (let ((text (if (stringp response) response (format "%s" response))))
-                        (funcall callback text)))
+                        (when (functionp callback) (funcall callback text))))
           :system system-prompt
           :timeout 30
           ))
-    (when callback (funcall callback nil))
+    (when (functionp callback) (funcall callback nil))
     nil))
 
 ;; ─── Allium Research Caching ───

@@ -89,13 +89,17 @@ callback never fires (e.g., void-function nil bug in sentinel)."
           (lambda (&rest args)
             (unless done
               (setq done t)
-              (apply callback args)))))
+              (if (functionp callback)
+                  (apply callback args)
+                (message "[llm] Guard-cb: original callback is not a function: %S" callback))))))
     (when timeout
       (run-with-timer timeout nil
         (lambda ()
           (unless done
             (setq done t)
-            (funcall callback (format "LLM request timed out after %ds" timeout))))))
+            (if (functionp callback)
+                (funcall callback (format "LLM request timed out after %ds" timeout))
+              (message "[llm] Timeout-cb: original callback is not a function: %S" callback))))))
     (gptel-request prompt
       :callback guard-cb)))
 
@@ -305,9 +309,9 @@ Returns suggestions directly, blocking until complete."
      name type anti-patterns
      (lambda (suggestions &rest _)
        (setq result suggestions done t)))
-    (while (and (not done) (< timeout-count 600)) ; max 60s at 0.1s intervals
-      (sit-for 0.1)
-      (cl-incf timeout-count))
+     (while (and (not done) (< timeout-count 600)) ; max 60s at 0.1s intervals
+       (sit-for 0.1)
+       (setq timeout-count (1+ timeout-count)))
      (unless done
        (message "[llm] Timeout waiting for suggestions after 60s"))
      result))
@@ -317,26 +321,22 @@ Returns suggestions directly, blocking until complete."
 Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to 300."
   (let ((result nil)
          (done nil)
-         (timeout-count 0)
-         (limit (* 10 (or timeout-seconds 300)))
-         (request-buffer (current-buffer))
-         (timeout-secs (or timeout-seconds 300)))
+         (request-buffer (current-buffer)))
     (gptel-benchmark-llm-synthesize-knowledge
      topic memories
       (lambda (content &rest _)
         (setq result content
               done t)))
-    ;; Fallback timer: if the gptel callback never fires (nil callback bug),
-    ;; this timer sets done after the timeout, freeing the busy-wait loop.
-    (run-with-timer timeout-secs nil
-      (lambda ()
-        (unless done
-          (setq done t))))
-    (while (and (not done) (< timeout-count limit))
-      (sit-for 0.1)
-      (cl-incf timeout-count))
+    (let ((timeout-secs (or timeout-seconds 300))
+          (deadline (float-time (time-add (current-time) (seconds-to-time (or timeout-seconds 300))))))
+      (run-with-timer timeout-secs nil
+        (lambda ()
+          (unless done
+            (setq done t))))
+      (while (and (not done) (< (float-time) deadline))
+        (read-event nil nil 1)))
     (unless done
-      (message "[llm] Timeout waiting for synthesis after %ss" timeout-secs)
+      (message "[llm] Timeout waiting for synthesis after %ss" (or timeout-seconds 300))
       (when (and (buffer-live-p request-buffer)
                  (fboundp 'gptel-abort))
         (ignore-errors (gptel-abort request-buffer))))
