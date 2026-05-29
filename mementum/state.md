@@ -39,6 +39,14 @@
 - Experiment time budget: 900s→1800s, validation retry: 120s→300s
 - All task types (analyzer, grader, executor, researcher, reviewer, comparator) now prefer DashScope/MiniMax
 
+### Additional Fix: vsm-health temp cleanup
+
+**`896d91f7`** ⊘ fix vsm-health temp cleanup: handle directories, use temporary-file-directory
+- Root cause: Hardcoded `/tmp` + `delete-file` on directories = file-error every cycle
+- Fix: Use `temporary-file-directory`, check `file-directory-p`, use `delete-directory` for dirs
+- Silently skip permission errors with `condition-case`
+- Removed stale `/tmp/gptel-agent-temp` directory
+
 ## Session: Skill Routing Ontology + Production Hardening
 
 **Pulled skill-routing-onto.el from remote.** 4-dim adaptive scoring (keep-rate, trend, confidence, holographic memory). Hit@1: 29.2% → 58.3%.
