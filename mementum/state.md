@@ -1,9 +1,9 @@
 # Mementum State
 
-> Last session: 2026-05-30 (synced 3 remote commits, reviewed production fixes)
+> Last session: 2026-05-30 (synced 2 more remote commits, 0 crash vectors)
 > Next pipeline: 07:00 (auto-workflow running, 0 crash vectors)
 
-## Session: void-variable err Fix Verification + Remote Sync
+## Session: Crash Vector Fixes + Remote Sync
 
 **Status:** FIX CONFIRMED. Daemon running 3h+, 0 errors.
 
@@ -46,6 +46,18 @@
 - Fix: Use `temporary-file-directory`, check `file-directory-p`, use `delete-directory` for dirs
 - Silently skip permission errors with `condition-case`
 - Removed stale `/tmp/gptel-agent-temp` directory
+
+### Additional Remote Sync (2 commits)
+
+**`e2bdc6a9`** ⊘ fix: resolve workflow-root scope error and missing require
+- Removed `workflow-root` references outside `let*` scope (lines 1004-1005)
+- These caused `Symbol's value as variable is void: workflow-root` when async callbacks executed after let* scope exited
+- Added `(require 'gptel-auto-workflow-strategic)` to prompt-build.el
+- Fixes `void-function gptel-auto-workflow-load-research-findings`
+
+**`1bc4fc11`** ⊘ remove eglot-python-preset and eglot-typescript-preset
+- These packages are not used in the current configuration
+- Cleans up unused dependencies from `lisp/init-dev.el`
 
 ## Session: Skill Routing Ontology + Production Hardening
 
