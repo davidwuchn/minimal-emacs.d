@@ -89,13 +89,17 @@ callback never fires (e.g., void-function nil bug in sentinel)."
           (lambda (&rest args)
             (unless done
               (setq done t)
-              (apply callback args)))))
+              (if (functionp callback)
+                  (apply callback args)
+                (message "[llm] Guard-cb: original callback is not a function: %S" callback))))))
     (when timeout
       (run-with-timer timeout nil
         (lambda ()
           (unless done
             (setq done t)
-            (funcall callback (format "LLM request timed out after %ds" timeout))))))
+            (if (functionp callback)
+                (funcall callback (format "LLM request timed out after %ds" timeout))
+              (message "[llm] Timeout-cb: original callback is not a function: %S" callback))))))
     (gptel-request prompt
       :callback guard-cb)))
 

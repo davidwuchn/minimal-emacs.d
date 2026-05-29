@@ -1984,7 +1984,7 @@ callback (for the user), and transition the request state."
   "Run cleanup for `gptel-request' with FSM."
   (when-let* ((info (gptel-fsm-info fsm))
               (post (plist-get info :post)))
-    (mapc (lambda (f) (funcall f info)) post)))
+    (mapc (lambda (f) (when (functionp f) (funcall f info))) post)))
 
 ;;;; State machine predicates
 ;; Predicates used to find the next state to transition to, see

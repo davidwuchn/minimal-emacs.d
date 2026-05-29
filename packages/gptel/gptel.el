@@ -1415,7 +1415,7 @@ No state transition here since that's handled by the process sentinels."
     ;; Run hook in visible window to set window-point, BUG #269
     (if-let* ((gptel-window (get-buffer-window gptel-buffer 'visible)))
         (with-selected-window gptel-window
-          (mapc (lambda (f) (funcall f info)) (plist-get info :post))
+          (mapc (lambda (f) (when (functionp f) (funcall f info))) (plist-get info :post))
           (run-hook-with-args
            'gptel-post-response-functions
            (marker-position start-marker) (marker-position tracking-marker)))
@@ -1467,12 +1467,12 @@ running hooks in the appropriate buffer/window context."
     (when (buffer-live-p gptel-buffer)
       (if-let* ((gptel-window (get-buffer-window gptel-buffer 'visible)))
           (with-selected-window gptel-window
-            (mapc (lambda (f) (funcall f info)) (plist-get info :post))
+            (mapc (lambda (f) (when (functionp f) (funcall f info))) (plist-get info :post))
             (run-hook-with-args
              'gptel-post-response-functions
              (marker-position start-marker) (marker-position tracking-marker)))
          (with-current-buffer gptel-buffer
-           (mapc (lambda (f) (funcall f info)) (plist-get info :post))
+           (mapc (lambda (f) (when (functionp f) (funcall f info))) (plist-get info :post))
            (run-hook-with-args
             'gptel-post-response-functions
             (marker-position start-marker) (marker-position tracking-marker)))))))
