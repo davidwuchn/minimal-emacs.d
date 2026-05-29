@@ -1893,7 +1893,8 @@ injects the results into the prompt data and transitions the FSM."
               (tool-use (cl-remove-if (lambda (tc) (plist-get tc :result))
                                       (plist-get info :tool-use))))
     (with-current-buffer (plist-get info :buffer)
-      (let ((pending-calls))
+      (let ((pending-calls)
+            missing-callback)
         (mapc                           ; Construct function calls
          (lambda (tool-call)
            (letrec ((args (plist-get tool-call :args))
@@ -1903,11 +1904,15 @@ injects the results into the prompt data and transitions the FSM."
                     (process-tool-result (apply-partially #'gptel--process-tool-call
                                                           fsm tool-spec tool-call)))
              (if (null tool-spec)
-                 (if (equal name gptel--ersatz-json-tool) ;Could be a JSON response
-                     ;; Handle structured JSON output supplied as tool call
-                     (funcall (plist-get info :callback)
-                              (gptel--json-encode (plist-get tool-call :args))
-                              info)
+                  (if (equal name gptel--ersatz-json-tool) ;Could be a JSON response
+                      ;; Handle structured JSON output supplied as tool call
+                      (let ((callback (plist-get info :callback)))
+                        (if (functionp callback)
+                            (funcall callback
+                                     (gptel--json-encode (plist-get tool-call :args))
+                                     info)
+                          (setq missing-callback
+                                "Missing gptel callback for structured tool response")))
                    (message "Unknown tool called by model: %s" name))
                (let ((confirm))         ;Check if tool requires confirmation
                  (cond      ;:confirm in tool-call (from hooks) takes precedence
@@ -1930,10 +1935,21 @@ injects the results into the prompt data and transitions the FSM."
                                        (error (mapconcat #'gptel--to-string errdata " ")))))
                          (funcall process-tool-result result)))))))))
          tool-use)
-        (when pending-calls
-          (plist-put info :tool-pending t)
-          (funcall (plist-get info :callback)
-                   (cons 'tool-call pending-calls) info))))))
+        (cond
+         (missing-callback
+          (plist-put info :error missing-callback)
+          (plist-put info :status missing-callback)
+          (gptel--fsm-transition fsm 'ERRS))
+         (pending-calls
+          (let ((callback (plist-get info :callback)))
+            (if (functionp callback)
+                (progn
+                  (plist-put info :tool-pending t)
+                  (funcall callback (cons 'tool-call pending-calls) info))
+              (let ((message "Missing gptel callback for pending tool calls"))
+                (plist-put info :error message)
+                (plist-put info :status message)
+                (gptel--fsm-transition fsm 'ERRS))))))))))
 
 (defun gptel--map-tool-args (tool-spec args)
   "Create a tool call argument list from TOOL-SPEC and ARGS.
@@ -1957,10 +1973,11 @@ callback (for the user), and transition the request state."
          (tool-use (plist-get info :tool-use))
          (callback (plist-get info :callback))
          (tool-result (plist-get info :tool-result)))
-    (gptel--inject-prompt
-     backend data
-     (gptel--parse-tool-results backend tool-use))
-    (funcall callback (cons 'tool-result tool-result) info))
+     (gptel--inject-prompt
+      backend data
+      (gptel--parse-tool-results backend tool-use))
+     (and (functionp callback)
+          (funcall callback (cons 'tool-result tool-result) info)))
   (gptel--fsm-transition fsm))
 
 (defun gptel--handle-post (fsm)
@@ -2656,9 +2673,11 @@ the response is inserted into the current buffer after point."
                     info)))
                                      (setq response (string-trim-left
                                                      (substring response (+ idx 8)))))
-                                 (when-let* ((reasoning (plist-get info :reasoning))
-                                             ((stringp reasoning)))
-                                   (funcall callback (cons 'reasoning reasoning) info))))
+                                  (when-let* ((reasoning (plist-get info :reasoning))
+                                              ((stringp reasoning)))
+                                    (with-demoted-errors "gptel callback error: %S"
+                                      (and (functionp callback)
+                                           (funcall callback (cons 'reasoning reasoning) info))))))
                              (when (or response (not (member http-status '("200" "100"))))
                                (with-demoted-errors "gptel callback error: %S"
                                  (and (functionp callback) (funcall callback response info))))
@@ -2935,13 +2954,13 @@ PROCESS and _STATUS are process parameters."
         (let ((cb_ (plist-get info :callback)))
           (when (functionp cb_)
             (with-demoted-errors "gptel callback error: %S"
-              (funcall cb_ nil info))))
+              (funcall cb_ nil info)))))
        ;; Finish handling a successful streaming response
        ((member http-status '("200" "100"))
         (let ((cb_ (plist-get info :callback)))
           (when (functionp cb_)
             (with-demoted-errors "gptel callback error: %S"
-              (funcall cb_ t info))))))
+              (funcall cb_ t info)))))
        ;; Capture error message from HTTP error response
        (t
         (with-current-buffer proc-buf
@@ -3122,7 +3141,9 @@ PROCESS and _STATUS are process parameters."
                           (string-trim-left (substring response (+ idx 8)))))
                 (when-let* ((reasoning (plist-get proc-info :reasoning))
                             ((stringp reasoning)))
-                  (funcall proc-callback (cons 'reasoning reasoning) proc-info)))
+                  (with-demoted-errors "gptel callback error: %S"
+                    (and (functionp proc-callback)
+                         (funcall proc-callback (cons 'reasoning reasoning) proc-info)))))
               ;; Call callback with response text
               (when (or response (not (member http-status '("200" "100"))))
                 (with-demoted-errors "gptel callback error: %S"
