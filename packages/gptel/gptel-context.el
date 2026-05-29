@@ -391,13 +391,13 @@ DATA-BUF is the buffer where the request prompt is constructed."
       (funcall gptel-context-string-function
                (lambda (c) (with-current-buffer data-buf
                              (gptel-context--wrap-in-buffer c))
-                 (funcall callback))
+                 (and (functionp callback) (funcall callback)))
                (gptel-context--collect))
     (with-current-buffer data-buf
       (thread-last (gptel-context--collect)
                    (funcall gptel-context-string-function)
                    (gptel-context--wrap-in-buffer)))
-    (funcall callback)))
+    (and (functionp callback) (funcall callback))))
 
 (defun gptel-context--wrap-in-buffer (context-string &optional method)
   "Inject CONTEXT-STRING to current buffer using METHOD.

@@ -393,17 +393,22 @@ that crash non-pcase-aware callbacks."
                     (or (and (functionp callback-val) callback-val) #'ignore)))
           (wrapped-cb
             (lambda (resp &optional info)
-              (if (and (consp resp) (eq (car resp) 'reasoning))
-                  ;; Reasoning cons cells are normal LLM response chunks.
-                  ;; Store in info for diagnostic access but also forward
-                  ;; the reasoning text to the original callback as a
-                  ;; normal string — the callback needs to receive ALL
-                  ;; response chunks, not just the final answer.
-                  (progn
-                    (when (and info (cdr resp))
-                      (plist-put info :reasoning (cdr resp)))
-                    (funcall safe-cb (cdr resp) info))
-                (funcall safe-cb resp info)))))
+              (condition-case err
+                  (if (and (consp resp) (eq (car resp) 'reasoning))
+                      ;; Reasoning cons cells are normal LLM response chunks.
+                      ;; Store in info for diagnostic access but also forward
+                      ;; the reasoning text to the original callback as a
+                      ;; normal string — the callback needs to receive ALL
+                      ;; response chunks, not just the final answer.
+                      (progn
+                        (when (and info (cdr resp))
+                          (plist-put info :reasoning (cdr resp)))
+                        (funcall safe-cb (cdr resp) info))
+                    (funcall safe-cb resp info))
+                (void-function
+                 (message "[gptel-ext-core] Callback void-function: %S, safe-cb=%S, original=%S"
+                          err safe-cb callback-val)
+                 (signal (car err) (cdr err)))))))
     (apply orig-fn prompt
            :callback wrapped-cb
            (cl-loop for (k v) on args by #'cddr

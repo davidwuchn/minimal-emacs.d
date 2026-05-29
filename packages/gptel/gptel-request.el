@@ -1133,7 +1133,7 @@ non-whitespace content on its line."
 (defun gptel--transform-add-context (callback fsm)
   (if (and gptel-use-context gptel-context)
       (gptel-context--wrap callback (plist-get (gptel-fsm-info fsm) :data))
-    (funcall callback)))
+    (and (functionp callback) (funcall callback))))
 
 ;;;; Model interface
 ;; NOTE: This interface would be simpler to implement as a defstruct.  But then
