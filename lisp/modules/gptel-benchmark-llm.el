@@ -317,8 +317,6 @@ Returns suggestions directly, blocking until complete."
 Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to 300."
   (let ((result nil)
          (done nil)
-         (timeout-count 0)
-         (limit (* 10 (or timeout-seconds 300)))
          (request-buffer (current-buffer))
          (timeout-secs (or timeout-seconds 300)))
     (gptel-benchmark-llm-synthesize-knowledge
@@ -327,19 +325,23 @@ Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to 300.
         (setq result content
               done t)))
     ;; Fallback timer: if the gptel callback never fires (nil callback bug),
-    ;; this timer sets done after the timeout, freeing the busy-wait loop.
+    ;; this timer sets done after the timeout, freeing the wait loop.
     (run-with-timer timeout-secs nil
       (lambda ()
         (unless done
-          (setq done t))))
-    (while (and (not done) (< timeout-count limit))
-      (sit-for 0.1)
-      (cl-incf timeout-count))
+          (setq done "timeout"))))
+    ;; Wait for done, using short sleeps so timers can fire.
+    (let ((waited 0))
+      (while (and (not done) (< waited timeout-secs))
+        (sleep-for 1)
+        (cl-incf waited)))
     (unless done
       (message "[llm] Timeout waiting for synthesis after %ss" timeout-secs)
       (when (and (buffer-live-p request-buffer)
                  (fboundp 'gptel-abort))
         (ignore-errors (gptel-abort request-buffer))))
+    (when (stringp done)
+      (setq result nil))
     result))
 
 ;;; Provide
