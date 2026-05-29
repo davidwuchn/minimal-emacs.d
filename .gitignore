@@ -9,6 +9,7 @@
 *.md.backup
 !lisp/
 !lisp/modules/
+!lisp/modules/*.el
 lisp/*.elc
 lisp/modules/*.elc
 !pre-early-init.el
