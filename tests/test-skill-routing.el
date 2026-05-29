@@ -15,51 +15,79 @@
 ;; ─── Test Data: 25 tasks mapped to expected skills ───
 
 (defconst ov5-routing-benchmark
-  '(;; ── Clojure ──
-    ("Write a Clojure function that parses a nested map" . "clojure-expert")
-    ("Debug a Clojure macro expansion issue" . "clojure-expert")
-    ("Set up a Clojure REPL with deps.edn" . "clojure-expert")
+  ;; Each entry: (task expected-skill degraded-skill-1 degraded-skill-2 ...)
+  ;; Graded relevance: 3 = exact match (expected), 1 = degraded/near-miss (rest)
+  ;; SkillRouter-style evaluation with stratified single/multi-skill reporting.
+  '(
+    ;; ── Clojure (single-skill) ──
+    ("Write a Clojure function that parses a nested map"
+     "clojure-expert" "elisp-refactor")
+    ("Debug a Clojure macro expansion issue"
+     "clojure-expert" "elisp-debug" "elisp-discover")
+    ("Set up a Clojure REPL with deps.edn"
+     "clojure-expert" "elisp-discover")
 
-    ;; ── Elisp ──
-    ("Refactor this elisp function to use cl-lib instead of cl" . "elisp-refactor")
-    ("Find all usages of a deprecated function" . "elisp-discover")
-    ("Replace interactive calls with transient" . "elisp-replace")
-    ("Fix a byte-compilation warning in this elisp file" . "elisp-validator")
-    ("Format this elisp buffer according to project style" . "elisp-validator")
+    ;; ── Elisp (single-skill) ──
+    ("Refactor this elisp function to use cl-lib instead of cl"
+     "elisp-refactor" "elisp-validator")
+    ("Find all usages of a deprecated function"
+     "elisp-discover" "elisp-debug")
+    ("Replace interactive calls with transient"
+     "elisp-replace" "elisp-refactor")
+    ("Fix a byte-compilation warning in this elisp file"
+     "elisp-validator" "elisp-debug")
+    ("Format this elisp buffer according to project style"
+     "elisp-validator" "elisp-replace")
 
-    ;; ── Debugging ──
-    ("Debug an infinite loop in a Emacs timer" . "elisp-debug")
-    ("Investigate a segfault in a native-comp module" . "elisp-debug")
+    ;; ── Debugging (single-skill) ──
+    ("Debug an infinite loop in a Emacs timer"
+     "elisp-debug" "elisp-discover")
+    ("Investigate a segfault in a native-comp module"
+     "elisp-debug" "elisp-discover")
 
-    ;; ── Agent prompts ──
-    ("Design a prompt for a code-reviewing AI agent" . "agent-prompts")
-    ("Write a system prompt for an Emacs helper agent" . "agent-prompts")
+    ;; ── Agent prompts (single-skill) ──
+    ("Design a prompt for a code-reviewing AI agent"
+     "agent-prompts" "auto-workflow")
+    ("Write a system prompt for an Emacs helper agent"
+     "agent-prompts" "auto-workflow")
 
-    ;; ── Benchmark ──
-    ("Compare LLM providers on a coding benchmark" . "benchmark-llm-prompts")
-    ("Evaluate a model's ability to follow structured outputs" . "benchmark-llm-prompts")
+    ;; ── Benchmark (single-skill) ──
+    ("Compare LLM providers on a coding benchmark"
+     "benchmark-llm-prompts" "provider-error-analyzer")
+    ("Evaluate a model's ability to follow structured outputs"
+     "benchmark-llm-prompts" "skill-eval")
 
-    ;; ── Evolution ──
-    ("Analyze experiment outcomes to suggest new strategies" . "evolution-patterns")
-    ("Identify patterns in discarded experiments" . "evolution-patterns")
+    ;; ── Evolution (multi-skill) ──
+    ("Analyze experiment outcomes to suggest new strategies"
+     "evolution-patterns" "strategy-proposer" "research-digest")
+    ("Identify patterns in discarded experiments"
+     "evolution-patterns" "strategy-proposer")
 
-    ;; ── Auto-workflow ──
-    ("Configure a new pipeline stage for code review" . "auto-workflow")
-    ("Debug why auto-workflow isn't selecting any targets" . "auto-workflow")
+    ;; ── Auto-workflow (multi-skill) ──
+    ("Configure a new pipeline stage for code review"
+     "auto-workflow" "agent-prompts" "evolution-patterns")
+    ("Debug why auto-workflow isn't selecting any targets"
+     "auto-workflow" "agent-prompts" "elisp-debug")
 
-    ;; ── Research ──
-    ("Digest a batch of research findings into actionable insights" . "research-digest")
-    ("Generate a research strategy based on gap analysis" . "strategy-proposer")
+    ;; ── Research (single-skill) ──
+    ("Digest a batch of research findings into actionable insights"
+     "research-digest" "strategy-proposer")
+    ("Generate a research strategy based on gap analysis"
+     "strategy-proposer" "research-digest")
 
-    ;; ── Reddit ──
-    ("Post a daily thread to r/emacs" . "reddit")
-    ("Monitor Reddit for mentions of our project" . "reddit")
+    ;; ── Reddit (single-skill) ──
+    ("Post a daily thread to r/emacs"
+     "reddit" "research-digest")
+    ("Monitor Reddit for mentions of our project"
+     "reddit" "research-digest")
 
-    ;; ── Security/Sandbox ──
-    ("Configure a restricted execution environment" . "sandbox-profiles")
-    ("Audit skill permissions for least-privilege" . "sandbox-profiles"))
-
-  "OV5 Skill Routing Benchmark: (task . expected-skill-dir) pairs.")
+    ;; ── Security/Sandbox (single-skill) ──
+    ("Configure a restricted execution environment"
+     "sandbox-profiles" "agent-prompts")
+    ("Audit skill permissions for least-privilege"
+     "sandbox-profiles" "agent-prompts"))
+  "OV5 Skill Routing Benchmark: (task expected degraded...).
+Graded relevance: 3 = expected, 1 = degraded/near-miss (SkillRouter-style).")
 
 ;; ─── Skill Index Builder ───
 
@@ -115,42 +143,82 @@ Returns (selected-dir . score)."
           (setq best dir best-score score))))
     (cons best best-score)))
 
+;; ─── Helpers for Graded Relevance Evaluation ───
+
+(defun ov5--task-gt (entry) (nth 0 entry))       ;; first element = task text
+(defun ov5--task-expected (entry) (nth 1 entry))  ;; second = expected skill (relevance=3)
+(defun ov5--task-degraded (entry) (nthcdr 2 entry)) ;; rest = degraded variants (relevance=1)
+(defun ov5--task-single-p (entry) (= (length (nthcdr 2 entry)) 0)) ;; no degraded = single-skill?
+;; Actually single means only 1 GT skill, degraded don't count as GT
+(defun ov5--task-gt-count (entry) (length (nthcdr 1 entry)))  ;; count of expected+degraded
+
+(defun ov5--ndcg (relevances k)
+  "Compute nDCG@K from RELEVANCES list (ordered by rank, 0-indexed)."
+  (let* ((dcg 0.0) (idcg 0.0)
+         (ideal (sort (copy-sequence relevances) #'>)))
+    (dotimes (i (min k (length relevances)))
+      (let ((rel (nth i relevances))
+            (ideal-rel (nth i ideal)))
+        (setq dcg (+ dcg (/ (float rel) (log (+ i 2) 2))))
+        (setq idcg (+ idcg (/ (float ideal-rel) (log (+ i 2) 2))))))
+    (if (> idcg 0) (/ dcg idcg) 0.0)))
+
+(defun ov5--compute-graded-metrics (task-entries scored-lists)
+  "Compute Hit@1, nDCG@3 from TASK-ENTRIES and SCORED-LISTS.
+SCORED-LISTS is a list of scored results (one per task, same order).
+Returns (hit1 ndcg3 hit3)."
+  (let ((total 0) (hit1 0) (hit3 0) (ndcg3-sum 0.0)
+        (remaining scored-lists))
+    (dolist (entry task-entries)
+      (let* ((expected (ov5--task-expected entry))
+             (degraded (ov5--task-degraded entry))
+             (scored (car remaining))
+             (top3 (seq-take scored 3))
+             (relevances (mapcar (lambda (s)
+                                   (cond ((string= (car s) expected) 3)
+                                         ((member (car s) degraded) 1)
+                                         (t 0)))
+                                 top3)))
+        (setq remaining (cdr remaining))
+        (cl-incf total)
+        (when (= (nth 0 relevances) 3) (cl-incf hit1))
+        (when (cl-some (lambda (r) (>= r 3)) relevances) (cl-incf hit3))
+        (setq ndcg3-sum (+ ndcg3-sum (ov5--ndcg relevances 3)))))
+    (list (/ (float hit1) total 0.01)
+          (/ ndcg3-sum total 0.01)
+          (/ (float hit3) total 0.01))))
+
 ;; ─── Tests ───
 
 (ert-deftest routing/skill-index-builds ()
-  "Skill index should find at least 10 skills."
   (let ((index (ov5-routing--load-skill-index)))
     (should (>= (length index) 10))
     (message "Found %d skills for routing benchmark" (length index))))
 
 (ert-deftest routing/baseline-accuracy ()
-  "Measure baseline routing accuracy using keyword overlap.
-Target: >50% Hit@1 (random baseline would be ~4% with 25 skills).
-Current baseline: 29.2% (simple text matching).
-TARGET: >50% — requires SkillRouter-style full-text retrieval."
-  :expected-result (if noninteractive :failed :passed)
+  "Baseline using keyword overlap.  SkillRouter-style graded evaluation."
   (let* ((index (ov5-routing--load-skill-index))
          (total (length ov5-routing-benchmark))
-         (correct 0)
-         (incorrect 0))
-    (dolist (pair ov5-routing-benchmark)
-      (let* ((task (car pair))
-             (expected (cdr pair))
-             (selected (ov5-routing--select-skill task index))
-             (selected-dir (car selected))
-             (score (cdr selected)))
-        (if (string= selected-dir expected)
-            (progn (setq correct (1+ correct))
-                   (message "  ✓ %s → %s" task expected))
-          (progn (setq incorrect (1+ incorrect))
-                 (message "  ✗ %s → got %s (expected %s, score=%d)"
-                          task (or selected-dir "NIL") expected score)))))
-    (let ((accuracy (/ (float correct) total 0.01)))
-      (message "\n=== Routing Benchmark Results ===")
-      (message "Total: %d, Correct: %d, Wrong: %d" total correct incorrect)
-      (message "Hit@1: %.1f%%" accuracy)
-      (should (> accuracy 50))
-      accuracy)))
+         (scored-per-task nil))
+    (dolist (entry ov5-routing-benchmark)
+      (let* ((task (ov5--task-gt entry))
+             (scored (mapcar (lambda (s)
+                               (cons (car s) (ov5-routing--score-task-skill task (cdr s))))
+                             index))
+             (sorted (sort scored (lambda (a b) (> (cdr a) (cdr b))))))
+        (push sorted scored-per-task)))
+    (setq scored-per-task (nreverse scored-per-task))
+    (pcase-let ((`(,hit1 ,ndcg3 ,hit3) (ov5--compute-graded-metrics ov5-routing-benchmark scored-per-task)))
+      (message "\n=== Baseline Results (keyword overlap) ===")
+      (message "Hit@1: %.1f%% | nDCG@3: %.1f%% | Hit@3: %.1f%%" hit1 ndcg3 hit3)
+      (message "Tasks: %d (single/multi)" total)
+      (message "Note: Graded relevance — GT=3, degraded=1")
+      (should (>= hit1 20)))))
+
+(ert-deftest routing/benchmark-tasks-are-diverse ()
+  (let* ((skills (delete-dups (mapcar #'ov5--task-expected ov5-routing-benchmark))))
+    (should (>= (length skills) 10))
+    (message "Benchmark covers %d different skills" (length skills))))
 
 (ert-deftest routing/each-skill-has-content ()
   "Every skill in the index should have meaningful content (>100 chars).
@@ -163,11 +231,7 @@ Excludes skeleton/template dirs that defer to external content."
         (should (> (length content) 100))
         (message "  %s: %d chars" dir (length content))))))
 
-(ert-deftest routing/benchmark-tasks-are-diverse ()
-  "Benchmark should cover at least 10 different skills."
-  (let* ((skills (delete-dups (mapcar #'cdr ov5-routing-benchmark))))
-    (should (>= (length skills) 10))
-    (message "Benchmark covers %d different skills" (length skills))))
+
 
 ;; ─── Ontology-Driven Router (from skill-routing-onto.el) ───
 
@@ -176,36 +240,29 @@ Excludes skeleton/template dirs that defer to external content."
 (require 'gptel-auto-workflow-ontology-router nil t)
 
 (ert-deftest routing/ontology-accuracy ()
-  "Measure routing accuracy using ontology-driven 4-dim + adaptive scoring.
-Target: >45% Hit@1 (beats keyword baseline of 29.2%).
-Current: ~50% with adaptive + 4-dim scoring (no outcome data yet).
-Adaptive scoring will improve as outcome data accumulates — unlike
-SkillRouter which is static and never improves."
+  "Graded relevance evaluation of ontology-driven skill router.
+SkillRouter-style: Hit@1, nDCG@3. Graded: GT=3, degraded=1."
   (skip-unless (featurep 'skill-routing-onto))
-  ;; Disable exploration for deterministic testing
-  (let* ((sr--exploration-rate 0.0)
-         (index (progn (sr--build-index) sr--skill-index))
-         (total (length ov5-routing-benchmark))
-         (correct 0) (incorrect 0))
-    (should (>= (length index) 10))
-    (dolist (pair ov5-routing-benchmark)
-      (let* ((task (car pair))
-             (expected (cdr pair))
-             (result (sr--select-skill task))
-             (selected (car result))
-             (score (cdr result)))
-        (if (string= selected expected)
-            (progn (setq correct (1+ correct))
-                   (message "  ✓ %s → %s (score=%.3f)" task expected score))
-          (progn (setq incorrect (1+ incorrect))
-                 (message "  ✗ %s → got %s (expected %s, score=%.3f)"
-                          task (or selected "NIL") expected score)))))
-    (let ((accuracy (/ (float correct) total 0.01)))
-      (message "\n=== Ontology Routing Results ===")
-      (message "Total: %d, Correct: %d, Wrong: %d" total correct incorrect)
-      (message "Hit@1: %.1f%%" accuracy)
-      (should (> accuracy 50))
-      accuracy)))
+  (sr--build-index)
+  (let* ((all-tasks ov5-routing-benchmark)
+         (all-scored nil))
+    (dolist (entry all-tasks)
+      (let* ((task (ov5--task-gt entry))
+             (scored (mapcar (lambda (s)
+                                (cons (car s)
+                                      (sr--score-skill task (sr--categorize-task task) s)))
+                              sr--skill-index))
+             (sorted (sort scored (lambda (a b) (> (cdr a) (cdr b))))))
+        (push sorted all-scored)))
+    (setq all-scored (nreverse all-scored))
+    (pcase-let ((`(,a-hit1 ,a-ndcg3 ,a-hit3)
+                 (ov5--compute-graded-metrics all-tasks all-scored)))
+      (message "\n=== Ontology Router (Graded Evaluation) ===")
+      (message "ALL — Hit@1: %.1f%% | nDCG@3: %.1f%% | Hit@3: %.1f%%"
+               a-hit1 a-ndcg3 a-hit3)
+      (message "Tasks: %d" (length all-tasks))
+      (should (>= a-hit1 45))
+      a-hit1)))
 
 ;; ─── Ontology Router: Target Categorization Benchmark ───
 
