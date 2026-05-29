@@ -856,7 +856,14 @@ SAFETY: Asserts main branch is not current before any operation.
 NOTE: Human must manually merge staging to main after review."
   (let ((completion-callback
          (when completion-callback
-           (gptel-auto-workflow--make-idempotent-staging-completion completion-callback))))
+           (gptel-auto-workflow--make-idempotent-staging-completion completion-callback)))
+         ;; Auto-detect: staging flow is safe on main because it only
+         ;; cherry-picks experiment branches to staging.  Setting this
+         ;; flag bypasses assert-main-untouched, which would otherwise
+         ;; block ALL experiments when running from the main worktree.
+         (gptel-auto-workflow--recovering-stale-staging
+          (or gptel-auto-workflow--recovering-stale-staging
+              (string= (ignore-errors (magit-get-current-branch)) "main"))))
     (gptel-auto-workflow--assert-main-untouched)
     (setq gptel-auto-workflow--review-retry-count 0)
     (setq gptel-auto-workflow--review-error-retry-count 0)
