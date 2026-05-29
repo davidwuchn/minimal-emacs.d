@@ -1,9 +1,9 @@
 # Mementum State
 
-> Last session: 2026-05-30 (void-variable err fix verified, daemon healthy)
+> Last session: 2026-05-30 (synced 3 remote commits, reviewed production fixes)
 > Next pipeline: 07:00 (auto-workflow running, 0 crash vectors)
 
-## Session: void-variable err Fix Verification
+## Session: void-variable err Fix Verification + Remote Sync
 
 **Status:** FIX CONFIRMED. Daemon running 3h+, 0 errors.
 
@@ -22,6 +22,22 @@
 - Research: 8414 bytes findings
 - Auto-workflow: completed after 1230s
 - Staging-verify: 19 experiments in progress
+
+### Remote Sync (3 commits merged)
+
+**`7126423a`** ⊘ Replace cl-incf with setq in critical experiment files
+- Fixes Emacs 30 `cl-incf` macro expansion bug on generalized variables in timer callbacks
+- 17 replacements across 6 files (experiment-core, experiment-loop, subagent, error, benchmark, strategy-harness)
+
+**`b0e43571`** ⊘ Fix remove misplaced workflow-root causing setq arity error  
+- `workflow-root` at line 942 was inside nested lambda body, becoming 3rd arg to `setq`
+- Caused `(wrong-number-of-arguments setq 3)` in timer callbacks
+- Pre-existing bug from `f9b268f2` when converting with-run-context → call-in-context
+
+**`d55e27fb`** fix: strongly prefer DashScope/MiniMax over degraded DeepSeek
+- Task backend preference: DashScope 0.50, MiniMax 0.40, DeepSeek 0.05 (was 0.15-0.25/0.05-0.15)
+- Experiment time budget: 900s→1800s, validation retry: 120s→300s
+- All task types (analyzer, grader, executor, researcher, reviewer, comparator) now prefer DashScope/MiniMax
 
 ## Session: Skill Routing Ontology + Production Hardening
 
