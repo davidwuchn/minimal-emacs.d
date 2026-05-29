@@ -1,6 +1,6 @@
 # Mementum State
 
-> Last session: 2026-05-30 (synced 2 more remote commits, 0 crash vectors)
+> Last session: 2026-05-30 (synced yaml cleanup commit, 0 crash vectors)
 > Next pipeline: 07:00 (auto-workflow running, 0 crash vectors)
 
 ## Session: Crash Vector Fixes + Remote Sync
@@ -58,6 +58,13 @@
 **`1bc4fc11`** ⊘ remove eglot-python-preset and eglot-typescript-preset
 - These packages are not used in the current configuration
 - Cleans up unused dependencies from `lisp/init-dev.el`
+
+**`cdda8f5e`** ⊘ Remove all yaml-1.2.3 references, replace with current version
+- yaml-1.2.3 was deleted but package database still referenced it
+- Caused 'Error loading autoloads' on every daemon startup
+- Cleared archive cache + reinstalled yaml to remove stale package-alist entry
+- Updated test files to reference yaml-20260113.653 instead of yaml-1.2.3
+- Removed symlink workaround from pipeline script (no longer needed)
 
 ## Session: Skill Routing Ontology + Production Hardening
 
