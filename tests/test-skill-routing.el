@@ -170,6 +170,7 @@ Excludes skeleton/template dirs that defer to external content."
 ;; ─── Ontology-Driven Router (from skill-routing-onto.el) ───
 
 (require 'skill-routing-onto nil t)
+(require 'gptel-auto-workflow-ontology-router nil t)
 
 (ert-deftest routing/ontology-accuracy ()
   "Measure routing accuracy using ontology-driven 4-dim scoring.
@@ -198,6 +199,43 @@ Current: 41.7% (improved from 29.2% via exclusive-word bonus + category fit)."
       (message "Total: %d, Correct: %d, Wrong: %d" total correct incorrect)
       (message "Hit@1: %.1f%%" accuracy)
       (should (> accuracy 50))
+      accuracy)))
+
+;; ─── Ontology Router: Target Categorization Benchmark ───
+
+(defconst ontology-target-benchmark
+  '(("lisp/modules/gptel-ext-context.el" . :natural-language)
+    ("lisp/modules/gptel-ext-streaming.el" . :natural-language)
+    ("lisp/modules/gptel-ext-retry.el" . :programming)
+    ("lisp/modules/gptel-ext-reasoning.el" . :programming)
+    ("lisp/modules/gptel-benchmark-core.el" . :programming)
+    ("lisp/modules/gptel-tools-bash.el" . :tool-calls)
+    ("lisp/modules/gptel-tools-edit.el" . :tool-calls)
+    ("lisp/modules/gptel-tools-grep.el" . :tool-calls)
+    ("lisp/modules/gptel-tools-agent-core.el" . :agentic)
+    ("lisp/modules/gptel-auto-workflow-evolution.el" . :agentic)
+    ("lisp/modules/gptel-auto-workflow-strategic.el" . :agentic)
+    ("lisp/modules/skill-routing-onto.el" . :natural-language)
+    ("lisp/modules/strategic-daemon-functions.el" . :programming))
+  "Ontology categorize-target benchmark: (filename . expected-category) pairs.")
+
+(ert-deftest routing/ontology-target-categorization ()
+  "Measure ontology router's target categorization accuracy."
+  (let ((total (length ontology-target-benchmark))
+        (correct 0))
+    (dolist (pair ontology-target-benchmark)
+      (let* ((target (car pair))
+             (expected (cdr pair))
+             (result (gptel-auto-workflow--categorize-target target)))
+        (if (eq result expected)
+            (progn (cl-incf correct)
+                   (message "  ✓ %s → %s" (file-name-nondirectory target) result))
+          (message "  ✗ %s → got %s (expected %s)" (file-name-nondirectory target) result expected))))
+    (let ((accuracy (/ (float correct) total 0.01)))
+      (message "\n=== Ontology Target Categorization ===")
+      (message "Total: %d, Correct: %d" total correct)
+      (message "Accuracy: %.1f%%" accuracy)
+      (should (> accuracy 80))
       accuracy)))
 
 (provide 'test-skill-routing)
