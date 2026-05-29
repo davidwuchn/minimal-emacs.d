@@ -311,17 +311,18 @@ Categories based on module purpose from historical experiment analysis."
                               "gptel-ext-context-cache.el" "gptel-ext-streaming.el"
                               "gptel-ext-transient.el")))
         :natural-language)
-       ;; Programming: code, benchmarks, FSM, tests, reasoning, compilation
-       ((or (string-match-p "benchmark" basename)
-            (string-match-p "fsm" basename)
-            (string-match-p "retry" basename)
-            (string-match-p "reasoning" basename)
-            (string-match-p "introspection" basename)
-            (string-match-p "test" basename)
-            (string-match-p "code" basename)
-            (string-match-p "compile" basename)
-            (string-match-p "\\`gptel-ext-" basename))
-        :programming)
+        ;; Programming: code, functions, benchmarks, FSM, tests, reasoning, compilation
+        ((or (string-match-p "benchmark" basename)
+             (string-match-p "fsm" basename)
+             (string-match-p "retry" basename)
+             (string-match-p "reasoning" basename)
+             (string-match-p "introspection" basename)
+             (string-match-p "test" basename)
+             (string-match-p "code" basename)
+             (string-match-p "function" basename)
+             (string-match-p "compile" basename)
+             (string-match-p "\\`gptel-ext-" basename))
+         :programming)
        ;; Tool-calls: sandbox, tool execution, bash, grep, glob
        ((or (string-match-p "sandbox" basename)
             (string-match-p "\\`gptel-tools-[^a]" basename)  ; tools-* but not tools-agent*
