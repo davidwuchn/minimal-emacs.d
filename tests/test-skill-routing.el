@@ -9,6 +9,8 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'skill-routing-onto)
+(require 'gptel-auto-workflow-ontology-router)
 
 ;; ─── Test Data: 25 tasks mapped to expected skills ───
 

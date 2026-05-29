@@ -4,7 +4,7 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-29T13:04
+Generated: 2026-05-29T15:12
 
 | lisp/modules/gptel-tools-agent-experiment-loop.el | lisp/modules/gptel-workflow-benchmark.el | 2.000 |
 | lisp/modules/gptel-ext-context.el | lisp/modules/gptel-workflow-benchmark.el | 1.000 |
