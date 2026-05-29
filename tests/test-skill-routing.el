@@ -176,7 +176,9 @@ Excludes skeleton/template dirs that defer to external content."
   "Measure routing accuracy using ontology-driven 4-dim + adaptive scoring.
 Target: >50% Hit@1 (beats keyword baseline of 29.2%)."
   (skip-unless (featurep 'skill-routing-onto))
-  (let* ((index (progn (sr--build-index) sr--skill-index))
+  ;; Disable exploration for deterministic testing
+  (let* ((sr--exploration-rate 0.0)
+         (index (progn (sr--build-index) sr--skill-index))
          (total (length ov5-routing-benchmark))
          (correct 0) (incorrect 0))
     (should (>= (length index) 10))

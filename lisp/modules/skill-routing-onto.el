@@ -161,6 +161,37 @@ Returns 0.0-0.5 bonus."
                                      ((= others 1) 0.2)
                                      (t 0.1)))))))))
 
+;; ─── Identity Keyword Boost ───
+
+(defconst sr--identity-keywords
+  '(("clojure-expert" . ("clojure" "deps.edn" "namespace" "macro expansion"))
+    ("elisp-debug" . ("debug" "infinite loop" "segfault" "timer"))
+    ("elisp-discover" . ("find usages" "deprecated" "discover"))
+    ("elisp-validator" . ("byte-compil" "warning" "format" "validate"))
+    ("elisp-refactor" . ("refactor" "cl-lib"))
+    ("elisp-replace" . ("replace" "transient" "interactive"))
+    ("benchmark-llm-prompts" . ("benchmark" "evaluate" "structured output" "llm"))
+    ("evolution-patterns" . ("experiment" "outcomes" "discarded" "evolution"))
+    ("research-digest" . ("digest" "findings"))
+    ("strategy-proposer" . ("strategy" "propos" "gap"))
+    ("agent-prompts" . ("prompt" "system prompt" "code-review"))
+    ("sandbox-profiles" . ("sandbox" "restrict" "permission" "audit" "least-privilege"))
+    ("reddit" . ("reddit" "post" "monitor"))
+    ("auto-workflow" . ("pipeline" "workflow" "stage")))
+  "Task keywords that strongly indicate a specific skill.
+Format: (skill-dir . (keyword...)).")
+
+(defun sr--identity-keyword-boost (task-text skill-dir)
+  "Strong boost when TASK-TEXT contains identity keywords for SKILL-DIR.
+Returns 0.0-1.5 boost."
+  (let* ((task-lower (downcase task-text))
+         (keywords (cdr (assoc skill-dir sr--identity-keywords)))
+         (boost 0.0))
+    (dolist (kw keywords)
+      (when (string-match-p (regexp-quote kw) task-lower)
+        (setq boost (+ boost 0.5))))
+    (min boost 1.5)))
+
 ;; ─── Adaptive Scoring (ported from ontology-router:218-550) ───
 
 (defvar sr--outcome-table (make-hash-table :test 'equal)
@@ -267,8 +298,9 @@ Returns score 0.0-1.6 (1.0 base + 0.6 adaptive)."
                 (cdr (assq :keyword-depth sr-dim-weights)))
              (* (sr--exclusive-keyword-bonus task-text skill-dir)
                 (cdr (assq :exclusive-match sr-dim-weights)))))
+         (identity-boost (sr--identity-keyword-boost task-text skill-dir))
          (adaptive-score (sr--score-adaptive skill-dir task-text)))
-    (+ base-score adaptive-score)))
+    (+ base-score adaptive-score identity-boost)))
 
 ;; ─── Selection with Exploration ───
 
