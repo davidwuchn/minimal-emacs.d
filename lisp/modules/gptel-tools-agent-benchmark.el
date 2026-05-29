@@ -405,8 +405,8 @@ If HYPOTHESIS is provided, use task-type-aware scoring."
                     (when content
                       (let ((score (gptel-benchmark--code-quality-score content)))
                         (when (numberp score)
-                          (cl-incf total-score score)
-                          (cl-incf file-count)))))))
+                          (setq total-score (+ total-score score))
+                          (setq file-count (1+ file-count))))))))
               (if (> file-count 0)
                   (/ total-score file-count)
                 0.5))))))))
@@ -844,7 +844,7 @@ If OUTPUT is an error message, fails immediately with error details.
 Uses hash table keyed by grade-id to support parallel execution.
 The grader subagent overlay will appear in the current buffer at time of call.
 TARGET and WORKTREE let the grader inspect concrete git evidence."
-  (let ((grade-id (cl-incf gptel-auto-experiment--grade-counter))
+  (let ((grade-id (setq gptel-auto-experiment--grade-counter (1+ gptel-auto-experiment--grade-counter)))
         (grade-buffer (current-buffer)))
     (cl-block gptel-auto-experiment-grade
       ;; Nil or empty output: fail immediately, don't waste an API call

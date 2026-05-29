@@ -315,11 +315,11 @@ Adapts max-experiments based on API error rate."
                             (when (and (not kept)
                                        score-after
                                        (<= score-after best-score))
-                              (cl-incf no-improvement-count))
-                            (unless hard-timeout
-                              (setq consecutive-timeouts 0))
-                            (when hard-timeout
-                              (cl-incf consecutive-timeouts)
+                               (setq no-improvement-count (1+ no-improvement-count)))
+                             (unless hard-timeout
+                               (setq consecutive-timeouts 0))
+                             (when hard-timeout
+                               (setq consecutive-timeouts (1+ consecutive-timeouts))
                               (message "[auto-experiment] Hard timeout for %s in experiment %d (%d consecutive); %s"
                                        target exp-id consecutive-timeouts
                                        (if (>= consecutive-timeouts gptel-auto-experiment--consecutive-timeout-threshold)

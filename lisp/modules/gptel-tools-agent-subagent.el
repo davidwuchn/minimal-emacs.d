@@ -299,7 +299,7 @@ subagent callback fired, and avoids reusing a deleted worktree as
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
 CALLBACK is called with the result or a timeout error.
 Uses hash table keyed by task-id to support parallel execution."
-  (let* ((task-id (cl-incf my/gptel--agent-task-counter))
+  (let* ((task-id (setq my/gptel--agent-task-counter (1+ my/gptel--agent-task-counter)))
          (start-time (current-time))
          (task-timeout my/gptel-agent-task-timeout)
          (origin-buf (current-buffer))

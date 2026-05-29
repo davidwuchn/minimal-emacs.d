@@ -290,7 +290,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                   (message "[auto-exp] Repeated focus on %s after %d prior non-kept attempts; discarding without grading"
                                            symbol count)
                                   (magit-git-success "checkout" "--" "."))
-                                  (cl-incf gptel-auto-experiment--no-improvement-count)
+                                  (setq gptel-auto-experiment--no-improvement-count (1+ gptel-auto-experiment--no-improvement-count))
                                   (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
                                     (gptel-auto-workflow--apply-category-vigilance target 'discarded))
                                   (funcall log-fn run-id exp-result)
@@ -370,7 +370,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                      :backend actual-backend
                           :model actual-model)))
                                                           (setq finished t)
-                                                          (cl-incf gptel-auto-experiment--no-improvement-count)
+                                                          (setq gptel-auto-experiment--no-improvement-count (1+ gptel-auto-experiment--no-improvement-count))
                                                           (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
                                                             (gptel-auto-workflow--apply-category-vigilance target 'validation-failed))
                                                           (funcall log-fn run-id retry-exp-result)
@@ -403,7 +403,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                         :backend actual-backend
                           :model actual-model)))
                                             (setq finished t)
-                                            (cl-incf gptel-auto-experiment--no-improvement-count)
+                                            (setq gptel-auto-experiment--no-improvement-count (1+ gptel-auto-experiment--no-improvement-count))
                                             (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
                                               (gptel-auto-workflow--apply-category-vigilance target 'validation-failed))
                                             (funcall log-fn run-id exp-result)
@@ -643,7 +643,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 		                                                     provisional-commit-hash
 		                                                     (format "Discard provisional commit for %s" target))
 		                                                    (setq provisional-commit-hash nil)
-		                                                    (cl-incf gptel-auto-experiment--no-improvement-count)
+		                                                    (setq gptel-auto-experiment--no-improvement-count (1+ gptel-auto-experiment--no-improvement-count))
 		                                                    (funcall log-fn
 			                                                         run-id exp-result)
 		                                                    (funcall callback exp-result))))))))
@@ -792,7 +792,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 								                                                     provisional-commit-hash
 								                                                     (format "Discard provisional commit for %s" target))
 								                                                    (setq provisional-commit-hash nil)
-								                                                    (cl-incf gptel-auto-experiment--no-improvement-count)
+								                                                    (setq gptel-auto-experiment--no-improvement-count (1+ gptel-auto-experiment--no-improvement-count))
 								                                                    (funcall log-fn
 									                                                         run-id exp-result)
                                                                                     (funcall callback exp-result))))))))
@@ -1071,7 +1071,7 @@ Safe to call multiple times: already-merged branches are skipped."
                                    (stringp experiment-id)
                                    (> age 1.0))
                           (if (>= age gptel-auto-experiment--staging-recovery-max-age-hours)
-                              (cl-incf skipped)
+                              (setq skipped (1+ skipped))
                             (condition-case err
                                 (let* ((exp-id (string-to-number experiment-id))
                                        (branch (gptel-auto-workflow--branch-name
@@ -1082,10 +1082,10 @@ Safe to call multiple times: already-merged branches are skipped."
                                         (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
                                                  branch age)
                                         (gptel-auto-workflow--staging-flow branch)
-                                        (cl-incf recovered))
+                                        (setq recovered (1+ recovered)))
                                     (message "[staging-recovery] Branch %s does not exist, skipping"
                                              branch)
-                                    (cl-incf skipped)))
+                                    (setq skipped (1+ skipped))))
                               (error
                                (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
                                         target experiment-id

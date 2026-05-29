@@ -119,7 +119,7 @@ Only removes files NOT tracked by git to preserve committed strategies."
       (dolist (file (directory-files strategies-dir t "^strategy-[^.]+\\.el$"))
         (unless (gptel-auto-workflow--file-tracked-by-git-p file)
           (delete-file file)
-          (cl-incf cleared-strategies)))
+          (setq cleared-strategies (1+ cleared-strategies))))
       (when (> cleared-strategies 0)
         (message "[strategy] Cleared %d untracked evolved strategy file(s)" cleared-strategies)))
     ;; Clear run logs (only untracked)
@@ -127,7 +127,7 @@ Only removes files NOT tracked by git to preserve committed strategies."
       (dolist (file (directory-files run-dir t "\\.jsonl?$"))
         (unless (gptel-auto-workflow--file-tracked-by-git-p file)
           (delete-file file)
-          (cl-incf cleared-logs)))
+          (setq cleared-logs (1+ cleared-logs))))
       (when (> cleared-logs 0)
         (message "[strategy] Cleared %d untracked log file(s) from %s" cleared-logs run-dir)))
     ;; Reset evolution summary counter
