@@ -1,55 +1,32 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 12%
 - Sources: 8 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted', Very short content (24 lines)
+- Auto-approved: yes (flagged)
 --->
 
 <think>
-The user wants me to synthesize multiple research memories into a knowledge page about "research-research-persisted". Let me analyze the memories to extract the key patterns, techniques, and actionable insights.
+The user wants me to synthesize a collection of research memories into a comprehensive knowledge page. Let me analyze the content:
 
-From the memories, I can identify several major themes:
+1. Multiple research sessions from May 20-27, 2026
+2. Strategy: persisted-findings
+3. Topics cover:
+   - Self-evolution patterns
+   - Agent architecture (circuit breakers, checkpoints, tool receipts)
+   - Lambda notation and mathematical attention anchors
+   - Think-in-code paradigm
+   - Session continuity via FTS5
+   - Feed-forward memory protocol
+   - Watchdog architectures
+   - Error recovery patterns
+   - Three-loop meta-learning
+   - Knowledge graph patterns
 
-1. **Research Pipeline Patterns**
-   - Local fallback strategies when external research is unavailable
-   - Feedback loop preservation (research hash in experiment rows)
-   - Daemon orchestration boundaries and fail-fast strategies
-   - Research quality measured by downstream experiment success
-
-2. **External Patterns from Repos**
-   - Circuit Breaker + Checkpoint/Restore (efrit)
-   - Tool Receipts for Audit Trail (efrit)
-   - Lambda Notation + Mathematical Attention Magnets (nucleus)
-   - Think-in-Code Context Reduction (context-mode)
-   - Session Continuity via FTS5 (context-mode)
-   - Feed-Forward Memory Protocol (mementum)
-   - Beads Ledger for Work Tracking (gastown)
-   - Self-Wiring Knowledge Graph (gbrain)
-   - Security-First Agent Runtime (zeroclaw)
-   - Self-Verification Engine (genesis-agent)
-   - Three-Tier Watchdog Architecture (gastown)
-   - Hybrid Search Fusion (gbrain)
-   - DEGRADED State Circuit Breaker
-   - Three-Loop Meta-Learning Architecture
-
-3. **External Research Sources**
-   - arXiv:2405.10467 - 18 Architectural Patterns
-   - arXiv:2508.00271 - MetaAgent Self-Evolving
-   - Azure AI Agent Orchestration Patterns
-   - NVIDIA AI Agent Evaluation Guide
-   - AI Agent Error Recovery Patterns
-   - Awesome Agents Repository
-
-4. **Codebase Metrics**
-   - 58031 total lines
-   - gptel-auto-workflow-evolution.el: 5822 lines
-   - gptel-auto-workflow-strategic.el: 2698 lines
-   - gptel-tools-agent-prompt-build.el: 2431 lines
-   - gptel-auto-workflow-research-benchmark.el: 1742 lines
-
-5. **Self-Evolution Directives**
-   - Focus on highest-failure modules
-   - Apply nil-safety patterns and validation guards
-   - Track research quality by downstream experiment success
+Let me synthesize all of this into a comprehensive knowledge page with:
+- Minimum 50 lines
+- Concrete examples (code, tables, commands)
+- Actionable patterns
+- Cross-references
+- Full markdown format with frontmatter
 </think>
