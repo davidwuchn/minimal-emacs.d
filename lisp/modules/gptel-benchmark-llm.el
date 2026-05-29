@@ -305,9 +305,9 @@ Returns suggestions directly, blocking until complete."
      name type anti-patterns
      (lambda (suggestions &rest _)
        (setq result suggestions done t)))
-    (while (and (not done) (< timeout-count 600)) ; max 60s at 0.1s intervals
-      (sit-for 0.1)
-      (cl-incf timeout-count))
+     (while (and (not done) (< timeout-count 600)) ; max 60s at 0.1s intervals
+       (sit-for 0.1)
+       (setq timeout-count (1+ timeout-count)))
      (unless done
        (message "[llm] Timeout waiting for suggestions after 60s"))
      result))
@@ -318,15 +318,13 @@ Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to 300.
   (let ((result nil)
          (done nil)
          (timeout-count 0)
-         (limit (* 10 (or timeout-seconds 300)))
+         (limit 3000)
          (request-buffer (current-buffer)))
     (gptel-benchmark-llm-synthesize-knowledge
      topic memories
       (lambda (content &rest _)
         (setq result content
               done t)))
-    ;; Fallback timer: if the gptel callback never fires (nil callback bug),
-    ;; this timer sets done after the timeout, freeing the wait loop.
     (let ((delay (or timeout-seconds 300)))
       (run-with-timer delay nil
         (lambda ()
@@ -334,7 +332,7 @@ Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to 300.
             (setq done t)))))
     (while (and (not done) (< timeout-count limit))
       (sit-for 0.1)
-      (cl-incf timeout-count))
+      (setq timeout-count (1+ timeout-count)))
     (unless done
       (message "[llm] Timeout waiting for synthesis after %ss" (or timeout-seconds 300))
       (when (and (buffer-live-p request-buffer)
