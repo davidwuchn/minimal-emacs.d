@@ -323,13 +323,14 @@ Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to 300.
       (lambda (content &rest _)
         (setq result content
               done t)))
-    (let ((deadline (float-time (time-add nil (or timeout-seconds 300)))))
-      (run-with-timer (or timeout-seconds 300) nil
+    (let ((timeout-secs (or timeout-seconds 300))
+          (deadline (float-time (time-add (current-time) (seconds-to-time (or timeout-seconds 300))))))
+      (run-with-timer timeout-secs nil
         (lambda ()
           (unless done
-            (setq done t)))))
-    (while (and (not done) (< (float-time) deadline))
-      (read-event nil nil 1))
+            (setq done t))))
+      (while (and (not done) (< (float-time) deadline))
+        (read-event nil nil 1)))
     (unless done
       (message "[llm] Timeout waiting for synthesis after %ss" (or timeout-seconds 300))
       (when (and (buffer-live-p request-buffer)
