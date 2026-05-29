@@ -370,23 +370,77 @@ Returns score 0.0-1.6 (1.0 base + 0.6 adaptive)."
 (defvar sr--exploration-rate 0.15
   "Probability of selecting a non-best skill (epsilon-greedy).")
 
+(defvar sr--embedding-fallback-threshold 0.15
+  "Min margin between top-1 and top-2 scores. When margin is below this,
+the n-gram fallback is activated. Higher = more fallback (safer, slower).")
+
+(defun sr--ngrams (text n)
+  "Generate N-grams of length N from TEXT. Returns a hash table of ngram→count."
+  (let ((ngrams (make-hash-table :test 'equal))
+        (lower (downcase text))
+        (i 0))
+    (while (<= (+ i n) (length lower))
+      (let ((ngram (substring lower i (+ i n))))
+        (puthash ngram (1+ (gethash ngram ngrams 0)) ngrams)
+        (setq i (1+ i))))
+    ngrams))
+
+(defun sr--ngram-similarity (text-a text-b)
+  "Compute n-gram overlap similarity between TEXT-A and TEXT-B.
+Uses 3-grams (trigrams). Returns 0.0-1.0. Simple embedding approximation."
+  (let* ((a-grams (sr--ngrams text-a 3))
+         (b-grams (sr--ngrams text-b 3))
+         (intersection 0) (union 0))
+    (maphash (lambda (k _) (when (gethash k b-grams) (cl-incf intersection))) a-grams)
+    (maphash (lambda (k v) (cl-incf union v)) a-grams)
+    (maphash (lambda (k v) (cl-incf union v)) b-grams)
+    (if (> union 0) (/ (float (* 2 intersection)) union) 0.0)))
+
+(defun sr--embedding-fallback (task-text top-n)
+  "Re-rank top-N candidates using n-gram similarity.
+When the 8-dim scorer is uncertain (tight margins), use trigram overlap
+as a cheap embedding approximation to break ties.
+Returns reordered list of (skill-dir . score)."
+  (let ((scored nil))
+    (dolist (entry top-n)
+      (let* ((dir (car entry))
+             (entry-data (assoc dir sr--skill-index))
+             (skill-content (if entry-data (cddr entry-data) ""))
+             (sim (sr--ngram-similarity task-text skill-content)))
+        (push (cons dir sim) scored)))
+    (sort scored (lambda (a b) (> (cdr a) (cdr b))))))
+
 (defun sr--select-skill (task-text)
   "Select best skill for TASK-TEXT using ontology-driven scoring.
+When the margin between top-1 and top-2 is below the threshold,
+fall back to n-gram similarity (cheap embedding approximation).
 Returns (skill-dir . score) or nil if no skills available."
   (unless sr--skill-index (sr--build-index))
   (let* ((task-category (sr--categorize-task task-text))
          (scored (mapcar (lambda (entry)
-                           (cons (car entry)
-                                 (sr--score-skill task-text task-category entry)))
-                         sr--skill-index))
+                            (cons (car entry)
+                                  (sr--score-skill task-text task-category entry)))
+                          sr--skill-index))
          (sorted (sort scored (lambda (a b) (> (cdr a) (cdr b)))))
-         (best (car sorted)))
-    ;; Exploration: with probability sr--exploration-rate, try #2 or #3
-     (if (and best (< (random 100) (* sr--exploration-rate 100))
-              (nth 1 sorted))
-        (let ((pick (nth (1+ (random (min 2 (1- (length sorted))))) sorted)))
-          (cons (car pick) (cdr pick)))
-      (cons (car best) (cdr best)))))
+         (best (car sorted))
+         (second (nth 1 sorted))
+         (margin (if (and best second) (- (cdr best) (cdr second)) 1.0))
+         (low-confidence (< margin sr--embedding-fallback-threshold)))
+    ;; Low confidence → n-gram fallback for top candidates
+    (if (and low-confidence second)
+        (let* ((top-n (seq-take sorted (min 5 (length sorted))))
+               (reranked (sr--embedding-fallback task-text top-n))
+               (fallback-best (car reranked)))
+          (message "[embed-fallback] margin=%.3f <%s, n-gram fallback: %s→%s"
+                   margin (format "%.2f" sr--embedding-fallback-threshold)
+                   (car best) (car fallback-best))
+          fallback-best)
+      ;; High enough confidence — use 8-dim score directly
+      (if (and best (< (random 100) (* sr--exploration-rate 100))
+               second)
+          (let ((pick (nth (1+ (random (min 2 (1- (length sorted))))) sorted)))
+            (cons (car pick) (cdr pick)))
+        (cons (car best) (cdr best))))))
 
 (provide 'skill-routing-onto)
 ;;; skill-routing-onto.el ends here
