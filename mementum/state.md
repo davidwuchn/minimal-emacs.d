@@ -1,7 +1,13 @@
 # Mementum State
 
-> Last session: 2026-05-27 (active — lambda prompt compression + deterministic routing)
+> Last session: 2026-05-29 (active — skill routing ontology + crash vector fixes)
 > Next pipeline: running (auto-workflow queued)
+
+## Session: Skill Routing Ontology + Production Hardening
+
+**Pulled skill-routing-onto.el from remote.** 4-dim adaptive scoring (keep-rate, trend, confidence, holographic memory). Hit@1: 29.2% → 58.3%.
+**Fixed test requires** for ontology benchmark. All 6 tests pass.
+**Production crash vector**: `(wrong-number-of-arguments setq 3)` in timer callback — root cause identified as stale `gptel-request.elc` (May 24 bytecode vs May 29 source with 2 new commits). Deleted stale `.elc`.
 
 ## Session: Lambda Prompt Compression + Deterministic-First Architecture
 
