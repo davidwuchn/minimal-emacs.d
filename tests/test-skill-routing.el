@@ -173,10 +173,8 @@ Excludes skeleton/template dirs that defer to external content."
 (require 'gptel-auto-workflow-ontology-router nil t)
 
 (ert-deftest routing/ontology-accuracy ()
-  "Measure routing accuracy using ontology-driven 4-dim scoring.
-Target: >50% Hit@1 (beats keyword baseline of 29.2%).
-Current: 41.7% (improved from 29.2% via exclusive-word bonus + category fit)."
-  :expected-result (if noninteractive :failed :passed)
+  "Measure routing accuracy using ontology-driven 4-dim + adaptive scoring.
+Target: >50% Hit@1 (beats keyword baseline of 29.2%)."
   (skip-unless (featurep 'skill-routing-onto))
   (let* ((index (progn (sr--build-index) sr--skill-index))
          (total (length ov5-routing-benchmark))
