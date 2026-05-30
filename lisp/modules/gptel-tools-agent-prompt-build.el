@@ -2633,20 +2633,94 @@ Optional N limits number of reasons (default 3)."
       (setq pairs (sort pairs (lambda (a b) (> (cdr a) (cdr b)))))
       (seq-take pairs (or n 3)))))
 
+(defvar gptel-auto-experiment--grader-insights (make-hash-table :test 'equal)
+  "Hash table keyed by target file, values are plists of grader insight data.
+Each entry: (:grader-output RAW-TEXT :criteria ((DESC . REASON) ...)).")
+
+(defun gptel-auto-experiment--parse-grader-output (target grader-output)
+  "Parse GRADER-OUTPUT for per-criterion PASS/FAIL reasoning.
+Extracts numbered items like '1. description: PASS - reason' from the
+output, including <think> blocks.  Stores results in
+`gptel-auto-experiment--grader-insights' for TARGET."
+  (when (and target (stringp grader-output))
+    (let ((criteria nil)
+          (in-think nil))
+      ;; Scan lines for numbered criteria patterns
+      (with-temp-buffer
+        (insert grader-output)
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let ((line (buffer-substring-no-properties
+                       (line-beginning-position) (line-end-position))))
+            ;; Track <think> blocks
+            (when (string-match-p "<think>" line)
+              (setq in-think t))
+            (when (string-match-p "</think>" line)
+              (setq in-think nil))
+            ;; Match: "N. description: PASS - reason" or "N. description - FAIL - reason"
+            (when (string-match
+                   "^\\s-*\\(?:\\*\\*\\)?\\([0-9]+\\)\\.\\s-+\\(?:\\*\\*\\)?\\([^:]+?\\)\\(?:\\*\\*\\)?\\s-*:\\s-+\\(PASS\\|FAIL\\)\\(?:\\s-+-\\s-*\\(.+\\)\\)?"
+                   line)
+              (let* ((desc (string-trim (match-string-no-properties 2 line)))
+                     (verdict (match-string-no-properties 3 line))
+                     (reason (match-string-no-properties 4 line)))
+                (push (list :description desc
+                            :verdict (if (string= "PASS" verdict) :pass :fail)
+                            :reason (when reason (string-trim reason)))
+                      criteria))))
+          (forward-line 1)))
+      (when criteria
+        (puthash target
+                 (list :grader-output (substring grader-output 0 (min 500 (length grader-output)))
+                       :criteria (nreverse criteria))
+                 gptel-auto-experiment--grader-insights)))))
+
 (defun gptel-auto-experiment--format-failure-patterns (target)
   "Format common failure patterns for TARGET as prompt guidance.
+Includes grader insight PASS/FAIL criteria when available.
 Returns string warning about common rejection reasons, or empty string."
-  (let ((reasons (gptel-auto-experiment--get-common-failure-reasons target 3)))
-    (if (null reasons)
-        ""
-      (concat "## Common Failure Patterns (AVOID THESE)\n"
-              "Recent experiments on this target were discarded for these reasons:\n"
-              (mapconcat (lambda (pair)
-                           (format "- %s (%d times)"
-                                   (car pair) (cdr pair)))
-                         reasons
-                         "\n")
-              "\n\nTo succeed, actively avoid the patterns above.\n\n"))))
+  (let ((reasons (gptel-auto-experiment--get-common-failure-reasons target 3))
+        (insights (gethash target gptel-auto-experiment--grader-insights))
+        (parts nil))
+    ;; Historical failure reasons
+    (when reasons
+      (push (concat "## Common Failure Patterns (AVOID THESE)\n"
+                    "Recent experiments on this target were discarded for these reasons:\n"
+                    (mapconcat (lambda (pair)
+                                 (format "- %s (%d times)"
+                                         (car pair) (cdr pair)))
+                               reasons
+                               "\n"))
+            parts))
+    ;; Grader insights from last evaluation
+    (when insights
+      (let* ((criteria (plist-get insights :criteria))
+             (fails (cl-remove-if-not
+                     (lambda (c) (eq :fail (plist-get c :verdict))) criteria))
+             (passes (cl-remove-if-not
+                      (lambda (c) (eq :pass (plist-get c :verdict))) criteria)))
+        (when fails
+          (push (concat "## Grader Feedback — Failed Criteria (FIX THESE)\n"
+                        "The last evaluation found these issues:\n"
+                        (mapconcat (lambda (c)
+                                     (format "- %s: %s"
+                                             (plist-get c :description)
+                                             (or (plist-get c :reason) "no details")))
+                                   fails
+                                   "\n"))
+                parts))
+        (when passes
+          (push (concat "## Grader Feedback — Passed Criteria (REINFORCE)\n"
+                        "These aspects were done well and should be maintained:\n"
+                        (mapconcat (lambda (c)
+                                     (format "- %s" (plist-get c :description)))
+                                   passes
+                                   "\n"))
+                parts))))
+    (if parts
+        (concat (mapconcat #'identity (nreverse parts) "\n\n") "\n\n"
+                "To succeed, actively avoid the failure patterns and address grader feedback above.\n\n")
+      "")))
 
 ;;; Cross-Target Pattern Transfer
 

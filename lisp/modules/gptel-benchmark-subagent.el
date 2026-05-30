@@ -335,9 +335,9 @@ Uses grader subagent - no local fallback (fail if subagent unavailable)."
   ∀e ∈ expected: pass(e) ∨ fail(e) with reason
   ∀f ∈ forbidden: absent(f) → pass | present(f) → fail with reason
 
-MANDATORY: End your response with exactly this line:
+MANDATORY: Begin your response with exactly this line:
 → summary: SCORE: X/%d
-where X is the count of passing items.
+where X is the count of passing items. Put this line FIRST, before any analysis — the parser reads it from the start of your response.
 
 OUTPUT:
 %s

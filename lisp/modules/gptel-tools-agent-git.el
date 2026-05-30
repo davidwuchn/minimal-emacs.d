@@ -85,10 +85,12 @@ Default 300s (5 min). Set lower to catch stuck requests faster."
 When non-nil, inactivity-based timeouts may still rearm on progress, but the
 task cannot exceed this total runtime.")
 
-(defcustom my/gptel-subagent-result-limit 4000
+(defcustom my/gptel-subagent-result-limit 16000
   "Max characters to return inline from a subagent result.
 Results longer than this are truncated and the full text is saved
-to a temp file."
+to a temp file.  Increased from 4000 to 16000 because the grader
+subagent generates verbose <think> analysis that exceeds 4000 chars
+before reaching the mandatory SCORE line at the end of output."
   :type 'integer
   :group 'gptel-tools-agent)
 

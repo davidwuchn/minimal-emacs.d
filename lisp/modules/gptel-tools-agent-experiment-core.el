@@ -467,10 +467,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                      (let* ((grade-score (plist-get grade :score))
                                             (grade-total (plist-get grade :total))
                                             (grade-passed (plist-get grade :passed))
-                                            (grade-details (plist-get grade :details))
-                                            (hypothesis (gptel-auto-experiment--extract-hypothesis effective-agent-output)))
-                                       (message "[auto-exp] Grade result: score=%s/%s passed=%s"
-                                                grade-score grade-total grade-passed)
+                                             (grade-details (plist-get grade :details))
+                                             (hypothesis (gptel-auto-experiment--extract-hypothesis effective-agent-output)))
+                                        ;; Extract grader insights for self-evolution feedback
+                                        (when (and target (stringp grade-details)
+                                                   (fboundp 'gptel-auto-experiment--parse-grader-output))
+                                          (gptel-auto-experiment--parse-grader-output target grade-details))
+                                        (message "[auto-exp] Grade result: score=%s/%s passed=%s"
+                                                 grade-score grade-total grade-passed)
                                        (when (and effective-agent-output (> (length effective-agent-output) 0))
                                          (message "[auto-exp] Agent preview: %s"
                                                   (my/gptel--sanitize-for-logging effective-agent-output 100)))
