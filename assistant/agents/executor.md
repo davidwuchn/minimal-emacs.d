@@ -1,7 +1,7 @@
 ---
 name: executor
-backend: MiniMax
-model: minimax-m2.7-highspeed
+backend: DashScope
+model: qwen3.6-plus
 max-tokens: 65536
 temperature: 0.1
 steps: 15
