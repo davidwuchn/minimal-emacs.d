@@ -65,18 +65,23 @@ F. **Memory Management** — Fix leaks, optimize allocation, cleanup patterns
 7. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
 8. **CRITICAL: YOU MUST USE Edit OR Write TOOLS.** Text-only descriptions of changes cause immediate failure. After reading code, your very next action MUST be an Edit or Write tool call that changes the file. Do not describe changes—make them.
 9. **MANDATORY VERIFICATION — WITHOUT THIS, EXPERIMENT FAILS AUTOMATICALLY**
-   After EVERY code change, run these THREE verification commands IN ORDER:
+   After EVERY code change, you MUST run these THREE verification commands IN ORDER:
    a. Syntax check: {{sexp-check-command}}
    b. Byte-compile: emacs -Q --batch -f batch-byte-compile {{target-full-path}}
    c. Load test: emacs -Q --batch -l {{target-full-path}}
    
-   **CRITICAL:** The grader checks your VERIFY section for evidence of these commands.
-   If you skip verification, the experiment scores 0/4 on "verification attempted" and FAILS.
+   **YOU MUST ACTUALLY RUN THESE COMMANDS. DO NOT SKIP THEM.**
+   **The grader checks for evidence that you ran them. If missing, you get 0/4 and FAIL.**
+   
+   Example VERIFY section (MUST include in final response):
+   VERIFY:
+   - Syntax check: emacs -Q --batch --eval="(check-parens)" {{target-full-path}} → PASS
+   - Byte-compile: emacs -Q --batch -f batch-byte-compile {{target-full-path}} → PASS  
+   - Load test: emacs -Q --batch -l {{target-full-path}} → PASS
    
    - If ANY validation step fails, FIX IT before proceeding
    - Do not run expensive tests on broken code
-   - In your final VERIFY section, list: command → result (PASS/FAIL)
-10. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
+ 10. (Optional) Run full tests: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
  11. DO NOT run git add, git commit, git push, or stage changes yourself.
      Leave edits uncommitted in the worktree; the auto-workflow controller
      handles grading, commit creation, review, and staging.
