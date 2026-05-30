@@ -17,7 +17,7 @@ total-kept: 0
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 2 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 3 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -49,6 +49,7 @@ total-kept: 0
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
 - **other** (2×): Investigate root cause
+- **validation-failed** (1×): Improve pre-grade validation prompts
 
 ## Success Patterns
 
@@ -65,7 +66,7 @@ total-kept: 0
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- Continue with current targets based on research findings
+- **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -91,4 +92,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (0 kept locally across 2 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (0 kept locally across 3 local records). It evolves every self-evolution cycle.*

@@ -319,13 +319,15 @@ finish."
   (ignore-errors
     (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
                   (expand-file-name "~/.authinfo.gpg")))
-  (unless (ignore-errors (gptel-agent--update-agents) t)
-    ;; gptel-agent--update-agents can fail in headless daemon. Register
-    ;; known agent types explicitly so grader/executor/researcher work.
-    (dolist (a '("analyzer" "comparator" "executor" "explorer" "grader"
-                 "introspector" "researcher" "reviewer"))
-      (unless (assoc a gptel-agent--agents)
-        (push (list a) gptel-agent--agents))))
+  ;; Ensure gptel-agent-dirs includes our custom agent directory so
+  ;; --update-agents registers all agent types (grader, analyzer, etc.).
+  (let ((agents-dir (expand-file-name "assistant/agents"
+                                      (or (bound-and-true-p minimal-emacs-user-directory)
+                                          user-emacs-directory))))
+    (when (and (file-directory-p agents-dir)
+               (boundp 'gptel-agent-dirs))
+      (cl-pushnew agents-dir gptel-agent-dirs :test #'string=)))
+  (ignore-errors (gptel-agent--update-agents))
   (gptel-auto-workflow--ensure-buffer-tables)
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[auto-workflow] Running for %d projects..."
@@ -832,12 +834,13 @@ then runs researcher for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   (interactive)
   ;; Ensure agent types are registered (researcher, executor, etc.)
-  (unless (and (fboundp 'gptel-agent--update-agents)
-               (ignore-errors (gptel-agent--update-agents) t))
-    (dolist (a '("analyzer" "comparator" "executor" "explorer" "grader"
-                 "introspector" "researcher" "reviewer"))
-      (unless (assoc a gptel-agent--agents)
-        (push (list a) gptel-agent--agents))))
+  (let ((agents-dir (expand-file-name "assistant/agents"
+                                      (or (bound-and-true-p minimal-emacs-user-directory)
+                                          user-emacs-directory))))
+    (when (and (file-directory-p agents-dir)
+               (boundp 'gptel-agent-dirs))
+      (cl-pushnew agents-dir gptel-agent-dirs :test #'string=)))
+  (ignore-errors (gptel-agent--update-agents))
   ;; Load full workflow stack when running in researcher daemon context
   (condition-case err
       (progn
