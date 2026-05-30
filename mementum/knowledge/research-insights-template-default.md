@@ -224,89 +224,88 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Distillation
+# Research Distillation: Template-Default
 
-## Overview
-- **65 experiments** executed across targets
-- **Template:** template-default
-- **Status:** All hypotheses discarded; strategic pivots identified
+**Scope:** 100 experiments across gptel modules (FSM utilities, benchmarks, auto-workflow, tools agent)
 
 ---
 
-## Discarded Hypotheses (9 Total)
+## Discarded Hypotheses (7 total)
 
-### Performance Optimizations (3)
-| Hypothesis | Rationale |
-|------------|-----------|
-| Memoize `nucleus--project-root` | Redundant `(project-current)` calls not significant bottleneck |
-| Memoize `nucleus--resolve-*--dir` functions | Over-engineering; filesystem caching sufficient |
-| Cache directory path resolution in `nucleus-prompts.el` | Same as above |
+### Code Clarity Improvements
 
-### Error Handling (1)
-| Hypothesis | Rationale |
-|------------|-----------|
-| Nil guard + `file-readable-p` validation in `nucleus--read-file` | Added complexity outweighs benefit |
+| Hypothesis | Mechanism | Impact |
+|------------|-----------|--------|
+| Replace `cl-letf`+`symbol-function` with `cl-labels` | Use idiomatic local recursive functions | Eliminates indirection overhead |
+| Remove dead `hash-table-p` guard | Unreachable code elimination | `seen` always fresh |
+| Extract traversal pattern to `my/gptel--fsm-for-each` | DRY helper function | Reduces duplication |
 
-### Bug Fixes (2)
-| Hypothesis | Rationale |
-|------------|-----------|
-| Fix argument order in `nucleus--validate-contract` | Low-impact edge case |
-| Fix race condition in `nucleus-sync-tool-profile` (lexical closure) | Unlikely to trigger in practice |
+### Performance Improvements
 
-### Code Quality (3)
-| Hypothesis | Rationale |
-|------------|-----------|
-| Optimize `make-hash-table` placement + `ignore-errors` | Marginal gains; refactoring risk |
-| Nil guard for empty `status-lines` | Premature optimization |
-| Fix indentation in `gptel-auto-workflow-*` | Cosmetic only |
+| Hypothesis | Mechanism | Impact |
+|------------|-----------|--------|
+| Eliminate redundant `puthash` calls | Skip writes when cons cell exists | Avoid mutation overhead |
+
+### Correctness Fixes
+
+| Hypothesis | Mechanism | Impact |
+|------------|-----------|--------|
+| `copy-tree` vs `copy-sequence` in `top-research-priority` | Prevent shared cons cell mutation | Fixes data corruption |
+| Add `(listp class)` guard in `ontology-research-gaps` | Validate malformed ontology entries | Prevents runtime errors |
+
+### Refactoring
+
+| Hypothesis | Mechanism | Impact |
+|------------|-----------|--------|
+| Extract `parse-one-autotts-trace` from while-loop | Separate mechanism from policy | Reduces nesting (3→2 levels) |
 
 ---
 
-## Strategic Implication
-**No kept hypotheses** suggests:
-- Current implementation is adequately performant
-- Focus should shift to **user-observable outcomes** rather than internal optimizations
-- Consider narrowing experiment scope to high-impact changes only
+**Status:** All 7 hypotheses discarded (not implemented)
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Distillation
+# Research Distillation Check
 
-## Observations
+## Structure Assessment
 
-### Strengths
-- Clear categorization of hypothesis types
-- Rationales are plausible
-- Acknowledges complete discard rate
+The template is well-formed. Quick verification:
 
-### Concerns
+| Aspect | Status |
+|--------|--------|
+| Scope definition | ✓ Clear |
+| Hypotheses categorized | ✓ 4 groups |
+| All fields populated | ✓ Mechanism + Impact |
+| Status consistency | ✓ All 7 marked discarded |
+| Count accuracy | ✓ 7 = 3+1+2+1 ✓ |
 
-| Issue | Detail |
-|-------|--------|
-| **Discrepancy** | 65 experiments, only 9 hypotheses documented |
-| **Metrics absent** | No baseline measurements cited |
-| **Rationale depth** | "Not significant" / "Low impact" lack evidence |
-| **No kept experiments** | Suggests either over-caution or unfocused scope |
+## Technical Notes
 
-## Questions
-
-1. Where are the other 56 experiment results?
-2. Was any hypothesis *ever* kept in this series?
-3. What defined "significant" / "high-impact" thresholds?
-4. Were any experiments *nearly* kept, requiring only refinement?
-
-## Suggestions
+Some hypotheses appear to lack rejection reasoning:
 
 ```
-Next iteration: Document ALL experiments, not just discarded ones
-Focus: Ensure at least 1-2 high-conviction changes per cycle
-Metric: Track "kept ratio" over time, not just absolute counts
+Hypothesis                          | Potential Issue
+------------------------------------|----------------------------------
+`copy-tree` vs `copy-sequence`      | Would lose structure if `class` is already a list?
+`(listp class)` guard               | What's the source of malformed entries?
+Remove `hash-table-p` guard         | Confirm unreachable via control flow analysis?
 ```
 
-**Bottom line**: The document reads like a post-mortem, but without success stories, it's incomplete. A healthy research pipeline should have *some* kept hypotheses.
+## Request
+
+Was this documentation:
+1. **Generated** (and you want validation)?
+2. **In progress** (and you want completion criteria)?
+3. **Completed** (and you want archiving)?
+
+Provide the source code snippets or context for the 7 items if you'd like deeper technical verification.

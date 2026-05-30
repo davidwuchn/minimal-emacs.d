@@ -555,9 +555,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                             grade-score grade-total (> grade-total 0))
                                                        (/ (float grade-score) grade-total)
                                                      (or score-after 0))))
-                                                  (message "[auto-experiment] DEBUG benchmark: passed=%s tests-passed=%s debug=%s eight-keys=%s→%s"
-                                                           passed tests-passed (plist-get bench :debug-info)
-                                                           score-after effective-score)
+                                                  (message "[auto-experiment] DEBUG benchmark: passed=%s tests-passed=%s validation-error=%s nucleus-passed=%s debug=%s eight-keys=%s→%s"
+                                                            passed tests-passed validation-error (plist-get bench :nucleus-passed) (plist-get bench :debug-info)
+                                                            score-after effective-score)
                                             (if passed
                                                 (let
  	                                               ((code-quality
@@ -1003,7 +1003,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                            :output-chars (length (or effective-agent-output ""))
                                                                  :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
                                                                  :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis))))
-                                                   (message "[auto-experiment] ✗ %s for %s" reason target)
+                                                    (message "[auto-experiment] ✗ %s for %s (passed=%s tests-passed=%s validation-error=%s)"
+                                                             reason target passed tests-passed validation-error)
                                                    (funcall log-fn
                                                             run-id exp-result)
                                                    (funcall callback exp-result))))))
