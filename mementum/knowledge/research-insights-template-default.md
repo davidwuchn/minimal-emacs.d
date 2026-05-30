@@ -156,64 +156,61 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
 
 ```allium
-The content you've provided appears to be a **template structure** rather than distillable research content. The fields are:
+**Distillation:**
 
-- **Research strategy**: Just labels "template-default"
-- **3 experiments across targets**: References a file path `lisp/modules/gptel-auto-workflow-projects.el`
-- **Kept hypotheses**: Empty
-- **Discarded hypotheses**: Empty
+Research strategy: template-default, 92 experiments across 14 targets (modules + staging/test scopes).
 
-**To distill something meaningful, I'd need:**
+**No hypotheses retained.**
 
-1. Actual experimental results or findings
-2. Hypotheses that were tested
-3. Research observations or data
+**7 hypotheses discarded:**
 
-**Or if you intended:**
-
-- To document your research using this template → Please share the actual hypotheses/experiments
-- Something else is the source material → Share the actual content to distill
-
-Could you provide the underlying research content or clarify what you'd like distilled?
+1. `cl-letf` + `symbol-function` → `cl-labels` in `gptel--fsm-registry-validate` (idiomatic, compiled local recursion)
+2. Remove dead `hash-table-p` guard in `gptel--fsm-collect-list` (unreachable code)
+3. Extract traversal pattern into `gptel--fsm-for-each` helper (DRY + reuse)
+4. Extract `gptel-auto-workflow--parse-one-autotts-trace` from while-loop (separation of mechanism/policy, reduce nesting)
+5. Eliminate redundant `puthash` in `gptel-auto-workflow--correlate-research-to-outcomes` (avoid no-op writes)
+6. `copy-tree` vs `copy-sequence` in `gptel-auto-workflow--top-research-priority` (prevent shared cons mutation)
+7. Add `(listp class)` guard in `gptel-auto-workflow--ontology-research-gaps` (defensive error prevention)
 ```
 
 ### Check Issues
 
-It looks like you've shared an AI-generated response asking for clarification. I'm not sure what you're asking me to do with it.
+# Review of Distillation Summary
 
-Could you clarify what you'd like me to help with?
+## Observations
 
-- **Evaluate** the response shown?
-- **Provide** the underlying research content it was asking for?
-- **Something else**?
+| Aspect | Status | Notes |
+|--------|--------|-------|
+| **Total experiments** | 92 | Across 14 targets |
+| **Hypotheses retained** | 0 | All discarded |
+| **Hypotheses discarded** | 7 | Fully enumerated |
 
-Let me know what you need.
+## Sanity Checks
+
+✅ **Number consistency**: 7 discarded, 0 retained — total is 7, which is a small subset of 92 experiments (as expected for distillation phase)
+
+⚠️ **No hypotheses retained** — unusual if this is a genuine hypothesis-driven process. Either:
+- The experimentation phase was purely exploratory/learning
+- The retention threshold was very high
+- The hypotheses were actually implemented as-is without formal retention tracking
+
+## Quality of Discard Rationales
+
+| # | Hypothesis | Rationale Soundness | Notes |
+|---|------------|---------------------|-------|
+| 1 | `cl-letf` → `cl-labels` | ⚠️ Partial | "Compiled" is incorrect — `cl-labels` is interpreted; `cl-flet` with `lexical-binding` compiles |
+| 2 | Remove dead code | ✅ Strong | Unreachable code should always be removed |
+| 3 | Extract traversal helper | ✅ Strong | DRY is well-justified |
+| 4 | Extract function | ✅ Strong | Nesting reduction is measurable |
+| 5 | Eliminate redundant `puthash` | ⚠️ Unclear | Needs proof of no-op; could affect semantics |
+| 6 | `copy-tree` vs `copy-sequence` | ✅ Strong | Mutation safety is critical |
+| 7 | Add `(listp class)` guard | ⚠️ Partial | "Defensive error prevention" is vague — clarify: silent failure vs explicit error? |
+
+## Questio
+
+... (truncated)

@@ -331,10 +331,12 @@ daemon alive."
              ;; Allow test failures that match main baseline
              (baseline-check (when (and should-run-tests (not raw-tests-passed))
                                (gptel-auto-workflow--staging-tests-match-main-baseline-p tests-output)))
-             (tests-passed (or (not should-run-tests)
-                               (and skip-tests (not gptel-auto-experiment-require-tests))
-                               raw-tests-passed
-                               (and baseline-check (car baseline-check))))
+              (tests-passed (or (not should-run-tests)
+                                (and skip-tests (not gptel-auto-experiment-require-tests))
+                                raw-tests-passed
+                                (and baseline-check (car baseline-check))))
+              (debug-info (format "DEBUG: skip=%s defer=%s should-run=%s raw-passed=%s baseline=%s tests-passed=%s"
+                                  skip-tests defer-tests-to-staging should-run-tests raw-tests-passed baseline-check tests-passed))
              (final-tests-output (or (and baseline-check (cdr baseline-check))
                                      tests-output))
              (scores (gptel-auto-experiment--eight-keys-scores hypothesis)))
@@ -344,10 +346,11 @@ daemon alive."
         (when (and skip-tests gptel-auto-experiment-require-tests)
           (message "[auto-exp] Tests required before staging merge: %s"
                    (if tests-passed "PASS" "FAIL")))
-        (list :passed tests-passed
-              :nucleus-passed t
-              :nucleus-skipped t
-              :tests-passed tests-passed
+         (list :passed tests-passed
+               :debug-info debug-info
+               :nucleus-passed t
+               :nucleus-skipped t
+               :tests-passed tests-passed
               :tests-output final-tests-output
               :tests-skipped (not should-run-tests)
               :time (- (float-time) start)
