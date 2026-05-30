@@ -555,24 +555,30 @@ Returns at most 3 patterns as a compact string, max 500 chars."
 
 (defun gptel-auto-experiment--research-for-prompt (english-findings &optional target)
   "Return research findings optimized for LLM prompts.
-Strips <think> blocks, extracts actionable patterns relevant to TARGET,
-limits to ~500 chars. Lambda-compressed format when backend supports it."
+Strips <think> blocks, extracts actionable patterns, limits to 200 chars.
+Adds strong DO-NOT-RESEARCH prefix to prevent agents from interpreting
+as a research task."
   (let* ((stripped (gptel-auto-experiment--strip-think-blocks english-findings))
-         (focused (gptel-auto-experiment--extract-actionable-patterns stripped (or target ""))))
-    (if (gptel-auto-experiment--use-lambda-prompts-p)
-        (let* ((lines (split-string stripped "\n"))
-               (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
-               (compact (if apply-lines
-                            (mapconcat (lambda (l)
-                                         (replace-regexp-in-string
-                                          "\\*\\*Apply:\\*\\*:?\\s-*" "λ apply: "
-                                          (string-trim l)))
-                                       apply-lines "\n")
-                          "")))
-          (if (string-empty-p compact)
-              focused
-            compact))
-      focused)))
+         (focused (gptel-auto-experiment--extract-actionable-patterns stripped (or target "")))
+         (base (if (gptel-auto-experiment--use-lambda-prompts-p)
+                  (let* ((lines (split-string stripped "\n"))
+                         (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
+                         (compact (if apply-lines
+                                      (mapconcat (lambda (l)
+                                                   (replace-regexp-in-string
+                                                    "\\*\\*Apply:\\*\\*:?\\s-*" "λ apply: "
+                                                    (string-trim l)))
+                                                 apply-lines "\n")
+                                    "")))
+                    (if (string-empty-p compact) focused compact))
+                focused))
+         (trimmed (if (> (length base) 200)
+                      (concat (truncate-string-to-width base 197 nil nil "") "...")
+                    base)))
+    (if (string-empty-p trimmed)
+        ""
+      (concat "## Research Context (REFERENCE ONLY — DO NOT RESEARCH — USE FOR HYPOTHESIS IDEAS)\n"
+              trimmed))))
 
 (defun gptel-auto-experiment--allium-issues-count (check-output)
   "Count distinct issues from Allium check output (deterministic).
