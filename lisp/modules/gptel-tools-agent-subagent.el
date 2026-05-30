@@ -98,17 +98,39 @@
   buffer)
 
 (defun my/gptel--reset-agent-task-state ()
-  "Abort and clear all tracked subagent task state."
+  "Abort running tasks and clear completed subagent task state.
+
+Completed entries are removed. In-flight entries are kept so their
+callbacks still have state to consult when they arrive — the caller's
+stale-run-id check prevents interference. This avoids wasting API
+calls by letting in-flight subagents drain naturally instead of being
+aborted mid-response.
+
+ALGORITHM: Collect task IDs first, then process, to avoid modifying
+the hash table during maphash iteration."
   (when (hash-table-p my/gptel--agent-task-state)
-    (let (request-buffers)
+    (let (all-task-ids request-buffers done-ids in-flight-ids stale-ids)
+      ;; Phase 1: collect all task IDs and classify
       (maphash
-       (lambda (_task-id state)
+       (lambda (task-id state)
+         (push task-id all-task-ids)
          (when (plistp state)
            (my/gptel--cancel-agent-task-timers state)
-           (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
-             (push request-buf request-buffers))))
+           (let ((done (plist-get state :done))
+                 (request-buf (my/gptel--agent-task-request-buffer state)))
+             (cond (done
+                    (push task-id done-ids))
+                   (request-buf
+                    (push request-buf request-buffers)
+                    (push task-id in-flight-ids))
+                   (t
+                    (push task-id stale-ids))))))
        my/gptel--agent-task-state)
-      (clrhash my/gptel--agent-task-state)
+      ;; Phase 2: remove done and stale entries (not in-flight)
+      (dolist (tid (append done-ids stale-ids))
+        (remhash tid my/gptel--agent-task-state))
+      ;; Cancel in-flight request buffers (but keep their state entries)
+      ;; so arriving callbacks don't trigger the "after reset" stale path
       (dolist (request-buf (delete-dups request-buffers))
         (when (and (buffer-live-p request-buf)
                    (fboundp 'gptel-abort))
@@ -121,7 +143,10 @@
                                (error "abort-error"))))
                (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
                         (buffer-name request-buf)
-                        safe-msg)))))))))
+                        safe-msg))))))
+      (when in-flight-ids
+        (message "[nucleus] Keeping %d in-flight subagent task(s) for natural drain"
+                 (length in-flight-ids))))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."

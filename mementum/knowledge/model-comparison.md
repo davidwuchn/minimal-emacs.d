@@ -3,7 +3,6 @@
 
 ## Model Rankings (by keep-rate)
 
-- **MiniMax/minimax-m2.7-highspeed**: 9.3%
 
 
-*Generated: 2026-05-30 12:52*
+*Generated: 2026-05-30 14:57*

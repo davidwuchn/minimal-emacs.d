@@ -136,9 +136,11 @@ fixable validation failures that the executor can correct."
            (string-match-p "Defensive code removal detected\\|removing.*fallbacks\\|without proof"
                            validation-error)
            (string-match-p "Undefined function introduced\\|undefined.*runtime.*call"
-                           validation-error)
-           (string-match-p "security|injection|eval.*without.*guard"
-                           validation-error))))
+                            validation-error)
+            (string-match-p "security|injection|eval.*without.*guard"
+                            validation-error)
+            (string-match-p "no code changes\\|no file modifications\\|Agent made no"
+                            validation-error))))
 
 (defun gptel-auto-experiment--make-retry-prompt (target validation-error original-prompt)
   "Create retry prompt after validation failure.
@@ -159,10 +161,10 @@ Instructs executor to load relevant skill instead of hardcoding patterns."
           ((gptel-auto-experiment--elisp-syntax-error-p target validation-error)
            "CALL THIS FIRST: Skill(\"elisp-expert\")
 This skill teaches syntax-safe Elisp edits and dangerous patterns including cl-return-from requirements.")
-          ;; Undefined function calls - guide the agent to check Emacs Lisp availability
-          ((string-match-p "Undefined function introduced\\|undefined.*runtime.*call"
-                           validation-error)
-           "The undefined function was rejected because it does not exist in this Emacs Lisp runtime.
+           ;; Undefined function calls - guide the agent to check Emacs Lisp availability
+           ((string-match-p "Undefined function introduced\\|undefined.*runtime.*call"
+                            validation-error)
+            "The undefined function was rejected because it does not exist in this Emacs Lisp runtime.
 Before writing a function call, verify it exists in Emacs Lisp. When uncertain, use
 well-known Emacs builtins only. Common Lisp functions NOT available in Emacs:
 getf (use plist-get), plusp (use (> n 0)), remf (use cl-remf),
@@ -173,8 +175,20 @@ If you see a function like \='tool\=' or \='key\=' in the error, it means you wr
 (tool ...) or (key ...) — these are NOT valid Emacs Lisp functions.
 Replace undefined calls with valid Emacs Lisp equivalents or remove them.
 Use function-quote #' for symbols meant as functions, not bare-quote \='.")
-          ;; Add more skill mappings here as needed
-          (t "")))
+           ;; Agent made no file modifications — it only analyzed, didn't edit
+           ((string-match-p "no code changes\\|no file modifications\\|Agent made no"
+                            validation-error)
+            "Your response contained ANALYSIS but NO FILE EDITS. This is always rejected.
+You MUST use Edit or Write tools to modify the target file. The validation
+gate checks git diff and rejects sessions where no files changed.
+CRITICAL rules for retry:
+- Start by editing the target file — do NOT just analyze or describe what to change
+- Even small, minimal edits are better than no edits
+- If you are uncertain what to change, make a small safe improvement (e.g. add a docstring,
+  fix an edge case, improve error handling) rather than returning analysis text
+- After editing, verify the file byte-compiles: `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"`")
+           ;; Add more skill mappings here as needed
+           (t "")))
         (original-contract
          (if (and (stringp original-prompt)
                   (> (length original-prompt) 0))

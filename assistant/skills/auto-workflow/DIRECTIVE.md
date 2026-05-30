@@ -19,8 +19,8 @@ total-kept: 0
 |--------|-----------|-------|------|--------|
 | `lisp/modules/gptel-auto-workflow-research-integration.el` | 0% | 2 | 0 | ⏳ Insufficient data |
 | `staging-verification` | 0% | 2 | 0 | ⏳ Insufficient data |
-| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 3 | 0 | ⏳ Insufficient data |
-| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 9 | 0 | ❌ Plateaued |
+| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 6 | 0 | ❌ Plateaued |
 | `staging-merge` | 0% | 1 | 0 | ⏳ Insufficient data |
 | `staging-review` | 0% | 1 | 0 | ⏳ Insufficient data |
 
@@ -29,7 +29,7 @@ total-kept: 0
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **manual-fix** (69× from git)
+- **manual-fix** (68× from git)
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
@@ -53,9 +53,10 @@ total-kept: 0
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (5×): Investigate root cause
-- **timeout** (3×): Add smaller batch sizes or chunked processing
+- **other** (13×): Investigate root cause
+- **timeout** (4×): Add smaller batch sizes or chunked processing
 - **test-failure** (2×): Run tests before committing experiments
+- **validation-failed** (2×): Improve pre-grade validation prompts
 
 ## Success Patterns
 
@@ -73,6 +74,7 @@ total-kept: 0
 
 <!-- AUTO-UPDATED: From experiment insights -->
 - **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-auto-workflow-strategic.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -98,4 +100,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (0 kept locally across 10 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (0 kept locally across 21 local records). It evolves every self-evolution cycle.*
