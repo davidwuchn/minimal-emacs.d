@@ -1,7 +1,5 @@
 ### Allium Issue Trends
-**Recurring patterns** across all strategies:
+**Regression warnings** (1 strategies with increased issues):
 
-- **Link experiments to specific targets**: 1 occurrence(s)
-- **Track decisions**: 1 occurrence(s)
-- **Add hypothesis documentation**: 1 occurrence(s)
+- `template-default`: 0 → 5 issues (worse)
 
