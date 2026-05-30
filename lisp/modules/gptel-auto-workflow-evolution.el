@@ -1897,13 +1897,14 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (let ((new-experiments (or (gptel-auto-workflow--evolution-count-new) 0))
             (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                                (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
-        (when (and (< new-experiments 0) (not has-research))
-          ;; Persist hints before early return so state survives daemon restarts
-          (gptel-auto-workflow--persist-next-cycle-hints)
-          (let ((message (format "[evolution] Insufficient new data (%d experiments, no research). Skipping."
-                                 new-experiments)))
-            (message "%s" message)
-            (cl-return-from gptel-auto-workflow-evolution-run-cycle message))))
+         ;; Negative count means experiments were cleaned up (last-total > current).
+         ;; Run anyway — we still have data to analyze. Only skip when genuinely 0.
+         (when (and (= new-experiments 0) (not has-research))
+           ;; Persist hints before early return so state survives daemon restarts
+           (gptel-auto-workflow--persist-next-cycle-hints)
+           (let ((message (format "[evolution] No new experiments (0 new, no research). Skipping.")))
+             (message "%s" message)
+             (cl-return-from gptel-auto-workflow-evolution-run-cycle message))))
     (error (message "[evolution] Warning: new-experiments check failed, continuing cycle")))
   ;; Consume pipeline env vars for research-aware evolution
   (let ((research-quality (getenv "PIPELINE_RESEARCH_QUALITY"))
