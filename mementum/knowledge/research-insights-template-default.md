@@ -65,6 +65,7 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< Updated upstream
 
 
 
@@ -73,11 +74,14 @@ These targets may need different research patterns or the research findings were
 
 
 
+=======
+>>>>>>> Stashed changes
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
+<<<<<<< Updated upstream
 # Research Strategy Distillation
 
 ## Template
@@ -100,10 +104,28 @@ These targets may need different research patterns or the research findings were
 
 ## Summary
 Standard template strategy with balanced experimentation across staging and module targets. No hypotheses retained or eliminated from current iteration.
+=======
+**Research Strategy: template-default**
+
+**87 experiments across 20 targets** — gptel modules for workflow automation, benchmarking, tools/agents, and extensions.
+
+**Kept (5 hypotheses):**
+- Nil summary validation in benchmark comparison → prevent `wrong-type-argument`
+- Negative caching fix → O(1) instead of O(n) disk hits for missing files
+- `proper-list-p` validation before `last` → prevent crash on improper lists
+- `stringp` validation in skill loader → explicit type contracts
+- Nil guards before `string-match`/`split-string` → error resilience
+
+**Discarded (14 hypotheses):**
+- `error-message-string` formatting, hash table removal, symbol map derivation, benchmark summary caching, `proper-list-p` replacement, module path caching, nil guards for `feature-name`, FSM logging, `seen` hash table reuse, redundant validation removal, regexp `bound-and-true-p`, `cl-remove` fix, memoization for error categorization
+
+**Focus:** Safety, Vitality (error resilience), Performance (caching), Clarity (explicit contracts).
+>>>>>>> Stashed changes
 ```
 
 ### Check Issues
 
+<<<<<<< Updated upstream
 # Research Strategy Distillation — Review
 
 ## ✅ Structure
@@ -130,3 +152,36 @@ Standard template strategy with balanced experimentation across staging and modu
 
 ## Verdict
 **Ready for iteration** once hypotheses are populated. Structure is sound.
+=======
+# Review: Research Strategy Summary
+
+## Math Check
+| Category | Count |
+|----------|-------|
+| Kept | 5 |
+| Discarded | 14 |
+| **Total listed** | **19** |
+| Stated total | 87 |
+
+**⚠️ Discrepancy:** 19 listed vs 87 stated — missing 68 experiments.
+
+## Validation
+
+**The 5 kept hypotheses** are sound defensive coding practices:
+- ✅ All address runtime error prevention
+- ✅ Cover the four focus areas (Safety, Vitality, Performance, Clarity)
+
+**The 14 discarded** are reasonable to discard:
+- ✅ Micro-optimizations without evidence of bottleneck
+- ✅ Refactorings that don't improve user-facing behavior
+
+## Questions
+
+1. **Where are the other 68 experiments categorized?**
+2. **What's the acceptance criteria for "kept" vs "discarded"?**
+3. **Were 87 experiments actually run, or is this aspirational?**
+
+## Verdict
+
+The framework is coherent. The hypothesis classifications appear reasonable. The main issue is the count mismatch with the 87-experiment claim.
+>>>>>>> Stashed changes
