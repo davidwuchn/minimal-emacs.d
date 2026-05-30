@@ -5,6 +5,17 @@ set -euo pipefail
 # Prevent C stack overflow in deeply nested subagent calls
 ulimit -s 65532 2>/dev/null || true
 
+# Required: python3 + lsof for socket ownership, staleness checks, emacsclient timeout
+if ! command -v python3 &>/dev/null; then
+    echo "ERROR: python3 is required but not found." >&2
+    echo "Install: sudo apt-get install python3" >&2
+    exit 1
+fi
+if ! command -v lsof &>/dev/null; then
+    echo "WARNING: lsof not found. Orphaned daemon sockets won't be cleaned." >&2
+    echo "Install: sudo apt-get install lsof" >&2
+fi
+
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ACTION="${1:-auto-workflow}"
 shift || true
