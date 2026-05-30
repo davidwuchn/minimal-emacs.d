@@ -100,44 +100,76 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*2 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+```markdown
+# Research Strategy: gptel-auto-workflow
 
-**Strategy:** `template-default`
-
-**Scope:**
-- 6 experiments total
-- 2 target files:
-  - `gptel-auto-workflow-strategic.el`
-  - `gptel-auto-workflow-projects.el`
+**Template:** Default  
+**Experiments:** 7  
+**Targets:** 2 modules
+- `gptel-auto-workflow-strategic.el`
+- `gptel-auto-workflow-projects.el`
 
 **Hypotheses:**
-- Kept: none
-- Discarded: none
+- Kept: — (none finalized)
+- Discarded: — (none eliminated)
 
----
-
-No hypotheses have been evaluated yet. Awaiting experiment results.
+**Status:** In progress (experiments running, hypotheses TBD)
+```
 ```
 
 ### Check Issues
 
-I see a research tracking document with:
+# Review of Research Strategy Document
 
-- **Strategy:** `template-default`
-- **Scope:** 6 experiments across 2 files:
-  - `gptel-auto-workflow-strategic.el`
-  - `gptel-auto-workflow-projects.el`
-- **Status:** No hypotheses evaluated yet
+## Observations
 
-What would you like me to do with this? For example:
+| Field | Value | Assessment |
+|-------|-------|------------|
+| Template | Default | ✓ Standard |
+| Experiments | 7 | ✓ Numeric |
+| Targets | 2 modules | ✓ Listed |
+| Hypotheses | Empty | ⚠️ Incomplete |
+| Status | In progress | ✓ Appropriate |
 
-1. **Validate** the scope/schedule makes sense?
-2. **Suggest** a hypothesis framework?
-3. **Review** the target files?
-4. **Create** experiment templates?
-5. Something else?
+## Notes
+
+- **Hypotheses section is empty** — if experiments are running, hypotheses should be documented (even if not finalized)
+- **Missing:** Experiment details, current results, blockers
+- **Missing:** Module descriptions or goals
+
+## Suggested Improvements
+
+```markdown
+# Research Strategy: gptel-auto-workflow
+
+**Template:** Default  
+**Experiments:** 7  
+**Targets:** 2 modules
+- `gptel-auto-workflow-strategic.el`
+- `gptel-auto-workflow-projects.el`
+
+**Hypotheses:**
+- Kept: — (none finalized)
+- Discarded: — (none eliminated)
+
+**Active Experiments:**
+1. [experiment-name] — [status]
+2. ...
+
+**Status:** In progress
+```
+
+Would you like me to help expand any section or check something specific?

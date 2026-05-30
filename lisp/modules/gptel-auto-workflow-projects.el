@@ -314,7 +314,13 @@ then runs workflow for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all project workflows
 finish."
   (interactive)
-  (ignore-errors (gptel-agent--update-agents))
+  (unless (ignore-errors (gptel-agent--update-agents) t)
+    ;; gptel-agent--update-agents can fail in headless daemon. Register
+    ;; known agent types explicitly so grader/executor/researcher work.
+    (dolist (a '("analyzer" "comparator" "executor" "explorer" "grader"
+                 "introspector" "researcher" "reviewer"))
+      (unless (assoc a gptel-agent--agents)
+        (push (list a) gptel-agent--agents))))
   (gptel-auto-workflow--ensure-buffer-tables)
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[auto-workflow] Running for %d projects..."
@@ -816,8 +822,12 @@ then runs researcher for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   (interactive)
   ;; Ensure agent types are registered (researcher, executor, etc.)
-  (when (fboundp 'gptel-agent--update-agents)
-    (ignore-errors (gptel-agent--update-agents)))
+  (unless (and (fboundp 'gptel-agent--update-agents)
+               (ignore-errors (gptel-agent--update-agents) t))
+    (dolist (a '("analyzer" "comparator" "executor" "explorer" "grader"
+                 "introspector" "researcher" "reviewer"))
+      (unless (assoc a gptel-agent--agents)
+        (push (list a) gptel-agent--agents))))
   ;; Load full workflow stack when running in researcher daemon context
   (condition-case err
       (progn
