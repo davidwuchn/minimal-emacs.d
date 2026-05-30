@@ -52,3 +52,51 @@ These targets may need different research patterns or the research findings were
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
+
+
+
+
+## Allium Behavioral Spec (auto-generated, v3)
+
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+
+```allium
+<think>
+The user wants me to distill a research strategy. Looking at the pattern, it seems like they want a concise format capturing:
+
+1. Research strategy
+2. The template/default context
+3. Number of experiments
+4. The specific targets
+5. What was kept vs discarded
+
+The format from the example shows:
+- Category: description
+- Details
+
+Let me distill this into a clean format:
+
+**Research Strategy:** template-default
+
+**Experiments:** 3 experiments across targets
+
+**Targets:** lisp/modules/gptel-auto-workflow-projects.el
+
+**Hypotheses:**
+- Kept: (none listed)
+- Discarded: (none listed)
+
+I should present this in a clear, structured way. Since both hypothesis sections are empty, I'll note that explicitly.
+</think>
+```
+
+### Check Issues
+
+``` markdown
+- **Research Strategy:** template-default
+- **Experiments:** 3 experiments across targets
+- **Targets:** lisp/modules/gptel-auto-workflow-projects.el
+- **Hypotheses:**
+  - Kept: (none)
+  - Discarded: (none)
+```
