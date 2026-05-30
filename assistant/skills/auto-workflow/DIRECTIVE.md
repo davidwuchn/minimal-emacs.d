@@ -3,7 +3,7 @@ name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.30
 total-experiments: 870
-total-kept: 5
+total-kept: 0
 ---
 
 # Auto-Workflow Program
@@ -17,26 +17,17 @@ total-kept: 5
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-ext-context.el` | 50% | 2 | 1 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-comparator.el` | 50% | 4 | 2 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent.el` | 14% | 7 | 1 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-error.el` | 11% | 9 | 1 | 🟡 Active |
-| `lisp/modules/gptel-ext-fsm-utils.el` | 0% | 7 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-ext-retry.el` | 0% | 3 | 0 | ⏳ Insufficient data |
-| `staging-review` | 0% | 9 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 20 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 10 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 4 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 5 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **manual-fix** (42× from git)
-- **Application for us** (24× from mementum)
+- **manual-fix** (39× from git)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
+- **Application for us** (24× from mementum)
 - **Application** (21× from mementum)
 - **Implementation sketch** (20× from mementum)
 - **How it works** (18× from mementum)
@@ -57,16 +48,13 @@ total-kept: 5
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (78×): Investigate root cause
-- **validation-failed** (6×): Improve pre-grade validation prompts
-- **api-limit** (5×): Implement provider fallback or rate limit handling
-- **timeout** (3×): Add smaller batch sizes or chunked processing
+- **other** (4×): Investigate root cause
+- **validation-failed** (1×): Improve pre-grade validation prompts
 
 ## Success Patterns
 
 <!-- AUTO-UPDATED: From mementum knowledge -->
 - Extract helper functions for repeated logic
-- Improve error handling and recovery mechanisms
 
 ## Failed Patterns
 
@@ -78,11 +66,7 @@ total-kept: 5
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 50%)
-- **lisp/modules/gptel-tools-agent.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-tools-agent-error.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-fsm-utils.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -108,4 +92,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (5 kept locally across 92 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (0 kept locally across 5 local records). It evolves every self-evolution cycle.*

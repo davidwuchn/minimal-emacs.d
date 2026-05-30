@@ -319,11 +319,18 @@ finish."
   (ignore-errors
     (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
                   (expand-file-name "~/.authinfo.gpg")))
-  ;; Blacklist Moonshot — its content_filter blocks code generation, causing
-  ;; the onto-router to prefer it over working backends (Moonshot returns an
-  ;; error message, other backends fail silently, making Moonshot look "best").
-  (when (boundp 'gptel-auto-workflow--rate-limited-backends)
-    (cl-pushnew "moonshot" gptel-auto-workflow--rate-limited-backends :test #'string=))
+  ;; Ensure Moonshot is excluded from the fallback chain — its content_filter
+  ;; blocks code generation, and the onto-router keeps preferring it because it
+  ;; returns error messages (looking more responsive than silently-failing peers).
+  ;; Override the static fallback with DeepSeek + MiniMax only.
+  (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+    (setq gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("DeepSeek" . "deepseek-v4-flash")
+            ("MiniMax" . "minimax-m2.7-highspeed"))))
+  (when (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+    (setq gptel-auto-workflow-headless-subagent-fallbacks
+          '(("DeepSeek" . "deepseek-v4-flash")
+            ("MiniMax" . "minimax-m2.7-highspeed"))))
   ;; Ensure gptel-agent-dirs includes our custom agent directory so
   ;; --update-agents registers all agent types (grader, analyzer, etc.).
   (let ((agents-dir (expand-file-name "assistant/agents"

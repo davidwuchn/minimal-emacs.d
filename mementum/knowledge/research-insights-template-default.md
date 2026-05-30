@@ -116,94 +116,190 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< Updated upstream
+=======
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>>>>>> Stashed changes
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default
+## Research Strategy Distillation
 
-**Scope:** 92 experiments across 20 Elisp modules
+**Strategy:** Template-default
 
-## Kept Hypotheses
+**Experiments:** 5 experiments across targets
 
-| # | Hypothesis | Target | Improvement Axis |
-|---|------------|--------|------------------|
-| 1 | Nil summary validation in `gptel-benchmark-compare-file-versions` prevents `wrong-type-argument` from malformed data | `gptel-benchmark-comparator.el` | Vitality |
-| 2 | Negative caching in `gptel-benchmark--cache-put`/`load-result` eliminates repeated disk I/O for missing files | `gptel-benchmark-subagent.el` | Performance |
-| 3 | `proper-list-p` validation before `last` in `extract-last-task-from-lines` prevents crashes from improper lists | `gptel-ext-context.el` | Safety, Clarity |
-| 4 | `stringp` validation in `gptel-error--load-patterns-from-skill` prevents runtime errors from non-string returns | `gptel-tools-agent-error.el` | Vitality, Clarity |
-| 5 | Nil guards before `string-match`/`split-string` in error handlers prevent crashes from nil error messages | `gptel-tools-agent-error.el` | Vitality |
+**Target:** `lisp/modules/gptel-auto-workflow-projects.el`
 
-## Discarded Hypotheses
+**Kept hypotheses:** (none specified)
 
-| # | Hypothesis | Reason Discarded |
-|---|------------|------------------|
-| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Incomplete / deferred |
-| 2 | Hash table entry removal | Incomplete |
-| 3 | Derive heading from `symbol-map` instead of pcase | Deferred |
-| 4 | Summary cache layer in `get-trend-summary` | Overhead > benefit |
-| 5 | Replace `listp` with `proper-list-p` | Redundant (already covered by #3) |
-| 6 | Hash table cache for module paths | Premature optimization |
-| 7 | Nil guard for `feature-name` in `module-path` | Low risk |
-| 8 | FSM collection logging infrastructure | Out of scope |
-| 9 | Optional `seen` hash table for traversal | Micro-optimization |
-| 10 | Remove redundant `hash-table-p` checks | Low impact |
-| 11 | `bound-and-true-p` guard for regexp variable | Unlikely to be unbound |
-| 12 | Fix unconditional `cl-remove` in demote-backend | Edge case |
-| 13 | Memoization cache for `categorize-error` | Premature optimization |
+**Discarded hypotheses:** (none specified)
 
-## Summary
+---
 
-**Focus areas:** Error resilience, nil-safety validation, and negative caching for I/O reduction.
-
-**Eliminated:** 13 hypotheses—primarily premature optimizations, edge cases, and low-risk items.
+**Summary:** Template-default approach tested with 5 experimental iterations targeting the gptel-auto-workflow-projects module. No hypotheses have been explicitly retained or discarded yet.
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Document
+# Research Strategy Check
 
-## Structural Assessment
+## Summary Assessment
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Scope definition | ✅ Clear | 92 experiments, 20 modules, specific modules named |
-| Hypothesis specificity | ✅ Good | Each targets specific functions/files |
-| Discard rationale | ✅ Present | "Premature optimization", "low risk", etc. |
-| Improvement axes | ✅ Logical | Vitality, Performance, Safety, Clarity capture key dimensions |
+| Field | Value | Status |
+|-------|-------|--------|
+| **Strategy** | Template-default | ✓ Specified |
+| **Experiments** | 5 across targets | ✓ Quantified |
+| **Target** | `gptel-auto-workflow-projects.el` | ✓ Identified |
+| **Kept hypotheses** | None | ⚠ Empty |
+| **Discarded hypotheses** | None | ⚠ Empty |
 
-## Concerns
+---
 
-**1. No experimental evidence shown**
-The document lists hypotheses but doesn't show:
-- How hypotheses were derived (static analysis? runtime errors? code review?)
-- What triggered investigation priorities
-- Metrics for measuring success
+## Observations
 
-**2. "Negative caching" hypothesis (#2) needs clarification**
-```
-Negative caching in `gptel-benchmark--cache-put`/`load-result` eliminates 
-repeated disk I/O for missing files
-```
-- Is this a known performance bottleneck? Empirical data?
-- "Negative caching" typically refers to caching *failures*—ensure this is what's intended
+### 1. **Hypotheses Gap**
+The most notable issue: No hypotheses tracked despite 5 experiments. This makes it difficult to:
+- Track what was tested
+- Understand decision rationale
+- Build institutional knowledge
 
-**3. Missing from Discarded #1-2**
-```
-| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Incomplete / deferred |
-| 2 | Hash table entry removal | Incomplete |
-```
-These are too terse. "Incomplete" could mean:
-- Problem not fully understood?
-- Implementation attempted and failed?
-- Lower priority?
+### 2. **Template-Default Strategy**
+This appears to be a baseline approach—likely meaning:
+- No specialized heuristics applied
+- Standard iteration pattern used
 
-**4. No ordering/prioritization**
-Among the 5 kept hypotheses, is there a dependency order? Critical path?
+---
 
 ## Recommendations
 
-1. **Add experimental evidence**: Br
+```
+Recommended additions:
+├── Hypotheses (per experiment)
+│   ├── What was tested
+│   ├── Why it was tested
+│   └── Expected outcome
+└── Results tracking
+    ├── What worked
+    ├── What didn't
+    └── Why (if known)
+```
 
-... (truncated)
+---
+
+## Questions
+
+1. **What were the 5 experiments testing?**
+2. **Was this targeting a specific bug or feature implementation?**
+3. **Do you want help formalizing the hypothesis tracking?**
+
+Would you like me to help flesh out the missing hypothesis details based on what was likely being tested?

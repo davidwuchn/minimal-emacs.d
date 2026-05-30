@@ -1,7 +1,5 @@
 ### Allium Issue Trends
-**Recurring patterns** across all strategies:
+**Regression warnings** (1 strategies with increased issues):
 
-- **Refine**: 1 occurrence(s)
-- **Summarize**: 1 occurrence(s)
-- **Classify**: 1 occurrence(s)
+- `template-default`: 3 → 14 issues (worse)
 
