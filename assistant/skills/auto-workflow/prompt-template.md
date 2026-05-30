@@ -73,7 +73,9 @@ F. **Memory Management** — Fix leaks, optimize allocation, cleanup patterns
    **YOU MUST ACTUALLY RUN THESE COMMANDS. DO NOT SKIP THEM.**
    **The grader checks for evidence that you ran them. If missing, you get 0/4 and FAIL.**
    
-   Example VERIFY section (MUST include in final response):
+    **WARNING: The VERIFY section MUST appear OUTSIDE <think> blocks.** The grader only counts verification evidence in visible output. Putting it inside <think> tags causes automatic FAIL on verification-attempted.
+    
+    Example VERIFY section (MUST include in final response, after closing </think>):
    VERIFY:
    - Syntax check: emacs -Q --batch --eval="(check-parens)" {{target-full-path}} → PASS
    - Byte-compile: emacs -Q --batch -f batch-byte-compile {{target-full-path}} → PASS  

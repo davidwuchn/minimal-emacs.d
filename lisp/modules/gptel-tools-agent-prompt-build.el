@@ -2720,40 +2720,9 @@ Returns alist of (REASON . COUNT) for the N most common, or nil."
     ;; Return top N sorted by count
     (when (> (hash-table-count reasons) 0)
       (let ((sorted (sort (let (result)
-                            (maphash (lambda (k v) (push (cons k v) result)) reasons)
-                            result)
-                          (lambda (a b) (> (cdr a) (cdr b))))))
-        (seq-take sorted (or n 3))))))
-
-(defun gptel-auto-experiment--get-category-failure-reasons (category &optional n)
-  "Aggregate failure reasons from ALL targets in CATEGORY.
-Returns alist of (REASON . COUNT) for the N most common, or nil."
-  (let ((results-file (gptel-auto-workflow--results-file-path))
-        (reasons (make-hash-table :test 'equal)))
-    (when (and results-file (file-exists-p results-file)
-               (fboundp 'gptel-auto-workflow--categorize-target))
-      (with-temp-buffer
-        (insert-file-contents results-file)
-        (goto-char (point-min))
-        (forward-line 1)
-        (while (not (eobp))
-          (let* ((fields (split-string
-                          (buffer-substring (line-beginning-position) (line-end-position))
-                          "\t"))
-                 (r-target (nth 1 fields))
-                 (r-reason (nth 12 fields)))
-            (when (and r-target r-reason (not (string-empty-p r-reason))
-                       (eq (gptel-auto-workflow--categorize-target r-target) category))
-              (let ((short (car (split-string r-reason ":" t))))
-                (when (and short (not (string= short "N/A")))
-                  (puthash short (1+ (gethash short reasons 0)) reasons))))
-            (forward-line 1)))))
-    ;; Return top N sorted by count
-    (when (> (hash-table-count reasons) 0)
-      (let ((sorted (sort (let (result)
-                            (maphash (lambda (k v) (push (cons k v) result)) reasons)
-                            result)
-                          (lambda (a b) (> (cdr a) (cdr b))))))
+                             (maphash (lambda (k v) (push (cons k v) result)) reasons)
+                             result)
+                           (lambda (a b) (> (cdr a) (cdr b))))))
         (seq-take sorted (or n 3))))))
 
 (defun gptel-auto-experiment--get-category-success-axes (category &optional n)

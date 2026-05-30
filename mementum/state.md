@@ -1,53 +1,35 @@
 # Mementum State
 
-> Last session: 2026-05-30 (Grader scoring FIXED, now fighting agent indentation issues)
-> Next pipeline: Running now (manual trigger)
-> Status: 2 experiments completed, both grader-failed due to unrelated indentation changes
+> Last session: 2026-05-30 (Verification-gate fix: extract <think> evidence for grader)
+> Next pipeline: 19:00 (fixed: 6 remote commits merged)
+> Status: In sync at 26eb5599. Verification evidence fix awaiting next pipeline run.
 
-## Session: Grader Scoring FIXED — Now Fighting Agent Indentation Issues
+## Session: Fix Verification Gate — Surface <think> Evidence
 
-**Status:** 2 experiments completed in current run. Both failed due to unrelated indentation changes. Daemon still running old prompt code.
+**Problem:** Experiment scored 7/9 (78%) but was rejected as `verification-failed`. The grader saw verification mentioned in `<think>` blocks but counted it as planning, not execution.
 
-### Root Cause Analysis (Part 1 — FIXED)
-
-**The grader model (MiniMax m2.7-highspeed) analyzes correctly but NEVER outputs `SCORE: X/Y`**
+**Root Cause:** Executor agents put verification output (byte-compile, syntax check) inside `<think>` reasoning blocks. The grader doesn't trust think-block content as execution evidence.
 
 **Fix Applied:**
-1. Parser fallback for text-based PASS counting (`gptel-benchmark-subagent.el`)
-2. Strengthened grader prompt with MANDATORY SCORE requirement
+1. `gptel-tools-agent-benchmark.el`: New `gptel-auto-experiment--extract-verify-evidence` parses `<think>` blocks for verification keywords and surfaces them as `VERIFICATION EVIDENCE FROM <think>` section in grading output
+2. `gptel-tools-agent-benchmark.el`: Updated grader criteria to check the new evidence section
+3. `prompt-template.md`: Added explicit warning that VERIFY section must appear outside `<think>` blocks
 
-### Root Cause Analysis (Part 2 — IN PROGRESS)
+**Remote Sync (6 commits from Pi5):**
+- 26eb5599: GPG cache prime before auto-workflow
+- a3b88353: Stronger verification mandate in executor prompt
+- 60760732: Fix 4 batch-mode test isolation failures
+- 0dbd6cef + 8adc7d92 + 30eb22a9: Pipeline sync merges
 
-**The agent makes broad indentation changes in unrelated code when using Edit tool**
-
-**Evidence from current run (2026-05-30T033214Z-ed11):**
-- Experiment 1: score=2/9. Grader: "diff shows mostly indentation changes in dolist blocks (lines 180-227)... unrelated to stated improvement. FAIL"
-- Experiment 2: score=0/9. Grader: "diff shows indentation changes throughout the file (lines 180-214, 348, etc.)... unintended indentation changes. FAIL"
-
-**Why this happens:**
-1. Agent uses `Edit` tool which may trigger `indent-region` or `save-buffer` with auto-indent
-2. Agent isn't explicitly told NOT to reformat code
-3. Agent may use `Write` tool to rewrite entire file sections, losing original formatting
-
-**Fix Applied (won't take effect until daemon restart):**
-1. `agent-behavior.md`: Added explicit "NEVER reformat, reindent, or restyle code" rule
-2. `agent-behavior.md`: Added surgical precision requirement — change ONLY specific lines
-3. `prompt-template.md`: Added FORBIDDEN rule against reformatting/reindenting
-4. `prompt-template.md`: Added instruction to NOT trigger save-buffer/auto-indent after Edit
-5. `prompt-template.md`: Renumbered instructions (was duplicate #13)
-
-### Current Run Status
-- Run: 2026-05-30T033214Z-ed11
-- Experiment 1: grader-failed (score=2/9, indentation issues + no verification)
-- Experiment 2: grader-failed (score=0/9, indentation issues + no verification)
-- Daemon PID: 59097 (running old prompt code, won't pick up fixes until restart)
-- Backend: DashScope/qwen3.6-plus
+**Experiment Failure Patterns (latest run 15:06):**
+1. Executors write plans, not code (experiments 2-3) — grader: "no actual change was committed"
+2. When they DO make real changes (experiment 1: 7/9), verification evidence is hidden in <think>
+3. Verification gate rejects despite high grader score
 
 ### Next Steps
-1. Let current run complete (experiments 3-9 may still fail with old prompts)
-2. Next daemon restart (from evolution cycle or manual) will load new prompt rules
-3. Monitor if indentation issues persist with new prompts
-4. If still failing, investigate Edit tool implementation for auto-indent triggers
+1. Next pipeline at 19:00 — first run with verification evidence extraction
+2. Monitor if grader now counts think-block verification as PASS
+3. If still failing, consider: (a) run verification in pipeline after executor, or (b) lower verification requirement
 - Consider switching grader model if MiniMax continues ignoring format instructions
 
 ---

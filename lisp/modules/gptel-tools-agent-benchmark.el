@@ -750,11 +750,15 @@ so the grader can inspect the actual edit instead of relying only on the
 executor's prose summary."
   (let* ((base-output (if (stringp output) output (format "%s" output)))
          (resolved-target (or target gptel-auto-experiment--grading-target))
-         (resolved-worktree (or worktree gptel-auto-experiment--grading-worktree)))
+         (resolved-worktree (or worktree gptel-auto-experiment--grading-worktree))
+         (reasoning-evidence (gptel-auto-experiment--extract-verify-evidence base-output)))
     (if (or (not (gptel-auto-workflow--non-empty-string-p resolved-target))
             (not (gptel-auto-workflow--non-empty-string-p resolved-worktree))
             (not (file-directory-p resolved-worktree)))
-        base-output
+        (if reasoning-evidence
+            (format "%s\n\nVERIFICATION EVIDENCE FROM <think>:\n%s"
+                    base-output reasoning-evidence)
+          base-output)
       (let* ((default-directory resolved-worktree)
              (target-q (shell-quote-argument resolved-target))
              (status-result
@@ -780,11 +784,51 @@ executor's prose summary."
                ((> (length diff-output) 3000)
                 (concat (substring diff-output 0 3000) "\n...[truncated]"))
                (t diff-output))))
-        (format "%s\n\nWORKTREE EVIDENCE:\n- Target: %s\n- Git status:\n%s\n- Diff excerpt:\n%s"
+        (format "%s\n\nWORKTREE EVIDENCE:\n- Target: %s\n- Git status:\n%s\n- Diff excerpt:\n%s%s"
                 base-output
                 resolved-target
                 status-text
-                diff-text)))))
+                diff-text
+                (if reasoning-evidence
+                    (format "\n\nVERIFICATION EVIDENCE FROM <think>:\n%s" reasoning-evidence)
+                  ""))))))
+
+(defun gptel-auto-experiment--extract-verify-evidence (output)
+  "Extract verification command evidence from OUTPUT's <think> blocks.
+Searches for mentions of byte-compile, syntax check, load test, nucleus,
+or test commands in reasoning sections.  Returns a formatted string or nil."
+  (when (and (stringp output) (string-match-p "<think>" output))
+    (let ((evidence-lines nil)
+          (verify-keywords
+           '("byte-compile" "syntax" "load test" "check-parens"
+             "nucleus" "run-tests" "verify" "emacs -Q" "batch" "ert"))
+          (in-think nil))
+      (with-temp-buffer
+        (insert output)
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let* ((line (buffer-substring-no-properties
+                        (line-beginning-position) (line-end-position)))
+                 (starts-think (string-match-p "<think>" line))
+                 (ends-think (string-match-p "</think>" line))
+                 (has-evidence
+                  (let ((case-fold-search t))
+                    (catch 'match
+                      (dolist (kw verify-keywords)
+                        (when (string-match-p kw line)
+                          (throw 'match t)))
+                      nil))))
+            (when (and has-evidence
+                       (or in-think starts-think))
+              (push (string-trim line) evidence-lines))
+            (when starts-think (setq in-think t))
+            (when ends-think (setq in-think nil)))
+          (forward-line 1)))
+      (when evidence-lines
+        (let ((lines (nreverse evidence-lines)))
+          (while (> (length lines) 15)
+            (setq lines (butlast lines)))
+          (mapconcat #'identity lines "\n"))))))
 
 (defun gptel-auto-experiment--target-pending-changes-p (target &optional worktree)
   "Return non-nil when TARGET has pending git changes in WORKTREE."
@@ -917,10 +961,10 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
           (with-current-buffer grade-buffer
             (gptel-benchmark-grade
              (gptel-auto-experiment--build-grading-output output target worktree)
-             '("change clearly described"
-               "change is minimal and focused"
-               "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
-               "verification attempted (byte-compile, nucleus, tests, or manual)")
+               '("change clearly described"
+                "change is minimal and focused"
+                "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
+                "verification attempted (byte-compile, syntax, load-test, nucleus, or tests — also check VERIFICATION EVIDENCE FROM <think> section and <think> reasoning blocks)")
              '("large refactor unrelated to stated improvement"
                "changed security files without review"
                "no description or unclear purpose"
