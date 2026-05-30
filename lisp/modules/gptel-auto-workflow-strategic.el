@@ -221,11 +221,14 @@ Cache is invalidated after 5 minutes to avoid stale data.")
 
 (defun gptel-auto-workflow--normalized-cache-key (&optional proj-root)
   "Return normalized cache key for PROJ-ROOT.
-Ensures consistent cache lookups across different path representations."
+Ensures consistent cache lookups across different path representations.
+BEHAVIOR: Strips trailing slash only — does NOT strip the last directory component.
+FIX: Was using file-name-directory which returned the parent directory,
+causing cache collisions between sibling projects."
   (let ((root (or proj-root
                   (gptel-auto-workflow--project-root)
                   (expand-file-name "~/.emacs.d/"))))
-    (directory-file-name (file-name-directory root))))
+    (directory-file-name root)))
 
 
 (defun gptel-auto-workflow--effective-project-root ()

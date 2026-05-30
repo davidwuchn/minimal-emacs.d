@@ -386,14 +386,13 @@ Passes if score >= 60% of total."
          (insert details)
          (goto-char (point-min))
          ;; Count numbered items with PASS/✓/✅ (any format), skip "(not present)"
-         (let ((pos nil))
-           (while (setq pos (re-search-forward
-                             (concat "^\\s-*\\(?:\\*\\*\\)?[0-9]+\\.\\s-+"
-                                     ".*\\(?:PASS\\|[✓✅]\\)")
-                             nil t))
-             (unless (string-match-p "PASS\\s-+(not present)"
-                                     (buffer-substring (line-beginning-position) (line-end-position)))
-               (cl-incf score))))
+         (while (re-search-forward
+                 (concat "^\\s-*\\(?:\\*\\*\\)?[0-9]+\\.\\s-+"
+                         ".*\\(?:PASS\\|[✓✅]\\)")
+                 nil t)
+           (unless (string-match-p "PASS\\s-+(not present)"
+                                   (buffer-substring (line-beginning-position) (line-end-position)))
+             (cl-incf score)))
          ;; Also count "PASS (not present)" for forbidden behaviors
          (goto-char (point-min))
          (while (re-search-forward ":\\s-+PASS\\s-+(not present)" nil t)

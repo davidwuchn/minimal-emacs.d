@@ -2244,20 +2244,19 @@ chain so that subagent calls do not fall through to the mode-hook default
 
 (defun gptel-auto-workflow--preset-backend-name (backend)
   "Return a readable backend name for BACKEND.
-Handles gptel-backend structs, strings, and keyword symbols."
-  (cond
-   ((stringp backend) backend)
-   ((keywordp backend) (substring (symbol-name backend) 1))
-   ((and backend (fboundp 'gptel-backend-name))
-    (gptel-auto-workflow--safe-backend-name backend))
-   (t (let ((name (format "%s" backend)))
-        (message "[backend] Warning: unknown backend type %S, using %s"
-                 (type-of backend) name)
-        name))))
+Handles gptel-backend structs, strings, and keyword symbols.
+Delegates to `gptel-auto-workflow--safe-backend-name' which
+handles stringp, keywordp, null, and struct types uniformly."
+  (gptel-auto-workflow--safe-backend-name backend))
 
 (defun gptel-auto-workflow--safe-backend-name (backend)
-  "Safe wrapper around `gptel-backend-name'.
-Catches type errors and falls back to format \"%s\"."
+  "Return a readable backend name for BACKEND, with type-safe fallbacks.
+Handles stringp (identity), keywordp (strip colon), null (\"nil\"),
+and gptel-backend structs via `gptel-backend-name' with error catching.
+When `gptel-backend-name' signals an error, falls back to (format \"%s\").
+
+This is the single point of truth for backend name resolution across
+the auto-workflow system."
   (cond
    ((stringp backend) backend)
    ((keywordp backend) (substring (symbol-name backend) 1))
