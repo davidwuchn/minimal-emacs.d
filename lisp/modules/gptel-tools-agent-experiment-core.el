@@ -1003,51 +1003,53 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 								   nil "false" nil
 								   gptel-auto-experiment-validation-retry-active-grace)))
                                                (let ((default-directory experiment-worktree))
-                                                 (setq finished t)
-                                                 (magit-git-success "checkout" "--" ".")
-                                                 (gptel-auto-workflow--drop-provisional-commit
-                                                  provisional-commit-hash
-                                                  (format "Discard provisional commit for %s" target))
-                                                 (setq provisional-commit-hash nil)
-                                                 ;; Grader bypass: when grader strongly passed (≥80%)
-                                                 ;; but benchmark failed (e.g. eight-keys 0.0),
-                                                 ;; use grader score instead of hard-rejecting.
-                                                 (let* ((grader-bypass
-                                                         (and grade-passed
-                                                              grade-score grade-total (> grade-total 0)
-                                                              (>= (/ (float grade-score) grade-total) 0.8)))
-                                                        (reason
-                                                         (if grader-bypass
-                                                             (format "grader-bypass:%s" "benchmark failed but grader passed strongly")
-                                                           (cond (validation-error validation-error)
-                                                                 ((not (plist-get bench :nucleus-passed))
-                                                                  "nucleus-validation-failed")
-                                                                 ((not tests-passed) "tests-failed")
-                                                                 (t "verification-failed"))))
-                                                        (exp-result
-                                                         (list :target target
-                                                               :id experiment-id
-                                                               :hypothesis hypothesis
-                                                               :score-before baseline
-                                                               :score-after (if grader-bypass (/ (float grade-score) grade-total) 0)
-                                                               :kept (and grader-bypass t)
-                                                               :duration (- (float-time) start-time)
-                                                               :grader-quality grade-score
-                                                               :grader-reason (plist-get grade :details)
-                                                               :comparator-reason reason
-                                                               :analyzer-patterns (format "%s" patterns)
-                                                               :agent-output agent-output
-                                                               :backend actual-backend
-                                                               :model actual-model
-                                                               :prompt-chars (length executor-prompt)
-                                                               :output-chars (length (or effective-agent-output ""))
-                                                                 :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
-                                                                 :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis))))
-                                                    (message "[auto-experiment] ✗ %s for %s (passed=%s tests-passed=%s validation-error=%s)"
-                                                             reason target passed tests-passed validation-error)
-                                                   (funcall log-fn
-                                                            run-id exp-result)
-                                                   (funcall callback exp-result))))))
+                                                  (let* ((grader-bypass
+                                                          (and grade-passed
+                                                               grade-score grade-total (> grade-total 0)
+                                                               (>= (/ (float grade-score) grade-total) 0.8)))
+                                                         (reason
+                                                          (if grader-bypass
+                                                              (format "grader-bypass:%s" "benchmark failed but grader passed strongly")
+                                                            (cond (validation-error validation-error)
+                                                                  ((not (plist-get bench :nucleus-passed))
+                                                                   "nucleus-validation-failed")
+                                                                  ((not tests-passed) "tests-failed")
+                                                                  (t "verification-failed"))))
+                                                         (exp-result
+                                                          (list :target target
+                                                                :id experiment-id
+                                                                :hypothesis hypothesis
+                                                                :score-before baseline
+                                                                :score-after (if grader-bypass (/ (float grade-score) grade-total) 0)
+                                                                :kept (and grader-bypass t)
+                                                                :duration (- (float-time) start-time)
+                                                                :grader-quality grade-score
+                                                                :grader-reason (plist-get grade :details)
+                                                                :comparator-reason reason
+                                                                :analyzer-patterns (format "%s" patterns)
+                                                                :agent-output agent-output
+                                                                :backend actual-backend
+                                                                :model actual-model
+                                                                :prompt-chars (length executor-prompt)
+                                                                :output-chars (length (or effective-agent-output ""))
+                                                                  :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
+                                                                  :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis))))
+                                                    ;; Don't discard changes when grader bypasses
+                                                    (unless grader-bypass
+                                                      (setq finished t)
+                                                      (magit-git-success "checkout" "--" ".")
+                                                      (gptel-auto-workflow--drop-provisional-commit
+                                                       provisional-commit-hash
+                                                       (format "Discard provisional commit for %s" target))
+                                                      (setq provisional-commit-hash nil))
+                                                     (if grader-bypass
+                                                         (message "[auto-experiment] ✓ grader-bypass keeping changes for %s (passed=%s tests-passed=%s)"
+                                                                  target passed tests-passed)
+                                                       (message "[auto-experiment] ✗ %s for %s (passed=%s tests-passed=%s validation-error=%s)"
+                                                                reason target passed tests-passed validation-error))
+                                                    (funcall log-fn
+                                                             run-id exp-result)
+                                                    (funcall callback exp-result))))))
                                           ))))))))))))))))
                                      ))
                 ;; Capture the backend and model that will actually be used by the

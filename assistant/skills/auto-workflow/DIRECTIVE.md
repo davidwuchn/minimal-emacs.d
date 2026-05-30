@@ -3,7 +3,7 @@ name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.30
 total-experiments: 870
-total-kept: 14
+total-kept: 15
 ---
 
 # Auto-Workflow Program
@@ -25,8 +25,8 @@ total-kept: 14
 | `lisp/modules/gptel-benchmark-comparator.el` | 15% | 13 | 2 | 🟡 Active |
 | `lisp/modules/gptel-benchmark-evolution.el` | 14% | 7 | 1 | 🟡 Active |
 | `lisp/modules/gptel-auto-workflow-research-integration.el` | 3% | 29 | 1 | ❌ Plateaued |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 2% | 53 | 1 | ❌ Plateaued |
 | `lisp/modules/gptel-tools-agent.el` | 0% | 6 | 0 | ❌ Plateaued |
-| `staging-merge` | 0% | 1 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -35,10 +35,10 @@ total-kept: 14
 
 - **How it works** (38× from mementum)
 - **Apply to us** (36× from mementum)
-- **manual-fix** (28× from git)
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
+- **manual-fix** (24× from git)
 - **Application** (21× from mementum)
 - **Implementation sketch** (20× from mementum)
 
@@ -57,8 +57,8 @@ total-kept: 14
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (170×): Investigate root cause
-- **timeout** (26×): Add smaller batch sizes or chunked processing
+- **other** (177×): Investigate root cause
+- **timeout** (27×): Add smaller batch sizes or chunked processing
 - **validation-failed** (20×): Improve pre-grade validation prompts
 - **test-failure** (9×): Run tests before committing experiments
 - **api-limit** (3×): Implement provider fallback or rate limit handling
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (14 kept locally across 228 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (15 kept locally across 236 local records). It evolves every self-evolution cycle.*
