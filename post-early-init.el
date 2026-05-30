@@ -261,6 +261,30 @@ daemons share the same config directory."
                 (setq result (plist-put result key val))
               (puthash key val result))))))))
 
+;; ═══════════════════════════════════════════════════════════════════════════
+;; Debug: backtrace capture for init-time Wrong type argument: stringp, nil
+;; ═══════════════════════════════════════════════════════════════════════════
+;; Captures backtrace to var/log/backtrace-init.log when this error fires
+;; during init.el loading (before post-init.el fixes are active).
+(let ((bt-log (expand-file-name "var/log/backtrace-init.log" user-emacs-directory)))
+  (condition-case nil
+      (make-directory (file-name-directory bt-log) t)
+    (error nil))
+  (advice-add 'signal :before
+              (lambda (err data)
+                (when (and (eq err 'wrong-type-argument)
+                           (eq (car-safe data) 'stringp))
+                  (condition-case nil
+                      (with-temp-file bt-log
+                        (prin1 (current-time-string) (current-buffer))
+                        (terpri (current-buffer))
+                        (prin1 (cons err data) (current-buffer))
+                        (terpri (current-buffer))
+                        (let ((standard-output (current-buffer))
+                              (debug-on-error nil))
+                          (backtrace)))
+                    (error nil))))))
+
 (provide 'post-early-init)
 
 ;;; post-early-init.el ends here
