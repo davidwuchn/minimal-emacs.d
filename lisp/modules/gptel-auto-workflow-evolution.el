@@ -3000,15 +3000,21 @@ CYCLE-FROZEN records which evolution cycle the freeze started.")
 
 (defun gptel-auto-workflow--category-frozen-p (category)
   "Return non-nil if CATEGORY is frozen (≥3 strikes).
-Auto-thaws if frozen for > 5 evolution cycles (strike decay)."
+Auto-thaws if frozen for > 5 evolution cycles (strike decay).
+Handles old format (CATEGORY . INTEGER) and new (CATEGORY . (INTEGER . CYCLE))."
   (let* ((entry (assq category gptel-auto-workflow--category-strike-counts))
-         (strikes (if entry (cadr entry) 0))
-         (frozen-cycle (if entry (cddr entry) nil)))
+         (rest (if entry (cdr entry) nil))
+         (strikes (if (consp rest) (car rest) (or rest 0)))
+         (frozen-cycle (if (consp rest) (cdr rest) nil)))
+    ;; If no freeze cycle recorded but frozen, set it now so auto-thaw can trigger
+    (when (and (numberp strikes) (>= strikes 3) (not frozen-cycle))
+      (setcdr entry (cons strikes gptel-auto-workflow--evolution-cycle-counter))
+      (setq frozen-cycle gptel-auto-workflow--evolution-cycle-counter))
     (if (and (>= strikes 3) frozen-cycle
              (> (- gptel-auto-workflow--evolution-cycle-counter frozen-cycle) 5))
         (progn
           (gptel-auto-workflow--reset-category-strikes category)
-          (message "[champion] ∀ Vigilance: category %s THAWED after %d cycles (strike decay)"
+          (message "[champion] ∀ Vigilance: category %s THAWED after %d cycles"
                    category (- gptel-auto-workflow--evolution-cycle-counter frozen-cycle))
           nil)
       (>= strikes 3))))
@@ -3019,13 +3025,15 @@ Auto-thaws if frozen for > 5 evolution cycles (strike decay)."
         (assq-delete-all category gptel-auto-workflow--category-strike-counts)))
 
 (defun gptel-auto-workflow--decay-category-strikes ()
-  "Reduce all category strikes by 1 per cycle (floor at 0).
-Prevents permanent freeze when no experiments succeed."
+  "Reduce all category strikes by 1 per cycle. Removes entries when strikes hit 0.
+Handles both old format (CATEGORY . INTEGER) and new format (CATEGORY . (INTEGER . CYCLE))."
   (let ((new nil))
     (dolist (entry gptel-auto-workflow--category-strike-counts)
       (let* ((cat (car entry))
-             (strikes (cadr entry))
-             (cycle (cddr entry))
+             (rest (cdr entry))
+             ;; Handle old format (CATEGORY . INTEGER) and new (CATEGORY . (STRIKES . CYCLE))
+             (strikes (if (consp rest) (car rest) rest))
+             (cycle (if (consp rest) (cdr rest) nil))
              (decayed (max 0 (1- strikes))))
         (when (> decayed 0)
           (push (cons cat (cons decayed (and (>= strikes 3) cycle))) new))))
