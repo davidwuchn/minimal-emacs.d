@@ -68,75 +68,76 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
+*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Strategy:** template-default
+# Research Strategy Distillation
 
-**Scope:** 79 experiments across 12 targets (lisp modules + staging scopes)
+**Strategy:** `template-default`
 
-**Hypotheses Summary:**
+**Scope:**
+- 6 experiments total
+- 2 target files:
+  - `gptel-auto-workflow-strategic.el`
+  - `gptel-auto-workflow-projects.el`
 
-All hypotheses were **discarded**:
+**Hypotheses:**
+- Kept: none
+- Discarded: none
 
-| Category | Change | Rationale |
-|----------|--------|-----------|
-| Idiom adoption | `cl-letf` + `symbol-function` → `cl-labels` | Compiled/idiomatic; explicit bindings |
-| Dead code | Remove `hash-table-p` guard in `my/gptel--fsm-collect-list` | `seen` always freshly created; guard unreachable |
-| DRY | Extract `my/gptel--fsm-for-each` helper | Eliminates duplication between traversal functions |
-| Separation | Extract `gptel-auto-workflow--parse-one-autotts-trace` | Separates mechanism from policy; reduces nesting (3→2) |
-| Performance | Skip redundant `puthash` in `gptel-auto-workflow--correlate-research-to-outcomes` | Mutating existing cons cells makes writes no-ops |
-| Correctness | `copy-tree` instead of `copy-sequence` in `gptel-auto-workflow--top-research-priority` | Prevents sort mutation of shared cons cells |
-| Defensive | Add `(listp class)` guard in `gptel-auto-workflow--ontology-research-gaps` | Handles malformed ontology entries |
+---
 
-**Status:** All hypotheses discarded; no changes committed.
+No hypotheses have been evaluated yet. Awaiting experiment results.
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Summary
+I see a research tracking document with:
 
-## Observations
+- **Strategy:** `template-default`
+- **Scope:** 6 experiments across 2 files:
+  - `gptel-auto-workflow-strategic.el`
+  - `gptel-auto-workflow-projects.el`
+- **Status:** No hypotheses evaluated yet
 
-| Aspect | Status |
-|--------|--------|
-| Comprehensiveness | ✅ 7 hypotheses across categories |
-| Rationale quality | ✅ Each hypothesis has explicit justification |
-| Decision consistency | ✅ All marked discarded with traceable reasons |
+What would you like me to do with this? For example:
 
-## Potential Concerns
-
-### 1. "Performance" Hypothesis
-**Rationale:** "Mutating existing cons cells makes writes no-ops"
-
-This logic is inverted. If a `puthash` is a no-op because the value already exists with same key, then the operation is *redundant*—but not necessarily *harmful*. The performance gain from skipping it is likely negligible (hash table lookup is O(1)).
-
-**Clarification needed:** Was this measured? If not, the hypothesis was reasonably discarded.
-
-### 2. "Dead Code" Hypothesis
-**Rationale:** "Guard unreachable because `seen` always freshly created"
-
-This is a valid elimination if confirmed via static analysis or code path tracing. Verify no dynamic callers could pass a non-fresh `seen`.
-
-### 3. "Idiom Adoption" Hypothesis
-**Rationale:** "Compiled/idiomatic; explicit bindings"
-
-This suggests the original code was *already* idiomatic. If so, this was never a strong hypothesis.
-
----
-
-## Missing Information
-
-- **Target system:** What do the 12 targets represent?
-- **Discard criteria:** Were hypotheses tested (experimented) and found ineffective, or discarded preemptively?
-- **79 experiments:** Unclear how experiments map to hypotheses
-
----
-
-## Verdict
-
-The summary is internally consistent. The rat
-
-... (truncated)
+1. **Validate** the scope/schedule makes sense?
+2. **Suggest** a hypothesis framework?
+3. **Review** the target files?
+4. **Create** experiment templates?
+5. Something else?
