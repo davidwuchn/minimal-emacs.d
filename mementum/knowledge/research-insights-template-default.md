@@ -138,33 +138,161 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Strategy: `template-default`**
+## Distillation
 
-**Scope:** 66 experiments across 13 targets (Elisp modules + staging targets).
+**Research Strategy**: Template-default (standard/default approach)
 
-**Discarded Hypotheses (5 groups):**
+**Scope**: 106 experiments across 15 target files/modules
 
-| Category | Hypothesis | Rationale |
-|----------|-----------|-----------|
-| Memoization | `nucleus--project-root` caching | Redundant `project-current` calls don't occur in practice |
-| Memoization | `nucleus--resolve-*-dir` caching | No state change between calls; `file-directory-p` I/O negligible |
-| Memoization | General directory path caching in `nucleus-prompts.el` | Same—resolution is idempotent, not a bottleneck |
-| Error handling | Nil guard + `file-readable-p` in `nucleus--read-file` | Unnecessary defensive coding |
-| Error handling | Argument order fix in `nucleus--validate-contract` | Low-impact clarity issue |
-| Race condition | `nucleus-sync-tool-profile` buffer capture via `let` | Edge case; not a meaningful source of bugs |
-| Performance | Remove redundant `(consp val)` check + move `make-hash-table` inside guard | Micro-optimization; negligible allocation savings |
-| Edge case | Nil guard for empty `status-lines` | Empty results are valid; caching is acceptable |
-| Style | Indentation fixes in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer` | Cosmetic only |
+**Outcome**: 
+- **Kept hypotheses**: None (0)
+- **Discarded hypotheses**: 7
 
-**Kept Hypotheses:** *(none listed)*
+**Discarded hypotheses covered**:
+1. `cl-letf` + `symbol-function` → `cl-labels` refactor (local function binding idioms)
+2. Dead `hash-table-p` guard removal (unreachable code elimination)
+3. `my/gptel--fsm-for-each` helper extraction (traversal pattern DRY)
+4. `gptel-auto-workflow--parse-one-autotts-trace` extraction (loop decomposition)
+5. Redundant `puthash` call elimination (hash table write optimization)
+6. `copy-tree` vs `copy-sequence` bug fix (shared structure mutation)
+7. `(listp class)` guard addition (malformed input error prevention)
 
----
-
-**Summary:** All 66 experiments were rejected. The strategy errs on the side of *not optimizing*—treating memoization, defensive nil guards, race condition fixes, and style corrections as premature or low-impact. The system favors preserving existing behavior over adding complexity.
+**Summary**: All 7 proposed changes were discarded after experimentation. The template-default strategy applied 106 experiments across 15 files but yielded no retained hypotheses.
 ```
 
+### Check Issues
+
+I don't have context on what codebase or files these results refer to. Could you clarify:
+
+1. **What should I check?** Do you have a specific repository, file, or dataset you'd like me to examine?
+
+2. **What format is the source data?** Are these:
+   - CSV/JSON files with experiment results?
+   - A codebase to analyze?
+   - Something else?
+
+3. **What's the verification goal?** Are you asking me to:
+   - Reproduce the experiment?
+   - Audit the 7 discarded hypotheses for quality?
+   - Check if these results are internally consistent?
+
+Without access to the underlying data or codebase, I can't verify these specific findings. If you can point me to the relevant files or provide the data, I can help analyze them.
