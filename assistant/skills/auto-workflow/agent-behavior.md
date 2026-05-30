@@ -87,13 +87,19 @@ For complex changes:
    - Is the change minimal enough?
 5. If the answer to any is "no", REWRITE
 
-### Step 3: Validate
+### Step 3: Validate — MANDATORY
+
+**Verification is not optional. Experiments WITHOUT verification commands are rejected automatically.**
+
+After EVERY edit, you MUST run verification in this exact order:
 
 1. **Check git diff:** Verify `git diff` shows actual file modifications. If empty, you failed — go back to Step 2.
-2. **Syntax check:** Run sexp-check or equivalent
-3. **Load test:** Ensure the file loads without errors
-4. **Functional test:** Run relevant test suite
-5. **Only then** mark as complete
+2. **Syntax check:** Run `{{sexp-check-command}}`
+3. **Byte-compile:** Run `emacs -Q --batch -f batch-byte-compile {{target-full-path}}`
+4. **Load test:** Run `emacs -Q --batch -l {{target-full-path}}`
+5. **Record results:** In your final response under VERIFY, list the exact commands run and their PASS/FAIL status.
+
+**Failure to run verification = automatic experiment rejection. The grader checks for verification commands explicitly.**
 
 ### Step 4: Document
 

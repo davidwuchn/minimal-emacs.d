@@ -1743,16 +1743,14 @@ CF-Gateway, then MiniMax."
   '(("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6")
     ("DeepSeek" . "deepseek-v4-flash")
-    ("MiniMax" . "minimax-m2.7-highspeed")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
+    ("MiniMax" . "minimax-m2.7-highspeed"))
   "Ordered backend/model fallbacks for executor after rate limits.
 
-DashScope first — ONLY backend proven to make actual code changes
-via Edit/Write tools (all kept experiments use this backend).
-moonshot second (emits well, good for code generation).
-DeepSeek third (outputs reasoning text instead of tool calls).
-MiniMax fourth (rate-limited, HTTP 429).
-CF-Gateway as emergency fallback."
+DashScope first — qwen3.6-plus supports tool calls and makes code changes.
+moonshot second — kimi-k2.6 emits well, good for code generation.
+DeepSeek third — deepseek-v4-flash (thinking disabled, should emit tool calls).
+MiniMax fourth — rate-limited, HTTP 429.
+CF-Gateway removed — @cf/moonshotai/kimi-k2.6 does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
@@ -1772,7 +1770,6 @@ CF-Gateway as emergency fallback."
     ("executor"   "moonshot"   . "kimi-k2.6")
     ("executor"   "DeepSeek"   . "deepseek-v4-flash")
     ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
-    ("executor"   "CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "DashScope"  . "qwen3.6-plus")
     ("researcher" "DeepSeek"   . "deepseek-v4-flash")
@@ -1979,12 +1976,11 @@ the user has not explicitly customized the variable."
                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
                      ("DashScope" . "qwen3.6-plus")
                      ("Gemini" . "gemini-3.1-pro-preview")))
-        (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-              '(("MiniMax" . "minimax-m2.7-highspeed")
-                ("moonshot" . "kimi-k2.6")
-                ("DashScope" . "glm-5")
-                ("DeepSeek" . "deepseek-v4-flash")
-                ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
+         (setq gptel-auto-workflow-executor-rate-limit-fallbacks
+               '(("MiniMax" . "minimax-m2.7-highspeed")
+                 ("moonshot" . "kimi-k2.6")
+                 ("DashScope" . "glm-5")
+                 ("DeepSeek" . "deepseek-v4-flash")))
         (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-experiment-validation-retry-active-grace)
