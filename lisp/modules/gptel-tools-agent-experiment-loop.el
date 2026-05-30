@@ -242,6 +242,20 @@ Adapts max-experiments based on API error rate."
               baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
      loop-buffer
      workflow-root)
+    ;; Ontology gate: check if target is suitable for experimentation
+    (when (and (fboundp 'gptel-auto-workflow--categorize-target)
+               (fboundp 'gptel-auto-workflow--check-action-preconditions))
+      (let* ((category (gptel-auto-workflow--categorize-target target))
+             (precondition-error (gptel-auto-workflow--check-action-preconditions target))
+             (saturated (and category (assoc category gptel-auto-workflow--category-saturation))))
+        (when precondition-error
+          (message "[ontology-gate] 🚫 %s: %s — skipping experiment" target precondition-error)
+          (funcall callback nil)
+          (cl-return-from gptel-auto-experiment-loop))
+        (when saturated
+          (message "[ontology-gate] ⚠ %s: category %s saturated — reducing experiments" target category)
+          (setq gptel-auto-experiment-max-per-target
+                (min gptel-auto-experiment-max-per-target 2)))))
     (let* ((original-max gptel-auto-experiment-max-per-target)
            (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
            ;; Adjust max-exp based on frontier size: underexplored targets get more experiments
