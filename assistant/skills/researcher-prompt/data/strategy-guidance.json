@@ -1,9 +1,1 @@
-<<<<<<< HEAD
-<<<<<<< Updated upstream
 {"beta":0.5,"own-priority":72.5,"ext-priority":15.0,"stop-threshold":71.0,"token-budget":8000,"learning-method":"beta-schedule","evolved-at":"not-yet","based-on-traces":0,"best-topic":"json-null","best-topic-rate":0.0}
-=======
-{"beta":0.06329113924050633,"own-priority":52.84810126582279,"ext-priority":15.0,"stop-threshold":65.75949367088609,"token-budget":4506,"learning-method":"beta-schedule","evolved-at":"not-yet","based-on-traces":0,"best-topic":"json-null","best-topic-rate":0.0}
->>>>>>> Stashed changes
-=======
-{"beta":0.06329113924050633,"own-priority":52.84810126582279,"ext-priority":15.0,"stop-threshold":65.75949367088609,"token-budget":4506,"learning-method":"beta-schedule","evolved-at":"not-yet","based-on-traces":0,"best-topic":"json-null","best-topic-rate":0.0}
->>>>>>> c216e3fb (◈ Merge auto-evolved pipeline files)
