@@ -66,13 +66,19 @@
 
 (defun gptel-auto-experiment--validate-all-modified-files (worktree)
   "Validate all modified .el files in WORKTREE.
-Returns nil if all pass, or error message string for first failure."
+Returns nil if all pass, or error message string for first failure.
+Also fails if NO files were modified (agent made no actual edits)."
   (let ((default-directory worktree)
         (modified-files (ignore-errors
                           (split-string
                            (shell-command-to-string
                             "git diff --name-only HEAD 2>/dev/null")
                            "\n" t))))
+    ;; CRITICAL: Agent must actually make file edits, not just output text
+    (when (null modified-files)
+      (message "[auto-exp] ✗ Validation failed: agent made no file modifications")
+      (throw 'validation-error
+             "Agent made no code changes. Use Edit or Write tools to modify files."))
     (catch 'validation-error
       (dolist (file modified-files)
         (when (and (string-suffix-p ".el" file)

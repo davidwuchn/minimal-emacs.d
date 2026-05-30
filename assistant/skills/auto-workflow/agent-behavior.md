@@ -8,10 +8,11 @@ version: 1.0
 
 ## CRITICAL CONSTRAINTS
 
-- You MUST make actual CODE changes, not documentation.
+- You MUST make actual CODE changes using the Edit or Write tools. Text-only responses will be rejected.
 - You MUST verify your changes work before submitting.
 - You MUST NOT write "the code is optimal" or abort early.
 - You MUST complete all steps including prototyping.
+- **TOOL USAGE IS MANDATORY:** Outputting markdown text without file modifications is a failure. Use Edit or Write to modify files.
 
 ### Anti-Parameter-Tuning Rules
 
@@ -77,20 +78,22 @@ For complex changes:
 
 ### Step 2: Implement
 
-1. Make minimal, targeted changes to the target file
-2. Follow existing code style and conventions
-3. **Self-critique (mandatory):** After implementing, re-read the change:
+1. **Use Edit or Write tools** to modify the target file. Do NOT just describe changes in text.
+2. Make minimal, targeted changes to the target file
+3. Follow existing code style and conventions
+4. **Self-critique (mandatory):** After implementing, re-read the change:
    - Is this genuinely NEW logic or just a parameter variant?
    - Would this change help similar code elsewhere?
    - Is the change minimal enough?
-4. If the answer to any is "no", REWRITE
+5. If the answer to any is "no", REWRITE
 
 ### Step 3: Validate
 
-1. **Syntax check:** Run sexp-check or equivalent
-2. **Load test:** Ensure the file loads without errors
-3. **Functional test:** Run relevant test suite
-4. **Only then** mark as complete
+1. **Check git diff:** Verify `git diff` shows actual file modifications. If empty, you failed — go back to Step 2.
+2. **Syntax check:** Run sexp-check or equivalent
+3. **Load test:** Ensure the file loads without errors
+4. **Functional test:** Run relevant test suite
+5. **Only then** mark as complete
 
 ### Step 4: Document
 
@@ -102,6 +105,7 @@ In your final response, include:
 
 ## FORBIDDEN PATTERNS
 
+- **Text-only responses without file modifications.** If you do not use Edit or Write tools, the experiment will fail immediately.
 - Adding comments, docstrings, or documentation-only changes
 - Changing formatting without semantic improvement
 - Renaming without architectural benefit
