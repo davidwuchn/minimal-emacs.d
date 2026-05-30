@@ -58,6 +58,7 @@
 (defvar gptel-auto-experiment-auto-push)
 (defvar gptel-auto-workflow-use-staging)
 (defvar gptel-auto-experiment--in-retry)
+(defvar gptel-auto-experiment--in-refine)
 (defvar gptel-auto-experiment-active-grace)
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
 (defvar gptel-auto-workflow--rate-limited-backends)
@@ -1167,6 +1168,83 @@ Safe to call multiple times: already-merged branches are skipped."
       (when (> skipped 0)
         (message "[staging-recovery] %d experiments are > %dh old — skipping (branches likely deleted)"
                  skipped gptel-auto-experiment--staging-recovery-max-age-hours)))))
+
+;; ─── Generate→Validate→Refine Cycle ───
+
+(defun gptel-auto-experiment--refine (target validation-error grade-details
+                                       executor-prompt experiment-worktree
+                                       baseline patterns actual-backend actual-model
+                                       strategy-name run-id log-fn provisional-commit-hash
+                                       experiment-branch experiment-id start-time callback)
+  "Run a refine cycle on the current worktree changes.
+Called when the grader passed but the benchmark/validation failed."
+  (let* ((refine-error (or validation-error "tests-failed"))
+         (refine-timeout (min gptel-auto-experiment-time-budget
+                              (or (bound-and-true-p gptel-auto-experiment-validation-retry-time-budget) 480)))
+         (refine-prompt
+          (concat "λ refine(previous_attempt).\n"
+                  "The changes above are valid (grader passed) but have issues.\n"
+                  "ERROR: " refine-error "\n\n"
+                  "Fix ONLY the specific issue. Do not rewrite or undo existing changes.\n"
+                  "| MANDATORY: emacs --batch -f batch-byte-compile before finishing\n")))
+    (my/gptel--run-agent-tool-with-timeout
+     refine-timeout
+     (lambda (agent-output)
+       (if (gptel-auto-experiment--agent-error-p agent-output)
+           (progn
+             (message "[auto-experiment] ✗ Refine agent error")
+             (let ((default-directory experiment-worktree))
+               (magit-git-success "checkout" "--" "."))
+             (funcall callback (list :refined nil :reason "agent-error")))
+         (gptel-auto-experiment--grade-with-retry
+          agent-output
+          (lambda (refine-grade)
+            (if (not (plist-get refine-grade :passed))
+                (progn
+                  (message "[auto-experiment] ✗ Refine grade failed")
+                  (let ((default-directory experiment-worktree))
+                    (magit-git-success "checkout" "--" "."))
+                  (funcall callback (list :refined nil :reason "grade-failed")))
+              (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis agent-output))
+                     (bench (gptel-auto-experiment-benchmark t hypothesis)))
+                (if (not (plist-get bench :passed))
+                    (progn
+                      (message "[auto-experiment] ✗ Refine benchmark still failed")
+                      (let ((default-directory experiment-worktree))
+                        (magit-git-success "checkout" "--" "."))
+                      (funcall callback (list :refined nil :reason "benchmark-failed")))
+                  (let* ((score-after (plist-get bench :eight-keys))
+                         (grade-score (plist-get refine-grade :score))
+                         (grade-total (plist-get refine-grade :total))
+                         (effective-score
+                          (if (and (plist-get refine-grade :passed)
+                                   (or (null score-after) (< score-after 0.1))
+                                   grade-score grade-total (> grade-total 0))
+                              (/ (float grade-score) grade-total)
+                            (or score-after 0)))
+                         (quality (or (gptel-auto-experiment--code-quality-score) 0.5))
+                         (exp-result
+                          (list :target target :id experiment-id
+                                :hypothesis hypothesis
+                                :score-before baseline :score-after effective-score
+                                :code-quality quality :refined t
+                                :duration (- (float-time) start-time)
+                                :grader-quality grade-score
+                                :grader-reason grade-details
+                                :analyzer-patterns (format "%s" patterns)
+                                :agent-output agent-output
+                                :backend actual-backend :model actual-model
+                                :strategy strategy-name)))
+                    (message "[auto-experiment] ✓ Refine passed (score=%s)" effective-score)
+                    (funcall callback (list :refined t :exp-result exp-result
+                                           :effective-score effective-score
+                                           :hypothesis hypothesis
+                                           :grade-score grade-score :grade-total grade-total
+                                           :grade-details grade-details
+                                           :provisional-commit-hash provisional-commit-hash
+                                           :experiment-branch experiment-branch))))))))))
+     refine-prompt target experiment-worktree nil nil nil
+     (bound-and-true-p gptel-auto-experiment-active-grace))))
 
 (provide 'gptel-tools-agent-experiment-core)
 ;;; gptel-tools-agent-experiment-core.el ends here

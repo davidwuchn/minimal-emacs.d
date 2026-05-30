@@ -2691,6 +2691,50 @@ Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
 
 ;; ─── Verbum Experiment Tracker ───
 
+;; ─── Category Action Schema ───
+
+(defconst gptel-auto-workflow--category-action-schemas
+  '((:agentic
+     :description "Agent orchestration and tool dispatch changes"
+     :preconditions ("tool-registry-initialized" "fsm-not-in-error-state")
+     :commit-criteria ("tool-dispatch-still-works" "error-handling-intact")
+     :verification-commands ("emacs --batch --eval \"(check-parens)\""
+                             "emacs -Q --batch -f batch-byte-compile"))
+    (:programming
+     :description "Code refactoring, performance, and bug fixes"
+     :preconditions ("file-byte-compiles" "no-syntax-errors")
+     :commit-criteria ("all-tests-pass" "no-regressions" "style-integrity")
+     :verification-commands ("emacs --batch --eval \"(check-parens)\""
+                             "emacs -Q --batch -f batch-byte-compile"))
+    (:tool-calls
+     :description "Sandbox execution and file operation tools"
+     :preconditions ("tool-argument-schemas-valid" "sandbox-rules-loaded")
+     :commit-criteria ("tool-call-still-works" "error-handling-robust")
+     :verification-commands ("emacs --batch --eval \"(check-parens)\""
+                             "emacs -Q --batch -f batch-byte-compile"))
+    (:natural-language
+     :description "Prompt templates, text processing, context management"
+     :preconditions ("file-byte-compiles")
+     :commit-criteria ("prompt-format-preserved" "fallback-handlers-intact")
+     :verification-commands ("emacs --batch --eval \"(check-parens)\""
+                             "emacs -Q --batch -f batch-byte-compile")))
+  "Per-category action schema with preconditions, commit criteria, and verification commands.")
+
+(defun gptel-auto-workflow--format-schema-guidance (target)
+  "Format action schema for TARGET as prompt guidance string."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let ((schema (cdr (assoc (gptel-auto-workflow--categorize-target target)
+                              gptel-auto-workflow--category-action-schemas))))
+      (when schema
+        (format "## Action Schema (%s)\nPreconditions:\n%s\n\nCommit criteria:\n%s\n\nVerification:\n%s"
+                (plist-get schema :description)
+                (mapconcat (lambda (p) (format "  ✓ %s" p))
+                           (plist-get schema :preconditions) "\n")
+                (mapconcat (lambda (c) (format "  ⚡ %s" c))
+                           (plist-get schema :commit-criteria) "\n")
+                (mapconcat (lambda (v) (format "  $ %s" v))
+                           (plist-get schema :verification-commands) "\n"))))))
+
 ;; ─── Ontology Self-Evolution ───
 
 (defvar gptel-auto-workflow--category-strategy-preferences nil
@@ -2788,9 +2832,51 @@ Runs during the self-evolution cycle.  Results are stored in
       ;; Phase 5: Aggregate per-category eight-key weights
       (gptel-auto-workflow--evolve-ontology-eight-keys)
 
+      ;; Phase 5: Learn backend-category fit from empirical data
+      (let ((cat-backends (make-hash-table :test 'equal))
+            (backend-changes 0))
+        (dolist (r results)
+          (let* ((r-target (plist-get r :target))
+                 (r-backend (plist-get r :backend))
+                 (r-decision (plist-get r :decision))
+                 (r-kept (equal r-decision "kept"))
+                 (category (and r-target (fboundp 'gptel-auto-workflow--categorize-target)
+                                (gptel-auto-workflow--categorize-target r-target))))
+            (when (and category r-backend)
+              (let* ((key (cons category r-backend))
+                     (entry (gethash key cat-backends (list :kept 0 :total 0))))
+                (setq entry (plist-put entry :kept (+ (plist-get entry :kept) (if r-kept 1 0))))
+                (setq entry (plist-put entry :total (1+ (plist-get entry :total))))
+                (puthash key entry cat-backends)))))
+        (let ((cat-best (make-hash-table :test 'equal)))
+          (maphash
+           (lambda (key entry)
+             (let* ((category (car key))
+                    (backend (cdr key))
+                    (kept (plist-get entry :kept))
+                    (total (plist-get entry :total))
+                    (rate (if (> total 0) (/ (float kept) total) 0))
+                    (current (gethash category cat-best (list :backend nil :keep-rate 0))))
+               (when (and (>= total 3) (> rate (plist-get current :keep-rate)))
+                 (puthash category (list :backend backend :keep-rate rate) cat-best))))
+           cat-backends)
+          (maphash
+           (lambda (category best)
+             (let* ((static (cdr (assoc category gptel-auto-workflow--category-backend-overrides)))
+                    (learned (plist-get best :backend))
+                    (rate (plist-get best :keep-rate)))
+               (when (and static (not (equal static learned)))
+                 (setq backend-changes (1+ backend-changes))
+                 (message "[ontology-evolve] ⚡ %s: static %s → learned %s (%.0f%%)"
+                          category static learned (* 100 rate)))))
+           cat-best))
+        (when (> backend-changes 0)
+          (message "[ontology-evolve] %d backend-category mismatches vs static defconst" backend-changes)))
+
       (when changes
         (message "[ontology-evolve] Updated %d category strategy preferences" (length changes)))
       (list :changes (length changes)
+            :backend-changes backend-changes
             :saturated (length saturated)
             :total-strategies (hash-table-count cat-strats))))))
 
