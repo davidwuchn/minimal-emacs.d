@@ -232,45 +232,77 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Distillation: Research Strategy — Template-Default**
+```markdown
+**Research Strategy: Template-Default**
 
-After 65 experiments across 13 targets, zero hypotheses were retained.
+**Scope:** 24 experiments across 6 target modules
 
-All proposed improvements—including memoization for `nucleus--project-root`, directory path caching, nil guards for error resilience, race condition fixes, and indentation corrections—were discarded.
+**Targets:**
+- `lisp/modules/gptel-tools-agent-benchmark.el`
+- `lisp/modules/gptel-benchmark-subagent.el`
+- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-tools-agent-prompt-build.el`
+- `lisp/modules/gptel-auto-workflow-strategic.el`
+- `lisp/modules/gptel-auto-workflow-projects.el`
 
-**Conclusion:** Systematic experimentation yielded no actionable hypotheses. Consider broadening search space or revisiting initial assumptions.
+**Status:**
+- Kept hypotheses: None documented
+- Discarded hypotheses: None documented
+
+**Summary:** Systematic evaluation across agent tools, benchmarking, error handling, prompt construction, and workflow automation modules using default templating approach.
 ```
 
 ### Check Issues
 
-# Analysis
+# Document Review
 
-This reads like a **satirical research abstract** — the dry academic framing over a relatable developer scenario (trying 65 things, none of them working) is the joke.
+Your markdown appears **structurally sound**. Here's a quick check:
 
-## If this is genuine (you have an actual problem):
+| Element | Status |
+|---------|--------|
+| Headers (`**text**`) | ✅ Correct |
+| List formatting | ✅ Valid |
+| Code fences (\`\`\`) | ✅ Properly closed |
+| Overall structure | ✅ Well-organized |
 
-The `nucleus--project-root` memoization and related attempts suggest you're optimizing something that perhaps doesn't need optimizing, or there's a deeper issue masking the symptoms.
+## Minor Observations
 
-**What I'd need to help:**
+1. **Status section** - Both fields are empty. Should these be populated, or is this intentional for a template?
 
-- The actual code or problem you're trying to solve
-- What behavior you're observing vs. what you expect
-- Which of those 65 experiments came closest to working
+2. **Summary** - Could be expanded with specific hypotheses or expected outcomes.
 
-## If this is satire:
+3. **Consistency** - File names follow `gptel-*` naming pattern consistently.
 
-It's well-formatted. The contrast between:
-- "65 experiments" (empirical rigor)
-- "zero hypotheses retained" (total failure)
-- "Consider broadening search space" (academic hedge)
-
-...is the punchline. Classic **absurdist humor** familiar in CS/debugging circles.
-
----
-
-**What did you want me to check?** Literal text review? Actual debugging help? Or was the joke itself the point?
+Would you like me to:
+- Validate the file paths exist?
+- Suggest additional fields?
+- Expand the summary with more detail?
