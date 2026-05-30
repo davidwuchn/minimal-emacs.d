@@ -2023,16 +2023,6 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (run-with-idle-timer 30 nil #'gptel-auto-workflow--run-research-champion-league))
         (gptel-auto-workflow--consume-vsm-actions))
     (error (message "[feedback] ERROR: cross-subsystem failed — %s" (error-message-string err))))
-  ;; Verbum Phase 11: Lambda compiler verification (run every 6 hours)
-  (when (fboundp 'gptel-auto-workflow--verify-all-backends-lambda)
-    (let ((last-verify (get 'gptel-auto-workflow--verify-all-backends-lambda :last-run)))
-      (when (or (null last-verify)
-                (> (- (float-time) last-verify) 21600))  ; 6 hours
-        (condition-case err
-            (progn
-              (gptel-auto-workflow--verify-all-backends-lambda)
-              (put 'gptel-auto-workflow--verify-all-backends-lambda :last-run (float-time)))
-          (error (message "[verbum] ERROR: lambda verification failed — %s" (error-message-string err)))))))
   ;; Verbum Phase 6+9: Cross-backend consistency + low-agreement alerts (run every 3 hours)
   (when (fboundp 'gptel-auto-workflow--check-all-targets-consistency)
     (let ((last-check (get 'gptel-auto-workflow--check-all-targets-consistency :last-run)))

@@ -74,8 +74,14 @@ These targets may need different research patterns or the research findings were
 
 
 
-=======
->>>>>>> Stashed changes
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
@@ -84,104 +90,83 @@ These targets may need different research patterns or the research findings were
 <<<<<<< Updated upstream
 # Research Strategy Distillation
 
-## Template
-`template-default`
-
-## Experiments (10 total across 6 targets)
-
-| Target | Count |
-|--------|-------|
-| `staging-review` | ~2 |
-| `staging-merge` | ~2 |
-| `lisp/modules/gptel-auto-workflow-strategic.el` | ~2 |
-| `lisp/modules/gptel-auto-workflow-projects.el` | ~2 |
-| `staging-verification` | ~1 |
-| `lisp/modules/gptel-auto-workflow-research-integration.el` | ~1 |
-
-## Hypotheses
-- **Kept:** 0
-- **Discarded:** 0
-
 ## Summary
-Standard template strategy with balanced experimentation across staging and module targets. No hypotheses retained or eliminated from current iteration.
-=======
-**Research Strategy: template-default**
 
-**87 experiments across 20 targets** — gptel modules for workflow automation, benchmarking, tools/agents, and extensions.
+| Field | Value |
+|-------|-------|
+| **Strategy Type** | template-default |
+| **Total Experiments** | 22 |
+| **Targets** | 7 files |
 
-**Kept (5 hypotheses):**
-- Nil summary validation in benchmark comparison → prevent `wrong-type-argument`
-- Negative caching fix → O(1) instead of O(n) disk hits for missing files
-- `proper-list-p` validation before `last` → prevent crash on improper lists
-- `stringp` validation in skill loader → explicit type contracts
-- Nil guards before `string-match`/`split-string` → error resilience
+## Experiment Targets
 
-**Discarded (14 hypotheses):**
-- `error-message-string` formatting, hash table removal, symbol map derivation, benchmark summary caching, `proper-list-p` replacement, module path caching, nil guards for `feature-name`, FSM logging, `seen` hash table reuse, redundant validation removal, regexp `bound-and-true-p`, `cl-remove` fix, memoization for error categorization
+### Elisp Modules (4)
+1. `lisp/modules/gptel-tools-agent-prompt-build.el`
+2. `lisp/modules/gptel-auto-workflow-strategic.el`
+3. `lisp/modules/gptel-auto-workflow-projects.el`
+4. `lisp/modules/gptel-auto-workflow-research-integration.el`
 
-**Focus:** Safety, Vitality (error resilience), Performance (caching), Clarity (explicit contracts).
->>>>>>> Stashed changes
+### Staging Workflows (3)
+1. `staging-review`
+2. `staging-merge`
+3. `staging-verification`
+
+## Hypothesis Tracking
+
+| Status | Count | Details |
+|--------|-------|---------|
+| **Kept** | — | Not yet documented |
+| **Discarded** | — | Not yet documented |
+
+---
+
+**Action Items:**
+- Document kept hypotheses as they emerge
+- Record discarded hypotheses with reasoning for future reference
+- Track which hypotheses map to which targets/experiments
 ```
 
 ### Check Issues
 
-<<<<<<< Updated upstream
-# Research Strategy Distillation — Review
-
-## ✅ Structure
-| Aspect | Status |
-|--------|--------|
-| Template identification | ✓ Present |
-| Experiment counts table | ✓ Present |
-| Hypothesis tracking | ⚠️ Empty (0/0) |
-| Summary | ✓ Present |
+# Document Review: Research Strategy Distillation
 
 ## Observations
 
-1. **Hypothesis section is blank** — May need populated hypotheses before next iteration
-2. **Tildes (~) on counts** — Intended as estimates? Consider exact numbers if planning discrete experiments
-3. **Module targets** — 3 of 6 targets are `.el` files; staging targets handle integration
+### ✅ What's Present
+- **Clear structure** — well-organized with tables for experiments and hypothesis tracking
+- **Specific targets** — 4 named Elisp modules and 3 staging workflows
+- **Experiment count** — 22 total experiments mapped to 7 targets
 
-## Recommendations
+### ⚠️ Issues / Gaps
 
-| # | Suggestion |
-|---|------------|
-| 1 | Add specific hypotheses being tested (e.g., "staging-merge improves workflow timing by X%") |
-| 2 | Clarify if ~2 means "2-3" or "approximately 2 scheduled" |
-| 3 | Consider tagging experiments by priority (P0/P1) if not already done elsewhere |
+| Issue | Detail |
+|-------|--------|
+| **No hypotheses documented** | The tracking section is empty — can't assess what's working |
+| **Missing experiment breakdown** | "22 experiments" has no mapping — which target got how many runs? |
+| **No results/success criteria** | No metrics or outcomes recorded |
+| **Staging workflows lack detail** | What triggers each? What do they verify? |
 
-## Verdict
-**Ready for iteration** once hypotheses are populated. Structure is sound.
-=======
-# Review: Research Strategy Summary
+## Suggestions
 
-## Math Check
-| Category | Count |
-|----------|-------|
-| Kept | 5 |
-| Discarded | 14 |
-| **Total listed** | **19** |
-| Stated total | 87 |
+```
+1. Add experiment-to-target mapping:
+   - e.g., gptel-tools-agent-prompt-build.el: 8 experiments
+   - staging-review: 3 experiments
+   
+2. Document hypothesis schema:
+   - Hypothesis: "Adding X will improve Y by Z%"
+   - Experiment: which file/run tested this
+   - Result: outcome (kept/discarded)
+   - Reasoning: why
 
-**⚠️ Discrepancy:** 19 listed vs 87 stated — missing 68 experiments.
+3. Add status column to Experiment Targets table:
+   - Not Started / In Progress / Complete / Blocked
+```
 
-## Validation
+## Questions to Consider
 
-**The 5 kept hypotheses** are sound defensive coding practices:
-- ✅ All address runtime error prevention
-- ✅ Cover the four focus areas (Safety, Vitality, Performance, Clarity)
+- What defines success for these experiments?
+- Is there a target date for hypothesis documentation?
+- Should discarded hypotheses be auto-archived or reviewed first?
 
-**The 14 discarded** are reasonable to discard:
-- ✅ Micro-optimizations without evidence of bottleneck
-- ✅ Refactorings that don't improve user-facing behavior
-
-## Questions
-
-1. **Where are the other 68 experiments categorized?**
-2. **What's the acceptance criteria for "kept" vs "discarded"?**
-3. **Were 87 experiments actually run, or is this aspirational?**
-
-## Verdict
-
-The framework is coherent. The hypothesis classifications appear reasonable. The main issue is the count mismatch with the 87-experiment claim.
->>>>>>> Stashed changes
+Would you like me to propose a more detailed template or help populate the hypothesis tracking section?

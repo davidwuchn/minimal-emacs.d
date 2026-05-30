@@ -579,17 +579,17 @@ Guards against missing runtime dependencies (worktree-base-root)."
 ;; ─── Backend Lambda Verification (verbum Phase 2) ───
 
 (ert-deftest tdd/lambda-verify/returns-cached-status ()
-  "Lambda verification returns cached status when available."
+  "Lambda verification returns :healthy — all backends support lambda."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
-    (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
     (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))))
 
 (ert-deftest tdd/lambda-verify/known-backends-return-unknown-without-cache ()
-  "Without cache, verification initiates async and returns :unknown."
+  "Without cache, verification returns :healthy immediately (no API call).
+All known backends now support lambda notation; no async verification needed."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
         (gptel-auto-workflow--backend-lambda-health-cache nil))
-    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))
-    (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "DashScope" "qwen3.6-plus")))))
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "DashScope" "qwen3.6-plus")))))
 
 (ert-deftest tdd/lambda-verify/response-contains-lambda ()
   "response-contains-lambda-p detects lambda expressions."
@@ -768,55 +768,43 @@ Guards against missing runtime dependencies (worktree-base-root)."
 ;; ─── Real Lambda Verification (verbum Phase 11) ───
 
 (ert-deftest tdd/lambda-verify/cached-healthy ()
-  "Returns cached result when available."
+  "Returns :healthy — all backends support lambda."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
     (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))))
 
 (ert-deftest tdd/lambda-verify/cached-degraded ()
-  "Returns cached degraded result."
+  ":degraded is no longer returned — all backends are :healthy now."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (puthash "moonshot" :degraded gptel-auto-workflow--lambda-verification-results)
-    (should (eq :degraded (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))))
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))))
 
 (ert-deftest tdd/lambda-verify/no-cache-initiates-async ()
-  "When no cached result, initiates async verification and returns :unknown."
+  "No API call needed — returns :healthy immediately."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
         (called nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--call-backend-for-lambda)
                (lambda (backend model _prompt) (setq called (cons backend model)) t)))
-      (should (eq :unknown (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))
-      (should (equal '("moonshot" . "kimi-k2.6") called)))))
+      (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))
+      (should (null called)))))
 
 (ert-deftest tdd/lambda-verify/callback-stores-healthy ()
-  "Async callback stores :healthy when lambda found in response."
+  "Lambda verification stores :healthy immediately (no API call needed)."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
-    (cl-letf (((symbol-function 'gptel-request)
-               (lambda (_prompt &rest args)
-                 (let ((cb (plist-get args :callback)))
-                   (funcall cb "λx.x" nil)))))
-      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
-      (should (eq :healthy (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
+    (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
+    (should (eq :healthy (gethash "moonshot" gptel-auto-workflow--lambda-verification-results)))))
 
 (ert-deftest tdd/lambda-verify/callback-stores-degraded ()
-  "Async callback stores :degraded when no lambda in response."
+  ":degraded is no longer stored — all backends are immediately :healthy."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
-    (cl-letf (((symbol-function 'gptel-request)
-               (lambda (_prompt &rest args)
-                 (let ((cb (plist-get args :callback)))
-                   (funcall cb "hello world" nil)))))
-      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
-      (should (eq :degraded (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
+    (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
+    (should (eq :healthy (gethash "moonshot" gptel-auto-workflow--lambda-verification-results)))))
 
 (ert-deftest tdd/lambda-verify/callback-stores-unknown-on-nil ()
-  "Async callback stores :unknown when response is nil."
+  ":unknown is no longer stored — all backends are immediately :healthy."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
-    (cl-letf (((symbol-function 'gptel-request)
-               (lambda (_prompt &rest args)
-                 (let ((cb (plist-get args :callback)))
-                   (funcall cb nil nil)))))
-      (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
-      (should (eq :unknown (gethash "moonshot" gptel-auto-workflow--lambda-verification-results))))))
+    (gptel-auto-workflow--call-backend-for-lambda "moonshot" "kimi-k2.6" "test")
+    (should (eq :healthy (gethash "moonshot" gptel-auto-workflow--lambda-verification-results)))))
 
 ;; ─── Lambda Verification Report (verbum Phase 12) ───
 
