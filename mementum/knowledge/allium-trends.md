@@ -1,6 +1,7 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **Missing details:**: 1 occurrence(s)
-- **"Hypotheses: None kept or discarded"**: 1 occurrence(s)
+- **Completed**: 1 occurrence(s)
+- **In progress**: 1 occurrence(s)
+- **Generated**: 1 occurrence(s)
 
