@@ -4,10 +4,12 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-30T08:01
+Generated: 2026-05-30T09:03
 
 | lisp/modules/gptel-ext-context.el | lisp/modules/gptel-workflow-benchmark.el | 2.000 |
 | lisp/modules/gptel-tools-agent-experiment-loop.el | lisp/modules/gptel-workflow-benchmark.el | 1.000 |
+| lisp/modules/gptel-tools-agent-prompt-analyze.el | lisp/modules/gptel-workflow-benchmark.el | 0.286 |
+| lisp/modules/gptel-tools-agent-experiment-core.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.250 |
 
 ## Ontology Implications
 

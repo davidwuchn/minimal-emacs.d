@@ -69,64 +69,105 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Distillation of 201-Experiment Research Strategy**
+**Distillation of 201 template-default experiments across ~30 Lisp modules**
 
-**Meta-pattern: Safety > Performance**
-Kept hypotheses overwhelmingly favor input validation, nil-safety, and functional correctness over caching, memoization, or micro-optimizations. Discarded hypotheses were predominantly speculative performance gains (memoized project roots, backend-name caching, eliminated temp buffers) or stylistic refactors (indentation, redundant guard removal) that did not address demonstrated failure modes.
-
----
-
-**Critical Functional Bugs (Kept)**
-
-- **Non-existent function:** `hash-table-keys` is not built-in Emacs Lisp; it breaks `my/gptel-show-permits` and `my/gptel-health-check` at runtime.
-- **Inverted comparison logic:** `gptel-benchmark-baseline-file-compare` had swapped arguments, reversing improvement/regression signals (it computed `score-b - score-a` but passed current as `version-a` and baseline as `version-b`).
-- **Wrong accessor type:** `gptel-benchmark-diagnose-elements` used `plist-get` on alist data, causing all scores to default to 0.5.
-- **Broken error handler:** `gptel-auto-workflow--safe-truename` used `(ignore)` as a `condition-case` label, which never catches errors; replaced with `(error nil)`.
-- **Stale copy vs. symlink:** `gptel-auto-workflow--link-shared-runtime-path` treated existing regular files as valid without ensuring they are symlinks, violating runtime path expectations.
-- **JSON serialization mismatch:** `gptel-benchmark--to-json-format` preserved keyword keys in dotted-pair alists (e.g., `((:score . 0.8))`) instead of converting them to symbol keys, causing inconsistent JSON output.
+### Bottom Line
+The experiments surfaced a **robustness crisis, not a performance crisis**. The majority of accepted changes are defensive validation guards and correctness fixes in `gptel-auto-workflow-*`, `gptel-benchmark-*`, `gptel-tools-memory`, and `nucleus-*`. Performance-oriented hypotheses (memoization, caching, buffer optimization) were overwhelmingly discarded as unnecessary or premature.
 
 ---
 
-**Systematic Hardening (Kept)**
+### Accepted Themes (Kept Hypotheses)
 
-- **Input validation:** Added nil/non-string/empty guards to experiment validation, workflow status, permit tools, memory path resolution, and benchmark processing.
-- **List safety:** Replaced `listp` with `proper-list-p` and added `cl-every #'consp` checks across benchmark scoring, summarization, and JSON conversion to prevent crashes on malformed lists.
-- **API consistency:** `gptel-tools-memory--read/write` now signal errors instead of returning strings, eliminating silent failures.
-- **Slug safety:** Added filesystem-safe slug validation to memory path resolution.
-- **Clarity refactors:** Extracted duplicated zero-result summary logic in `gptel-benchmark-summarize-results` into a dedicated helper.
-- **Test infrastructure:** Moved misplaced `(provide 'gptel-benchmark-tests)` to the end of the file, added missing `(require 'cl-lib)`, fixed log append vs. overwrite, and isolated global state in evolution tests.
+**1. Input validation / nil-safety (≈60% of kept value)**
+- **Pattern**: Add explicit guards for `nil`, non-string, empty-string, and improper-list inputs before processing.
+- **Hotspots**: 
+  - `gptel-auto-experiment--validate-candidate-safely`, `gptel-auto-workflow-research-status-all`, `gptel-workflow--score-tools`
+  - `gptel-benchmark-summarize-results`, `gptel-benchmark-prescribe`, `gptel-benchmark--to-json-format`
+  - `my/gptel-permit-tool`, `gptel-tools-memory--resolve-path`, `gptel-tools-memory--collect-dir`
+- **Impact**: Prevents runtime crashes from malformed agent output or incomplete project data. Maps directly to **φ Vitality** (error resilience) and **fractal Clarity** (testable assumptions).
+
+**2. Type/accessor mismatch bugs**
+- `gptel-benchmark-diagnose-elements`: Used `plist-get` on alist data → switched to `alist-get` (scores were defaulting to 0.5).
+- `gptel-benchmark--to-json-format`: Dotted-pair alists like `((:score . 0.8))` preserved keyword keys instead of converting to symbols, breaking JSON serialization.
+- `hash-table-keys`: Not built-in in Emacs Lisp; usage in permit/health modules would cause runtime errors.
+- `condition-case` handler: `(ignore)` is not a valid error condition in `gptel-auto-workflow--safe-truename`; replaced with `(error nil)` to make the "safe" wrapper actually safe.
+
+**3. Logic/argument-order bugs**
+- **`gptel-benchmark-baseline-file-compare`**: Caller passed `(current baseline)` but `compare-summaries` treats arg1 as baseline and arg2 as candidate, inverting improvement/regression signals. Swapped order.
+- **`gptel-auto-workflow--link-shared-runtime-path`**: Regular files at target were treated as valid without creating symlinks, leaving stale copies.
+- **`gptel-auto-workflow--finalize-review-fix-result`**: `string-match-p` could receive `nil` response.
+
+**4. Structural & API consistency**
+- **File structure**: Moved 14 test definitions and `(provide 'gptel-benchmark-tests)` to end-of-file (120+ lines had been stranded after the `provide`, breaking batch loading).
+- **Memory module API**: `gptel-tools-memory--read` and `--write` now signal errors instead of returning error strings, preventing silent failures and making the API consistent.
+- **Clarity refactors**: Extracted duplicated zero-result structure into `gptel-benchmark--empty-summary`; added keyword-plist helper to simplify nested score-extraction logic.
 
 ---
 
-**Rejected Directions**
+### Discarded Themes & Why
 
-- **Memoization / caching:** Caching for `nucleus--project-root`, prompt directories, and backend names was discarded—treated as premature optimization without a proven hot-path bottleneck.
-- **Micro-optimizations:** Removing double-pass `cl-every`, restructuring `condition-case` scope, and eliminating temp buffers in memory read were rejected in favor of clarity and safety.
-- **Stylistic-only refactors:** Misleading indentation fixes and speculative hash-table allocation moves were discarded as non-functional.
+**1. Premature optimization / speculative caching**
+- Memoization for `nucleus--project-root`, `nucleus--resolve-*-dir`, and `gptel-auto-workflow--safe-backend-name`.
+- Rationale: Added state/complexity for marginal gain; the "hot paths" weren’t actually hot enough to justify cache invalidation logic.
+
+**2. Micro-optimizations that broke safety or were unnecessary**
+- Removing "redundant" `(cl-every #'consp data)` in `gptel-benchmark--to-json-format` to eliminate a "double-pass" — discarded because the check was load-bearing for safety.
+- Optimizing `gptel-tools-memory--read` by removing `with-temp-buffer` — discarded (likely due to correctness or minimal gain).
+- `gptel-ext-tool-permits.el` was already fully optimized from prior experiments (139 lines, down from 200); further changes had no headroom.
+
+**3. Misleading simplifications**
+- Removing `(consp val)(keywordp (car val))` checks that were already encoded in `inner-ht` — found to still be needed for guard logic.
 
 ---
 
-**Bottom Line**
-The accepted changes form a coherent defensive pass: make every boundary (user input, agent output, git results, file reads, JSON deserialization) explicitly validate its assumptions, fix the small set of logic inversions and non-existent function calls that cause silent data corruption, and keep error signaling consistent. Performance optimizations were deferred until safety invariants are enforced.
+### Meta-Observations
+
+| Axis | Finding |
+|------|---------|
+| **Vitality (Error R
+-- ... truncated ...
 ```
 
 ### Check Issues
 
-This is a tight, accurate distillation. The safety-first meta-pattern is well-justified, and the technical claims hold up under scrutiny. A few confirmations and minor nuances:
+**Verdict: Technically sound and well-framed.** The distillation is sharp, internally consistent, and the “robustness crisis, not performance crisis” conclusion is strongly supported by the evidence you presented. A few minor technical notes and one likely inaccuracy to address before this is finalized:
 
-**Verified / Correct**
-- **`hash-table-keys`**: Correctly identified as missing. It lives in `subr-x` (since Emacs 24.4) and is not autoloaded/preloaded. If the file didn’t explicitly require it, calling it signals `void-function`.
-- **`(ignore)` in `condition-case`**: Excellent catch. Handlers match signal *symbols*, so `(ignore)` only catches a signal literally named `ignore`, which is not what standard errors emit. `(error nil)` is the correct universal catch-and-return-nil pattern.
-- **`plist-get` on alists**: Classic silent data corruption. `plist-get` walks by `cddr` expecting flat `:key val` pairs; on an alist it either returns nil or misreads car/cdr structure.
-- **Inverted benchmark logic**: The argument swap is a high-severity silent failure—exactly the kind of bug that makes defensive validation worth prioritizing over perf tweaks.
-- **JSON keyword keys**: `json-encode` and friends generally prefer symbols or strings. Keyword keys in dotted pairs often serialize inconsistently or retain the colon, so normalizing to symbols upstream is the right fix.
+---
 
-**Nuance / Ensure Compatibility**
-- **`proper-list-p`**: This was added to `subr-x` in Emacs 27.1. If `gptel` supports older Emacs, you may need a compatibility shim or an explicit `(require 'subr-x)`. The distillation notes you added `(re
+### ✅ Confirmed / Strong
+
+**1. The `(ignore)` → `(error nil)` fix is correct.**
+In `condition-case`, a handler has the shape `(CONDITIONS . BODY)`. Writing `(ignore)` installs a handler for the *specific* signal symbol `ignore`, not a catch-all. To swallow any error and return `nil`, `(error nil)` is the right replacement. (Pedantic aside: you *could* define an error symbol named `ignore`, but it would never catch a standard `error` signal.)
+
+**2. `plist-get` on alists and dotted-pair JSON keys are classic Elisp boundary bugs.**
+Both fixes are exactly right. `plist-get` expects a property list (`:key val :key2 val2...`), not an alist. And JSON serialization paths in Emacs are notoriously sensitive to whether keys are keywords, symbols, or strings depending on `json-object-type` / `json-encoding-key-fn`.
+
+**3. `string-match-p` on `nil` is a guaranteed `wrong-type-argument` error.**
+Guard is necessary.
+
+**4. Argument-order inversion in `gptel-benchmark-baseline-file-compare`.**
+This is a high-severity silent bug—exactly the kind of thing that makes baseline/candidate comparisons useless. Good catch.
+
+**5. `provide` stranded before EOF.**
+A genuine structural/load-order bug. M
 
 ... (truncated)
