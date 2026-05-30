@@ -355,7 +355,11 @@ Runs as :after advice on `gptel--apply-preset'."
           (setq skill-dirs (append skill-dirs (list skill-dir))))
         (setq gptel-agent-skill-dirs (delete-dups skill-dirs))))
     (when (fboundp 'gptel-agent-update)
-      (gptel-agent-update))))
+      ;; gptel-agent--update-skills scans system dirs (~/.claude/skills/ etc.)
+      ;; that may not exist or contain unreadable files, causing Wrong type
+      ;; argument: stringp, nil. Wrap the full update in ignore-errors so
+      ;; agent definitions still load even if skills scanning fails.
+      (ignore-errors (gptel-agent-update)))))
 
 ;;; Integration
 
