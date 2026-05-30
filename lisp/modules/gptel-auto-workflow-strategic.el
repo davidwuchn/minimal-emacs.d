@@ -2706,29 +2706,43 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
     (message "[research] Periodic research stopped")))
 
 (defun gptel-auto-workflow-research-status ()
-  "Show researcher status for current project."
+  "Show researcher status for current project.
+When called interactively, displays formatted status.
+When called programmatically, returns a status plist."
   (interactive)
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
-         (findings (gethash cache-key
-                            gptel-auto-workflow--research-findings-cache
-                            ""))
+         (findings (gethash cache-key gptel-auto-workflow--research-findings-cache))
          (cache-file (gptel-auto-workflow--research-file))
          (file-exists (file-exists-p cache-file))
          (file-attrs (and file-exists (file-attributes cache-file)))
          (file-size (or (and file-attrs (nth 7 file-attrs)) 0))
          (file-mtime (and file-attrs (nth 5 file-attrs)))
          (file-mtime-str (and file-mtime
-                              (format-time-string "%Y-%m-%d %H:%M" file-mtime))))
-    (list :running (timerp gptel-auto-workflow--research-timer)
-          :interval gptel-auto-workflow-research-interval
-          :project proj-root
-          :findings-cached (and (stringp findings) (not (string-empty-p findings)))
-          :findings-length (length findings)
-          :cache-file cache-file
-          :cache-file-exists file-exists
-          :cache-file-size file-size
-          :cache-file-mtime file-mtime-str)))
+                              (format-time-string "%Y-%m-%d %H:%M" file-mtime)))
+         (status (list :running (timerp gptel-auto-workflow--research-timer)
+                       :interval gptel-auto-workflow-research-interval
+                       :project proj-root
+                       :findings-cached (stringp findings)
+                       :findings-length (if findings (length findings) 0)
+                       :cache-file cache-file
+                       :cache-file-exists file-exists
+                       :cache-file-size file-size
+                       :cache-file-mtime file-mtime-str)))
+    ;; ASSUMPTION: Interactive calls expect visible output, programmatic calls expect return value
+    ;; BEHAVIOR: Display formatted status when interactive, always return plist
+    (when (called-interactively-p 'any)
+      (message "[research] Status: %srunning | findings: %s (%d chars) | cache: %s"
+               (if (plist-get status :running) "" "not ")
+               (if (plist-get status :findings-cached) "cached" "none")
+               (plist-get status :findings-length)
+               (if (plist-get status :cache-file-exists)
+                   (format "%s (%.1fKB, %s)"
+                           (plist-get status :cache-file)
+                           (/ (plist-get status :cache-file-size) 1024.0)
+                           (plist-get status :cache-file-mtime))
+                 "missing")))
+    status))
 
 ;;; ─── AutoTTS via Benchmark System ───
 
