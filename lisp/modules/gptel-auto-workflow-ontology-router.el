@@ -2854,6 +2854,60 @@ Returns alist of (target . (category . delta)) for drifts > 20%."
        target-stats)
       drifts)))
 
+;; ─── Ontology Self-Repair ───
+;; The ontology not only detects drift but automatically suggests fixes.
+
+(defconst gptel-auto-workflow--category-pattern-map
+  '((:agentic        . "agent\\|workflow\\|strategy\\|evolution")
+    (:programming    . "benchmark\\|fsm\\|retry\\|test\\|code\\|compile\\|^gptel-ext-")
+    (:tool-calls     . "sandbox\\|^gptel-tools-\\(?:bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\)")
+    (:natural-language . "context\\|prompt\\|chat\\|conversation\\|language\\|text\\|summarize\\|stream"))
+  "Regex patterns used by `categorize-target' for each category.
+Used by `gptel-auto-workflow--repair-ontology' to suggest pattern updates.")
+
+(defun gptel-auto-workflow--repair-ontology ()
+  "Analyze drift data and suggest category boundary adjustments.
+When targets consistently behave differently from their assigned category,
+this function suggests recategorization or pattern updates.
+Returns alist of suggestions: (target . suggested-category)."
+  (let* ((drifts (ignore-errors (gptel-auto-workflow--detect-category-drift)))
+         (results (ignore-errors (gptel-auto-workflow--parse-all-results)))
+         (suggestions nil))
+    (when drifts
+      (dolist (drift drifts)
+        (let* ((target (car drift))
+               (current-cat (nth 1 drift))
+               (delta (nth 2 drift))
+               (basename (file-name-nondirectory target))
+               (best-cat nil)
+               (best-rate 0))
+          ;; Find which category this target would perform best in
+          (when results
+            (let ((cat-rates (make-hash-table :test 'equal)))
+              (dolist (r results)
+                (let* ((r-target (plist-get r :target))
+                       (r-decision (plist-get r :decision))
+                       (r-kept (equal r-decision "kept"))
+                       (r-cat (and r-target (gptel-auto-workflow--categorize-target r-target))))
+                  (when r-cat
+                    (let ((entry (gethash r-cat cat-rates (list :kept 0 :total 0))))
+                      (setq entry (plist-put entry :kept (+ (plist-get entry :kept) (if r-kept 1 0))))
+                      (setq entry (plist-put entry :total (1+ (plist-get entry :total))))
+                      (puthash r-cat entry cat-rates)))))
+              ;; Find category with best keep-rate
+              (maphash (lambda (cat stats)
+                         (let* ((tot (plist-get stats :total))
+                                (rate (if (> tot 0) (/ (float (plist-get stats :kept)) tot) 0)))
+                           (when (and (> tot 5) (> rate best-rate))
+                             (setq best-cat cat best-rate rate))))
+                       cat-rates))
+            (when (and best-cat (not (eq best-cat current-cat)))
+              (push (list target current-cat best-cat delta) suggestions)
+              (message "[ontology-repair] 🔧 %s: %s → %s (Δ%+.0f%%, category keep-rate %.0f%%)"
+                       (file-name-nondirectory target) current-cat best-cat
+                       (* 100 delta) (* 100 best-rate))))))
+    suggestions))
+
 ;; ─── Ontology Self-Evolution ───
 
 (defvar gptel-auto-workflow--category-strategy-preferences nil
@@ -3026,17 +3080,19 @@ Runs during the self-evolution cycle.  Results are stored in
                      total-dispatch (length pairs))
             (dolist (pair (seq-take (sort pairs (lambda (a b) (> (cdr a) (cdr b)))) 5))
               (message "[ontology-evolve]     %s: %d×" (car pair) (cdr pair))))))
-      ;; Log category drift detection (researcher→ontology bridge)
+      ;; Log category drift + attempt repair
       (condition-case nil
-          (let ((drifts (gptel-auto-workflow--detect-category-drift)))
+          (let* ((drifts (gptel-auto-workflow--detect-category-drift))
+                 (repairs (ignore-errors (gptel-auto-workflow--repair-ontology))))
             (when drifts
-              (message "[ontology-evolve] 📐 %d targets show category drift (Δ > 20%% from category average)"
-                       (length drifts))))
+              (message "[ontology-evolve] 📐 %d targets show category drift" (length drifts)))
+            (when repairs
+              (message "[ontology-evolve] 🔧 %d targets have suggested recategorization" (length repairs))))
         (error nil))
       (list :changes (length changes)
             :backend-changes backend-changes
             :saturated (length saturated)
-            :total-strategies (hash-table-count cat-strats))))))
+            :total-strategies (hash-table-count cat-strats)))))))
 
 ;; ─── Per-Category Eight-Key Aggregation ───
 
