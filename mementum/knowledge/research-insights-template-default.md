@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.9/10
+insight-quality: 0.8/10
 allium-issues: 0
 allium-severity: 0.00
 allium-status: coherent
@@ -11,44 +11,42 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 194 experiments (9% keep rate).*
+*Consolidated from 216 experiments (8% keep rate).*
 
-**Performance:** 18 kept / 44 discarded / 14 failed (EXTRACTED — from TSV)
+**Performance:** 17 kept / 41 discarded / 21 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 3 discarded / 2 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 1 discarded / 2 failed)
-- `lisp/modules/gptel-benchmark-core.el` (5 kept / 7 discarded / 2 failed)
-- `lisp/modules/gptel-ext-tool-permits.el` (3 kept / 2 discarded)
-- `lisp/modules/gptel-benchmark-comparator.el` (1 kept / 1 discarded)
-- `lisp/modules/gptel-tools-memory.el` (2 kept / 6 discarded)
-- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 2 discarded / 5 failed)
-- `lisp/modules/gptel-benchmark-principles.el` (2 kept / 1 discarded)
-- `lisp/modules/gptel-tools-agent-staging-baseline.el` (1 kept / 3 discarded)
+- `lisp/modules/gptel-benchmark-evolution.el` (2 kept / 6 discarded)
+- `lisp/modules/gptel-ext-tool-permits.el` (4 kept / 2 discarded / 1 failed)
+- `lisp/modules/gptel-auto-workflow-mementum.el` (1 kept / 1 discarded / 1 failed)
+- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 1 discarded)
+- `lisp/modules/gptel-benchmark-integrate.el` (1 kept / 1 discarded)
+- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
+- `lisp/modules/gptel-ext-core.el` (2 kept / 1 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-validation.el` (2 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-strategy-harness.el` (2 kept / 2 discarded / 1 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-auto-workflow--knowledge-cache-get, gptel-auto-workflow--knowledge-cache-set, gptel-auto-workflow--knowledge-cache-invalidate, gptel-auto-workflow--knowledge-cache-stats, gptel-auto-workflow--load-token-efficiency-data, gptel-auto-workflow--adapt-prompt-compression, gptel-auto-experiment--prompt-structure-score, gptel-auto-experiment--kibcm-axis, gptel-auto-experiment--forge-fixed-point, gptel-auto-experiment--compile-score, gptel-auto-experiment--decompile-score, gptel-auto-experiment--nucleus-compiler-prompt, gptel-auto-experiment--forge-lambda-fixed-point, gptel-auto-experiment--edn-richness-score, gptel-auto-experiment--count-edn-elements, gptel-auto-experiment--use-lambda-prompts-p, gptel-auto-experiment--lambda-compress-prompt, gptel-auto-experiment--resolve-prompt, gptel-auto-experiment--allium-compiler-prompt, gptel-auto-experiment--allium-distill
-defvars: gptel-auto-workflow--skills), gptel-auto-experiment-large-target-byte-threshold), gptel-auto-workflow--last-prompt-sections), gptel-auto-workflow--current-research-context), gptel-auto-experiment-time-budget), gptel-auto-workflow-use-staging), gptel-auto-workflow--running), gptel-auto-workflow--stats), gptel-auto-experiment-validation-retry-active-grace), gptel-auto-workflow--legacy-validation-retry-active-grace), gptel-auto-workflow--current-validation-retry-active-grace), my/gptel-subagent-stream), gptel-auto-workflow--knowledge-cache, gptel-auto-workflow--knowledge-cache-max-age, gptel-auto-workflow--topic-knowledge-max-chars, gptel-auto-experiment--lambda-verified-backends, gptel-auto-experiment--allium-research-cache, gptel-auto-workflow--ab-test-sections, gptel-auto-workflow--ab-test-omit-rate, gptel-auto-workflow--ab-test-min-samples
-requires: cl-lib, seq, subr-x
-provides: gptel-tools-agent-prompt-build
-declares: gptel-agent-read-file, gptel-auto-workflow--valid-strategy-name-p, gptel-auto-workflow-load-research-findings, gptel-benchmark--detect-task-type, my/gptel-get-model-metadata, gptel-auto-workflow--current-run-id, gptel-auto-workflow--ensure-results-file, gptel-auto-workflow--make-idempotent-callback, gptel-auto-workflow--non-empty-string-p, gptel-auto-workflow--plist-get, gptel-auto-workflow--results-file-path, gptel-auto-workflow--worktree-base-root, gptel-auto-experiment--eight-keys-scores, gptel-auto-workflow--project-root, gptel-auto-workflow--persist-status, my/gptel--sanitize-for-logging, gptel-auto-workflow--extract-mutation-templates, gptel-auto-workflow--format-weakest-keys, gptel-auto-workflow-skill-suggest-hypothesis, gptel-auto-experiment--inspection-thrash-result-p
-errors: Error, error, error, error, error, Error, signal, signal, error, error
-handlers: nil, nil, err, err, err, err, err, err, nil
+defuns: gptel-benchmark-evolution-cycle, gptel-benchmark-evolution-observe, gptel-benchmark-evolution--deficient-p, gptel-benchmark-evolution-orient, gptel-benchmark-evolution-decide, gptel-benchmark-evolution-act, gptel-benchmark-evolution-mutate, gptel-benchmark-evolution-feed-forward, gptel-benchmark-evolution-check-capabilities, gptel-benchmark-evolution-emergence-rate, gptel-benchmark-evolution-track-correction, gptel-benchmark-evolution-status-report, gptel-benchmark-evolution-check-complete, gptel-benchmark-detect-anti-patterns, gptel-benchmark-apply-anti-pattern-remedy, gptel-benchmark-evolution-balance, gptel-benchmark-evolution-pathway, gptel-benchmark-evolution-next-capability, gptel-benchmark-evolution-discover, gptel-benchmark-evolution-self-improve
+defvars: gptel-benchmark-evolution-cycle-threshold, gptel-benchmark-evolution-state
+requires: cl-lib, gptel-benchmark-core, gptel-benchmark-principles, gptel-benchmark-memory
+provides: gptel-benchmark-evolution
+errors: error
+handlers: err
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 3 discarded / 2 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (1 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-evolution.el` (1 failed)
-- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 1 discarded / 2 failed)
-- `lisp/modules/gptel-benchmark-core.el` (5 kept / 7 discarded / 2 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (4 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (5 failed)
+- `lisp/modules/gptel-ext-context.el` (1 failed)
+- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
+- `lisp/modules/gptel-auto-workflow-research-benchmark.el` (2 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -67,61 +65,128 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-``` 
-Research Strategy: template-default
+# Research Strategy: Template-Default Distillation
 
-**10 experiments** across 6 targets:
-- staging-review
-- staging-merge
-- lisp/modules/gptel-auto-workflow-strategic.el
-- lisp/modules/gptel-auto-workflow-projects.el
-- staging-verification
-- lisp/modules/gptel-auto-workflow-research-integration.el
+## Scope
+**216 experiments** across 29 target files, evaluating hypotheses for performance, clarity, safety, and vitality improvements.
 
-**Hypotheses:** None recorded
+## Kept Hypotheses (18 validated)
 
----
-**Summary:** Template structure with no active hypotheses documented. All 10 experiments executed against 6 targets without hypothesis tracking.
-```
+### Performance
+| Change | Benefit |
+|--------|---------|
+| Precompute cycle thresholds in `gptel-benchmark-evolution-check-capabilities` | Eliminates 5x redundant multiplication per invocation |
+| Use `hash-table-count` for empty-check in `my/gptel-show-permits` | O(1) vs O(n) for common case |
+
+### Safety/Vitality (Error Resilience)
+| Change | Target |
+|--------|--------|
+| `stringp` validation for hash-key collection | `my/gptel-show-permits` |
+| `processp` guard | `my/gptel-health-check` |
+| `proper-list-p` validation | `gptel-health-check`, benchmark extractors |
+| Nil guards + path-separator sanitization | `gptel-auto-workflow--mementum-write-memory` |
+| `vectorp` guard + `member` vs `memq` | `my/gptel--sanitize-multimodal-content` |
+| Nil/validity validation | Entry points, benchmark cache, strategy evaluation |
+
+### Clarity (Explicit Assumptions)
+- Extract shared `my/gptel--mode-label` helper (fixes "CONFIRM" vs "CONFIRM-ALL" inconsistency)
+- Add `(vectorp content-vec)` guard for multimodal content
+- Make TSV field count validation explicit
+
+## Discarded Hypotheses (47 rejected)
+
+### Not Worth It
+| Rejected | Reason |
+|----------|--------|
+| `cl-letf` + `symbol-function` → `cl-labels` | Non-standard but functional; not compelling |
+| Extract common traversal setup | Adds indirection without clear benefit |
+| Regex fast-path for JSON sanitization | Marginal gains; complexity cost high |
+| Memoization cache for `gptel-benchmark--read-version-file` | Unclear call patterns |
+
+### Bug Fixes (kept separately)
+Several bug fixes were **moved to separate tickets** rather than bundled:
+- `copy-tree` vs `copy-sequence` data corruption fix
+- `gethash` always returning nil in effectiveness report
+- Frontmatter-skipping bug in knowledge retrieval
+- FSM ID scientific notation formatting
+
+## Key Patterns
+
+1. **Safety/Vitality wins**: Nil guards, proper-list-p, and explicit validation consistently approved
+2. **Performance tradeoffs**: Micro-optimizations (regex, memoization) often rejected when complexity outweighs gains
+3. **Clarity wins**: Explicit assumptions, shared helpers, removing dead code approved
+4. **Bug fixes separated**: Substantive correctness fixes extracted from optimization work
+
+**Net**: Focus on **explicit validation** and **clarity** improvements; treat performance optimizations skeptically unless clearly warranted.
 ```
 
 ### Check Issues
 
-# Research Strategy Review
+# Review: Research Strategy
 
-## Observed Issues
-
-| Element | Status | Issue |
-|---------|--------|-------|
-| Template | ✅ Present | `template-default` applied |
-| Targets | ✅ Defined | 6 targets identified |
-| Experiments | ✅ Logged | 10 experiments recorded |
-| Hypotheses | ❌ Missing | None documented |
-
-## Key Concern
-
-**No hypothesis tracking** undermines experimental value. Each experiment should test a specific hypothesis to derive meaningful conclusions.
-
-## Suggested Improvements
-
-1. **Add hypothesis field** before experiments
-2. **Link experiments to hypotheses** explicitly
-3. **Record outcomes** per experiment
-4. **Document learnings** from results
+## Overall Assessment
+Well-structured document, but has some gaps and inconsistencies worth addressing.
 
 ---
 
-*Example structure:*
-```
-**Hypothesis:** "Workflow X improves merge latency by >20%"
+## Issues to Address
 
-**Experiments:**
-- [ ] staging-merge/test-A → Result: +15% latency
-- [ ] staging-merge/test-B → Result: +22% latency
-  → **Conclusion:** Hypothesis partially supported
+### 1. Category Inconsistencies
+| Entry | Issue |
+|-------|-------|
+| "CONFIRM" vs "CONFIRM-ALL" fix | This is a **bug fix**, not clarity. Why was it retained while other bug fixes were separated? |
+| "Make TSV field count validation explicit" | Vague. Which file? What constitutes valid? |
+| Multiple `proper-list-p` entries | Are these the same validation copied, or genuinely separate validations? |
+
+### 2. Missing Information
+
 ```
+□ Risk/impact assessment for approved changes
+□ Priority ranking (18 changes ≠ 18 equally important)
+□ Testing strategy for approved changes
+□ Estimated effort for implementation
+```
+
+### 3. The 5x Multiplication Claim
+> "Precompute cycle thresholds... Eliminates 5x redundant multiplication"
+
+This is oddly specific. Is the 5x figure:
+- Measured?
+- Per call or aggregate?
+- Across the benchmark run?
+
+Same for O(1) vs O(n) claim—need quantification.
+
+### 4. Rejection Reasons Are Uneven
+| Entry | Problem |
+|-------|---------|
+| "Adds indirection without clear benefit" | Subjective; indirection can aid maintainability |
+| "Unclear call patterns" | Shouldn't you investigate first? |
+
+---
+
+## Recommendations
+
+1. **Move "CONFIRM" fix to bug tickets** for consistency
+2. **Quantify performance claims** or soften to "likely reduces redundant work"
+3. **Add priority/effort columns** to the kept hypotheses table
+4. **Clarify the 47 rej
+
+... (truncated)
