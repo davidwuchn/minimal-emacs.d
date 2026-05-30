@@ -359,12 +359,18 @@ Passes if score >= 60% of total."
   (let ((score 0)
         (total (+ (length expected) (length forbidden)))
         (details (replace-regexp-in-string "<think>.*?</think>" "" (if (stringp response) response (format "%S" response)))))
-    ;; Try SCORE: X/Y format first
-    ;; Also matches "Total: X/Y", "score: X/Y", and similar formats
+    ;; Try score: X/Y format — take LAST match (grader often revises)
+    ;; Matches "SCORE: X/Y", "Total: X/Y", "score: X/Y", "Score: X/Y", etc.
     (cond
-     ((string-match "\\(?:SCORE\\|Total\\|score\\)[:=]\\s-*\\([0-9]+\\)\\s-*/\\s-*\\([0-9]+\\)" details)
-      (setq score (string-to-number (match-string 1 details))
-            total (string-to-number (match-string 2 details))))
+     ((let ((pos 0) (last-score nil) (last-total nil))
+        (while (string-match "\\(?:SCORE\\|Total\\|score\\)[:=]\\s-*\\([0-9]+\\)\\s-*/\\s-*\\([0-9]+\\)" details pos)
+          (setq last-score (string-to-number (match-string 1 details))
+                last-total (string-to-number (match-string 2 details))
+                pos (match-end 0)))
+        (when last-score
+          (setq score last-score
+                total last-total)
+          t)))
      ;; Count "passed": true in JSON results
      ((string-match-p "\"passed\"" details)
       (with-temp-buffer
