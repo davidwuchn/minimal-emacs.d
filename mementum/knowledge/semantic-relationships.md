@@ -4,7 +4,7 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-30T15:01
+Generated: 2026-05-30T15:06
 
 | lisp/modules/gptel-auto-workflow-behavioral-tests.el | lisp/modules/gptel-ext-context.el | 2.000 |
 | lisp/modules/gptel-benchmark-integrate.el | lisp/modules/gptel-ext-context.el | 2.000 |
