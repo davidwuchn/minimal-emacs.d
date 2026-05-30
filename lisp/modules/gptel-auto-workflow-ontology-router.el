@@ -2217,15 +2217,65 @@ Initiates async verification if no cached result exists."
      (message "[verbum] Lambda verification failed for %s: %s" backend (error-message-string err))
      :unknown)))
 
+(defconst gptel-auto-workflow--combinator-patterns
+  '((:K . "\\bk[^a-z]\\|\\bselect\\|car\\|first\\|head")        ;; Select first argument
+    (:I . "\\bidentity\\|\\biota\\|\\bignore\\|return\b.*self") ;; Identity
+    (:B . "\\bcomp[ose]\\|\\bfmap\\|\\bmap\\|\\b\\.\\b")        ;; Compose
+    (:C . "\\bflip\\|\\breverse\\|\\bswap\\|\\border\\s+")       ;; Flip/reorder
+    (:D . "\\bcasca[de]\\|\\bjoin\\|\\bflatmap\\|\\bbind")      ;; Cascade/join
+    (:W . "\\bduplicat\\|\\bcopy\\|\\btwice\\|\\bboth\\s+")     ;; Duplicate
+    (:Y . "\\bfix\\|\\brecurs\\|\\by-combinator\\|\\bfixed-point") ;; Recursion
+    (:S . "\\bsubstitut\\|\\bapply\\|\\bap\\|\\b\\$\\s*"))      ;; Substitution
+  "Combinator type regex patterns for classifying lambda expressions.
+Maps verbum ISA opcodes to regex patterns in backend responses.
+Used for task-specific backend routing: programming→B,
+tool-calls→C/apply, agentic→Y/recursion, natural-language→I/identity.")
+
+(defun gptel-auto-workflow--classify-combinators (response)
+  "Classify which combinator types appear in RESPONSE.
+Returns list of (combinator-type . strength) pairs sorted by strength.
+E.g., ((:B . 3) (:K . 1)) for a response heavy on composition."
+  (let ((results nil))
+    (when response
+      (dolist (pair gptel-auto-workflow--combinator-patterns)
+        (let* ((type (car pair))
+               (pattern (cdr pair))
+               (count 0))
+          (with-temp-buffer
+            (insert (downcase response))
+            (goto-char (point-min))
+            (while (re-search-forward pattern nil t)
+              (setq count (1+ count))))
+          (when (> count 0)
+            (push (cons type count) results))))
+      ;; Sort by count descending
+      (sort results (lambda (a b) (> (cdr a) (cdr b)))))))
+
 (defun gptel-auto-workflow--response-contains-lambda-p (response)
   "Check if RESPONSE contains lambda expressions.
-Looks for λ, lambda, or -> patterns.
-TODO: Use proper parser when verbum integration complete."
+Looks for λ, lambda, or -> patterns, plus typed combinators."
   (when response
     (or (string-match-p "λ" response)
         (string-match-p "\\\\lambda" response)
         (string-match-p "->" response)
-        (string-match-p "lambda" response))))
+        (string-match-p "lambda" response)
+        (gptel-auto-workflow--classify-combinators response))))
+
+(defun gptel-auto-workflow--combinator-for-category (category)
+  "Return the dominant combinator type for a task CATEGORY.
+Based on verbum's finding that different tasks use different opcode
+profiles. Maps OV5's 4-category ontology to verbum's combinator ISA.
+
+- :programming → :B (compose)  — code is function composition
+- :tool-calls  → :C (flip)    — tool calling reorders arguments
+- :agentic     → :Y (recursion) — agents recurse through states
+- :natural-language → :I (identity) — NL is identity-like (reading directly)"
+  (cl-case category
+    (:programming :B)
+    (:tool-calls :C)
+    (:agentic :Y)
+    (:natural-language :I)
+    (t :I)))
 
 ;; ─── Lambda Verification Report (verbum Phase 12) ───
 
