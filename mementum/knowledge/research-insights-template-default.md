@@ -56,47 +56,85 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
 <think>
-The user wants me to distill a research strategy. Looking at the pattern, it seems like they want a concise format capturing:
+The user is asking me to distill something, but the content is very sparse. Let me analyze what's provided:
 
-1. Research strategy
-2. The template/default context
-3. Number of experiments
-4. The specific targets
-5. What was kept vs discarded
+- Research strategy: template-default
+- 4 experiments across targets
+- 2 specific targets mentioned (lisp files)
+- Kept hypotheses: (empty)
+- Discarded hypotheses: (empty)
 
-The format from the example shows:
-- Category: description
-- Details
+This appears to be a template or framework for documenting research experiments, but the user hasn't filled in the actual content. They seem to be asking me to "distill" this template or perhaps complete/fill it out.
 
-Let me distill this into a clean format:
+Given the minimal context, I should ask for clarification or provide a framework that helps them organize their research distillation. Let me think about what would be most helpful:
 
-**Research Strategy:** template-default
+1. This looks like a meta-level request about research documentation
+2. The "template-default" strategy suggests they want a standardized format
+3. They have 4 experiments but haven't specified what they are
+4. They have 2 specific target files mentioned
 
-**Experiments:** 3 experiments across targets
-
-**Targets:** lisp/modules/gptel-auto-workflow-projects.el
-
-**Hypotheses:**
-- Kept: (none listed)
-- Discarded: (none listed)
-
-I should present this in a clear, structured way. Since both hypothesis sections are empty, I'll note that explicitly.
+I should provide a helpful distillation template or ask what specific experiments they want documented.
 </think>
 ```
 
 ### Check Issues
 
-``` markdown
-- **Research Strategy:** template-default
-- **Experiments:** 3 experiments across targets
-- **Targets:** lisp/modules/gptel-auto-workflow-projects.el
-- **Hypotheses:**
-  - Kept: (none)
-  - Discarded: (none)
-```
+# Research Distillation Framework
+
+Your template needs content. Here's a structured approach:
+
+## Missing Information Required:
+
+| Element | What to Fill In |
+|---------|-----------------|
+| **Research Strategy** | What methodology/approach? |
+| **4 Experiments** | What were each? (E1-E4) |
+| **2 Targets** | Specific lisp files? |
+| **Kept Hypotheses** | What was validated? |
+| **Discarded Hypotheses** | What was refuted? |
+
+## To Help You Distill:
+
+1. **What is the research domain?** (e.g., compiler optimization, language design, algorithm performance)
+
+2. **What were the 4 experiments testing?**
+
+3. **Share the lisp file targets** or describe them
+
+4. **What results/findings** do you want condensed?
+
+---
+
+**Quick Start:** If you paste your experiment notes or findings, I can distill them into this framework immediately. Just share:
+
+- What you tested
+- What worked
+- What didn't work
+
+And I'll format it according to your template structure.

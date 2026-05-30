@@ -1719,13 +1719,14 @@ exhaustion.")
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
-  '(("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-v4-flash")
-    ("moonshot" . "kimi-k2.6")
-    ("MiniMax" . "minimax-m2.7-highspeed"))
+  '(("DeepSeek" . "deepseek-v4-flash")
+    ("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
-DashScope first (faster, more reliable), then DeepSeek, Moonshot, MiniMax.
+DeepSeek first (working, no content filter), then MiniMax (highspeed, but
+may hit rate limits), then moonshot (content_filter blocks code gen).
+DashScope removed — quota exhausted (HTTP 429) on this account.
 CF-Gateway removed — does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
