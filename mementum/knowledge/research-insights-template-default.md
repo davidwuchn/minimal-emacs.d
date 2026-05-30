@@ -65,28 +65,10 @@ These targets may need different research patterns or the research findings were
 
 
 
-<<<<<<< Updated upstream
 
 
 
 
-
-
-
-
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
-
-
-
-
-
-
-
-
->>>>>>> Stashed changes
 
 
 
@@ -97,135 +79,114 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-<think>
-The user wants me to distill a research strategy document. Let me analyze the content:
+# Research Strategy: Template-Default Distillation
 
-<<<<<<< Updated upstream
-## Summary
+## Scope
+**216 experiments** across 29 target files, evaluating hypotheses for performance, clarity, safety, and vitality improvements.
 
-| Field | Value |
-|-------|-------|
-| **Strategy Type** | template-default |
-| **Total Experiments** | 22 |
-| **Targets** | 7 files |
+## Kept Hypotheses (18 validated)
 
-## Experiment Targets
+### Performance
+| Change | Benefit |
+|--------|---------|
+| Precompute cycle thresholds in `gptel-benchmark-evolution-check-capabilities` | Eliminates 5x redundant multiplication per invocation |
+| Use `hash-table-count` for empty-check in `my/gptel-show-permits` | O(1) vs O(n) for common case |
 
-### Elisp Modules (4)
-1. `lisp/modules/gptel-tools-agent-prompt-build.el`
-2. `lisp/modules/gptel-auto-workflow-strategic.el`
-3. `lisp/modules/gptel-auto-workflow-projects.el`
-4. `lisp/modules/gptel-auto-workflow-research-integration.el`
+### Safety/Vitality (Error Resilience)
+| Change | Target |
+|--------|--------|
+| `stringp` validation for hash-key collection | `my/gptel-show-permits` |
+| `processp` guard | `my/gptel-health-check` |
+| `proper-list-p` validation | `gptel-health-check`, benchmark extractors |
+| Nil guards + path-separator sanitization | `gptel-auto-workflow--mementum-write-memory` |
+| `vectorp` guard + `member` vs `memq` | `my/gptel--sanitize-multimodal-content` |
+| Nil/validity validation | Entry points, benchmark cache, strategy evaluation |
 
-### Staging Workflows (3)
-1. `staging-review`
-2. `staging-merge`
-3. `staging-verification`
+### Clarity (Explicit Assumptions)
+- Extract shared `my/gptel--mode-label` helper (fixes "CONFIRM" vs "CONFIRM-ALL" inconsistency)
+- Add `(vectorp content-vec)` guard for multimodal content
+- Make TSV field count validation explicit
 
-## Hypothesis Tracking
+## Discarded Hypotheses (47 rejected)
 
-| Status | Count | Details |
-|--------|-------|---------|
-| **Kept** | — | Not yet documented |
-| **Discarded** | — | Not yet documented |
+### Not Worth It
+| Rejected | Reason |
+|----------|--------|
+| `cl-letf` + `symbol-function` → `cl-labels` | Non-standard but functional; not compelling |
+| Extract common traversal setup | Adds indirection without clear benefit |
+| Regex fast-path for JSON sanitization | Marginal gains; complexity cost high |
+| Memoization cache for `gptel-benchmark--read-version-file` | Unclear call patterns |
 
----
+### Bug Fixes (kept separately)
+Several bug fixes were **moved to separate tickets** rather than bundled:
+- `copy-tree` vs `copy-sequence` data corruption fix
+- `gethash` always returning nil in effectiveness report
+- Frontmatter-skipping bug in knowledge retrieval
+- FSM ID scientific notation formatting
 
-**Action Items:**
-- Document kept hypotheses as they emerge
-- Record discarded hypotheses with reasoning for future reference
-- Track which hypotheses map to which targets/experiments
+## Key Patterns
+
+1. **Safety/Vitality wins**: Nil guards, proper-list-p, and explicit validation consistently approved
+2. **Performance tradeoffs**: Micro-optimizations (regex, memoization) often rejected when complexity outweighs gains
+3. **Clarity wins**: Explicit assumptions, shared helpers, removing dead code approved
+4. **Bug fixes separated**: Substantive correctness fixes extracted from optimization work
+
+**Net**: Focus on **explicit validation** and **clarity** improvements; treat performance optimizations skeptically unless clearly warranted.
 ```
 
 ### Check Issues
 
-# Document Review: Research Strategy Distillation
+# Review: Research Strategy
 
-## Observations
+## Overall Assessment
+Well-structured document, but has some gaps and inconsistencies worth addressing.
 
-### ✅ What's Present
-- **Clear structure** — well-organized with tables for experiments and hypothesis tracking
-- **Specific targets** — 4 named Elisp modules and 3 staging workflows
-- **Experiment count** — 22 total experiments mapped to 7 targets
+---
 
-### ⚠️ Issues / Gaps
+## Issues to Address
 
-| Issue | Detail |
-|-------|--------|
-| **No hypotheses documented** | The tracking section is empty — can't assess what's working |
-| **Missing experiment breakdown** | "22 experiments" has no mapping — which target got how many runs? |
-| **No results/success criteria** | No metrics or outcomes recorded |
-| **Staging workflows lack detail** | What triggers each? What do they verify? |
+### 1. Category Inconsistencies
+| Entry | Issue |
+|-------|-------|
+| "CONFIRM" vs "CONFIRM-ALL" fix | This is a **bug fix**, not clarity. Why was it retained while other bug fixes were separated? |
+| "Make TSV field count validation explicit" | Vague. Which file? What constitutes valid? |
+| Multiple `proper-list-p` entries | Are these the same validation copied, or genuinely separate validations? |
 
-## Suggestions
+### 2. Missing Information
 
 ```
-1. Add experiment-to-target mapping:
-   - e.g., gptel-tools-agent-prompt-build.el: 8 experiments
-   - staging-review: 3 experiments
-   
-2. Document hypothesis schema:
-   - Hypothesis: "Adding X will improve Y by Z%"
-   - Experiment: which file/run tested this
-   - Result: outcome (kept/discarded)
-   - Reasoning: why
-
-3. Add status column to Experiment Targets table:
-   - Not Started / In Progress / Complete / Blocked
+□ Risk/impact assessment for approved changes
+□ Priority ranking (18 changes ≠ 18 equally important)
+□ Testing strategy for approved changes
+□ Estimated effort for implementation
 ```
 
-## Questions to Consider
+### 3. The 5x Multiplication Claim
+> "Precompute cycle thresholds... Eliminates 5x redundant multiplication"
 
-- What defines success for these experiments?
-- Is there a target date for hypothesis documentation?
-- Should discarded hypotheses be auto-archived or reviewed first?
+This is oddly specific. Is the 5x figure:
+- Measured?
+- Per call or aggregate?
+- Across the benchmark run?
 
-Would you like me to propose a more detailed template or help populate the hypothesis tracking section?
-=======
-1. **Research strategy: template-default**
-2. **87 experiments across targets** - listing many lisp module files
-3. **Kept hypotheses** - 7 detailed hypotheses with explanations
-4. **Discarded hypotheses** - many items that were rejected
+Same for O(1) vs O(n) claim—need quantification.
 
-The user wants me to distill this. I should:
-1. Identify the core theme/purpose
-2. Extract the key kept hypotheses concisely
-3. Note the discard reason pattern
-4. Present this in a clean, distilled format
+### 4. Rejection Reasons Are Uneven
+| Entry | Problem |
+|-------|---------|
+| "Adds indirection without clear benefit" | Subjective; indirection can aid maintainability |
+| "Unclear call patterns" | Shouldn't you investigate first? |
 
-Let me distill this:
+---
 
-**Core Purpose**: This is a research/experimentation log for improving a GPT-elisp integration system through 87 experiments across 20 module files.
+## Recommendations
 
-**Kept hypotheses** (7 total):
-1. nil summary validation in benchmark comparison
-2. Negative caching for missing benchmark files
-3. proper-list-p validation for user-list before last call
-4. stringp validation for skill loading
-5. nil validation guards before string-match/split-string
+1. **Move "CONFIRM" fix to bug tickets** for consistency
+2. **Quantify performance claims** or soften to "likely reduces redundant work"
+3. **Add priority/effort columns** to the kept hypotheses table
+4. **Clarify the 47 rej
 
-**Discarded hypotheses** (12+ items):
-- Various performance optimizations
-- FSM infrastructure improvements
-- Caching mechanisms
-- Guard conditions
-
-The discarded ones tend to be:
-- Performance optimizations (Axis B)
-- Infrastructure refactoring
-- Additional caching layers
-- Maintenance improvements
-
-The kept ones are primarily:
-- Error resilience/vitality improvements
-- Safety validations
-- Clarity improvements
-
-Let me create a clean distillation.
-</think>
-```
-
->>>>>>> Stashed changes
+... (truncated)
