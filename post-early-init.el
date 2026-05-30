@@ -221,6 +221,46 @@ daemons share the same config directory."
 
 (advice-add 'message :after #'mw-message--file-log)
 
+;; ═══════════════════════════════════════════════════════════════════════════
+;; Shim: yaml-parse-string for Emacs built without libyaml
+;; ═══════════════════════════════════════════════════════════════════════════
+;; This Debian Emacs 30.1 build lacks libyaml (yaml-parse-string C function).
+;; Provide pure-Elisp fallback for gptel-agent YAML frontmatter parsing.
+;; Must load before gptel-agent (via init.el → post-init.el → init-ai.el).
+(unless (fboundp 'yaml-parse-string)
+  (defun yaml-parse-string (str &rest args)
+    (let* ((object-type (plist-get args :object-type))
+           (object-key-type (plist-get args :object-key-type))
+           (result (if (eq object-type 'plist) '() (make-hash-table :test 'equal))))
+      (dolist (line (split-string str "\n") result)
+        (when (string-match "^\\([^:\n]+\\):[[:space:]]*\\(.*\\)" line)
+          (let* ((raw (string-trim (match-string 1 line)))
+                 (key (if (eq object-key-type 'keyword) (intern (concat ":" raw)) raw))
+                 (raw-val (string-trim (match-string 2 line)))
+                 (val (cond
+                       ((string-match "^\"\\(.*\\)\"$" raw-val) (match-string 1 raw-val))
+                       ((string-match "^'\\(.*\\)'$" raw-val) (match-string 1 raw-val))
+                       ((member (downcase raw-val) '("true" "yes" "on")) t)
+                       ((member (downcase raw-val) '("false" "no" "off" "null" "~")) nil)
+                       ((string-match "^[0-9]+$" raw-val) (string-to-number raw-val))
+                       ((string-match "^\\[\\(.*\\)\\]$" raw-val)
+                        (mapcar (lambda (s)
+                                  (let ((tv (string-trim s)))
+                                    (cond
+                                     ((string-match "^\"\\(.*\\)\"$" tv) (match-string 1 tv))
+                                     ((string-match "^'\\(.*\\)'$" tv) (match-string 1 tv))
+                                     ((member (downcase tv) '("true" "yes" "on")) t)
+                                     ((member (downcase tv) '("false" "no" "off" "null" "~")) nil)
+                                     ((string-match "^[0-9]+$" tv) (string-to-number tv))
+                                     ((string-match "^[0-9.]+$" tv) (string-to-number tv))
+                                     (t tv))))
+                                (split-string (match-string 1 raw-val) ",")))
+                       ((string-match "^[0-9.]+$" raw-val) (string-to-number raw-val))
+                       (t raw-val))))
+            (if (eq object-type 'plist)
+                (setq result (plist-put result key val))
+              (puthash key val result))))))))
+
 (provide 'post-early-init)
 
 ;;; post-early-init.el ends here
