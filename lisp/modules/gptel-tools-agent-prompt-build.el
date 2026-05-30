@@ -1738,7 +1738,7 @@ CF-Gateway, then MiniMax."
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-pro")
+    ("DeepSeek" . "deepseek-v4-flash")
     ("MiniMax" . "minimax-m2.7-highspeed")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
@@ -1766,7 +1766,7 @@ CF-Gateway as emergency fallback."
     ("grader"     "moonshot"   . "kimi-k2.6")
     ("executor"   "DashScope"  . "qwen3.6-plus")
     ("executor"   "moonshot"   . "kimi-k2.6")
-    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
+    ("executor"   "DeepSeek"   . "deepseek-v4-flash")
     ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("executor"   "CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
@@ -1788,7 +1788,7 @@ CF-Gateway as emergency fallback."
 Each element is (AGENT-TYPE BACKEND . MODEL).
 When selecting a backend+model pair for AGENT-TYPE, this map takes
 priority over the static fallback lists — ensuring code-generation
-tasks (executor) use the capable deepseek-v4-pro while analysis tasks
+tasks (executor) use deepseek-v4-flash (thinking disabled for tool calls)
 (analyzer, grader) use the faster deepseek-v4-flash.
 Backend entries not listed here fall back to their default model from
 `gptel-auto-workflow-headless-subagent-fallbacks`."
@@ -1979,7 +1979,7 @@ the user has not explicitly customized the variable."
               '(("MiniMax" . "minimax-m2.7-highspeed")
                 ("moonshot" . "kimi-k2.6")
                 ("DashScope" . "glm-5")
-                ("DeepSeek" . "deepseek-v4-pro")
+                ("DeepSeek" . "deepseek-v4-flash")
                 ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
         (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p

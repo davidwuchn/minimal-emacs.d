@@ -61,7 +61,7 @@ F. **Memory Management** — Fix leaks, optimize allocation, cleanup patterns
 5. If a Mandatory Focus Contract is present, obey it exactly; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
 6. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
 7. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
-8. Implement the CODE change minimally using Edit tool
+8. **CRITICAL: YOU MUST USE Edit OR Write TOOLS.** Text-only descriptions of changes cause immediate failure. After reading code, your very next action MUST be an Edit or Write tool call that changes the file. Do not describe changes—make them.
 9. Run validation pipeline (CHEAP - do these first):
    a. Syntax check: {{sexp-check-command}}
    b. Byte-compile: emacs -Q --batch -f batch-byte-compile {{target-full-path}}
