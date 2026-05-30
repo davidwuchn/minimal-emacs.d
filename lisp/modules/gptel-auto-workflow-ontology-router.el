@@ -474,6 +474,15 @@ STRATEGY and TARGET filter the performance data.
                                 ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
            (category (when target (gptel-auto-workflow--categorize-target target)))
            (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
+           ;; verbum data bypass: retrieval tasks (context docs, factual lookups)
+           ;; use near-zero combinator activation — they don't need the full
+           ;; compute pipeline.  Log when detected for routing observability.
+           (retrieval-p (and target
+                             (let ((bn (file-name-nondirectory target)))
+                               (or (string= bn "gptel-ext-context.el")
+                                   (string= bn "gptel-ext-context-images.el")
+                                   (string= bn "gptel-ext-context-cache.el")
+                                   (string= bn "gptel-ext-transient.el")))))
            ;; Compute baseline once per category
            (baseline (when category (gptel-auto-workflow--category-baseline-keep-rate category strategy)))
            ;; VSM health → routing auto-tuning
@@ -484,7 +493,12 @@ STRATEGY and TARGET filter the performance data.
            (confidence-weight (plist-get vsm-params :confidence-weight))
            (scored nil))
     
-    ;; Health ladder: filter probation/dead backends, apply weight reduction
+     ;; Log verbum data bypass detection
+     (when retrieval-p
+       (message "[verbum] BYPASS: %s — retrieval task, zero combinator activation expected"
+                (file-name-nondirectory target)))
+     
+     ;; Health ladder: filter probation/dead backends, apply weight reduction
     (let ((filtered nil))
       (dolist (entry static-fallbacks)
         (let* ((backend (car entry))
