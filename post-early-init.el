@@ -262,10 +262,19 @@ daemons share the same config directory."
               (puthash key val result))))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
-;; Debug: backtrace capture for init-time Wrong type argument: stringp, nil
+;; Fix: suppress mode-line + icons in headless workflow daemons
 ;; ═══════════════════════════════════════════════════════════════════════════
-;; Captures backtrace to var/log/backtrace-init.log when this error fires
-;; during init.el loading (before post-init.el fixes are active).
+;; The Wrong type argument: stringp, nil error occurs when doom-modeline or
+;; nerd-icons try to render glyphs during init in a daemon without a display.
+;; Suppress mode-line for headless daemons before any package code loads.
+(when (my/workflow-daemon-p)
+  (setq-default mode-line-format nil)
+  (with-eval-after-load 'doom-modeline
+    (setq doom-modeline-icon nil
+          doom-modeline-major-mode-icon nil
+          doom-modeline-buffer-state-icon nil
+          doom-modeline-enable-word-count nil)))
+;; Captures backtrace to var/log/backtrace-init.log for further diagnosis.
 (let ((bt-log (expand-file-name "var/log/backtrace-init.log" user-emacs-directory)))
   (condition-case nil
       (make-directory (file-name-directory bt-log) t)
