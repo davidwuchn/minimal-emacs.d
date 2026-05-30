@@ -1,7 +1,7 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **Risk assessment**: 1 occurrence(s)
-- **Dependency map**: 1 occurrence(s)
-- **Hypothesis framework**: 1 occurrence(s)
+- **Context**: 1 occurrence(s)
+- **The hypotheses**: 1 occurrence(s)
+- **The actual experiment descriptions**: 1 occurrence(s)
 

@@ -116,94 +116,129 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default
+# Research Distillation Template
 
-**Scope:** 92 experiments across 20 Elisp modules
+This appears to be a **template structure** for documenting experimental research. Here's what's being captured:
 
-## Kept Hypotheses
+## Structure Breakdown
 
-| # | Hypothesis | Target | Improvement Axis |
-|---|------------|--------|------------------|
-| 1 | Nil summary validation in `gptel-benchmark-compare-file-versions` prevents `wrong-type-argument` from malformed data | `gptel-benchmark-comparator.el` | Vitality |
-| 2 | Negative caching in `gptel-benchmark--cache-put`/`load-result` eliminates repeated disk I/O for missing files | `gptel-benchmark-subagent.el` | Performance |
-| 3 | `proper-list-p` validation before `last` in `extract-last-task-from-lines` prevents crashes from improper lists | `gptel-ext-context.el` | Safety, Clarity |
-| 4 | `stringp` validation in `gptel-error--load-patterns-from-skill` prevents runtime errors from non-string returns | `gptel-tools-agent-error.el` | Vitality, Clarity |
-| 5 | Nil guards before `string-match`/`split-string` in error handlers prevent crashes from nil error messages | `gptel-tools-agent-error.el` | Vitality |
+| Field | Purpose |
+|-------|---------|
+| **Research strategy** | Overall approach (e.g., template-default) |
+| **Experiments** | Number of trials conducted |
+| **Targets** | Files/modules being tested |
+| **Kept hypotheses** | Validated/confirmed assumptions |
+| **Discarded hypotheses** | Rejected/invalidated assumptions |
 
-## Discarded Hypotheses
+## The Target
 
-| # | Hypothesis | Reason Discarded |
-|---|------------|------------------|
-| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Incomplete / deferred |
-| 2 | Hash table entry removal | Incomplete |
-| 3 | Derive heading from `symbol-map` instead of pcase | Deferred |
-| 4 | Summary cache layer in `get-trend-summary` | Overhead > benefit |
-| 5 | Replace `listp` with `proper-list-p` | Redundant (already covered by #3) |
-| 6 | Hash table cache for module paths | Premature optimization |
-| 7 | Nil guard for `feature-name` in `module-path` | Low risk |
-| 8 | FSM collection logging infrastructure | Out of scope |
-| 9 | Optional `seen` hash table for traversal | Micro-optimization |
-| 10 | Remove redundant `hash-table-p` checks | Low impact |
-| 11 | `bound-and-true-p` guard for regexp variable | Unlikely to be unbound |
-| 12 | Fix unconditional `cl-remove` in demote-backend | Edge case |
-| 13 | Memoization cache for `categorize-error` | Premature optimization |
+```
+lisp/modules/gptel-auto-workflow-projects.el
+```
+This is an **Emacs Lisp module** (part of gptel package for AI interactions with project workflows).
 
-## Summary
+---
 
-**Focus areas:** Error resilience, nil-safety validation, and negative caching for I/O reduction.
+## To Complete This Distillation
 
-**Eliminated:** 13 hypotheses—primarily premature optimizations, edge cases, and low-risk items.
+Could you provide:
+
+1. **What were the 3 experiments?** (brief descriptions)
+2. **What hypotheses were tested?** (kept or discarded)
+3. **Context:** Is this for your gptel-auto-workflow-projects research?
+
+Or if this is a **report format** you need me to help complete based on previous conversation context—please share the source material/experiments you're summarizing.
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Document
+# Template Review
 
-## Structural Assessment
+Your **Research Distillation Template** looks structurally sound for capturing experimental iterations. Here's a quick assessment:
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Scope definition | ✅ Clear | 92 experiments, 20 modules, specific modules named |
-| Hypothesis specificity | ✅ Good | Each targets specific functions/files |
-| Discard rationale | ✅ Present | "Premature optimization", "low risk", etc. |
-| Improvement axes | ✅ Logical | Vitality, Performance, Safety, Clarity capture key dimensions |
+## ✓ What's Working
+- **Clear field mapping** — Each field has a defined purpose
+- **Binary hypothesis tracking** — Kept vs. Discarded forces decisive conclusions
+- **Target specificity** — Points to a specific module
 
-## Concerns
+## Suggestions for Enhancement
 
-**1. No experimental evidence shown**
-The document lists hypotheses but doesn't show:
-- How hypotheses were derived (static analysis? runtime errors? code review?)
-- What triggered investigation priorities
-- Metrics for measuring success
-
-**2. "Negative caching" hypothesis (#2) needs clarification**
+```markdown
+| Field | Purpose |
+|-------|---------|
+| Research strategy | Overall approach (e.g., template-default) |
+| **Timestamp/Date** | *Add: When experiment was run* |
+| **Environment** | *Add: Emacs version, system config* |
+| Experiments | Number of trials conducted |
+| Targets | Files/modules being tested |
+| Kept hypotheses | Validated/confirmed assumptions |
+| Discarded hypotheses | Rejected/invalidated assumptions |
+| **Next steps** | *Add: Actionable follow-ups* |
 ```
-Negative caching in `gptel-benchmark--cache-put`/`load-result` eliminates 
-repeated disk I/O for missing files
-```
-- Is this a known performance bottleneck? Empirical data?
-- "Negative caching" typically refers to caching *failures*—ensure this is what's intended
 
-**3. Missing from Discarded #1-2**
-```
-| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Incomplete / deferred |
-| 2 | Hash table entry removal | Incomplete |
-```
-These are too terse. "Incomplete" could mean:
-- Problem not fully understood?
-- Implementation attempted and failed?
-- Lower priority?
+## Next Steps
 
-**4. No ordering/prioritization**
-Among the 5 kept hypotheses, is there a dependency order? Critical path?
+To help you **complete** this distillation, I need:
 
-## Recommendations
+1. **The actual experiment descriptions** — What 3 things did you test?
+2. **The hypotheses** — What did you expect vs. what happened?
+3. **Context** — Are you documenting `gptel-auto-workflow-projects` development?
 
-1. **Add experimental evidence**: Br
+**Option:** If this is a *report template* you want me to fill out based on prior conversation, share:
+- The source material (logs, code, chat history)
+- Or link to the previous context
 
-... (truncated)
+What would you like me to help with—**review**, **complete**, or **create** this distillation?
