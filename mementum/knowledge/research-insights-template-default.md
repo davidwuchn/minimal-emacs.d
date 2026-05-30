@@ -116,8 +116,6 @@ These targets may need different research patterns or the research findings were
 
 
 
-<<<<<<< Updated upstream
-=======
 
 
 
@@ -218,7 +216,22 @@ These targets may need different research patterns or the research findings were
 
 
 
->>>>>>> Stashed changes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -237,48 +250,60 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Strategy**: template-default
+**Research Strategy Summary**
 
-**48 experiments** across **9 targets**:
+- **Strategy:** template-default
+- **Experiments:** 9 total
+- **Targets:** 
+  - `lisp/modules/gptel-tools-agent-benchmark.el`
+  - `lisp/modules/gptel-auto-workflow-projects.el`
+- **Kept hypotheses:** None recorded
+- **Discarded hypotheses:** None recorded
 
-| Target | Type |
-|--------|------|
-| staging-verification | staging |
-| lisp/modules/gptel-auto-workflow-research-integration.el | module |
-| staging-merge | staging |
-| staging-review | staging |
-| lisp/modules/gptel-benchmark-subagent.el | module |
-| lisp/modules/gptel-tools-agent-error.el | module |
-| lisp/modules/gptel-tools-agent-prompt-build.el | module |
-| lisp/modules/gptel-auto-workflow-strategic.el | module |
-| lisp/modules/gptel-auto-workflow-projects.el | module |
-
-**Kept hypotheses**: none  
-**Discarded hypotheses**: none
+*Note: No hypotheses have been explicitly recorded as kept or discarded yet.*
 ```
 
 ### Check Issues
 
-# Research Strategy Check ✓
+# Research Strategy Check
 
-Your data appears internally consistent:
+Your template structure looks good. Here's my assessment:
 
-| Metric | Value |
-|--------|-------|
-| Strategy | template-default |
-| Total Experiments | 48 |
-| Total Targets | 9 |
-| Avg Experiments/Target | ~5.3 |
-| Staging Targets | 3 |
-| Module Targets | 6 |
-| Kept Hypotheses | 0 |
-| Discarded Hypotheses | 0 |
+## ✓ What's Working Well
+- Clear target files identified
+- Experiment count is reasonable
+- Standard template format is documented
 
-**Question**: What specifically do you want me to check?
+## ⚠️ Areas for Improvement
 
-- Syntax/format validation?
-- Consistency across the experiment tracking system?
-- Something else?
+**1. Hypothesis Tracking**
+Your note says "None recorded" — this is a red flag for an experimental approach. You should be tracking:
+- What you're testing in each experiment
+- Expected outcomes
+- Results (kept vs. discarded)
+
+**2. Missing Details**
+The template doesn't capture:
+- What `template-default` means as a strategy
+- Why these specific files are targets
+- What problem you're trying to solve
+
+## Suggested Next Steps
+
+```markdown
+### Hypothesis Example Format
+- **H1:** "Adding X to gptel-tools-agent-benchmark.el will improve Y"
+  - Status: [Kept/Discarded]
+  - Evidence: ...
+```
+
+---
+
+**What would you like me to help with?**
+1. Design hypotheses for your 9 experiments?
+2. Review the target files for potential improvements?
+3. Restructure the tracking template?
+4. Something else?
