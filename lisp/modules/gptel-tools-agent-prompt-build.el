@@ -1076,10 +1076,10 @@ Returns template string or fallback hardcoded template."
         RULES:
         | ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)
         | ¬doc_only | ¬comment_only | Δ(code) ≡ required
-        | 1st_line ≡ "HYPOTHESIS: [what changes & why]" (NEVER leave blank)
+        | 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank)
         {{focus-line}}
         | use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)
-        | MANDATORY: Run `emacs --batch --eval "(byte-compile-file \"FILE\")"` on changed files
+        | MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files
         | MANDATORY: Run verify command and report exit code
         | verify: {{sexp-check-command}} && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
 
@@ -1087,7 +1087,7 @@ Returns template string or fallback hardcoded template."
         CHANGED: file(s) + functions touched
         EVIDENCE: 1-2 concrete diffs
         VERIFY: commands run + exit codes (MANDATORY — show each command and its exit code)
-        COMMIT: "not committed"
+        COMMIT: \"not committed\"
 
         TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage
 
@@ -1742,7 +1742,7 @@ CF-Gateway, then MiniMax."
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-flash")
+    ("DeepSeek" . "deepseek-v4-pro")
     ("MiniMax" . "minimax-m2.7-highspeed")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
@@ -1770,7 +1770,7 @@ CF-Gateway as emergency fallback."
     ("grader"     "moonshot"   . "kimi-k2.6")
     ("executor"   "DashScope"  . "qwen3.6-plus")
     ("executor"   "moonshot"   . "kimi-k2.6")
-    ("executor"   "DeepSeek"   . "deepseek-v4-flash")
+    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
     ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("executor"   "CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
@@ -1792,7 +1792,7 @@ CF-Gateway as emergency fallback."
 Each element is (AGENT-TYPE BACKEND . MODEL).
 When selecting a backend+model pair for AGENT-TYPE, this map takes
 priority over the static fallback lists — ensuring code-generation
-tasks (executor) use deepseek-v4-flash (thinking disabled for tool calls)
+tasks (executor) use the capable deepseek-v4-pro while analysis tasks
 (analyzer, grader) use the faster deepseek-v4-flash.
 Backend entries not listed here fall back to their default model from
 `gptel-auto-workflow-headless-subagent-fallbacks`."
@@ -1983,7 +1983,7 @@ the user has not explicitly customized the variable."
               '(("MiniMax" . "minimax-m2.7-highspeed")
                 ("moonshot" . "kimi-k2.6")
                 ("DashScope" . "glm-5")
-                ("DeepSeek" . "deepseek-v4-flash")
+                ("DeepSeek" . "deepseek-v4-pro")
                 ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
         (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
