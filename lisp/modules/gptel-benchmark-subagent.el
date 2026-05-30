@@ -380,23 +380,24 @@ Passes if score >= 60% of total."
           (cl-incf score)))
       (when (string-match "\"total\"\\s-*:\\s-*\\([0-9]+\\)" details)
         (setq total (string-to-number (match-string 1 details)))))
-     ;; Fallback: count text-based PASS/✓ items in grader output
-     (t
-      (with-temp-buffer
-        (insert details)
-        (goto-char (point-min))
-        ;; Count numbered items with PASS or ✓ markers
-        ;; Matches: "1. description: PASS" or "1. ✓ description - Yes"
-        (while (re-search-forward
-                (concat "^\\s-*\\(?:\\*\\*\\)?[0-9]+\\.\\s-+"
-                        "\\(?:\\*\\*\\)?\\(?:\\(?:✓\\|✅\\)\\|"
-                        "[^:\n]+\\(?:\\*\\*\\)?:\\s-+PASS\\)")
-                nil t)
-          (cl-incf score))
-        ;; Also count "PASS (not present)" for forbidden behaviors
-        (goto-char (point-min))
-        (while (re-search-forward ":\\s-+PASS\\s-+(not present)" nil t)
-          (cl-incf score)))))
+      ;; Fallback: count text-based PASS/✓ items in grader output
+      (t
+       (with-temp-buffer
+         (insert details)
+         (goto-char (point-min))
+         ;; Count numbered items with PASS/✓/✅ (any format), skip "(not present)"
+         (let ((pos nil))
+           (while (setq pos (re-search-forward
+                             (concat "^\\s-*\\(?:\\*\\*\\)?[0-9]+\\.\\s-+"
+                                     ".*\\(?:PASS\\|[✓✅]\\)")
+                             nil t))
+             (unless (string-match-p "PASS\\s-+(not present)"
+                                     (buffer-substring (line-beginning-position) (line-end-position)))
+               (cl-incf score))))
+         ;; Also count "PASS (not present)" for forbidden behaviors
+         (goto-char (point-min))
+         (while (re-search-forward ":\\s-+PASS\\s-+(not present)" nil t)
+           (cl-incf score)))))
     (let* ((percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0))
            ;; Pass if >= 60% (lowered from 80% to increase keep rate)
            (passed (and (> total 0) (>= percentage 60.0))))
