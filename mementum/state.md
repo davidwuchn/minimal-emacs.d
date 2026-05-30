@@ -1,8 +1,41 @@
 # Mementum State
 
-> Last session: 2026-05-30 (Verification-gate fix: extract <think> evidence for grader)
-> Next pipeline: 19:00 (fixed: 6 remote commits merged)
-> Status: In sync at 26eb5599. Verification evidence fix awaiting next pipeline run.
+> Last session: 2026-05-30 (8 root cause fixes + remote sync)
+> Next pipeline: 23:00 (current: 19:00 running)
+> Status: Pipeline active, workflow running with all fixes loaded
+
+## Session: 8 Root Cause Fixes + Remote Sync (2026-05-30)
+
+**Problem:** 0% keep-rate, 2 failed experiments per run. Multiple crash vectors blocking pipeline.
+
+**8 Root Causes Fixed:**
+
+| # | Fix | File | Commit |
+|---|-----|------|--------|
+| 1 | API key resolution (headless daemon) | `gptel-ext-backends.el` | `97019d46` |
+| 2 | condition-case handlers `(ignore)` → `(error nil)` | `gptel-auto-workflow-evolution.el` | `4e1c6426` |
+| 3 | Model capture: prioritize `gptel-model` over preset | `gptel-tools-agent-experiment-core.el` | `d8a13d1a` |
+| 4 | Evolution false skip on negative count | `gptel-auto-workflow-evolution.el` | `43131643` |
+| 5 | Controller guidance nil guards | `gptel-auto-workflow-evolution.el` | `e3115dc2` |
+| 6 | Agent registration before auto-workflow | `gptel-auto-workflow-projects.el` | `285a7d46` |
+| 7 | GPG-agent cache priming | `scripts/run-pipeline.sh` | `26eb5599` |
+| 8 | DeepSeek routing preferred | `gptel-tools-agent-prompt-build.el` | `d75bf345` |
+
+**Remote Sync:**
+- Merged 6+ remote commits from Pi5 (auto-evolved knowledge, DIRECTIVE.md, strategy-guidance.json)
+- Resolved conflicts: accepted remote versions for all auto-evolved files
+- Additional fixes: grader scoring, timeout fast-fail, subagent buffer crash, agent indentation
+
+**Current Status:**
+- Pipeline 19:00 running (started 19:05)
+- Workflow: PID 1308046, phase "auto-workflow", run-id 2026-05-30T190530Z-e3a1
+- All API keys verified: DeepSeek ✓, moonshot ✓, MiniMax ✓, DashScope ✓
+- Evolution timer: next fire 19:42
+
+**Next Steps:**
+1. Monitor 19:00 pipeline results for keep-rate improvement
+2. Verify backend/model alignment in results.tsv
+3. Check for "Insufficient new data" skip resolved
 
 ## Session: Fix Verification Gate — Surface <think> Evidence
 

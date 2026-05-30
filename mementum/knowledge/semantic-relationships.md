@@ -4,11 +4,7 @@
 
 # Semantic File Relationships
 
-<<<<<<< Updated upstream
-Generated: 2026-05-30T02:38
-=======
 Generated: 2026-05-30T15:07
->>>>>>> Stashed changes
 
 | lisp/modules/gptel-tools-agent-validation.el | lisp/modules/gptel-tools-agent.el | 0.836 |
 | lisp/modules/gptel-benchmark-evolution.el | lisp/modules/gptel-benchmark-integrate.el | 0.830 |
