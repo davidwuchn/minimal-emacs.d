@@ -959,17 +959,25 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
                     (1+ turn))
            (gptel-auto-workflow--branch-pool-add
             (or strategy "default") merged-findings cumulative-tokens)
-           (gptel-auto-workflow--branch-pool-widen
-            gptel-auto-workflow--research-controller-config
-            research-prompt callback)
-           ;; Continue current branch too if not at max turns
-           (if (< turn (1- max-turns))
-               (gptel-auto-workflow--run-research-turn
-                research-prompt (1+ turn) callback
-                merged-findings cumulative-tokens 'widen)
-             (gptel-auto-workflow--finalize-research
-              research-prompt merged-findings strategy findings-hash
-              controller-decision turn-confidence cumulative-tokens callback)))
+           ;; Guard: ensure callback fires only once (WIDEN creates parallel branches)
+           (let* ((widen-cb-fired nil)
+                  (widen-once-cb
+                   (lambda (findings)
+                     (unless widen-cb-fired
+                       (setq widen-cb-fired t)
+                       (funcall callback findings)))))
+             (gptel-auto-workflow--branch-pool-widen
+              gptel-auto-workflow--research-controller-config
+              research-prompt widen-once-cb)
+             ;; Continue current branch too if not at max turns
+             (if (< turn (1- max-turns))
+                 (gptel-auto-workflow--run-research-turn
+                  research-prompt (1+ turn) widen-once-cb
+                  merged-findings cumulative-tokens 'widen)
+               (gptel-auto-workflow--finalize-research
+                research-prompt merged-findings strategy findings-hash
+                controller-decision turn-confidence cumulative-tokens
+                widen-once-cb))))
           ;; BRANCH: Try alternate strategy (simple single-branch switch)
           ((eq controller-decision 'branch)
            (message "[autotts] Controller BRANCH after turn %d, trying alternate strategy"
