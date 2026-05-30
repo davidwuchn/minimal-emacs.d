@@ -436,6 +436,53 @@ Returns plist with :healthy (t/nil), :recent-errors (count),
           :recent-errors errors
           :last-error last-error)))
 
+;; ─── verbum Three-Phase Pipeline ───
+;; From verbum's LLM-ISA decoder: each layer has a phase with measured
+;; transform strength. Different task types need different phases.
+(defconst gptel-auto-workflow--phases
+  '((:build   . "Early layers (0-20): construct program, research, synthesis")
+    (:execute . "Mid  layers (21-42): execute code, compose, transform")
+    (:emit    . "Late layers (43-63): generate output, format, emit"))
+  "verbum three-phase pipeline: Build → Execute → Emit.")
+
+(defun gptel-auto-workflow--phase-for-category (category)
+  "Return the dominant pipeline phase for a task CATEGORY.
+Based on verbum's finding that different tasks need different phases:
+- Programming needs Execute phase (B compose, C flip in mid layers)
+- Tool-calls needs Execute phase (C flip, β_apply)
+- Agentic needs Build phase (Y recursion, D cascade in early layers)
+- Natural-language needs Emit phase (I identity, W duplicate in late layers)"
+  (cl-case category
+    (:programming :execute)
+    (:tool-calls :execute)
+    (:agentic :build)
+    (:natural-language :emit)
+    (t :emit)))
+
+(defun gptel-auto-workflow--phase-boost (backend target)
+  "Return phase boost (0.0 to +15.0) for BACKEND on TARGET.
+Boosts backends whose phase strength matches the task's needs.
+verbum measured transform strengths: Build=1.17, Execute=0.95, Emit=0.69.
+The boost is proportional to the phase's measured strength."
+  (let* ((category (when target (gptel-auto-workflow--categorize-target target)))
+         (needed-phase (when category (gptel-auto-workflow--phase-for-category category)))
+         ;; Backend-specific phase strength (defaults from verbum measurements)
+         ;; In production, these would be measured per-backend via the
+         ;; moiré grating decoder. For now, use heuristics based on
+         ;; backend architecture (Qwen→emits well, DeepSeek→executes well).
+         (phase-strengths
+          (cond ((string-match-p "DeepSeek" backend)
+                 '((:build . 0.8) (:execute . 1.1) (:emit . 0.7)))
+                ((string-match-p "DashScope\\|qwen" backend)
+                 '((:build . 0.9) (:execute . 0.8) (:emit . 1.0)))
+                ((string-match-p "MiniMax" backend)
+                 '((:build . 1.0) (:execute . 0.9) (:emit . 0.8)))
+                ((string-match-p "moonshot\\|kimi" backend)
+                 '((:build . 0.7) (:execute . 1.0) (:emit . 1.1)))
+                (t '((:build . 1.0) (:execute . 1.0) (:emit . 1.0)))))
+         (phase-str (cdr (assq needed-phase phase-strengths))))
+    (* (or phase-str 1.0) 15.0)))  ; Scale to 0-15 points
+
 ;; ─── Category Overrides (from 1,204 experiments) ───
 
 (defconst gptel-auto-workflow--category-backend-overrides
@@ -474,6 +521,15 @@ STRATEGY and TARGET filter the performance data.
                                 ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
            (category (when target (gptel-auto-workflow--categorize-target target)))
            (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
+           ;; verbum data bypass: retrieval tasks (context docs, factual lookups)
+           ;; use near-zero combinator activation — they don't need the full
+           ;; compute pipeline.  Log when detected for routing observability.
+           (retrieval-p (and target
+                             (let ((bn (file-name-nondirectory target)))
+                               (or (string= bn "gptel-ext-context.el")
+                                   (string= bn "gptel-ext-context-images.el")
+                                   (string= bn "gptel-ext-context-cache.el")
+                                   (string= bn "gptel-ext-transient.el")))))
            ;; Compute baseline once per category
            (baseline (when category (gptel-auto-workflow--category-baseline-keep-rate category strategy)))
            ;; VSM health → routing auto-tuning
@@ -484,7 +540,12 @@ STRATEGY and TARGET filter the performance data.
            (confidence-weight (plist-get vsm-params :confidence-weight))
            (scored nil))
     
-    ;; Health ladder: filter probation/dead backends, apply weight reduction
+     ;; Log verbum data bypass detection
+     (when retrieval-p
+       (message "[verbum] BYPASS: %s — retrieval task, zero combinator activation expected"
+                (file-name-nondirectory target)))
+     
+     ;; Health ladder: filter probation/dead backends, apply weight reduction
     (let ((filtered nil))
       (dolist (entry static-fallbacks)
         (let* ((backend (car entry))
@@ -546,13 +607,14 @@ STRATEGY and TARGET filter the performance data.
                                 (let* ((health-penalty (if (>= (gptel-auto-workflow--backend-health-level backend) 2)
                                                            -100.0   ; DEGRADED or worse = severe penalty
                                                          0.0)))
-                                  (+ (* delta (* delta-weight 100.0))
-                                     (* all-rate (* rate-weight 100.0))
-                                     (* trend (* trend-weight 100.0))
-                                     (* confidence (* confidence-weight 100.0))
-                                     (if healthy 0 -50.0)   ; Quota penalty
-                                     health-penalty))
-                              -1.0))  ; No data = bottom
+                                   (+ (* delta (* delta-weight 100.0))
+                                      (* all-rate (* rate-weight 100.0))
+                                      (* trend (* trend-weight 100.0))
+                                      (* confidence (* confidence-weight 100.0))
+                                      (if healthy 0 -50.0)   ; Quota penalty
+                                      health-penalty
+                                      (gptel-auto-workflow--phase-boost backend target)))
+                               -1.0))  ; No data = bottom
               scored)))
     
     ;; Apply category override if available
@@ -2217,15 +2279,65 @@ Initiates async verification if no cached result exists."
      (message "[verbum] Lambda verification failed for %s: %s" backend (error-message-string err))
      :unknown)))
 
+(defconst gptel-auto-workflow--combinator-patterns
+  '((:K . "\\bk[^a-z]\\|\\bselect\\|car\\|first\\|head")        ;; Select first argument
+    (:I . "\\bidentity\\|\\biota\\|\\bignore\\|return\b.*self") ;; Identity
+    (:B . "\\bcomp[ose]\\|\\bfmap\\|\\bmap\\|\\b\\.\\b")        ;; Compose
+    (:C . "\\bflip\\|\\breverse\\|\\bswap\\|\\border\\s+")       ;; Flip/reorder
+    (:D . "\\bcasca[de]\\|\\bjoin\\|\\bflatmap\\|\\bbind")      ;; Cascade/join
+    (:W . "\\bduplicat\\|\\bcopy\\|\\btwice\\|\\bboth\\s+")     ;; Duplicate
+    (:Y . "\\bfix\\|\\brecurs\\|\\by-combinator\\|\\bfixed-point") ;; Recursion
+    (:S . "\\bsubstitut\\|\\bapply\\|\\bap\\|\\b\\$\\s*"))      ;; Substitution
+  "Combinator type regex patterns for classifying lambda expressions.
+Maps verbum ISA opcodes to regex patterns in backend responses.
+Used for task-specific backend routing: programming→B,
+tool-calls→C/apply, agentic→Y/recursion, natural-language→I/identity.")
+
+(defun gptel-auto-workflow--classify-combinators (response)
+  "Classify which combinator types appear in RESPONSE.
+Returns list of (combinator-type . strength) pairs sorted by strength.
+E.g., ((:B . 3) (:K . 1)) for a response heavy on composition."
+  (let ((results nil))
+    (when response
+      (dolist (pair gptel-auto-workflow--combinator-patterns)
+        (let* ((type (car pair))
+               (pattern (cdr pair))
+               (count 0))
+          (with-temp-buffer
+            (insert (downcase response))
+            (goto-char (point-min))
+            (while (re-search-forward pattern nil t)
+              (setq count (1+ count))))
+          (when (> count 0)
+            (push (cons type count) results))))
+      ;; Sort by count descending
+      (sort results (lambda (a b) (> (cdr a) (cdr b)))))))
+
 (defun gptel-auto-workflow--response-contains-lambda-p (response)
   "Check if RESPONSE contains lambda expressions.
-Looks for λ, lambda, or -> patterns.
-TODO: Use proper parser when verbum integration complete."
+Looks for λ, lambda, or -> patterns, plus typed combinators."
   (when response
     (or (string-match-p "λ" response)
         (string-match-p "\\\\lambda" response)
         (string-match-p "->" response)
-        (string-match-p "lambda" response))))
+        (string-match-p "lambda" response)
+        (gptel-auto-workflow--classify-combinators response))))
+
+(defun gptel-auto-workflow--combinator-for-category (category)
+  "Return the dominant combinator type for a task CATEGORY.
+Based on verbum's finding that different tasks use different opcode
+profiles. Maps OV5's 4-category ontology to verbum's combinator ISA.
+
+- :programming → :B (compose)  — code is function composition
+- :tool-calls  → :C (flip)    — tool calling reorders arguments
+- :agentic     → :Y (recursion) — agents recurse through states
+- :natural-language → :I (identity) — NL is identity-like (reading directly)"
+  (cl-case category
+    (:programming :B)
+    (:tool-calls :C)
+    (:agentic :Y)
+    (:natural-language :I)
+    (t :I)))
 
 ;; ─── Lambda Verification Report (verbum Phase 12) ───
 

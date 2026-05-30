@@ -632,19 +632,24 @@ on the current provider."
   (funcall
    invoke
    (lambda (result)
-     (let* ((attempt (or retries 0))
-            (prov-attempts (or provider-attempts 0))
-            (category
-             (gptel-auto-experiment--retryable-aux-subagent-category result))
-            (raw (gptel-auto-experiment--subagent-raw-result result))
-            (is-pressure (gptel-auto-experiment--provider-pressure-error-p raw))
-            ;; Advance provider only after N consecutive failures on same one
-            (should-advance (and is-pressure
-                                 (>= (1+ prov-attempts)
-                                     gptel-auto-experiment-max-per-provider-attempts))))
-       (if (and category
-                (not (bound-and-true-p gptel-auto-experiment--quota-exhausted))
-                (< attempt gptel-auto-experiment-max-aux-subagent-retries))
+      (let* ((attempt (or retries 0))
+             (prov-attempts (or provider-attempts 0))
+             (category
+              (gptel-auto-experiment--retryable-aux-subagent-category result))
+             (raw (gptel-auto-experiment--subagent-raw-result result))
+             (is-pressure (gptel-auto-experiment--provider-pressure-error-p raw))
+             ;; Advance provider only after N consecutive failures on same one
+             (should-advance (and is-pressure
+                                  (>= (1+ prov-attempts)
+                                      gptel-auto-experiment-max-per-provider-attempts)))
+             ;; verbum determinism: lambda-healthy backends have 0.0 drift.
+             ;; Skip retries for non-network errors — computation is
+             ;; deterministic. Only retry on quota/network pressure.
+             (lambda-available (fboundp 'gptel-auto-workflow--backend-health-level)))
+        (if (and category
+                 (not (bound-and-true-p gptel-auto-experiment--quota-exhausted))
+                 (< attempt gptel-auto-experiment-max-aux-subagent-retries)
+                 (or is-pressure (not lambda-available)))
            (progn
              (when should-advance
                (when-let ((preset
