@@ -301,9 +301,43 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                     (gptel-auto-workflow--apply-category-vigilance target 'discarded))
                                   (funcall log-fn run-id exp-result)
                                   (funcall callback exp-result))
-                              ;; Validate syntax BEFORE calling grader to avoid wasting API calls
-                              ;; Check ALL modified files, not just target — agent may edit dependencies
-                              (let ((validation-error
+                               ;; Agent error early abort: if executor returned a timeout/curl
+                               ;; error, any partial file changes are corrupted. Revert and
+                               ;; fail fast — don't waste 300s on a teachable retry.
+                               ;; Setting finished=t skips validation, grade, and retry below.
+                               (when (and (gptel-auto-experiment--agent-error-p effective-agent-output)
+                                          (gptel-auto-experiment--executor-timeout-p effective-agent-output))
+                                 (let ((default-directory experiment-worktree))
+                                   (message "[auto-exp] ⏱ Executor timed out on %s experiment %d; reverting partial changes, failing fast"
+                                            target experiment-id)
+                                   (magit-git-success "checkout" "--" "."))
+                                 (let ((error-result
+                                        (list :target target
+                                              :id experiment-id
+                                              :hypothesis (gptel-auto-experiment--extract-hypothesis
+                                                           effective-agent-output)
+                                              :score-before baseline
+                                              :score-after 0
+                                              :code-quality baseline-code-quality
+                                              :kept nil
+                                              :duration (- (float-time) start-time)
+                                              :grader-quality 0
+                                              :grader-reason (format "executor-timeout: %s"
+                                                                     (my/gptel--sanitize-for-logging
+                                                                      effective-agent-output 200))
+                                              :comparator-reason "executor-timeout"
+                                              :analyzer-patterns (format "%s" patterns)
+                                              :agent-output effective-agent-output
+                                              :backend actual-backend
+                                              :model actual-model)))
+                                   (setq gptel-auto-experiment--no-improvement-count
+                                         (1+ gptel-auto-experiment--no-improvement-count))
+                                   (funcall log-fn run-id error-result)
+                                   (funcall callback error-result))
+                                 (setq finished t))
+                               ;; Validate syntax BEFORE calling grader to avoid wasting API calls
+                               ;; Check ALL modified files, not just target — agent may edit dependencies
+                               (let ((validation-error
                                      (when target
                                        (or (gptel-auto-experiment--validate-all-modified-files experiment-worktree)
                                            (gptel-auto-experiment--validate-code
