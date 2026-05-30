@@ -116,131 +116,94 @@ These targets may need different research patterns or the research findings were
 
 
 
-<<<<<<< Updated upstream
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Summary**
+# Research Strategy: Template-Default
 
-- **Strategy**: Template-default
-- **Target**: `lisp/modules/gptel-auto-workflow-projects.el`
-- **Experiments**: 2 completed
-- **Hypotheses**: None kept or discarded
+**Scope:** 92 experiments across 20 Elisp modules
 
-**Distillate**: Early-phase, exploratory work on a single module with inconclusive or pre-hypothesis results. No validated or rejected theories yet—likely still in data collection or scoping mode.
-=======
+## Kept Hypotheses
 
+| # | Hypothesis | Target | Improvement Axis |
+|---|------------|--------|------------------|
+| 1 | Nil summary validation in `gptel-benchmark-compare-file-versions` prevents `wrong-type-argument` from malformed data | `gptel-benchmark-comparator.el` | Vitality |
+| 2 | Negative caching in `gptel-benchmark--cache-put`/`load-result` eliminates repeated disk I/O for missing files | `gptel-benchmark-subagent.el` | Performance |
+| 3 | `proper-list-p` validation before `last` in `extract-last-task-from-lines` prevents crashes from improper lists | `gptel-ext-context.el` | Safety, Clarity |
+| 4 | `stringp` validation in `gptel-error--load-patterns-from-skill` prevents runtime errors from non-string returns | `gptel-tools-agent-error.el` | Vitality, Clarity |
+| 5 | Nil guards before `string-match`/`split-string` in error handlers prevent crashes from nil error messages | `gptel-tools-agent-error.el` | Vitality |
 
+## Discarded Hypotheses
 
+| # | Hypothesis | Reason Discarded |
+|---|------------|------------------|
+| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Incomplete / deferred |
+| 2 | Hash table entry removal | Incomplete |
+| 3 | Derive heading from `symbol-map` instead of pcase | Deferred |
+| 4 | Summary cache layer in `get-trend-summary` | Overhead > benefit |
+| 5 | Replace `listp` with `proper-list-p` | Redundant (already covered by #3) |
+| 6 | Hash table cache for module paths | Premature optimization |
+| 7 | Nil guard for `feature-name` in `module-path` | Low risk |
+| 8 | FSM collection logging infrastructure | Out of scope |
+| 9 | Optional `seen` hash table for traversal | Micro-optimization |
+| 10 | Remove redundant `hash-table-p` checks | Low impact |
+| 11 | `bound-and-true-p` guard for regexp variable | Unlikely to be unbound |
+| 12 | Fix unconditional `cl-remove` in demote-backend | Edge case |
+| 13 | Memoization cache for `categorize-error` | Premature optimization |
 
+## Summary
 
+**Focus areas:** Error resilience, nil-safety validation, and negative caching for I/O reduction.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Allium Behavioral Spec (auto-generated, v3)
-
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
-
-```allium
-# Distillation
-
-This appears to be an **incomplete research template** with:
-
-- **Research strategy:** template-default
-- **34 experiments** across 8 target files (all GPTel-related)
-- **Kept/Discarded hypotheses sections:** Empty
-
-## Issue
-
-The "Kept hypotheses" and "Discarded hypotheses" fields are **blank** — there's no content to distill.
-
-## Request
-
-Could you provide:
-
-1. **The hypotheses themselves** (what was tested, results, etc.)
-2. **Context** — what research question are you investigating?
-3. **Any patterns** you want me to identify across the experiments
-
-Or are you asking me to help you **populate** this template based on the file contents listed?
+**Eliminated:** 13 hypotheses—primarily premature optimizations, edge cases, and low-risk items.
 ```
 
 ### Check Issues
 
-# Acknowledged
+# Review: Research Strategy Document
 
-I see what you've shared — a distillation summary for a **GPTel-related research template** with 34 experiments across 8 files.
+## Structural Assessment
 
-## What I Observe
+| Aspect | Status | Notes |
+|--------|--------|-------|
+| Scope definition | ✅ Clear | 92 experiments, 20 modules, specific modules named |
+| Hypothesis specificity | ✅ Good | Each targets specific functions/files |
+| Discard rationale | ✅ Present | "Premature optimization", "low risk", etc. |
+| Improvement axes | ✅ Logical | Vitality, Performance, Safety, Clarity capture key dimensions |
 
-The template is structured but **empty**:
-- ✅ Experiment count and file references are populated
-- ❌ Hypotheses (kept/discarded) are blank
-- ❌ Research question / context is missing
+## Concerns
 
-## How I Can Help
+**1. No experimental evidence shown**
+The document lists hypotheses but doesn't show:
+- How hypotheses were derived (static analysis? runtime errors? code review?)
+- What triggered investigation priorities
+- Metrics for measuring success
 
-**Option A:** If you have the raw experiment data or notes, paste them here and I'll:
-- Extract the hypotheses
-- Summarize results
-- Categorize into kept/discarded
+**2. "Negative caching" hypothesis (#2) needs clarification**
+```
+Negative caching in `gptel-benchmark--cache-put`/`load-result` eliminates 
+repeated disk I/O for missing files
+```
+- Is this a known performance bottleneck? Empirical data?
+- "Negative caching" typically refers to caching *failures*—ensure this is what's intended
 
-**Option B:** If you want me to design hypotheses for a GPTel research agenda, I can:
-- Propose testable hypotheses
-- Suggest experimental approaches
+**3. Missing from Discarded #1-2**
+```
+| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Incomplete / deferred |
+| 2 | Hash table entry removal | Incomplete |
+```
+These are too terse. "Incomplete" could mean:
+- Problem not fully understood?
+- Implementation attempted and failed?
+- Lower priority?
 
-**Option C:** If this is a template you want me to fill out based on a specific research question, tell me what you're investigating.
+**4. No ordering/prioritization**
+Among the 5 kept hypotheses, is there a dependency order? Critical path?
 
----
+## Recommendations
 
-**What would you like me to do?**
+1. **Add experimental evidence**: Br
+
+... (truncated)
