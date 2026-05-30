@@ -3,15 +3,7 @@ name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.30
 total-experiments: 870
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-total-kept: 20
-=======
-total-kept: 5
->>>>>>> Stashed changes
-=======
-total-kept: 5
->>>>>>> c216e3fb (◈ Merge auto-evolved pipeline files)
+total-kept: 18
 ---
 
 # Auto-Workflow Program
@@ -25,35 +17,16 @@ total-kept: 5
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-<<<<<<< HEAD
-<<<<<<< Updated upstream
 | `lisp/modules/gptel-benchmark-principles.el` | 67% | 3 | 2 | ✅ High yield |
 | `lisp/modules/gptel-benchmark-comparator.el` | 33% | 3 | 1 | ✅ High yield |
 | `lisp/modules/gptel-benchmark-core.el` | 26% | 19 | 5 | 🟡 Active |
 | `lisp/modules/gptel-tools-agent-staging-baseline.el` | 25% | 4 | 1 | 🟡 Active |
 | `lisp/modules/gptel-ext-tool-permits.el` | 25% | 12 | 3 | 🟡 Active |
 | `lisp/modules/gptel-tools-agent-runtime.el` | 25% | 4 | 1 | 🟡 Active |
-| `lisp/modules/gptel-tools-memory.el` | 14% | 29 | 4 | 🟡 Active |
 | `lisp/modules/gptel-workflow-benchmark.el` | 12% | 8 | 1 | 🟡 Active |
+| `lisp/modules/gptel-tools-memory.el` | 9% | 22 | 2 | ❌ Plateaued |
 | `lisp/modules/gptel-auto-workflow-projects.el` | 8% | 12 | 1 | ❌ Plateaued |
 | `lisp/modules/gptel-tools-agent-prompt-build.el` | 7% | 14 | 1 | ❌ Plateaued |
-=======
-=======
->>>>>>> c216e3fb (◈ Merge auto-evolved pipeline files)
-| `lisp/modules/gptel-ext-context.el` | 50% | 2 | 1 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-comparator.el` | 50% | 4 | 2 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent.el` | 14% | 7 | 1 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-error.el` | 11% | 9 | 1 | 🟡 Active |
-| `lisp/modules/gptel-ext-fsm-utils.el` | 0% | 7 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-ext-retry.el` | 0% | 3 | 0 | ⏳ Insufficient data |
-| `staging-review` | 0% | 9 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 16 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 8 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 4 | 0 | ⏳ Insufficient data |
-<<<<<<< HEAD
->>>>>>> Stashed changes
-=======
->>>>>>> c216e3fb (◈ Merge auto-evolved pipeline files)
 
 ## 🧬 Meta-Learned Patterns
 
@@ -84,30 +57,16 @@ total-kept: 5
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-- **other** (159×): Investigate root cause
-- **timeout** (14×): Add smaller batch sizes or chunked processing
+- **other** (152×): Investigate root cause
 - **api-limit** (14×): Implement provider fallback or rate limit handling
+- **timeout** (12×): Add smaller batch sizes or chunked processing
 - **validation-failed** (12×): Improve pre-grade validation prompts
 - **test-failure** (2×): Run tests before committing experiments
-=======
-=======
->>>>>>> c216e3fb (◈ Merge auto-evolved pipeline files)
-- **other** (74×): Investigate root cause
-- **api-limit** (5×): Implement provider fallback or rate limit handling
-- **validation-failed** (4×): Improve pre-grade validation prompts
-- **timeout** (3×): Add smaller batch sizes or chunked processing
-<<<<<<< HEAD
->>>>>>> Stashed changes
-=======
->>>>>>> c216e3fb (◈ Merge auto-evolved pipeline files)
 
 ## Success Patterns
 
 <!-- AUTO-UPDATED: From mementum knowledge -->
 - Extract helper functions for repeated logic
-- Improve error handling and recovery mechanisms
 
 ## Failed Patterns
 
@@ -119,25 +78,11 @@ total-kept: 5
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-<<<<<<< HEAD
-<<<<<<< Updated upstream
 - **lisp/modules/gptel-benchmark-principles.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 67%)
 - **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
 - **lisp/modules/gptel-benchmark-core.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 26%)
-- **lisp/modules/gptel-tools-memory.el**: Try validation guards or error handling improvements (previous experiments discarded)
 - **lisp/modules/gptel-workflow-benchmark.el**: Try validation guards or error handling improvements (previous experiments discarded)
-=======
-=======
->>>>>>> c216e3fb (◈ Merge auto-evolved pipeline files)
-- **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 50%)
-- **lisp/modules/gptel-tools-agent.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-tools-agent-error.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-fsm-utils.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
-<<<<<<< HEAD
->>>>>>> Stashed changes
-=======
->>>>>>> c216e3fb (◈ Merge auto-evolved pipeline files)
+- **lisp/modules/gptel-tools-memory.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -163,12 +108,4 @@ var/elpa/**
 
 ---
 
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-*This directive was auto-generated from 870 experiments (20 kept locally across 201 local records). It evolves every self-evolution cycle.*
-=======
-*This directive was auto-generated from 870 experiments (5 kept locally across 86 local records). It evolves every self-evolution cycle.*
->>>>>>> Stashed changes
-=======
-*This directive was auto-generated from 870 experiments (5 kept locally across 86 local records). It evolves every self-evolution cycle.*
->>>>>>> c216e3fb (◈ Merge auto-evolved pipeline files)
+*This directive was auto-generated from 870 experiments (18 kept locally across 192 local records). It evolves every self-evolution cycle.*
