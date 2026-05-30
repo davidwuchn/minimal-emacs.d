@@ -512,14 +512,13 @@ STRATEGY and TARGET filter the performance data.
    4. CONFIDENCE — how much data backs this score?
    Weights auto-tune from VSM health when available (defaults 40/30/20/10).
    Penalty: unhealthy backends (3+ recent errors) drop to bottom."
-  (let* ((static-fallbacks (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
-                                gptel-auto-workflow-headless-subagent-fallbacks
-                              '(("MiniMax" . "minimax-m2.7-highspeed")
-                                ("moonshot" . "kimi-k2.6")
-                                ("DashScope" . "qwen3.6-plus")
-                                ("DeepSeek" . "deepseek-v4-flash")
-                                ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
-           (category (when target (gptel-auto-workflow--categorize-target target)))
+   (let* ((static-fallbacks (if (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                                 gptel-auto-workflow-executor-rate-limit-fallbacks
+                               '(("DashScope" . "qwen3.6-plus")
+                                 ("moonshot" . "kimi-k2.6")
+                                 ("DeepSeek" . "deepseek-v4-flash")
+                                 ("MiniMax" . "minimax-m2.7-highspeed"))))
+            (category (when target (gptel-auto-workflow--categorize-target target)))
            (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
            ;; verbum data bypass: retrieval tasks (context docs, factual lookups)
            ;; use near-zero combinator activation — they don't need the full
@@ -774,11 +773,14 @@ the original fallback list — preventing mutation side effects."
 ;; ─── Reset to Static Order ───
 
 (defun gptel-auto-workflow--reset-fallback-order ()
-  "Reset fallback chain to static order from headless config."
-  (when (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+  "Reset fallback chain to static order from executor config."
+  (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
     (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-          gptel-auto-workflow-headless-subagent-fallbacks)
-    (message "[onto-router] Reset to static fallback order")))
+          '(("DashScope" . "qwen3.6-plus")
+            ("moonshot" . "kimi-k2.6")
+            ("DeepSeek" . "deepseek-v4-flash")
+            ("MiniMax" . "minimax-m2.7-highspeed")))
+    (message "[onto-router] Reset to executor static fallback order")))
 
 ;; ─── Semantic Similarity Target Discovery ───
 
