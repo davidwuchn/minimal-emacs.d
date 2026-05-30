@@ -116,216 +116,55 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy
+# Research Strategy Distillation
 
-**Strategy Type:** template-default
+## Overview
+- **Strategy**: template-default
+- **Scale**: 64 experiments across 14 targets
 
-**Experiments:** 24 total across 6 targets
+## Outcome Summary
+All hypotheses were **discarded** (none retained).
 
-**Target Files:**
-- `lisp/modules/gptel-tools-agent-benchmark.el`
-- `lisp/modules/gptel-benchmark-subagent.el`
-- `lisp/modules/gptel-tools-agent-error.el`
-- `lisp/modules/gptel-tools-agent-prompt-build.el`
-- `lisp/modules/gptel-auto-workflow-strategic.el`
-- `lisp/modules/gptel-auto-workflow-projects.el`
+## Discarded Hypotheses by Category
 
-**Kept Hypotheses:** —
+| Category | Hypothesis | Rationale |
+|----------|------------|-----------|
+| **Performance** | Memoize `nucleus--project-root` | Avoid repeated `(project-current nil)` calls |
+| **Performance** | Memoize directory resolution functions | Eliminate redundant `file-directory-p` checks |
+| **Performance** | Cache directory path resolution in `nucleus-prompts.el` | Remove repeated `file-directory-p`/`project-current` checks |
+| **Vitality** | Add nil guard + `file-readable-p` validation to `nucleus--read-file` | Prevent errors on invalid paths |
+| **Clarity** | Fix argument order bug in `nucleus--validate-contract` | Error messages incorrectly show tool name instead of arg name |
+| **Concurrency** | Fix race condition in `nucleus-sync-tool-profile` | Buffer captured at fire time vs. creation time in idle timer |
+| **Clarity/Efficiency** | Remove redundant consp/keywordp check, move `make-hash-table` inside guard, use `ignore-errors` | Eliminate speculative allocation, use idiomatic error suppression |
+| **Vitality/Clarity** | Add nil guard for empty `status-lines` in `gptel-auto-workflow-research-status-all` | Prevent caching empty results, handle edge case explicitly |
+| **Clarity (fractal)** | Fix misleading indentation in workflow functions | Visual structure didn't match parse tree |
 
-**Discarded Hypotheses:** —
+## Key Takeaway
+Despite extensive experimentation (64 runs), no hypothesis warranted implementation—suggesting either the proposed optimizations are premature, the baseline performance is acceptable, or the identified issues have lower impact than anticipated.
 ```
 
 ### Check Issues
 
-# Research Strategy Check
+The summary is clear and well-structured. A few observations:
 
-Your strategy configuration looks structurally sound. Here are a few observations:
+**Looks reasonable.** "All hypotheses discarded" is a valid outcome—it's information, not failure. The hypotheses appear well-reasoned (memoization, nil guards, race conditions, argument order bugs).
 
-## Configuration Summary
-| Field | Value |
-|-------|-------|
-| Strategy Type | `template-default` |
-| Total Experiments | 24 |
-| Targets | 6 files |
-| Hypotheses | None tracked yet |
+**Minor feedback on the table:**
+- "Clarity (fractal)" for the indentation fix is oddly specific terminology—consider "Code Quality" or just "Clarity"
+- "Remove redundant consp/keywordp check..." is long; could trim to "Simplify contract validation" for readability
 
-## Questions/Considerations
+**Potential gaps to consider:**
+- Were any hypotheses *partially* valid but not worth the complexity? (Worth noting if so)
+- Is there any pattern across the 14 targets suggesting certain areas are more stable/optimized than others?
 
-1. **Hypotheses Tracking** — Both "Kept" and "Discarded" are empty. Should these be populated as experiments run?
+**Next steps might include:**
+1. Confirm these hypotheses weren't implemented outside this study
+2. Verify the baseline performance is actually "acceptable" (e.g., user-reported slowness elsewhere?)
+3. Decide if 64 experiments on 14 targets is worth revisiting with different hypotheses, or if the code has reached local optimum
 
-2. **Experiment Distribution** — 24 experiments across 6 targets = 4 experiments each on average. Is this allocation intentional, or do some targets need more focus?
-
-3. **Target Files** — All are in `lisp/modules/`. Are these all related benchmarks/tools, or should they be grouped differently?
-
-4. **Strategy Type** — `template-default` suggests a standard approach. Do you need a custom strategy for these benchmarks?
-
----
-
-**What specifically would you like me to check?**
-- File structure/existence?
-- Experiment definitions?
-- Hypothesis tracking?
-- Something else?
+Overall: solid empirical approach. The conclusion ("premature optimization" likely) is defensible.
