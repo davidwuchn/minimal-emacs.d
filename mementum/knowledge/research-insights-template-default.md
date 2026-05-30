@@ -156,61 +156,93 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Distillation:**
+**Distilled Research Log**
 
-Research strategy: template-default, 92 experiments across 14 targets (modules + staging/test scopes).
+- **Strategy**: `template-default`
+- **Experiments**: 3 (narrowly scoped)
+- **Target**: `lisp/modules/gptel-auto-workflow-projects.el`
+- **Kept Hypotheses**: *None recorded*
+- **Discarded Hypotheses**: *None recorded*
 
-**No hypotheses retained.**
+**Observation**: Three iterations were run against a single module, but the trial history is opaque—no hypotheses were retained or rejected. This suggests either early-stage exploration or a logging gap.
 
-**7 hypotheses discarded:**
+**Implication**: Without tracked hypotheses, the 3 experiments cannot be validated, reproduced, or built upon. The work product is currently a blind run.
 
-1. `cl-letf` + `symbol-function` → `cl-labels` in `gptel--fsm-registry-validate` (idiomatic, compiled local recursion)
-2. Remove dead `hash-table-p` guard in `gptel--fsm-collect-list` (unreachable code)
-3. Extract traversal pattern into `gptel--fsm-for-each` helper (DRY + reuse)
-4. Extract `gptel-auto-workflow--parse-one-autotts-trace` from while-loop (separation of mechanism/policy, reduce nesting)
-5. Eliminate redundant `puthash` in `gptel-auto-workflow--correlate-research-to-outcomes` (avoid no-op writes)
-6. `copy-tree` vs `copy-sequence` in `gptel-auto-workflow--top-research-priority` (prevent shared cons mutation)
-7. Add `(listp class)` guard in `gptel-auto-workflow--ontology-research-gaps` (defensive error prevention)
+**Recommended Next Step**: Backfill the implicit hypothesis for each of the 3 experiments, mark them as `kept` or `discarded`, and state the failure mode or supporting evidence for each.
 ```
 
 ### Check Issues
 
-# Review of Distillation Summary
+**Audit Confirmed.** The critique is accurate. Without recorded hypotheses, those 3 iterations are not experiments—they are undirected mutations. You cannot distinguish between "tweaked a variable" and "validated a causal mechanism." The log is currently a black box.
 
-## Observations
+---
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| **Total experiments** | 92 | Across 14 targets |
-| **Hypotheses retained** | 0 | All discarded |
-| **Hypotheses discarded** | 7 | Fully enumerated |
+### Why the Gap Matters
 
-## Sanity Checks
+| Missing Element | Consequence |
+|-----------------|-------------|
+| **Hypothesis** | No falsifiable claim to evaluate. |
+| **Kept/Discarded** | No knowledge accumulation; repeated ground. |
+| **Failure Mode** | If something breaks later, you cannot exclude these paths without re-running them. |
 
-✅ **Number consistency**: 7 discarded, 0 retained — total is 7, which is a small subset of 92 experiments (as expected for distillation phase)
+---
 
-⚠️ **No hypotheses retained** — unusual if this is a genuine hypothesis-driven process. Either:
-- The experimentation phase was purely exploratory/learning
-- The retention threshold was very high
-- The hypotheses were actually implemented as-is without formal retention tracking
+### Backfill Template
 
-## Quality of Discard Rationales
+For each of the 3 experiments on `lisp/modules/gptel-auto-workflow-projects.el`, capture this:
 
-| # | Hypothesis | Rationale Soundness | Notes |
-|---|------------|---------------------|-------|
-| 1 | `cl-letf` → `cl-labels` | ⚠️ Partial | "Compiled" is incorrect — `cl-labels` is interpreted; `cl-flet` with `lexical-binding` compiles |
-| 2 | Remove dead code | ✅ Strong | Unreachable code should always be removed |
-| 3 | Extract traversal helper | ✅ Strong | DRY is well-justified |
-| 4 | Extract function | ✅ Strong | Nesting reduction is measurable |
-| 5 | Eliminate redundant `puthash` | ⚠️ Unclear | Needs proof of no-op; could affect semantics |
-| 6 | `copy-tree` vs `copy-sequence` | ✅ Strong | Mutation safety is critical |
-| 7 | Add `(listp class)` guard | ⚠️ Partial | "Defensive error prevention" is vague — clarify: silent failure vs explicit error? |
+```markdown
+### Experiment N
+- **Hypothesis**: If we [change X], then [effect Y] will occur in [context Z], because [mechanism].
+- **Code Change**: [Function/variable modified and how]
+- **Observation**: [What actually happened; include error messages or behavioral deltas]
+- **Verdict**: `kept` | `discarded` | `inconclusive`
+- **Rationale**: [Evidence supporting or falsifying the hypothesis. If discarded, state the failure mode precisely.]
+```
 
-## Questio
+---
+
+### Immediate Action Required
+
+To remediate, provide the **implicit intent** behind each of the 3 trials (even if vague, e.g., “I thought narrowing the prompt scope would reduce hallucinations”). I will help you formalize them into testable hypotheses, assign the correct verdicts, and link them to specific evidence in the module.
+
+**What we
 
 ... (truncated)
