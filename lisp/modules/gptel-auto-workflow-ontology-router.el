@@ -1108,12 +1108,11 @@ Uses fallback chain if BACKEND is nil (verifies all backends)."
   "Verify lambda compiler presence for all backends in fallback chain.
 Returns plist with :overall status and per-backend results."
   (let ((fallbacks (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
-                       gptel-auto-workflow-headless-subagent-fallbacks
-                     '(("MiniMax" . "minimax-m2.7-highspeed")
-                       ("moonshot" . "kimi-k2.6")
-                       ("DashScope" . "qwen3.6-plus")
-                       ("DeepSeek" . "deepseek-v4-flash")
-                       ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+                        gptel-auto-workflow-headless-subagent-fallbacks
+                      '(("DashScope" . "qwen3.6-plus")
+                        ("moonshot" . "kimi-k2.6")
+                        ("DeepSeek" . "deepseek-v4-flash")
+                        ("MiniMax" . "minimax-m2.7-highspeed"))))
         (results nil)
         (healthy-count 0)
         (degraded-count 0)
@@ -2043,11 +2042,10 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
         ;; reorder-fallbacks-by-ontology) is picked up here too.
         (default-models (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
                                 gptel-auto-workflow-executor-rate-limit-fallbacks)
-            '(("MiniMax" . "minimax-m2.7-highspeed")
-              ("DeepSeek" . "deepseek-v4-flash")
-              ("DashScope" . "qwen3.6-plus")
-              ("moonshot" . "kimi-k2.6")
-              ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+             '(("DashScope" . "qwen3.6-plus")
+               ("moonshot" . "kimi-k2.6")
+               ("DeepSeek" . "deepseek-v4-flash")
+               ("MiniMax" . "minimax-m2.7-highspeed"))))
         ;; Pre-compute once for all backends
         (axis-rates-cache (when (fboundp 'gptel-auto-workflow--backend-per-axis-keep-rates)
                             (condition-case nil
@@ -2347,12 +2345,11 @@ profiles. Maps OV5's 4-category ontology to verbum's combinator ISA.
   "Generate report of lambda verification results across all backends.
 Returns plist with :total :healthy :degraded :unknown :backends."
   (let ((fallbacks (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
-                       gptel-auto-workflow-headless-subagent-fallbacks
-                     '(("MiniMax" . "minimax-m2.7-highspeed")
-                       ("moonshot" . "kimi-k2.6")
-                       ("DashScope" . "qwen3.6-plus")
-                       ("DeepSeek" . "deepseek-v4-flash")
-                       ("CF-Gateway" . "@cf/openai/gpt-oss-120b"))))
+                        gptel-auto-workflow-headless-subagent-fallbacks
+                      '(("DashScope" . "qwen3.6-plus")
+                        ("moonshot" . "kimi-k2.6")
+                        ("DeepSeek" . "deepseek-v4-flash")
+                        ("MiniMax" . "minimax-m2.7-highspeed"))))
         (healthy-count 0)
         (degraded-count 0)
         (unknown-count 0)
