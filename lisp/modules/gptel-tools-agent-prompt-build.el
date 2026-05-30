@@ -1059,6 +1059,7 @@ Returns a compact lambda-notation string ready for the LLM."
          (agent-b (cdr (assoc 'agent-behavior vars)))
          (val-pipe (cdr (assoc 'validation-pipeline vars))))
     (concat
+     ;; HEADER
      (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
              target exp-id max-exp budget worktree tgt-full baseline)
      (if weakest (concat "\n  " weakest) "")
@@ -1067,7 +1068,12 @@ Returns a compact lambda-notation string ready for the LLM."
      (if large (concat "\n  " large) "")
      (if moderator (concat "\n  " moderator) "")
      "\n\n"
-     (if persona (concat "CATEGORY: " persona "\n") "")
+     ;; ONTOLOGY FRAME (harness — structures the action space first)
+     (if onto-g (concat "CATEGORY: " onto-g "\n") "")
+     (if act-s (concat act-s "\n") "")
+     (when (or onto-g act-s) "\n")
+     ;; CONTEXT (what you know about this target)
+     (if persona (concat "PERSONA: " persona "\n") "")
      (if skills (concat "SKILLS: " skills "\n") "")
      (if allium-i (concat "ALLIUM: " allium-i "\n") "")
      (if allium-r (concat "REPAIR: " allium-r "\n") "")
@@ -1087,8 +1093,7 @@ Returns a compact lambda-notation string ready for the LLM."
      (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
      (if frontier (concat "FRONTIER: " frontier "\n") "")
      (if satur (concat "SATUR: " satur "\n") "")
-     (if onto-g (concat "CATEGORY: " onto-g "\n") "")
-     (if act-s (concat act-s "\n") "")
+     ;; FAILURE PATTERNS (guardrails — what went wrong before)
      (if fail-p (concat "FAIL: " fail-p "\n") "")
      (if div (concat "DIVERSITY: " div "\n") "")
      (if cross (concat "CROSS: " cross "\n") "")
