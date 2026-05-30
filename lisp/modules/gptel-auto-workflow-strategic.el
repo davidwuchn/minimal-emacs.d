@@ -504,29 +504,49 @@ Uses standard skill loader so humans can edit researcher-prompt/SKILL.md."
   "Read JSON FILE into a hash-table without maphash corruption.
 Reads as plist internally, then manually builds hash table to avoid
 iterating JSON-created hash tables with maphash (Emacs 30.2 issue).
-Returns nil if FILE is missing or unreadable."
+Returns nil if FILE is missing or unreadable.
+ASSUMPTION: JSON contains plist structure (alternating key-value pairs).
+ASSUMPTION: Nested hash structures are plists starting with keyword keys.
+BEHAVIOR: Logs error type on failure for adaptive debugging.
+EDGE CASE: Empty plist data returns empty hash table (not nil)."
   (when (file-readable-p file)
-    (condition-case nil
+    (condition-case err
         (let ((json-object-type 'plist)
               (json-array-type 'list))
           (let* ((data (json-read-file file))
                  (ht (make-hash-table :test 'equal)))
-            (while data
-              (let* ((key (pop data))
-                     (val (pop data))
-                     (inner-ht (and (consp val) (keywordp (car val))
-                                    (make-hash-table :test 'equal))))
-                (if (and inner-ht (consp val) (keywordp (car val)))
-                    (let ((inner val))
-                      (while inner
-                        (let ((ik (pop inner))
-                              (iv (pop inner)))
-                          (when (and ik iv)
-                            (puthash (if (keywordp ik) (substring (symbol-name ik) 1) ik) iv inner-ht))))
-                      (puthash key inner-ht ht))
-                  (puthash key val ht))))
+            ;; BEHAVIOR: Early return for empty plist (not nil), ensuring
+            ;; hash table is always returned when file is readable
+            (when data
+              (while data
+                (let* ((key (pop data))
+                       (val (pop data))
+                       (inner-ht (and (consp val) (keywordp (car val))
+                                      (make-hash-table :test 'equal))))
+                  (if (and inner-ht (consp val) (keywordp (car val)))
+                      (let ((inner val))
+                        (while inner
+                          (let ((ik (pop inner))
+                                (iv (pop inner)))
+                            (when (and ik iv)
+                              (puthash (if (keywordp ik) (substring (symbol-name ik) 1) ik) iv inner-ht))))
+                        (puthash key inner-ht ht))
+                    (puthash key val ht)))))
             ht))
-      (error nil))))
+      ;; BEHAVIOR: Log error type for φ Vitality - builds on discoveries
+      ;; that parsing errors occur and what types they are
+      (json-error
+       (message "[json] %s: JSON parse error in %s: %s"
+                (file-name-nondirectory file) file (error-message-string err))
+       nil)
+      (file-error
+       (message "[json] %s: File error reading %s: %s"
+                (file-name-nondirectory file) file (error-message-string err))
+       nil)
+      (error
+       (message "[json] %s: Unexpected error reading %s: %s"
+                (file-name-nondirectory file) file (error-message-string err))
+       nil))))
 
 (defun gptel-auto-workflow--load-researcher-meta-learning ()
   "Load meta-learning data for researcher skill.
