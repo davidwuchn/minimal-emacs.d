@@ -334,7 +334,10 @@ Uses grader subagent - no local fallback (fail if subagent unavailable)."
   (format "λ grade(output, expected, forbidden).
   ∀e ∈ expected: pass(e) ∨ fail(e) with reason
   ∀f ∈ forbidden: absent(f) → pass | present(f) → fail with reason
-  → summary: SCORE: X/%d
+
+MANDATORY: End your response with exactly this line:
+→ summary: SCORE: X/%d
+where X is the count of passing items.
 
 OUTPUT:
 %s
@@ -351,24 +354,41 @@ OUTPUT:
 
 (defun gptel-benchmark--parse-grade-response (response expected forbidden)
   "Parse LLM grading RESPONSE into plist.
-Handles both SCORE: X/Y format and JSON format.
-Passes if score >= 80% of total (not requiring perfect score)."
+Handles SCORE: X/Y format, JSON format, and text-based PASS/FALL fallback.
+Passes if score >= 60% of total."
   (let ((score 0)
         (total (+ (length expected) (length forbidden)))
         (details (if (stringp response) response (format "%S" response))))
     ;; Try SCORE: X/Y format first
-    (if (string-match "SCORE:\\s-*\\([0-9]+\\)/\\([0-9]+\\)" details)
-        (setq score (string-to-number (match-string 1 details))
-              total (string-to-number (match-string 2 details)))
-      ;; Count "passed": true in results
+    (cond
+     ((string-match "SCORE:\\s-*\\([0-9]+\\)/\\([0-9]+\\)" details)
+      (setq score (string-to-number (match-string 1 details))
+            total (string-to-number (match-string 2 details))))
+     ;; Count "passed": true in JSON results
+     ((string-match-p "\"passed\"" details)
       (with-temp-buffer
         (insert details)
         (goto-char (point-min))
         (while (re-search-forward "\"passed\"\\s-*:\\s-*true" nil t)
           (cl-incf score)))
-      ;; Try to get total from summary
       (when (string-match "\"total\"\\s-*:\\s-*\\([0-9]+\\)" details)
         (setq total (string-to-number (match-string 1 details)))))
+     ;; Fallback: count text-based PASS items in grader output
+     (t
+      (with-temp-buffer
+        (insert details)
+        (goto-char (point-min))
+        ;; Count lines with numbered/bulleted items ending in : PASS
+        ;; Matches patterns like:
+        ;;   "1. description: PASS"
+        ;;   "**1. description**: PASS"
+        ;;   "1. **description**: PASS"
+        (while (re-search-forward "^\\s-*\\(?:\\*\\*\\)?[0-9]+\\.\\s-+\\(?:\\*\\*\\)?.+\\(?:\\*\\*\\)?:\\s-+PASS\\(?:\\s-+-\\|$\\)" nil t)
+          (cl-incf score))
+        ;; Also count "PASS (not present)" for forbidden behaviors
+        (goto-char (point-min))
+        (while (re-search-forward ":\\s-+PASS\\s-+(not present)" nil t)
+          (cl-incf score)))))
     (let* ((percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0))
            ;; Pass if >= 60% (lowered from 80% to increase keep rate)
            (passed (and (> total 0) (>= percentage 60.0))))
