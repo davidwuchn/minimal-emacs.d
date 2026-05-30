@@ -1,11 +1,17 @@
 # Mementum State
 
-> Last session: 2026-05-30 (fixed 2 let* paren errors causing timer callback crashes)
+> Last session: 2026-05-30 (fixed syntax error in evolution.el line 505)
 > Next pipeline: 11:00 (daemon restart to load fixed code)
 
 ## Session: Crash Vector Fixes + Remote Sync
 
-**Status:** 2 NEW FIXES COMMITTED. Daemon restart at 11:00 will load them.
+**Status:** 3 FIXES COMMITTED. Daemon restart at 11:00 will load them.
+
+**Commit:** `e9dac400` ⊘ fix: remove extra close paren on line 505 that broke evolution-synthesize function
+- Root cause: Previous commit accidentally added 1 `)` to line 505, changing 8→9 closes
+- This prematurely closed `with-temp-file` (line 436), causing function to end at line 612
+- Lines 614-618 (message + cache invalidation) became top-level forms, causing "Invalid read syntax: )"
+- Fix: Reverted line 505 to 8 closes. File now byte-compiles cleanly.
 
 **Commit:** `6aaf43b0` ⊘ fix two let* paren errors causing timer callback crashes
 
