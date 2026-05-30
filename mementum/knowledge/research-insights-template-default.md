@@ -65,18 +65,7 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+<<<<<<< Updated upstream
 
 
 
@@ -95,60 +84,89 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Research Distillation
+<<<<<<< Updated upstream
+# Research Strategy Distillation
 
-**Strategy:** Template-default approach
+## Summary
 
-**Scope:** 22 experiments across 7 targets:
-- 3 LISP modules (gptel-tools-agent-prompt-build, gptel-auto-workflow-strategic, gptel-auto-workflow-projects)
-- 3 Staging targets (staging-review, staging-merge, staging-verification)
-- 1 Research integration module
+| Field | Value |
+|-------|-------|
+| **Strategy Type** | template-default |
+| **Total Experiments** | 22 |
+| **Targets** | 7 files |
 
-**Status:** 
-- Results pending (hypotheses sections empty)
-- Awaiting hypothesis outcomes from experiments
+## Experiment Targets
 
-**Need:** Fill in "Kept hypotheses" and "Discarded hypotheses" with your experimental findings to complete the distillation.
+### Elisp Modules (4)
+1. `lisp/modules/gptel-tools-agent-prompt-build.el`
+2. `lisp/modules/gptel-auto-workflow-strategic.el`
+3. `lisp/modules/gptel-auto-workflow-projects.el`
+4. `lisp/modules/gptel-auto-workflow-research-integration.el`
+
+### Staging Workflows (3)
+1. `staging-review`
+2. `staging-merge`
+3. `staging-verification`
+
+## Hypothesis Tracking
+
+| Status | Count | Details |
+|--------|-------|---------|
+| **Kept** | — | Not yet documented |
+| **Discarded** | — | Not yet documented |
+
+---
+
+**Action Items:**
+- Document kept hypotheses as they emerge
+- Record discarded hypotheses with reasoning for future reference
+- Track which hypotheses map to which targets/experiments
 ```
 
 ### Check Issues
 
-# Research Distillation Review
+# Document Review: Research Strategy Distillation
 
-## Document Analysis
+## Observations
 
-Your distillation template shows:
+### ✅ What's Present
+- **Clear structure** — well-organized with tables for experiments and hypothesis tracking
+- **Specific targets** — 4 named Elisp modules and 3 staging workflows
+- **Experiment count** — 22 total experiments mapped to 7 targets
 
-| Field | Status |
+### ⚠️ Issues / Gaps
+
+| Issue | Detail |
 |-------|--------|
-| Strategy | ✓ Defined (template-default) |
-| Scope | ✓ Defined (22 experiments, 7 targets) |
-| Modules | 3 LISP + 3 Staging + 1 Research |
-| Hypotheses | ✗ Empty |
+| **No hypotheses documented** | The tracking section is empty — can't assess what's working |
+| **Missing experiment breakdown** | "22 experiments" has no mapping — which target got how many runs? |
+| **No results/success criteria** | No metrics or outcomes recorded |
+| **Staging workflows lack detail** | What triggers each? What do they verify? |
 
-## Observation
+## Suggestions
 
-I'm not able to fill in experimental findings I don't have access to. The document correctly states "Results pending."
+```
+1. Add experiment-to-target mapping:
+   - e.g., gptel-tools-agent-prompt-build.el: 8 experiments
+   - staging-review: 3 experiments
+   
+2. Document hypothesis schema:
+   - Hypothesis: "Adding X will improve Y by Z%"
+   - Experiment: which file/run tested this
+   - Result: outcome (kept/discarded)
+   - Reasoning: why
 
-## Options to Proceed
+3. Add status column to Experiment Targets table:
+   - Not Started / In Progress / Complete / Blocked
+```
 
-**If you have experimental results:**
-Paste your findings here and I'll structure them into:
-- **Kept hypotheses** → evidence that supported retention
-- **Discarded hypotheses** → evidence that led to rejection
+## Questions to Consider
 
-**If you need a template:**
-I can provide a hypothesis framework for each target type:
-- LISP modules (prompt/workflow behavior)
-- Staging targets (review/merge/verification)
-- Research integration
+- What defines success for these experiments?
+- Is there a target date for hypothesis documentation?
+- Should discarded hypotheses be auto-archived or reviewed first?
 
-**If this is a system prompt:**
-Ensure experiment results are appended to this document before calling the distillation step.
-
----
-
-*What would you like to do?*
+Would you like me to propose a more detailed template or help populate the hypothesis tracking section?
