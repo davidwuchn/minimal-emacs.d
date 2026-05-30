@@ -997,9 +997,10 @@ Returns a compact lambda-notation string ready for the LLM."
          (axis-p (cdr (assoc 'axis-performance vars)))
          (frontier (cdr (assoc 'frontier-guidance vars)))
          (satur (cdr (assoc 'saturation-status vars)))
-         (fail-p (cdr (assoc 'failure-patterns vars)))
-         (div (cdr (assoc 'task-type-diversity vars)))
-         (cross (cdr (assoc 'cross-target-patterns vars)))
+          (fail-p (cdr (assoc 'failure-patterns vars)))
+          (onto-g (cdr (assoc 'ontology-guidance vars)))
+          (div (cdr (assoc 'task-type-diversity vars)))
+          (cross (cdr (assoc 'cross-target-patterns vars)))
          (strat-f (cdr (assoc 'strategy-frontier vars)))
          (agent-b (cdr (assoc 'agent-behavior vars)))
          (val-pipe (cdr (assoc 'validation-pipeline vars))))
@@ -1033,6 +1034,7 @@ Returns a compact lambda-notation string ready for the LLM."
      (if frontier (concat "FRONTIER: " frontier "\n") "")
      (if satur (concat "SATUR: " satur "\n") "")
      (if fail-p (concat "FAIL: " fail-p "\n") "")
+     (if onto-g (concat "CATEGORY: " onto-g "\n") "")
      (if div (concat "DIVERSITY: " div "\n") "")
      (if cross (concat "CROSS: " cross "\n") "")
      (if strat-f (concat "STRATEGY: " strat-f "\n") "")
@@ -1292,9 +1294,10 @@ Implements section-level A/B testing to identify effective prompt components."
               (axis-performance . ,(gptel-auto-experiment--format-axis-performance target))
               (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
               (saturation-status . ,(gptel-auto-experiment--frontier-saturation-guidance target))
-              (failure-patterns . ,(gptel-auto-experiment--format-failure-patterns target))
-              (task-type-diversity . ,(gptel-auto-experiment--format-task-type-diversity target))
-              (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
+               (failure-patterns . ,(gptel-auto-experiment--format-failure-patterns target))
+               (task-type-diversity . ,(gptel-auto-experiment--format-task-type-diversity target))
+               (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
+               (ontology-guidance . ,(gptel-auto-experiment--format-ontology-guidance target))
               (strategy-frontier . ,(if (fboundp 'gptel-auto-workflow--format-strategy-frontier)
                                         (gptel-auto-workflow--format-strategy-frontier)
                                       ""))
@@ -2690,6 +2693,22 @@ output, including <think> blocks.  Stores results in
                  (list :grader-output (substring grader-output 0 (min 500 (length grader-output)))
                        :criteria (nreverse criteria))
                  gptel-auto-experiment--grader-insights)))))
+
+(defun gptel-auto-experiment--format-ontology-guidance (target)
+  "Format ontology-based guidance for TARGET based on its category.
+Returns category-specific string with optimization priorities, or empty string."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let ((category (gptel-auto-workflow--categorize-target target)))
+      (pcase category
+        (:agentic
+         "agentic — tool dispatch, state management, async workflows\n  Focus: error recovery paths, tool call lifecycle, state cleanup\n  Avoid: removing error handlers, changing async callback contracts")
+        (:programming
+         "programming — algorithms, data flow, edge cases\n  Focus: performance optimization, edge case handling, code deduplication\n  Avoid: style-only changes, comment/doc additions, reindentation")
+        (:tool-calls
+         "tool-calls — sandbox execution, file operations\n  Focus: error handling robustness, tool dispatch safety, timeout handling\n  Avoid: changing tool argument schemas, removing safety guards")
+        (:natural-language
+         "natural-language — prompt templates, text processing, context management\n  Focus: prompt quality, context window efficiency, text pipeline edge cases\n  Avoid: changing prompt format, removing fallback text handlers")
+        (_ "")))))
 
 (defun gptel-auto-experiment--format-failure-patterns (target)
   "Format common failure patterns for TARGET as prompt guidance.

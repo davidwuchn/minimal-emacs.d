@@ -116,6 +116,7 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< Updated upstream
 
 
 
@@ -161,38 +162,75 @@ These targets may need different research patterns or the research findings were
 - **Hypotheses**: None kept or discarded
 
 **Distillate**: Early-phase, exploratory work on a single module with inconclusive or pre-hypothesis results. No validated or rejected theories yet—likely still in data collection or scoping mode.
+=======
+
+
+
+
+
+
+
+
+## Allium Behavioral Spec (auto-generated, v3)
+
+*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+
+```allium
+# Research Distillation
+
+The provided data appears to be a **template with no populated results**:
+
+| Field | Status |
+|-------|--------|
+| Research strategy | `template-default` |
+| Experiments | 34 across 8 targets |
+| Kept hypotheses | *(empty)* |
+| Discarded hypotheses | *(empty)* |
+
+**To distill this effectively, I need the actual hypothesis content** that was tested in those 34 experiments.
+
+Please provide:
+1. The hypotheses that were evaluated
+2. The outcomes/metrics from the experiments
+3. Which hypotheses were kept vs. discarded
+
+Once you share the actual hypothesis data, I can summarize patterns, learnings, and strategic insights.
 ```
 
 ### Check Issues
 
-This reads as a coherent early-phase research log, but it flags a **process gap** that you should address before continuing.
+# Analysis of Your Research Distillation Request
 
-### Quick Check
+I can see what you're showing me. Here's what's happening:
 
-| Field | Assessment |
-|-------|------------|
-| **Strategy** | `Template-default` is noted. Fine for scoping, but consider tagging when you switch to a targeted strategy (e.g., `dependency-analysis`, `api-design`). |
-| **Target** | Clear, single-file scope. Good. |
-| **Experiments** | 2 completed, but **no linkage to hypotheses**. This is the weak point. |
-| **Hypotheses** | Empty set is acceptable *only if* the experiments were purely observational (e.g., "read codebase," "trace load order"). If they were behavioral tests, you likely generated implicit hypotheses that weren't captured. |
-| **Distillate** | Accurate tone for pre-hypothesis work. |
+## What I Observe
 
-### Suggested Fix
+The table you shared shows a **meta-level summary** rather than actual research content:
 
-Add an **Observations** or **Raw Findings** field between Experiments and Hypotheses. Early-phase work usually produces *observations* before *hypotheses*. Your current template forces a binary (kept/discarded) that doesn't fit data-collection mode.
+| Issue | Details |
+|-------|---------|
+| **Strategy status** | `template-default` — indicates no custom strategy was applied |
+| **Experiment count** | 34 experiments across 8 targets — this is concrete |
+| **Hypothesis fields** | Both empty — the core content is missing |
 
-**Revised structure for this entry:**
+## What This Means
 
-```markdown
-**Research Summary**
-- **Strategy**: Template-default
-- **Target**: `lisp/modules/gptel-auto-workflow-projects.el`
-- **Experiments**: 2 completed
-  1. [Describe: e.g., "load-order tracing"]
-  2. [Describe: e.g., "command autoload audit"]
-- **Observations**: 
-  - [e.g., "Module loads after `gptel` but before project hooks fire"]
-  - [e.g., "No autoload cookies on interactive commands"]
-- **
+Someone (or some system) generated a **shell document** that describes the *structure* of research that *should* exist, but no one populated it with the actual hypotheses, results, or decisions.
 
-... (truncated)
+## What I Need to Help You
+
+If you want me to assist with research distillation, I'd need one of the following:
+
+1. **Raw experiment outputs** — The raw results from your 34 experiments
+2. **Hypothesis list** — The specific hypotheses that were tested
+3. **Previous distillation attempts** — If you've already tried summarizing and want me to refine it
+4. **Target descriptions** — What the 8 targets are and what you're researching
+
+## What I Can Do Once You Share Data
+
+- Identify patterns across experiments
+- Distinguish signal from noise
+- Extract actionable insights
+- Suggest next steps based on what worked
+
+**What would you like to share?**
