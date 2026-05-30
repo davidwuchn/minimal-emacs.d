@@ -2923,6 +2923,25 @@ Runs during the self-evolution cycle.  Results are stored in
 
       (when changes
         (message "[ontology-evolve] Updated %d category strategy preferences" (length changes)))
+      ;; Log convergence stats from refine cycle
+      (when (bound-and-true-p gptel-auto-experiment--refine-convergence-stats)
+        (let ((t-ref (plist-get gptel-auto-experiment--refine-convergence-stats :total))
+              (s-ref (plist-get gptel-auto-experiment--refine-convergence-stats :success))
+              (f-ref (plist-get gptel-auto-experiment--refine-convergence-stats :failure)))
+          (when (> t-ref 0)
+            (message "[ontology-evolve] 🔄 Refine convergence: %d/%d success (%.0f%%) — Palantir target: 94%%"
+                     s-ref t-ref (* 100 (/ (float s-ref) t-ref))))))
+      ;; Log target state cache (lightweight digital twin)
+      (when (and (bound-and-true-p gptel-auto-experiment--target-state-cache)
+                 (> (hash-table-count gptel-auto-experiment--target-state-cache) 0))
+        (let ((healthy 0) (broken 0))
+          (maphash (lambda (_t state)
+                     (if (and (plist-get state :byte-compiles)
+                              (plist-get state :syntax-ok))
+                         (cl-incf healthy)
+                       (cl-incf broken)))
+                   gptel-auto-experiment--target-state-cache)
+          (message "[ontology-evolve] 📊 Target state: %d healthy, %d broken" healthy broken)))
       (list :changes (length changes)
             :backend-changes backend-changes
             :saturated (length saturated)

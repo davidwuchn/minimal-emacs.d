@@ -59,6 +59,12 @@
 (defvar gptel-auto-workflow-use-staging)
 (defvar gptel-auto-experiment--in-retry)
 (defvar gptel-auto-experiment--in-refine)
+(defvar gptel-auto-experiment--refine-convergence-stats (list :total 0 :success 0 :failure 0)
+  "Convergence statistics for the Generate→Validate→Refine cycle.
+Updated by the refine loop, consumed by the evolution cycle.")
+(defvar gptel-auto-experiment--target-state-cache (make-hash-table :test 'equal)
+  "Cache of target file state before experiments: (:byte-compiles :syntax-ok).
+Checked before each run to detect pre-existing breakage.")
 (defvar gptel-auto-experiment-active-grace)
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
 (defvar gptel-auto-workflow--rate-limited-backends)
@@ -141,9 +147,26 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                  (ignore-errors
                                    (gptel-auto-workflow--get-worktree-buffer
                                     experiment-worktree))))
-         (experiment-branch (or (gptel-auto-workflow--get-current-branch target)
-                                (gptel-auto-workflow--branch-name target experiment-id)))
-         ;; CRITICAL: Set default-directory to worktree so all subagents
+          (experiment-branch (or (gptel-auto-workflow--get-current-branch target)
+                                 (gptel-auto-workflow--branch-name target experiment-id)))
+          ;; Track target state before experiment (lightweight digital twin)
+          (_target-state
+           (when target
+             (let* ((source (expand-file-name target (or worktree default-directory)))
+                    (byte-compiles (when (file-exists-p source)
+                                    (zerop (call-process "emacs" nil nil nil
+                                                         "--batch" "-Q"
+                                                         "-f" "batch-byte-compile"
+                                                         source))))
+                    (syntax-ok (when (file-exists-p source)
+                                 (with-temp-buffer
+                                   (ignore-errors (insert-file-contents source))
+                                   (zerop (call-process "emacs" nil nil nil
+                                                        "--batch" "--eval"
+                                                        "(check-parens)"))))))
+               (puthash target (list :byte-compiles byte-compiles :syntax-ok syntax-ok)
+                        gptel-auto-experiment--target-state-cache))))
+          ;; CRITICAL: Set default-directory to worktree so all subagents
          ;; operate in the correct context. Each worktree = one session.
          (default-directory experiment-worktree)
          (log-fn (or log-fn #'gptel-auto-experiment-log-tsv))
@@ -1206,6 +1229,12 @@ Called when the grader passed but the benchmark/validation failed."
      (lambda (agent-output)
        (if (gptel-auto-experiment--agent-error-p agent-output)
            (progn
+             (setq gptel-auto-experiment--refine-convergence-stats
+                   (plist-put gptel-auto-experiment--refine-convergence-stats :total
+                              (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
+             (setq gptel-auto-experiment--refine-convergence-stats
+                   (plist-put gptel-auto-experiment--refine-convergence-stats :failure
+                              (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :failure))))
              (message "[auto-experiment] ✗ Refine agent error")
              (let ((default-directory experiment-worktree))
                (magit-git-success "checkout" "--" "."))
@@ -1215,6 +1244,12 @@ Called when the grader passed but the benchmark/validation failed."
           (lambda (refine-grade)
             (if (not (plist-get refine-grade :passed))
                 (progn
+                  (setq gptel-auto-experiment--refine-convergence-stats
+                        (plist-put gptel-auto-experiment--refine-convergence-stats :total
+                                   (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
+                  (setq gptel-auto-experiment--refine-convergence-stats
+                        (plist-put gptel-auto-experiment--refine-convergence-stats :failure
+                                   (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :failure))))
                   (message "[auto-experiment] ✗ Refine grade failed")
                   (let ((default-directory experiment-worktree))
                     (magit-git-success "checkout" "--" "."))
@@ -1223,6 +1258,12 @@ Called when the grader passed but the benchmark/validation failed."
                      (bench (gptel-auto-experiment-benchmark t hypothesis)))
                 (if (not (plist-get bench :passed))
                     (progn
+                      (setq gptel-auto-experiment--refine-convergence-stats
+                            (plist-put gptel-auto-experiment--refine-convergence-stats :total
+                                       (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
+                      (setq gptel-auto-experiment--refine-convergence-stats
+                            (plist-put gptel-auto-experiment--refine-convergence-stats :failure
+                                       (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :failure))))
                       (message "[auto-experiment] ✗ Refine benchmark still failed")
                       (let ((default-directory experiment-worktree))
                         (magit-git-success "checkout" "--" "."))
@@ -1249,6 +1290,12 @@ Called when the grader passed but the benchmark/validation failed."
                                 :agent-output agent-output
                                 :backend actual-backend :model actual-model
                                 :strategy strategy-name)))
+                    (setq gptel-auto-experiment--refine-convergence-stats
+                          (plist-put gptel-auto-experiment--refine-convergence-stats :total
+                                     (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
+                    (setq gptel-auto-experiment--refine-convergence-stats
+                          (plist-put gptel-auto-experiment--refine-convergence-stats :success
+                                     (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :success))))
                     (message "[auto-experiment] ✓ Refine passed (score=%s)" effective-score)
                     (funcall callback (list :refined t :exp-result exp-result
                                            :effective-score effective-score
