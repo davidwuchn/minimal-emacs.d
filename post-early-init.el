@@ -264,11 +264,14 @@ daemons share the same config directory."
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; Fix: prevent Wrong type argument: stringp, nil in headless daemons
 ;; ═══════════════════════════════════════════════════════════════════════════
-;; The error occurs when doom-modeline-mode renders its custom mode-line
-;; format in a daemon with no display (no font for nerd-icons glyphs).
-;; Disable doom-modeline-mode entirely for workflow daemons.
+;; The error occurs when some mode-line or font rendering code runs during
+;; init in a daemon with no display. Override format-mode-line to return
+;; empty string for headless daemons, preventing the C-level error.
 (when (my/workflow-daemon-p)
-  (setq-default mode-line-format nil)
+  (setq-default mode-line-format nil
+                mode-line-mode-menu nil)
+  (advice-add 'format-mode-line :override
+              (lambda (&rest _) ""))
   (with-eval-after-load 'doom-modeline
     (setq doom-modeline-icon nil
           doom-modeline-major-mode-icon nil
