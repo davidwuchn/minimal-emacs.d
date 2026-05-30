@@ -60,65 +60,87 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+The provided template is **empty/incomplete** — no actual hypotheses are listed under either "Kept" or "Discarded."
 
-**81 experiments** evaluated across 12 targets (lisp modules + test/staging scopes).
+**What's needed to distill:**
 
-## All Hypotheses Discarded
+- The specific hypotheses tested in the 5 experiments
+- Outcomes/results for each
 
-The 7 discarded hypotheses share a pattern: they describe **incremental refactorings** targeting two quality dimensions (fractal Clarity, φ Vitality) but failed to yield measurable improvements:
+**Summary so far:**
 
-| Category | Examples |
-|----------|----------|
-| **Idiomatic replacement** | `cl-letf`+`symbol-function` → `cl-labels` |
-| **Dead code removal** | Unreachable `hash-table-p` guard |
-| **Pattern extraction** | Common traversal → `my/gptel--fsm-for-each` helper |
-| **Separation of concerns** | Extract trace parsing from collection loop |
-| **Redundant operation elimination** | Skip unnecessary `puthash` calls |
-| **Bug fixes** | `copy-sequence` → `copy-tree` for shared structure safety |
-| **Defensive guards** | Adding `listp` guard for malformed inputs |
+- Strategy: `template-default`
+- Scope: 2 files across 5 experiments
+- No evaluated hypotheses present
 
-**Bottom line:** No actionable refactorings emerged from this experiment batch. The codebase appears already aligned with these patterns, or the proposed changes lack measurable impact on the target quality dimensions.
+Please provide the actual hypothesis content and results if you'd like a meaningful distillation.
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Distillation
+# Verification Complete
 
-**Verdict: Methodologically sound, but conclusion warrants scrutiny.**
+You're correct. Based on the provided information:
 
-## What Works
+| Aspect | Status |
+|--------|--------|
+| **Hypotheses Listed** | ❌ None found |
+| **Kept Hypotheses** | Empty |
+| **Discarded Hypotheses** | Empty |
+| **Experiment Results** | Not provided |
+| **Scope** | 5 experiments (2 files) |
 
-- Clear hypothesis-outcome mapping
-- Diverse failure categories (confirms patterns weren't overlooked)
-- Numeric specificity (81 × 12) adds credibility
-- Honest null result
+## What This Means
 
-## Potential Concerns
+The distillation cannot proceed because:
 
-| Issue | Implication |
-|-------|-------------|
-| **7 hypotheses / 12 targets** | Uneven coverage—some targets may have been under-explored |
-| **Quality dimensions not defined** | "Fractal Clarity" and "φ Vitality" aren't standard metrics—hard to validate they were correctly targeted |
-| **No baseline measurement** | Did you confirm these codebases *had* problems in those dimensions before trying to fix them? |
+1. **No hypothesis content exists** to categorize as "kept" or "discarded"
+2. **No experimental outcomes** are recorded
+3. **No results** are available to analyze
 
-## Likely Interpretations
+## Next Steps
 
-1. **Codebase already optimized** — plausible for mature lisp codebases (often already idiomatic)
-2. **Wrong quality dimensions** — maybe Clarity and Vitality aren't what matters; try **maintainability**, **performance**, or **testability**
-3. **Measurement noise** — if these dimensions are hard to operationalize, you may be detecting no signal because there is no signal *to* detect
+If you want a meaningful distillation, please provide:
 
-## Suggested Next Steps
+- The specific hypotheses tested in each of the 5 experiments
+- The outcomes/results for each experiment
+- Which hypotheses were supported vs. rejected
 
-- **Invert the experiment**: Find the *worst* code and confirm your metrics catch it (constructive validation)
-- **Broaden dimensions**: Add conventional metrics (cyclomatic complexity, coupling, etc.)
-- **Check effect size**: Maybe refactorings helped slightly but below measurement threshold
-
-The summary is honest and reproducible.
-
-... (truncated)
+Once that content is available, I can help distill it into a coherent summary.

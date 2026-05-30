@@ -17,6 +17,7 @@ total-kept: 0
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
+<<<<<<< Updated upstream
 | `lisp/modules/gptel-auto-workflow-research-integration.el` | 0% | 2 | 0 | ⏳ Insufficient data |
 | `staging-verification` | 0% | 2 | 0 | ⏳ Insufficient data |
 | `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 10 | 0 | ❌ Plateaued |
@@ -24,6 +25,10 @@ total-kept: 0
 | `staging-merge` | 0% | 1 | 0 | ⏳ Insufficient data |
 | `staging-review` | 0% | 1 | 0 | ⏳ Insufficient data |
 | `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 2 | 0 | ⏳ Insufficient data |
+=======
+| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 4 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 1 | 0 | ⏳ Insufficient data |
+>>>>>>> Stashed changes
 
 ## 🧬 Meta-Learned Patterns
 
@@ -56,10 +61,15 @@ total-kept: 0
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
+<<<<<<< Updated upstream
 - **other** (16×): Investigate root cause
 - **timeout** (4×): Add smaller batch sizes or chunked processing
 - **test-failure** (2×): Run tests before committing experiments
 - **validation-failed** (2×): Improve pre-grade validation prompts
+=======
+- **validation-failed** (3×): Improve pre-grade validation prompts
+- **other** (2×): Investigate root cause
+>>>>>>> Stashed changes
 
 ## Success Patterns
 
@@ -104,4 +114,8 @@ var/elpa/**
 
 ---
 
+<<<<<<< Updated upstream
 *This directive was auto-generated from 870 experiments (0 kept locally across 24 local records). It evolves every self-evolution cycle.*
+=======
+*This directive was auto-generated from 870 experiments (0 kept locally across 5 local records). It evolves every self-evolution cycle.*
+>>>>>>> Stashed changes
