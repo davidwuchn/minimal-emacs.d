@@ -1003,16 +1003,39 @@ in unrelated test files are not affected by side effects."
 
 (defun gptel-auto-workflow--winning-strategy-for-target (target)
   "Find the strategy that produced a 'kept result for TARGET.
-Returns strategy name string or nil.  Checks TSV results."
+First tries exact target match, then falls back to category-level
+recommendation (ontology→researcher bridge).
+Returns strategy name string or nil."
   (when (fboundp 'gptel-auto-workflow--parse-all-results)
-    (let ((results (gptel-auto-workflow--parse-all-results)))
+    (let ((results (gptel-auto-workflow--parse-all-results))
+          (category (and (fboundp 'gptel-auto-workflow--categorize-target)
+                         (gptel-auto-workflow--categorize-target target))))
+      ;; Phase 1: exact target match
       (catch 'found
         (dolist (r results)
           (when (and (equal (plist-get r :target) target)
                      (equal (plist-get r :decision) "kept")
                      (plist-get r :strategy))
             (throw 'found (plist-get r :strategy))))
-        nil))))
+        ;; Phase 2: category-level fallback (ontology→researcher bridge)
+        ;; Exclude the current target to avoid self-matching
+        (when category
+          (let ((cat-strats (make-hash-table :test 'equal)))
+            (dolist (r results)
+              (when (and (not (equal (plist-get r :target) target))
+                         (equal (plist-get r :decision) "kept")
+                         (plist-get r :strategy)
+                         (eq (gptel-auto-workflow--categorize-target
+                              (plist-get r :target)) category))
+                (let ((strat (plist-get r :strategy)))
+                  (puthash strat (1+ (gethash strat cat-strats 0)) cat-strats))))
+            ;; Return most frequently kept strategy for this category
+            (let ((best nil) (best-count 0))
+              (maphash (lambda (strat count)
+                         (when (> count best-count)
+                           (setq best strat best-count count)))
+                       cat-strats)
+              best)))))))
 
 (defun gptel-auto-workflow--semantic-cluster-targets (&optional min-score)
   "Group kept targets with their semantically similar files.
@@ -2783,6 +2806,54 @@ before the executor runs, not just listed in the prompt."
                     (_ nil))))))
       result)))
 
+;; ─── Researcher→Ontology Bridge ───
+;; The researcher discovers patterns that should refine the ontology.
+;; This function surfaces category boundary mismatches from experiment data.
+
+(defun gptel-auto-workflow--detect-category-drift ()
+  "Check if any targets behave differently from their ontology category.
+Compares each target's keep-rate against its category average.
+A target that significantly outperforms/underperforms its category
+average may be misclassified.
+Returns alist of (target . (category . delta)) for drifts > 20%."
+  (when (fboundp 'gptel-auto-workflow--parse-all-results)
+    (let* ((results (gptel-auto-workflow--parse-all-results))
+           (cat-stats (make-hash-table :test 'equal))
+           (target-stats (make-hash-table :test 'equal))
+           (drifts nil))
+      ;; Aggregate category-level and target-level keep-rates
+      (dolist (r results)
+        (let* ((r-target (plist-get r :target))
+               (r-decision (plist-get r :decision))
+               (r-kept (equal r-decision "kept"))
+               (category (and r-target (fboundp 'gptel-auto-workflow--categorize-target)
+                              (gptel-auto-workflow--categorize-target r-target))))
+          (when category
+            (let ((c-entry (gethash category cat-stats (list :kept 0 :total 0))))
+              (setq c-entry (plist-put c-entry :kept (+ (plist-get c-entry :kept) (if r-kept 1 0))))
+              (setq c-entry (plist-put c-entry :total (1+ (plist-get c-entry :total))))
+              (puthash category c-entry cat-stats))
+            (let ((t-entry (gethash r-target target-stats (list :kept 0 :total 0))))
+              (setq t-entry (plist-put t-entry :kept (+ (plist-get t-entry :kept) (if r-kept 1 0))))
+              (setq t-entry (plist-put t-entry :total (1+ (plist-get t-entry :total))))
+              (puthash r-target t-entry target-stats)))))
+      ;; Compare each target against its category average
+      (maphash
+       (lambda (target t-stats)
+         (let* ((category (and target (gptel-auto-workflow--categorize-target target)))
+                (c-stats (gethash category cat-stats))
+                (t-total (plist-get t-stats :total))
+                (c-total (plist-get c-stats :total))
+                (t-rate (if (> t-total 0) (/ (float (plist-get t-stats :kept)) t-total) 0))
+                (c-rate (if (> c-total 0) (/ (float (plist-get c-stats :kept)) c-total) 0))
+                (delta (- t-rate c-rate)))
+           (when (and (>= t-total 5) (> (abs delta) 0.2))
+             (push (list target category delta) drifts)
+             (message "[ontology-drift] ⚠ %s (%s) keep-rate %.0f%% vs category %.0f%% (Δ%+.0f%%) — possible misclassification"
+                      (file-name-nondirectory target) category (* 100 t-rate) (* 100 c-rate) (* 100 delta)))))
+       target-stats)
+      drifts)))
+
 ;; ─── Ontology Self-Evolution ───
 
 (defvar gptel-auto-workflow--category-strategy-preferences nil
@@ -2955,6 +3026,13 @@ Runs during the self-evolution cycle.  Results are stored in
                      total-dispatch (length pairs))
             (dolist (pair (seq-take (sort pairs (lambda (a b) (> (cdr a) (cdr b)))) 5))
               (message "[ontology-evolve]     %s: %d×" (car pair) (cdr pair))))))
+      ;; Log category drift detection (researcher→ontology bridge)
+      (condition-case nil
+          (let ((drifts (gptel-auto-workflow--detect-category-drift)))
+            (when drifts
+              (message "[ontology-evolve] 📐 %d targets show category drift (Δ > 20%% from category average)"
+                       (length drifts))))
+        (error nil))
       (list :changes (length changes)
             :backend-changes backend-changes
             :saturated (length saturated)

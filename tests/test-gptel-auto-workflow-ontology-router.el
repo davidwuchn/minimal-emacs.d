@@ -423,7 +423,9 @@ Guards against missing runtime dependencies (worktree-base-root)."
                        (gptel-auto-workflow--winning-strategy-for-target "a.el")))
       (should (string= "complexity-compression"
                        (gptel-auto-workflow--winning-strategy-for-target "b.el")))
-      (should-not (gptel-auto-workflow--winning-strategy-for-target "c.el")))))
+      ;; c.el has no exact match, but ontology falls back to category-level
+      ;; recommendation from other targets in the same category
+      (should (gptel-auto-workflow--winning-strategy-for-target "c.el")))))
 
 (ert-deftest tdd/semantic-cluster/cluster-grouping ()
   "semantic-cluster-targets groups kept targets with similar files."
