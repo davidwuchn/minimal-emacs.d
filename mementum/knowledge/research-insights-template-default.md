@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.7/10
+insight-quality: 0.5/10
 allium-issues: 0
 allium-severity: 0.00
 allium-status: coherent
@@ -11,41 +11,37 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 197 experiments (7% keep rate).*
+*Consolidated from 92 experiments (5% keep rate).*
 
-**Performance:** 14 kept / 31 discarded / 19 failed (EXTRACTED — from TSV)
+**Performance:** 5 kept / 14 discarded / 6 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-benchmark-evolution.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-ext-tool-permits.el` (4 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-mementum.el` (1 kept / 1 discarded / 1 failed)
 - `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 1 discarded)
-- `lisp/modules/gptel-benchmark-integrate.el` (1 kept / 1 discarded)
-- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
-- `lisp/modules/gptel-ext-core.el` (2 kept / 1 discarded / 1 failed)
-- `lisp/modules/gptel-tools-agent-validation.el` (2 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-ext-context.el` (1 kept / 1 discarded)
+- `lisp/modules/gptel-tools-agent.el` (1 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (1 kept / 2 discarded)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-benchmark-evolution-cycle, gptel-benchmark-evolution-observe, gptel-benchmark-evolution--deficient-p, gptel-benchmark-evolution-orient, gptel-benchmark-evolution-decide, gptel-benchmark-evolution-act, gptel-benchmark-evolution-mutate, gptel-benchmark-evolution-feed-forward, gptel-benchmark-evolution-check-capabilities, gptel-benchmark-evolution-emergence-rate, gptel-benchmark-evolution-track-correction, gptel-benchmark-evolution-status-report, gptel-benchmark-evolution-check-complete, gptel-benchmark-detect-anti-patterns, gptel-benchmark-apply-anti-pattern-remedy, gptel-benchmark-evolution-balance, gptel-benchmark-evolution-pathway, gptel-benchmark-evolution-next-capability, gptel-benchmark-evolution-discover, gptel-benchmark-evolution-self-improve
-defvars: gptel-benchmark-evolution-cycle-threshold, gptel-benchmark-evolution-state
-requires: cl-lib, gptel-benchmark-core, gptel-benchmark-principles, gptel-benchmark-memory
-provides: gptel-benchmark-evolution
-errors: error
-handlers: err
+defuns: gptel-benchmark--cache-get, gptel-benchmark--require-valid-string, gptel-benchmark--require-valid-name, gptel-benchmark--require-valid-version, gptel-benchmark--cache-put, gptel-benchmark--clear-result-cache, gptel-benchmark-compare-file-versions, gptel-benchmark-baseline-file-compare, gptel-benchmark--get-trend-summary, gptel-benchmark-version-trend, gptel-benchmark-compare-summaries, gptel-benchmark-load-result, gptel-benchmark--read-version-file, gptel-benchmark-current-version, gptel-benchmark-baseline-version, gptel-benchmark-get-file, gptel-benchmark--scan-versions-from-dir, gptel-benchmark-get-all-versions
+defvars: gptel-benchmark-result-cache
+requires: json, cl-lib, gptel-benchmark-core
+provides: gptel-benchmark-comparator
+declares: cl-last
+errors: Signal, error, signal, Signal, Signal, signal, signal, signal, signal, signal, signal, signal, signal, signal, signal, signal, signal
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (5 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (5 failed)
-- `lisp/modules/gptel-ext-context.el` (1 failed)
-- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-research-benchmark.el` (2 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (1 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 discarded / 1 failed)
+- `lisp/modules/gptel-ext-retry.el` (2 failed)
+- `lisp/modules/gptel-tools-agent.el` (1 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-ext-fsm-utils.el` (4 discarded / 1 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -56,6 +52,11 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< HEAD
+=======
+<<<<<<< Updated upstream
+=======
+>>>>>>> 55fe9820 (◈ Merge auto-evolved pipeline files)
 
 
 
@@ -76,13 +77,30 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< HEAD
+=======
+
+
+
+
+
+
+
+
+>>>>>>> Stashed changes
+>>>>>>> 55fe9820 (◈ Merge auto-evolved pipeline files)
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
 <think>
+<<<<<<< HEAD
 The user is asking me to distill something, but the content is very sparse. Let me analyze what's provided:
+=======
+<<<<<<< Updated upstream
+The user wants me to distill a research strategy. Looking at the pattern, it seems like they want a concise format capturing:
+>>>>>>> 55fe9820 (◈ Merge auto-evolved pipeline files)
 
 - Research strategy: template-default
 - 4 experiments across targets
@@ -105,6 +123,7 @@ I should provide a helpful distillation template or ask what specific experiment
 
 ### Check Issues
 
+<<<<<<< HEAD
 # Research Distillation Framework
 
 Your template needs content. Here's a structured approach:
@@ -138,3 +157,48 @@ Your template needs content. Here's a structured approach:
 - What didn't work
 
 And I'll format it according to your template structure.
+=======
+``` markdown
+- **Research Strategy:** template-default
+- **Experiments:** 3 experiments across targets
+- **Targets:** lisp/modules/gptel-auto-workflow-projects.el
+- **Hypotheses:**
+  - Kept: (none)
+  - Discarded: (none)
+```
+=======
+The user wants me to distill a research strategy document that contains many hypotheses - some kept and some discarded - about various improvements to a codebase. Let me analyze the structure:
+
+1. **Research strategy: template-default** - This is the methodology used
+2. **92 experiments across targets** - A list of ~20 files that were targeted
+3. **Kept hypotheses** - Several bullet points about improvements to keep
+4. **Discarded hypotheses** - Several bullet points about improvements that were rejected
+
+The task is to "distill" this, which means I should:
+1. Identify the core themes and patterns
+2. Summarize the key findings/approaches
+3. Remove redundancy
+4. Present a cleaner, more condensed version
+
+Let me identify the themes across both kept and discarded hypotheses:
+
+**Kept hypotheses themes:**
+1. Input validation (nil checks, type checks like `stringp`, `proper-list-p`)
+2. Caching improvements (negative caching, memoization)
+3. Error handling robustness
+4. Performance optimizations
+5. Safety improvements
+
+**Discarded hypotheses themes:**
+1. Error message formatting
+2. Hash table operations
+3. FSM (Finite State Machine) operations
+4. Caching strategies
+5. Module path handling
+
+Let me distill this into a concise summary.
+</think>
+```
+
+>>>>>>> Stashed changes
+>>>>>>> 55fe9820 (◈ Merge auto-evolved pipeline files)

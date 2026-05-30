@@ -1746,32 +1746,35 @@ EDGE CASE: nil returns nil, non-list atoms return nil."
 (defun gptel-auto-workflow--handle-analyzer-error-state (targets static-targets callback)
   "Handle analyzer error states and invoke CALLBACK with appropriate targets.
 TARGETS is the analyzer result, STATIC-TARGETS is fallback list.
-CALLBACK must be a function; ASSUMPTION: caller validates this.
+CALLBACK must be a function; guarded with fallback on invalid input.
 BEHAVIOR: Returns non-nil if error state was handled.
 EDGE CASE: Non-nil but malformed targets (improper list, atom) caught before downstream crash."
-  (unless (functionp callback)
-    (message "[auto-workflow] Error state handler: callback is not a function (%S)" callback)
-    (setq callback (lambda (x) (message "[auto-workflow] Dropped result: %S" x))))
-  (cond
-   ((and gptel-auto-workflow--analyzer-quota-exhausted
-         (not targets))
-    (message "[auto-workflow] Analyzer quota exhausted; using static targets")
-    (funcall callback static-targets)
-    t)
-   ((and gptel-auto-workflow--analyzer-transient-failure
-         (not targets))
-    (message "[auto-workflow] Analyzer transient failure; using static targets")
-    (funcall callback static-targets)
-    t)
-   ((not targets)
-    (message "[auto-workflow] Analyzer returned no targets; using static targets")
-    (funcall callback static-targets)
-    t)
-   ((not (proper-list-p targets))
-    (message "[auto-workflow] Analyzer returned malformed targets (%S); using static targets" targets)
-    (funcall callback static-targets)
-    t)
-   (t nil)))
+  (cl-block gptel-auto-workflow--handle-analyzer-error-state
+    ;; Guard: validate callback, use no-op fallback if invalid
+    (unless (functionp callback)
+      (message "[auto-workflow] Error state handler: callback is not a function (%S)" callback)
+      (setq callback (lambda (x) (message "[auto-workflow] Dropped result: %S" x))))
+    ;; Check error conditions in priority order; return t after invoking callback
+    (cond
+     ((and gptel-auto-workflow--analyzer-quota-exhausted
+           (not targets))
+      (message "[auto-workflow] Analyzer quota exhausted; using static targets")
+      (funcall callback static-targets)
+      (cl-return-from gptel-auto-workflow--handle-analyzer-error-state t))
+     ((and gptel-auto-workflow--analyzer-transient-failure
+           (not targets))
+      (message "[auto-workflow] Analyzer transient failure; using static targets")
+      (funcall callback static-targets)
+      (cl-return-from gptel-auto-workflow--handle-analyzer-error-state t))
+     ((not targets)
+      (message "[auto-workflow] Analyzer returned no targets; using static targets")
+      (funcall callback static-targets)
+      (cl-return-from gptel-auto-workflow--handle-analyzer-error-state t))
+     ((not (proper-list-p targets))
+      (message "[auto-workflow] Analyzer returned malformed targets (%S); using static targets" targets)
+      (funcall callback static-targets)
+      (cl-return-from gptel-auto-workflow--handle-analyzer-error-state t))
+     (t nil))))
 
 (defun gptel-auto-workflow--normalize-target-candidate (candidate)
   "Normalize parsed target CANDIDATE to a repo-relative path when possible."
