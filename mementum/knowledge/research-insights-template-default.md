@@ -3,14 +3,20 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
+<<<<<<< HEAD
 insight-quality: 1.0/10
 allium-issues: 0
+=======
+insight-quality: 0.6/10
+allium-issues: 3
+>>>>>>> 0a830f3a (◈ Merge auto-evolved pipeline files)
 allium-severity: 0.00
-allium-status: coherent
+allium-status: ok
 ---
 
 # Research Strategy: template-default
 
+<<<<<<< HEAD
 *Consolidated from 201 experiments (10% keep rate).*
 
 **Performance:** 20 kept / 48 discarded / 12 failed (EXTRACTED — from TSV)
@@ -27,10 +33,23 @@ allium-status: coherent
 - `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 2 discarded / 5 failed)
 - `lisp/modules/gptel-benchmark-principles.el` (2 kept / 1 discarded)
 - `lisp/modules/gptel-tools-agent-staging-baseline.el` (1 kept / 3 discarded)
+=======
+*Consolidated from 86 experiments (6% keep rate).*
+
+**Performance:** 5 kept / 14 discarded / 4 failed (EXTRACTED — from TSV)
+
+## Successful Targets
+
+- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 1 discarded)
+- `lisp/modules/gptel-ext-context.el` (1 kept / 1 discarded)
+- `lisp/modules/gptel-tools-agent.el` (1 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (1 kept / 2 discarded)
+>>>>>>> 0a830f3a (◈ Merge auto-evolved pipeline files)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
+<<<<<<< HEAD
 defuns: gptel-auto-workflow--knowledge-cache-get, gptel-auto-workflow--knowledge-cache-set, gptel-auto-workflow--knowledge-cache-invalidate, gptel-auto-workflow--knowledge-cache-stats, gptel-auto-workflow--load-token-efficiency-data, gptel-auto-workflow--adapt-prompt-compression, gptel-auto-experiment--prompt-structure-score, gptel-auto-experiment--kibcm-axis, gptel-auto-experiment--forge-fixed-point, gptel-auto-experiment--compile-score, gptel-auto-experiment--decompile-score, gptel-auto-experiment--nucleus-compiler-prompt, gptel-auto-experiment--forge-lambda-fixed-point, gptel-auto-experiment--edn-richness-score, gptel-auto-experiment--count-edn-elements, gptel-auto-experiment--use-lambda-prompts-p, gptel-auto-experiment--lambda-compress-prompt, gptel-auto-experiment--resolve-prompt, gptel-auto-experiment--allium-compiler-prompt, gptel-auto-experiment--allium-distill
 defvars: gptel-auto-workflow--skills), gptel-auto-experiment-large-target-byte-threshold), gptel-auto-workflow--last-prompt-sections), gptel-auto-workflow--current-research-context), gptel-auto-experiment-time-budget), gptel-auto-workflow-use-staging), gptel-auto-workflow--running), gptel-auto-workflow--stats), gptel-auto-experiment-validation-retry-active-grace), gptel-auto-workflow--legacy-validation-retry-active-grace), gptel-auto-workflow--current-validation-retry-active-grace), my/gptel-subagent-stream), gptel-auto-workflow--knowledge-cache, gptel-auto-workflow--knowledge-cache-max-age, gptel-auto-workflow--topic-knowledge-max-chars, gptel-auto-experiment--lambda-verified-backends, gptel-auto-experiment--allium-research-cache, gptel-auto-workflow--ab-test-sections, gptel-auto-workflow--ab-test-omit-rate, gptel-auto-workflow--ab-test-min-samples
 requires: cl-lib, seq, subr-x, gptel-auto-workflow-strategic
@@ -38,17 +57,29 @@ provides: gptel-tools-agent-prompt-build
 declares: gptel-agent-read-file, gptel-auto-workflow--valid-strategy-name-p, gptel-auto-workflow-load-research-findings, gptel-benchmark--detect-task-type, my/gptel-get-model-metadata, gptel-auto-workflow--current-run-id, gptel-auto-workflow--ensure-results-file, gptel-auto-workflow--make-idempotent-callback, gptel-auto-workflow--non-empty-string-p, gptel-auto-workflow--plist-get, gptel-auto-workflow--results-file-path, gptel-auto-workflow--worktree-base-root, gptel-auto-experiment--eight-keys-scores, gptel-auto-workflow--project-root, gptel-auto-workflow--persist-status, my/gptel--sanitize-for-logging, gptel-auto-workflow--extract-mutation-templates, gptel-auto-workflow--format-weakest-keys, gptel-auto-workflow-skill-suggest-hypothesis, gptel-auto-experiment--inspection-thrash-result-p
 errors: Error, error, error, error, error, Error, signal, signal, error, error
 handlers: nil, nil, err, err, err, err, err, err, nil
+=======
+defuns: gptel-benchmark--cache-get, gptel-benchmark--require-valid-string, gptel-benchmark--require-valid-name, gptel-benchmark--require-valid-version, gptel-benchmark--cache-put, gptel-benchmark--clear-result-cache, gptel-benchmark-compare-file-versions, gptel-benchmark-baseline-file-compare, gptel-benchmark--get-trend-summary, gptel-benchmark-version-trend, gptel-benchmark-compare-summaries, gptel-benchmark-load-result, gptel-benchmark--read-version-file, gptel-benchmark-current-version, gptel-benchmark-baseline-version, gptel-benchmark-get-file, gptel-benchmark--scan-versions-from-dir, gptel-benchmark-get-all-versions
+defvars: gptel-benchmark-result-cache
+requires: json, cl-lib, gptel-benchmark-core
+provides: gptel-benchmark-comparator
+declares: cl-last
+errors: Signal, error, signal, Signal, Signal, signal, signal, signal, signal, signal, signal, signal, signal, signal, signal, signal, signal
+>>>>>>> 0a830f3a (◈ Merge auto-evolved pipeline files)
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-strategic.el` (1 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-evolution.el` (1 failed)
-- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 1 discarded / 2 failed)
-- `lisp/modules/gptel-benchmark-core.el` (5 kept / 7 discarded / 2 failed)
-- `lisp/modules/gptel-tools-agent-subagent.el` (1 failed)
+- `lisp/modules/gptel-ext-retry.el` (2 failed)
+- `lisp/modules/gptel-tools-agent.el` (1 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-ext-fsm-utils.el` (4 discarded / 1 failed)
+
+## Allium Behavioral Coherence
+
+*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+
+
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -71,6 +102,7 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< HEAD
 
 
 
@@ -83,11 +115,14 @@ These targets may need different research patterns or the research findings were
 
 
 
+=======
+>>>>>>> 0a830f3a (◈ Merge auto-evolved pipeline files)
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
+<<<<<<< HEAD
 **Distillation of 201 template-default experiments across ~30 Lisp modules**
 
 ### Bottom Line
@@ -145,10 +180,18 @@ The experiments surfaced a **robustness crisis, not a performance crisis**. The 
 |------|---------|
 | **Vitality (Error R
 -- ... truncated ...
+=======
+We need to "distill" the given content. Likely produce a concise summary of the research strategy, experiments, kept hypotheses, discarded hypotheses. Probably produce bullet points, categories, key takeaways. Use the template-default. So output a distilled version: list of experiments, main hypotheses kept, key improvements, etc. Should be concise but thorough.
+
+Let's craft: Title, Overview, Experiments (list), Kept hypotheses (grouped by area: Vitality, Performance, Safety, Clarity, Error Handling), Discarded hypotheses (brief). Provide actionable insights.
+
+
+>>>>>>> 0a830f3a (◈ Merge auto-evolved pipeline files)
 ```
 
 ### Check Issues
 
+<<<<<<< HEAD
 **Verdict: Technically sound and well-framed.** The distillation is sharp, internally consistent, and the “robustness crisis, not performance crisis” conclusion is strongly supported by the evidence you presented. A few minor technical notes and one likely inaccuracy to address before this is finalized:
 
 ---
@@ -171,3 +214,6 @@ This is a high-severity silent bug—exactly the kind of thing that makes baseli
 A genuine structural/load-order bug. M
 
 ... (truncated)
+=======
+I’m happy to help distill the material, but I’ll need the content you’d like summarized. Could you please paste the research strategy, experiment notes, hypotheses, or any other relevant text you want condensed? Once I have it, I’ll provide a concise, organized summary following the template you described.
+>>>>>>> 0a830f3a (◈ Merge auto-evolved pipeline files)
