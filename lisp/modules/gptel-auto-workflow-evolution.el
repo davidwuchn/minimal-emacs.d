@@ -162,10 +162,16 @@ Uses cached value from load time, or detects from current directory."
 
 ;; ─── Benchmark Parsing ───
 
+(defvar gptel-auto-workflow--results-cache nil
+  "Cached result of `gptel-auto-workflow--parse-all-results'.
+Reset to nil at evolution cycle start.")
+
 (defun gptel-auto-workflow--parse-all-results (&optional max-age-days)
   "Parse historical results.tsv files into a list of experiment records.
-Optional MAX-AGE-DAYS limits to runs within that many days (default: all)."
-  (let* ((results-dir (expand-file-name "var/tmp/experiments"
+Optional MAX-AGE-DAYS limits to runs within that many days (default: all).
+Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
+  (or (and (not max-age-days) gptel-auto-workflow--results-cache)
+      (let* ((results-dir (expand-file-name "var/tmp/experiments"
                                          (gptel-auto-workflow--worktree-base-root)))
          (cutoff-time (when max-age-days
                         (- (float-time) (* max-age-days 24 60 60))))
@@ -243,7 +249,10 @@ Optional MAX-AGE-DAYS limits to runs within that many days (default: all)."
                                 records))))
                     (forward-line 1)))))))))
     (message "[parse-all-results] Parsed %d runs, %d records" runs-parsed (length records))
-    (nreverse records)))
+    (let ((result (nreverse records)))
+      (unless max-age-days
+        (setq gptel-auto-workflow--results-cache result))
+      result))))
 
 (defvar gptel-auto-workflow--evolution-patterns-cache nil
   "Cached evolution patterns from skill. Reset on skill reload.")
@@ -1845,6 +1854,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (cl-block gptel-auto-workflow-evolution-run-cycle
   (condition-case early-err
       (progn
+  ;; Invalidate parse cache so this cycle sees fresh data
+  (setq gptel-auto-workflow--results-cache nil)
   ;; Throttle: don't run more than once per 300s (5min) unless forced
   (let ((now (float-time (current-time))))
     (when (and gptel-auto-workflow--evolution-last-run

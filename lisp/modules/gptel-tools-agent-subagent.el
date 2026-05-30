@@ -161,34 +161,21 @@ new analyzer/executor/grader launch on that same buffer or worktree."
                   (equal activity-dir state-dir))))))
 
 (defun my/gptel--cleanup-overlapping-agent-tasks (origin-buf activity-dir)
-  "Abort and clear tracked subagent tasks that overlap a new workflow dispatch.
-
-This prevents stale timers/callbacks from older analyzer/executor work on the
-same routed experiment buffer from re-entering a later retry."
+  "Cancel timers for overlapping subagent tasks.
+Does NOT call `gptel-abort' or remove hash-table entries — the caller's
+stale-run-id check prevents callback interference, and aborting the
+session buffer mid-flight causes 'Selecting deleted buffer' errors."
   (let ((normalized-dir (my/gptel--normalize-agent-activity-dir activity-dir))
-        overlap-ids
-        request-buffers)
+        (overlap-count 0))
     (maphash
      (lambda (task-id state)
        (when (my/gptel--agent-task-overlaps-p state origin-buf normalized-dir)
          (my/gptel--cancel-agent-task-timers state)
-         (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
-           (push request-buf request-buffers))
-         (push task-id overlap-ids)))
+         (cl-incf overlap-count)))
      my/gptel--agent-task-state)
-    (dolist (task-id overlap-ids)
-      (remhash task-id my/gptel--agent-task-state))
-    (dolist (request-buf (delete-dups request-buffers))
-      (when (and (buffer-live-p request-buf)
-                 (fboundp 'gptel-abort))
-        (condition-case err
-            (gptel-abort request-buf)
-          (error
-           (message "[nucleus] Failed to abort overlapping subagent buffer %s: %s"
-                    (buffer-name request-buf)
-                    (my/gptel--sanitize-for-logging
-                     (error-message-string err) 160))))))
-    (length overlap-ids)))
+    (when (> overlap-count 0)
+      (message "[nucleus] Drained %d overlapping subagent task(s)" overlap-count))
+    overlap-count))
 
 (defun my/gptel--call-gptel-agent-task (callback agent-type description prompt)
   "Invoke the active gptel subagent task runner.
