@@ -37,6 +37,13 @@
 - Executor prompt now warns VERIFY section must appear outside `<think>`
 - Duplicated function `get-category-failure-reasons` in remote code removed
 
+### Eight-Key Ontology Self-Evolution
+- TSV column `eight_key_scores` added (JSON-encoded per-key scores per experiment)
+- `gptel-auto-workflow--aggregate-category-eight-keys`: reads all results, computes per-category per-key average deltas
+- `gptel-auto-workflow--category-eight-key-weight` now uses dynamic weights from experiment data (falls back to hardcoded defaults when insufficient data)
+- Wired into `gptel-auto-workflow--evolve-ontology` evolution cycle
+- Weight scale: avg delta 0.10 → 1.5x multiplier, capped 0.8–2.0
+
 ### Comparator Fix
 - `experiment-core.el`: When eight-keys score is nil or < 0.1 but grader passed, use normalized grader score as the after-score for the comparator. This prevents valid changes from being rejected because the structural scorer returned 0.0.
 - `prompt-analyze.el`: Lowered strong-grade-pass threshold 85%→70% so grade bypass triggers more readily.

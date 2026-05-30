@@ -2780,11 +2780,101 @@ Runs during the self-evolution cycle.  Results are stored in
       (dolist (cat saturated)
         (push (cons cat t) gptel-auto-workflow--category-saturation))
 
+      ;; Phase 5: Aggregate per-category eight-key weights
+      (gptel-auto-workflow--evolve-ontology-eight-keys)
+
       (when changes
         (message "[ontology-evolve] Updated %d category strategy preferences" (length changes)))
       (list :changes (length changes)
             :saturated (length saturated)
             :total-strategies (hash-table-count cat-strats))))))
+
+;; ─── Per-Category Eight-Key Aggregation ───
+
+(defvar gptel-auto-workflow--category-eight-key-weights nil
+  "Alist of (category (key . weight) ...) learned from experiment history.
+Each category maps to per-key average score improvement deltas.
+Populated by `gptel-auto-workflow--aggregate-category-eight-keys' during evolution.
+When nil, `gptel-auto-workflow--category-eight-key-weight' uses hardcoded defaults.")
+
+(defun gptel-auto-workflow--parse-eight-key-scores (scores-str)
+  "Parse SCORES-STR from TSV column into alist of (key . score).
+Example input: \"{phi-vitality:0.5,fractal-clarity:0.3,overall:0.42}\""
+  (when (and (stringp scores-str) (string-match "^{\\(.+\\)}$" scores-str))
+    (let ((result nil))
+      (dolist (pair (split-string (match-string 1 scores-str) "," t))
+        (when (string-match "^\\([^:]+\\):\\([-0-9.]+\\)$" pair)
+          (push (cons (intern (match-string 1 pair))
+                      (string-to-number (match-string 2 pair)))
+                result)))
+      (nreverse result))))
+
+(defun gptel-auto-workflow--aggregate-category-eight-keys ()
+  "Aggregate per-category, per-key Eight-Keys deltas from experiment history.
+Reads all results.tsv files, groups by category, and computes average score
+delta per key.  Updates `gptel-auto-workflow--category-eight-key-weights'."
+  (let* ((base-dir (expand-file-name "var/tmp/experiments"
+                                     (gptel-auto-workflow--worktree-base-root)))
+         (results-dirs (when (file-directory-p base-dir)
+                         (directory-files base-dir t "^[0-9]")))
+         (cat-keys (make-hash-table :test 'equal))
+         (cat-counts (make-hash-table :test 'equal)))
+    (dolist (dir results-dirs)
+      (let ((tsv-file (expand-file-name "results.tsv" dir)))
+        (when (file-exists-p tsv-file)
+          (with-temp-buffer
+            (insert-file-contents tsv-file)
+            (goto-char (point-min))
+            (forward-line 1) ; skip header
+            (while (not (eobp))
+              (let* ((fields (split-string
+                               (buffer-substring (line-beginning-position) (line-end-position))
+                               "\t"))
+                     (target (nth 1 fields))
+                     (score-before (string-to-number (or (nth 3 fields) "0")))
+                     (score-after (string-to-number (or (nth 4 fields) "0")))
+                     (keys-str (nth 27 fields)) ; eight_key_scores column
+                     (parsed (gptel-auto-workflow--parse-eight-key-scores keys-str)))
+                (when (and target parsed (fboundp 'gptel-auto-workflow--categorize-target))
+                  (let* ((cat (gptel-auto-workflow--categorize-target target))
+                         (key (cons cat t))
+                         (cat-deltas (gethash key cat-keys (make-hash-table :test 'eq)))
+                         (cat-n (gethash key cat-counts 0)))
+                    ;; Accumulate per-key deltas
+                    (dolist (pair parsed)
+                      (let ((k (car pair))
+                            (v (cdr pair)))
+                        (unless (eq k 'overall)
+                          (puthash k (+ (gethash k cat-deltas 0.0)
+                                         (- v (if (eq k (car (car parsed))) score-before score-after)))
+                                   cat-deltas))))
+                    (puthash key cat-deltas cat-keys)
+                    (puthash key (1+ cat-n) cat-counts))))
+              (forward-line 1))))))
+    ;; Compute averages and build weight alist
+    (let ((result nil))
+      (maphash
+       (lambda (key deltas)
+         (let* ((cat (car key))
+                (n (gethash key cat-counts 1))
+                (avg-deltas nil))
+           (maphash (lambda (k total)
+                      (push (cons k (/ total n)) avg-deltas))
+                    deltas)
+           (when avg-deltas
+             (push (cons cat avg-deltas) result))))
+       cat-keys)
+      (setq gptel-auto-workflow--category-eight-key-weights result)
+      (message "[ontology-evolve] Aggregated per-category eight-key weights for %d categories" (length result))
+      result)))
+
+;; Add to evolve-ontology
+(defun gptel-auto-workflow--evolve-ontology-eight-keys ()
+  "Evolve category Eight-Key weights from experiment outcomes.
+Runs during evolution cycle alongside strategy learning."
+  (condition-case err
+      (gptel-auto-workflow--aggregate-category-eight-keys)
+    (error (message "[ontology-evolve] Error aggregating eight-key weights: %S" err))))
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here

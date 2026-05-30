@@ -619,8 +619,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                (prog1 (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s")))
                                                  (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using fallback hash" (or target "unknown")))))
                             :research-quality (or (and (boundp 'gptel-auto-workflow--current-research-context)
-                                                      (plist-get gptel-auto-workflow--current-research-context :source))
-                                                  "none"))))
+                                                       (plist-get gptel-auto-workflow--current-research-context :source))
+                                                   "none")
+                             :eight-keys-scores (plist-get bench :eight-keys-scores))))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format
