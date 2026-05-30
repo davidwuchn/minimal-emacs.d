@@ -558,8 +558,7 @@ Returns at most 3 patterns as a compact string, max 500 chars."
 Strips <think> blocks, extracts actionable patterns relevant to TARGET,
 limits to ~500 chars. Lambda-compressed format when backend supports it."
   (let* ((stripped (gptel-auto-experiment--strip-think-blocks english-findings))
-         (focused (gptel-auto-experiment--extract-actionable-patterns stripped (or target "")))
-         (allium (gptel-auto-experiment--allium-research-findings english-findings nil)))
+         (focused (gptel-auto-experiment--extract-actionable-patterns stripped (or target ""))))
     (if (gptel-auto-experiment--use-lambda-prompts-p)
         (let* ((lines (split-string stripped "\n"))
                (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
