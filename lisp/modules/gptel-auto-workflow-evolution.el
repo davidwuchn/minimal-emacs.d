@@ -162,71 +162,87 @@ Uses cached value from load time, or detects from current directory."
 
 ;; ─── Benchmark Parsing ───
 
-(defun gptel-auto-workflow--parse-all-results ()
-  "Parse all historical results.tsv files into a list of experiment records."
-  (let ((results-dir (expand-file-name "var/tmp/experiments"
-                                       (gptel-auto-workflow--worktree-base-root)))
-        (records nil))
+(defun gptel-auto-workflow--parse-all-results (&optional max-age-days)
+  "Parse historical results.tsv files into a list of experiment records.
+Optional MAX-AGE-DAYS limits to runs within that many days (default: all)."
+  (let* ((results-dir (expand-file-name "var/tmp/experiments"
+                                         (gptel-auto-workflow--worktree-base-root)))
+         (cutoff-time (when max-age-days
+                        (- (float-time) (* max-age-days 24 60 60))))
+         (records nil)
+         (runs-parsed 0)
+         (max-runs 50))  ; Hard limit to prevent excessive parsing
     (when (file-directory-p results-dir)
-      (dolist (run-dir (directory-files results-dir t "^202[0-9]-"))
-        (let ((tsv-file (expand-file-name "results.tsv" run-dir)))
-          (when (file-exists-p tsv-file)
-            (with-temp-buffer
-              (insert-file-contents tsv-file)
-              (goto-char (point-min))
-              (forward-line 1)
-              (while (not (eobp))
-                (let ((line (buffer-substring-no-properties
-                             (line-beginning-position) (line-end-position))))
-                  (unless (string-empty-p line)
-                     (let* ((fields (split-string line "\t"))
-                             (field-count (length fields))
-                             ;; Handle multiple TSV format versions:
-                             ;; 14 cols: earliest (no backend/strategy/research fields)
-                             ;; 20 cols: backend at index 14, no research fields
-                             ;; 24 cols: backend at index 14, research fields at 20-23
-                             ;; 27 cols: backend at index 15, full research fields
-                             (format-version (cond ((<= field-count 14) 14)
-                                                   ((<= field-count 20) 20)
-                                                   ((<= field-count 24) 24)
-                                                   (t 27)))
-                             (target (nth 1 fields))
-                             (hypothesis (nth 2 fields))
-                             (score-before (string-to-number (or (nth 3 fields) "0")))
-                             (score-after (string-to-number (or (nth 4 fields) "0")))
-                             (quality (string-to-number (or (nth 5 fields) "0")))
-                              (delta (string-to-number (or (nth 6 fields) "+0.00")))
-                             (decision (nth 7 fields))
-                             (grader-q (string-to-number (or (nth 9 fields) "0")))
-                             (backend (cond ((<= format-version 14) "unknown")
-                                            ((<= format-version 24)
-                                             (or (nth 14 fields) "unknown"))
-                                            (t (or (nth 15 fields) "unknown"))))
-                             (prompt-chars (string-to-number
-                                            (or (nth (if (<= format-version 24) 15 16) fields) "0")))
-                             (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
-                             (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
-                             (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
-                             (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
-                             (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
-                            (push (list :target target
-                                        :hypothesis hypothesis
-                                        :score-before score-before
-                                        :score-after score-after
-                                        :code-quality quality
-                                         :delta delta
-                                        :decision decision
-                                        :grader-quality grader-q
-                                        :prompt-chars prompt-chars
-                                        :backend backend
-                                        :research-strategy research-strategy
-                                        :research-hash research-hash
-                                        :research-quality research-quality
-                                        :kibcm-axis kibcm-axis
-                                        :model model
-                                        :run-dir (file-name-nondirectory run-dir))
-                                 records))))
-                (forward-line 1)))))))
+      (let ((all-dirs (directory-files results-dir t "^202[0-9]-")))
+        ;; Sort by modification time (newest first) and take only recent ones
+        (setq all-dirs (sort all-dirs
+                             (lambda (a b)
+                               (> (float-time (file-attribute-modification-time (file-attributes a)))
+                                  (float-time (file-attribute-modification-time (file-attributes b)))))))
+        (dolist (run-dir (seq-take all-dirs max-runs))
+          (when (or (not cutoff-time)
+                    (> (float-time (file-attribute-modification-time (file-attributes run-dir)))
+                       cutoff-time))
+            (let ((tsv-file (expand-file-name "results.tsv" run-dir)))
+              (when (file-exists-p tsv-file)
+                (setq runs-parsed (1+ runs-parsed))
+                (with-temp-buffer
+                  (insert-file-contents tsv-file)
+                  (goto-char (point-min))
+                  (forward-line 1)
+                  (while (not (eobp))
+                    (let ((line (buffer-substring-no-properties
+                                 (line-beginning-position) (line-end-position))))
+                      (unless (string-empty-p line)
+                        (let* ((fields (split-string line "\t"))
+                               (field-count (length fields))
+                               ;; Handle multiple TSV format versions:
+                               ;; 14 cols: earliest (no backend/strategy/research fields)
+                               ;; 20 cols: backend at index 14, no research fields
+                               ;; 24 cols: backend at index 14, research fields at 20-23
+                               ;; 27 cols: backend at index 15, full research fields
+                               (format-version (cond ((<= field-count 14) 14)
+                                                     ((<= field-count 20) 20)
+                                                     ((<= field-count 24) 24)
+                                                     (t 27)))
+                               (target (nth 1 fields))
+                               (hypothesis (nth 2 fields))
+                               (score-before (string-to-number (or (nth 3 fields) "0")))
+                               (score-after (string-to-number (or (nth 4 fields) "0")))
+                               (quality (string-to-number (or (nth 5 fields) "0")))
+                               (delta (string-to-number (or (nth 6 fields) "+0.00")))
+                               (decision (nth 7 fields))
+                               (grader-q (string-to-number (or (nth 9 fields) "0")))
+                               (backend (cond ((<= format-version 14) "unknown")
+                                              ((<= format-version 24)
+                                               (or (nth 14 fields) "unknown"))
+                                              (t (or (nth 15 fields) "unknown"))))
+                               (prompt-chars (string-to-number
+                                              (or (nth (if (<= format-version 24) 15 16) fields) "0")))
+                               (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
+                               (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
+                               (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
+                               (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
+                               (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
+                          (push (list :target target
+                                      :hypothesis hypothesis
+                                      :score-before score-before
+                                      :score-after score-after
+                                      :code-quality quality
+                                      :delta delta
+                                      :decision decision
+                                      :grader-quality grader-q
+                                      :prompt-chars prompt-chars
+                                      :backend backend
+                                      :research-strategy research-strategy
+                                      :research-hash research-hash
+                                      :research-quality research-quality
+                                      :kibcm-axis kibcm-axis
+                                      :model model
+                                      :run-dir (file-name-nondirectory run-dir))
+                                records))))
+                    (forward-line 1)))))))))
+    (message "[parse-all-results] Parsed %d runs, %d records" runs-parsed (length records))
     (nreverse records)))
 
 (defvar gptel-auto-workflow--evolution-patterns-cache nil
@@ -4242,13 +4258,24 @@ Use to determine which minimal pair has cleaner behavioral specification."
   "Find opposing hypotheses from kept+discarded experiments and diff via Allium.
 Compares the most recently kept hypothesis against the most recently discarded
 one for the same target. Logs which side has cleaner behavioral spec.
-Non-blocking — runs async via gptel callbacks."
+Non-blocking — runs async via gptel callbacks.
+Only processes targets from the last 7 days to avoid analyzing stale data."
   (when (and (fboundp 'gptel-auto-experiment--allium-distill)
              (fboundp 'gptel-auto-experiment--allium-check))
     (let* ((results (gptel-auto-workflow--parse-all-results))
+           ;; Only keep kept/discarded results for comparison
+           (recent-results
+            (cl-remove-if-not
+             (lambda (r)
+               (let ((decision (plist-get r :decision)))
+                 (or (string= decision "kept")
+                     (string= decision "discarded"))))
+             results))
            (by-target (make-hash-table :test 'equal))
-           (targets nil))
-      (dolist (r results)
+           (targets nil)
+           (processed-count 0)
+           (max-targets 20))  ; Limit to avoid excessive processing
+      (dolist (r recent-results)
         (let ((target (plist-get r :target))
               (hypothesis (plist-get r :hypothesis))
               (decision (plist-get r :decision)))
@@ -4257,12 +4284,15 @@ Non-blocking — runs async via gptel callbacks."
             (unless (gethash target by-target)
               (push target targets))
             (push (cons decision hypothesis) (gethash target by-target)))))
-       (dolist (target (nreverse targets))
-         (let ((entries (gethash target by-target)))
+      (message "[allium-diff] Analyzing %d targets with kept/discarded pairs (limited to %d)"
+               (length targets) max-targets)
+      (dolist (target (seq-take (nreverse targets) max-targets))
+        (let ((entries (gethash target by-target)))
           (when (listp entries)
             (let ((kept (cl-find "kept" entries :key #'car :test #'equal))
                   (discarded (cl-find "discarded" entries :key #'car :test #'equal)))
               (when (and kept discarded)
+                (setq processed-count (1+ processed-count))
                 (gptel-auto-workflow--allium-diff-minimal-pairs
                  (cdr kept) (cdr discarded)
                  (lambda (result)
@@ -4270,7 +4300,8 @@ Non-blocking — runs async via gptel callbacks."
                             target (car result) (cdr result))
                    (when (< (car result) (cdr result))
                      (message "[allium-diff] %s: kept hypothesis has cleaner spec (kept=%d < discarded=%d)"
-                               target (car result) (cdr result)))))))))))))
+                               target (car result) (cdr result))))))))))
+      (message "[allium-diff] Processed %d target pairs" processed-count))))
 
 ;; ─── Allium Improvements: trend tracking, dedup, regression detection, auto-repair ───
 
