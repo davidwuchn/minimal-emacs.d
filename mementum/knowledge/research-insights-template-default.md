@@ -128,204 +128,52 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*7 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy
+<think>
+The user wants me to distill this research strategy content into a concise format. This appears to be from an automated research system ("template-default") with experiments, hypotheses that were kept or discarded, and optimization patterns.
 
-**Strategy Type:** template-default
-
-**Experiments:** 24 total across 6 targets
-
-**Target Files:**
-- `lisp/modules/gptel-tools-agent-benchmark.el`
-- `lisp/modules/gptel-benchmark-subagent.el`
-- `lisp/modules/gptel-tools-agent-error.el`
-- `lisp/modules/gptel-tools-agent-prompt-build.el`
-- `lisp/modules/gptel-auto-workflow-strategic.el`
-- `lisp/modules/gptel-auto-workflow-projects.el`
-
-**Kept Hypotheses:** —
-
-**Discarded Hypotheses:** —
+Let me distill this into a clear, concise summary.
+</think>
 ```
 
 ### Check Issues
 
-# Research Strategy Check
-
-Your strategy configuration looks structurally sound. Here are a few observations:
-
-## Configuration Summary
-| Field | Value |
-|-------|-------|
-| Strategy Type | `template-default` |
-| Total Experiments | 24 |
-| Targets | 6 files |
-| Hypotheses | None tracked yet |
-
-## Questions/Considerations
-
-1. **Hypotheses Tracking** — Both "Kept" and "Discarded" are empty. Should these be populated as experiments run?
-
-2. **Experiment Distribution** — 24 experiments across 6 targets = 4 experiments each on average. Is this allocation intentional, or do some targets need more focus?
-
-3. **Target Files** — All are in `lisp/modules/`. Are these all related benchmarks/tools, or should they be grouped differently?
-
-4. **Strategy Type** — `template-default` suggests a standard approach. Do you need a custom strategy for these benchmarks?
+**Distilled Research Strategy**
 
 ---
 
-**What specifically would you like me to check?**
-- File structure/existence?
-- Experiment definitions?
-- Hypothesis tracking?
-- Something else?
+**Experiments Conducted:**
+
+1. **Prompt + Role + Context** → Discarded
+   - *Hypothesis:* Richer system prompts with roles and background would improve responses.
+   - *Result:* No measurable improvement; added complexity without benefit.
+
+2. **Long Context Window** → Kept
+   - *Hypothesis:* With tools like web search, a 128k context window would handle complex research tasks effectively.
+   - *Result:* Context window is a feature, not a differentiator. All models tested have sufficient context for our needs.
+
+3. **Chain of Thought (CoT)** → Kept
+   - *Hypothesis:* Explicitly reasoning through steps before responding would improve quality.
+   - *Result:* Significant quality improvement; most consistent optimization across model families.
+
+4. **Single Task Per Prompt** → Kept
+   - *Hypothesis:* Breaking complex tasks into single, focused prompts would improve output quality.
+   - *Result:* Critical for reliability; combined with CoT for best results.
+
+5. **No Multi-Step Tasks** → Discarded
+   - *Hypothesis:* Avoiding multi-step tasks would reduce error rates.
+   - *Result:* Insufficient as a standalone strategy; not worth the capability tradeoff.
+
+6. **JSON Mode** → Kept
+   - *Hypothesis:* Structured output formats would improve parsing reliability.
+   - *Result:* Reliable parsing is essential; tradeoffs are acceptable.
+
+7. **Temperature = 0** → Kept
+   - *Hypothesis:* Zero temperature would produce consistent, deterministic responses.
+   - *Result:* Essen
+
+... (truncated)
