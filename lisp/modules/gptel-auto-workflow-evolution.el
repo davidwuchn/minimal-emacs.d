@@ -2043,6 +2043,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case err
       (progn
         (gptel-auto-workflow--apply-cross-subsystem-feedback)
+      ;; Decay category strikes so frozen categories eventually thaw
+      (condition-case nil (gptel-auto-workflow--decay-category-strikes) (error nil))
       ;; Research champion league: benchmark proposed strategies against incumbents
       (when (fboundp 'gptel-auto-workflow--run-research-champion-league)
         (run-with-idle-timer 30 nil #'gptel-auto-workflow--run-research-champion-league))
@@ -2961,27 +2963,63 @@ Semantica abductive reasoner pattern."
 DEPRECATED: use --category-champions for per-category gating.")
 
 (defvar gptel-auto-workflow--category-strike-counts nil
-  "Alist of (CATEGORY . STRIKES) tracking successive champion failures.
-∀ Vigilance: 3 consecutive failures in a category freezes it for 5 cycles.")
+  "Alist of (CATEGORY . (STRIKES . CYCLE-FROZEN)) tracking failures.
+∀ Vigilance: 3 consecutive failures in a category freezes it.
+Strikes decay by 1 per evolution cycle below frozen threshold.
+CYCLE-FROZEN records which evolution cycle the freeze started.")
+
+(defvar gptel-auto-workflow--evolution-cycle-counter 0
+  "Incremented each evolution cycle. Used for strike decay timing.")
 
 (defun gptel-auto-workflow--record-category-strike (category)
   "Increment failure strike for CATEGORY. Freezes at 3."
-  (let ((entry (assq category gptel-auto-workflow--category-strike-counts)))
+  (let* ((entry (assq category gptel-auto-workflow--category-strike-counts))
+         (strikes (if entry (cadr entry) 0))
+         (cycle (if entry (cddr entry) nil))
+         (new-strikes (1+ strikes)))
     (if entry
-        (setcdr entry (1+ (cdr entry)))
-      (push (cons category 1) gptel-auto-workflow--category-strike-counts))
-    (when (>= (cdr (assq category gptel-auto-workflow--category-strike-counts)) 3)
-      (message "[champion] ∀ Vigilance: category %s FROZEN (3 strikes) — 5 cycle cooldown" category))))
+        (setcdr entry (cons new-strikes cycle))
+      (push (cons category (cons new-strikes nil)) gptel-auto-workflow--category-strike-counts))
+    (when (>= new-strikes 3)
+      (unless cycle
+        (setcdr (assq category gptel-auto-workflow--category-strike-counts)
+                (cons new-strikes gptel-auto-workflow--evolution-cycle-counter)))
+      (message "[champion] ∀ Vigilance: category %s FROZEN (%d strikes) — auto-thaw after decay or success"
+               category new-strikes))))
 
 (defun gptel-auto-workflow--category-frozen-p (category)
-  "Return non-nil if CATEGORY is frozen (≥3 strikes)."
-  (let ((entry (assq category gptel-auto-workflow--category-strike-counts)))
-    (and entry (>= (cdr entry) 3))))
+  "Return non-nil if CATEGORY is frozen (≥3 strikes).
+Auto-thaws if frozen for > 5 evolution cycles (strike decay)."
+  (let* ((entry (assq category gptel-auto-workflow--category-strike-counts))
+         (strikes (if entry (cadr entry) 0))
+         (frozen-cycle (if entry (cddr entry) nil)))
+    (if (and (>= strikes 3) frozen-cycle
+             (> (- gptel-auto-workflow--evolution-cycle-counter frozen-cycle) 5))
+        (progn
+          (gptel-auto-workflow--reset-category-strikes category)
+          (message "[champion] ∀ Vigilance: category %s THAWED after %d cycles (strike decay)"
+                   category (- gptel-auto-workflow--evolution-cycle-counter frozen-cycle))
+          nil)
+      (>= strikes 3))))
 
 (defun gptel-auto-workflow--reset-category-strikes (category)
   "Reset strikes for CATEGORY after a success."
   (setq gptel-auto-workflow--category-strike-counts
         (assq-delete-all category gptel-auto-workflow--category-strike-counts)))
+
+(defun gptel-auto-workflow--decay-category-strikes ()
+  "Reduce all category strikes by 1 per cycle (floor at 0).
+Prevents permanent freeze when no experiments succeed."
+  (let ((new nil))
+    (dolist (entry gptel-auto-workflow--category-strike-counts)
+      (let* ((cat (car entry))
+             (strikes (cadr entry))
+             (cycle (cddr entry))
+             (decayed (max 0 (1- strikes))))
+        (when (> decayed 0)
+          (push (cons cat (cons decayed (and (>= strikes 3) cycle))) new))))
+    (setq gptel-auto-workflow--category-strike-counts new))
+  (cl-incf gptel-auto-workflow--evolution-cycle-counter))
 
 (defun gptel-auto-workflow--apply-category-vigilance (target decision)
   "Apply ∀ Vigilance strikes based on TARGET and DECISION.
