@@ -143,7 +143,7 @@ generation and prompt classification."
 ;;; ==============================================================================
 
 ;; Ensure Unicode symbols render (busy indicators, icons)
-(set-fontset-font t 'unicode "DejaVuSansM Nerd Font" nil 'prepend)
+(set-fontset-font t 'unicode "DejaVuSansM Nerd Font Mono" nil 'prepend)
 
 ;; Custom separator for header (replace default "➤" with "|")
 (defvar my/agent-shell-header-separator " | "

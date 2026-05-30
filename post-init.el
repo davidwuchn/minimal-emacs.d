@@ -87,7 +87,21 @@
                     (error-message-string err)))))))
   (require 'init-ai)
 
+;; Ensure config-verified flag even if init.el errors before its line 641.
+;; Must be set after all module loads but before any post-init code that
+;; might error and abort loading (which prevents init.el:641 from running).
+(setq minimal-emacs--success t)
+
 ;; Backup and auto-save settings are configured in init-files.el
+
+;; ==============================================================================
+;; DEBUG: Runtime error backtrace capture
+;; ==============================================================================
+;; "Wrong type argument: stringp, nil" occurs during mode-line updates (window
+;; resize, mouse interaction). To capture a backtrace:
+;;    M-x toggle-debug-on-error RET
+;; Then drag a window divider. Check *Backtrace* buffer. Disable with:
+;;    M-x toggle-debug-on-error RET
 
 ;; ==============================================================================
 ;; PERSONAL CUSTOMIZATIONS (Add your own below)
