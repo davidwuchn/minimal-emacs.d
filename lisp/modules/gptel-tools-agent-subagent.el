@@ -17,6 +17,9 @@
 (defvar gptel-agent-loop--bypass)
 (defvar gptel-auto-workflow--defer-subagent-env-persistence)
 (defvar gptel-auto-workflow--subagent-process-environment)
+(defvar gptel-auto-experiment--subagent-dispatch-log (make-hash-table :test 'equal)
+  "Hash table tracking subagent dispatch counts per (agent-type, category).
+Populated by `my/gptel--run-agent-tool-with-timeout', consumed by evolution cycle.")
 (defvar gptel-agent--agents)
 (defvar my/gptel-subagent-include-history-default)
 (defvar gptel-auto-experiment-active-grace)
@@ -620,11 +623,23 @@ AGENT-NAME must exist in `gptel-agent--agents`.
                                          include-history-bool include-diff-bool))))
 
 (defun my/gptel--run-agent-tool-with-timeout (timeout callback agent-name description prompt
-                                                      &optional files include-history include-diff active-grace)
-  "Run `my/gptel--run-agent-tool' with TIMEOUT and optional ACTIVE-GRACE."
+                                                       &optional files include-history include-diff active-grace)
+  "Run `my/gptel--run-agent-tool' with TIMEOUT and optional ACTIVE-GRACE.
+Logs subagent dispatch to ontology for self-evolution tracking."
   (let ((previous-timeout my/gptel-agent-task-timeout)
         (previous-hard-timeout my/gptel-agent-task-hard-timeout)
         (grace (or active-grace gptel-auto-experiment-active-grace)))
+    ;; Log subagent dispatch to ontology tracking (for self-evolution)
+    (when (and (boundp 'gptel-auto-workflow--current-target)
+               gptel-auto-workflow--current-target
+               (fboundp 'gptel-auto-workflow--categorize-target))
+      (let ((cat (gptel-auto-workflow--categorize-target
+                  gptel-auto-workflow--current-target)))
+        (when (and cat (boundp 'gptel-auto-experiment--subagent-dispatch-log))
+          (let ((log (symbol-value 'gptel-auto-experiment--subagent-dispatch-log)))
+            (puthash (format "%s-%s" agent-name cat)
+                     (1+ (gethash (format "%s-%s" agent-name cat) log 0))
+                     log)))))
     (unwind-protect
         (progn
           (setq my/gptel-agent-task-timeout timeout)
