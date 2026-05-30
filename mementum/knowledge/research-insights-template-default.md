@@ -69,116 +69,59 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation: template-default
+``` 
+Research Strategy: template-default
 
-## Kept Hypotheses (Prioritized)
+**10 experiments** across 6 targets:
+- staging-review
+- staging-merge
+- lisp/modules/gptel-auto-workflow-strategic.el
+- lisp/modules/gptel-auto-workflow-projects.el
+- staging-verification
+- lisp/modules/gptel-auto-workflow-research-integration.el
 
-### Critical Bug Fixes
-1. **`hash-table-keys` not built-in** — used in `my/gptel-show-permits` and `my/gptel-health-check`; causes runtime errors
-2. **Keyword-to-alist conversion bug** in `gptel-benchmark--to-json-format` — dotted-pair alists retain keyword keys instead of converting to symbols
-3. **Argument order swap** in `gptel-benchmark-baseline-file-compare` — baseline/candidate inversion inverts improvement/regression signals
-4. **Stale-copy bug** in `gptel-auto-workflow--link-shared-runtime-path` — regular files treated as valid without creating symlinks
-5. **`plist-get` vs `alist-get` bug** in `gptel-benchmark-diagnose-elements` — alist data accessed with plist accessor; scores always default to 0.5
+**Hypotheses:** None recorded
 
-### Input Validation (Safety/Clarity)
-- `gptel-auto-experiment--validate-candidate-safely`: nil, non-string, empty guards
-- `gptel-auto-workflow-research-status-all`: nil-safety
-- `my/gptel-permit-tool`: string validation to prevent hash corruption
-- `gptel-tools-memory--resolve-path`: slug character validation
-- `gptel-workflow--score-tools`: proper-list-p validation
-- `gptel-benchmark-summarize-results`: proper-list-p validation
-- `gptel-benchmark-prescribe`: nil guard for malformed plist entries
-- `gptel-benchmark--to-json-format`: `(cl-every #'consp data)` validation
-- `gptel-auto-workflow--finalize-review-fix-result`: response nil guard
-
-### Code Quality
-- Extract `gptel-benchmark--empty-summary` helper (duplicated zero-result structure)
-- Fix unreachable code in error conditions
-- Fix `condition-case` error handler in `gptel-auto-workflow--safe-truename` (invalid `(ignore)` condition)
-
-### Test Infrastructure
-- Move `provide` after test definitions in `gptel-benchmark-tests.el`
-- Add unwind-protect for global state modification
-- Fix test state pollution in `gptel-benchmark-test-evolution-cycle-increments`
-- Add `(require 'cl-lib)` for undefined functions
-
-## Discarded Hypotheses
-
-| Category | Reason |
-|----------|--------|
-| Redundant `(consp val)` check removal | Already encoded in computation |
-| `condition-case nil` → `ignore-errors` | Self-flagged anti-pattern |
-| Empty `status-lines` nil guard | Marginal edge case |
-| Misleading indentation fixes | Visual-only, no functional impact |
-| Argument order fix in `nucleus--validate-contract` | Lower impact |
-| Race condition in `nucleus-sync-tool-profile` | Not observed |
-| Memoization for `nucleus--project-root` | Not benchmarked as bottleneck |
-| Memoization for `nucleus--resolve-*` dirs | Already optimized |
-| Removing duplicate `cl-every` | Preserves identical semantics |
-| File size validation in `gptel-tools-memory--read` | Over-specification |
-| Restructuring `condition-case` in sync | Marginal performance gain |
-| `gptel-ext-tool-permits.el` optimization | Already optimized |
-| CRUD lifecycle + search | No hypothesis stated |
-
-## Strategy Pattern
-
-**Keep when:**
-- Fixes concrete bugs (runtime errors, incorrect behavior)
-- Adds defensive validation for implicit assumptions
-- Improves error messages/Clarity of code intent
-
-**Discard when:**
-- Speculative performance gains
-- Redundant validation already covered elsewhere
-- Code already optimized from prior experiments
-- Marginal edge cases with low observed impact
+---
+**Summary:** Template structure with no active hypotheses documented. All 10 experiments executed against 6 targets without hypothesis tracking.
+```
 ```
 
 ### Check Issues
 
-# Review of Research Strategy Distillation
+# Research Strategy Review
 
-## Structure Assessment
+## Observed Issues
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Hypotheses prioritization | ✅ Good | Clear separation of kept vs discarded |
-| Priority ordering | ⚠️ Unclear | "Critical" first, but sub-priority within sections not indicated |
-| Discard rationale | ⚠️ Inconsistent | Some entries detailed, "CRUD lifecycle + search" lacks substance |
+| Element | Status | Issue |
+|---------|--------|-------|
+| Template | ✅ Present | `template-default` applied |
+| Targets | ✅ Defined | 6 targets identified |
+| Experiments | ✅ Logged | 10 experiments recorded |
+| Hypotheses | ❌ Missing | None documented |
 
-## Issues to Address
+## Key Concern
 
-### 1. Discarded Hypotheses Table Gaps
+**No hypothesis tracking** undermines experimental value. Each experiment should test a specific hypothesis to derive meaningful conclusions.
+
+## Suggested Improvements
+
+1. **Add hypothesis field** before experiments
+2. **Link experiments to hypotheses** explicitly
+3. **Record outcomes** per experiment
+4. **Document learnings** from results
+
+---
+
+*Example structure:*
 ```
-| CRUD lifecycle + search | No hypothesis stated |
+**Hypothesis:** "Workflow X improves merge latency by >20%"
+
+**Experiments:**
+- [ ] staging-merge/test-A → Result: +15% latency
+- [ ] staging-merge/test-B → Result: +22% latency
+  → **Conclusion:** Hypothesis partially supported
 ```
-This entry provides no actionable insight. Either:
-- Remove it entirely
-- Clarify what was being evaluated and why it was discarded
-
-### 2. Categorization Ambiguity
-Several "Code Quality" items could qualify as "Critical":
-- `condition-case` error handler bug
-- Unreachable code in error conditions
-
-Consider elevating these if they affect correctness.
-
-### 3. Test Infrastructure Priority
-Listed last despite affecting correctness of all other work. Consider repositioning or adding a note explaining why it's lower priority than bug fixes.
-
-### 4. Missing Context
-- What methodology produced these hypotheses?
-- What was the codebase scope/size?
-- Were these prioritized via testing, code review, or runtime observation?
-
-## Suggestions
-
-1. **Add section headers with priority numbers** within kept hypotheses
-2. **Standardize discard reasons** — aim for 1-2 sentences each
-3. **Add a "Next Steps" or "Action Items" section** with owner assignments or timelines
-4. **Consider a "Review Date
-
-... (truncated)

@@ -21,7 +21,8 @@
 ;;; Known models (subset of models validated in this repo)
 
 (defconst test-agent-known-models
-  '("qwen3.5-plus"
+  '("qwen3.6-plus"
+    "qwen3.5-plus"
     "qwen3-max-2026-01-23"
     "qwen3-coder-plus"
     "qwen3-coder-next"
