@@ -162,72 +162,97 @@ Uses cached value from load time, or detects from current directory."
 
 ;; ─── Benchmark Parsing ───
 
-(defun gptel-auto-workflow--parse-all-results ()
-  "Parse all historical results.tsv files into a list of experiment records."
-  (let ((results-dir (expand-file-name "var/tmp/experiments"
-                                       (gptel-auto-workflow--worktree-base-root)))
-        (records nil))
+(defvar gptel-auto-workflow--results-cache nil
+  "Cached result of `gptel-auto-workflow--parse-all-results'.
+Reset to nil at evolution cycle start.")
+
+(defun gptel-auto-workflow--parse-all-results (&optional max-age-days)
+  "Parse historical results.tsv files into a list of experiment records.
+Optional MAX-AGE-DAYS limits to runs within that many days (default: all).
+Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
+  (or (and (not max-age-days) gptel-auto-workflow--results-cache)
+      (let* ((results-dir (expand-file-name "var/tmp/experiments"
+                                         (gptel-auto-workflow--worktree-base-root)))
+         (cutoff-time (when max-age-days
+                        (- (float-time) (* max-age-days 24 60 60))))
+         (records nil)
+         (runs-parsed 0)
+         (max-runs 50))  ; Hard limit to prevent excessive parsing
     (when (file-directory-p results-dir)
-      (dolist (run-dir (directory-files results-dir t "^202[0-9]-"))
-        (let ((tsv-file (expand-file-name "results.tsv" run-dir)))
-          (when (file-exists-p tsv-file)
-            (with-temp-buffer
-              (insert-file-contents tsv-file)
-              (goto-char (point-min))
-              (forward-line 1)
-              (while (not (eobp))
-                (let ((line (buffer-substring-no-properties
-                             (line-beginning-position) (line-end-position))))
-                  (unless (string-empty-p line)
-                     (let* ((fields (split-string line "\t"))
-                             (field-count (length fields))
-                             ;; Handle multiple TSV format versions:
-                             ;; 14 cols: earliest (no backend/strategy/research fields)
-                             ;; 20 cols: backend at index 14, no research fields
-                             ;; 24 cols: backend at index 14, research fields at 20-23
-                             ;; 27 cols: backend at index 15, full research fields
-                             (format-version (cond ((<= field-count 14) 14)
-                                                   ((<= field-count 20) 20)
-                                                   ((<= field-count 24) 24)
-                                                   (t 27)))
-                             (target (nth 1 fields))
-                             (hypothesis (nth 2 fields))
-                             (score-before (string-to-number (or (nth 3 fields) "0")))
-                             (score-after (string-to-number (or (nth 4 fields) "0")))
-                             (quality (string-to-number (or (nth 5 fields) "0")))
-                              (delta (string-to-number (or (nth 6 fields) "+0.00")))
-                             (decision (nth 7 fields))
-                             (grader-q (string-to-number (or (nth 9 fields) "0")))
-                             (backend (cond ((<= format-version 14) "unknown")
-                                            ((<= format-version 24)
-                                             (or (nth 14 fields) "unknown"))
-                                            (t (or (nth 15 fields) "unknown"))))
-                             (prompt-chars (string-to-number
-                                            (or (nth (if (<= format-version 24) 15 16) fields) "0")))
-                             (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
-                             (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
-                             (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
-                             (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
-                             (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
-                            (push (list :target target
-                                        :hypothesis hypothesis
-                                        :score-before score-before
-                                        :score-after score-after
-                                        :code-quality quality
-                                         :delta delta
-                                        :decision decision
-                                        :grader-quality grader-q
-                                        :prompt-chars prompt-chars
-                                        :backend backend
-                                        :research-strategy research-strategy
-                                        :research-hash research-hash
-                                        :research-quality research-quality
-                                        :kibcm-axis kibcm-axis
-                                        :model model
-                                        :run-dir (file-name-nondirectory run-dir))
-                                 records))))
-                (forward-line 1)))))))
-    (nreverse records)))
+      (let ((all-dirs (directory-files results-dir t "^202[0-9]-")))
+        ;; Sort by modification time (newest first) and take only recent ones
+        (setq all-dirs (sort all-dirs
+                             (lambda (a b)
+                               (> (float-time (file-attribute-modification-time (file-attributes a)))
+                                  (float-time (file-attribute-modification-time (file-attributes b)))))))
+        (dolist (run-dir (seq-take all-dirs max-runs))
+          (when (or (not cutoff-time)
+                    (> (float-time (file-attribute-modification-time (file-attributes run-dir)))
+                       cutoff-time))
+            (let ((tsv-file (expand-file-name "results.tsv" run-dir)))
+              (when (file-exists-p tsv-file)
+                (setq runs-parsed (1+ runs-parsed))
+                (with-temp-buffer
+                  (insert-file-contents tsv-file)
+                  (goto-char (point-min))
+                  (forward-line 1)
+                  (while (not (eobp))
+                    (let ((line (buffer-substring-no-properties
+                                 (line-beginning-position) (line-end-position))))
+                      (unless (string-empty-p line)
+                        (let* ((fields (split-string line "\t"))
+                               (field-count (length fields))
+                               ;; Handle multiple TSV format versions:
+                               ;; 14 cols: earliest (no backend/strategy/research fields)
+                               ;; 20 cols: backend at index 14, no research fields
+                               ;; 24 cols: backend at index 14, research fields at 20-23
+                               ;; 27 cols: backend at index 15, full research fields
+                               (format-version (cond ((<= field-count 14) 14)
+                                                     ((<= field-count 20) 20)
+                                                     ((<= field-count 24) 24)
+                                                     (t 27)))
+                               (target (nth 1 fields))
+                               (hypothesis (nth 2 fields))
+                               (score-before (string-to-number (or (nth 3 fields) "0")))
+                               (score-after (string-to-number (or (nth 4 fields) "0")))
+                               (quality (string-to-number (or (nth 5 fields) "0")))
+                               (delta (string-to-number (or (nth 6 fields) "+0.00")))
+                               (decision (nth 7 fields))
+                               (grader-q (string-to-number (or (nth 9 fields) "0")))
+                               (backend (cond ((<= format-version 14) "unknown")
+                                              ((<= format-version 24)
+                                               (or (nth 14 fields) "unknown"))
+                                              (t (or (nth 15 fields) "unknown"))))
+                               (prompt-chars (string-to-number
+                                              (or (nth (if (<= format-version 24) 15 16) fields) "0")))
+                               (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
+                               (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
+                               (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
+                               (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
+                               (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
+                          (push (list :target target
+                                      :hypothesis hypothesis
+                                      :score-before score-before
+                                      :score-after score-after
+                                      :code-quality quality
+                                      :delta delta
+                                      :decision decision
+                                      :grader-quality grader-q
+                                      :prompt-chars prompt-chars
+                                      :backend backend
+                                      :research-strategy research-strategy
+                                      :research-hash research-hash
+                                      :research-quality research-quality
+                                      :kibcm-axis kibcm-axis
+                                      :model model
+                                      :run-dir (file-name-nondirectory run-dir))
+                                records))))
+                    (forward-line 1)))))))))
+    (message "[parse-all-results] Parsed %d runs, %d records" runs-parsed (length records))
+    (let ((result (nreverse records)))
+      (unless max-age-days
+        (setq gptel-auto-workflow--results-cache result))
+      result))))
 
 (defvar gptel-auto-workflow--evolution-patterns-cache nil
   "Cached evolution patterns from skill. Reset on skill reload.")
@@ -1145,7 +1170,7 @@ Returns t if page created."
                               (insert "### Structure (deterministic scan)\n\n")
                               (insert (gptel-auto-workflow--summarize-elisp-structure structure))
                               (insert "\n\n"))
-                          (ignore))))))))
+                          (error nil))))))))
           ;; Extract failed targets with patterns
           (let ((failed-targets (targets-for-decision "validation-failed")))
             (when failed-targets
@@ -1404,7 +1429,7 @@ Returns output string or nil on failure."
 (defun gptel-auto-workflow--generate-source-effectiveness-section ()
   "Generate markdown section showing source effectiveness from traces.
 Returns string with table of source → keep rate."
-  (let* ((traces (condition-case nil (gptel-auto-workflow--load-research-traces) (ignore)))
+  (let* ((traces (condition-case nil (gptel-auto-workflow--load-research-traces) (error nil)))
          (own-repo-kept 0) (own-repo-total 0)
          (external-kept 0) (external-total 0)
          (content ""))
@@ -1440,7 +1465,7 @@ Returns string with table of source → keep rate."
   "Generate markdown section with controller config and topic models.
 Returns string with controller guidance."
   (let ((content "## Controller Guidance\n\n")
-        (controller (condition-case nil (gptel-auto-workflow--load-autotts-controller) (ignore))))
+        (controller (condition-case nil (gptel-auto-workflow--load-autotts-controller) (error nil))))
     (if controller
         (progn
           (setq content (concat content "Current controller configuration (evolved from trace outcomes):\n\n"))
@@ -1455,8 +1480,8 @@ Returns string with controller guidance."
               (setq content (concat content "\n**Topic-specific strategies**:\n\n"))
               (dolist (tm topic-models)
                 (let ((topic (plist-get tm :topic))
-                      (n (plist-get tm :n-traces))
-                      (base (plist-get tm :base-rate)))
+                      (n (or (plist-get tm :n-traces) 0))
+                      (base (or (plist-get tm :base-rate) 0.0)))
                   (setq content (concat content (format "- %s: %d traces, %.0f%% base rate\n"
                                                         topic n (* 100 base)))))))
             content))
@@ -1465,7 +1490,7 @@ Returns string with controller guidance."
 (defun gptel-auto-workflow--generate-dynamic-instructions ()
   "Generate markdown section with dynamic instructions based on trace outcomes.
 Returns string with source strategy and controller awareness."
-  (let* ((traces (condition-case nil (gptel-auto-workflow--load-research-traces) (ignore)))
+  (let* ((traces (condition-case nil (gptel-auto-workflow--load-research-traces) (error nil)))
          (own-repo-kept 0) (own-repo-total 0)
          (external-kept 0) (external-total 0)
          (content "## Instructions\n\n"))
@@ -1829,6 +1854,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (cl-block gptel-auto-workflow-evolution-run-cycle
   (condition-case early-err
       (progn
+  ;; Invalidate parse cache so this cycle sees fresh data
+  (setq gptel-auto-workflow--results-cache nil)
   ;; Throttle: don't run more than once per 300s (5min) unless forced
   (let ((now (float-time (current-time))))
     (when (and gptel-auto-workflow--evolution-last-run
@@ -1855,7 +1882,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (message "[evolution] ∃ Truth: convergence — Eight Keys score %.3f ≤ %.3f, skipping"
                  current-obj gptel-auto-workflow--evolution-last-objective)
         (cl-return-from gptel-auto-workflow-evolution-run-cycle "converged"))
-      (when (> current-obj 0)
+      (when (and current-obj (> current-obj 0))
         (setq gptel-auto-workflow--evolution-last-objective current-obj)
         (message "[evolution] Eight Keys score: %.3f" current-obj))))
   (message "[auto-workflow] Running self-evolution cycle...")
@@ -1881,13 +1908,14 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (let ((new-experiments (or (gptel-auto-workflow--evolution-count-new) 0))
             (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                                (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
-        (when (and (< new-experiments 3) (not has-research))
-          ;; Persist hints before early return so state survives daemon restarts
-          (gptel-auto-workflow--persist-next-cycle-hints)
-          (let ((message (format "[evolution] Insufficient new data (%d experiments, no research). Skipping."
-                                 new-experiments)))
-            (message "%s" message)
-            (cl-return-from gptel-auto-workflow-evolution-run-cycle message))))
+         ;; Negative count means experiments were cleaned up (last-total > current).
+         ;; Run anyway — we still have data to analyze. Only skip when genuinely 0.
+         (when (and (= new-experiments 0) (not has-research))
+           ;; Persist hints before early return so state survives daemon restarts
+           (gptel-auto-workflow--persist-next-cycle-hints)
+           (let ((message (format "[evolution] No new experiments (0 new, no research). Skipping.")))
+             (message "%s" message)
+             (cl-return-from gptel-auto-workflow-evolution-run-cycle message))))
     (error (message "[evolution] Warning: new-experiments check failed, continuing cycle")))
   ;; Consume pipeline env vars for research-aware evolution
   (let ((research-quality (getenv "PIPELINE_RESEARCH_QUALITY"))
@@ -1960,6 +1988,14 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (condition-case err
         (gptel-auto-workflow--auto-tune-personas)
       (error (message "[evolution] Step persona-auto-tune: %s" err))))
+  ;; Step C.7c: Ontology self-evolution — learn category-strategy fit
+  (when (fboundp 'gptel-auto-workflow--evolve-ontology)
+    (condition-case err
+        (let ((result (gptel-auto-workflow--evolve-ontology)))
+          (message "[ontology-evolve] Changes: %d, Saturated: %d"
+                   (plist-get result :changes)
+                   (plist-get result :saturated)))
+      (error (message "[evolution] Step ontology-evolve: %s" err))))
   ;; Step C.8: Allium issue trend analysis + regression detection
   (condition-case err
       (let ((trends-report (gptel-auto-workflow--allium-trends-report)))
@@ -1993,7 +2029,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (dolist (b (seq-take (plist-get impact :breaking) 3))
           (message "[impact]   BREAKING: %s (delta=%.2f, %s)"
                    (plist-get b :target) (plist-get b :delta) (plist-get b :reason))))
-    (ignore))
+    (error nil))
   ;; Competency question answerability check (Semantica pattern)
   (condition-case nil
       (let ((cq-results (gptel-auto-workflow--check-competency-questions)))
@@ -2004,7 +2040,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (dolist (r cq-results)
             (unless (cdr r)
               (message "[cq]   UNANSWERABLE: %s" (car r))))))
-    (ignore))
+    (error nil))
   ;; Competitive gating — champion league (AutoGo pattern)
   (condition-case err
       (let ((gated (gptel-auto-workflow--gate-strategies)))
@@ -2018,21 +2054,13 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case err
       (progn
         (gptel-auto-workflow--apply-cross-subsystem-feedback)
+      ;; Decay category strikes so frozen categories eventually thaw
+      (condition-case nil (gptel-auto-workflow--decay-category-strikes) (error nil))
       ;; Research champion league: benchmark proposed strategies against incumbents
       (when (fboundp 'gptel-auto-workflow--run-research-champion-league)
         (run-with-idle-timer 30 nil #'gptel-auto-workflow--run-research-champion-league))
         (gptel-auto-workflow--consume-vsm-actions))
     (error (message "[feedback] ERROR: cross-subsystem failed — %s" (error-message-string err))))
-  ;; Verbum Phase 11: Lambda compiler verification (run every 6 hours)
-  (when (fboundp 'gptel-auto-workflow--verify-all-backends-lambda)
-    (let ((last-verify (get 'gptel-auto-workflow--verify-all-backends-lambda :last-run)))
-      (when (or (null last-verify)
-                (> (- (float-time) last-verify) 21600))  ; 6 hours
-        (condition-case err
-            (progn
-              (gptel-auto-workflow--verify-all-backends-lambda)
-              (put 'gptel-auto-workflow--verify-all-backends-lambda :last-run (float-time)))
-          (error (message "[verbum] ERROR: lambda verification failed — %s" (error-message-string err)))))))
   ;; Verbum Phase 6+9: Cross-backend consistency + low-agreement alerts (run every 3 hours)
   (when (fboundp 'gptel-auto-workflow--check-all-targets-consistency)
     (let ((last-check (get 'gptel-auto-workflow--check-all-targets-consistency :last-run)))
@@ -2065,8 +2093,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                         (message "[verbum]   %s: %.0f%% agreement, %d conflicts"
                                  (plist-get report :target)
                                  (* 100 (or (plist-get report :ratio) 0.0))
-                                 (length (plist-get report :conflicts))))))))))
-          (error (message "[verbum] ERROR: consistency check failed — %s" (error-message-string err)))))))
+                                  (length (plist-get report :conflicts)))))))))
+          (error (message "[verbum] ERROR: consistency check failed — %s" (error-message-string err))))))))
   ;; Ambiguity filtering + second-chance repair (LogMap patterns)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -2074,7 +2102,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (when targets
           (gptel-auto-workflow--filter-by-ambiguity targets 3))
         (gptel-auto-workflow--second-chance-repair))
-    (ignore))
+    (error nil))
   ;; Policy check (Semantica PolicyEngine pattern)
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -2086,7 +2114,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
               (message "[policy] VIOLATION: %s" e)))
           (dolist (w (plist-get policy-result :warnings))
             (message "[policy] WARNING: %s" w))))
-    (ignore))
+    (error nil))
   ;; Run audits and feed results back into evolution
   (condition-case err
       (let ((flagged (gptel-auto-workflow--audit-signal)))
@@ -2108,7 +2136,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                   (> (- now (or (symbol-value 'gptel-auto-workflow--allium-audit-last-run) 0)) 900))
           (setq gptel-auto-workflow--allium-audit-last-run now)
           (gptel-auto-workflow--allium-audit-signal)))
-    (ignore))
+    (error nil))
   ;; Allium BDD gate: behavioral spec coherence check on Ouroboros invariants
   (condition-case err
       (gptel-auto-workflow--allium-bdd-gate)
@@ -2151,7 +2179,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                          (file-name-nondirectory worst)
                          (length (plist-get v :errors))
                          (length (plist-get v :warnings))))))))
-    (ignore))
+    (error nil))
   ;; Forward chaining + DecisionQuery (Semantica reasoning + query)
   (condition-case nil
       (let ((inferred (gptel-auto-workflow--forward-chain)))
@@ -2162,7 +2190,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                      (cdr (assoc 'action a))
                      (cdr (assoc 'reason a))
                       (cdr (assoc 'severity a))))))
-    (ignore))
+    (error nil))
   ;; Abductive diagnosis — best explanations for system state
   (condition-case nil
       (let ((diagnoses (gptel-auto-workflow--abductive-diagnose)))
@@ -2176,7 +2204,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                          (plist-get e :cause)
                          (plist-get e :action)
                          (* 100 (plist-get e :confidence))))))))
-    (ignore))
+    (error nil))
   ;; Deductive explanation — prove WHY observations hold
   (condition-case nil
       (let ((facts (list (cons 'keep-rate (gptel-auto-workflow--overall-keep-rate))
@@ -2187,7 +2215,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                      (plist-get p :goal)
                      (* 100 (or (plist-get p :confidence) 0))
                      (or (plist-get p :premises-count) 0)))))
-    (ignore))
+    (error nil))
   ;; Datalog transitive closure — causal chains
   (condition-case nil
       (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -2202,7 +2230,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (let ((transitive (gptel-auto-workflow--datalog-transitive-chain causal-pairs)))
           (when transitive
             (message "[datalog] %d transitive causal edges discovered" (length transitive)))))
-    (ignore))
+    (error nil))
   ;; Temporal analysis — Allen relations + coverage gaps
   (condition-case nil
       (let ((gaps (gptel-auto-workflow--experiment-time-gaps)))
@@ -2212,29 +2240,29 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (message "[temporal]   %s: gap since %.0fh ago"
                      (truncate-string-to-width (car (cdr g)) 30)
                      (/ (- (float-time) (cdr (cdr g))) 3600)))))
-    (ignore))
+    (error nil))
   ;; AgentMemory status log (Semantica pattern)
   (condition-case nil
       (let ((mem (gptel-auto-workflow--memory-status)))
         (message "[memory] 4-layer architecture:")
         (dolist (m mem)
           (message "[memory]   %s: %s (%s)" (plist-get m :layer) (plist-get m :state) (plist-get m :description))))
-    (ignore))
+    (error nil))
   ;; Holdout evaluation — real progress vs overfitting (AutoGo pattern)
   (condition-case nil
       (let ((h (gptel-auto-workflow--evaluate-holdout)))
         (message "[holdout] avg=%.3f trend=%+.3f" (plist-get h :average) (plist-get h :trend)))
-    (ignore))
+    (error nil))
   ;; LLM-as-Oracle: produce uncertain candidates for validation
   (condition-case nil
       (let ((candidates (gptel-auto-workflow--produce-candidates-for-llm 20)))
         (when candidates
           (message "[oracle] %d uncertain candidates for LLM validation" (length candidates))))
-    (ignore))
+    (error nil))
   ;; Build inverted file index (LogMap pattern)
   (condition-case nil
       (gptel-auto-workflow--build-inverted-file)
-    (ignore))
+    (error nil))
   (message "[auto-workflow] Self-evolution cycle complete.")
   ;; Emit machine-parseable RESULT for this cycle (AutoGo protocol)
   (condition-case nil
@@ -2249,7 +2277,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (list :metric "evolution-cycle" :value rate
                   :delta (- rate (or gptel-auto-workflow--champion-keep-rate 0))
                   :status (if (> rate 0) "keep" "skip")))))
-    (ignore)))
+    (error nil)))
 
  ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
 
@@ -2420,13 +2448,17 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
               (when (string-match "[0-9]+" pid)
                 (signal-process (string-to-number pid) 'sigterm)
                 (message "[cleanup] Killed stale fg-daemon pid %s" pid))))
-          ;; 4. Clean /tmp/gptel-* files older than 2 hours
-          (dolist (f (directory-files "/tmp" t "gptel-"))
+          ;; 4. Clean gptel-* temp files/directories older than 2 hours
+          (dolist (f (directory-files temporary-file-directory t "gptel-"))
             (let ((attrs (and f (file-attributes f))))
               (when (and attrs
                          (> (- now (float-time (file-attribute-modification-time attrs)))
                             (* 2 3600)))
-                (delete-file f t)
+                (condition-case nil
+                    (if (file-directory-p f)
+                        (delete-directory f t)
+                      (delete-file f t))
+                  (error nil))
                 (setq cleaned-temp (1+ cleaned-temp)))))
           ;; 5. Truncate daemon log if >10MB
           (let ((log-file (expand-file-name "var/tmp/cron/ov5-auto-workflow.log" root)))
@@ -2467,7 +2499,7 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
             (message "[cleanup] Removed %d stale worktrees" removed-worktrees))
           (when (> cleaned-temp 0)
             (message "[cleanup] Cleaned %d stale temp files" cleaned-temp)))
-      (ignore))))
+      (error nil))))
 
 (defun gptel-auto-workflow--detect-minimal-pairs (target)
   "Detect minimal pair experiments for TARGET from TSV history.
@@ -2556,7 +2588,7 @@ Returns plist with :added, :removed, :changed."
                           (insert-file-contents snap-file)
                           (goto-char (point-min))
                           (read (current-buffer)))
-                      (ignore)))
+                      (error nil)))
          (added nil) (removed nil) (changed nil))
     (dolist (f current-pages)
       (let ((sig (gptel-auto-workflow--knowledge-page-signature f)))
@@ -2942,27 +2974,71 @@ Semantica abductive reasoner pattern."
 DEPRECATED: use --category-champions for per-category gating.")
 
 (defvar gptel-auto-workflow--category-strike-counts nil
-  "Alist of (CATEGORY . STRIKES) tracking successive champion failures.
-∀ Vigilance: 3 consecutive failures in a category freezes it for 5 cycles.")
+  "Alist of (CATEGORY . (STRIKES . CYCLE-FROZEN)) tracking failures.
+∀ Vigilance: 3 consecutive failures in a category freezes it.
+Strikes decay by 1 per evolution cycle below frozen threshold.
+CYCLE-FROZEN records which evolution cycle the freeze started.")
+
+(defvar gptel-auto-workflow--evolution-cycle-counter 0
+  "Incremented each evolution cycle. Used for strike decay timing.")
 
 (defun gptel-auto-workflow--record-category-strike (category)
   "Increment failure strike for CATEGORY. Freezes at 3."
-  (let ((entry (assq category gptel-auto-workflow--category-strike-counts)))
+  (let* ((entry (assq category gptel-auto-workflow--category-strike-counts))
+         (strikes (if entry (cadr entry) 0))
+         (cycle (if entry (cddr entry) nil))
+         (new-strikes (1+ strikes)))
     (if entry
-        (setcdr entry (1+ (cdr entry)))
-      (push (cons category 1) gptel-auto-workflow--category-strike-counts))
-    (when (>= (cdr (assq category gptel-auto-workflow--category-strike-counts)) 3)
-      (message "[champion] ∀ Vigilance: category %s FROZEN (3 strikes) — 5 cycle cooldown" category))))
+        (setcdr entry (cons new-strikes cycle))
+      (push (cons category (cons new-strikes nil)) gptel-auto-workflow--category-strike-counts))
+    (when (>= new-strikes 3)
+      (unless cycle
+        (setcdr (assq category gptel-auto-workflow--category-strike-counts)
+                (cons new-strikes gptel-auto-workflow--evolution-cycle-counter)))
+      (message "[champion] ∀ Vigilance: category %s FROZEN (%d strikes) — auto-thaw after decay or success"
+               category new-strikes))))
 
 (defun gptel-auto-workflow--category-frozen-p (category)
-  "Return non-nil if CATEGORY is frozen (≥3 strikes)."
-  (let ((entry (assq category gptel-auto-workflow--category-strike-counts)))
-    (and entry (>= (cdr entry) 3))))
+  "Return non-nil if CATEGORY is frozen (≥3 strikes).
+Auto-thaws if frozen for > 5 evolution cycles (strike decay).
+Handles old format (CATEGORY . INTEGER) and new (CATEGORY . (INTEGER . CYCLE))."
+  (let* ((entry (assq category gptel-auto-workflow--category-strike-counts))
+         (rest (if entry (cdr entry) nil))
+         (strikes (if (consp rest) (car rest) (or rest 0)))
+         (frozen-cycle (if (consp rest) (cdr rest) nil)))
+    ;; If no freeze cycle recorded but frozen, set it now so auto-thaw can trigger
+    (when (and (numberp strikes) (>= strikes 3) (not frozen-cycle))
+      (setcdr entry (cons strikes gptel-auto-workflow--evolution-cycle-counter))
+      (setq frozen-cycle gptel-auto-workflow--evolution-cycle-counter))
+    (if (and (>= strikes 3) frozen-cycle
+             (> (- gptel-auto-workflow--evolution-cycle-counter frozen-cycle) 5))
+        (progn
+          (gptel-auto-workflow--reset-category-strikes category)
+          (message "[champion] ∀ Vigilance: category %s THAWED after %d cycles"
+                   category (- gptel-auto-workflow--evolution-cycle-counter frozen-cycle))
+          nil)
+      (>= strikes 3))))
 
 (defun gptel-auto-workflow--reset-category-strikes (category)
   "Reset strikes for CATEGORY after a success."
   (setq gptel-auto-workflow--category-strike-counts
         (assq-delete-all category gptel-auto-workflow--category-strike-counts)))
+
+(defun gptel-auto-workflow--decay-category-strikes ()
+  "Reduce all category strikes by 1 per cycle. Removes entries when strikes hit 0.
+Handles both old format (CATEGORY . INTEGER) and new format (CATEGORY . (INTEGER . CYCLE))."
+  (let ((new nil))
+    (dolist (entry gptel-auto-workflow--category-strike-counts)
+      (let* ((cat (car entry))
+             (rest (cdr entry))
+             ;; Handle old format (CATEGORY . INTEGER) and new (CATEGORY . (STRIKES . CYCLE))
+             (strikes (if (consp rest) (car rest) rest))
+             (cycle (if (consp rest) (cdr rest) nil))
+             (decayed (max 0 (1- strikes))))
+        (when (> decayed 0)
+          (push (cons cat (cons decayed (and (>= strikes 3) cycle))) new))))
+    (setq gptel-auto-workflow--category-strike-counts new))
+  (cl-incf gptel-auto-workflow--evolution-cycle-counter))
 
 (defun gptel-auto-workflow--apply-category-vigilance (target decision)
   "Apply ∀ Vigilance strikes based on TARGET and DECISION.
@@ -3494,7 +3570,7 @@ AutoGo holdout pattern: crosses train vs holdout trends."
                   (let ((m (cl-count-if (lambda (l) (string-match-p patt l))
                                         (split-string c "\n"))))
                     (setq s (+ s (min 1.0 (/ (* m 10.0) n))))))))))
-      (ignore))
+      (error nil))
     (min 1.0 (/ s 2.0))))
 
 
@@ -3538,7 +3614,7 @@ Source repos are extracted from prefetched content patterns."
                   (let ((entry (or (gethash w gptel-auto-workflow--pattern-inverted-file) (make-hash-table :test (quote equal)))))
                     (puthash name t entry)
                     (puthash w entry gptel-auto-workflow--pattern-inverted-file)))))
-          (ignore)))))
+          (error nil)))))
   (message "[logmap] Inverted file: %d tokens indexed" (hash-table-count gptel-auto-workflow--pattern-inverted-file)))
 
 (defun gptel-auto-workflow--query-inverted-file (query)
@@ -4170,7 +4246,7 @@ Returns markdown grouped by strategy, or an empty string."
                       (let ((content (buffer-string)))
                         (when (and content (> (length content) 20))
                           (push content result))))))
-              (ignore))))
+              (error nil))))
         (if result
             (concat "### Allium Behavioral Audit (coherence check of last cycle's research)\n\n"
                     (mapconcat #'identity (nreverse result) "\n---\n"))
@@ -4248,13 +4324,24 @@ Use to determine which minimal pair has cleaner behavioral specification."
   "Find opposing hypotheses from kept+discarded experiments and diff via Allium.
 Compares the most recently kept hypothesis against the most recently discarded
 one for the same target. Logs which side has cleaner behavioral spec.
-Non-blocking — runs async via gptel callbacks."
+Non-blocking — runs async via gptel callbacks.
+Only processes targets from the last 7 days to avoid analyzing stale data."
   (when (and (fboundp 'gptel-auto-experiment--allium-distill)
              (fboundp 'gptel-auto-experiment--allium-check))
     (let* ((results (gptel-auto-workflow--parse-all-results))
+           ;; Only keep kept/discarded results for comparison
+           (recent-results
+            (cl-remove-if-not
+             (lambda (r)
+               (let ((decision (plist-get r :decision)))
+                 (or (string= decision "kept")
+                     (string= decision "discarded"))))
+             results))
            (by-target (make-hash-table :test 'equal))
-           (targets nil))
-      (dolist (r results)
+           (targets nil)
+           (processed-count 0)
+           (max-targets 20))  ; Limit to avoid excessive processing
+      (dolist (r recent-results)
         (let ((target (plist-get r :target))
               (hypothesis (plist-get r :hypothesis))
               (decision (plist-get r :decision)))
@@ -4263,12 +4350,15 @@ Non-blocking — runs async via gptel callbacks."
             (unless (gethash target by-target)
               (push target targets))
             (push (cons decision hypothesis) (gethash target by-target)))))
-       (dolist (target (nreverse targets))
-         (let ((entries (gethash target by-target)))
+      (message "[allium-diff] Analyzing %d targets with kept/discarded pairs (limited to %d)"
+               (length targets) max-targets)
+      (dolist (target (seq-take (nreverse targets) max-targets))
+        (let ((entries (gethash target by-target)))
           (when (listp entries)
             (let ((kept (cl-find "kept" entries :key #'car :test #'equal))
                   (discarded (cl-find "discarded" entries :key #'car :test #'equal)))
               (when (and kept discarded)
+                (setq processed-count (1+ processed-count))
                 (gptel-auto-workflow--allium-diff-minimal-pairs
                  (cdr kept) (cdr discarded)
                  (lambda (result)
@@ -4276,7 +4366,8 @@ Non-blocking — runs async via gptel callbacks."
                             target (car result) (cdr result))
                    (when (< (car result) (cdr result))
                      (message "[allium-diff] %s: kept hypothesis has cleaner spec (kept=%d < discarded=%d)"
-                               target (car result) (cdr result)))))))))))))
+                               target (car result) (cdr result))))))))))
+      (message "[allium-diff] Processed %d target pairs" processed-count))))
 
 ;; ─── Allium Improvements: trend tracking, dedup, regression detection, auto-repair ───
 
@@ -4329,7 +4420,7 @@ Returns plist with :trends (deduplicated issue patterns with counts),
                       (when (> current-count prev-count)
                         (push (list name prev-count current-count)
                               regressions)))))))
-          (ignore))))
+          (error nil))))
     (list :trends (sort (mapcar (lambda (k) (cons k (gethash k pattern-counts)))
                                 (hash-table-keys pattern-counts))
                         (lambda (a b) (> (cdr a) (cdr b))))
@@ -4378,7 +4469,7 @@ Returns string suitable for mementum or prompt injection."
                     (setq issue-count (string-to-number (match-string 1 (buffer-string)))))
                   (with-temp-file baseline-file
                     (insert (format "%d:0" issue-count))))))
-          (ignore))))))
+          (error nil))))))
 
 (defun gptel-auto-workflow--allium-build-repair-target (strategy-name)
   "Generate a repair guidance prompt for STRATEGY-NAME with critical Allium issues.
@@ -4448,7 +4539,7 @@ or empty string if none found."
                                (push (format "### Research quality for strategy `%s` (from Allium audit):\n\n%s"
                                              strategy content)
                                      result))))))
-                   (ignore)))))
+                   (error nil)))))
            relevant-strategies))))
     (if result
         (concat "## Previous Research Quality Issues (Allium audit)\n\n"
@@ -5263,7 +5354,7 @@ Simple keyword-based opposition detection."
                 (push (format "%s: missing Allium audit" (file-name-nondirectory f)) issues))
               (unless has-targets
                 (push (format "%s: missing Successful Targets section" (file-name-nondirectory f)) issues))))
-        (ignore)))
+        (error nil)))
     (let ((n (max 1 total-pages)))
       (list :coverage (/ coverage-score n)
             :completeness (/ completeness-score n)
@@ -5456,7 +5547,13 @@ Checks: required frontmatter, duplicate titles, empty sections."
   "Auto-reorder the fallback chain based on backend performance data.
 Moves better-performing backends to the front of the fallback chain."
   (let* ((stats (gptel-auto-workflow--evolution-backend-stats))
-         (ordered (mapcar #'car stats)))
+         ;; Only consider backends already in the current fallback chain.
+         ;; Historical data may include deprecated backends (e.g. CF-Gateway)
+         ;; that have been removed from the chain — don't re-add them.
+         (current-backends (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                             (mapcar #'car gptel-auto-workflow-executor-rate-limit-fallbacks)))
+         (ordered (seq-filter (lambda (b) (member b current-backends))
+                              (mapcar #'car stats))))
     (when (and ordered (> (length ordered) 2))
       (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
         (let ((new-chain
@@ -5898,10 +5995,8 @@ prompt, and category champions should gate new strategies with keep-rate evidenc
                  (let* ((root (gptel-auto-workflow--worktree-base-root))
                         (file (and root (expand-file-name "var/tmp/evolution/allium-bdd-report.md" root))))
                    (when file
-                     (make-directory (file-name-directory file) t)
-                     (with-temp-file file (insert report)))))))))
-       ;; Non-blocking: don't wait for callback
-       nil))))
+                      (make-directory (file-name-directory file) t)
+                      (with-temp-file file (insert report)))))))))))))
 
 
 
@@ -5958,3 +6053,4 @@ Signals ert-test-failed if check fails. Use in ERT tests."
 
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here
+

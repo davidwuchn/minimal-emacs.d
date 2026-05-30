@@ -1,4 +1,4 @@
-                                        ; -*- lexical-binding: t; -*-
+;;; -*- lexical-binding: t; -*-
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
@@ -498,28 +498,87 @@ The Allium format is a compact statechart — much smaller than English prose."
                         (* 100.0 (/ (float (length allium-spec)) (length english-findings))))))))
         nil))))
 
-(defun gptel-auto-experiment--research-for-prompt (english-findings)
+(defun gptel-auto-experiment--strip-think-blocks (text)
+  "Remove all <think>...</think> blocks from TEXT.
+These are LLM reasoning/planning text that confuses executor agents
+into interpreting the task as research rather than code changes."
+  (let ((result text) start end)
+    (while (string-match "<think>" result)
+      (setq start (match-beginning 0))
+      (setq end (when (string-match "</think>" result (match-end 0))
+                  (match-end 0)))
+      (if end
+          (setq result (concat (substring result 0 start)
+                               (substring result end)))
+        (setq result (substring result 0 start))))
+    (string-trim result)))
+
+(defun gptel-auto-experiment--extract-actionable-patterns (text target)
+  "Extract actionable patterns from TEXT relevant to TARGET.
+Filters to lines containing actionable keywords and topic-relevant terms.
+Returns at most 3 patterns as a compact string, max 500 chars."
+  (let* ((lines (split-string text "\n"))
+         (action-kws '("apply" "fix" "add" "implement" "guard" "validate"
+                       "verify" "handle" "prevent" "circuit" "breaker"
+                       "timeout" "retry" "fallback" "degrade" "classify"
+                       "pattern" "route" "optimize" "extract" "deduplicate"))
+         (target-topic (cond
+                        ((string-match "error" target) "error")
+                        ((string-match "retry" target) "retry")
+                        ((string-match "timeout" target) "timeout")
+                        ((string-match "prompt" target) "prompt")
+                        ((string-match "benchmark" target) "benchmark")
+                        ((string-match "routing\\|router" target) "routing")
+                        ((string-match "evolution" target) "evolution")
+                        (t nil)))
+         (relevant-lines
+          (seq-take
+           (seq-filter
+            (lambda (l)
+              (and (string-match-p (regexp-opt '("^- " "^\\* " "^[0-9]+\\." "^-\\s-" "^\\*\\*"))
+                                   (string-trim l))
+                   (let ((lower (downcase l)))
+                     (or (seq-some (lambda (kw) (string-match-p kw lower))
+                                   action-kws)
+                         (and target-topic (string-match-p target-topic lower))))))
+            lines)
+           3))
+         (compact (if relevant-lines
+                      (mapconcat (lambda (l)
+                                   (let ((trimmed (string-trim l)))
+                                     (truncate-string-to-width trimmed 160 nil nil "")))
+                                 relevant-lines "\n")
+                    (truncate-string-to-width text 300 nil nil "..."))))
+    (if (> (length compact) 500)
+        (concat (truncate-string-to-width compact 497 nil nil "") "...")
+      compact)))
+
+(defun gptel-auto-experiment--research-for-prompt (english-findings &optional target)
   "Return research findings optimized for LLM prompts.
-Uses lambda-compressed version when backend supports it,
-falls back to English prose otherwise.  Allium version is for human audit only."
-  (let ((allium (gptel-auto-experiment--allium-research-findings english-findings nil)))
-    ;; Allium: human audit trail only — never sent to LLM directly
-    ;; Lambda compression: strip English filler, convert to compact notation
-    (if (gptel-auto-experiment--use-lambda-prompts-p)
-        ;; Lambda-compressed: key patterns, no prose filler
-        (let* ((lines (split-string english-findings "\n"))
-               (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
-               (compact (if apply-lines
-                            (mapconcat (lambda (l)
-                                         (replace-regexp-in-string
-                                          "\\*\\*Apply:\\*\\*:?\\s-*" "λ apply: "
-                                          (string-trim l)))
-                                       apply-lines "\n")
-                          "")))
-          (if (string-empty-p compact)
-              (truncate-string-to-width english-findings 500 nil nil "...")
-            compact))
-      english-findings)))
+Strips <think> blocks, extracts actionable patterns, limits to 200 chars.
+Adds strong DO-NOT-RESEARCH prefix to prevent agents from interpreting
+as a research task."
+  (let* ((stripped (gptel-auto-experiment--strip-think-blocks english-findings))
+         (focused (gptel-auto-experiment--extract-actionable-patterns stripped (or target "")))
+         (base (if (gptel-auto-experiment--use-lambda-prompts-p)
+                  (let* ((lines (split-string stripped "\n"))
+                         (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
+                         (compact (if apply-lines
+                                      (mapconcat (lambda (l)
+                                                   (replace-regexp-in-string
+                                                    "\\*\\*Apply:\\*\\*:?\\s-*" "λ apply: "
+                                                    (string-trim l)))
+                                                 apply-lines "\n")
+                                    "")))
+                    (if (string-empty-p compact) focused compact))
+                focused))
+         (trimmed (if (> (length base) 200)
+                      (concat (truncate-string-to-width base 197 nil nil "") "...")
+                    base)))
+    (if (string-empty-p trimmed)
+        ""
+      (concat "## Research Context (REFERENCE ONLY — DO NOT RESEARCH — USE FOR HYPOTHESIS IDEAS)\n"
+              trimmed))))
 
 (defun gptel-auto-experiment--allium-issues-count (check-output)
   "Count distinct issues from Allium check output (deterministic).
@@ -647,7 +706,8 @@ CALLBACK receives the Turtle string or nil."
 
 (defvar gptel-auto-workflow--ab-test-sections
   '(suggestions self-evolution topic-specific git-history
-                axis-performance cross-target-patterns failure-patterns)
+                axis-performance cross-target-patterns failure-patterns
+                research-findings)
   "Prompt sections that can be individually included/excluded for A/B testing.")
 
 (defvar gptel-auto-workflow--ab-test-omit-rate 0.2
@@ -996,13 +1056,16 @@ Returns a compact lambda-notation string ready for the LLM."
          (axis-p (cdr (assoc 'axis-performance vars)))
          (frontier (cdr (assoc 'frontier-guidance vars)))
          (satur (cdr (assoc 'saturation-status vars)))
-         (fail-p (cdr (assoc 'failure-patterns vars)))
-         (div (cdr (assoc 'task-type-diversity vars)))
-         (cross (cdr (assoc 'cross-target-patterns vars)))
+          (fail-p (cdr (assoc 'failure-patterns vars)))
+          (onto-g (cdr (assoc 'ontology-guidance vars)))
+          (act-s (cdr (assoc 'action-schema vars)))
+          (div (cdr (assoc 'task-type-diversity vars)))
+          (cross (cdr (assoc 'cross-target-patterns vars)))
          (strat-f (cdr (assoc 'strategy-frontier vars)))
          (agent-b (cdr (assoc 'agent-behavior vars)))
          (val-pipe (cdr (assoc 'validation-pipeline vars))))
     (concat
+     ;; HEADER
      (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
              target exp-id max-exp budget worktree tgt-full baseline)
      (if weakest (concat "\n  " weakest) "")
@@ -1011,7 +1074,12 @@ Returns a compact lambda-notation string ready for the LLM."
      (if large (concat "\n  " large) "")
      (if moderator (concat "\n  " moderator) "")
      "\n\n"
-     (if persona (concat "CATEGORY: " persona "\n") "")
+     ;; ONTOLOGY FRAME (harness — structures the action space first)
+     (if onto-g (concat "CATEGORY: " onto-g "\n") "")
+     (if act-s (concat act-s "\n") "")
+     (when (or onto-g act-s) "\n")
+     ;; CONTEXT (what you know about this target)
+     (if persona (concat "PERSONA: " persona "\n") "")
      (if skills (concat "SKILLS: " skills "\n") "")
      (if allium-i (concat "ALLIUM: " allium-i "\n") "")
      (if allium-r (concat "REPAIR: " allium-r "\n") "")
@@ -1031,22 +1099,41 @@ Returns a compact lambda-notation string ready for the LLM."
      (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
      (if frontier (concat "FRONTIER: " frontier "\n") "")
      (if satur (concat "SATUR: " satur "\n") "")
+     ;; FAILURE PATTERNS (guardrails — what went wrong before)
      (if fail-p (concat "FAIL: " fail-p "\n") "")
      (if div (concat "DIVERSITY: " div "\n") "")
      (if cross (concat "CROSS: " cross "\n") "")
      (if strat-f (concat "STRATEGY: " strat-f "\n") "")
      (if agent-b (concat "AGENT: " agent-b "\n") "")
      (if val-pipe (concat "VALIDATE: " val-pipe "\n") "")
-     "\nRULES:\n"
-     "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
-     "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
-     "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"\n"
-     (if focus (concat "  " focus "\n") "")
-     "| use(Edit) | minimal(change) | ¬git(add,commit,push) — workflow handles\n"
-     (concat "| verify: " (or sexp "emacs --batch --eval '...'")
-             " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n")
-     "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds) COMMIT(\"not committed\")\n"
-     "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage")))
+       "\nRULES:\n"
+       "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
+       "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
+       "| MUST edit files — analysis-only responses will be rejected without grading\n"
+       "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank — always state concrete change)\n"
+       (if focus (concat "  " focus "\n") "")
+        "| use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)\n"
+        "| ∀cl-return-from: ∃cl-block ∧ name_match | ¬call_undefined_fn\n"
+        "| MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files before finishing\n"
+       (concat "| MANDATORY: verify command: " (or sexp "emacs --batch --eval '...'")
+               " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n"
+               "| REPORT: In OUTPUT section, show exactly which verify commands ran and their exit codes\n")
+       "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds+exit_codes) COMMIT(\"not committed\")\n"
+      "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage"
+      "\n\nANTI-PATTERNS (causes instant REJECT):\n"
+      "| ¬broad_indentation_changes (never re-indent entire functions)\n"
+      "| ¬extract_helpers_for_single_use (don't create abstractions with one caller)\n"
+      "| ¬rename_vars_unless_bug | ¬reorder_existing_logic\n"
+      "| ¬remove_commented_code | ¬add_comments_to_working_code\n"
+      "| ¬change_indentation_style | ¬convert_let*→let_unless_semantic\n"
+      "\nPATTERNS THAT PASS (copy these):\n"
+      "| add `nil` guard before car/assq on optional arg\n"
+      "| change `(when x (progn ...))` to `(when x ...)` (remove redundant progn)\n"
+      "| add `(ignore-errors ...)` around fragile operation\n"
+      "| replace `(if x nil (y))` with `(unless x (y))`\n"
+      "| add type check `(when (stringp x) ...)` before string operation\n"
+      "| replace `(append (list a) (list b))` with `(list a b)`\n"
+      "\nCRITICAL: Your code quality delta MUST be >= 0. If you break existing tests or decrease readability, you will be REJECTED.\n")))
 
 (defun gptel-auto-workflow--load-prompt-template ()
   "Load prompt template from skill file.
@@ -1073,15 +1160,17 @@ Returns template string or fallback hardcoded template."
         RULES:
         | ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)
         | ¬doc_only | ¬comment_only | Δ(code) ≡ required
-        | 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"
+        | 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank)
         {{focus-line}}
-        | use(Edit) | minimal(change) | ¬git(add,commit,push) — workflow handles
+        | use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)
+        | MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files
+        | MANDATORY: Run verify command and report exit code
         | verify: {{sexp-check-command}} && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
 
         OUTPUT:
         CHANGED: file(s) + functions touched
         EVIDENCE: 1-2 concrete diffs
-        VERIFY: commands run + pass/fail
+        VERIFY: commands run + exit codes (MANDATORY — show each command and its exit code)
         COMMIT: \"not committed\"
 
         TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage
@@ -1094,7 +1183,23 @@ Returns template string or fallback hardcoded template."
         HYPOTHESES: \"Adding nil validation in X prevents runtime errors\"
                    \"Extracting duplicate Y into helper reduces duplication\"
                    \"Adding cache for Z improves performance\"
-                   \"Fixing off-by-one in loop corrects boundary case\"")))
+                   \"Fixing off-by-one in loop corrects boundary case\"
+
+        ANTI-PATTERNS (causes instant REJECT):
+        ¬broad_indentation_changes | ¬extract_helpers_for_single_use
+        ¬rename_vars_unless_bug | ¬reorder_existing_logic
+        ¬remove_commented_code | ¬add_comments_to_working_code
+        ¬change_indentation_style | ¬convert_let*→let_unless_semantic
+
+        PATTERNS THAT PASS:
+        add nil guard before car/assq on optional arg
+        change (when x (progn ...)) to (when x ...)
+        add (ignore-errors ...) around fragile operation
+        replace (if x nil (y)) with (unless x (y))
+        add (when (stringp x) ...) before string operation
+        replace (append (list a) (list b)) with (list a b)
+
+        CRITICAL: code quality delta MUST be >= 0. Breaking tests or decreasing readability = REJECTED.")))
 
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)
@@ -1255,18 +1360,23 @@ Implements section-level A/B testing to identify effective prompt components."
               (axis-performance . ,(gptel-auto-experiment--format-axis-performance target))
               (frontier-guidance . ,(gptel-auto-experiment--format-frontier-guidance target))
               (saturation-status . ,(gptel-auto-experiment--frontier-saturation-guidance target))
-              (failure-patterns . ,(gptel-auto-experiment--format-failure-patterns target))
-              (task-type-diversity . ,(gptel-auto-experiment--format-task-type-diversity target))
-              (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
+               (failure-patterns . ,(gptel-auto-experiment--format-failure-patterns target))
+               (task-type-diversity . ,(gptel-auto-experiment--format-task-type-diversity target))
+               (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
+               (ontology-guidance . ,(gptel-auto-experiment--format-ontology-guidance target))
+               (action-schema . ,(if (fboundp 'gptel-auto-workflow--format-schema-guidance)
+                                     (gptel-auto-workflow--format-schema-guidance target) ""))
               (strategy-frontier . ,(if (fboundp 'gptel-auto-workflow--format-strategy-frontier)
                                         (gptel-auto-workflow--format-strategy-frontier)
                                       ""))
               (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
               (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
-              (research-findings . ,(let ((findings (gptel-auto-workflow-load-research-findings)))
-                                       (if (and findings (not (string-empty-p findings)))
-                                           (gptel-auto-experiment--research-for-prompt findings)
-                                         "No recent external research available.")))
+               (research-findings . ,(if (funcall section-included-p 'research-findings)
+                                           (let ((findings (gptel-auto-workflow-load-research-findings)))
+                                              (if (and findings (not (string-empty-p findings)))
+                                                  (gptel-auto-experiment--research-for-prompt findings target)
+                                                "No recent external research available."))
+                                         ""))
               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
@@ -1445,7 +1555,9 @@ row for the same experiment and target."
     (gptel-auto-workflow--persist-status)))
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
-  "Append EXPERIMENT to results.tsv for RUN-ID."
+  "Append EXPERIMENT to results.tsv for RUN-ID.
+Captures executor reasoning from the dynamic variable
+`gptel-auto-experiment--executor-reasoning' when available."
   (let* ((file (gptel-auto-workflow--ensure-results-file run-id))
          (experiment-id (gptel-auto-workflow--plist-get experiment :id "?"))
          (target (gptel-auto-workflow--plist-get experiment :target "?"))
@@ -1453,6 +1565,20 @@ row for the same experiment and target."
          (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
                             (truncate-string-to-width agent-output 500 nil nil "..."))))
+    ;; Capture executor reasoning for self-evolution feedback
+    (when (and target (bound-and-true-p gptel-auto-experiment--executor-reasoning))
+      (let* ((insights (gethash target gptel-auto-experiment--grader-insights))
+             (existing-output (plist-get insights :executor-reasoning)))
+        ;; Only store if we don't already have reasoning for this target
+        ;; (first executor run per target is the most relevant)
+        (unless existing-output
+          (puthash target
+                   (plist-put (or insights (list :criteria nil))
+                              :executor-reasoning
+                              (substring gptel-auto-experiment--executor-reasoning
+                                         0 (min 500 (length gptel-auto-experiment--executor-reasoning))))
+                   gptel-auto-experiment--grader-insights))))
+    (setq gptel-auto-experiment--executor-reasoning nil)
     ;; Inject research metadata from global context into experiment record.
     ;; This closes the feedback loop: experiments carry the research run that
     ;; influenced the prompt so trace outcomes can be linked after logging.
@@ -1489,7 +1615,7 @@ row for the same experiment and target."
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                         experiment-id
                         target
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
@@ -1550,7 +1676,15 @@ row for the same experiment and target."
                             "?")
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :model "unknown"))
-                            "unknown"))))
+                             "unknown")
+                        (gptel-auto-experiment--tsv-escape
+                         (let ((ks (gptel-auto-workflow--plist-get experiment :eight-keys-scores nil)))
+                           (if ks (concat "{" (mapconcat
+                                                (lambda (pair)
+                                                  (format "%s:%.2f" (car pair) (cdr pair)))
+                                                ks ",") "}")
+                             ""))))))
+
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.
     (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)
@@ -1710,14 +1844,15 @@ exhaustion.")
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
-  '(("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-v4-flash")
-    ("moonshot" . "kimi-k2.6")
-    ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
-    ("MiniMax" . "minimax-m2.7-highspeed"))
+  '(("DeepSeek" . "deepseek-v4-pro")
+    ("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
-DashScope first (faster, more reliable), then DeepSeek, Moonshot, CF-Gateway, MiniMax."
+DeepSeek first (working, no content filter), then MiniMax (highspeed, but
+may hit rate limits), then moonshot (content_filter blocks code gen).
+DashScope removed — quota exhausted (HTTP 429) on this account.
+CF-Gateway removed — does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
@@ -1735,16 +1870,14 @@ CF-Gateway, then MiniMax."
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("DeepSeek" . "deepseek-v4-pro")
     ("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
-    ("DashScope" . "qwen3.6-plus")
-    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
+    ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
 
-DeepSeek first (best keep-rate for executor tasks at 25%).
-MiniMax second (16.3% keep-rate, proven on executor).
-Moonshot third (backup).  DashScope last — too slow for executor
-tasks (consistently times out at 1080s with nil output).
-CF-Gateway as emergency fallback."
+DeepSeek first — deepseek-v4-pro confirmed working (no content filter).
+MiniMax second — minimax-m2.7-highspeed fast but may hit rate limits.
+moonshot third — kimi-k2.6 content_filter blocks code gen (last resort).
+DashScope removed — quota exhausted (HTTP 429) on this account.
+CF-Gateway removed — @cf/moonshotai/kimi-k2.6 does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
@@ -1752,40 +1885,34 @@ CF-Gateway as emergency fallback."
 (defcustom gptel-auto-workflow-per-task-model-map
   '(("analyzer"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("analyzer"   "DashScope"  . "qwen3.6-plus")
-    ("analyzer"   "DeepSeek"   . "deepseek-v4-flash")
-    ("analyzer"   "CF-Gateway" . "@cf/openai/gpt-oss-120b")
+    ("analyzer"   "DeepSeek"   . "deepseek-v4-pro")
     ("analyzer"   "moonshot"   . "kimi-k2.6")
     ("grader"     "MiniMax"    . "minimax-m2.7-highspeed")
     ("grader"     "DashScope"  . "qwen3.6-plus")
-    ("grader"     "DeepSeek"   . "deepseek-v4-flash")
-    ("grader"     "CF-Gateway" . "@cf/openai/gpt-oss-120b")
+    ("grader"     "DeepSeek"   . "deepseek-v4-pro")
     ("grader"     "moonshot"   . "kimi-k2.6")
-    ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("executor"   "DashScope"  . "qwen3.6-plus")
-    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
-    ("executor"   "CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("executor"   "moonshot"   . "kimi-k2.6")
+    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
+    ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "DashScope"  . "qwen3.6-plus")
-    ("researcher" "DeepSeek"   . "deepseek-v4-flash")
-    ("researcher" "CF-Gateway" . "@cf/openai/gpt-oss-120b")
+    ("researcher" "DeepSeek"   . "deepseek-v4-pro")
     ("researcher" "moonshot"   . "kimi-k2.6")
     ("reviewer"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("reviewer"   "DashScope"  . "qwen3.6-plus")
     ("reviewer"   "DeepSeek"   . "deepseek-v4-pro")
-    ("reviewer"   "CF-Gateway" . "@cf/openai/gpt-oss-120b")
     ("reviewer"   "moonshot"   . "kimi-k2.6")
     ("comparator" "MiniMax"    . "minimax-m2.7-highspeed")
     ("comparator" "DashScope"  . "qwen3.6-plus")
-    ("comparator" "DeepSeek"   . "deepseek-v4-flash")
-    ("comparator" "CF-Gateway" . "@cf/openai/gpt-oss-120b")
+    ("comparator" "DeepSeek"   . "deepseek-v4-pro")
     ("comparator" "moonshot"   . "kimi-k2.6"))
   "Per-task-type model selection for each backend.
 Each element is (AGENT-TYPE BACKEND . MODEL).
 When selecting a backend+model pair for AGENT-TYPE, this map takes
 priority over the static fallback lists — ensuring code-generation
 tasks (executor) use the capable deepseek-v4-pro while analysis tasks
-(analyzer, grader) use the faster deepseek-v4-flash.
+(analyzer, grader) use the faster deepseek-v4-pro.
 Backend entries not listed here fall back to their default model from
 `gptel-auto-workflow-headless-subagent-fallbacks`."
   :type '(repeat (list (string :tag "Agent type")
@@ -1952,17 +2079,15 @@ the user has not explicitly customized the variable."
                        ("DeepSeek" . "deepseek-chat")
                        ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
                        ("Gemini" . "gemini-3.1-pro-preview"))
-                      (("DashScope" . "qwen3.6-plus")
-                       ("moonshot" . "kimi-k2.6")
-                       ("DeepSeek" . "deepseek-v4-flash")
-                       ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
-                       ("MiniMax" . "minimax-m2.7-highspeed"))))
-        (setq gptel-auto-workflow-headless-subagent-fallbacks
-              '(("DashScope" . "qwen3.6-plus")
-                ("DeepSeek" . "deepseek-v4-flash")
-                ("moonshot" . "kimi-k2.6")
-                ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
-                ("MiniMax" . "minimax-m2.7-highspeed")))
+                       (("DashScope" . "qwen3.6-plus")
+                        ("moonshot" . "kimi-k2.6")
+                        ("DeepSeek" . "deepseek-v4-pro")
+                        ("MiniMax" . "minimax-m2.7-highspeed"))))
+         (setq gptel-auto-workflow-headless-subagent-fallbacks
+               '(("DashScope" . "qwen3.6-plus")
+                 ("DeepSeek" . "deepseek-v4-pro")
+                 ("moonshot" . "kimi-k2.6")
+                 ("MiniMax" . "minimax-m2.7-highspeed")))
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-executor-rate-limit-fallbacks)
@@ -1971,12 +2096,11 @@ the user has not explicitly customized the variable."
                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
                      ("DashScope" . "qwen3.6-plus")
                      ("Gemini" . "gemini-3.1-pro-preview")))
-        (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-              '(("MiniMax" . "minimax-m2.7-highspeed")
-                ("moonshot" . "kimi-k2.6")
-                ("DashScope" . "glm-5")
-                ("DeepSeek" . "deepseek-v4-pro")
-                ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))
+          (setq gptel-auto-workflow-executor-rate-limit-fallbacks
+                '(("MiniMax" . "minimax-m2.7-highspeed")
+                  ("moonshot" . "kimi-k2.6")
+                  ("DashScope" . "glm-5")
+                  ("DeepSeek" . "deepseek-v4-pro")))
         (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-experiment-validation-retry-active-grace)
@@ -2126,20 +2250,19 @@ chain so that subagent calls do not fall through to the mode-hook default
 
 (defun gptel-auto-workflow--preset-backend-name (backend)
   "Return a readable backend name for BACKEND.
-Handles gptel-backend structs, strings, and keyword symbols."
-  (cond
-   ((stringp backend) backend)
-   ((keywordp backend) (substring (symbol-name backend) 1))
-   ((and backend (fboundp 'gptel-backend-name))
-    (gptel-auto-workflow--safe-backend-name backend))
-   (t (let ((name (format "%s" backend)))
-        (message "[backend] Warning: unknown backend type %S, using %s"
-                 (type-of backend) name)
-        name))))
+Handles gptel-backend structs, strings, and keyword symbols.
+Delegates to `gptel-auto-workflow--safe-backend-name' which
+handles stringp, keywordp, null, and struct types uniformly."
+  (gptel-auto-workflow--safe-backend-name backend))
 
 (defun gptel-auto-workflow--safe-backend-name (backend)
-  "Safe wrapper around `gptel-backend-name'.
-Catches type errors and falls back to format \"%s\"."
+  "Return a readable backend name for BACKEND, with type-safe fallbacks.
+Handles stringp (identity), keywordp (strip colon), null (\"nil\"),
+and gptel-backend structs via `gptel-backend-name' with error catching.
+When `gptel-backend-name' signals an error, falls back to (format \"%s\").
+
+This is the single point of truth for backend name resolution across
+the auto-workflow system."
   (cond
    ((stringp backend) backend)
    ((keywordp backend) (substring (symbol-name backend) 1))
@@ -2603,20 +2726,224 @@ Optional N limits number of reasons (default 3)."
       (setq pairs (sort pairs (lambda (a b) (> (cdr a) (cdr b)))))
       (seq-take pairs (or n 3)))))
 
+(defvar gptel-auto-experiment--grader-insights (make-hash-table :test 'equal)
+  "Hash table keyed by target file, values are plists of grader insight data.
+Each entry: (:grader-output RAW-TEXT :criteria ((DESC . REASON) ...)).")
+
+(defun gptel-auto-experiment--parse-grader-output (target grader-output)
+  "Parse GRADER-OUTPUT for per-criterion PASS/FAIL reasoning.
+Extracts numbered items like '1. description: PASS - reason' from the
+output, including <think> blocks.  Stores results in
+`gptel-auto-experiment--grader-insights' for TARGET."
+  (when (and target (stringp grader-output))
+    (let ((criteria nil)
+          (in-think nil))
+      ;; Scan lines for numbered criteria patterns
+      (with-temp-buffer
+        (insert grader-output)
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let ((line (buffer-substring-no-properties
+                       (line-beginning-position) (line-end-position))))
+            ;; Track <think> blocks
+            (when (string-match-p "<think>" line)
+              (setq in-think t))
+            (when (string-match-p "</think>" line)
+              (setq in-think nil))
+            ;; Match: "N. description: PASS - reason" or "N. description - FAIL - reason"
+            (when (string-match
+                   "^\\s-*\\(?:\\*\\*\\)?\\([0-9]+\\)\\.\\s-+\\(?:\\*\\*\\)?\\([^:]+?\\)\\(?:\\*\\*\\)?\\s-*:\\s-+\\(PASS\\|FAIL\\)\\(?:\\s-+-\\s-*\\(.+\\)\\)?"
+                   line)
+              (let* ((desc (string-trim (match-string-no-properties 2 line)))
+                     (verdict (match-string-no-properties 3 line))
+                     (reason (match-string-no-properties 4 line)))
+                (push (list :description desc
+                            :verdict (if (string= "PASS" verdict) :pass :fail)
+                            :reason (when reason (string-trim reason)))
+                      criteria))))
+          (forward-line 1)))
+      (when criteria
+        (puthash target
+                 (list :grader-output (substring grader-output 0 (min 500 (length grader-output)))
+                       :criteria (nreverse criteria))
+                 gptel-auto-experiment--grader-insights)))))
+
+(defun gptel-auto-experiment--get-category-failure-reasons (category &optional n)
+  "Aggregate failure reasons from ALL targets in CATEGORY.
+Returns alist of (REASON . COUNT) for the N most common, or nil."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (reasons (make-hash-table :test 'equal)))
+    (when (and results-file (file-exists-p results-file)
+               (fboundp 'gptel-auto-workflow--categorize-target))
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1)
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position) (line-end-position))
+                          "\t"))
+                 (r-target (nth 1 fields))
+                 (r-reason (nth 12 fields)))
+            (when (and r-target r-reason (not (string-empty-p r-reason))
+                       (eq (gptel-auto-workflow--categorize-target r-target) category))
+              (let ((short (car (split-string r-reason ":" t))))
+                (when (and short (not (string= short "N/A")))
+                  (puthash short (1+ (gethash short reasons 0)) reasons))))
+            (forward-line 1)))))
+    ;; Return top N sorted by count
+    (when (> (hash-table-count reasons) 0)
+      (let ((sorted (sort (let (result)
+                             (maphash (lambda (k v) (push (cons k v) result)) reasons)
+                             result)
+                           (lambda (a b) (> (cdr a) (cdr b))))))
+        (seq-take sorted (or n 3))))))
+
+(defun gptel-auto-experiment--get-category-success-axes (category &optional n)
+  "Find most successful exploration axes for CATEGORY across all targets.
+Returns alist of (AXIS . COUNT) for axes that led to kept experiments."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (axes (make-hash-table :test 'equal)))
+    (when (and results-file (file-exists-p results-file)
+               (fboundp 'gptel-auto-workflow--categorize-target))
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1)
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position) (line-end-position))
+                          "\t"))
+                 (r-target (nth 1 fields))
+                 (r-decision (nth 7 fields))
+                 (r-axis (nth 17 fields)))
+            (when (and r-target (equal r-decision "kept") r-axis
+                       (not (equal r-axis "?"))
+                       (eq (gptel-auto-workflow--categorize-target r-target) category))
+              (puthash r-axis (1+ (gethash r-axis axes 0)) axes))
+            (forward-line 1)))))
+    (when (> (hash-table-count axes) 0)
+      (let ((sorted (sort (let (result)
+                            (maphash (lambda (k v) (push (cons k v) result)) axes)
+                            result)
+                          (lambda (a b) (> (cdr a) (cdr b))))))
+        (seq-take sorted (or n 3))))))
+
+(defun gptel-auto-experiment--format-ontology-guidance (target)
+  "Format ontology-based guidance for TARGET based on its category.
+Includes category-specific Focus/Avoid, recommended axes, failure
+patterns from other targets in the same category, and successful
+axes from kept experiments across the category."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let* ((category (gptel-auto-workflow--categorize-target target))
+           (cat-label (pcase category
+                        (:agentic "agentic") (:programming "programming")
+                        (:tool-calls "tool-calls") (:natural-language "NLP")
+                        (_ nil)))
+           (base (pcase category
+                   (:agentic "agentic — tool dispatch, state management, async workflows")
+                   (:programming "programming — algorithms, data flow, edge cases")
+                   (:tool-calls "tool-calls — sandbox execution, file operations")
+                   (:natural-language "natural-language — prompt templates, text processing, context management")
+                   (_ nil)))
+           (focus (pcase category
+                    (:agentic "error recovery paths, tool call lifecycle, state cleanup")
+                    (:programming "performance optimization, edge case handling, code deduplication")
+                    (:tool-calls "error handling robustness, tool dispatch safety, timeout handling")
+                    (:natural-language "prompt quality, context window efficiency, text pipeline edge cases")
+                    (_ nil)))
+           (avoid (pcase category
+                    (:agentic "removing error handlers, changing async callback contracts")
+                    (:programming "style-only changes, comment/doc additions, reindentation")
+                    (:tool-calls "changing tool argument schemas, removing safety guards")
+                    (:natural-language "changing prompt format, removing fallback text handlers")
+                    (_ nil)))
+           (axes (pcase category
+                   (:agentic "A (validation/safety), F (memory/cleanup), H (defensive)")
+                   (:programming "B (performance), C (refactoring), I (edge cases)")
+                   (:tool-calls "A (validation/safety), D (guards), H (defensive)")
+                   (:natural-language "C (refactoring), G (clarity), I (edge cases)")
+                   (_ nil)))
+           (cat-failures (gptel-auto-experiment--get-category-failure-reasons category 2))
+           (success-axes (gptel-auto-experiment--get-category-success-axes category 3))
+           (parts (list base)))
+      ;; Focus and Avoid
+      (when focus
+        (push (concat "  Focus: " focus) parts))
+      (when avoid
+        (push (concat "  Avoid: " avoid) parts))
+      ;; Recommended axes for this category
+      (when axes
+        (push (concat "  Best axes: " axes) parts))
+      ;; Category-level failure patterns from other targets
+      (when cat-failures
+        (push (concat "  Common failures across " (or cat-label "other") " targets:\n"
+                      (mapconcat (lambda (pair)
+                                   (format "    - %s (%d×)" (car pair) (cdr pair)))
+                                 cat-failures "\n"))
+              parts))
+      ;; Category-level success axes from kept experiments
+      (when success-axes
+        (push (concat "  Successful axes on " (or cat-label "other") " targets:\n"
+                      (mapconcat (lambda (pair)
+                                   (format "    - Axis %s (%d kept)" (car pair) (cdr pair)))
+                                 success-axes "\n"))
+              parts))
+      (mapconcat #'identity (nreverse parts) "\n"))))
+
 (defun gptel-auto-experiment--format-failure-patterns (target)
   "Format common failure patterns for TARGET as prompt guidance.
+Includes grader insight PASS/FAIL criteria when available.
 Returns string warning about common rejection reasons, or empty string."
-  (let ((reasons (gptel-auto-experiment--get-common-failure-reasons target 3)))
-    (if (null reasons)
-        ""
-      (concat "## Common Failure Patterns (AVOID THESE)\n"
-              "Recent experiments on this target were discarded for these reasons:\n"
-              (mapconcat (lambda (pair)
-                           (format "- %s (%d times)"
-                                   (car pair) (cdr pair)))
-                         reasons
-                         "\n")
-              "\n\nTo succeed, actively avoid the patterns above.\n\n"))))
+  (let ((reasons (gptel-auto-experiment--get-common-failure-reasons target 3))
+        (insights (gethash target gptel-auto-experiment--grader-insights))
+        (parts nil))
+    ;; Historical failure reasons
+    (when reasons
+      (push (concat "## Common Failure Patterns (AVOID THESE)\n"
+                    "Recent experiments on this target were discarded for these reasons:\n"
+                    (mapconcat (lambda (pair)
+                                 (format "- %s (%d times)"
+                                         (car pair) (cdr pair)))
+                               reasons
+                               "\n"))
+            parts))
+    ;; Executor reasoning from DeepSeek thinking (if available)
+    (let ((executor-reasoning (plist-get insights :executor-reasoning)))
+      (when executor-reasoning
+        (push (concat "## Executor Reasoning from Previous Attempt\n"
+                      "The previous executor proposed these changes with the following reasoning:\n"
+                      "> " (string-trim executor-reasoning) "\n")
+              parts)))
+    ;; Grader insights from last evaluation
+    (when insights
+      (let* ((criteria (plist-get insights :criteria))
+             (fails (cl-remove-if-not
+                     (lambda (c) (eq :fail (plist-get c :verdict))) criteria))
+             (passes (cl-remove-if-not
+                      (lambda (c) (eq :pass (plist-get c :verdict))) criteria)))
+        (when fails
+          (push (concat "## Grader Feedback — Failed Criteria (FIX THESE)\n"
+                        "The last evaluation found these issues:\n"
+                        (mapconcat (lambda (c)
+                                     (format "- %s: %s"
+                                             (plist-get c :description)
+                                             (or (plist-get c :reason) "no details")))
+                                   fails
+                                   "\n"))
+                parts))
+        (when passes
+          (push (concat "## Grader Feedback — Passed Criteria (REINFORCE)\n"
+                        "These aspects were done well and should be maintained:\n"
+                        (mapconcat (lambda (c)
+                                     (format "- %s" (plist-get c :description)))
+                                   passes
+                                   "\n"))
+                parts))))
+    (if parts
+        (concat (mapconcat #'identity (nreverse parts) "\n\n") "\n\n"
+                "To succeed, actively avoid the failure patterns and address grader feedback above.\n\n")
+      "")))
 
 ;;; Cross-Target Pattern Transfer
 

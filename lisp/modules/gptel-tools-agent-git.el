@@ -85,10 +85,12 @@ Default 300s (5 min). Set lower to catch stuck requests faster."
 When non-nil, inactivity-based timeouts may still rearm on progress, but the
 task cannot exceed this total runtime.")
 
-(defcustom my/gptel-subagent-result-limit 4000
+(defcustom my/gptel-subagent-result-limit 16000
   "Max characters to return inline from a subagent result.
 Results longer than this are truncated and the full text is saved
-to a temp file."
+to a temp file.  Increased from 4000 to 16000 because the grader
+subagent generates verbose <think> analysis that exceeds 4000 chars
+before reaching the mandatory SCORE line at the end of output."
   :type 'integer
   :group 'gptel-tools-agent)
 
@@ -136,6 +138,11 @@ long-running daemons)."
 (defvar-local my/gptel--subagent-temp-files nil
   "Buffer-local list of temp files created by subagent results.
 Each buffer manages its own temp files to avoid race conditions.")
+
+(defvar gptel-auto-experiment--executor-reasoning nil
+  "Dynamic variable set by FSM callback with DeepSeek reasoning_content.
+Read by the executor callback for self-evolution.  Reset to nil after
+each subagent call so stale reasoning is not reused across experiments.")
 
 (defvar my/gptel--global-temp-files nil
   "Global fallback list for temp files (used when no buffer context).")
@@ -418,6 +425,11 @@ large-result truncation, and result caching."
                              (setq partial (concat partial resp))
                              (unless (plist-get info :tool-use)
                                (when (overlayp ov) (delete-overlay ov))
+                               ;; Capture DeepSeek/thinking reasoning_content for
+                               ;; self-evolution — stored in a dynamic variable so
+                               ;; the experiment callback can read it.
+                               (when-let ((reasoning (plist-get info :reasoning)))
+                                 (setq gptel-auto-experiment--executor-reasoning reasoning))
                                (when-let* ((transformer (plist-get info :transformer)))
                                  (setq partial (funcall transformer partial)))
                                (gptel-auto-workflow--maybe-activate-rate-limit-failover

@@ -212,10 +212,10 @@ EOF
 # Keeps at most 3 rotated copies: .1 (newest), .2, .3 (oldest).
 log_rotate() {
     local f="$1" max="${2:-102400}"
-    [ -f "$f" ] || return
+    [ -f "$f" ] || return 0
     local size
     size=$(wc -c < "$f")
-    [ "$size" -lt "$max" ] && return
+    [ "$size" -lt "$max" ] && return 0
     [ -f "${f}.3" ] && rm -f "${f}.3"
     [ -f "${f}.2" ] && mv "${f}.2" "${f}.3" 2>/dev/null || true
     [ -f "${f}.1" ] && mv "${f}.1" "${f}.2" 2>/dev/null || true
@@ -273,9 +273,10 @@ verify_research_feedback_loop() {
 log_rotate "$PIPELINE_LOG"
 log_rotate "$LOG_DIR/ov5-researcher.log"
 log_rotate "$LOG_DIR/ov5-auto-workflow.log"
+log_rotate "$LOG_DIR/evolution-backtrace.log" 51200  # Rotate at 50KB (grows fast)
 
-# ─── Clean stale PID/lock files older than 24h ───
-find "$DIR/var/tmp" -type f \( -name "*.pid" -o -name "*.lock" \) -mtime +1 -delete 2>/dev/null || true
+# ─── Clean stale PID/lock files older than 12h ───
+find "$DIR/var/tmp" -type f \( -name "*.pid" -o -name "*.lock" \) -mtime +0 -delete 2>/dev/null || true
 
 # ─── Clean old experiment directories (keep last 7 days) ───
 find "$DIR/var/tmp/experiments" -maxdepth 1 -type d -mtime +7 2>/dev/null | while read d; do
@@ -329,9 +330,11 @@ clean_stale_socket "ov5-researcher"
 
 # ─── Pull latest code so daemon restart picks up fixes ───
 log "Pulling latest code from origin..."
-# Discard dirty auto-generated files so git pull doesn't fail
-git -C "$DIR" checkout -- mementum/knowledge/ assistant/skills/ mementum/memories/ mementum/state.md 2>/dev/null || true
-git -C "$DIR" pull --ff-only origin main 2>&1 || log "WARNING: git pull failed, continuing with current code"
+# Stash dirty auto-generated files so git pull doesn't fail, then pop them
+# so mementum memories aren't silently discarded.
+git -C "$DIR" stash push -- mementum/knowledge/ assistant/skills/ mementum/memories/ mementum/state.md 2>/dev/null || true
+git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: git pull failed, continuing with current code"
+git -C "$DIR" stash pop 2>/dev/null || true
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
@@ -526,10 +529,11 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     unset -f clean_ov5_sockets
     # Clear workflow status so auto-workflow can start a fresh daemon
     rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
-    # Discard dirty auto-generated files so git pull doesn't fail
-    git -C "$DIR" checkout -- mementum/knowledge/ assistant/skills/ mementum/memories/ mementum/state.md 2>/dev/null || true
+    # Stash dirty auto-generated files so git pull doesn't fail, then pop
+    git -C "$DIR" stash push -- mementum/knowledge/ assistant/skills/ mementum/memories/ mementum/state.md 2>/dev/null || true
     # Pull any commits pushed by evolution cycle
-    git -C "$DIR" pull --ff-only origin main 2>&1 || log "WARNING: post-evolution git pull failed"
+    git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: post-evolution git pull failed"
+    git -C "$DIR" stash pop 2>/dev/null || true
     sleep 2
 else
     log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="

@@ -314,6 +314,26 @@ then runs workflow for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all project workflows
 finish."
   (interactive)
+  ;; Prime gpg-agent cache by decrypting authinfo once. Subsequent gpg
+  ;; --batch calls in my/gptel-api-key reuse the cached passphrase.
+  (ignore-errors
+    (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
+                  (expand-file-name "~/.authinfo.gpg")))
+  ;; Moonshot content_filter (quota exhausted) blocks code generation, returns
+  ;; 400 errors that make it look responsive to the onto-router.  Mark it as
+  ;; rate-limited so the router skips it dynamically.  When quota resets (next
+  ;; week), the onto-router will re-enable it automatically as responses succeed.
+  (when (boundp 'gptel-auto-workflow--rate-limited-backends)
+    (cl-pushnew "moonshot" gptel-auto-workflow--rate-limited-backends :test #'string=))
+  ;; Ensure gptel-agent-dirs includes our custom agent directory so
+  ;; --update-agents registers all agent types (grader, analyzer, etc.).
+  (let ((agents-dir (expand-file-name "assistant/agents"
+                                      (or (bound-and-true-p minimal-emacs-user-directory)
+                                          user-emacs-directory))))
+    (when (and (file-directory-p agents-dir)
+               (boundp 'gptel-agent-dirs))
+      (cl-pushnew agents-dir gptel-agent-dirs :test #'string=)))
+  (ignore-errors (gptel-agent--update-agents))
   (gptel-auto-workflow--ensure-buffer-tables)
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[auto-workflow] Running for %d projects..."
@@ -731,6 +751,17 @@ Gets target buffer from gptel-fsm-info and creates overlay there."
 
 ;;; Executor Overlay Management
 
+(defun gptel-auto-workflow--iterate-project-buffers (fn)
+  "Iterate FN over each live buffer in `gptel-auto-workflow--project-buffers'.
+FN is called with (ROOT BUFFER) for each entry where BUFFER is live.
+ASSUMPTION: Caller ensures buffer tables are initialized via
+`gptel-auto-workflow--ensure-buffer-tables'."
+  (when (hash-table-p gptel-auto-workflow--project-buffers)
+    (maphash (lambda (root buf)
+               (when (buffer-live-p buf)
+                 (funcall fn root buf)))
+             gptel-auto-workflow--project-buffers)))
+
 (defun gptel-auto-workflow-clear-executor-overlays (&optional project-root)
   "Clear all persistent executor overlays for PROJECT-ROOT or all projects.
 Without PROJECT-ROOT, clears overlays for all projects."
@@ -744,14 +775,12 @@ Without PROJECT-ROOT, clears overlays for all projects."
             (when (overlay-get ov 'gptel-agent--task-type)
               (delete-overlay ov))))
         (message "[auto-workflow] Cleared executor overlays for %s" project-root))
-    (when (hash-table-p gptel-auto-workflow--project-buffers)
-      (cl-flet ((clear-buf-overlays (_ buf)
-                  (when (buffer-live-p buf)
-                    (with-current-buffer buf
-                      (dolist (ov (overlays-in (point-min) (point-max)))
-                        (when (overlay-get ov 'gptel-agent--task-type)
-                          (delete-overlay ov)))))))
-        (maphash #'clear-buf-overlays gptel-auto-workflow--project-buffers)))
+    (gptel-auto-workflow--iterate-project-buffers
+     (lambda (_ buf)
+       (with-current-buffer buf
+         (dolist (ov (overlays-in (point-min) (point-max)))
+           (when (overlay-get ov 'gptel-agent--task-type)
+             (delete-overlay ov))))))
     (message "[auto-workflow] Cleared all executor overlays")))
 
 (defun gptel-auto-workflow-list-project-buffers ()
@@ -759,17 +788,20 @@ Without PROJECT-ROOT, clears overlays for all projects."
   (interactive)
   (gptel-auto-workflow--ensure-buffer-tables)
   (let ((buffers nil))
-    (when (hash-table-p gptel-auto-workflow--project-buffers)
-      (cl-flet ((collect-buffer (root buf)
-                  (when (bufferp buf)
-                    (push (format "%s -> %s (%s)"
-                                  root
-                                  (buffer-name buf)
-                                  (if (buffer-live-p buf) "live" "dead"))
-                          buffers))))
-        (maphash #'collect-buffer gptel-auto-workflow--project-buffers)))
+    (gptel-auto-workflow--iterate-project-buffers
+     (lambda (root buf)
+       (let ((mode (with-current-buffer buf
+                     (format-mode-line mode-name))))
+         (push (format "%s -> %s [%s]"
+                       root
+                       (buffer-name buf)
+                       (or mode "unknown"))
+               buffers))))
     (if buffers
-        (message "Project buffers:\n%s" (string-join buffers "\n"))
+        (let ((sorted (sort buffers #'string<)))
+          (message "Project buffers (%d):\n%s"
+                   (length sorted)
+                   (string-join sorted "\n")))
       (message "No project buffers created yet"))))
 
 ;;; Researcher Multi-Project Support
@@ -807,17 +839,32 @@ To be called from cron - visits each project directory (loading .dir-locals.el),
 then runs researcher for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   (interactive)
+  ;; Ensure agent types are registered (researcher, executor, etc.)
+  (let ((agents-dir (expand-file-name "assistant/agents"
+                                      (or (bound-and-true-p minimal-emacs-user-directory)
+                                          user-emacs-directory))))
+    (when (and (file-directory-p agents-dir)
+               (boundp 'gptel-agent-dirs))
+      (cl-pushnew agents-dir gptel-agent-dirs :test #'string=)))
+  (ignore-errors (gptel-agent--update-agents))
   ;; Load full workflow stack when running in researcher daemon context
-  (when (fboundp 'gptel-auto-workflow--reload-live-support)
-    (gptel-auto-workflow--reload-live-support))
-  ;; Prevent gptel-mode hooks from defaulting to MiniMax and ensure
-  ;; headless-provider-override-active-p returns t so the fallback
-  ;; chain (DeepSeek etc.) is consulted for research subagent calls.
-  (setq gptel-auto-workflow-persistent-headless t)
-  ;; Clear stale rate-limited backends from previous research attempts so
-  ;; the fallback chain starts fresh with Moonshot.
-  (when (fboundp 'gptel-auto-workflow--clear-rate-limited-backends)
-    (gptel-auto-workflow--clear-rate-limited-backends))
+  (condition-case err
+      (progn
+        (when (fboundp 'gptel-auto-workflow--reload-live-support)
+          (gptel-auto-workflow--reload-live-support))
+        ;; Prevent gptel-mode hooks from defaulting to MiniMax and ensure
+        ;; headless-provider-override-active-p returns t so the fallback
+        ;; chain (DeepSeek etc.) is consulted for research subagent calls.
+        (setq gptel-auto-workflow-persistent-headless t)
+        ;; Clear stale rate-limited backends from previous research attempts so
+        ;; the fallback chain starts fresh with Moonshot.
+        (when (fboundp 'gptel-auto-workflow--clear-rate-limited-backends)
+          (gptel-auto-workflow--clear-rate-limited-backends)))
+    (error
+     (let ((bt (with-output-to-string (backtrace))))
+       (with-temp-file "/tmp/research-init-backtrace.txt"
+         (insert (format "Error: %S\n\nBacktrace:\n%s\n" err bt)))
+       (message "[research] Init error: %S — backtrace written to /tmp/research-init-backtrace.txt" err))))
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[research] Running for %d projects..." (length projects))
     (let ((results nil)
@@ -916,18 +963,6 @@ so calling this with no fresh data is a safe no-op."
             (message "[research] AutoTTS: controller evolution complete"))
         (error
          (message "[research] AutoTTS evolution skipped: %s"
-                  (error-message-string err)))))
-    ;; 1b. Lambda verification: check which backends have a lambda compiler.
-    ;;    Async: initiates API calls, results arrive later via callbacks.
-    ;;    Until verified, backends get a -5 penalty (unknown → penalized equally,
-    ;;    so ordering is unaffected).
-    (when (fboundp 'gptel-auto-workflow--verify-all-backends-lambda)
-      (condition-case err
-          (progn
-            (message "[verbum] Verifying lambda compiler on all backends...")
-            (gptel-auto-workflow--verify-all-backends-lambda))
-        (error
-         (message "[verbum] Lambda verification skipped: %s"
                   (error-message-string err)))))
     ;; 2. Ontology: reorder backend fallbacks based on performance data.
     ;;    Uses experiment keep-rates; safe to call even with empty history.
@@ -1093,20 +1128,25 @@ and restores headless state. Returns t on success, nil on failure."
 (defun gptel-auto-workflow--run-all-weekly-jobs (prefix per-project-fn)
   "Run a weekly job for all projects using PREFIX and PER-PROJECT-FN.
 PER-PROJECT-FN should accept a project root and return t/nil for success."
-  (message "[%s] Running weekly job for %d projects..."
-           prefix (length (gptel-auto-workflow--normalized-projects)))
-  (let ((results nil))
-    (dolist (project-root (gptel-auto-workflow--normalized-projects))
-      (message "[%s] Processing project: %s" prefix project-root)
+  (when (or (null per-project-fn)
+            (not (functionp per-project-fn)))
+    (signal 'wrong-type-argument (list #'functionp per-project-fn)))
+  (let* ((projects (gptel-auto-workflow--normalized-projects))
+         (results nil)
+         (log-prefix (if (stringp prefix) prefix "weekly")))
+    (message "[%s] Running weekly job for %d projects..."
+             log-prefix (length projects))
+    (dolist (project-root projects)
+      (message "[%s] Processing project: %s" log-prefix project-root)
       (condition-case err
           (if (funcall per-project-fn project-root)
               (push (cons (directory-file-name project-root) 'success) results)
             (push (cons (directory-file-name project-root) 'error) results))
         (error
          (push (cons (directory-file-name project-root) (format "error: %s" err)) results)
-         (message "[%s] ✗ Failed: %s - %s" prefix project-root err))))
+         (message "[%s] ✗ Failed: %s - %s" log-prefix project-root err))))
     (message "[%s] All projects processed: %s"
-             prefix
+             log-prefix
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
     results))

@@ -12,7 +12,31 @@
 
 ---
 
-## Document Map
+## Cross-Machine Co-Evolution Protocol
+
+### Machine Roles
+
+| Machine | Role | Runs Pipeline | Evolves Skills | Pushes Mementum |
+|---------|------|-------------|---------------|-----------------|
+| **Pi5** (24/7 server) | **Primary Evolver** | Yes (`run-pipeline.sh`) | Yes | Yes |
+| **Local dev** (macOS/Linux) | **Secondary / Pull-only** | Manual only (`./scripts/run-pipeline.sh`) | No | Yes (memories only) |
+
+### Rules
+
+1. **Only Pi5** runs the scheduled pipeline (`0 23,3,7,11,15,19`).
+2. **Only Pi5** pushes evolved skill changes (`assistant/skills/`, `mementum/knowledge/`).
+3. **Both machines** can push mementum memories (`mementum/memories/`) and state (`mementum/state.md`).
+4. **Local machine MUST `git pull --rebase` before running experiments** to get Pi5's latest evolved skills.
+5. **No machine force-pushes `origin/main`**. Conflicts are resolved via rebase.
+6. **Auto-evolved files** (`DIRECTIVE.md`, `strategy-guidance.json`, `mementum/knowledge/*.md`) are marked `--assume-unchanged` on non-Pi5 machines to prevent accidental conflicts.
+
+### Conflict Resolution
+
+- **Skill conflicts**: Pi5's version wins (it has the most experiment data).
+- **Knowledge conflicts**: Merge both versions (newer knowledge supplements older).
+- **Mementum conflicts**: Accept both (memories are atomic and additive).
+
+### Document Map
 
 | Document | Purpose | Start Here If... |
 |----------|---------|------------------|

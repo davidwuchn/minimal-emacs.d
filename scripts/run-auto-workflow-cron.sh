@@ -5,6 +5,17 @@ set -euo pipefail
 # Prevent C stack overflow in deeply nested subagent calls
 ulimit -s 65532 2>/dev/null || true
 
+# Required: python3 + lsof for socket ownership, staleness checks, emacsclient timeout
+if ! command -v python3 &>/dev/null; then
+    echo "ERROR: python3 is required but not found." >&2
+    echo "Install: sudo apt-get install python3" >&2
+    exit 1
+fi
+if ! command -v lsof &>/dev/null; then
+    echo "WARNING: lsof not found. Orphaned daemon sockets won't be cleaned." >&2
+    echo "Install: sudo apt-get install lsof" >&2
+fi
+
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ACTION="${1:-auto-workflow}"
 shift || true
@@ -978,7 +989,7 @@ workflow_action_elisp() {
         *) return 1 ;;
     esac
 
-    printf '(condition-case _err (let ((root (file-name-as-directory "%s")) (load-prefer-newer t)) (let ((inhibit-message t) (load-verbose nil)) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)) (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el")) (load-file (expand-file-name (concat "lisp/modules/" module) root))) (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root))) %s) (error (format "[workflow-action] action-error: %%s" (error-message-string _err))))' \
+    printf '(condition-case _err (let ((root (file-name-as-directory "%s")) (load-prefer-newer t)) (let ((inhibit-message t) (load-verbose nil)) (ignore-errors (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))     (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el")) (ignore-errors (load-file (expand-file-name (concat "lisp/modules/" module) root)))) (ignore-errors (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root))) (ignore-errors (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root)))) %s) (error (format "[workflow-action] action-error: %%s" (error-message-string _err))))' \
            "$ROOT_LISP" "$dispatch"
 }
 

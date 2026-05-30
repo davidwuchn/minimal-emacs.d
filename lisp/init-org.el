@@ -174,8 +174,11 @@
            :if-new (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
                               "#+title: ${title}\n#+date: %U\n#+filetags: \n\n")
            :unnarrowed t)))
-  (org-roam-db-autosync-mode 1)
-  (org-roam-setup)
+  (condition-case nil
+      (progn (require 'emacsql)
+             (org-roam-db-autosync-mode 1)
+             (org-roam-setup))
+    (error (message "[init-org] org-roam setup deferred (emacsql not ready)")))
   :bind (("C-c n l" . org-roam-buffer-toggle)
          ("C-c n f" . org-roam-node-find)
          ("C-c n g" . org-roam-graph)

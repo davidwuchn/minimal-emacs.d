@@ -5,6 +5,7 @@
 (declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
 (defvar gptel-auto-workflow--current-research-context)
 (defvar gptel-auto-workflow--research-in-progress)
+(defvar gptel-auto-workflow--research-findings-cache)
 
 (defun slr--root ()
   "Return the project root for standalone research."
@@ -180,7 +181,11 @@ COMPLETION-CALLBACK receives the saved findings when provided."
       (condition-case err
           (progn
             (message "[slr] Multi-turn EMA research path available, delegating...")
+            ;; Clear stale state before starting new research
             (setq gptel-auto-workflow--research-in-progress nil)
+            ;; Ensure nil-safety for findings cache
+            (when (null gptel-auto-workflow--research-findings-cache)
+              (setq gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)))
             (gptel-auto-workflow--research-patterns
              (lambda (findings)
                (if (slr--usable-findings-p findings)

@@ -265,8 +265,9 @@
   (should (= my/gptel-subagent-progress-interval 10)))
 
 (ert-deftest agent/result-limit/default-value ()
-  "Default result limit should be 4000 chars."
-  (should (= my/gptel-subagent-result-limit 4000)))
+  "Default result limit should be 16000 chars.
+Increased from 4000 to accommodate verbose grader <think> blocks."
+  (should (= my/gptel-subagent-result-limit 16000)))
 
 ;;; ========================================
 ;;; Tests for known agent types

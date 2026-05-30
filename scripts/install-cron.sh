@@ -38,6 +38,7 @@ render_crontab() {
         if [ "$machine" = "pi5" ] || [ "$machine" = "linux" ]; then
             echo "XDG_RUNTIME_DIR=/run/user/\$(id -u)"
         fi
+        echo "MAILTO=\"\""
         echo
         echo "# Watchdog: restart daemon if unresponsive (every 30min, reaper handles 95%)"
         echo "*/30 * * * * \$HOME/.emacs.d/scripts/watchdog-daemon.sh"
@@ -175,6 +176,13 @@ case "$MODE" in
         exit 0
         ;;
     install)
+        # Verify python3 is available (required for merge logic)
+        if ! command -v python3 &>/dev/null; then
+            echo "ERROR: python3 is required but not found." >&2
+            echo "Install it: sudo apt-get install python3" >&2
+            exit 1
+        fi
+
         # Verify pipeline script exists and is executable
         PIPELINE_SCRIPT="$DIR/scripts/run-pipeline.sh"
         if [ ! -x "$PIPELINE_SCRIPT" ]; then

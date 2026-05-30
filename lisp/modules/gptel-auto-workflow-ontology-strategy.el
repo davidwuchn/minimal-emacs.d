@@ -88,17 +88,32 @@ The value is effective, promising, underperforming, or unknown."
 
 (defun gptel-auto-workflow--category-eight-key-weight (category)
   "Return the primary Eight Key weight multiplier for CATEGORY.
-Maps ontology categories to their most relevant Eight Key metric:
+Uses dynamically aggregated weights from experiment history when available,
+otherwise falls back to hardcoded defaults based on category semantics:
   :programming → μ Directness (code must work, fewer tokens per kept)
   :agentic     → ∀ Vigilance (agent must avoid anti-patterns)
   :tool-calls  → φ Vitality (tools must show improving trend)
   :natural-language → fractal Clarity (output must be high quality)"
-  (pcase category
-    (:programming '(mu-directness . 1.3))
-    (:agentic     '(forall-vigilance . 1.3))
-    (:tool-calls  '(phi-vitality . 1.3))
-    (:natural-language '(fractal-clarity . 1.3))
-    (_ '(epsilon-purpose . 1.0))))
+  (let* ((cat-weights (and (boundp 'gptel-auto-workflow--category-eight-key-weights)
+                           (assoc category gptel-auto-workflow--category-eight-key-weights)))
+         (defaults '((:programming (mu-directness . 1.3))
+                     (:agentic (forall-vigilance . 1.3))
+                     (:tool-calls (phi-vitality . 1.3))
+                     (:natural-language (fractal-clarity . 1.3))
+                     (t (epsilon-purpose . 1.0)))))
+    (if cat-weights
+        ;; Dynamic: find the key with the highest average delta for this category
+        (let* ((key-deltas (cdr cat-weights))
+               (sorted (sort (copy-sequence key-deltas)
+                             (lambda (a b) (> (abs (cdr a)) (abs (cdr b))))))
+               (best (car sorted))
+               (delta (abs (cdr best)))
+               ;; Scale: avg delta of 0.10 → 1.5x, 0.05 → 1.25x, etc.
+               (multiplier (max 0.8 (min 2.0 (+ 1.0 (* delta 5))))))
+          (cons (car best) multiplier))
+      ;; Fallback: hardcoded defaults
+      (or (cdr (assoc category defaults))
+          (cdr (assoc t defaults))))))
 
 (defun gptel-auto-workflow--select-best-strategy-with-ontology (strategies target)
   "Select best strategy using ontology classification + Eight Key alignment.

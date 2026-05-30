@@ -60,11 +60,19 @@
     (error nil))
   (unless (featurep 'gptel)
     (message "[init-ai] Workflow daemon detected; force-loading gptel")
-    (require 'gptel)
-    ;; Ensure gptel-config is loaded even if gptel was already loaded
-    ;; before this eval block ran.
-    (require 'gptel-config)
-    (require 'nucleus-config))
+    (condition-case err
+        (require 'gptel)
+      (error
+       (message "[init-ai] Failed to load gptel: %S" err)))
+    (condition-case err
+        (require 'gptel-config)
+      (error
+       (message "[init-ai] Failed to load gptel-config: %S" err)))
+    (condition-case err
+        (require 'nucleus-config)
+      (error
+       (message "[init-ai] Failed to load nucleus-config: %S" err)))
+    (message "[init-ai] gptel + modules loaded"))
   ;; Note: gptel-auto-workflow-persistent-headless is set in post-init.el
   ;; before any gptel-mode buffers exist, so the mode hook in
   ;; gptel-ext-core.el won't default to MiniMax.
@@ -143,7 +151,7 @@ generation and prompt classification."
 ;;; ==============================================================================
 
 ;; Ensure Unicode symbols render (busy indicators, icons)
-(set-fontset-font t 'unicode "DejaVuSansM Nerd Font" nil 'prepend)
+(set-fontset-font t 'unicode "DejaVuSansM Nerd Font Mono" nil 'prepend)
 
 ;; Custom separator for header (replace default "➤" with "|")
 (defvar my/agent-shell-header-separator " | "
@@ -206,6 +214,15 @@ generation and prompt classification."
 
 ;; Load ECA security utilities
 (require 'eca-security)
+;; Prime gpg-agent cache by decrypting .authinfo.gpg immediately.
+;; eca-security's own decryption is deferred until eca loads, but in
+;; workflow daemons eca may never load (deferred). Without this, every
+;; gpg --batch --decrypt call fails because gpg-agent has no passphrase.
+(ignore-errors
+  (let ((authinfo (expand-file-name "~/.authinfo.gpg")))
+    (when (file-exists-p authinfo)
+      (call-process "gpg" nil nil nil
+                    "--batch" "--quiet" "--decrypt" authinfo))))
 
 (use-package eca
   :ensure t

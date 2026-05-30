@@ -8,10 +8,11 @@ version: 1.0
 
 ## CRITICAL CONSTRAINTS
 
-- You MUST make actual CODE changes, not documentation.
+- You MUST make actual CODE changes using the Edit or Write tools. Text-only responses will be rejected.
 - You MUST verify your changes work before submitting.
 - You MUST NOT write "the code is optimal" or abort early.
 - You MUST complete all steps including prototyping.
+- **TOOL USAGE IS MANDATORY:** Outputting markdown text without file modifications is a failure. Use Edit or Write to modify files.
 
 ### Anti-Parameter-Tuning Rules
 
@@ -77,20 +78,31 @@ For complex changes:
 
 ### Step 2: Implement
 
-1. Make minimal, targeted changes to the target file
-2. Follow existing code style and conventions
-3. **Self-critique (mandatory):** After implementing, re-read the change:
+1. **Use Edit or Write tools** to modify the target file. Do NOT just describe changes in text.
+2. Make minimal, targeted changes to the target file
+3. **NEVER reformat, reindent, or restyle code.** Do NOT run `indent-region`, `save-buffer` with auto-indent, or any tool that changes whitespace/line breaks outside your actual code change. The grader treats unrelated indentation changes as a FORBIDDEN behavior.
+4. **Surgical edits only:** Change ONLY the specific lines needed for your improvement. If your diff shows changes to functions other than your target, or indentation changes in unrelated code, UNDO and redo more precisely.
+5. Follow existing code style and conventions
+6. **Self-critique (mandatory):** After implementing, re-read the change:
    - Is this genuinely NEW logic or just a parameter variant?
    - Would this change help similar code elsewhere?
    - Is the change minimal enough?
-4. If the answer to any is "no", REWRITE
+   - Does the diff contain any indentation/whitespace changes outside the target function?
+7. If the answer to any is "no", REWRITE
 
-### Step 3: Validate
+### Step 3: Validate — MANDATORY
 
-1. **Syntax check:** Run sexp-check or equivalent
-2. **Load test:** Ensure the file loads without errors
-3. **Functional test:** Run relevant test suite
-4. **Only then** mark as complete
+**Verification is not optional. Experiments WITHOUT verification commands are rejected automatically.**
+
+After EVERY edit, you MUST run verification in this exact order:
+
+1. **Check git diff:** Verify `git diff` shows actual file modifications. If empty, you failed — go back to Step 2.
+2. **Syntax check:** Run `{{sexp-check-command}}`
+3. **Byte-compile:** Run `emacs -Q --batch -f batch-byte-compile {{target-full-path}}`
+4. **Load test:** Run `emacs -Q --batch -l {{target-full-path}}`
+5. **Record results:** In your final response under VERIFY, list the exact commands run and their PASS/FAIL status.
+
+**Failure to run verification = automatic experiment rejection. The grader checks for verification commands explicitly.**
 
 ### Step 4: Document
 
@@ -102,6 +114,7 @@ In your final response, include:
 
 ## FORBIDDEN PATTERNS
 
+- **Text-only responses without file modifications.** If you do not use Edit or Write tools, the experiment will fail immediately.
 - Adding comments, docstrings, or documentation-only changes
 - Changing formatting without semantic improvement
 - Renaming without architectural benefit

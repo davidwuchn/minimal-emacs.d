@@ -136,9 +136,11 @@ fixable validation failures that the executor can correct."
            (string-match-p "Defensive code removal detected\\|removing.*fallbacks\\|without proof"
                            validation-error)
            (string-match-p "Undefined function introduced\\|undefined.*runtime.*call"
-                           validation-error)
-           (string-match-p "security|injection|eval.*without.*guard"
-                           validation-error))))
+                            validation-error)
+            (string-match-p "security|injection|eval.*without.*guard"
+                            validation-error)
+            (string-match-p "no code changes\\|no file modifications\\|Agent made no"
+                            validation-error))))
 
 (defun gptel-auto-experiment--make-retry-prompt (target validation-error original-prompt)
   "Create retry prompt after validation failure.
@@ -159,10 +161,10 @@ Instructs executor to load relevant skill instead of hardcoding patterns."
           ((gptel-auto-experiment--elisp-syntax-error-p target validation-error)
            "CALL THIS FIRST: Skill(\"elisp-expert\")
 This skill teaches syntax-safe Elisp edits and dangerous patterns including cl-return-from requirements.")
-          ;; Undefined function calls - guide the agent to check Emacs Lisp availability
-          ((string-match-p "Undefined function introduced\\|undefined.*runtime.*call"
-                           validation-error)
-           "The undefined function was rejected because it does not exist in this Emacs Lisp runtime.
+           ;; Undefined function calls - guide the agent to check Emacs Lisp availability
+           ((string-match-p "Undefined function introduced\\|undefined.*runtime.*call"
+                            validation-error)
+            "The undefined function was rejected because it does not exist in this Emacs Lisp runtime.
 Before writing a function call, verify it exists in Emacs Lisp. When uncertain, use
 well-known Emacs builtins only. Common Lisp functions NOT available in Emacs:
 getf (use plist-get), plusp (use (> n 0)), remf (use cl-remf),
@@ -173,8 +175,20 @@ If you see a function like \='tool\=' or \='key\=' in the error, it means you wr
 (tool ...) or (key ...) — these are NOT valid Emacs Lisp functions.
 Replace undefined calls with valid Emacs Lisp equivalents or remove them.
 Use function-quote #' for symbols meant as functions, not bare-quote \='.")
-          ;; Add more skill mappings here as needed
-          (t "")))
+           ;; Agent made no file modifications — it only analyzed, didn't edit
+           ((string-match-p "no code changes\\|no file modifications\\|Agent made no"
+                            validation-error)
+            "Your response contained ANALYSIS but NO FILE EDITS. This is always rejected.
+You MUST use Edit or Write tools to modify the target file. The validation
+gate checks git diff and rejects sessions where no files changed.
+CRITICAL rules for retry:
+- Start by editing the target file — do NOT just analyze or describe what to change
+- Even small, minimal edits are better than no edits
+- If you are uncertain what to change, make a small safe improvement (e.g. add a docstring,
+  fix an edge case, improve error handling) rather than returning analysis text
+- After editing, verify the file byte-compiles: `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"`")
+           ;; Add more skill mappings here as needed
+           (t "")))
         (original-contract
          (if (and (stringp original-prompt)
                   (> (length original-prompt) 0))
@@ -228,6 +242,22 @@ Adapts max-experiments based on API error rate."
               baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
      loop-buffer
      workflow-root)
+    ;; Ontology gate: check if target is suitable for experimentation
+    (when (and (fboundp 'gptel-auto-workflow--categorize-target)
+               (fboundp 'gptel-auto-workflow--check-action-preconditions))
+      (let* ((category (gptel-auto-workflow--categorize-target target))
+             (precondition-error (gptel-auto-workflow--check-action-preconditions target))
+             (saturated (and category
+                              (boundp 'gptel-auto-workflow--category-saturation)
+                              (assoc category gptel-auto-workflow--category-saturation))))
+        (when precondition-error
+          (message "[ontology-gate] 🚫 %s: %s — skipping experiment" target precondition-error)
+          (funcall callback nil)
+          (cl-return-from gptel-auto-experiment-loop))
+        (when saturated
+          (message "[ontology-gate] ⚠ %s: category %s saturated — reducing experiments" target category)
+          (setq gptel-auto-experiment-max-per-target
+                (min gptel-auto-experiment-max-per-target 2)))))
     (let* ((original-max gptel-auto-experiment-max-per-target)
            (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
            ;; Adjust max-exp based on frontier size: underexplored targets get more experiments
@@ -261,10 +291,11 @@ Adapts max-experiments based on API error rate."
                target best-score max-exp)
       (cl-labels ((run-next (exp-id)
                     (gptel-auto-workflow--update-progress)
-                    (when gptel-auto-experiment--quota-exhausted
-                      (message "[auto-workflow] Provider quota exhausted; stopping early for %s"
-                               target)
-                      (setq max-exp (min max-exp (1- exp-id))))
+                     (when gptel-auto-experiment--quota-exhausted
+                       (message "[auto-workflow] ⏹ All backends exhausted — stopping early for %s"
+                                target)
+                       (setq max-exp (1- exp-id))
+                       (cl-return-from gptel-auto-experiment-loop))
                     (when (and (>= gptel-auto-experiment--api-error-count
                                    gptel-auto-experiment--api-error-threshold)
                                (< exp-id max-exp))
@@ -315,11 +346,11 @@ Adapts max-experiments based on API error rate."
                             (when (and (not kept)
                                        score-after
                                        (<= score-after best-score))
-                              (cl-incf no-improvement-count))
-                            (unless hard-timeout
-                              (setq consecutive-timeouts 0))
-                            (when hard-timeout
-                              (cl-incf consecutive-timeouts)
+                               (setq no-improvement-count (1+ no-improvement-count)))
+                             (unless hard-timeout
+                               (setq consecutive-timeouts 0))
+                             (when hard-timeout
+                               (setq consecutive-timeouts (1+ consecutive-timeouts))
                               (message "[auto-experiment] Hard timeout for %s in experiment %d (%d consecutive); %s"
                                        target exp-id consecutive-timeouts
                                        (if (>= consecutive-timeouts gptel-auto-experiment--consecutive-timeout-threshold)

@@ -168,10 +168,10 @@ AutoTTS: Controller stops early if confidence threshold met."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-workflow-analyzer-time-budget 120
+(defcustom gptel-auto-workflow-analyzer-time-budget 180
   "Minimum timeout in seconds for analyzer target selection.
-Target selection can require more context synthesis than the default subagent
-timeout, so keep a dedicated budget to avoid unnecessary static fallbacks."
+Reduced from 240→180s: DeepSeek v4-pro thinking mode still exceeds 240s.
+Let it fail fast and fall back to faster backends (MiniMax/moonshot)."
   :type 'integer
   :group 'gptel-tools-agent)
 
@@ -219,11 +219,14 @@ Cache is invalidated after 5 minutes to avoid stale data.")
 
 (defun gptel-auto-workflow--normalized-cache-key (&optional proj-root)
   "Return normalized cache key for PROJ-ROOT.
-Ensures consistent cache lookups across different path representations."
+Ensures consistent cache lookups across different path representations.
+BEHAVIOR: Strips trailing slash only — does NOT strip the last directory component.
+FIX: Was using file-name-directory which returned the parent directory,
+causing cache collisions between sibling projects."
   (let ((root (or proj-root
                   (gptel-auto-workflow--project-root)
                   (expand-file-name "~/.emacs.d/"))))
-    (directory-file-name (file-name-directory root))))
+    (directory-file-name root)))
 
 
 (defun gptel-auto-workflow--effective-project-root ()
@@ -504,29 +507,49 @@ Uses standard skill loader so humans can edit researcher-prompt/SKILL.md."
   "Read JSON FILE into a hash-table without maphash corruption.
 Reads as plist internally, then manually builds hash table to avoid
 iterating JSON-created hash tables with maphash (Emacs 30.2 issue).
-Returns nil if FILE is missing or unreadable."
+Returns nil if FILE is missing or unreadable.
+ASSUMPTION: JSON contains plist structure (alternating key-value pairs).
+ASSUMPTION: Nested hash structures are plists starting with keyword keys.
+BEHAVIOR: Logs error type on failure for adaptive debugging.
+EDGE CASE: Empty plist data returns empty hash table (not nil)."
   (when (file-readable-p file)
-    (condition-case nil
+    (condition-case err
         (let ((json-object-type 'plist)
               (json-array-type 'list))
           (let* ((data (json-read-file file))
                  (ht (make-hash-table :test 'equal)))
-            (while data
-              (let* ((key (pop data))
-                     (val (pop data))
-                     (inner-ht (and (consp val) (keywordp (car val))
-                                    (make-hash-table :test 'equal))))
-                (if (and inner-ht (consp val) (keywordp (car val)))
-                    (let ((inner val))
-                      (while inner
-                        (let ((ik (pop inner))
-                              (iv (pop inner)))
-                          (when (and ik iv)
-                            (puthash (if (keywordp ik) (substring (symbol-name ik) 1) ik) iv inner-ht))))
-                      (puthash key inner-ht ht))
-                  (puthash key val ht))))
+            ;; BEHAVIOR: Early return for empty plist (not nil), ensuring
+            ;; hash table is always returned when file is readable
+            (when data
+              (while data
+                (let* ((key (pop data))
+                       (val (pop data))
+                       (inner-ht (and (consp val) (keywordp (car val))
+                                      (make-hash-table :test 'equal))))
+                  (if (and inner-ht (consp val) (keywordp (car val)))
+                      (let ((inner val))
+                        (while inner
+                          (let ((ik (pop inner))
+                                (iv (pop inner)))
+                            (when (and ik iv)
+                              (puthash (if (keywordp ik) (substring (symbol-name ik) 1) ik) iv inner-ht))))
+                        (puthash key inner-ht ht))
+                    (puthash key val ht)))))
             ht))
-      (error nil))))
+      ;; BEHAVIOR: Log error type for φ Vitality - builds on discoveries
+      ;; that parsing errors occur and what types they are
+      (json-error
+       (message "[json] %s: JSON parse error in %s: %s"
+                (file-name-nondirectory file) file (error-message-string err))
+       nil)
+      (file-error
+       (message "[json] %s: File error reading %s: %s"
+                (file-name-nondirectory file) file (error-message-string err))
+       nil)
+      (error
+       (message "[json] %s: Unexpected error reading %s: %s"
+                (file-name-nondirectory file) file (error-message-string err))
+       nil))))
 
 (defun gptel-auto-workflow--load-researcher-meta-learning ()
   "Load meta-learning data for researcher skill.
@@ -1726,32 +1749,35 @@ EDGE CASE: nil returns nil, non-list atoms return nil."
 (defun gptel-auto-workflow--handle-analyzer-error-state (targets static-targets callback)
   "Handle analyzer error states and invoke CALLBACK with appropriate targets.
 TARGETS is the analyzer result, STATIC-TARGETS is fallback list.
-CALLBACK must be a function; ASSUMPTION: caller validates this.
+CALLBACK must be a function; guarded with fallback on invalid input.
 BEHAVIOR: Returns non-nil if error state was handled.
 EDGE CASE: Non-nil but malformed targets (improper list, atom) caught before downstream crash."
-  (unless (functionp callback)
-    (message "[auto-workflow] Error state handler: callback is not a function (%S)" callback)
-    (setq callback (lambda (x) (message "[auto-workflow] Dropped result: %S" x))))
-  (cond
-   ((and gptel-auto-workflow--analyzer-quota-exhausted
-         (not targets))
-    (message "[auto-workflow] Analyzer quota exhausted; using static targets")
-    (funcall callback static-targets)
-    t)
-   ((and gptel-auto-workflow--analyzer-transient-failure
-         (not targets))
-    (message "[auto-workflow] Analyzer transient failure; using static targets")
-    (funcall callback static-targets)
-    t)
-   ((not targets)
-    (message "[auto-workflow] Analyzer returned no targets; using static targets")
-    (funcall callback static-targets)
-    t)
-   ((not (proper-list-p targets))
-    (message "[auto-workflow] Analyzer returned malformed targets (%S); using static targets" targets)
-    (funcall callback static-targets)
-    t)
-   (t nil)))
+  (cl-block gptel-auto-workflow--handle-analyzer-error-state
+    ;; Guard: validate callback, use no-op fallback if invalid
+    (unless (functionp callback)
+      (message "[auto-workflow] Error state handler: callback is not a function (%S)" callback)
+      (setq callback (lambda (x) (message "[auto-workflow] Dropped result: %S" x))))
+    ;; Check error conditions in priority order; return t after invoking callback
+    (cond
+     ((and gptel-auto-workflow--analyzer-quota-exhausted
+           (not targets))
+      (message "[auto-workflow] Analyzer quota exhausted; using static targets")
+      (funcall callback static-targets)
+      (cl-return-from gptel-auto-workflow--handle-analyzer-error-state t))
+     ((and gptel-auto-workflow--analyzer-transient-failure
+           (not targets))
+      (message "[auto-workflow] Analyzer transient failure; using static targets")
+      (funcall callback static-targets)
+      (cl-return-from gptel-auto-workflow--handle-analyzer-error-state t))
+     ((not targets)
+      (message "[auto-workflow] Analyzer returned no targets; using static targets")
+      (funcall callback static-targets)
+      (cl-return-from gptel-auto-workflow--handle-analyzer-error-state t))
+     ((not (proper-list-p targets))
+      (message "[auto-workflow] Analyzer returned malformed targets (%S); using static targets" targets)
+      (funcall callback static-targets)
+      (cl-return-from gptel-auto-workflow--handle-analyzer-error-state t))
+     (t nil))))
 
 (defun gptel-auto-workflow--normalize-target-candidate (candidate)
   "Normalize parsed target CANDIDATE to a repo-relative path when possible."
@@ -2681,29 +2707,47 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
     (message "[research] Periodic research stopped")))
 
 (defun gptel-auto-workflow-research-status ()
-  "Show researcher status for current project."
+  "Show researcher status for current project.
+When called interactively, displays formatted status.
+When called programmatically, returns a status plist."
   (interactive)
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
-         (findings (gethash cache-key
-                            gptel-auto-workflow--research-findings-cache
-                            ""))
+         ;; Ensure nil-safety: initialize cache if needed
+         (_ (when (null gptel-auto-workflow--research-findings-cache)
+              (setq gptel-auto-workflow--research-findings-cache
+                    (make-hash-table :test 'equal))))
+         (findings (gethash cache-key gptel-auto-workflow--research-findings-cache))
          (cache-file (gptel-auto-workflow--research-file))
          (file-exists (file-exists-p cache-file))
          (file-attrs (and file-exists (file-attributes cache-file)))
          (file-size (or (and file-attrs (nth 7 file-attrs)) 0))
          (file-mtime (and file-attrs (nth 5 file-attrs)))
          (file-mtime-str (and file-mtime
-                              (format-time-string "%Y-%m-%d %H:%M" file-mtime))))
-    (list :running (timerp gptel-auto-workflow--research-timer)
-          :interval gptel-auto-workflow-research-interval
-          :project proj-root
-          :findings-cached (and (stringp findings) (not (string-empty-p findings)))
-          :findings-length (length findings)
-          :cache-file cache-file
-          :cache-file-exists file-exists
-          :cache-file-size file-size
-          :cache-file-mtime file-mtime-str)))
+                              (format-time-string "%Y-%m-%d %H:%M" file-mtime)))
+         (status (list :running (timerp gptel-auto-workflow--research-timer)
+                       :interval gptel-auto-workflow-research-interval
+                       :project proj-root
+                       :findings-cached (stringp findings)
+                       :findings-length (if findings (length findings) 0)
+                       :cache-file cache-file
+                       :cache-file-exists file-exists
+                       :cache-file-size file-size
+                       :cache-file-mtime file-mtime-str)))
+    ;; ASSUMPTION: Interactive calls expect visible output, programmatic calls expect return value
+    ;; BEHAVIOR: Display formatted status when interactive, always return plist
+    (when (called-interactively-p 'any)
+      (message "[research] Status: %srunning | findings: %s (%d chars) | cache: %s"
+               (if (plist-get status :running) "" "not ")
+               (if (plist-get status :findings-cached) "cached" "none")
+               (plist-get status :findings-length)
+               (if (plist-get status :cache-file-exists)
+                   (format "%s (%.1fKB, %s)"
+                           (plist-get status :cache-file)
+                           (/ (plist-get status :cache-file-size) 1024.0)
+                           (plist-get status :cache-file-mtime))
+                 "missing")))
+    status))
 
 ;;; ─── AutoTTS via Benchmark System ───
 

@@ -466,6 +466,7 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/gptel-ext-tool-sanitize.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-tools-agent-prompt-build.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-ontology-router.el" root))
+    (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-tools-agent-error.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-benchmark-subagent.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
@@ -546,7 +547,7 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                  gptel-auto-workflow-persistent-headless t
                  message-log-max 10000
                  gptel-auto-experiment-max-retries 3  ; 3 attempts for transient network errors
-                 gptel-auto-experiment-time-budget 900
+                 gptel-auto-experiment-time-budget 300
                  gptel-auto-experiment-validation-retry-time-budget 120)
            (gptel-auto-workflow--enable-headless-suppression)
            (if gptel-auto-workflow--running

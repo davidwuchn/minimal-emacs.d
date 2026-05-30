@@ -17,6 +17,9 @@
 (defvar gptel-agent-loop--bypass)
 (defvar gptel-auto-workflow--defer-subagent-env-persistence)
 (defvar gptel-auto-workflow--subagent-process-environment)
+(defvar gptel-auto-experiment--subagent-dispatch-log (make-hash-table :test 'equal)
+  "Hash table tracking subagent dispatch counts per (agent-type, category).
+Populated by `my/gptel--run-agent-tool-with-timeout', consumed by evolution cycle.")
 (defvar gptel-agent--agents)
 (defvar my/gptel-subagent-include-history-default)
 (defvar gptel-auto-experiment-active-grace)
@@ -98,30 +101,41 @@
   buffer)
 
 (defun my/gptel--reset-agent-task-state ()
-  "Abort and clear all tracked subagent task state."
+  "Drain completed subagent tasks and let in-flight tasks drain naturally.
+
+Completed entries are removed. In-flight entries are kept (not aborted)
+so their callbacks still have state to consult when they arrive — the
+caller's stale-run-id check prevents interference.
+
+CRITICAL: We do NOT call `gptel-abort` on in-flight buffers because the
+subagent's tool-dispatch loop runs asynchronously and crashes with
+\"Selecting deleted buffer\" when the session buffer is killed mid-flight.
+In-flight subagents drain naturally; the stale-run-id check in callbacks
+provides the safety net.
+
+ALGORITHM: Collect task IDs first, then process, to avoid modifying
+the hash table during maphash iteration."
   (when (hash-table-p my/gptel--agent-task-state)
-    (let (request-buffers)
+    (let (done-ids stale-ids in-flight-count)
+      ;; Phase 1: classify all task IDs
       (maphash
-       (lambda (_task-id state)
+       (lambda (task-id state)
          (when (plistp state)
            (my/gptel--cancel-agent-task-timers state)
-           (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
-             (push request-buf request-buffers))))
+           (let ((done (plist-get state :done)))
+             (cond (done
+                    (push task-id done-ids))
+                   ((my/gptel--agent-task-request-buffer state)
+                    (cl-incf in-flight-count))
+                   (t
+                    (push task-id stale-ids))))))
        my/gptel--agent-task-state)
-      (clrhash my/gptel--agent-task-state)
-      (dolist (request-buf (delete-dups request-buffers))
-        (when (and (buffer-live-p request-buf)
-                   (fboundp 'gptel-abort))
-          (condition-case err
-              (gptel-abort request-buf)
-            (error
-             (let ((safe-msg (condition-case nil
-                                 (my/gptel--sanitize-for-logging
-                                  (error-message-string err) 160)
-                               (error "abort-error"))))
-               (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
-                        (buffer-name request-buf)
-                        safe-msg)))))))))
+      ;; Phase 2: remove done and stale entries (not in-flight)
+      (dolist (tid (append done-ids stale-ids))
+        (remhash tid my/gptel--agent-task-state))
+      (when (> in-flight-count 0)
+        (message "[nucleus] Keeping %d in-flight subagent task(s) for natural drain (not aborting — stale-run check prevents interference)"
+                 in-flight-count)))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."
@@ -147,34 +161,21 @@ new analyzer/executor/grader launch on that same buffer or worktree."
                   (equal activity-dir state-dir))))))
 
 (defun my/gptel--cleanup-overlapping-agent-tasks (origin-buf activity-dir)
-  "Abort and clear tracked subagent tasks that overlap a new workflow dispatch.
-
-This prevents stale timers/callbacks from older analyzer/executor work on the
-same routed experiment buffer from re-entering a later retry."
+  "Cancel timers for overlapping subagent tasks.
+Does NOT call `gptel-abort' or remove hash-table entries — the caller's
+stale-run-id check prevents callback interference, and aborting the
+session buffer mid-flight causes 'Selecting deleted buffer' errors."
   (let ((normalized-dir (my/gptel--normalize-agent-activity-dir activity-dir))
-        overlap-ids
-        request-buffers)
+        (overlap-count 0))
     (maphash
      (lambda (task-id state)
        (when (my/gptel--agent-task-overlaps-p state origin-buf normalized-dir)
          (my/gptel--cancel-agent-task-timers state)
-         (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
-           (push request-buf request-buffers))
-         (push task-id overlap-ids)))
+         (cl-incf overlap-count)))
      my/gptel--agent-task-state)
-    (dolist (task-id overlap-ids)
-      (remhash task-id my/gptel--agent-task-state))
-    (dolist (request-buf (delete-dups request-buffers))
-      (when (and (buffer-live-p request-buf)
-                 (fboundp 'gptel-abort))
-        (condition-case err
-            (gptel-abort request-buf)
-          (error
-           (message "[nucleus] Failed to abort overlapping subagent buffer %s: %s"
-                    (buffer-name request-buf)
-                    (my/gptel--sanitize-for-logging
-                     (error-message-string err) 160))))))
-    (length overlap-ids)))
+    (when (> overlap-count 0)
+      (message "[nucleus] Drained %d overlapping subagent task(s)" overlap-count))
+    overlap-count))
 
 (defun my/gptel--call-gptel-agent-task (callback agent-type description prompt)
   "Invoke the active gptel subagent task runner.
@@ -299,7 +300,7 @@ subagent callback fired, and avoids reusing a deleted worktree as
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
 CALLBACK is called with the result or a timeout error.
 Uses hash table keyed by task-id to support parallel execution."
-  (let* ((task-id (cl-incf my/gptel--agent-task-counter))
+  (let* ((task-id (setq my/gptel--agent-task-counter (1+ my/gptel--agent-task-counter)))
          (start-time (current-time))
          (task-timeout my/gptel-agent-task-timeout)
          (origin-buf (current-buffer))
@@ -609,11 +610,23 @@ AGENT-NAME must exist in `gptel-agent--agents`.
                                          include-history-bool include-diff-bool))))
 
 (defun my/gptel--run-agent-tool-with-timeout (timeout callback agent-name description prompt
-                                                      &optional files include-history include-diff active-grace)
-  "Run `my/gptel--run-agent-tool' with TIMEOUT and optional ACTIVE-GRACE."
+                                                       &optional files include-history include-diff active-grace)
+  "Run `my/gptel--run-agent-tool' with TIMEOUT and optional ACTIVE-GRACE.
+Logs subagent dispatch to ontology for self-evolution tracking."
   (let ((previous-timeout my/gptel-agent-task-timeout)
         (previous-hard-timeout my/gptel-agent-task-hard-timeout)
         (grace (or active-grace gptel-auto-experiment-active-grace)))
+    ;; Log subagent dispatch to ontology tracking (for self-evolution)
+    (when (and (boundp 'gptel-auto-workflow--current-target)
+               gptel-auto-workflow--current-target
+               (fboundp 'gptel-auto-workflow--categorize-target))
+      (let ((cat (gptel-auto-workflow--categorize-target
+                  gptel-auto-workflow--current-target)))
+        (when (and cat (boundp 'gptel-auto-experiment--subagent-dispatch-log))
+          (let ((log (symbol-value 'gptel-auto-experiment--subagent-dispatch-log)))
+            (puthash (format "%s-%s" agent-name cat)
+                     (1+ (gethash (format "%s-%s" agent-name cat) log 0))
+                     log)))))
     (unwind-protect
         (progn
           (setq my/gptel-agent-task-timeout timeout)
@@ -742,14 +755,14 @@ Monthly subscription: LLM selection finds best targets each run."
   :type 'directory
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-time-budget 900
-  "Time budget per experiment in seconds (default: 15 min).
+(defcustom gptel-auto-experiment-time-budget 300
+  "Time budget per experiment in seconds (default: 5 min).
 
-Reduced from 2400s to 900s because:
-1. Provider failures (Curl 28 timeout) caused 25-min waits per attempt
-2. Retries × 5 × 2400s = 3.3h per failing experiment
-3. 900s covers 2-3 normal LLM calls at 300s each
-4. Stuck experiments fail fast, retry mechanism handles transient issues"
+Reduced from 900s to 300s because:
+1. DeepSeek thinking mode + multi-step agents stretch to 700+ seconds
+2. 300s is enough for 2-3 LLM calls at 60-100s each
+3. Stuck experiments fail fast instead of wasting 15 min
+4. Dying experiments free the pipeline for productive ones"
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)

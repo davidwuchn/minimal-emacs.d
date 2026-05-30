@@ -331,10 +331,12 @@ daemon alive."
              ;; Allow test failures that match main baseline
              (baseline-check (when (and should-run-tests (not raw-tests-passed))
                                (gptel-auto-workflow--staging-tests-match-main-baseline-p tests-output)))
-             (tests-passed (or (not should-run-tests)
-                               (and skip-tests (not gptel-auto-experiment-require-tests))
-                               raw-tests-passed
-                               (and baseline-check (car baseline-check))))
+              (tests-passed (or (not should-run-tests)
+                                (and skip-tests (not gptel-auto-experiment-require-tests))
+                                raw-tests-passed
+                                (and baseline-check (car baseline-check))))
+              (debug-info (format "DEBUG: skip=%s defer=%s should-run=%s raw-passed=%s baseline=%s tests-passed=%s"
+                                  skip-tests defer-tests-to-staging should-run-tests raw-tests-passed baseline-check tests-passed))
              (final-tests-output (or (and baseline-check (cdr baseline-check))
                                      tests-output))
              (scores (gptel-auto-experiment--eight-keys-scores hypothesis)))
@@ -344,10 +346,11 @@ daemon alive."
         (when (and skip-tests gptel-auto-experiment-require-tests)
           (message "[auto-exp] Tests required before staging merge: %s"
                    (if tests-passed "PASS" "FAIL")))
-        (list :passed tests-passed
-              :nucleus-passed t
-              :nucleus-skipped t
-              :tests-passed tests-passed
+         (list :passed tests-passed
+               :debug-info debug-info
+               :nucleus-passed t
+               :nucleus-skipped t
+               :tests-passed tests-passed
               :tests-output final-tests-output
               :tests-skipped (not should-run-tests)
               :time (- (float-time) start)
@@ -357,7 +360,13 @@ daemon alive."
 (defun gptel-auto-experiment--eight-keys-scores (&optional hypothesis)
   "Get full Eight Keys scores alist from current codebase.
 Scores based on commit message + code diff (not just stat).
-If HYPOTHESIS is provided, use task-type-aware scoring."
+If HYPOTHESIS is provided, use task-type-aware scoring.
+Loads gptel-benchmark-principles if not already available."
+  (unless (fboundp 'gptel-benchmark-eight-keys-score)
+    (message "[auto-exp] Eight Keys scorer not loaded — requiring gptel-benchmark-principles")
+    (condition-case err
+        (require 'gptel-benchmark-principles nil t)
+      (error (message "[auto-exp] Failed to load Eight Keys scorer: %S" err))))
   (when (fboundp 'gptel-benchmark-eight-keys-score)
     (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
@@ -405,8 +414,8 @@ If HYPOTHESIS is provided, use task-type-aware scoring."
                     (when content
                       (let ((score (gptel-benchmark--code-quality-score content)))
                         (when (numberp score)
-                          (cl-incf total-score score)
-                          (cl-incf file-count)))))))
+                          (setq total-score (+ total-score score))
+                          (setq file-count (1+ file-count))))))))
               (if (> file-count 0)
                   (/ total-score file-count)
                 0.5))))))))
@@ -632,19 +641,24 @@ on the current provider."
   (funcall
    invoke
    (lambda (result)
-     (let* ((attempt (or retries 0))
-            (prov-attempts (or provider-attempts 0))
-            (category
-             (gptel-auto-experiment--retryable-aux-subagent-category result))
-            (raw (gptel-auto-experiment--subagent-raw-result result))
-            (is-pressure (gptel-auto-experiment--provider-pressure-error-p raw))
-            ;; Advance provider only after N consecutive failures on same one
-            (should-advance (and is-pressure
-                                 (>= (1+ prov-attempts)
-                                     gptel-auto-experiment-max-per-provider-attempts))))
-       (if (and category
-                (not (bound-and-true-p gptel-auto-experiment--quota-exhausted))
-                (< attempt gptel-auto-experiment-max-aux-subagent-retries))
+      (let* ((attempt (or retries 0))
+             (prov-attempts (or provider-attempts 0))
+             (category
+              (gptel-auto-experiment--retryable-aux-subagent-category result))
+             (raw (gptel-auto-experiment--subagent-raw-result result))
+             (is-pressure (gptel-auto-experiment--provider-pressure-error-p raw))
+             ;; Advance provider only after N consecutive failures on same one
+             (should-advance (and is-pressure
+                                  (>= (1+ prov-attempts)
+                                      gptel-auto-experiment-max-per-provider-attempts)))
+             ;; verbum determinism: lambda-healthy backends have 0.0 drift.
+             ;; Skip retries for non-network errors — computation is
+             ;; deterministic. Only retry on quota/network pressure.
+             (lambda-available (fboundp 'gptel-auto-workflow--backend-health-level)))
+        (if (and category
+                 (not (bound-and-true-p gptel-auto-experiment--quota-exhausted))
+                 (< attempt gptel-auto-experiment-max-aux-subagent-retries)
+                 (or is-pressure (not lambda-available)))
            (progn
              (when should-advance
                (when-let ((preset
@@ -707,9 +721,9 @@ Values are plist: (:done :timer).")
 (defvar gptel-auto-experiment--grading-worktree nil
   "Dynamically bound experiment worktree for the current grade request.")
 
-(defvar gptel-auto-experiment-grade-timeout 120
+(defvar gptel-auto-experiment-grade-timeout 180
   "Timeout in seconds for grading subagent.
-Default 120s — grading normally takes 8-10s but slow backends
+Default 180s — grading normally takes 8-10s but slow backends
 (CF-Gateway, DeepSeek under load) need more headroom.")
 
 (defun gptel-auto-experiment--reset-grade-state ()
@@ -745,11 +759,15 @@ so the grader can inspect the actual edit instead of relying only on the
 executor's prose summary."
   (let* ((base-output (if (stringp output) output (format "%s" output)))
          (resolved-target (or target gptel-auto-experiment--grading-target))
-         (resolved-worktree (or worktree gptel-auto-experiment--grading-worktree)))
+         (resolved-worktree (or worktree gptel-auto-experiment--grading-worktree))
+         (reasoning-evidence (gptel-auto-experiment--extract-verify-evidence base-output)))
     (if (or (not (gptel-auto-workflow--non-empty-string-p resolved-target))
             (not (gptel-auto-workflow--non-empty-string-p resolved-worktree))
             (not (file-directory-p resolved-worktree)))
-        base-output
+        (if reasoning-evidence
+            (format "%s\n\nVERIFICATION EVIDENCE FROM <think>:\n%s"
+                    base-output reasoning-evidence)
+          base-output)
       (let* ((default-directory resolved-worktree)
              (target-q (shell-quote-argument resolved-target))
              (status-result
@@ -775,11 +793,51 @@ executor's prose summary."
                ((> (length diff-output) 3000)
                 (concat (substring diff-output 0 3000) "\n...[truncated]"))
                (t diff-output))))
-        (format "%s\n\nWORKTREE EVIDENCE:\n- Target: %s\n- Git status:\n%s\n- Diff excerpt:\n%s"
+        (format "%s\n\nWORKTREE EVIDENCE:\n- Target: %s\n- Git status:\n%s\n- Diff excerpt:\n%s%s"
                 base-output
                 resolved-target
                 status-text
-                diff-text)))))
+                diff-text
+                (if reasoning-evidence
+                    (format "\n\nVERIFICATION EVIDENCE FROM <think>:\n%s" reasoning-evidence)
+                  ""))))))
+
+(defun gptel-auto-experiment--extract-verify-evidence (output)
+  "Extract verification command evidence from OUTPUT's <think> blocks.
+Searches for mentions of byte-compile, syntax check, load test, nucleus,
+or test commands in reasoning sections.  Returns a formatted string or nil."
+  (when (and (stringp output) (string-match-p "<think>" output))
+    (let ((evidence-lines nil)
+          (verify-keywords
+           '("byte-compile" "syntax" "load test" "check-parens"
+             "nucleus" "run-tests" "verify" "emacs -Q" "batch" "ert"))
+          (in-think nil))
+      (with-temp-buffer
+        (insert output)
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let* ((line (buffer-substring-no-properties
+                        (line-beginning-position) (line-end-position)))
+                 (starts-think (string-match-p "<think>" line))
+                 (ends-think (string-match-p "</think>" line))
+                 (has-evidence
+                  (let ((case-fold-search t))
+                    (catch 'match
+                      (dolist (kw verify-keywords)
+                        (when (string-match-p kw line)
+                          (throw 'match t)))
+                      nil))))
+            (when (and has-evidence
+                       (or in-think starts-think))
+              (push (string-trim line) evidence-lines))
+            (when starts-think (setq in-think t))
+            (when ends-think (setq in-think nil)))
+          (forward-line 1)))
+      (when evidence-lines
+        (let ((lines (nreverse evidence-lines)))
+          (while (> (length lines) 15)
+            (setq lines (butlast lines)))
+          (mapconcat #'identity lines "\n"))))))
 
 (defun gptel-auto-experiment--target-pending-changes-p (target &optional worktree)
   "Return non-nil when TARGET has pending git changes in WORKTREE."
@@ -807,35 +865,50 @@ executor's prose summary."
 
 (defun gptel-auto-experiment--timeout-salvage-output (output prompt target &optional worktree)
   "Return synthetic executor output when timed-out error OUTPUT left real
-target edits.  PROMPT is the original executor prompt so the salvage path
-can preserve the intended hypothesis.  TARGET and WORKTREE identify the
-actual edited file."
+valid target edits.  PROMPT is the original executor prompt.  TARGET and
+WORKTREE identify the actual edited file.
+Returns nil (no salvage) when pending changes are syntactically broken,
+avoiding wasted retry cycles on corrupted files."
   (when (and (gptel-auto-experiment--agent-error-p output)
              (gptel-auto-experiment--executor-timeout-p output)
              (gptel-auto-experiment--target-pending-changes-p target worktree))
-    (let* ((raw-hypothesis (gptel-auto-experiment--extract-hypothesis prompt))
-           (hypothesis
-            (if (or (not (gptel-auto-workflow--non-empty-string-p raw-hypothesis))
-                    (member raw-hypothesis '("Agent error" "No hypothesis stated")))
-                (format "Timed-out executor left partial changes in %s for workflow evaluation"
-                        target)
-              raw-hypothesis)))
-      (format
-       (concat
-        "HYPOTHESIS: %s\n"
-        "CHANGED:\n"
-        "- Executor timed out before returning a final response, but the worktree contains pending changes for %s.\n"
-        "EVIDENCE:\n"
-        "- Treat the concrete worktree diff below as the source of truth for this partial attempt.\n"
-        "- Original timeout: %s\n"
-        "VERIFY:\n"
-        "- Run the normal benchmark and required tests against the changed worktree.\n"
-        "COMMIT:\n"
-        "- No commit was created before timeout; only keep the change if benchmark and review gates pass.\n"
-        "Task completed with partial work ready for workflow evaluation.")
-       hypothesis
-       target
-       (my/gptel--sanitize-for-logging output 200)))))
+    ;; Validate pending changes before salvaging — broken parens or syntax
+    ;; errors from a timed-out executor are not worth salvaging.
+    (let* ((target-file (expand-file-name target (or worktree default-directory)))
+           (validation-error (when (file-exists-p target-file)
+                               (gptel-auto-experiment--validate-code target-file))))
+      (if validation-error
+          (progn
+            (message "[auto-exp] ⏱ Timed-out executor left BROKEN changes in %s (%s); reverting instead of salvaging"
+                     target validation-error)
+            (when worktree
+              (let ((default-directory worktree))
+                (magit-git-success "checkout" "--" ".")))
+            nil)
+        ;; Pending changes are valid — salvage them
+        (let* ((raw-hypothesis (gptel-auto-experiment--extract-hypothesis prompt))
+               (hypothesis
+                (if (or (not (gptel-auto-workflow--non-empty-string-p raw-hypothesis))
+                        (member raw-hypothesis '("Agent error" "No hypothesis stated")))
+                    (format "Timed-out executor left partial changes in %s for workflow evaluation"
+                            target)
+                  raw-hypothesis)))
+          (format
+           (concat
+            "HYPOTHESIS: %s\n"
+            "CHANGED:\n"
+            "- Executor timed out before returning a final response, but the worktree contains pending changes for %s.\n"
+            "EVIDENCE:\n"
+            "- Treat the concrete worktree diff below as the source of truth for this partial attempt.\n"
+            "- Original timeout: %s\n"
+            "VERIFY:\n"
+            "- Run the normal benchmark and required tests against the changed worktree.\n"
+            "COMMIT:\n"
+            "- No commit was created before timeout; only keep the change if benchmark and review gates pass.\n"
+            "Task completed with partial work ready for workflow evaluation.")
+           hypothesis
+           target
+           (my/gptel--sanitize-for-logging output 200)))))))
 
 (defun gptel-auto-experiment-grade (output callback &optional target worktree)
   "Grade experiment OUTPUT. LLM decides quality threshold.
@@ -844,7 +917,7 @@ If OUTPUT is an error message, fails immediately with error details.
 Uses hash table keyed by grade-id to support parallel execution.
 The grader subagent overlay will appear in the current buffer at time of call.
 TARGET and WORKTREE let the grader inspect concrete git evidence."
-  (let ((grade-id (cl-incf gptel-auto-experiment--grade-counter))
+  (let ((grade-id (setq gptel-auto-experiment--grade-counter (1+ gptel-auto-experiment--grade-counter)))
         (grade-buffer (current-buffer)))
     (cl-block gptel-auto-experiment-grade
       ;; Nil or empty output: fail immediately, don't waste an API call
@@ -897,10 +970,10 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
           (with-current-buffer grade-buffer
             (gptel-benchmark-grade
              (gptel-auto-experiment--build-grading-output output target worktree)
-             '("change clearly described"
-               "change is minimal and focused"
-               "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
-               "verification attempted (byte-compile, nucleus, tests, or manual)")
+               '("change clearly described"
+                "change is minimal and focused"
+                "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
+                "verification attempted (byte-compile, syntax, load-test, nucleus, or tests — also check VERIFICATION EVIDENCE FROM <think> section and <think> reasoning blocks)")
              '("large refactor unrelated to stated improvement"
                "changed security files without review"
                "no description or unclear purpose"

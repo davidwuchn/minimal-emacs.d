@@ -1,40 +1,35 @@
 # Backend Head-to-Head Comparison
-<<<<<<< HEAD
-> Auto-generated from 6 experiments across 0 backends
+> Auto-generated from 105 experiments across 4 backends
 
-
-*Generated: 2026-05-29 15:04*
-=======
-<<<<<<< Updated upstream
-> Auto-generated from 204 experiments across 4 backends
-
-## DashScope vs MiniMax (winner: **DashScope**)
-- DashScope: 36.4% keep-rate
-- MiniMax: 4.5% keep-rate
-- Shared targets: 3 | DashScope won 3, MiniMax won 0, ties 0
-
-## MiniMax vs DeepSeek (winner: **tie**)
+## CF-Gateway vs MiniMax (winner: **tie**)
+- CF-Gateway: 0.0% keep-rate
 - MiniMax: 0.0% keep-rate
-- DeepSeek: 0.0% keep-rate
-- Shared targets: 2 | MiniMax won 0, DeepSeek won 0, ties 2
-=======
-> Auto-generated from 82 experiments across 3 backends
->>>>>>> Stashed changes
+- Shared targets: 2 | CF-Gateway won 0, MiniMax won 0, ties 2
 
-## MiniMax vs moonshot (winner: **tie**)
+## DeepSeek vs MiniMax (winner: **DeepSeek**)
+- DeepSeek: 7.7% keep-rate
 - MiniMax: 0.0% keep-rate
-- moonshot: 0.0% keep-rate
-- Shared targets: 1 | MiniMax won 0, moonshot won 0, ties 1
+- Shared targets: 2 | DeepSeek won 1, MiniMax won 0, ties 1
 
-## DeepSeek vs MiniMax (winner: **tie**)
-- DeepSeek: 0.0% keep-rate
+## DeepSeek vs CF-Gateway (winner: **DeepSeek**)
+- DeepSeek: 7.7% keep-rate
+- CF-Gateway: 0.0% keep-rate
+- Shared targets: 2 | DeepSeek won 1, CF-Gateway won 0, ties 1
+
+## DashScope vs MiniMax (winner: **tie**)
+- DashScope: 0.0% keep-rate
 - MiniMax: 0.0% keep-rate
-- Shared targets: 1 | DeepSeek won 0, MiniMax won 0, ties 1
+- Shared targets: 1 | DashScope won 0, MiniMax won 0, ties 1
+
+## CF-Gateway vs DashScope (winner: **tie**)
+- CF-Gateway: 0.0% keep-rate
+- DashScope: 0.0% keep-rate
+- Shared targets: 1 | CF-Gateway won 0, DashScope won 0, ties 1
+
+## DeepSeek vs DashScope (winner: **DeepSeek**)
+- DeepSeek: 10.0% keep-rate
+- DashScope: 0.0% keep-rate
+- Shared targets: 1 | DeepSeek won 1, DashScope won 0, ties 0
 
 
-<<<<<<< Updated upstream
-*Generated: 2026-05-29 15:12*
-=======
-*Generated: 2026-05-29 15:26*
->>>>>>> Stashed changes
->>>>>>> 3b8899bd (◈ Merge auto-evolved pipeline files)
+*Generated: 2026-05-30 11:11*

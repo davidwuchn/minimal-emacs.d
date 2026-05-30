@@ -477,7 +477,7 @@ the shared run-wide API counter or stopping the rest of the workflow."
            (hard-quota (gptel-auto-experiment--hard-quota-exhausted-p error-source)))
       (if escalate-run-pressure
           (progn
-            (cl-incf gptel-auto-experiment--api-error-count)
+            (setq gptel-auto-experiment--api-error-count (1+ gptel-auto-experiment--api-error-count))
             (message "[auto-workflow] API error #%d: %s"
                      gptel-auto-experiment--api-error-count error-category)
             (when hard-quota
@@ -642,9 +642,12 @@ RETRY-COUNT tracks current retry attempt."
                (gptel-auto-experiment--retry-history previous-results result))
               (is-pressure (when raw-error
                              (gptel-auto-experiment--provider-pressure-error-p raw-error)))
-              (should-advance (and is-pressure
-                                   (>= (1+ prov-attempts)
-                                       gptel-auto-experiment-max-per-provider-attempts))))
+               (hard-quota (and raw-error
+                                (gptel-auto-experiment--hard-quota-exhausted-p raw-error)))
+               (should-advance (or hard-quota
+                                   (and is-pressure
+                                        (>= (1+ prov-attempts)
+                                            gptel-auto-experiment-max-per-provider-attempts)))))
          (gptel-auto-workflow--restore-live-target-file target workflow-root)
          (when quota-exhausted
            (setq gptel-auto-experiment--quota-exhausted t))

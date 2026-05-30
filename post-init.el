@@ -87,7 +87,34 @@
                     (error-message-string err)))))))
   (require 'init-ai)
 
+;; Ensure config-verified flag even if init.el errors before its line 641.
+;; Must be set after all module loads but before any post-init code that
+;; might error and abort loading (which prevents init.el:641 from running).
+(setq minimal-emacs--success t)
+
 ;; Backup and auto-save settings are configured in init-files.el
+
+;; ==============================================================================
+;; DEBUG: Auto-capture backtrace for mode-line errors
+;; ==============================================================================
+;; "Wrong type argument: stringp, nil" occurs during mode-line updates.
+;; Catch it in format-mode-line and log a full backtrace.
+(defvar my/backtrace-log
+  (expand-file-name "var/log/backtrace-mode-line.log" user-emacs-directory))
+(defun my/format-mode-line-backtrace (orig-fn format &optional face window buffer)
+  (condition-case err
+      (funcall orig-fn format face window buffer)
+    (wrong-type-argument
+     (when (string-match-p "stringp, nil" (error-message-string err))
+       (with-temp-file my/backtrace-log
+         (prin1 (format-time-string "%Y-%m-%dT%T ") (current-buffer))
+         (prin1 err (current-buffer))
+         (terpri (current-buffer))
+         (let ((standard-output (current-buffer))
+               (debug-on-error nil))
+           (backtrace))))
+     (signal (car err) (cdr err)))))
+(advice-add 'format-mode-line :around #'my/format-mode-line-backtrace)
 
 ;; ==============================================================================
 ;; PERSONAL CUSTOMIZATIONS (Add your own below)

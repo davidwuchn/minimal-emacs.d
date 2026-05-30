@@ -1,32 +1,39 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
-- Sources: 8 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted', Very short content (24 lines)
+- Confidence: 24%
+- Sources: 11 memories
+- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
 - Auto-approved: yes (flagged)
 --->
 
 <think>
-The user wants me to synthesize a collection of research memories into a comprehensive knowledge page. Let me analyze the content:
+The user wants me to generate a complete knowledge page based on all the research findings I've compiled. Let me synthesize everything into a comprehensive, well-organized knowledge page with frontmatter.
 
-1. Multiple research sessions from May 20-27, 2026
-2. Strategy: persisted-findings
-3. Topics cover:
-   - Self-evolution patterns
-   - Agent architecture (circuit breakers, checkpoints, tool receipts)
-   - Lambda notation and mathematical attention anchors
-   - Think-in-code paradigm
-   - Session continuity via FTS5
-   - Feed-forward memory protocol
-   - Watchdog architectures
-   - Error recovery patterns
-   - Three-loop meta-learning
-   - Knowledge graph patterns
+Let me organize the key patterns from all research sessions:
 
-Let me synthesize all of this into a comprehensive knowledge page with:
-- Minimum 50 lines
-- Concrete examples (code, tables, commands)
-- Actionable patterns
-- Cross-references
-- Full markdown format with frontmatter
+**From the most recent research (2026-05-30 19:57):**
+- Nucleus: VSM Architecture (S5-S1), Symbolic Attention Magnets, Mode/Boundary System, Fibonacci Recall, Criticality-driven storage
+- Mementum: Git-based memory, λ(λ) meta-learning, Three-tier memory, Storage criticality gate
+- gptel: Tool-use architecture, MCP integration, Temperature nil default
+
+
+- gptel-agent: Sub-agent delegation via YAML/Markdown frontmatter, Context isolation, Skill directory scanning, @mentions for delegation, Planning vs Execution presets
+
+**From earlier research sessions (2026-05-22 10:29):**
+- efrit: Circuit Breaker, Checkpoint/Restore, Tool Receipts
+- context-mode: Think-in-Code, Session Continuity via FTS5
+- nucleus: Lambda Notation, Mathematical Attention Anchors
+- mementum: Feed-Forward Memory Protocol
+- gastown: Beads Ledger, Multi-Agent Workspace
+- gbrain: Self-Wiring Knowledge Graph
+
+, Hybrid Search Fusion
+
+**From the arXiv research (2026-05-20 23:27):**
+- Agent Design Pattern Catalogue, MetaAgent Self-Evolving, Azure AI Orchestration, NVIDIA Evaluation Metrics, Error Recovery Patterns, and a comprehensive Architecture Pattern Taxonomy covering single agent patterns, multi-agent patterns, and tool use patterns
+
+**From the self-evolution research (2026-05-22 12:10):**
+- Genesis Agent with Self-Verification, Context Mode's Sandbox Tool Pattern, and GBrain's Self-Wiring Knowledge Graph approach
+
+Now I'm pulling together the remaining research findings to round out the full picture.
 </think>

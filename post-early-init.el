@@ -174,7 +174,7 @@
 ;;
 ;; C-level message_with_string (from load, save-buffer, etc.) is also
 ;; suppressed from *Messages* (message-log-max 0 blocks message_dolog).
-(setq message-log-max 0)
+(setq message-log-max 65536)
 
 ;; Prefer .el source over .elc when both exist.  The daemon's (load ...)
 ;; call byte-compiles source to .elc as a side effect, and stale .elc
@@ -220,6 +220,96 @@ daemons share the same config directory."
       (ignore))))
 
 (advice-add 'message :after #'mw-message--file-log)
+
+;; ═══════════════════════════════════════════════════════════════════════════
+;; Shim: yaml-parse-string for Emacs built without libyaml
+;; ═══════════════════════════════════════════════════════════════════════════
+;; This Debian Emacs 30.1 build lacks libyaml (yaml-parse-string C function).
+;; Provide pure-Elisp fallback for gptel-agent YAML frontmatter parsing.
+;; Must load before gptel-agent (via init.el → post-init.el → init-ai.el).
+(unless (fboundp 'yaml-parse-string)
+  (defun yaml-parse-string (str &rest args)
+    (let* ((object-type (plist-get args :object-type))
+           (object-key-type (plist-get args :object-key-type))
+           (result (if (eq object-type 'plist) '() (make-hash-table :test 'equal))))
+      (dolist (line (split-string str "\n") result)
+        (when (string-match "^\\([^:\n]+\\):[[:space:]]*\\(.*\\)" line)
+          (let* ((raw (string-trim (match-string 1 line)))
+                 (key (if (eq object-key-type 'keyword) (intern (concat ":" raw)) raw))
+                 (raw-val (string-trim (match-string 2 line)))
+                 (val (cond
+                       ((string-match "^\"\\(.*\\)\"$" raw-val) (match-string 1 raw-val))
+                       ((string-match "^'\\(.*\\)'$" raw-val) (match-string 1 raw-val))
+                       ((member (downcase raw-val) '("true" "yes" "on")) t)
+                       ((member (downcase raw-val) '("false" "no" "off" "null" "~")) nil)
+                       ((string-match "^[0-9]+$" raw-val) (string-to-number raw-val))
+                       ((string-match "^\\[\\(.*\\)\\]$" raw-val)
+                        (mapcar (lambda (s)
+                                  (let ((tv (string-trim s)))
+                                    (cond
+                                     ((string-match "^\"\\(.*\\)\"$" tv) (match-string 1 tv))
+                                     ((string-match "^'\\(.*\\)'$" tv) (match-string 1 tv))
+                                     ((member (downcase tv) '("true" "yes" "on")) t)
+                                     ((member (downcase tv) '("false" "no" "off" "null" "~")) nil)
+                                     ((string-match "^[0-9]+$" tv) (string-to-number tv))
+                                     ((string-match "^[0-9.]+$" tv) (string-to-number tv))
+                                     (t tv))))
+                                (split-string (match-string 1 raw-val) ",")))
+                       ((string-match "^[0-9.]+$" raw-val) (string-to-number raw-val))
+                       (t raw-val))))
+            (if (eq object-type 'plist)
+                (setq result (plist-put result key val))
+              (puthash key val result))))))))
+
+;; ═══════════════════════════════════════════════════════════════════════════
+;; Fix: catch Wrong type argument: stringp, nil in headless daemon init
+;; ═══════════════════════════════════════════════════════════════════════════
+;; The error fires during init.el loading in a headless worker daemon.
+;; Wrap startup--load-user-init-file to capture a full backtrace.
+(let ((bt-log (expand-file-name "var/log/backtrace-init.log"
+                                (or (bound-and-true-p minimal-emacs-user-directory)
+                                    user-emacs-directory))))
+  (condition-case nil
+      (make-directory (file-name-directory bt-log) t)
+    (error nil))
+  (advice-add 'startup--load-user-init-file :around
+              (lambda (orig-fn &rest args)
+                (condition-case err
+                    (apply orig-fn args)
+                  (wrong-type-argument
+                   (with-temp-file bt-log
+                     (prin1 (current-time-string) (current-buffer))
+                     (terpri (current-buffer))
+                     (prin1 err (current-buffer))
+                     (terpri (current-buffer))
+                     (prin1 (backtrace-frames 'backtrace-base) (current-buffer))
+                     (terpri (current-buffer))
+                     (let ((standard-output (current-buffer))
+                           (debug-on-error nil))
+                       (backtrace)))
+                   ;; Re-signal so init error handler displays the warning
+                   (signal (car err) (cdr err)))))))
+;; Captures backtrace to var/log/backtrace-init.log for further diagnosis.
+(let ((bt-log (expand-file-name "var/log/backtrace-init.log"
+                                (or (bound-and-true-p minimal-emacs-user-directory)
+                                    user-emacs-directory))))
+  (condition-case nil
+      (make-directory (file-name-directory bt-log) t)
+    (error nil))
+  (advice-add 'signal :before
+              (lambda (err data)
+                (when (and (eq err 'wrong-type-argument)
+                           (eq (car-safe data) 'stringp))
+                  (condition-case nil
+                      (with-temp-file bt-log
+                        (prin1 (current-time-string) (current-buffer))
+                        (terpri (current-buffer))
+                        (prin1 (cons err data) (current-buffer))
+                        (terpri (current-buffer))
+                        (let ((standard-output (current-buffer))
+                              (debug-on-error nil))
+                          (backtrace)))
+                    (error nil))))))
 
 (provide 'post-early-init)
 
