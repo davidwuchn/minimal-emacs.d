@@ -5960,3 +5960,4 @@ Signals ert-test-failed if check fails. Use in ERT tests."
 
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here
+

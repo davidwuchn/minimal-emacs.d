@@ -1,11 +1,13 @@
 # Mementum State
 
-> Last session: 2026-05-30 (synced yaml cleanup commit, 0 crash vectors)
-> Next pipeline: 07:00 (auto-workflow running, 0 crash vectors)
+> Last session: 2026-05-30 (fixed 2 let* paren errors causing timer callback crashes)
+> Next pipeline: 11:00 (daemon restart to load fixed code)
 
 ## Session: Crash Vector Fixes + Remote Sync
 
-**Status:** FIX CONFIRMED. Daemon running 3h+, 0 errors.
+**Status:** 2 NEW FIXES COMMITTED. Daemon restart at 11:00 will load them.
+
+**Commit:** `6aaf43b0` ⊘ fix two let* paren errors causing timer callback crashes
 
 **Commit:** `e832fd43` ⊘ fix void-variable err: restore condition-case handler pairing
 
@@ -65,6 +67,23 @@
 - Cleared archive cache + reinstalled yaml to remove stale package-alist entry
 - Updated test files to reference yaml-20260113.653 instead of yaml-1.2.3
 - Removed symlink workaround from pipeline script (no longer needed)
+
+### Critical Fix: Two let* paren errors causing timer callback crashes
+
+**`6aaf43b0`** ⊘ fix two let* paren errors causing timer callback crashes
+
+**Error 1 (line 344):** Missing close paren for `let*` bindings list.
+- `my/gptel--run-agent-tool-with-timeout` was parsed as a BINDING instead of function call
+- Caused: `let* with empty body` + `Malformed 'let*' binding` byte-compile warnings
+- Fixed: Added 1 `)` to line 344, removed 1 from line 384
+
+**Error 2 (line 566):** Extra close paren prematurely closed `let*` at line 515.
+- `let*` body became empty, `keep` and `exp-result` variables went out of scope
+- Would cause `void-variable keep` when experiment reached grading/decision
+- Fixed: Removed 1 `)` from line 566, added 1 to line 649
+
+**Verification:** Byte-compiler clean (no let* warnings). File loads without errors.
+**Note:** Daemon PID 457686 still running pre-fix code. Restart at 11:00 pipeline will load fixes.
 
 ## Session: Skill Routing Ontology + Production Hardening
 
