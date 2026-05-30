@@ -1,7 +1,7 @@
 ---
 name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
-version: 2026.05.30
+version: 2026.05.31
 total-experiments: 870
 total-kept: 15
 ---
@@ -17,6 +17,7 @@ total-kept: 15
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
+<<<<<<< Updated upstream
 | `lisp/modules/gptel-benchmark-integrate.el` | 50% | 2 | 1 | ✅ High yield |
 | `lisp/modules/gptel-ext-tool-permits.el` | 50% | 8 | 4 | ✅ High yield |
 | `lisp/modules/gptel-ext-core.el` | 40% | 5 | 2 | ✅ High yield |
@@ -27,6 +28,16 @@ total-kept: 15
 | `lisp/modules/gptel-auto-workflow-research-integration.el` | 3% | 29 | 1 | ❌ Plateaued |
 | `lisp/modules/gptel-auto-workflow-projects.el` | 2% | 53 | 1 | ❌ Plateaued |
 | `lisp/modules/gptel-tools-agent.el` | 0% | 6 | 0 | ❌ Plateaued |
+=======
+| `lisp/modules/gptel-auto-workflow-projects.el` | 12% | 16 | 2 | 🟡 Active |
+| `lisp/modules/gptel-tools-agent-benchmark.el` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 3 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 3 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-tools-agent-error.el` | 0% | 3 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-benchmark-subagent.el` | 0% | 3 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-tools-agent-experiment-core.el` | 0% | 2 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-ontology-strategy.el` | 0% | 3 | 0 | ⏳ Insufficient data |
+>>>>>>> Stashed changes
 
 ## 🧬 Meta-Learned Patterns
 
@@ -35,9 +46,15 @@ total-kept: 15
 
 - **How it works** (38× from mementum)
 - **Apply to us** (36× from mementum)
+<<<<<<< Updated upstream
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
+=======
+- **Source type** (24× from mementum)
+- **Description** (24× from mementum)
+- **Application for us** (24× from mementum)
+>>>>>>> Stashed changes
 - **manual-fix** (24× from git)
 - **Application** (21× from mementum)
 - **Implementation sketch** (20× from mementum)
@@ -57,11 +74,17 @@ total-kept: 15
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
+<<<<<<< Updated upstream
 - **other** (177×): Investigate root cause
 - **timeout** (27×): Add smaller batch sizes or chunked processing
 - **validation-failed** (20×): Improve pre-grade validation prompts
 - **test-failure** (9×): Run tests before committing experiments
 - **api-limit** (3×): Implement provider fallback or rate limit handling
+=======
+- **validation-failed** (17×): Improve pre-grade validation prompts
+- **other** (16×): Investigate root cause
+- **timeout** (1×): Add smaller batch sizes or chunked processing
+>>>>>>> Stashed changes
 
 ## Success Patterns
 
@@ -108,4 +131,8 @@ var/elpa/**
 
 ---
 
+<<<<<<< Updated upstream
 *This directive was auto-generated from 870 experiments (15 kept locally across 236 local records). It evolves every self-evolution cycle.*
+=======
+*This directive was auto-generated from 870 experiments (2 kept locally across 34 local records). It evolves every self-evolution cycle.*
+>>>>>>> Stashed changes
