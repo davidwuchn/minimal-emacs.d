@@ -24,7 +24,7 @@ total-kept: 5
 | `lisp/modules/gptel-ext-fsm-utils.el` | 0% | 7 | 0 | ❌ Plateaued |
 | `lisp/modules/gptel-ext-retry.el` | 0% | 3 | 0 | ⏳ Insufficient data |
 | `staging-review` | 0% | 9 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 16 | 0 | ❌ Plateaued |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 17 | 0 | ❌ Plateaued |
 | `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 8 | 0 | ❌ Plateaued |
 | `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 4 | 0 | ⏳ Insufficient data |
 
@@ -40,7 +40,7 @@ total-kept: 5
 - **Application** (21× from mementum)
 - **Implementation sketch** (20× from mementum)
 - **How it works** (18× from mementum)
-- **nil-guard-pattern** (17× from git)
+- **nil-guard-pattern** (18× from git)
 
 ## 🛠️ Effective Techniques
 
@@ -58,8 +58,8 @@ total-kept: 5
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
 - **other** (74×): Investigate root cause
+- **validation-failed** (5×): Improve pre-grade validation prompts
 - **api-limit** (5×): Implement provider fallback or rate limit handling
-- **validation-failed** (4×): Improve pre-grade validation prompts
 - **timeout** (3×): Add smaller batch sizes or chunked processing
 
 ## Success Patterns
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (5 kept locally across 86 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (5 kept locally across 87 local records). It evolves every self-evolution cycle.*
