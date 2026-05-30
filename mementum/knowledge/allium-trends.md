@@ -1,7 +1,7 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **Completed**: 1 occurrence(s)
-- **In progress**: 1 occurrence(s)
-- **Generated**: 1 occurrence(s)
+- **What's the verification goal?**: 1 occurrence(s)
+- **What format is the source data?**: 1 occurrence(s)
+- **What should I check?**: 1 occurrence(s)
 

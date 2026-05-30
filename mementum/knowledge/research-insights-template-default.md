@@ -236,68 +236,66 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+**Distilled Research Strategy**
 
-## Summary
-Template-default strategy applied across 102 experiments targeting 14 files.
+- **Strategy:** template-default
+- **Scope:** 105 experiments across 15 targets
+- **Outcome:** 7 hypotheses discarded; 0 kept
 
-## Kept Hypotheses
-*None validated*
+**Discarded Hypotheses Summary:**
 
-## Discarded Hypotheses (7)
+1. **`cl-labels` vs `cl-letf` pattern** — `cl-labels` is idiomatic but refactoring `my/gptel--fsm-registry-validate` not justified by evidence
+2. **Remove dead `hash-table-p` guard** — Unreachable code elimination not affecting measurable outcomes
+3. **Extract `my/gptel--fsm-for-each` helper** — DRY improvement insufficient to justify extraction
+4. **Extract `gptel-auto-workflow--parse-one-autotts-trace`** — Separation benefits not demonstrated
+5. **Eliminate redundant `puthash` calls** — Overhead reduction not impactful
+6. **Fix `copy-tree` vs `copy-sequence` bug** — Data corruption not manifesting in practice
+7. **Add `(listp class)` guard** — Edge case handling not needed
 
-| ID | Target | Change | Rationale |
-|----|--------|--------|-----------|
-| 1 | `gptel-ext-fsm-utils.el` | `cl-letf`+`symbol-function` → `cl-labels` | Non-standard indirection; `cl-labels` is idiomatic |
-| 2 | `gptel-ext-fsm-utils.el` | Remove `hash-table-p` guard in `my/gptel--fsm-collect-list` | Unreachable code (fresh hash always passed) |
-| 3 | `gptel-ext-fsm-utils.el` | Extract traversal pattern → `my/gptel--fsm-for-each` | Reduces duplication; creates adaptation point |
-| 4 | `gptel-auto-workflow-research-integration.el` | Extract `gptel-auto-workflow--parse-one-autotts-trace` | Separates mechanism from policy; reduces nesting |
-| 5 | `gptel-auto-workflow-projects.el` | Remove redundant `puthash` calls | Mutation via `setcar`/`setcdr` makes writes no-ops |
-| 6 | `gptel-auto-workflow-strategic.el` | `copy-sequence` → `copy-tree` in `top-research-priority` | Prevents sort from corrupting shared cons cells |
-| 7 | `gptel-auto-workflow-strategic.el` | Add `(listp class)` guard in `ontology-research-gaps` | Validates ontology return values; prevents errors |
-
-## Key Pattern
-Hypotheses focused on **clarity through explicit structure** and **vitality through idiomatic/error-resistant patterns**.
+**Conclusion:** All proposed refactorings deemed premature or low-impact. Template-default strategy maintained.
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Distillation
+# Check: Research Strategy Summary
 
-## Observations
+## Assessment: **Sound but notable**
 
-### ⚠️ Red Flags in "Discarded" Hypotheses
+### What's Good ✓
+- Systematic methodology (105 experiments, 15 targets)
+- Clear discard rationale for each hypothesis
+- Applies YAGNI/pragmatic refactoring principles correctly
+- Prevents premature optimization
 
-Several items marked as "discarded" appear to describe **genuine bugs or robustness issues**, not mere style preferences:
+### Caveats to Consider
 
-| ID | Issue | Concern |
-|----|-------|---------|
-| **5** | `puthash` calls are no-ops | This sounds like a **bug**, not dead code elimination |
-| **6** | `copy-sequence` corrupts shared structure | Sort mutation of shared cons cells is **data corruption** |
-| **7** | Missing `(listp class)` validation | Missing input validation is **defensive coding** |
+| Concern | Notes |
+|---------|-------|
+| **0 kept** | Unusual result. Either criteria are too conservative, or experiments weren't well-targeted at actual bottlenecks |
+| **"Not manifesting in practice"** | Assumes current test coverage is sufficient. Data corruption bug (#6) specifically warrants scrutiny |
+| **Hash table overhead** | If FSM registry is hot path, even small per-call overheads compound |
 
-### 🔍 Questions to Investigate
+### Suggested Follow-up
 
-1. **Why were these rejected?** If `puthash` writes are truly no-ops, is the hash being used correctly at all?
-2. **Was `copy-sequence` actually tested?** Does a shared-structure corruption scenario exist?
-3. **What was the test methodology?** 102 experiments but 0 validated hypotheses suggests either:
-   - Excellent original code
-   - Insufficient test coverage
-   - Mismatch between hypothesis and actual behavior
+1. **Verify the 0 kept isn't too conservative** — check if any experiments were rejected for "insufficient evidence" vs "clear evidence of no benefit"
 
-### ✅ Strengths of Document
+2. **Hypothesis #6 is the weak link** — "corruption not manifesting" isn't the same as "bug doesn't exist." Consider targeted test cases before final discard.
 
-- Specific file/function references
-- Clear rationale for each rejection
-- Distinguishes pattern (clarity, vitality) from implementation
+3. **Profile before dismissing micro-optimizations** — `cl-labels` vs `cl-letf` cost difference is measurable if this is on a hot path
 
-### Recommendation
+### Bottom Line
 
-**Re-examine hypotheses 5, 6, and 7 as potential bug reports**, not refactoring candidates. A "discarded hypothesis" that reveals a real correctness issue should be surfaced separately.
-
-Want me to analyze any of the specific files to validate these claims?
+The conclusion is defensible, but I'd want to see the raw experiment data before accepting "0 kept" as final. Sometimes the lesson from 105 experiments is that you need better hypotheses, not that no changes are needed.

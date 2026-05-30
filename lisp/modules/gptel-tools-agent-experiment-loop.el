@@ -247,7 +247,9 @@ Adapts max-experiments based on API error rate."
                (fboundp 'gptel-auto-workflow--check-action-preconditions))
       (let* ((category (gptel-auto-workflow--categorize-target target))
              (precondition-error (gptel-auto-workflow--check-action-preconditions target))
-             (saturated (and category (assoc category gptel-auto-workflow--category-saturation))))
+             (saturated (and category
+                              (boundp 'gptel-auto-workflow--category-saturation)
+                              (assoc category gptel-auto-workflow--category-saturation))))
         (when precondition-error
           (message "[ontology-gate] 🚫 %s: %s — skipping experiment" target precondition-error)
           (funcall callback nil)

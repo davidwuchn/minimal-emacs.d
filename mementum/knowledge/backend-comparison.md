@@ -1,5 +1,5 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 102 experiments across 4 backends
+> Auto-generated from 105 experiments across 4 backends
 
 ## MiniMax vs DeepSeek (winner: **tie**)
 - MiniMax: 0.0% keep-rate
@@ -32,4 +32,4 @@
 - Shared targets: 1 | CF-Gateway won 0, DashScope won 0, ties 1
 
 
-*Generated: 2026-05-30 08:29*
+*Generated: 2026-05-30 09:47*
