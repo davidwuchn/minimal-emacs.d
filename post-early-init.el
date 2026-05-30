@@ -277,7 +277,9 @@ daemons share the same config directory."
           doom-modeline-mode nil)
     (advice-add 'doom-modeline-mode :override #'ignore)))
 ;; Captures backtrace to var/log/backtrace-init.log for further diagnosis.
-(let ((bt-log (expand-file-name "var/log/backtrace-init.log" user-emacs-directory)))
+(let ((bt-log (expand-file-name "var/log/backtrace-init.log"
+                                (or (bound-and-true-p minimal-emacs-user-directory)
+                                    user-emacs-directory))))
   (condition-case nil
       (make-directory (file-name-directory bt-log) t)
     (error nil))
