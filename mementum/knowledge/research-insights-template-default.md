@@ -116,86 +116,6 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
@@ -203,85 +123,87 @@ These targets may need different research patterns or the research findings were
 ```allium
 # Research Strategy: Template-Default
 
-## Overview
-- **Strategy Type**: Template-default
-- **Experiments**: 5 total across targets
-- **File**: `lisp/modules/gptel-auto-workflow-projects.el`
+**Scope:** 92 experiments across 20 Elisp modules
 
----
+## Kept Hypotheses
 
-## Structure (To Be Populated)
+| # | Hypothesis | Target | Improvement Axis |
+|---|------------|--------|------------------|
+| 1 | Nil summary validation in `gptel-benchmark-compare-file-versions` prevents `wrong-type-argument` from malformed data | `gptel-benchmark-comparator.el` | Vitality |
+| 2 | Negative caching in `gptel-benchmark--cache-put`/`load-result` eliminates repeated disk I/O for missing files | `gptel-benchmark-subagent.el` | Performance |
+| 3 | `proper-list-p` validation before `last` in `extract-last-task-from-lines` prevents crashes from improper lists | `gptel-ext-context.el` | Safety, Clarity |
+| 4 | `stringp` validation in `gptel-error--load-patterns-from-skill` prevents runtime errors from non-string returns | `gptel-tools-agent-error.el` | Vitality, Clarity |
+| 5 | Nil guards before `string-match`/`split-string` in error handlers prevent crashes from nil error messages | `gptel-tools-agent-error.el` | Vitality |
 
-| Section | Content |
-|---------|---------|
-| **Kept Hypotheses** | (Hypotheses confirmed by experiments) |
-| **Discarded Hypotheses** | (Hypotheses invalidated by experiments) |
+## Discarded Hypotheses
 
----
+| # | Hypothesis | Reason Discarded |
+|---|------------|------------------|
+| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Incomplete / deferred |
+| 2 | Hash table entry removal | Incomplete |
+| 3 | Derive heading from `symbol-map` instead of pcase | Deferred |
+| 4 | Summary cache layer in `get-trend-summary` | Overhead > benefit |
+| 5 | Replace `listp` with `proper-list-p` | Redundant (already covered by #3) |
+| 6 | Hash table cache for module paths | Premature optimization |
+| 7 | Nil guard for `feature-name` in `module-path` | Low risk |
+| 8 | FSM collection logging infrastructure | Out of scope |
+| 9 | Optional `seen` hash table for traversal | Micro-optimization |
+| 10 | Remove redundant `hash-table-p` checks | Low impact |
+| 11 | `bound-and-true-p` guard for regexp variable | Unlikely to be unbound |
+| 12 | Fix unconditional `cl-remove` in demote-backend | Edge case |
+| 13 | Memoization cache for `categorize-error` | Premature optimization |
 
-## Next Steps
+## Summary
 
-To complete this distillation, provide:
-1. The specific hypotheses tested
-2. Which hypotheses were supported → move to **Kept**
-3. Which hypotheses were refuted → move to **Discarded**
+**Focus areas:** Error resilience, nil-safety validation, and negative caching for I/O reduction.
 
----
-
-**Note**: The actual hypothesis content appears missing from the prompt. Please share the experiment results or hypothesis list to complete the distillation.
+**Eliminated:** 13 hypotheses—primarily premature optimizations, edge cases, and low-risk items.
 ```
 
 ### Check Issues
 
-# Analysis: Incomplete Research Strategy Document
+# Review: Research Strategy Document
 
-You're correct to flag this as incomplete. Here's what I observe:
+## Structural Assessment
 
-## Current Status
+| Aspect | Status | Notes |
+|--------|--------|-------|
+| Scope definition | ✅ Clear | 92 experiments, 20 modules, specific modules named |
+| Hypothesis specificity | ✅ Good | Each targets specific functions/files |
+| Discard rationale | ✅ Present | "Premature optimization", "low risk", etc. |
+| Improvement axes | ✅ Logical | Vitality, Performance, Safety, Clarity capture key dimensions |
 
-| Element | Status |
-|---------|--------|
-| Template structure | ✅ Present |
-| Section placeholders | ✅ Present |
-| Hypotheses tested | ❌ Missing |
-| Experiment results | ❌ Missing |
-| Kept/Discarded classifications | ❌ Missing |
+## Concerns
 
----
+**1. No experimental evidence shown**
+The document lists hypotheses but doesn't show:
+- How hypotheses were derived (static analysis? runtime errors? code review?)
+- What triggered investigation priorities
+- Metrics for measuring success
 
-## What's Needed to Complete
-
-To populate this template, I need:
-
-### 1. Hypotheses List
-Example format:
+**2. "Negative caching" hypothesis (#2) needs clarification**
 ```
-H1: Hypothesis text here
-H2: Hypothesis text here
-H3: Hypothesis text here
-...
+Negative caching in `gptel-benchmark--cache-put`/`load-result` eliminates 
+repeated disk I/O for missing files
 ```
+- Is this a known performance bottleneck? Empirical data?
+- "Negative caching" typically refers to caching *failures*—ensure this is what's intended
 
-### 2. Experiment Results Per Target
+**3. Missing from Discarded #1-2**
 ```
-Target A:
-- Experiment 1: H1 ✓, H2 ✗
-- Experiment 2: H1 ✓, H3 ✓
-...
-
-Target B:
-- Experiment 3: H2 ✓, H4 ✗
-...
+| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Incomplete / deferred |
+| 2 | Hash table entry removal | Incomplete |
 ```
+These are too terse. "Incomplete" could mean:
+- Problem not fully understood?
+- Implementation attempted and failed?
+- Lower priority?
 
----
+**4. No ordering/prioritization**
+Among the 5 kept hypotheses, is there a dependency order? Critical path?
 
-## Ready to Help
+## Recommendations
 
-Once you provide the hypotheses and experiment outcomes, I can help:
+1. **Add experimental evidence**: Br
 
-1. **Classify** each hypothesis as Kept or Discarded
-2. **Summarize** patterns across targets
-3. **Refine** the distillation into concise findings
-
-**Would you like to share the experiment results/hypotheses now?**
+... (truncated)
