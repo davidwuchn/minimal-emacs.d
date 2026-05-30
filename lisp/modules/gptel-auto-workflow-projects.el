@@ -314,6 +314,11 @@ then runs workflow for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all project workflows
 finish."
   (interactive)
+  ;; Prime gpg-agent cache by decrypting authinfo once. Subsequent gpg
+  ;; --batch calls in my/gptel-api-key reuse the cached passphrase.
+  (ignore-errors
+    (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
+                  (expand-file-name "~/.authinfo.gpg")))
   (unless (ignore-errors (gptel-agent--update-agents) t)
     ;; gptel-agent--update-agents can fail in headless daemon. Register
     ;; known agent types explicitly so grader/executor/researcher work.
