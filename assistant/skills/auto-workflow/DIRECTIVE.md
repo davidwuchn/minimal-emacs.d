@@ -17,23 +17,17 @@ total-kept: 0
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-auto-workflow-research-integration.el` | 0% | 2 | 0 | ⏳ Insufficient data |
-| `staging-verification` | 0% | 2 | 0 | ⏳ Insufficient data |
-| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 9 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 6 | 0 | ❌ Plateaued |
-| `staging-merge` | 0% | 1 | 0 | ⏳ Insufficient data |
-| `staging-review` | 0% | 1 | 0 | ⏳ Insufficient data |
-| `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 2 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 1 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **manual-fix** (55× from git)
-- **Application for us** (24× from mementum)
+- **manual-fix** (41× from git)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
+- **Application for us** (24× from mementum)
 - **Application** (21× from mementum)
 - **Implementation sketch** (20× from mementum)
 - **How it works** (18× from mementum)
@@ -54,10 +48,7 @@ total-kept: 0
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (15×): Investigate root cause
-- **timeout** (4×): Add smaller batch sizes or chunked processing
-- **test-failure** (2×): Run tests before committing experiments
-- **validation-failed** (2×): Improve pre-grade validation prompts
+- **other** (1×): Investigate root cause
 
 ## Success Patterns
 
@@ -74,8 +65,7 @@ total-kept: 0
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-auto-workflow-strategic.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- Continue with current targets based on research findings
 
 ## Immutable Files
 
@@ -101,4 +91,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (0 kept locally across 23 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (0 kept locally across 1 local records). It evolves every self-evolution cycle.*

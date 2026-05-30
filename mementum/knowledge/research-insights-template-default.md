@@ -108,68 +108,56 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*2 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-```markdown
-# Research Strategy: gptel-auto-workflow
+**Distilled Summary**
 
-**Template:** Default  
-**Experiments:** 7  
-**Targets:** 2 modules
-- `gptel-auto-workflow-strategic.el`
-- `gptel-auto-workflow-projects.el`
-
-**Hypotheses:**
-- Kept: — (none finalized)
-- Discarded: — (none eliminated)
-
-**Status:** In progress (experiments running, hypotheses TBD)
-```
+- **Strategy**: template-default  
+- **Effort**: 1 experiment → `lisp/modules/gptel-auto-workflow-projects.el`  
+- **Result**: Zero hypotheses kept or discarded.  
+- **Assessment**: Inconclusive / exploratory. The probe yielded no signal—neither confirming nor ruling out any theory about the target.  
+- **Next Step**: Sharpen the experiment into a falsifiable, narrowly-scoped claim (e.g., a specific function behavior or side-effect) rather than an open-ended reconnaissance pass.
 ```
 
 ### Check Issues
 
-# Review of Research Strategy Document
+**Verdict**: The meta-assessment is directionally correct, but the framing is loose. You correctly identified the null result, yet calling it an “experiment” overstates the epistemic rigor. What you ran was a **probe or reconnaissance pass**, not an experiment.
 
-## Observations
+### Specific gaps
 
-| Field | Value | Assessment |
-|-------|-------|------------|
-| Template | Default | ✓ Standard |
-| Experiments | 7 | ✓ Numeric |
-| Targets | 2 modules | ✓ Listed |
-| Hypotheses | Empty | ⚠️ Incomplete |
-| Status | In progress | ✓ Appropriate |
+| Item | Issue |
+|------|-------|
+| **Strategy** | “template-default” is fine, but it doesn’t describe the *action*. Did you load the file? Read it? Evaluate a form? |
+| **Effort** | “1 experiment” is non-reproducible. What exactly did you do to the `.el` file? |
+| **Result** | “Zero hypotheses kept or discarded” is awkward. If you started with no hypotheses, you cannot discard any; you simply gathered no evidence. |
+| **Assessment** | “No signal” is accurate, but you need to state what sensor you were reading. No error? No output? Silent success? |
 
-## Notes
+### Suggested rewrite
 
-- **Hypotheses section is empty** — if experiments are running, hypotheses should be documented (even if not finalized)
-- **Missing:** Experiment details, current results, blockers
-- **Missing:** Module descriptions or goals
+- **Strategy**: Exploratory buffer review / load-test (template-default)  
+- **Effort**: Open-ended read of `lisp/modules/gptel-auto-workflow-projects.el`; evaluated buffer; no predefined hypothesis.  
+- **Observation**: File loaded without error / no obvious structural anomalies / no functional tests invoked *(pick the one that matches)*.  
+- **Assessment**: Inconclusive. Reconnaissance yielded no actionable data; no claims about the module were tested.  
+- **Next Step**: Commit to one falsifiable micro-claim before the next interaction.  
+  - *Example*: “Evaluating `(gptel-auto-workflow-projects-init '())` signals a specific error.
 
-## Suggested Improvements
-
-```markdown
-# Research Strategy: gptel-auto-workflow
-
-**Template:** Default  
-**Experiments:** 7  
-**Targets:** 2 modules
-- `gptel-auto-workflow-strategic.el`
-- `gptel-auto-workflow-projects.el`
-
-**Hypotheses:**
-- Kept: — (none finalized)
-- Discarded: — (none eliminated)
-
-**Active Experiments:**
-1. [experiment-name] — [status]
-2. ...
-
-**Status:** In progress
-```
-
-Would you like me to help expand any section or check something specific?
+... (truncated)
