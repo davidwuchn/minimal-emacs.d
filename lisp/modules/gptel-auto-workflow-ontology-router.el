@@ -2908,6 +2908,47 @@ Returns alist of suggestions: (target . suggested-category)."
                        (* 100 delta) (* 100 best-rate))))))
     suggestions))
 
+;; ─── Digital Twin Persistence ───
+
+(defun gptel-auto-workflow--persist-target-state ()
+  "Save target state cache to disk (survives daemon restart)."
+  (when (and (bound-and-true-p gptel-auto-experiment--target-state-cache)
+             (> (hash-table-count gptel-auto-experiment--target-state-cache) 0))
+    (let ((file (expand-file-name "var/tmp/digital-twin.json"
+                                  (gptel-auto-workflow--worktree-base-root)))
+          (data nil))
+      (maphash (lambda (target state)
+                 (push (cons target (list (cons :byte-compiles (plist-get state :byte-compiles))
+                                          (cons :syntax-ok (plist-get state :syntax-ok))))
+                       data))
+               gptel-auto-experiment--target-state-cache)
+      (make-directory (file-name-directory file) t)
+      (with-temp-file file
+        (insert (let ((json-encoding-pretty-print t))
+                  (json-encode data))))
+      (message "[digital-twin] Persisted %d target states to %s" (length data) file))))
+
+(defun gptel-auto-workflow--load-target-state ()
+  "Load target state cache from disk."
+  (when (boundp 'gptel-auto-experiment--target-state-cache)
+    (let ((file (expand-file-name "var/tmp/digital-twin.json"
+                                  (gptel-auto-workflow--worktree-base-root))))
+      (when (file-exists-p file)
+        (condition-case nil
+            (with-temp-buffer
+              (insert-file-contents file)
+              (let ((data (json-read)))
+                (dolist (entry data)
+                  (let ((target (car entry))
+                        (plist (cdr entry)))
+                    (puthash target
+                             (list :byte-compiles (cdr (assq 'byte-compiles plist))
+                                   :syntax-ok (cdr (assq 'syntax-ok plist)))
+                             gptel-auto-experiment--target-state-cache))))
+              (message "[digital-twin] Loaded %d target states from %s"
+                       (hash-table-count gptel-auto-experiment--target-state-cache) file))
+          (error (message "[digital-twin] Failed to load: %s" (error-message-string err))))))))
+
 ;; ─── Ontology Self-Evolution ───
 
 (defvar gptel-auto-workflow--category-strategy-preferences nil
@@ -3067,6 +3108,8 @@ Runs during the self-evolution cycle.  Results are stored in
                        (cl-incf broken)))
                    gptel-auto-experiment--target-state-cache)
           (message "[ontology-evolve] 📊 Target state: %d healthy, %d broken" healthy broken)))
+      ;; Persist digital twin state to disk
+      (condition-case nil (gptel-auto-workflow--persist-target-state) (error nil))
       ;; Log subagent dispatch distribution (ontology as universal runtime)
       (when (bound-and-true-p gptel-auto-experiment--subagent-dispatch-log)
         (let ((total-dispatch 0)
@@ -3180,6 +3223,9 @@ Runs during evolution cycle alongside strategy learning."
   (condition-case err
       (gptel-auto-workflow--aggregate-category-eight-keys)
     (error (message "[ontology-evolve] Error aggregating eight-key weights: %S" err))))
+
+;; Load persisted digital twin state at startup
+(condition-case nil (gptel-auto-workflow--load-target-state) (error nil))
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here

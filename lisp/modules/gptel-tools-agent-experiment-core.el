@@ -1293,9 +1293,18 @@ Called when the grader passed but the benchmark/validation failed."
                     (setq gptel-auto-experiment--refine-convergence-stats
                           (plist-put gptel-auto-experiment--refine-convergence-stats :total
                                      (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
-                    (setq gptel-auto-experiment--refine-convergence-stats
-                          (plist-put gptel-auto-experiment--refine-convergence-stats :success
-                                     (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :success))))
+                   (setq gptel-auto-experiment--refine-convergence-stats
+                         (plist-put gptel-auto-experiment--refine-convergence-stats :success
+                                    (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :success))))
+                    ;; Postcondition check: verify commit criteria from action schema
+                    (when (and target (fboundp 'gptel-auto-workflow--schema-for-target))
+                      (let* ((schema (gptel-auto-workflow--schema-for-target target))
+                             (commit-failed (cl-find-if
+                                             (lambda (c)
+                                               (string-match-p "all-tests-pass\\|no-regressions" c))
+                                             (plist-get schema :commit-criteria))))
+                        (when commit-failed
+                          (message "[auto-exp] ⚠ Postcondition %s not verified for %s" commit-failed target))))
                     (message "[auto-experiment] ✓ Refine passed (score=%s)" effective-score)
                     (funcall callback (list :refined t :exp-result exp-result
                                            :effective-score effective-score
