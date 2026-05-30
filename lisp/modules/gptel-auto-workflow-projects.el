@@ -815,16 +815,23 @@ then runs researcher for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   (interactive)
   ;; Load full workflow stack when running in researcher daemon context
-  (when (fboundp 'gptel-auto-workflow--reload-live-support)
-    (gptel-auto-workflow--reload-live-support))
-  ;; Prevent gptel-mode hooks from defaulting to MiniMax and ensure
-  ;; headless-provider-override-active-p returns t so the fallback
-  ;; chain (DeepSeek etc.) is consulted for research subagent calls.
-  (setq gptel-auto-workflow-persistent-headless t)
-  ;; Clear stale rate-limited backends from previous research attempts so
-  ;; the fallback chain starts fresh with Moonshot.
-  (when (fboundp 'gptel-auto-workflow--clear-rate-limited-backends)
-    (gptel-auto-workflow--clear-rate-limited-backends))
+  (condition-case err
+      (progn
+        (when (fboundp 'gptel-auto-workflow--reload-live-support)
+          (gptel-auto-workflow--reload-live-support))
+        ;; Prevent gptel-mode hooks from defaulting to MiniMax and ensure
+        ;; headless-provider-override-active-p returns t so the fallback
+        ;; chain (DeepSeek etc.) is consulted for research subagent calls.
+        (setq gptel-auto-workflow-persistent-headless t)
+        ;; Clear stale rate-limited backends from previous research attempts so
+        ;; the fallback chain starts fresh with Moonshot.
+        (when (fboundp 'gptel-auto-workflow--clear-rate-limited-backends)
+          (gptel-auto-workflow--clear-rate-limited-backends)))
+    (error
+     (let ((bt (with-output-to-string (backtrace))))
+       (with-temp-file "/tmp/research-init-backtrace.txt"
+         (insert (format "Error: %S\n\nBacktrace:\n%s\n" err bt)))
+       (message "[research] Init error: %S — backtrace written to /tmp/research-init-backtrace.txt" err))))
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[research] Running for %d projects..." (length projects))
     (let ((results nil)
