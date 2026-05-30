@@ -116,55 +116,171 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*6 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+## Distillation
 
-## Overview
-- **Strategy**: template-default
-- **Scale**: 64 experiments across 14 targets
+**Research Strategy:** template-default
 
-## Outcome Summary
-All hypotheses were **discarded** (none retained).
+**Scope:** 64 experiments across 14 targets
 
-## Discarded Hypotheses by Category
+**Outcome:** All hypotheses discarded
 
-| Category | Hypothesis | Rationale |
-|----------|------------|-----------|
-| **Performance** | Memoize `nucleus--project-root` | Avoid repeated `(project-current nil)` calls |
-| **Performance** | Memoize directory resolution functions | Eliminate redundant `file-directory-p` checks |
-| **Performance** | Cache directory path resolution in `nucleus-prompts.el` | Remove repeated `file-directory-p`/`project-current` checks |
-| **Vitality** | Add nil guard + `file-readable-p` validation to `nucleus--read-file` | Prevent errors on invalid paths |
-| **Clarity** | Fix argument order bug in `nucleus--validate-contract` | Error messages incorrectly show tool name instead of arg name |
-| **Concurrency** | Fix race condition in `nucleus-sync-tool-profile` | Buffer captured at fire time vs. creation time in idle timer |
-| **Clarity/Efficiency** | Remove redundant consp/keywordp check, move `make-hash-table` inside guard, use `ignore-errors` | Eliminate speculative allocation, use idiomatic error suppression |
-| **Vitality/Clarity** | Add nil guard for empty `status-lines` in `gptel-auto-workflow-research-status-all` | Prevent caching empty results, handle edge case explicitly |
-| **Clarity (fractal)** | Fix misleading indentation in workflow functions | Visual structure didn't match parse tree |
+**Discarded proposals:**
 
-## Key Takeaway
-Despite extensive experimentation (64 runs), no hypothesis warranted implementation—suggesting either the proposed optimizations are premature, the baseline performance is acceptable, or the identified issues have lower impact than anticipated.
+1. **Memoize `nucleus--project-root`** — avoid repeated `project-current` calls
+2. **Memoize directory resolution** (`nucleus--resolve-*`) — avoid redundant `file-directory-p` I/O
+3. **Cache path resolution** in `nucleus-prompts.el` — eliminate repeated checks
+4. **Add nil guard + `file-readable-p` check** to `nucleus--read-file` — improve error resilience
+5. **Fix argument order bug** in `nucleus--validate-contract` — correct error messaging
+6. **Fix race condition** in `nucleus-sync-tool-profile` — capture buffer in lexical closure
+7. **Optimize hash table creation** in status-lines processing — remove speculative allocation, use `ignore-errors`
+8. **Guard empty `status-lines`** in `gptel-auto-workflow-research-status-all` — handle unconfigured state
+9. **Fix indentation** in workflow functions — align code structure to actual parse tree
+
+**Status:** No hypotheses retained. Strategy exhausted against template-default criteria.
 ```
 
 ### Check Issues
 
-The summary is clear and well-structured. A few observations:
+# Research Log Review
 
-**Looks reasonable.** "All hypotheses discarded" is a valid outcome—it's information, not failure. The hypotheses appear well-reasoned (memoization, nil guards, race conditions, argument order bugs).
+## Observations
 
-**Minor feedback on the table:**
-- "Clarity (fractal)" for the indentation fix is oddly specific terminology—consider "Code Quality" or just "Clarity"
-- "Remove redundant consp/keywordp check..." is long; could trim to "Simplify contract validation" for readability
+### What's Documented
+- **8 proposals** are listed (items 1-9, but 3 appears to be cut off)
+- Template-default strategy exhausted
+- 64 experiments across 14 targets
+- All discarded
 
-**Potential gaps to consider:**
-- Were any hypotheses *partially* valid but not worth the complexity? (Worth noting if so)
-- Is there any pattern across the 14 targets suggesting certain areas are more stable/optimized than others?
+### Potential Issues
 
-**Next steps might include:**
-1. Confirm these hypotheses weren't implemented outside this study
-2. Verify the baseline performance is actually "acceptable" (e.g., user-reported slowness elsewhere?)
-3. Decide if 64 experiments on 14 targets is worth revisiting with different hypotheses, or if the code has reached local optimum
+1. **Incomplete item 3** — `nucleus-prompts.el` entry is truncated
 
-Overall: solid empirical approach. The conclusion ("premature optimization" likely) is defensible.
+2. **Redundancy concerns:**
+   - Items 1, 2, and 3 all target the same problem (repeated I/O/checks)
+   - These could have been consolidated
+
+3. **"All hypotheses discarded" is unusual** — suggests either:
+   - Overly strict criteria
+   - Insufficient measurement methodology
+   - Premature abandonment
+
+### Questions
+
+- What measurement threshold was used to discard these?
+- Were the 64 experiments systematic or exploratory?
+- Was `template-default` ever a viable strategy, or was it assumed from the start?
+
+### Recommendation
+
+The list shows plausible optimizations. Consider:
+
+1. **Re-evaluate with actual benchmarks** — many of these (memoization, caching) are standard wins
+2. **Separate profiling from optimization** — document *why* each was discarded
+3. **Reconsider strategy** if 0/64 experiments yielded retained hypotheses
+
+Would you like me to help analyze specific proposals or re-examine the methodology?

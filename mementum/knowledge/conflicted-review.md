@@ -1,6 +1,6 @@
 # Conflicted Target Review
 
-*Generated: 2026-05-30 15:10 | Pending: 1 targets*
+*Generated: 2026-05-30 19:10 | Pending: 1 targets*
 
 > Targets where <50% of backends agree on KIBC axis.
 > Edit the status line and selection boxes below, then save.
@@ -9,11 +9,11 @@
 
 ---
 
-## Target: `lisp/modules/gptel-auto-workflow-projects.el`
+## Target: `lisp/modules/nucleus-tools.el`
 
 - **Agreement**: 33% (2 backends disagree)
-- **Disagreeing backends**: `DeepSeek`→`:D` (expected `:K`), `MiniMax`→`?` (expected `:K`)
-- **Historical consensus**: :K axis, 1 operations, 100% confidence
+- **Disagreeing backends**: `DashScope`→`:K` (expected `:SCOPE`), `MiniMax`→`:QUOTE` (expected `:SCOPE`)
+- **Historical consensus**: ? axis, 0 operations, 0% confidence
 
 **Status**: PENDING
 
