@@ -80,12 +80,15 @@ For complex changes:
 
 1. **Use Edit or Write tools** to modify the target file. Do NOT just describe changes in text.
 2. Make minimal, targeted changes to the target file
-3. Follow existing code style and conventions
-4. **Self-critique (mandatory):** After implementing, re-read the change:
+3. **NEVER reformat, reindent, or restyle code.** Do NOT run `indent-region`, `save-buffer` with auto-indent, or any tool that changes whitespace/line breaks outside your actual code change. The grader treats unrelated indentation changes as a FORBIDDEN behavior.
+4. **Surgical edits only:** Change ONLY the specific lines needed for your improvement. If your diff shows changes to functions other than your target, or indentation changes in unrelated code, UNDO and redo more precisely.
+5. Follow existing code style and conventions
+6. **Self-critique (mandatory):** After implementing, re-read the change:
    - Is this genuinely NEW logic or just a parameter variant?
    - Would this change help similar code elsewhere?
    - Is the change minimal enough?
-5. If the answer to any is "no", REWRITE
+   - Does the diff contain any indentation/whitespace changes outside the target function?
+7. If the answer to any is "no", REWRITE
 
 ### Step 3: Validate — MANDATORY
 

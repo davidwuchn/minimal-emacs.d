@@ -33,7 +33,9 @@ Make minimal, targeted changes to CODE, not documentation.
 - Immutable files: early-init.el, pre-early-init.el, lisp/eca-security.el
 - Must pass tests: ./scripts/verify-nucleus.sh
 - FORBIDDEN: Adding comments, docstrings, or documentation-only changes
+- FORBIDDEN: Reformatting, reindenting, or changing whitespace in code outside your actual change. The grader penalizes unrelated indentation changes as "style-only without functional impact".
 - REQUIRED: Actual code changes (bug fixes, performance, refactoring, error handling)
+- REQUIRED: Surgical precision — change ONLY the specific lines needed. Do NOT trigger `indent-region`, `save-buffer` with auto-indent, or any tool that reformats code.
 
 ## Code Improvement Types (PICK ONE)
 1. **Bug Fix**: Fix an actual bug or error handling gap
@@ -75,17 +77,18 @@ F. **Memory Management** — Fix leaks, optimize allocation, cleanup patterns
    - Do not run expensive tests on broken code
    - In your final VERIFY section, list: command → result (PASS/FAIL)
 10. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
-11. DO NOT run git add, git commit, git push, or stage changes yourself.
-    Leave edits uncommitted in the worktree; the auto-workflow controller
-    handles grading, commit creation, review, and staging.
-12. FINAL RESPONSE must include:
+ 11. DO NOT run git add, git commit, git push, or stage changes yourself.
+     Leave edits uncommitted in the worktree; the auto-workflow controller
+     handles grading, commit creation, review, and staging.
+ 12. DO NOT trigger auto-indentation. After using Edit tool, do NOT call `save-buffer` if it triggers `indent-region`. Use Write tool only for new files, not to rewrite existing files just to "fix formatting".
+ 14. FINAL RESPONSE must include:
      - CHANGED: exact file path(s) and function/variable names touched
      - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
      - VERIFY: exact command(s) run and whether they passed or failed
      - AXIS: which exploration axis this targets (A-F)
      - COMMIT: always "not committed" (workflow controller handles commits)
-13. End the final response with: Task completed
-14. NEVER reply with only "Done", only a commit message, or a vague success claim
+ 15. End the final response with: Task completed
+ 16. NEVER reply with only "Done", only a commit message, or a vague success claim
 
 CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
 DO NOT add comments, docstrings, or documentation.
