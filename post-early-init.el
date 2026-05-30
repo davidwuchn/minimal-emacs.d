@@ -262,23 +262,33 @@ daemons share the same config directory."
               (puthash key val result))))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
-;; Fix: prevent Wrong type argument: stringp, nil in headless daemons
+;; Fix: catch Wrong type argument: stringp, nil in headless daemon init
 ;; ═══════════════════════════════════════════════════════════════════════════
-;; The error occurs when some mode-line or font rendering code runs during
-;; init in a daemon with no display. Override format-mode-line to return
-;; empty string for headless daemons, preventing the C-level error.
-(when (my/workflow-daemon-p)
-  (setq-default mode-line-format nil
-                mode-line-mode-menu nil)
-  (advice-add 'format-mode-line :override
-              (lambda (&rest _) ""))
-  (with-eval-after-load 'doom-modeline
-    (setq doom-modeline-icon nil
-          doom-modeline-major-mode-icon nil
-          doom-modeline-buffer-state-icon nil
-          doom-modeline-enable-word-count nil
-          doom-modeline-mode nil)
-    (advice-add 'doom-modeline-mode :override #'ignore)))
+;; The error fires during init.el loading in a headless worker daemon.
+;; Wrap startup--load-user-init-file to capture a full backtrace.
+(let ((bt-log (expand-file-name "var/log/backtrace-init.log"
+                                (or (bound-and-true-p minimal-emacs-user-directory)
+                                    user-emacs-directory))))
+  (condition-case nil
+      (make-directory (file-name-directory bt-log) t)
+    (error nil))
+  (advice-add 'startup--load-user-init-file :around
+              (lambda (orig-fn &rest args)
+                (condition-case err
+                    (apply orig-fn args)
+                  (wrong-type-argument
+                   (with-temp-file bt-log
+                     (prin1 (current-time-string) (current-buffer))
+                     (terpri (current-buffer))
+                     (prin1 err (current-buffer))
+                     (terpri (current-buffer))
+                     (prin1 (backtrace-frames 'backtrace-base) (current-buffer))
+                     (terpri (current-buffer))
+                     (let ((standard-output (current-buffer))
+                           (debug-on-error nil))
+                       (backtrace)))
+                   ;; Re-signal so init error handler displays the warning
+                   (signal (car err) (cdr err)))))))
 ;; Captures backtrace to var/log/backtrace-init.log for further diagnosis.
 (let ((bt-log (expand-file-name "var/log/backtrace-init.log"
                                 (or (bound-and-true-p minimal-emacs-user-directory)
