@@ -83,6 +83,7 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< Updated upstream
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
@@ -145,10 +146,38 @@ The experiments surfaced a **robustness crisis, not a performance crisis**. The 
 |------|---------|
 | **Vitality (Error R
 -- ... truncated ...
+=======
+
+
+
+
+
+
+
+
+
+
+
+
+## Allium Behavioral Spec (auto-generated, v3)
+
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+
+```allium
+**Distilled Research Strategy**
+
+- **Template:** template-default
+- **Experiments:** 8 total
+- **Targets:** 6
+  - 2 staging targets (review, merge, verification)
+  - 4 Elisp module targets (strategic, projects, research-integration workflows)
+- **Hypotheses:** None specified (kept or discarded)
+>>>>>>> Stashed changes
 ```
 
 ### Check Issues
 
+<<<<<<< Updated upstream
 **Verdict: Technically sound and well-framed.** The distillation is sharp, internally consistent, and the “robustness crisis, not performance crisis” conclusion is strongly supported by the evidence you presented. A few minor technical notes and one likely inaccuracy to address before this is finalized:
 
 ---
@@ -171,3 +200,36 @@ This is a high-severity silent bug—exactly the kind of thing that makes baseli
 A genuine structural/load-order bug. M
 
 ... (truncated)
+=======
+# Quick Review: Distilled Research Strategy
+
+## Structure Analysis
+
+| Element | Status | Notes |
+|---------|--------|-------|
+| Template | ✓ | Standard choice |
+| Experiment count | ✓ | 8 experiments is reasonable |
+| Target breakdown | ⚠️ | 6 targets with 2 staging + 4 modules |
+| Hypotheses | ❓ | "None specified" — intentional? |
+
+## Observations
+
+**Potential Gaps:**
+- No hypotheses defined — will experiments test specific claims?
+- Unclear how 8 experiments distribute across 6 targets
+- No priority or sequencing specified
+
+**Questions to Consider:**
+1. Are the 2 staging targets prerequisites for module targets?
+2. What's the expected output of each Elisp module target?
+3. Is "no hypotheses" by design, or an oversight?
+
+## Need More Detail?
+
+If you'd like a deeper review, share:
+- Experiment descriptions
+- Success criteria
+- Timeline/deadlines
+
+This helps validate the strategy is well-scoped.
+>>>>>>> Stashed changes

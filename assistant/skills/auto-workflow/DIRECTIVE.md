@@ -3,7 +3,7 @@ name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.30
 total-experiments: 870
-total-kept: 20
+total-kept: 0
 ---
 
 # Auto-Workflow Program
@@ -17,23 +17,19 @@ total-kept: 20
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-benchmark-principles.el` | 67% | 3 | 2 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-comparator.el` | 33% | 3 | 1 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-core.el` | 26% | 19 | 5 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-staging-baseline.el` | 25% | 4 | 1 | 🟡 Active |
-| `lisp/modules/gptel-ext-tool-permits.el` | 25% | 12 | 3 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-runtime.el` | 25% | 4 | 1 | 🟡 Active |
-| `lisp/modules/gptel-tools-memory.el` | 14% | 29 | 4 | 🟡 Active |
-| `lisp/modules/gptel-workflow-benchmark.el` | 12% | 8 | 1 | 🟡 Active |
-| `lisp/modules/gptel-auto-workflow-projects.el` | 8% | 12 | 1 | ❌ Plateaued |
-| `lisp/modules/gptel-tools-agent-prompt-build.el` | 7% | 14 | 1 | ❌ Plateaued |
+| `lisp/modules/gptel-auto-workflow-research-integration.el` | 0% | 2 | 0 | ⏳ Insufficient data |
+| `staging-verification` | 0% | 2 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `staging-merge` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `staging-review` | 0% | 1 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **manual-fix** (60× from git)
+- **manual-fix** (58× from git)
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
@@ -57,10 +53,8 @@ total-kept: 20
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (159×): Investigate root cause
-- **timeout** (14×): Add smaller batch sizes or chunked processing
-- **api-limit** (14×): Implement provider fallback or rate limit handling
-- **validation-failed** (12×): Improve pre-grade validation prompts
+- **other** (3×): Investigate root cause
+- **timeout** (3×): Add smaller batch sizes or chunked processing
 - **test-failure** (2×): Run tests before committing experiments
 
 ## Success Patterns
@@ -78,11 +72,7 @@ total-kept: 20
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-principles.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 67%)
-- **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
-- **lisp/modules/gptel-benchmark-core.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 26%)
-- **lisp/modules/gptel-tools-memory.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-workflow-benchmark.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- Continue with current targets based on research findings
 
 ## Immutable Files
 
@@ -108,4 +98,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (20 kept locally across 201 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (0 kept locally across 8 local records). It evolves every self-evolution cycle.*
