@@ -436,6 +436,53 @@ Returns plist with :healthy (t/nil), :recent-errors (count),
           :recent-errors errors
           :last-error last-error)))
 
+;; ─── verbum Three-Phase Pipeline ───
+;; From verbum's LLM-ISA decoder: each layer has a phase with measured
+;; transform strength. Different task types need different phases.
+(defconst gptel-auto-workflow--phases
+  '((:build   . "Early layers (0-20): construct program, research, synthesis")
+    (:execute . "Mid  layers (21-42): execute code, compose, transform")
+    (:emit    . "Late layers (43-63): generate output, format, emit"))
+  "verbum three-phase pipeline: Build → Execute → Emit.")
+
+(defun gptel-auto-workflow--phase-for-category (category)
+  "Return the dominant pipeline phase for a task CATEGORY.
+Based on verbum's finding that different tasks need different phases:
+- Programming needs Execute phase (B compose, C flip in mid layers)
+- Tool-calls needs Execute phase (C flip, β_apply)
+- Agentic needs Build phase (Y recursion, D cascade in early layers)
+- Natural-language needs Emit phase (I identity, W duplicate in late layers)"
+  (cl-case category
+    (:programming :execute)
+    (:tool-calls :execute)
+    (:agentic :build)
+    (:natural-language :emit)
+    (t :emit)))
+
+(defun gptel-auto-workflow--phase-boost (backend target)
+  "Return phase boost (0.0 to +15.0) for BACKEND on TARGET.
+Boosts backends whose phase strength matches the task's needs.
+verbum measured transform strengths: Build=1.17, Execute=0.95, Emit=0.69.
+The boost is proportional to the phase's measured strength."
+  (let* ((category (when target (gptel-auto-workflow--categorize-target target)))
+         (needed-phase (when category (gptel-auto-workflow--phase-for-category category)))
+         ;; Backend-specific phase strength (defaults from verbum measurements)
+         ;; In production, these would be measured per-backend via the
+         ;; moiré grating decoder. For now, use heuristics based on
+         ;; backend architecture (Qwen→emits well, DeepSeek→executes well).
+         (phase-strengths
+          (cond ((string-match-p "DeepSeek" backend)
+                 '((:build . 0.8) (:execute . 1.1) (:emit . 0.7)))
+                ((string-match-p "DashScope\\|qwen" backend)
+                 '((:build . 0.9) (:execute . 0.8) (:emit . 1.0)))
+                ((string-match-p "MiniMax" backend)
+                 '((:build . 1.0) (:execute . 0.9) (:emit . 0.8)))
+                ((string-match-p "moonshot\\|kimi" backend)
+                 '((:build . 0.7) (:execute . 1.0) (:emit . 1.1)))
+                (t '((:build . 1.0) (:execute . 1.0) (:emit . 1.0)))))
+         (phase-str (cdr (assq needed-phase phase-strengths))))
+    (* (or phase-str 1.0) 15.0)))  ; Scale to 0-15 points
+
 ;; ─── Category Overrides (from 1,204 experiments) ───
 
 (defconst gptel-auto-workflow--category-backend-overrides
@@ -560,13 +607,14 @@ STRATEGY and TARGET filter the performance data.
                                 (let* ((health-penalty (if (>= (gptel-auto-workflow--backend-health-level backend) 2)
                                                            -100.0   ; DEGRADED or worse = severe penalty
                                                          0.0)))
-                                  (+ (* delta (* delta-weight 100.0))
-                                     (* all-rate (* rate-weight 100.0))
-                                     (* trend (* trend-weight 100.0))
-                                     (* confidence (* confidence-weight 100.0))
-                                     (if healthy 0 -50.0)   ; Quota penalty
-                                     health-penalty))
-                              -1.0))  ; No data = bottom
+                                   (+ (* delta (* delta-weight 100.0))
+                                      (* all-rate (* rate-weight 100.0))
+                                      (* trend (* trend-weight 100.0))
+                                      (* confidence (* confidence-weight 100.0))
+                                      (if healthy 0 -50.0)   ; Quota penalty
+                                      health-penalty
+                                      (gptel-auto-workflow--phase-boost backend target)))
+                               -1.0))  ; No data = bottom
               scored)))
     
     ;; Apply category override if available
