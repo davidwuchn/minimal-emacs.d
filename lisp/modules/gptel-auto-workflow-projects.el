@@ -731,6 +731,17 @@ Gets target buffer from gptel-fsm-info and creates overlay there."
 
 ;;; Executor Overlay Management
 
+(defun gptel-auto-workflow--iterate-project-buffers (fn)
+  "Iterate FN over each live buffer in `gptel-auto-workflow--project-buffers'.
+FN is called with (ROOT BUFFER) for each entry where BUFFER is live.
+ASSUMPTION: Caller ensures buffer tables are initialized via
+`gptel-auto-workflow--ensure-buffer-tables'."
+  (when (hash-table-p gptel-auto-workflow--project-buffers)
+    (maphash (lambda (root buf)
+               (when (buffer-live-p buf)
+                 (funcall fn root buf)))
+             gptel-auto-workflow--project-buffers)))
+
 (defun gptel-auto-workflow-clear-executor-overlays (&optional project-root)
   "Clear all persistent executor overlays for PROJECT-ROOT or all projects.
 Without PROJECT-ROOT, clears overlays for all projects."
@@ -744,14 +755,12 @@ Without PROJECT-ROOT, clears overlays for all projects."
             (when (overlay-get ov 'gptel-agent--task-type)
               (delete-overlay ov))))
         (message "[auto-workflow] Cleared executor overlays for %s" project-root))
-    (when (hash-table-p gptel-auto-workflow--project-buffers)
-      (cl-flet ((clear-buf-overlays (_ buf)
-                  (when (buffer-live-p buf)
-                    (with-current-buffer buf
-                      (dolist (ov (overlays-in (point-min) (point-max)))
-                        (when (overlay-get ov 'gptel-agent--task-type)
-                          (delete-overlay ov)))))))
-        (maphash #'clear-buf-overlays gptel-auto-workflow--project-buffers)))
+    (gptel-auto-workflow--iterate-project-buffers
+     (lambda (_ buf)
+       (with-current-buffer buf
+         (dolist (ov (overlays-in (point-min) (point-max)))
+           (when (overlay-get ov 'gptel-agent--task-type)
+             (delete-overlay ov))))))
     (message "[auto-workflow] Cleared all executor overlays")))
 
 (defun gptel-auto-workflow-list-project-buffers ()
@@ -759,15 +768,13 @@ Without PROJECT-ROOT, clears overlays for all projects."
   (interactive)
   (gptel-auto-workflow--ensure-buffer-tables)
   (let ((buffers nil))
-    (when (hash-table-p gptel-auto-workflow--project-buffers)
-      (cl-flet ((collect-buffer (root buf)
-                  (when (bufferp buf)
-                    (push (format "%s -> %s (%s)"
-                                  root
-                                  (buffer-name buf)
-                                  (if (buffer-live-p buf) "live" "dead"))
-                          buffers))))
-        (maphash #'collect-buffer gptel-auto-workflow--project-buffers)))
+    (gptel-auto-workflow--iterate-project-buffers
+     (lambda (root buf)
+       (push (format "%s -> %s (%s)"
+                     root
+                     (buffer-name buf)
+                     "live")
+             buffers)))
     (if buffers
         (message "Project buffers:\n%s" (string-join buffers "\n"))
       (message "No project buffers created yet"))))
